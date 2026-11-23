@@ -69,10 +69,6 @@ class FrameUpdateObserver{
     }
 }
 
-void DrainQuitMessages(){
-    while(RemoveQuitMessage()){}
-}
-
 class QuitMessageGuard : NoCopy{
     public QuitMessageGuard(){ DrainQuitMessages(); }
     public ~QuitMessageGuard(){ DrainQuitMessages(); }
@@ -96,15 +92,19 @@ class ScopedUnfocusedPass : NoCopy{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void DrainQuitMessages(){
+    while(RemoveQuitMessage()){}
+}
+
 String NativeFailure(in StringView message, in u32 code){
     String reason;
     StringAppendFormat(reason, "{}; native_code={}", message, code);
     return reason;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 GpuDescriptorHeapAbi MakeShaderlessHeapAbi(){
     GpuDescriptorHeapAbi heapAbi = GpuDescriptorHeapAbi();
@@ -265,17 +265,11 @@ void VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQ
     CheckInactiveLoop(false);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization, VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization)
+
 NWB_ADHD_GTEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass, VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass)
+
 NWB_ADHD_GTEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit, VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_ADHD_GTEST(FrameWindowDimensions, LogicalDimensionsRemainPositiveAtLargestNativeScale, VerifyFrameWindowDimensions_LogicalDimensionsRemainPositiveAtLargestNativeScale)
 

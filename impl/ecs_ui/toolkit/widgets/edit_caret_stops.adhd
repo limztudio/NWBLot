@@ -8,6 +8,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type SharedEditCaretStopTable = Shared<EditCaretStopTable>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditCaretStopTable{
+    public Vector<EditBoxCaretStop> stops;
+    public Vector<EditCaretLine> lines;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<Rect> ResolveEditCaretRect(
     in StringView text,
     in Span<TextLine> lines,
@@ -187,13 +202,7 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     return Rect(firstX, line.top, width, line.height);
 }
 
-class EditCaretStopTable{
-    public Vector<EditBoxCaretStop> stops;
-    public Vector<EditCaretLine> lines;
-}
-type SharedEditCaretStopTable = Shared<EditCaretStopTable>;
-
-b8 BuildEditCaretStopsAndLinesInto(
+[cpp_unwind] b8 BuildEditCaretStopsAndLinesInto(
     in StringView expectedText,
     in Span<TextLine> textLines,
     in Span<TextCluster> clusters,
@@ -203,10 +212,10 @@ b8 BuildEditCaretStopsAndLinesInto(
     mut Vector<EditBoxCaretStop> outStops,
     mut Vector<EditCaretLine> outLines
 ){
-    outStops.clear();
-    outLines.clear();
     outStops.reserve(mapping.size());
     outLines.reserve(textLines.size());
+    outStops.clear();
+    outLines.clear();
     for(in TextLine line : textLines)
         outLines.push_back(MakeEditCaretLine(line));
     usize previousCommitted = 0u;
@@ -226,7 +235,7 @@ b8 BuildEditCaretStopsAndLinesInto(
     return true;
 }
 
-b8 AdoptEditCaretGeometryInto(
+[cpp_unwind] b8 AdoptEditCaretGeometryInto(
     in StringView layoutText,
     in f32 layoutFontSize,
     in Span<TextLine> textLines,

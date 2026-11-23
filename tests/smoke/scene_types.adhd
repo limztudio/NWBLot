@@ -22,7 +22,6 @@ const StringView s_ShadowSmokeOpenCaseTerminal65 = "terminal65";
 const StringView s_ShadowSmokeOpenInterface = "project/shaders/reflection_optical";
 const StringView s_ShadowSmokePlaneShapePath = "engine/csg/plane";
 const StringView s_ShadowSmokePoint = "point";
-
 const Name s_SmokeTimingNameGraphicsFrame = "graphics.frame";
 const Name s_SmokeTimingNameGraphicsPrepareResources = "graphics.prepare_resources";
 const Name s_SmokeTimingNameGraphicsRenderPasses = "graphics.render_passes";
@@ -77,6 +76,8 @@ const usize s_CsgVisibleShapeCount = 4u;
 const f32 s_CsgVisibleReceiverBaseScale = 0.72f;
 const f32 s_CsgVisibleReceiverScale = 1.08f;
 const f32 s_CsgVisibleOverlappingReceiverDepthOffset = 0.125f;
+const f32x2u s_CsgVisibleShapeGridHalfSpacing = f32x2u(1.55f, 1.05f);
+const f32 s_CsgVisibleCutterScale = s_CsgVisibleReceiverScale / s_CsgVisibleReceiverBaseScale;
 const f32 s_ReflectionReferenceGlassIor = 3.8f;
 const StringView s_ReflectionSmokeHardwareRoute = "hardware";
 const u64 s_RefractionDiagnosticsRequiredTargetFrames = 16u;
@@ -154,7 +155,75 @@ const f64 s_SmokeProbeReportIntervalSeconds = 0.5;
 const f64 s_SmokeProbeMinimumMeasurementSeconds = 30.0;
 const u64 s_SmokeProbeMinimumPresentations = 100u;
 const usize s_SmokeTimingMaxRecords = 262144u;
+const StringView s_RefractionGalleryInterface = "project/shaders/smoke_surface";
+const StringView s_RefractionGalleryOpticalInterface = "project/shaders/reflection_optical";
+const f32 s_RefractionGalleryCameraDistance = 6.0f;
+const f32 s_RefractionGalleryIdentityForeignFront = -0.0005f;
+const f32 s_RefractionGalleryIdentityNearPlane = s_RefractionGalleryCameraDistance - 0.00025f;
+const f32 s_RefractionGalleryCenterHeight = 1.4f;
+const f32 s_RefractionGallerySlabFaceScale = 2.6f;
+const f32 s_RefractionGalleryPreviewAlpha = 0.48f;
+const f32 s_RefractionGalleryOpticalIor = 1.5f;
+const f32 s_RefractionGalleryTintedCoverage = 0.3f;
+const f32 s_RefractionGalleryDuplicateSphereRadius = 1.1f;
+const i32 s_RefractionGalleryWinningOpticalPriority = 10;
+const f32 s_RefractionGalleryBackdropDepth = 4.5f;
+const f32 s_RefractionGalleryBackdropHalfHeight = 5.0f;
+const f32 s_RefractionGalleryDepthMarkerAlpha = 0.70f;
+const StringView s_RefractionGalleryCaseCsgReference = "csg_reference";
+const StringView s_RefractionGalleryCaseCsgCap = "csg_cap";
+const StringView s_RefractionGalleryCaseCsgMiddle = "csg_middle";
+const StringView s_RefractionGalleryCaseCsgUncut = "csg_uncut";
+const StringView s_RefractionGalleryCaseIdentityReference = "identity_reference";
+const StringView s_RefractionGalleryCaseIdentitySameIor = "identity_same_ior";
+const StringView s_RefractionGalleryCaseIdentityDifferentIor = "identity_different_ior";
+const StringView s_RefractionGalleryCaseCrossingOverflow = "crossing_overflow";
+const StringView s_RefractionGalleryCaseNearAirOrdinary = "near_air_ordinary";
+const StringView s_RefractionGalleryCaseNearAirCsg = "near_air_csg";
+const StringView s_RefractionGalleryCaseSingle = "single";
+const StringView s_RefractionGalleryCaseSeparate = "separate";
+const StringView s_RefractionGalleryCaseStacked = "stacked";
+const StringView s_RefractionGalleryCaseIntersecting = "intersecting";
+const StringView s_RefractionGalleryCaseNested = "nested";
+const StringView s_RefractionGalleryCaseDuplicateSingleCool = "duplicate_single_cool";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarm = "duplicate_single_warm";
+const StringView s_RefractionGalleryCaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
+const StringView s_RefractionGalleryCaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
+const StringView s_RefractionGalleryCaseCoincident = "coincident";
+const StringView s_RefractionGalleryCaseCoincidentTinted = "coincident_tinted";
+const StringView s_RefractionGalleryCaseCoincidentReversed = "coincident_reversed";
+const StringView s_RefractionGalleryCaseCoincidentTintedReversed = "coincident_tinted_reversed";
+const StringView s_RefractionGalleryCaseCoincidentPrioritySwap = "coincident_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
+const StringView s_RefractionGalleryCaseCoincidentIdentical = "coincident_identical";
+const StringView s_RefractionGalleryCaseCoincidentTintedIdentical = "coincident_tinted_identical";
+const StringView s_RefractionGalleryCaseNearCoincident = "near_coincident";
+const StringView s_RefractionGalleryCaseCoincidentPreserved = "coincident_preserved";
+const StringView s_RefractionGalleryCaseTorus = "torus";
+const StringView s_RefractionGalleryCaseSameMesh = "same_mesh";
+const StringView s_RefractionGalleryCasePrism = "prism";
+const f32 s_RefractionGalleryForeignExit = 0.25f;
+const u32 s_AvboitCoverageWords = 9u;
+const u32 s_AvboitProbeControlWordCount = 8u;
+const u32 s_AvboitTotalCaseCount = s_AvboitBoundaryCaseCount + s_AvboitExhaustiveCaseCount + s_AvboitRandomCaseCount;
+const u32 s_AvboitVirtualCountCount = 21u;
+const u32 s_AvboitPhysicalCountCount = 5u;
+const u32 s_RefractionTileProbeWidth = 2049u;
+const u32 s_RefractionTileProbeHeight = 2049u;
+const u32 s_RefractionTileProbeGroupSize = 8u;
+const u32 s_RefractionTileProbeMaxGroupCountX = 65535u;
+const u32 s_RefractionTileProbeTilesX = 257u;
+const u32 s_RefractionTileProbeTilesY = 257u;
+const u32 s_RefractionTileProbeTileCount = 66049u;
+const u32 s_RefractionTileProbeMissingTile = (s_RefractionTileProbeTilesY / 2u) * s_RefractionTileProbeTilesX + s_RefractionTileProbeTilesX / 2u;
 
+enum<u64> CsgVisibleShapeSlot{
+    Plane,
+    Box,
+    Sphere,
+    Capsule,
+    kCount
+}
 
 enum<u8> CsgShadowArm{
     Reference,
@@ -172,6 +241,145 @@ enum<u8> CsgShadowOpenCase{
     Boundary64,
     Terminal65
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReflectionCsgContextEntities{
+    public EntityID smallReceiver = s_InvalidEntityId;
+    public EntityID denseReceiver = s_InvalidEntityId;
+    public EntityID smallCutter = s_InvalidEntityId;
+    public EntityID denseCutter = s_InvalidEntityId;
+}
+
+class SmokeBoxBounds{
+    public f32x3u minimum;
+    public f32x3u maximum;
+
+    public SmokeBoxBounds(){
+        this.minimum = f32x3u(0.0f, 0.0f, 0.0f);
+        this.maximum = f32x3u(0.0f, 0.0f, 0.0f);
+    }
+
+    public SmokeBoxBounds(in f32x3u minVal, in f32x3u maxVal){
+        this.minimum = minVal;
+        this.maximum = maxVal;
+    }
+}
+
+class AvboitDepthWarpCase{
+    public Array<u32, s_AvboitCoverageWords> coverage;
+    public u32 virtualCount = 1u;
+    public u32 physicalCount = 1u;
+    public u32 scenario = 0u;
+
+    public b8 occupied(in u32 slice)const{
+        return (this.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
+    }
+
+    public void setOccupied(in u32 slice){
+        if(slice < this.virtualCount)
+            this.coverage[slice / 32u] |= 1u << (slice % 32u);
+    }
+
+    public void poisonUnusedCoverage(){
+        for(u32 slice = this.virtualCount; slice < s_AvboitCoverageWords * 32u; ++slice)
+            this.coverage[slice / 32u] |= 1u << (slice % 32u);
+    }
+}
+
+class AvboitDepthWarpResult{
+    public Array<u32, s_AvboitMaxVirtualCount> warp;
+    public Array<u32, s_AvboitProbeControlWordCount> control;
+}
+
+class CsgShadowMode{
+    public CsgShadowArm arm = CsgShadowArm::Cut;
+    public CsgShadowOpenCase openCase = CsgShadowOpenCase::Retained;
+    public b8 pointLight = false;
+    public b8 finiteLightSource = false;
+    public b8 analyticAtlas = false;
+    public b8 openAtlas = false;
+
+    public b8 applyEnvironmentValues(
+        in StringView armText,
+        in b8 hasArm,
+        in StringView lightText,
+        in b8 hasLight,
+        in StringView sourceText,
+        in b8 hasSource,
+        in StringView atlasText,
+        in b8 hasAtlas,
+        in StringView openCaseText,
+        in b8 hasOpenCase,
+        in b8 caustic
+    ){
+        if(hasArm){
+            const Expected<CsgShadowArm> parsedArm = ParseCsgShadowArm(armText);
+            if(!parsedArm.has_value())
+                return false;
+            this.arm = parsedArm.value();
+        }
+        if(hasLight){
+            if(lightText != s_ShadowSmokeDirectional && lightText != s_ShadowSmokePoint)
+                return false;
+            this.pointLight = lightText == s_ShadowSmokePoint;
+        }
+        if(hasSource){
+            if(sourceText != s_ShadowSmokeHard && sourceText != s_ShadowSmokeFinite)
+                return false;
+            this.finiteLightSource = sourceText == s_ShadowSmokeFinite;
+        }
+        if(hasAtlas){
+            if(atlasText != "boxes" && atlasText != s_ShadowSmokeAnalyticAtlas && atlasText != s_ShadowSmokeOpenAtlas)
+                return false;
+            this.analyticAtlas = atlasText == s_ShadowSmokeAnalyticAtlas;
+            this.openAtlas = atlasText == s_ShadowSmokeOpenAtlas;
+        }
+        if(this.openAtlas){
+            if(!hasOpenCase || this.pointLight || this.finiteLightSource || this.arm != CsgShadowArm::Cut || caustic)
+                return false;
+            const Expected<CsgShadowOpenCase> parsedOpenCase = ParseCsgShadowOpenCase(openCaseText);
+            if(!parsedOpenCase.has_value())
+                return false;
+            this.openCase = parsedOpenCase.value();
+        }
+        return !this.analyticAtlas || (!this.pointLight && (this.arm == CsgShadowArm::Cut || this.arm == CsgShadowArm::Uncut));
+    }
+
+    public b8 read(in b8 caustic){
+        const Expected<String> arm = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ARM");
+        const Expected<String> light = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT");
+        const Expected<String> source = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT_SOURCE");
+        const Expected<String> atlas = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ATLAS");
+        const Expected<String> openCase = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_OPEN_CASE");
+        String armStr;
+        String lightStr;
+        String sourceStr;
+        String atlasStr;
+        String openCaseStr;
+        if(arm.has_value())
+            armStr = arm.value();
+        if(light.has_value())
+            lightStr = light.value();
+        if(source.has_value())
+            sourceStr = source.value();
+        if(atlas.has_value())
+            atlasStr = atlas.value();
+        if(openCase.has_value())
+            openCaseStr = openCase.value();
+        return this.applyEnvironmentValues(armStr, arm.has_value(), lightStr, light.has_value(), sourceStr, source.has_value(), atlasStr, atlas.has_value(), openCaseStr, openCase.has_value(), caustic);
+    }
+
+    public StringView openCaseName()const{
+        return ResolveCsgShadowOpenCaseName(this.openCase);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 StringView ResolveCsgShadowOpenCaseName(in CsgShadowOpenCase openCase){
     switch(openCase){
@@ -323,77 +531,6 @@ void ComputeCsgCutterTransforms(
     outShapeToWorld = shapeToWorld;
 }
 
-class ReflectionCsgContextEntities{
-    public EntityID smallReceiver = s_InvalidEntityId;
-    public EntityID denseReceiver = s_InvalidEntityId;
-    public EntityID smallCutter = s_InvalidEntityId;
-    public EntityID denseCutter = s_InvalidEntityId;
-}
-
-const StringView s_RefractionGalleryInterface = "project/shaders/smoke_surface";
-const StringView s_RefractionGalleryOpticalInterface = "project/shaders/reflection_optical";
-const f32 s_RefractionGalleryCameraDistance = 6.0f;
-const f32 s_RefractionGalleryIdentityForeignFront = -0.0005f;
-const f32 s_RefractionGalleryIdentityNearPlane = s_RefractionGalleryCameraDistance - 0.00025f;
-const f32 s_RefractionGalleryCenterHeight = 1.4f;
-const f32 s_RefractionGallerySlabFaceScale = 2.6f;
-const f32 s_RefractionGalleryPreviewAlpha = 0.48f;
-const f32 s_RefractionGalleryOpticalIor = 1.5f;
-const f32 s_RefractionGalleryTintedCoverage = 0.3f;
-const f32 s_RefractionGalleryDuplicateSphereRadius = 1.1f;
-const i32 s_RefractionGalleryWinningOpticalPriority = 10;
-const f32 s_RefractionGalleryBackdropDepth = 4.5f;
-const f32 s_RefractionGalleryBackdropHalfHeight = 5.0f;
-const f32 s_RefractionGalleryDepthMarkerAlpha = 0.70f;
-const StringView s_RefractionGalleryCaseCsgReference = "csg_reference";
-const StringView s_RefractionGalleryCaseCsgCap = "csg_cap";
-const StringView s_RefractionGalleryCaseCsgMiddle = "csg_middle";
-const StringView s_RefractionGalleryCaseCsgUncut = "csg_uncut";
-const StringView s_RefractionGalleryCaseIdentityReference = "identity_reference";
-const StringView s_RefractionGalleryCaseIdentitySameIor = "identity_same_ior";
-const StringView s_RefractionGalleryCaseIdentityDifferentIor = "identity_different_ior";
-const StringView s_RefractionGalleryCaseCrossingOverflow = "crossing_overflow";
-const StringView s_RefractionGalleryCaseNearAirOrdinary = "near_air_ordinary";
-const StringView s_RefractionGalleryCaseNearAirCsg = "near_air_csg";
-const StringView s_RefractionGalleryCaseSingle = "single";
-const StringView s_RefractionGalleryCaseSeparate = "separate";
-const StringView s_RefractionGalleryCaseStacked = "stacked";
-const StringView s_RefractionGalleryCaseIntersecting = "intersecting";
-const StringView s_RefractionGalleryCaseNested = "nested";
-const StringView s_RefractionGalleryCaseDuplicateSingleCool = "duplicate_single_cool";
-const StringView s_RefractionGalleryCaseDuplicateSingleWarm = "duplicate_single_warm";
-const StringView s_RefractionGalleryCaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
-const StringView s_RefractionGalleryCaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
-const StringView s_RefractionGalleryCaseCoincident = "coincident";
-const StringView s_RefractionGalleryCaseCoincidentTinted = "coincident_tinted";
-const StringView s_RefractionGalleryCaseCoincidentReversed = "coincident_reversed";
-const StringView s_RefractionGalleryCaseCoincidentTintedReversed = "coincident_tinted_reversed";
-const StringView s_RefractionGalleryCaseCoincidentPrioritySwap = "coincident_priority_swap";
-const StringView s_RefractionGalleryCaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
-const StringView s_RefractionGalleryCaseCoincidentIdentical = "coincident_identical";
-const StringView s_RefractionGalleryCaseCoincidentTintedIdentical = "coincident_tinted_identical";
-const StringView s_RefractionGalleryCaseNearCoincident = "near_coincident";
-const StringView s_RefractionGalleryCaseCoincidentPreserved = "coincident_preserved";
-const StringView s_RefractionGalleryCaseTorus = "torus";
-const StringView s_RefractionGalleryCaseSameMesh = "same_mesh";
-const StringView s_RefractionGalleryCasePrism = "prism";
-const f32 s_RefractionGalleryForeignExit = 0.25f;
-
-class SmokeBoxBounds{
-    public f32x3u minimum;
-    public f32x3u maximum;
-
-    public SmokeBoxBounds(){
-        this.minimum = f32x3u(0.0f, 0.0f, 0.0f);
-        this.maximum = f32x3u(0.0f, 0.0f, 0.0f);
-    }
-
-    public SmokeBoxBounds(in f32x3u minVal, in f32x3u maxVal){
-        this.minimum = minVal;
-        this.maximum = maxVal;
-    }
-}
-
 b8 SmokeBoxBoundsValid(in SmokeBoxBounds box){
     return box.minimum.x < box.maximum.x && box.minimum.y < box.maximum.y && box.minimum.z < box.maximum.z;
 }
@@ -411,36 +548,6 @@ b8 BuildSmokeBoxSubtractionPieces(in SmokeBoxBounds box, in SmokeBoxBounds cutte
     outPieces[4u] = SmokeBoxBounds(f32x3u(lower.x, lower.y, box.minimum.z), f32x3u(upper.x, upper.y, lower.z));
     outPieces[5u] = SmokeBoxBounds(f32x3u(lower.x, lower.y, upper.z), f32x3u(upper.x, upper.y, box.maximum.z));
     return SmokeBoxBoundsValid(intersection);
-}
-
-const u32 s_AvboitCoverageWords = 9u;
-const u32 s_AvboitProbeControlWordCount = 8u;
-const u32 s_AvboitTotalCaseCount = s_AvboitBoundaryCaseCount + s_AvboitExhaustiveCaseCount + s_AvboitRandomCaseCount;
-
-class AvboitDepthWarpCase{
-    public Array<u32, s_AvboitCoverageWords> coverage;
-    public u32 virtualCount = 1u;
-    public u32 physicalCount = 1u;
-    public u32 scenario = 0u;
-
-    public b8 occupied(in u32 slice)const{
-        return (this.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
-    }
-
-    public void setOccupied(in u32 slice){
-        if(slice < this.virtualCount)
-            this.coverage[slice / 32u] |= 1u << (slice % 32u);
-    }
-
-    public void poisonUnusedCoverage(){
-        for(u32 slice = this.virtualCount; slice < s_AvboitCoverageWords * 32u; ++slice)
-            this.coverage[slice / 32u] |= 1u << (slice % 32u);
-    }
-}
-
-class AvboitDepthWarpResult{
-    public Array<u32, s_AvboitMaxVirtualCount> warp;
-    public Array<u32, s_AvboitProbeControlWordCount> control;
 }
 
 AvboitDepthWarpResult BuildAvboitDepthWarpOracle(in AvboitDepthWarpCase probe, in Array<u32, 4u> frame){
@@ -492,9 +599,6 @@ AvboitDepthWarpResult BuildAvboitDepthWarpOracle(in AvboitDepthWarpCase probe, i
     oracle.control[7u] = frame[1u];
     return oracle;
 }
-
-const u32 s_AvboitVirtualCountCount = 21u;
-const u32 s_AvboitPhysicalCountCount = 5u;
 
 u32 AvboitVirtualCount(in u32 index){
     switch(index){
@@ -592,17 +696,6 @@ void BuildAvboitDepthWarpCases(mut Vector<AvboitDepthWarpCase> cases){
     }
 }
 
-const f32x2u s_CsgVisibleShapeGridHalfSpacing = f32x2u(1.55f, 1.05f);
-const f32 s_CsgVisibleCutterScale = s_CsgVisibleReceiverScale / s_CsgVisibleReceiverBaseScale;
-
-enum<u64> CsgVisibleShapeSlot{
-    Plane,
-    Box,
-    Sphere,
-    Capsule,
-    kCount
-}
-
 VectorSingle BuildCsgVisibleCubeRotation(in f32 time, in f32 phase){
     const VectorSingle angles = VectorSingle(time * 0.35f, time + phase, time * 0.18f, 0.0f);
     return QuaternionRotationRollPitchYawFromVector(angles);
@@ -635,15 +728,6 @@ VectorSingle CsgVisibleCutterLocalOffset(in usize shapeSlot){
     return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-const u32 s_RefractionTileProbeWidth = 2049u;
-const u32 s_RefractionTileProbeHeight = 2049u;
-const u32 s_RefractionTileProbeGroupSize = 8u;
-const u32 s_RefractionTileProbeMaxGroupCountX = 65535u;
-const u32 s_RefractionTileProbeTilesX = 257u;
-const u32 s_RefractionTileProbeTilesY = 257u;
-const u32 s_RefractionTileProbeTileCount = 66049u;
-const u32 s_RefractionTileProbeMissingTile = (s_RefractionTileProbeTilesY / 2u) * s_RefractionTileProbeTilesX + s_RefractionTileProbeTilesX / 2u;
-
 b8 IsRefractionProbeTileActive(in u32 phase, in u32 tile){
     if(phase == 0u)
         return true;
@@ -673,87 +757,13 @@ u32 ExpectedRefractionProbeTileCount(in u32 phase){
     return s_RefractionTileProbeTileCount - 1u;
 }
 
-b8 TryReadNonEmptySmokeEnvVar(in StringView name, mut String outValue){
+Expected<String> TryReadNonEmptySmokeEnvVar(in StringView name){
     const Expected<Optional<String>, ErrorCode> result = ReadEnvironmentVariable(name);
     if(!result.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     if(!result.value().has_value() || result.value().value().empty())
-        return false;
-    outValue = result.value().value();
-    return true;
-}
-
-class CsgShadowMode{
-    public CsgShadowArm arm = CsgShadowArm::Cut;
-    public CsgShadowOpenCase openCase = CsgShadowOpenCase::Retained;
-    public b8 pointLight = false;
-    public b8 finiteLightSource = false;
-    public b8 analyticAtlas = false;
-    public b8 openAtlas = false;
-
-    public b8 applyEnvironmentValues(
-        in StringView armText,
-        in b8 hasArm,
-        in StringView lightText,
-        in b8 hasLight,
-        in StringView sourceText,
-        in b8 hasSource,
-        in StringView atlasText,
-        in b8 hasAtlas,
-        in StringView openCaseText,
-        in b8 hasOpenCase,
-        in b8 caustic
-    ){
-        if(hasArm){
-            const Expected<CsgShadowArm> parsedArm = ParseCsgShadowArm(armText);
-            if(!parsedArm.has_value())
-                return false;
-            this.arm = parsedArm.value();
-        }
-        if(hasLight){
-            if(lightText != s_ShadowSmokeDirectional && lightText != s_ShadowSmokePoint)
-                return false;
-            this.pointLight = lightText == s_ShadowSmokePoint;
-        }
-        if(hasSource){
-            if(sourceText != s_ShadowSmokeHard && sourceText != s_ShadowSmokeFinite)
-                return false;
-            this.finiteLightSource = sourceText == s_ShadowSmokeFinite;
-        }
-        if(hasAtlas){
-            if(atlasText != "boxes" && atlasText != s_ShadowSmokeAnalyticAtlas && atlasText != s_ShadowSmokeOpenAtlas)
-                return false;
-            this.analyticAtlas = atlasText == s_ShadowSmokeAnalyticAtlas;
-            this.openAtlas = atlasText == s_ShadowSmokeOpenAtlas;
-        }
-        if(this.openAtlas){
-            if(!hasOpenCase || this.pointLight || this.finiteLightSource || this.arm != CsgShadowArm::Cut || caustic)
-                return false;
-            const Expected<CsgShadowOpenCase> parsedOpenCase = ParseCsgShadowOpenCase(openCaseText);
-            if(!parsedOpenCase.has_value())
-                return false;
-            this.openCase = parsedOpenCase.value();
-        }
-        return !this.analyticAtlas || (!this.pointLight && (this.arm == CsgShadowArm::Cut || this.arm == CsgShadowArm::Uncut));
-    }
-
-    public b8 read(in b8 caustic){
-        String armStr;
-        String lightStr;
-        String sourceStr;
-        String atlasStr;
-        String openCaseStr;
-        const b8 hasArm = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ARM", armStr);
-        const b8 hasLight = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT", lightStr);
-        const b8 hasSource = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr);
-        const b8 hasAtlas = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ATLAS", atlasStr);
-        const b8 hasOpenCase = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr);
-        return this.applyEnvironmentValues(armStr, hasArm, lightStr, hasLight, sourceStr, hasSource, atlasStr, hasAtlas, openCaseStr, hasOpenCase, caustic);
-    }
-
-    public StringView openCaseName()const{
-        return ResolveCsgShadowOpenCaseName(this.openCase);
-    }
+        return MakeUnexpected(Failure());
+    return result.value().value();
 }
 
 void AnimateSkinningBenchmarkPoseJoints(

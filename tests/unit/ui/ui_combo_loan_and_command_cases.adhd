@@ -11,33 +11,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> UiComboLoanMutationKind{ None, RevisionSelect, KeySelect, TextSelect, EnabledOpen, TextRevision }
+const StringView s_UiComboLoanPanelKey = "panel";
+const StringView s_UiComboLoanKey = "combo";
+const StringView s_UiComboLoanSecondKey = "other";
+const StringView s_UiContextClaimSliderKey = "slider";
+const StringView s_UiContextClaimListKey = "list";
 type UiComboLoanAcceptedState = UiFixtureAcceptedInputState<32u>;
 
-HitTarget MakeCommandOwnerEditor(){
-    HitTarget target;
-    target.id = WidgetId(1u);
-    target.declarationGeneration = 7u;
-    target.rectangle = Rect(0.0f, 0.0f, 120.0f, 24.0f);
-    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
-    target.focusable = true;
-    target.textEditable = true;
-    target.control = ControlToken(101u, 102u, 103u);
-    return target;
-}
+enum<u8> UiComboLoanMutationKind{ None, RevisionSelect, KeySelect, TextSelect, EnabledOpen, TextRevision }
 
-HitTarget MakeCommandOwnerList(in u64 id, in f32 x){
-    HitTarget target;
-    target.id = WidgetId(id);
-    target.declarationGeneration = 11u;
-    target.rectangle = Rect(x, 40.0f, 120.0f, 120.0f);
-    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
-    target.focusable = true;
-    target.navigable = true;
-    target.control = ControlToken(31u, 41u, 51u);
-    target.pageRows = 5u;
-    return target;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ComboLoanCallbackSource : ComboSource{
     public mut ComboState m_state;
@@ -86,7 +71,6 @@ class ComboLoanCallbackSource : ComboSource{
     }
 }
 
-
 class UiComboLoanForeignRevisionSource : ComboSource{
     public mut ComboSource m_foreign;
     public TestObserved<b8> m_armed;
@@ -105,7 +89,6 @@ class UiComboLoanForeignRevisionSource : ComboSource{
     public u64 mutations()const{ return this.m_mutations.value(); }
 }
 
-
 class UiComboLoanTests : ComboFixture{
     public ComboLoanCallbackSource m_callbacks;
 
@@ -119,14 +102,12 @@ class UiComboLoanTests : ComboFixture{
     public UiComboLoanAcceptedState accepted()const{ return CaptureAcceptedInput<32u>(this.m_context.input()); }
 }
 
-
 class UiCommandInputRouted{
     public InputRoutingResult routing;
     public InputEvent event;
 
 
 }
-
 
 class UiCommandInputTests{
     public InputRouter m_router;
@@ -148,7 +129,6 @@ class UiCommandInputTests{
         return this.m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
     }
 }
-
 
 class UiCommandOwnerTests : RouterTestFixture{
     public Array<HitTarget, 3u> m_targets;
@@ -198,7 +178,6 @@ class UiCommandOwnerTests : RouterTestFixture{
     }
 }
 
-
 class UiContextClaimTests{
     public Context m_context;
 
@@ -220,15 +199,30 @@ class UiContextClaimTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_UiComboLoanPanelKey = "panel";
-const StringView s_UiComboLoanKey = "combo";
-const StringView s_UiComboLoanSecondKey = "other";
-const StringView s_UiContextClaimSliderKey = "slider";
-const StringView s_UiContextClaimListKey = "list";
+HitTarget MakeCommandOwnerEditor(){
+    HitTarget target;
+    target.id = WidgetId(1u);
+    target.declarationGeneration = 7u;
+    target.rectangle = Rect(0.0f, 0.0f, 120.0f, 24.0f);
+    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
+    target.focusable = true;
+    target.textEditable = true;
+    target.control = ControlToken(101u, 102u, 103u);
+    return target;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+HitTarget MakeCommandOwnerList(in u64 id, in f32 x){
+    HitTarget target;
+    target.id = WidgetId(id);
+    target.declarationGeneration = 11u;
+    target.rectangle = Rect(x, 40.0f, 120.0f, 120.0f);
+    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
+    target.focusable = true;
+    target.navigable = true;
+    target.control = ControlToken(31u, 41u, 51u);
+    target.pageRows = 5u;
+    return target;
+}
 
 HitTarget MakeUiCommandInputTarget(in u64 id){
     HitTarget target = HitTarget();
@@ -283,10 +277,6 @@ b8 DeclareUiComboLoanPair(mut UiComboLoanTests self, in u64 generation, in IList
     return self.m_builder.comboBox(s_UiComboLoanKey, self.m_source, self.m_state, options).valid
         && self.m_builder.comboBox(s_UiComboLoanSecondKey, secondSource, secondState, options).valid;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiComboLoanTests_SameValueApplicationSelectionAfterDeclarationRejectsDeferredPaint(mut UiComboLoanTests self){
     self.m_state.select(1u);
@@ -533,10 +523,6 @@ void VerifyUiComboLoanTests_LaterPopupTextCannotChangeTheEarlierSourceAfterItsLo
     EXPECT_EQ(other.selectedKey(), 2u);
     self.expectAccepted(displayed);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiCommandInputTests_TwoControllersRetainIndependentOwnersForTheSameCommand(mut UiCommandInputTests self){
     const HitTarget host = MakeUiCommandInputControl(1u);
@@ -1100,10 +1086,6 @@ void VerifyUiCommandInputTests_QueuedReleaseDiscardedByResetRetiresOnlyTheReleas
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiCommandOwnerTests_EnterIntentionSharesNavigationSequenceWithoutAnActivation(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
@@ -1356,10 +1338,6 @@ void VerifyUiCommandOwnerTests_HeldEnterCannotSubmitAgainUntilItsConsumedRelease
     ASSERT_TRUE(actionResult2.has_value());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiContextClaimTests_DifferentKindsCanShareAnInstanceGenerationWhilePreservingTheFullGeneration(mut UiContextClaimTests self){
     ASSERT_TRUE(self.begin(1u));
     const Expected<WidgetState> slider = self.declareState(s_UiContextClaimSliderKey, WidgetKind::Slider);
@@ -1509,69 +1487,118 @@ void VerifyUiContextClaimTests_CapacityCountsDistinctKindAndInstancePairs(mut Ui
     EXPECT_TRUE(self.m_context.failed());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiComboLoanTests, SameValueApplicationSelectionAfterDeclarationRejectsDeferredPaint, VerifyUiComboLoanTests_SameValueApplicationSelectionAfterDeclarationRejectsDeferredPaint)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, ClosingBetweenDeclarationAndEndKeepsTheApplicationClose, VerifyUiComboLoanTests_ClosingBetweenDeclarationAndEndKeepsTheApplicationClose)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, ReopeningBetweenDeclarationAndEndCannotPublishTheOldPopupLifetime, VerifyUiComboLoanTests_ReopeningBetweenDeclarationAndEndCannotPublishTheOldPopupLifetime)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, SourceRevisionBetweenDeclarationAndEndRejectsTheWholeCandidate, VerifyUiComboLoanTests_SourceRevisionBetweenDeclarationAndEndRejectsTheWholeCandidate)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, SourceCountBetweenDeclarationAndEndRejectsEvenWithoutARevisionChange, VerifyUiComboLoanTests_SourceCountBetweenDeclarationAndEndRejectsEvenWithoutARevisionChange)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, RevisionCallbackAtDeferredValidationKeepsExplicitApplicationSelection, VerifyUiComboLoanTests_RevisionCallbackAtDeferredValidationKeepsExplicitApplicationSelection)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, PopupTextCallbackCannotOverwriteApplicationSelectionOrAcceptedTargets, VerifyUiComboLoanTests_PopupTextCallbackCannotOverwriteApplicationSelectionOrAcceptedTargets)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, EnabledCallbackOpenDuringPopupRowsRejectsTheBorrowedLifetime, VerifyUiComboLoanTests_EnabledCallbackOpenDuringPopupRowsRejectsTheBorrowedLifetime)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, TextCallbackSourceRevisionRejectsThePopupAndKeepsAcceptedGeometry, VerifyUiComboLoanTests_TextCallbackSourceRevisionRejectsThePopupAndKeepsAcceptedGeometry)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, ReconcileCallbackSelectionRejectsBeforeAnyQueuedCommitIsApplied, VerifyUiComboLoanTests_ReconcileCallbackSelectionRejectsBeforeAnyQueuedCommitIsApplied)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, ClosedUserPopupSuppressesLaterComboBeforeSourceOrModelCallbacks, VerifyUiComboLoanTests_ClosedUserPopupSuppressesLaterComboBeforeSourceOrModelCallbacks)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, MatchingPanelEndReleasesItsSourceAndStateBeforeTheNextPanel, VerifyUiComboLoanTests_MatchingPanelEndReleasesItsSourceAndStateBeforeTheNextPanel)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint, VerifyUiComboLoanTests_LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint)
+
 NWB_ADHD_GTEST_F(UiComboLoanTests, LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanWasChecked, VerifyUiComboLoanTests_LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanWasChecked)
 
 NWB_ADHD_GTEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameCommand, VerifyUiCommandInputTests_TwoControllersRetainIndependentOwnersForTheSameCommand)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissionAcrossProfileReplacement, VerifyUiCommandInputTests_HeldPhysicalPressPinsCommandSelectionAndEditAdmissionAcrossProfileReplacement)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, AnUnconsumedInitialPressCannotClaimUiAfterFocusAppears, VerifyUiCommandInputTests_AnUnconsumedInitialPressCannotClaimUiAfterFocusAppears)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTargetReturns, VerifyUiCommandInputTests_RetiredControlOwnerCannotReviveWhenTheExactOldTargetReturns)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, RetiredEditorCannotBorrowAHeldCommandAfterReturningWithItsOldIdentity, VerifyUiCommandInputTests_RetiredEditorCannotBorrowAHeldCommandAfterReturningWithItsOldIdentity)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, HeldEditingCommandCannotMoveToAnotherFocusedEditor, VerifyUiCommandInputTests_HeldEditingCommandCannotMoveToAnotherFocusedEditor)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVerticalNavigationDoesNot, VerifyUiCommandInputTests_DelegatedAcceptStillReachesEditorSubmissionWhileVerticalNavigationDoesNot)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCancelPendingSubmissions, VerifyUiCommandInputTests_ClearFocusAndNativeLossRetainReleaseOwnershipButCancelPendingSubmissions)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBeforeProcessing, VerifyUiCommandInputTests_QueuedReleaseSeparatesOldAndNewBindingSnapshotsBeforeProcessing)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBeforeEditingOrNavigation, VerifyUiCommandInputTests_OrphanRepeatsAfterNativeLossAndResetNeedReleaseBeforeEditingOrNavigation)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExistingOwners, VerifyUiCommandInputTests_MalformedCommandSourcesRejectWithoutChangingExistingOwners)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit, VerifyUiCommandInputTests_ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, ExactSourceCapacityRejectsOverflowWithoutLosingReleaseOrRebindingState, VerifyUiCommandInputTests_ExactSourceCapacityRejectsOverflowWithoutLosingReleaseOrRebindingState)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource, VerifyUiCommandInputTests_FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesNotRepeatOrActivate, VerifyUiCommandInputTests_DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesNotRepeatOrActivate)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, IndependentControllerSubmitReleasesDoNotTransferOrRepeat, VerifyUiCommandInputTests_IndependentControllerSubmitReleasesDoNotTransferOrRepeat)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, SubmitCannotReviveWhenFocusReturnsToTheOriginalDeclaration, VerifyUiCommandInputTests_SubmitCannotReviveWhenFocusReturnsToTheOriginalDeclaration)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, EditorCancelRetiresAllSubmitSourcesButKeepsTheirReleasesOwned, VerifyUiCommandInputTests_EditorCancelRetiresAllSubmitSourcesButKeepsTheirReleasesOwned)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndProfileChanges, VerifyUiCommandInputTests_CustomSubmitBindingPinsItsReleaseAcrossModifierAndProfileChanges)
+
 NWB_ADHD_GTEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand, VerifyUiCommandInputTests_QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand)
 
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation, VerifyUiCommandOwnerTests_EnterIntentionSharesNavigationSequenceWithoutAnActivation)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted, VerifyUiCommandOwnerTests_AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance, VerifyUiCommandOwnerTests_MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys, VerifyUiCommandOwnerTests_PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNavigation, VerifyUiCommandOwnerTests_NonEditableDisabledAndPartSourcesCannotBorrowNavigation)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejected, VerifyUiCommandOwnerTests_SelfDelegationAndCompetingNavigationHostsAreRejected)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently, VerifyUiCommandOwnerTests_RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease, VerifyUiCommandOwnerTests_RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives, VerifyUiCommandOwnerTests_OmittedEditorRetiresItsActionsEvenWhenTheListSurvives)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues, VerifyUiCommandOwnerTests_RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions, VerifyUiCommandOwnerTests_ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus, VerifyUiCommandOwnerTests_FenceControlRetiresTheDelegateWithoutStealingEditorFocus)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers, VerifyUiCommandOwnerTests_PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers)
+
 NWB_ADHD_GTEST_F(UiCommandOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease, VerifyUiCommandOwnerTests_HeldEnterCannotSubmitAgainUntilItsConsumedRelease)
 
 NWB_ADHD_GTEST_F(UiContextClaimTests, DifferentKindsCanShareAnInstanceGenerationWhilePreservingTheFullGeneration, VerifyUiContextClaimTests_DifferentKindsCanShareAnInstanceGenerationWhilePreservingTheFullGeneration)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, ASharedKindAndInstanceFailsAcrossDistinctRoots, VerifyUiContextClaimTests_ASharedKindAndInstanceFailsAcrossDistinctRoots)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, ASharedKindAndInstanceFailsAcrossDistinctScopes, VerifyUiContextClaimTests_ASharedKindAndInstanceFailsAcrossDistinctScopes)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, AcceptedAndAbandonedFramesReleaseTheirClaimsBeforeTheNextFrame, VerifyUiContextClaimTests_AcceptedAndAbandonedFramesReleaseTheirClaimsBeforeTheNextFrame)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, ZeroInstancesAndStaleDeclarationsStillRejectTheFrame, VerifyUiContextClaimTests_ZeroInstancesAndStaleDeclarationsStillRejectTheFrame)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, PromotedClaimsStillRejectPairsFromTheInlinePrefix, VerifyUiContextClaimTests_PromotedClaimsStillRejectPairsFromTheInlinePrefix)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, DuplicateAtThePromotionBoundaryRejectsTheFrame, VerifyUiContextClaimTests_DuplicateAtThePromotionBoundaryRejectsTheFrame)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, LargeSmallAndEmptyFramesDoNotLeakPreviousPairsIntoPromotion, VerifyUiContextClaimTests_LargeSmallAndEmptyFramesDoNotLeakPreviousPairsIntoPromotion)
+
 NWB_ADHD_GTEST_F(UiContextClaimTests, CapacityCountsDistinctKindAndInstancePairs, VerifyUiContextClaimTests_CapacityCountsDistinctKindAndInstancePairs)
 
 

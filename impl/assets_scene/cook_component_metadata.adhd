@@ -114,16 +114,17 @@ b8 ReadOptionalSceneFloat3Field(
     return true;
 }
 
-b8 ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset, mut TransformComponent outComponent){
+Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset){
     if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
         return IsAllowedTransformComponentField(fieldName);
     }))
-        return false;
+        return MakeUnexpected(Failure());
 
-    VectorSingle position = VectorSingle(outComponent.position);
+    TransformComponent component;
+    VectorSingle position = VectorSingle(component.position);
     if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformPositionField, position))
-        return false;
-    outComponent.position = f32x4(position);
+        return MakeUnexpected(Failure());
+    component.position = f32x4(position);
 
     const b8 hasRotation = asset.hasField(s_TransformRotationField);
     const b8 hasEuler = asset.hasField(s_TransformRotationEulerField);
@@ -141,12 +142,12 @@ b8 ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset, mu
             , s_TransformDiagnosticPrefix
             , PathToString(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     if(hasRotation){
         b8 parsedOk = true;
-        VectorSingle parsedRotation = VectorSingle(outComponent.rotation);
+        VectorSingle parsedRotation = VectorSingle(component.rotation);
         asset.visitField(
             s_TransformRotationField,
             lambda[in nwbFilePath, mut parsedOk, mut parsedRotation](in MetascriptValue fieldValue) -> void{
@@ -159,35 +160,36 @@ b8 ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset, mu
             }
         );
         if(!parsedOk)
-            return false;
-        outComponent.rotation = f32x4(parsedRotation);
+            return MakeUnexpected(Failure());
+        component.rotation = f32x4(parsedRotation);
     }
     else if(hasEuler){
         VectorSingle eulerRadians = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
         if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerField, eulerRadians))
-            return false;
-        outComponent.rotation = BuildTransformEulerQuaternion(eulerRadians, false);
+            return MakeUnexpected(Failure());
+        component.rotation = BuildTransformEulerQuaternion(eulerRadians, false);
     }
     else if(hasEulerDegrees){
         VectorSingle eulerDegrees = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
         if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerDegreesField, eulerDegrees))
-            return false;
-        outComponent.rotation = BuildTransformEulerQuaternion(eulerDegrees, true);
+            return MakeUnexpected(Failure());
+        component.rotation = BuildTransformEulerQuaternion(eulerDegrees, true);
     }
 
-    VectorSingle scale = VectorSingle(outComponent.scale);
+    VectorSingle scale = VectorSingle(component.scale);
     if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformScaleField, scale))
-        return false;
-    outComponent.scale = f32x4(scale);
-    return true;
+        return MakeUnexpected(Failure());
+    component.scale = f32x4(scale);
+    return component;
 }
 
-b8 ParseCameraComponentData(in Path nwbFilePath, in MetascriptValue asset, mut CameraComponent outComponent){
+Expected<CameraComponent> ParseCameraComponentData(in Path nwbFilePath, in MetascriptValue asset){
     if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
         return IsAllowedCameraComponentField(fieldName);
     }))
-        return false;
+        return MakeUnexpected(Failure());
 
+    CameraComponent component;
     const b8 hasFovDegrees = asset.hasField(s_CameraVerticalFovDegreesField);
     const b8 hasFovRadians = asset.hasField(s_CameraVerticalFovRadiansField);
     if(hasFovDegrees && hasFovRadians){
@@ -196,54 +198,55 @@ b8 ParseCameraComponentData(in Path nwbFilePath, in MetascriptValue asset, mut C
             , s_CameraDiagnosticPrefix
             , PathToString(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     if(hasFovDegrees){
         f32 fovDegrees = 0.0f;
         if(!ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraVerticalFovDegreesField, fovDegrees))
-            return false;
-        outComponent.setVerticalFovRadians(fovDegrees * s_SceneDegreesToRadians);
+            return MakeUnexpected(Failure());
+        component.setVerticalFovRadians(fovDegrees * s_SceneDegreesToRadians);
     }
     else if(hasFovRadians){
         f32 fovRadians = 0.0f;
         if(!ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraVerticalFovRadiansField, fovRadians))
-            return false;
-        outComponent.setVerticalFovRadians(fovRadians);
+            return MakeUnexpected(Failure());
+        component.setVerticalFovRadians(fovRadians);
     }
 
-    f32 nearPlane = outComponent.nearPlane();
-    f32 farPlane = outComponent.farPlane();
-    f32 aspectRatio = outComponent.aspectRatio();
+    f32 nearPlane = component.nearPlane();
+    f32 farPlane = component.farPlane();
+    f32 aspectRatio = component.aspectRatio();
     if(
         !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
         || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
         || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
     )
-        return false;
-    outComponent.setNearPlane(nearPlane);
-    outComponent.setFarPlane(farPlane);
-    outComponent.setAspectRatio(aspectRatio);
-    return true;
+        return MakeUnexpected(Failure());
+    component.setNearPlane(nearPlane);
+    component.setFarPlane(farPlane);
+    component.setAspectRatio(aspectRatio);
+    return component;
 }
 
-b8 ParseLightComponentData(in Path nwbFilePath, in MetascriptValue asset, mut LightComponent outComponent){
+Expected<LightComponent> ParseLightComponentData(in Path nwbFilePath, in MetascriptValue asset){
     if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_LightDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
         return IsAllowedLightComponentField(fieldName);
     }))
-        return false;
+        return MakeUnexpected(Failure());
 
+    LightComponent component;
     if(asset.hasField(s_LightTypeField)){
         const Expected<MetadataStringField> typeField = ReadMetadataStringField(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightTypeField, true);
         if(!typeField.has_value())
-            return false;
+            return MakeUnexpected(Failure());
         const StringView typeText = typeField.value().text;
         if(typeText == s_LightTypeDirectional)
-            outComponent.type = LightType::Directional;
+            component.type = LightType::Directional;
         else if(typeText == s_LightTypePoint)
-            outComponent.type = LightType::Point;
+            component.type = LightType::Point;
         else if(typeText == s_LightTypeSpot)
-            outComponent.type = LightType::Spot;
+            component.type = LightType::Spot;
         else{
             error(
                 "{} '{}': field '{}' {}"
@@ -252,29 +255,29 @@ b8 ParseLightComponentData(in Path nwbFilePath, in MetascriptValue asset, mut Li
                 , s_LightTypeField
                 , s_LightTypeHint
             );
-            return false;
+            return MakeUnexpected(Failure());
         }
     }
 
-    VectorSingle lightColor = outComponent.color();
+    VectorSingle lightColor = component.color();
     if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightColorField, lightColor))
-        return false;
-    outComponent.setColor(lightColor);
+        return MakeUnexpected(Failure());
+    component.setColor(lightColor);
 
-    f32 intensity = outComponent.intensity();
+    f32 intensity = component.intensity();
     if(
         !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
-        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, outComponent.range)
-        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, outComponent.innerConeCos)
-        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, outComponent.outerConeCos)
-        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, outComponent.angularRadius)
-        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, outComponent.sourceRadius)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, component.range)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, component.innerConeCos)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, component.outerConeCos)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, component.angularRadius)
+        || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, component.sourceRadius)
     )
-        return false;
-    outComponent.setIntensity(intensity);
+        return MakeUnexpected(Failure());
+    component.setIntensity(intensity);
 
     b8 enableCausticsParsed = true;
-    b8 enableCaustics = outComponent.enableCaustics;
+    b8 enableCaustics = component.enableCaustics;
     asset.visitField(
         s_LightEnableCausticsField,
         lambda[in nwbFilePath, mut enableCausticsParsed, mut enableCaustics](in MetascriptValue fieldValue) -> void{
@@ -287,9 +290,9 @@ b8 ParseLightComponentData(in Path nwbFilePath, in MetascriptValue asset, mut Li
         }
     );
     if(!enableCausticsParsed)
-        return false;
-    outComponent.enableCaustics = enableCaustics;
-    return true;
+        return MakeUnexpected(Failure());
+    component.enableCaustics = enableCaustics;
+    return component;
 }
 
 

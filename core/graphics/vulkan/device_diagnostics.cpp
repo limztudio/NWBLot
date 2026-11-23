@@ -36,7 +36,7 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     );
 
     {
-        ScopedLock lock(m_amdBreadcrumb.slotMutex);
+        NothrowScopedLock lock(m_amdBreadcrumb.slotMutex);
         const auto reservation = VulkanDetail::AmdBreadcrumbRing::BuildNextReservation(m_amdBreadcrumb.metadata->nextSerials[queue.index], m_amdBreadcrumb.layout.slotsPerQueue);
         if(!reservation)
             return write;

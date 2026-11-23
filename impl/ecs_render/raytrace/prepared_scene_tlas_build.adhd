@@ -8,14 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsPreparedSceneTlasStorageReady(in RendererRayTracingState state, in usize instanceCount){
-    return state.sceneBvh.m_tlas.valid()
-        && state.sceneBvh.m_tlas.deref().getBackingBufferHandle().valid()
-        && state.sceneBvh.m_tlasMaxInstances >= instanceCount
-        && state.sceneBvh.m_tlasHeapHandle.valid()
-        && state.sceneBvh.m_tlasHeapHandle.descriptorClass() == GpuDescriptorClass::AccelStruct;
-}
-
 [modular]
 class PreparedSceneTlasBuild : NoCopy{
     private Vector<RayTracingInstanceDesc> m_instances;
@@ -50,6 +42,18 @@ class PreparedSceneTlasBuild : NoCopy{
     }
     public b8 ready()const{ return this.m_ready; }
     public b8 storageMatches(in RendererRayTracingState state)const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsPreparedSceneTlasStorageReady(in RendererRayTracingState state, in usize instanceCount){
+    return state.sceneBvh.m_tlas.valid()
+        && state.sceneBvh.m_tlas.deref().getBackingBufferHandle().valid()
+        && state.sceneBvh.m_tlasMaxInstances >= instanceCount
+        && state.sceneBvh.m_tlasHeapHandle.valid()
+        && state.sceneBvh.m_tlasHeapHandle.descriptorClass() == GpuDescriptorClass::AccelStruct;
 }
 
 

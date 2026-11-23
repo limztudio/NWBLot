@@ -10,39 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiEditClipboardStatus ResolveStaleUiEditClipboardStatus(in b8 sameOwner, in b8 cancelledCleanly){
-    if(!cancelledCleanly)
-        return UiEditClipboardStatus::NativeFailure;
-    if(sameOwner)
-        return UiEditClipboardStatus::StaleModel;
-    return UiEditClipboardStatus::StaleOwner;
-}
-
-UiEditClipboardResult MakeUiEditClipboardStatusResult(in UiEditClipboardStatus status){
-    UiEditClipboardResult outResult;
-    outResult.status = status;
-    return outResult;
-}
-
-UiEditClipboardResult MakeAppliedUiEditClipboardResult(
-    in u64 previousRevision,
-    in u64 currentRevision,
-    in usize previousAnchor,
-    in usize currentAnchor,
-    in usize previousCaret,
-    in usize currentCaret
-){
-    UiEditClipboardResult outResult;
-    outResult.status = UiEditClipboardStatus::Applied;
-    outResult.textChanged = currentRevision != previousRevision;
-    outResult.selectionChanged = currentAnchor != previousAnchor || currentCaret != previousCaret;
-    return outResult;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [modular]
 class UiEditClipboardController : NoCopy{
     private mut IClipboardService m_service;
@@ -63,7 +30,7 @@ class UiEditClipboardController : NoCopy{
             TerminateInvariant();
     }
 
-    public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel, in b8 readOnly){
+    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel, in b8 readOnly){
         if(!this.m_service.isOwnerThread())
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
         if(!owner.valid())
@@ -88,35 +55,38 @@ class UiEditClipboardController : NoCopy{
             if(!capabilities.writeText)
                 return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Unsupported);
         }
+        this.m_expectedModel.capture(model);
         Expected<ClipboardRequestToken, ClipboardAdmission> result = MakeUnexpected(ClipboardAdmission::WrongThread);
         if(reads.value())
             result = this.m_service.requestReadText(channel);
         else
             result = this.m_service.requestWriteText(channel, model.selectedText());
         if(!result.has_value()){
+            this.m_expectedModel.clear();
             if(result.error() == ClipboardAdmission::WrongThread)
                 return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::QueueFull);
         }
-        if(!result.value().valid())
+        if(!result.value().valid()){
+            this.m_expectedModel.clear();
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::NativeFailure);
+        }
         this.m_token = result.value();
         this.m_owner = owner;
         this.m_channel = channel;
         this.m_action = action;
-        this.m_expectedModel.capture(model);
         return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Pending);
     }
 
-    public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel){
+    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel){
         return this.request(owner, model, action, channel, false);
     }
 
-    public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action){
+    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action){
         return this.request(owner, model, action, ClipboardChannel::Clipboard, false);
     }
 
-    public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model, in b8 readOnly){
+    [cpp_unwind] public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model, in b8 readOnly){
         if(!this.m_service.isOwnerThread())
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
         if(!this.m_token.valid())
@@ -144,7 +114,7 @@ class UiEditClipboardController : NoCopy{
         return result;
     }
 
-    public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model){
+    [cpp_unwind] public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model){
         return this.drain(owner, model, false);
     }
 
@@ -179,7 +149,7 @@ class UiEditClipboardController : NoCopy{
         this.m_insertText.clear();
     }
 
-    private UiEditClipboardResult applyCompletion(mut EditModel model, in b8 readOnly){
+    [cpp_unwind] private UiEditClipboardResult applyCompletion(mut EditModel model, in b8 readOnly){
         if(this.m_completion.status != ClipboardStatus::Success){
             switch(this.m_completion.status){
             case ClipboardStatus::Unsupported: return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Unsupported);
@@ -208,6 +178,39 @@ class UiEditClipboardController : NoCopy{
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::ModelRejected);
         return MakeAppliedUiEditClipboardResult(revision, model.revision(), anchor, model.anchor(), caret, model.caret());
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiEditClipboardStatus ResolveStaleUiEditClipboardStatus(in b8 sameOwner, in b8 cancelledCleanly){
+    if(!cancelledCleanly)
+        return UiEditClipboardStatus::NativeFailure;
+    if(sameOwner)
+        return UiEditClipboardStatus::StaleModel;
+    return UiEditClipboardStatus::StaleOwner;
+}
+
+UiEditClipboardResult MakeUiEditClipboardStatusResult(in UiEditClipboardStatus status){
+    UiEditClipboardResult outResult;
+    outResult.status = status;
+    return outResult;
+}
+
+UiEditClipboardResult MakeAppliedUiEditClipboardResult(
+    in u64 previousRevision,
+    in u64 currentRevision,
+    in usize previousAnchor,
+    in usize currentAnchor,
+    in usize previousCaret,
+    in usize currentCaret
+){
+    UiEditClipboardResult outResult;
+    outResult.status = UiEditClipboardStatus::Applied;
+    outResult.textChanged = currentRevision != previousRevision;
+    outResult.selectionChanged = currentAnchor != previousAnchor || currentCaret != previousCaret;
+    return outResult;
 }
 
 

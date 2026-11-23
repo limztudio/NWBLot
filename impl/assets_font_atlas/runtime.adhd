@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 b8 FontAtlas::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath("FontAtlas::loadBinary"))
         return false;
@@ -21,6 +22,7 @@ b8 FontAtlas::loadBinary(in Span<u8> binary){
     return true;
 }
 
+[cpp_unwind]
 b8 FontAtlas::validatePayload()const{
     return this.checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(this.m_payload);
 }

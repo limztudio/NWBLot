@@ -6,7 +6,7 @@
 #include "case_types.adhd"
 #include "cook_tool_sdk.adhd"
 #include "path_sdk.adhd"
-#include <tests/common/test_context.adhd>
+#include <tests/integration/asset_fixture_paths.adhd>
 #include <pipeline/asset_builder/build.adhd>
 #include <pipeline/asset_gatherer/gather.adhd>
 #include <impl/assets_graphics/gather.adhd>
@@ -22,7 +22,7 @@ class GraphicsMerge{
 }
 
 Path GraphicsRepoPath(){
-    return RepoRootOf(s_GraphicsFixtureSource);
+    return Path(s_CookTestRepoRoot);
 }
 
 [cpp_unwind]

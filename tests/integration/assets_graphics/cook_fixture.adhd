@@ -107,56 +107,15 @@ type SkeletonAssetCodec = DeclaredAssetCodec<Skeleton>;
 type TextureAssetCodec = DeclaredAssetCodec<Texture>;
 type ModelAssetCodec = DeclaredAssetCodec<Model>;
 type AssetTestVector<T> = HeapStorageVector<T>;
-
 type MetaValue = MetascriptValue;
 type AssetBunchExpandFailureEnum = AssetBunchExpandFailure;
 type SamplerColor = Color;
 type ShaderArchiveRecord = Record;
 type TexturePayloadFormatEnum = TexturePayloadFormat;
 
-Expected<UniquePtr<IAsset>> DeserializeTestCodec(in IAssetCodec codec, in Name name, in Span<u8> binary, mut TestArena storage){ return codec.deserialize(name, Span<u8>(binary), storage.arena); }
 
-Expected<UniquePtr<IFilesystem>> MountGraphicsTestVolume(in GraphicsTestPath directory, mut TestArena storage){
-    VolumeMountDesc desc(storage.arena);
-    EXPECT_TRUE(desc.volumeName.assign("graphics"));
-    desc.mountDirectory = directory;
-    return CreateVolumeFilesystem(storage.arena, desc);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Expected<UniquePtr<IAsset>> LoadCookedAsset<Codec>(in GraphicsTestPath directory, in Name name, in usize expectedCount, mut TestArena storage){
-    auto mounted = MountGraphicsTestVolume(directory, storage);
-    EXPECT_TRUE(mounted.has_value());
-    if(!mounted.has_value())
-        return MakeUnexpected(mounted.error());
-    mut IFilesystem filesystem = mounted.value().deref();
-    if(expectedCount != 0u)
-        EXPECT_EQ(filesystem.fileCount(), expectedCount);
-    Vector<u8> binary;
-    const b8 loaded = filesystem.readFile(name, binary);
-    EXPECT_TRUE(loaded);
-    EXPECT_FALSE(binary.empty());
-    if(!loaded || binary.empty())
-        return MakeUnexpected(Failure());
-    Codec codec = Codec();
-    auto decoded = DeserializeTestCodec(codec, name, binary, storage);
-    EXPECT_TRUE(decoded.has_value());
-    return decoded;
-}
-
-Expected<T> LoadCookedValue<T, Codec>(in GraphicsTestPath directory, in Name name, in usize expectedCount, mut TestArena storage){
-    auto loaded = LoadCookedAsset<Codec>(directory, name, expectedCount, storage);
-    if(!loaded.has_value() || !loaded.value())
-        return MakeUnexpected(Failure());
-    return TakeTestAssetValue<T>(loaded.value().deref());
-}
-
-Expected<SamplerAsset> LoadCookedSamplerAsset(in GraphicsTestPath directory, in Name name, in usize count, mut TestArena storage){
-    return LoadCookedValue<SamplerAsset, SamplerAssetCodec>(directory, name, count, storage);
-}
-
-void CheckCodecRejectsBinary(in IAssetCodec codec, in Name path, in Span<u8> binary, mut TestArena storage){
-    EXPECT_FALSE(codec.deserialize(path, Span<u8>(binary), storage.arena).has_value());
-}
 
 [ordered]
 class BuildInputSelection{
@@ -245,96 +204,6 @@ class PathFixture{
     public String expectedDerived;
 }
 
-void PrepareAssetPathWorkload(in usize count, in StringView directory, in usize repeats, mut PathFixture fixture){
-    fixture.relativeText.reserve(count * (directory.size() * repeats + 1u) + 32u);
-    for(usize i = 0u; i < count; ++i){
-        for(usize token = 0u; token < repeats; ++token)
-            fixture.relativeText.append(directory);
-        fixture.relativeText.append("/");
-    }
-    fixture.relativeText.append("Model.LOD0.NWB");
-    fixture.relativePath = GraphicsTestPath(fixture.storage, StringView(fixture.relativeText));
-    fixture.sourcePath = fixture.assetRoot / fixture.relativePath;
-    fixture.expectedRelative = fixture.relativeText;
-    CanonicalizeTextInPlace(fixture.expectedRelative);
-    fixture.expectedDerived.reserve(8u + fixture.expectedRelative.size());
-    fixture.expectedDerived = "project/";
-    fixture.expectedDerived.append(StringView(fixture.expectedRelative).substr(0u, fixture.expectedRelative.size() - 4u));
-}
-
-b8 GatherBuiltDirectoryToOutput(mut TestArena storage, in GraphicsTestPath built, in GraphicsTestPath output){
-    AssetGatherOptions options;
-    options.inputs.emplace_back(PathToString(built));
-    options.outputDirectory = PathToString(output);
-    options.configuration = CompactString(s_TestsConfiguration);
-    return GatherAssets(options);
-}
-
-b8 BuildAndGatherWithExplicitRepoRoot(mut TestArena storage, in GraphicsTestPath root, in GraphicsTestPath assetRoot, in GraphicsTestPath built, in GraphicsTestPath output){
-    CpuTaskScheduler scheduler(0u);
-    AssetBuildOptions options(scheduler);
-    options.repoRoot = root;
-    options.outputDirectory = built;
-    if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign("graphics"))
-        return false;
-    options.assetRoots.emplace_back(assetRoot, s_ProjectVirtualRoot);
-    return BuildAssets(options) && GatherBuiltDirectoryToOutput(storage, built, output);
-}
-
-void CorruptManifestLastPayloadHash(mut CookPackManifest manifest){ manifest.entries.back().identity.payloadHash ^= 1u; }
-
-String UnboundMaterialShaderProbeText(){
-    String result;
-    GraphicsStringAppendFormat(result, "#define NWB_MESH_GBUFFER_BASE_COLOR_LOCATION {}\n#define NWB_MESH_GBUFFER_NORMAL_LOCATION {}\n#define NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION {}\n", s_ShaderMeshGbufferBaseColorLocation, s_ShaderMeshGbufferNormalLocation, s_ShaderMeshGbufferWorldPositionLocation);
-    result.append(s_UnboundProbeBody);
-    return result;
-}
-
-StringView EmbeddedNulInputPath(){ return StringView("nul\0byte", 8u); }
-StringView EmbeddedNulMaterialResourceCandidate(){ return StringView("project/\0value", 14u); }
-b8 HasNonZeroErrorCode(in ErrorCode code){ return code.value() != 0; }
-u32 MaterialParamF32ValueTypeId(){ return cast<u32>(MaterialParameterValueType::f32); }
-
-Expected<BuiltAssetFileHeader> ReadBuiltAssetFileHeader(in Span<u8> bytes){
-    usize cursor = 0u;
-    return ReadPOD<BuiltAssetFileHeader>(bytes, cursor);
-}
-
-void ExpectNoShaderCompilerWorkDirectories(in GraphicsTestPath cache){
-    const Path root(cache);
-    const auto entries = RecursiveDirectoryIteratorCreate(root);
-    ASSERT_TRUE(entries.has_value());
-    for(in DirectoryEntry entry : entries.value()){
-        const String name = PathToString(entry.path().filenameView());
-        ScopedTestTrace trace(name);
-        EXPECT_FALSE(StringView(name).starts_with(".nwb_shader_"));
-    }
-}
-
-Expected<GraphicsTestPath> FindSingleShaderBytecodeCachePath(in GraphicsTestPath cache, mut TestArena storage){
-    const Path root(cache);
-    const auto entries = RecursiveDirectoryIteratorCreate(root);
-    EXPECT_TRUE(entries.has_value());
-    if(!entries.has_value())
-        return MakeUnexpected(Failure());
-    Path found;
-    usize count = 0u;
-    for(in DirectoryEntry entry : entries.value()){
-        const auto regular = entry.isRegularFile();
-        EXPECT_TRUE(regular.has_value());
-        if(!regular.has_value())
-            return MakeUnexpected(Failure());
-        if(regular.value() && entry.path().extensionView() == PlatformTextLiteral(".spv")){
-            found = entry.path();
-            ++count;
-        }
-    }
-    EXPECT_EQ(count, 1u);
-    if(count != 1u)
-        return MakeUnexpected(Failure());
-    return OwnGraphicsPath(storage, found);
-}
-
 class GatherMergeCount{
     public usize calls = 0u;
 }
@@ -348,12 +217,6 @@ class GatherBytesMerge{
             output.push_back(byte);
         return true;
     }
-}
-
-Expected<Name> GatherInputAssetName(in usize index){
-    CompactString text;
-    AppendUnsignedDecimal(text, index);
-    return DeriveName(s_AssetCaseProjectGather, text.view());
 }
 
 [ordered]
@@ -447,6 +310,153 @@ class CookCase{
 class SpirvModelStageCase{
     public ShaderStageMask stage = ShaderStageMask();
     public u32 model = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UniquePtr<IAsset>> DeserializeTestCodec(in IAssetCodec codec, in Name name, in Span<u8> binary, mut TestArena storage){ return codec.deserialize(name, Span<u8>(binary), storage.arena); }
+
+Expected<UniquePtr<IFilesystem>> MountGraphicsTestVolume(in GraphicsTestPath directory, mut TestArena storage){
+    VolumeMountDesc desc(storage.arena);
+    EXPECT_TRUE(desc.volumeName.assign("graphics"));
+    desc.mountDirectory = directory;
+    return CreateVolumeFilesystem(storage.arena, desc);
+}
+
+Expected<UniquePtr<IAsset>> LoadCookedAsset<Codec>(in GraphicsTestPath directory, in Name name, in usize expectedCount, mut TestArena storage){
+    auto mounted = MountGraphicsTestVolume(directory, storage);
+    EXPECT_TRUE(mounted.has_value());
+    if(!mounted.has_value())
+        return MakeUnexpected(mounted.error());
+    mut IFilesystem filesystem = mounted.value().deref();
+    if(expectedCount != 0u)
+        EXPECT_EQ(filesystem.fileCount(), expectedCount);
+    Vector<u8> binary;
+    const b8 loaded = filesystem.readFile(name, binary);
+    EXPECT_TRUE(loaded);
+    EXPECT_FALSE(binary.empty());
+    if(!loaded || binary.empty())
+        return MakeUnexpected(Failure());
+    Codec codec = Codec();
+    auto decoded = DeserializeTestCodec(codec, name, binary, storage);
+    EXPECT_TRUE(decoded.has_value());
+    return decoded;
+}
+
+Expected<T> LoadCookedValue<T, Codec>(in GraphicsTestPath directory, in Name name, in usize expectedCount, mut TestArena storage){
+    auto loaded = LoadCookedAsset<Codec>(directory, name, expectedCount, storage);
+    if(!loaded.has_value() || !loaded.value())
+        return MakeUnexpected(Failure());
+    return TakeTestAssetValue<T>(loaded.value().deref());
+}
+
+Expected<SamplerAsset> LoadCookedSamplerAsset(in GraphicsTestPath directory, in Name name, in usize count, mut TestArena storage){
+    return LoadCookedValue<SamplerAsset, SamplerAssetCodec>(directory, name, count, storage);
+}
+
+void CheckCodecRejectsBinary(in IAssetCodec codec, in Name path, in Span<u8> binary, mut TestArena storage){
+    EXPECT_FALSE(codec.deserialize(path, Span<u8>(binary), storage.arena).has_value());
+}
+
+void PrepareAssetPathWorkload(in usize count, in StringView directory, in usize repeats, mut PathFixture fixture){
+    fixture.relativeText.reserve(count * (directory.size() * repeats + 1u) + 32u);
+    for(usize i = 0u; i < count; ++i){
+        for(usize token = 0u; token < repeats; ++token)
+            fixture.relativeText.append(directory);
+        fixture.relativeText.append("/");
+    }
+    fixture.relativeText.append("Model.LOD0.NWB");
+    fixture.relativePath = GraphicsTestPath(fixture.storage, StringView(fixture.relativeText));
+    fixture.sourcePath = fixture.assetRoot / fixture.relativePath;
+    fixture.expectedRelative = fixture.relativeText;
+    CanonicalizeTextInPlace(fixture.expectedRelative);
+    fixture.expectedDerived.reserve(8u + fixture.expectedRelative.size());
+    fixture.expectedDerived = "project/";
+    fixture.expectedDerived.append(StringView(fixture.expectedRelative).substr(0u, fixture.expectedRelative.size() - 4u));
+}
+
+b8 GatherBuiltDirectoryToOutput(mut TestArena storage, in GraphicsTestPath built, in GraphicsTestPath output){
+    AssetGatherOptions options;
+    options.inputs.emplace_back(PathToString(built));
+    options.outputDirectory = PathToString(output);
+    options.configuration = CompactString(s_TestsConfiguration);
+    return GatherAssets(options);
+}
+
+b8 BuildAndGatherWithExplicitRepoRoot(mut TestArena storage, in GraphicsTestPath root, in GraphicsTestPath assetRoot, in GraphicsTestPath built, in GraphicsTestPath output){
+    CpuTaskScheduler scheduler(0u);
+    AssetBuildOptions options(scheduler);
+    options.repoRoot = root;
+    options.outputDirectory = built;
+    if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign("graphics"))
+        return false;
+    options.assetRoots.emplace_back(assetRoot, s_ProjectVirtualRoot);
+    return BuildAssets(options) && GatherBuiltDirectoryToOutput(storage, built, output);
+}
+
+void CorruptManifestLastPayloadHash(mut CookPackManifest manifest){ manifest.entries.back().identity.payloadHash ^= 1u; }
+
+String UnboundMaterialShaderProbeText(){
+    String result;
+    GraphicsStringAppendFormat(result, "#define NWB_MESH_GBUFFER_BASE_COLOR_LOCATION {}\n#define NWB_MESH_GBUFFER_NORMAL_LOCATION {}\n#define NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION {}\n", s_ShaderMeshGbufferBaseColorLocation, s_ShaderMeshGbufferNormalLocation, s_ShaderMeshGbufferWorldPositionLocation);
+    result.append(s_UnboundProbeBody);
+    return result;
+}
+
+StringView EmbeddedNulInputPath(){ return StringView("nul\0byte", 8u); }
+
+StringView EmbeddedNulMaterialResourceCandidate(){ return StringView("project/\0value", 14u); }
+
+b8 HasNonZeroErrorCode(in ErrorCode code){ return code.value() != 0; }
+
+u32 MaterialParamF32ValueTypeId(){ return cast<u32>(MaterialParameterValueType::f32); }
+
+Expected<BuiltAssetFileHeader> ReadBuiltAssetFileHeader(in Span<u8> bytes){
+    usize cursor = 0u;
+    return ReadPOD<BuiltAssetFileHeader>(bytes, cursor);
+}
+
+void ExpectNoShaderCompilerWorkDirectories(in GraphicsTestPath cache){
+    const Path root(cache);
+    const auto entries = RecursiveDirectoryIteratorCreate(root);
+    ASSERT_TRUE(entries.has_value());
+    for(in DirectoryEntry entry : entries.value()){
+        const String name = PathToString(entry.path().filenameView());
+        ScopedTestTrace trace(name);
+        EXPECT_FALSE(StringView(name).starts_with(".nwb_shader_"));
+    }
+}
+
+Expected<GraphicsTestPath> FindSingleShaderBytecodeCachePath(in GraphicsTestPath cache, mut TestArena storage){
+    const Path root(cache);
+    const auto entries = RecursiveDirectoryIteratorCreate(root);
+    EXPECT_TRUE(entries.has_value());
+    if(!entries.has_value())
+        return MakeUnexpected(Failure());
+    Path found;
+    usize count = 0u;
+    for(in DirectoryEntry entry : entries.value()){
+        const auto regular = entry.isRegularFile();
+        EXPECT_TRUE(regular.has_value());
+        if(!regular.has_value())
+            return MakeUnexpected(Failure());
+        if(regular.value() && entry.path().extensionView() == PlatformTextLiteral(".spv")){
+            found = entry.path();
+            ++count;
+        }
+    }
+    EXPECT_EQ(count, 1u);
+    if(count != 1u)
+        return MakeUnexpected(Failure());
+    return OwnGraphicsPath(storage, found);
+}
+
+Expected<Name> GatherInputAssetName(in usize index){
+    CompactString text;
+    AppendUnsignedDecimal(text, index);
+    return DeriveName(s_AssetCaseProjectGather, text.view());
 }
 
 TestAString BuildTriangleMeta(in StringView assetHeader, in StringView normalField, in StringView tangentField, in StringView vertexRefsField, in StringView suffix){
@@ -603,6 +613,7 @@ void InsertEvaluatorIncludeMetadata(in GraphicsTestPath path, in StringView opti
 }
 
 b8 HasPreparedShaderDefine(in PreparedShaderEntry prepared, in StringView name){ return prepared.entry.defineValues.contains(name); }
+
 Vector<String> GetPreparedShaderDefineValues(in PreparedShaderEntry prepared, in StringView name){ return prepared.entry.defineValues.find(name).value().values; }
 
 CsgShapeTypeId FindCookedCsgShapeTypeId(in CsgShapeCookEntryVector entries, in Name name){
@@ -908,10 +919,12 @@ void SetMaterialBindEntryVirtualPath(mut MaterialBindEntry entry, in StringView 
     entry.virtualPath = virtualPath;
 }
 
+[cpp_unwind]
 b8 CanBuildMaterialBindIncludeSource(in MaterialBindEntry entry, mut TestArena testArena, mut GraphicsScratchArena scratch){
     return BuildMaterialBindIncludeSource(entry).has_value();
 }
 
+[cpp_unwind]
 b8 CanFindOrBuildMaterialBindTypedLayout(in Name cacheInterface, in MaterialBindEntry entry, mut GraphicsScratchArena scratch, mut MaterialBindTypedLayoutCache layoutCache){
     return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, layoutCache).has_value();
 }
@@ -962,6 +975,7 @@ b8 CookMinimalMeshWithMaterialBind(in StringView bindText, in CookCase cookCase,
     return CookSingleAssetRoot(testArena, cookCase.root, cookCase.outputDirectory, assetRoot);
 }
 
+[cpp_unwind]
 b8 CanEmitDuplicateMaterialBindIncludePath(mut TestArena testArena, in CookCase cookCase){
     Vector<MaterialBindEntry> entries;
     const Array<StringView, 2u> directories("first", "second");
@@ -1060,6 +1074,7 @@ Expected<MeshletAttributeStreamRef> DecodeMeshAssetAttributeRef(in MeshAsset mes
 }
 
 Expected<ShaderCookEntry> ReadTestShaderEntry(in GraphicsTestPath path, in MetascriptDocument document){ return ReadShaderMetadata(path, document); }
+
 Expected<ShaderIncludeEntry> ReadTestShaderInclude(in GraphicsTestPath path, in MetascriptDocument document){ return ReadShaderIncludeMetadata(path, document); }
 
 Expected<ShaderCookEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
@@ -1108,11 +1123,12 @@ b8 PathVectorContains(in ShaderCookPathVector paths, in GraphicsTestPath target)
     return false;
 }
 
-b8 ReadTextFileMatches(in GraphicsTestPath path, in StringView expected, mut GraphicsScratchArena scratch, mut b8 outMatches){
+Expected<b8, ErrorCode> ReadTextFileMatches(in GraphicsTestPath path, in StringView expected, mut GraphicsScratchArena scratch){
     String text;
-    const b8 read = GraphicsReadTextFile(path, text).has_value();
-    outMatches = read && StringView(text) == expected;
-    return read;
+    const Expected<void, ErrorCode> read = GraphicsReadTextFile(path, text);
+    if(!read.has_value())
+        return MakeUnexpected(read.error());
+    return StringView(text) == expected;
 }
 
 b8 ValidateShaderEntryVariantSignature(in StringView assetName, in StringView signature, in ShaderCookShaderEntry entry, mut GraphicsScratchArena scratch){
@@ -1198,6 +1214,7 @@ usize TestArenaUsedBytes(in TestArena testArena){
     return cast<usize>(testArena.arena.memoryStats().usedBytes);
 }
 
+[cpp_unwind]
 b8 CanDecodeFirstTextureMip(mut TextureMipDecoder decoder, in TextureAsset texture, in FormatEnum format, mut GraphicsScratchArena scratch){
     return decoder.decode(texture, texture.mipLevels().front(), 0u, format).has_value();
 }

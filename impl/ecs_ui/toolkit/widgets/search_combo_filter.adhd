@@ -64,7 +64,7 @@ class SearchComboFilterRules{
         return rebuild || externalQueryChange;
     }
 
-    public void commitSearchComboFilterState(
+    [cpp_unwind] public void commitSearchComboFilterState(
         in b8 rebuild,
         in StringView candidate,
         in SearchComboSourceSnapshot full,
@@ -113,6 +113,8 @@ class SearchComboState : NoCopy{
     public u64 m_queryGeneration = 0u;
     public u64 m_queryExternalRevision = 0u;
     public b8 m_filterValid = false;
+
+    [cpp_unwind] public SearchComboState(){}
 
     public in ComboState combo()const{
         return this.m_combo;

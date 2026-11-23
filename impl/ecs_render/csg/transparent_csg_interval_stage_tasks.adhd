@@ -134,13 +134,15 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     );
     const auto preTaskResult = this.m_graph.addPreparedPayloadTask(avboitIntervalDesc, prePayload);
     if(!preTaskResult.has_value()){
-        this.m_avboitSystem.taskGraphStage().m_preTask = GpuTaskId();
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare transparent CSG interval graph task");
         return MakeUnexpected(Failure());
     }
-    this.m_avboitSystem.taskGraphStage().m_preTask = preTaskResult.value();
+    const GpuTaskId preTask = preTaskResult.value();
 
-    GpuTaskId avboitIntervalCompletionTask = this.m_avboitSystem.taskGraphStage().m_preTask;
+    GpuTaskId csgReceiverSpanTask = GpuTaskId();
+    GpuTaskId csgIntervalCombineTask = GpuTaskId();
+    GpuTaskId avboitIntervalCompletionTask = preTask;
     b8 avboitIntervalOutputsGraphOwned = false;
     if(avboitCsgReceiverSpanGraphOwned){
         const Array<GpuTaskResourceUse, 6u> avboitIntervalSpanResourceUses = Array<GpuTaskResourceUse, 6u>(
@@ -161,17 +163,17 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setIdentity(Name(s_RenderNameRenderAvboitTransparentCsgReceiverSpan))
             .setMarkerLabel("Transparent CSG Receiver Span")
             .setScheduling(avboitIntervalSpanScheduling)
-            .setDependency(this.m_avboitSystem.taskGraphStage().m_preTask)
+            .setDependency(preTask)
             .setResourceUses(avboitIntervalSpanResourceUses)
         ;
         const auto csgReceiverSpanTaskResult = this.m_graph.addPreparedPayloadTask(avboitIntervalSpanDesc, receiverSpanPayload);
         if(!csgReceiverSpanTaskResult.has_value()){
-            this.m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = GpuTaskId();
+            this.m_avboitSystem.taskGraphStage().reset();
             warning("RendererSystem: could not declare transparent CSG receiver-span graph task");
             return MakeUnexpected(Failure());
         }
-        this.m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = csgReceiverSpanTaskResult.value();
-        avboitIntervalCompletionTask = this.m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
+        csgReceiverSpanTask = csgReceiverSpanTaskResult.value();
+        avboitIntervalCompletionTask = csgReceiverSpanTask;
     }
     if(avboitCsgIntervalCombineGraphOwned){
         const Array<GpuTaskResourceUse, 11u> avboitIntervalCombineResourceUses = Array<GpuTaskResourceUse, 11u>(
@@ -202,14 +204,17 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         ;
         const auto csgIntervalCombineTaskResult = this.m_graph.addPreparedPayloadTask(avboitIntervalCombineDesc, intervalCombinePayload);
         if(!csgIntervalCombineTaskResult.has_value()){
-            this.m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = GpuTaskId();
+            this.m_avboitSystem.taskGraphStage().reset();
             warning("RendererSystem: could not declare transparent CSG interval-combine graph task");
             return MakeUnexpected(Failure());
         }
-        this.m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = csgIntervalCombineTaskResult.value();
-        avboitIntervalCompletionTask = this.m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;
+        csgIntervalCombineTask = csgIntervalCombineTaskResult.value();
+        avboitIntervalCompletionTask = csgIntervalCombineTask;
         avboitIntervalOutputsGraphOwned = true;
     }
+    this.m_avboitSystem.taskGraphStage().m_preTask = preTask;
+    this.m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = csgReceiverSpanTask;
+    this.m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = csgIntervalCombineTask;
     result.intervalCompletionTask = avboitIntervalCompletionTask;
     result.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
     return result;
@@ -396,15 +401,16 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
         clearDesc.csgReceiverEventCountSubresources = inputs.resources.csgReceiverEventCountSubresources;
         clearDesc.clearRect = ToCoreRect(avboitPrePayload.transparentCsgSnapshot.frameData.workRegion.resolveRect(inputs.targets.width, inputs.targets.height));
         clearDesc.dependencyTask = result.uploadTask;
-        if(!DeclareCsgIntervalRectClearTasks(
+        const Expected<OpaqueCsgIntervalClearResult> clearResult = DeclareCsgIntervalRectClearTasks(
             clearDesc,
             this.m_graph,
-            intervalClearTimingState,
-            this.m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask,
-            this.m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask
-        ))
+            intervalClearTimingState
+        );
+        if(!clearResult.has_value())
             return MakeUnexpected(Failure());
-        result.uploadTask = this.m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
+        this.m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask = clearResult.value().clearFirstTask;
+        this.m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask = clearResult.value().clearTask;
+        result.uploadTask = clearResult.value().clearTask;
         assert(avboitPrePayload.transparentCsgStreamsUploaded && avboitPrePayload.transparentCsgSnapshot.captured);
     }
     result.materialGeometrySet = transparentCsgMaterialGeometrySet;

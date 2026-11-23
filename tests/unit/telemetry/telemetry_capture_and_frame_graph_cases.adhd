@@ -5,21 +5,27 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/telemetry/suite.adhd>
+#include <tests/common/threads.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/threads.adhd>
+const usize s_DiagnosticAttemptsPerThread = 256u;
+const u32 s_CaptureMessagesPerWriter = 384u;
+const StringView s_ScopeDiagnosticCategory = "scope_diagnostic";
+const StringView s_TelemetryGuardCategory = "telemetry_guard";
+const StringView s_ErrorEvent = "error";
+const usize s_EncodedPhysicalQueueMutationCount = 22u;
 
-static_assert(s_TelemetryGuardCaptureIsNothrow);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ExistingCallbackObservations{ public u32 calls = 0u; }
 
-void ExistingDiagnosticCallback(in borrow DiagnosticEventRecord record){
-    ++TestProcessValue<ExistingCallbackObservations>().calls;
-}
 class TelemetryUnwindMarker{}
+
 class CaptureOnUnwind{
     public ~CaptureOnUnwind(){ CaptureDiagnosticEvent(MakeDiagnosticEvent("warning", "unwind", "cleanup failed", "", 0u)); }
 }
@@ -62,14 +68,15 @@ class OwnerThreadTimingSink : TimingSink{
     }
 }
 
-const StringView s_ScopeDiagnosticCategory = "scope_diagnostic";
-const StringView s_TelemetryGuardCategory = "telemetry_guard";
-const StringView s_ErrorEvent = "error";
-const usize s_EncodedPhysicalQueueMutationCount = 22u;
+static_assert(s_TelemetryGuardCaptureIsNothrow);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void ExistingDiagnosticCallback(in borrow DiagnosticEventRecord record){
+    ++TestProcessValue<ExistingCallbackObservations>().calls;
+}
 
 OwnerThreadTimingSink MakeOwnerThreadTimingSink(mut CpuTaskScheduler scheduler, mut TimingRecorder recorder, in b8 injectTasks){
     return OwnerThreadTimingSink(scheduler, recorder, injectTasks);
@@ -544,17 +551,16 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
-    const usize s_AttemptsPerThread = 256u;
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
     DiagnosticEventRecord source = DiagnosticEventRecord();
     source.event = s_ErrorEvent;
     source.message = "concurrent bounded observer";
     {
         TestAtomic<b8> start(false);
-        const auto capture = lambda[mut start, in s_AttemptsPerThread, mut guard, in source]() -> void{
+        const auto capture = lambda[mut start, mut guard, in source]() -> void{
             while(!start.load(MemoryOrder::acquire))
                 start.wait(false, MemoryOrder::acquire);
-            for(usize attempt = 0u; attempt < s_AttemptsPerThread; ++attempt)
+            for(usize attempt = 0u; attempt < s_DiagnosticAttemptsPerThread; ++attempt)
                 guard.capture(source);
         };
         JoiningThread first(capture);
@@ -567,7 +573,7 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     const ArenaMemoryStats captured = testArena.arena.memoryStats();
     EXPECT_GT(recorder.eventCount(), 0u);
     EXPECT_LE(recorder.eventCount(), s_DiagnosticCaptureEventCapacity);
-    EXPECT_EQ(recorder.eventCount() + recorder.droppedDiagnosticCount(), s_AttemptsPerThread * 2u);
+    EXPECT_EQ(recorder.eventCount() + recorder.droppedDiagnosticCount(), s_DiagnosticAttemptsPerThread * 2u);
     EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
     const u64 dropped = recorder.droppedDiagnosticCount();
@@ -661,8 +667,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
 
 void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurrentChurn(){
     const u32 s_WriterCount = 4u;
-    const u32 s_MessagesPerWriter = 384u;
-    const u32 s_ExpectedForwardCount = s_WriterCount * s_MessagesPerWriter;
+    const u32 s_ExpectedForwardCount = s_WriterCount * s_CaptureMessagesPerWriter;
     const u32 s_BaseStreamId = 70u;
 
     TelemetryTestArena testArena = TelemetryTestArena();
@@ -681,9 +686,9 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
         TestAtomic<u32> activeWriters(kWriters);
         Array<Optional<JoiningThread>, 4u> writers;
         for(u32 writerIndex = 0u; writerIndex < kWriters; ++writerIndex){
-            writers[writerIndex].emplace(lambda[mut startGate, mut activeWriters, in s_MessagesPerWriter]() -> void{
+            writers[writerIndex].emplace(lambda[mut startGate, mut activeWriters]() -> void{
                 startGate.arrive_and_wait();
-                for(u32 messageIndex = 0u; messageIndex < s_MessagesPerWriter; ++messageIndex){
+                for(u32 messageIndex = 0u; messageIndex < s_CaptureMessagesPerWriter; ++messageIndex){
                     [essential] info("concurrent capture scope text {}", messageIndex);
                     if((messageIndex & 7u) == 0u)
                         YieldThread();
@@ -1417,39 +1422,64 @@ void VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalfo
     EXPECT_FALSE(ParseFrameGraphPrefix(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction, VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction)
+
 NWB_ADHD_GTEST(Telemetry, TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAndStillForwards, VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAndStillForwards)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader, VerifyTelemetry_DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticPayloadPreservesAliasedTextFields, VerifyTelemetry_DiagnosticPayloadPreservesAliasedTextFields)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback, VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflow, VerifyTelemetry_DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflow)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDiagnostics, VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDiagnostics)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverCapturesDuringUnwindWithoutAllocating, VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverPreservesPublishedRecordsAcrossFlagTogglesAndFiltersDisabledCapture, VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagTogglesAndFiltersDisabledCapture)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinaryEventsFillIt, VerifyTelemetry_DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinaryEventsFillIt)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuilderReentry, VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuilderReentry)
+
 NWB_ADHD_GTEST(Telemetry, ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt, VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt)
+
 NWB_ADHD_GTEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress, VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress)
+
 NWB_ADHD_GTEST(Telemetry, CaptureScopePreservesForwardedLogsAndMetadataUnderConcurrentChurn, VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurrentChurn)
+
 NWB_ADHD_GTEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterPublication, VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtLaterPublication)
+
 NWB_ADHD_GTEST(CpuTaskProfileIntegration, DisabledTimingSinkDiscardsBufferedSamples, VerifyCpuTaskProfileIntegration_DisabledTimingSinkDiscardsBufferedSamples)
+
 NWB_ADHD_GTEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot, VerifyCpuTaskProfileIntegration_CollectorConsumesOnlyItsInitialPendingSnapshot)
+
 NWB_ADHD_GTEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThread, VerifyCpuTaskProfileIntegration_NativeWorkerSamplesAreRecordedOnTheCollectorThread)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPayloadPreservesBorrowedLabelsWhenRebuiltInPlace, VerifyTelemetry_FrameGraphPayloadPreservesBorrowedLabelsWhenRebuiltInPlace)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPayloadRejectsCorruptedHeaderAfterValidParse, VerifyTelemetry_FrameGraphPayloadRejectsCorruptedHeaderAfterValidParse)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPayloadRejectsNonCurrentVersions, VerifyTelemetry_FrameGraphPayloadRejectsNonCurrentVersions)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPayloadRejectsHistoricalEmptyPayloads, VerifyTelemetry_FrameGraphPayloadRejectsHistoricalEmptyPayloads)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords, VerifyTelemetry_FrameGraphQueueAssignmentPayloadRejectsMalformedRecords)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords, VerifyTelemetry_FrameGraphCompiledTaskPayloadRejectsMalformedRecords)
+
 NWB_ADHD_GTEST(Telemetry, PacketSubmissionStatisticsRejectInconsistentCountsAndNonfiniteTime, VerifyTelemetry_PacketSubmissionStatisticsRejectInconsistentCountsAndNonfiniteTime)
+
 NWB_ADHD_GTEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals, VerifyTelemetry_InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals)
+
 NWB_ADHD_GTEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder, VerifyTelemetry_PacketSubmissionEncodingIsIndependentOfInputOrder)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecords, VerifyTelemetry_FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecords)
+
 NWB_ADHD_GTEST(Telemetry, PhysicalQueueDecodeShrinkingInputClearsPreviousRecords, VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords)
+
 NWB_ADHD_GTEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedRecords, VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedRecords)
 
 

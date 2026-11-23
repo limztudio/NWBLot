@@ -41,11 +41,19 @@ b8 ValidateSingleAssetRefComponentPayload(
 }
 
 b8 ModelComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    ModelComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 ModelComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_ModelComponentLoadPayloadContext, this.component.model.virtualPath);
+    const Expected<Name> virtualPath = GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_ModelComponentLoadPayloadContext);
+    if(!virtualPath.has_value())
+        return false;
+    this.component.model.virtualPath = virtualPath.value();
+    return true;
 }
 
 b8 ModelComponentAsset::validatePayload()const{
@@ -61,11 +69,19 @@ b8 ModelComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary
 }
 
 b8 MeshComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    MeshComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 MeshComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_MeshComponentLoadPayloadContext, this.component.mesh.virtualPath);
+    const Expected<Name> virtualPath = GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_MeshComponentLoadPayloadContext);
+    if(!virtualPath.has_value())
+        return false;
+    this.component.mesh.virtualPath = virtualPath.value();
+    return true;
 }
 
 b8 MeshComponentAsset::validatePayload()const{
@@ -81,11 +97,19 @@ b8 MeshComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)
 }
 
 b8 RendererComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    RendererComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 RendererComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return GraphicsComponentBinaryCodec().deserializeRenderer(payload, this.component);
+    const Expected<RendererComponent> component = GraphicsComponentBinaryCodec().deserializeRenderer(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
 }
 
 b8 RendererComponentAsset::validatePayload()const{

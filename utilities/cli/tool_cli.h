@@ -7,8 +7,6 @@
 
 #include <engine_namespace.h>
 #include <global/containers.h>
-#include <global/expected.h>
-#include <global/inplace_function.h>
 #include <CLI.hpp>
 
 
@@ -33,7 +31,6 @@ struct ConsoleArguments{
     }
 };
 
-[[nodiscard]] Expected<i32> TryConsoleCommand(const ConsoleArguments& arguments, const InplaceFunction<64u, i32(const ConsoleArguments&)>& command)noexcept;
 void ConsoleWrite(AStringView text);
 void ConsoleWriteError(AStringView text);
 b8 ConsoleReadLine(AString<::ArenaBase>& line);

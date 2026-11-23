@@ -498,6 +498,10 @@ const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwne
     return record.next;
 }
 
+Name ReadArenaMemoryOwnerName(const ArenaMemoryOwnerRecord& record)noexcept{
+    return record.ownerName;
+}
+
 const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept{
     outSnapshot.ownerName = record.ownerName;
     outSnapshot.source = record.source;

@@ -18,6 +18,28 @@ class MeshTextReplacement{
     public String text;
 }
 
+class MeshRefreshDocument : NoCopy{
+    private in Path file;
+    private in MetascriptDocument document;
+    private StringView source;
+    public Vector<MeshTextReplacement> replacements;
+    public SourceMeshCanonicalizeReport report;
+    public b8 sawMesh = false;
+
+    public MeshRefreshDocument(in Path file, in MetascriptDocument document, in StringView source){
+        this.file = file;
+        this.document = document;
+        this.source = source;
+    }
+
+    [cpp_unwind]
+    public b8 refreshDeclaration(in StringView typeName, in StringView variable);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateRefreshMeshFields(in Path file, in StringView variable, in MetascriptValue asset){
     if(!asset.isMap()){
         error("{} meta '{}': '{}' is not a map", s_MeshMetaKindText, file, variable);
@@ -31,6 +53,7 @@ b8 ValidateRefreshMeshFields(in Path file, in StringView variable, in Metascript
     });
 }
 
+[cpp_unwind]
 Expected<SourceMeshStreams> ParseRefreshMesh(in Path file, in StringView variable, in MetascriptValue asset){
     SourceMeshStreams mesh;
     if(!ValidateRefreshMeshFields(file, variable, asset)
@@ -104,6 +127,7 @@ Expected<AssignmentRange> FindListAssignmentRange(in StringView source, in Strin
     return range;
 }
 
+[cpp_unwind]
 b8 AddMeshReplacement(in StringView source, in StringView variableName, in StringView field, in String text, mut Vector<MeshTextReplacement> replacements){
     const auto range = FindListAssignmentRange(source, variableName, field);
     if(!range.has_value()){
@@ -118,6 +142,7 @@ b8 AddMeshReplacement(in StringView source, in StringView variableName, in Strin
     return true;
 }
 
+[cpp_unwind]
 b8 AppendMeshReplacements(in StringView source, in StringView variable, in SourceMeshStreamCounts before, in SourceMeshStreams after, mut Vector<MeshTextReplacement> replacements){
     if(before.positions != after.positions.size() && !AddMeshReplacement(source, variable, s_MeshPositionsFieldNameView, FormatMeshRefreshList<Vec3>(after.positions, 40u), replacements))
         return false;
@@ -157,6 +182,7 @@ Expected<Optional<StringView>> FindMeshSkin(in MetascriptDocument document, in S
     return found;
 }
 
+[cpp_unwind]
 Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in MetascriptDocument document, in StringView variable, mut SourceMeshStreams mesh){
     const auto linked = FindMeshSkin(document, variable);
     if(!linked.has_value())
@@ -172,43 +198,30 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in
     return CanonicalizeMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.skin, mesh.indices.size(), mesh.vertexRefs, PositionSkinRemap::Deduplicate);
 }
 
-class MeshRefreshDocument : NoCopy{
-    private in Path file;
-    private in MetascriptDocument document;
-    private StringView source;
-    public Vector<MeshTextReplacement> replacements;
-    public SourceMeshCanonicalizeReport report;
-    public b8 sawMesh = false;
-
-    public MeshRefreshDocument(in Path file, in MetascriptDocument document, in StringView source){
-        this.file = file;
-        this.document = document;
-        this.source = source;
-    }
-
-    public b8 refreshDeclaration(in StringView typeName, in StringView variable){
-        if(!IsMeshRefreshDeclarationType(typeName))
-            return true;
-        this.sawMesh = true;
-        const auto value = this.document.borrowVariable(variable);
-        if(!value.has_value()){
-            error("Failed to refresh NWB mesh: missing mesh variable '{}'", variable);
-            return false;
-        }
-        auto mesh = ParseRefreshMesh(this.file, variable, value.value());
-        if(!mesh.has_value())
-            return false;
-        const auto canonical = CanonicalizeRefreshMesh(this.file, this.document, variable, mesh.value());
-        if(!canonical.has_value())
-            return false;
-        ApplyCanonicalizedStreams(canonical.value(), mesh.value());
-        if(!AppendMeshReplacements(this.source, variable, canonical.value().report.before, mesh.value(), this.replacements))
-            return false;
-        AccumulateReport(canonical.value().report, this.report);
+[cpp_unwind]
+b8 MeshRefreshDocument::refreshDeclaration(in StringView typeName, in StringView variable){
+    if(!IsMeshRefreshDeclarationType(typeName))
         return true;
+    this.sawMesh = true;
+    const auto value = this.document.borrowVariable(variable);
+    if(!value.has_value()){
+        error("Failed to refresh NWB mesh: missing mesh variable '{}'", variable);
+        return false;
     }
+    auto mesh = ParseRefreshMesh(this.file, variable, value.value());
+    if(!mesh.has_value())
+        return false;
+    const auto canonical = CanonicalizeRefreshMesh(this.file, this.document, variable, mesh.value());
+    if(!canonical.has_value())
+        return false;
+    ApplyCanonicalizedStreams(canonical.value(), mesh.value());
+    if(!AppendMeshReplacements(this.source, variable, canonical.value().report.before, mesh.value(), this.replacements))
+        return false;
+    AccumulateReport(canonical.value().report, this.report);
+    return true;
 }
 
+[cpp_unwind]
 Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(in Path inputPath, in Path outputPath){
     String source;
     const auto read = ReadTextFile(inputPath, source);

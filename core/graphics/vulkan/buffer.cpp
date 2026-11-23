@@ -96,12 +96,12 @@ Buffer::~Buffer()noexcept{
     const VkBuffer registeredNativeBuffer = m_buffer;
 
     {
-        ScopedLock bindingLock(m_memoryBindingMutex);
+        NothrowScopedLock bindingLock(m_memoryBindingMutex);
         m_gpuReady.store(false, MemoryOrder::release);
         if(m_boundHeap){
             auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
-                ScopedLock heapLock(boundHeap.m_bindingMutex);
+                NothrowScopedLock heapLock(boundHeap.m_bindingMutex);
                 if(m_buffer != VK_NULL_HANDLE){
                     m_context.deviceDispatch.vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
                     m_buffer = VK_NULL_HANDLE;

@@ -8,6 +8,210 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[modular]
+class UiTextEditSession : NoCopy{
+    private mut ITextInputService m_service;
+    private TextInputEvent m_event = TextInputEvent();
+    private EditModelSnapshot m_expectedModel;
+    private EditModelSnapshot m_publishedModel;
+    private UiTextEditOwner m_owner;
+    private TextInputSessionToken m_token;
+    private u64 m_surroundingRevision = 0u;
+    private u64 m_lastSequence = 0u;
+
+    public UiTextEditSession(mut ITextInputService service){
+        this.m_service = service;
+    }
+
+    public ~UiTextEditSession(){
+        if(!this.cancel())
+            TerminateInvariant();
+    }
+
+    [cpp_unwind] public TextInputAdmission begin(in UiTextEditOwner owner, in TextInputRect caret, mut EditModel model){
+        if(!this.m_service.isOwnerThread())
+            return TextInputAdmission::WrongThread;
+        if(!owner.valid() || model.composition().active)
+            return TextInputAdmission::InvalidSession;
+        if(this.m_token.valid())
+            return TextInputAdmission::Busy;
+        this.m_expectedModel.capture(model);
+        this.m_publishedModel.captureSurrounding(model);
+        TextInputSessionDesc desc;
+        desc.caret = caret;
+        desc.surrounding = model.text();
+        desc.anchorByte = model.anchor();
+        desc.caretByte = model.caret();
+        const Expected<TextInputSessionToken, TextInputAdmission> result = this.m_service.begin(desc);
+        if(!result.has_value()){
+            this.m_expectedModel.clear();
+            this.m_publishedModel.clear();
+            return result.error();
+        }
+        this.m_token = result.value();
+        this.m_owner = owner;
+        this.m_lastSequence = 0u;
+        this.m_surroundingRevision = this.m_service.surroundingRevision(this.m_token);
+        return TextInputAdmission::Accepted;
+    }
+
+    [cpp_unwind] public TextInputAdmission refresh(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
+        return this.syncSession(owner, model, caret, TextInputChangeCause::InputMethod, false);
+    }
+
+    [cpp_unwind] public UiTextEditResult drain(in UiTextEditOwner owner, mut EditModel model){
+        UiTextEditResult result;
+        if(!this.m_service.isOwnerThread()){
+            result.status = UiTextEditStatus::WrongThread;
+            return result;
+        }
+        if(!this.m_token.valid())
+            return result;
+        if(this.m_owner != owner || !this.m_expectedModel.matches(model)){
+            const b8 sameOwner = this.m_owner == owner;
+            result.status = ResolveStaleUiTextEditSessionStatus(sameOwner, this.cancel());
+            return result;
+        }
+        const u64 initialRevision = model.revision();
+        for(usize index = 0u; index <= s_TextInputMaxEvents; ++index){
+            const TextInputPollResult poll = this.m_service.poll(this.m_token, this.m_event);
+            if(poll == TextInputPollResult::Pending)
+                break;
+            if(poll != TextInputPollResult::Event){
+                if(poll == TextInputPollResult::WrongThread)
+                    result.status = UiTextEditStatus::WrongThread;
+                else
+                    result.status = UiTextEditStatus::Cancelled;
+                model.cancelComposition();
+                if(!this.cancel())
+                    result.status = UiTextEditStatus::NativeFailure;
+                break;
+            }
+            if(this.m_event.token != this.m_token || !ValidateUiTextEditPollSequence(this.m_event.sequence, this.m_lastSequence, index, s_TextInputMaxEvents)){
+                result.status = UiTextEditStatus::InvalidEvent;
+            }
+            else{
+                this.m_lastSequence = this.m_event.sequence;
+                result.status = ApplyUiTextEditEvent(model, this.m_event, this.m_surroundingRevision, this.m_publishedModel.matchesSurrounding(model));
+            }
+            if(result.status != UiTextEditStatus::Applied){
+                model.cancelComposition();
+                if(!this.cancel())
+                    result.status = UiTextEditStatus::NativeFailure;
+                break;
+            }
+            ++result.eventsApplied;
+            this.m_expectedModel.capture(model);
+        }
+        result.textChanged = model.revision() != initialRevision;
+        if(this.m_token.valid() && !this.m_publishedModel.matchesSurrounding(model)){
+            if(this.publishSurrounding(model) != TextInputAdmission::Accepted){
+                model.cancelComposition();
+                result.status = UiTextEditStatus::NativeFailure;
+                if(!this.cancel())
+                    TerminateInvariant();
+            }
+        }
+        return result;
+    }
+
+    public TextInputPollResult pollOwned(mut TextInputEvent event){
+        if(!this.m_service.isOwnerThread())
+            return TextInputPollResult::WrongThread;
+        if(!this.m_token.valid())
+            return TextInputPollResult::InvalidSession;
+        return this.m_service.poll(this.m_token, event);
+    }
+
+    [cpp_unwind] public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause){
+        return this.syncSession(owner, model, caret, cause, true);
+    }
+
+    [cpp_unwind] public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
+        return this.adoptLocal(owner, model, caret, TextInputChangeCause::Other);
+    }
+
+    public b8 end(in UiTextEditOwner owner, mut EditModel model){
+        if(!this.m_service.isOwnerThread() || !this.m_token.valid() || this.m_owner != owner)
+            return false;
+        if(this.m_expectedModel.matches(model))
+            model.cancelComposition();
+        return this.cancel();
+    }
+
+    public b8 cancel(){
+        if(!this.m_token.valid())
+            return true;
+        if(!this.m_service.isOwnerThread())
+            return false;
+        if(!this.m_service.end(this.m_token) && this.m_service.activeSession() == this.m_token)
+            return false;
+        this.m_token = TextInputSessionToken();
+        this.m_owner = UiTextEditOwner();
+        this.m_expectedModel.clear();
+        this.m_publishedModel.clear();
+        return true;
+    }
+
+    public TextInputSessionToken token()const{
+        return this.m_token;
+    }
+
+    public in UiTextEditOwner owner()const{
+        return this.m_owner;
+    }
+
+    public u64 surroundingRevision()const{
+        if(this.m_token.valid())
+            return this.m_surroundingRevision;
+        return 0u;
+    }
+
+    public b8 matchesPublished(in UiTextEditOwner owner, in EditModel model)const{
+        return this.m_token.valid() && this.m_owner == owner && this.m_expectedModel.matches(model) && this.m_publishedModel.matchesSurrounding(model);
+    }
+
+    [cpp_unwind] private TextInputAdmission syncSession(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause, in b8 adoptExpected){
+        if(!this.m_service.isOwnerThread())
+            return TextInputAdmission::WrongThread;
+        b8 sessionValid = false;
+        if(adoptExpected)
+            sessionValid = this.m_service.activeSession() == this.m_token;
+        else
+            sessionValid = this.m_expectedModel.matches(model);
+        if(!this.m_token.valid() || this.m_owner != owner || !sessionValid)
+            return TextInputAdmission::InvalidSession;
+        const TextInputAdmission admission = this.m_service.updateCaret(this.m_token, caret);
+        if(admission != TextInputAdmission::Accepted)
+            return admission;
+        if(!this.m_publishedModel.matchesSurrounding(model)){
+            const TextInputAdmission publish = this.publishSurrounding(model, cause);
+            if(publish != TextInputAdmission::Accepted)
+                return publish;
+        }
+        if(adoptExpected)
+            this.m_expectedModel.capture(model);
+        return TextInputAdmission::Accepted;
+    }
+
+    [cpp_unwind] private TextInputAdmission publishSurrounding(in EditModel model, in TextInputChangeCause cause){
+        const TextInputAdmission admission = this.m_service.updateSurrounding(this.m_token, model.text(), model.anchor(), model.caret(), cause);
+        if(admission != TextInputAdmission::Accepted)
+            return admission;
+        this.m_publishedModel.captureSurrounding(model);
+        this.m_surroundingRevision = this.m_service.surroundingRevision(this.m_token);
+        return TextInputAdmission::Accepted;
+    }
+
+    [cpp_unwind] private TextInputAdmission publishSurrounding(in EditModel model){
+        return this.publishSurrounding(model, TextInputChangeCause::InputMethod);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiTextEditStatus ToUiTextEditAppliedStatus(in b8 applied){
     if(applied)
         return UiTextEditStatus::Applied;
@@ -30,7 +234,7 @@ b8 IsStaleUiTextEditSurroundingRevision(
     return expectedSurroundingRevision == 0u || eventSurroundingRevision != expectedSurroundingRevision || !matchesPublishedModel;
 }
 
-UiTextEditStatus ApplyUiTextEditEvent(
+[cpp_unwind] UiTextEditStatus ApplyUiTextEditEvent(
     mut EditModel model,
     in TextInputEvent event,
     in u64 expectedSurroundingRevision,
@@ -116,207 +320,6 @@ UiTextEditStatus ApplyUiTextEditEvent(
         return UiTextEditStatus::Cancelled;
     default:
         return UiTextEditStatus::InvalidEvent;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[modular]
-class UiTextEditSession : NoCopy{
-    private mut ITextInputService m_service;
-    private TextInputEvent m_event = TextInputEvent();
-    private EditModelSnapshot m_expectedModel;
-    private EditModelSnapshot m_publishedModel;
-    private UiTextEditOwner m_owner;
-    private TextInputSessionToken m_token;
-    private u64 m_surroundingRevision = 0u;
-    private u64 m_lastSequence = 0u;
-
-    public UiTextEditSession(mut ITextInputService service){
-        this.m_service = service;
-    }
-
-    public ~UiTextEditSession(){
-        if(!this.cancel())
-            TerminateInvariant();
-    }
-
-    public TextInputAdmission begin(in UiTextEditOwner owner, in TextInputRect caret, mut EditModel model){
-        if(!this.m_service.isOwnerThread())
-            return TextInputAdmission::WrongThread;
-        if(!owner.valid() || model.composition().active)
-            return TextInputAdmission::InvalidSession;
-        if(this.m_token.valid())
-            return TextInputAdmission::Busy;
-        TextInputSessionDesc desc;
-        desc.caret = caret;
-        desc.surrounding = model.text();
-        desc.anchorByte = model.anchor();
-        desc.caretByte = model.caret();
-        const Expected<TextInputSessionToken, TextInputAdmission> result = this.m_service.begin(desc);
-        if(!result.has_value())
-            return result.error();
-        this.m_token = result.value();
-        this.m_owner = owner;
-        this.m_lastSequence = 0u;
-        this.m_expectedModel.capture(model);
-        this.m_publishedModel.captureSurrounding(model);
-        this.m_surroundingRevision = this.m_service.surroundingRevision(this.m_token);
-        return TextInputAdmission::Accepted;
-    }
-
-    public TextInputAdmission refresh(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
-        return this.syncSession(owner, model, caret, TextInputChangeCause::InputMethod, false);
-    }
-
-    public UiTextEditResult drain(in UiTextEditOwner owner, mut EditModel model){
-        UiTextEditResult result;
-        if(!this.m_service.isOwnerThread()){
-            result.status = UiTextEditStatus::WrongThread;
-            return result;
-        }
-        if(!this.m_token.valid())
-            return result;
-        if(this.m_owner != owner || !this.m_expectedModel.matches(model)){
-            const b8 sameOwner = this.m_owner == owner;
-            result.status = ResolveStaleUiTextEditSessionStatus(sameOwner, this.cancel());
-            return result;
-        }
-        const u64 initialRevision = model.revision();
-        for(usize index = 0u; index <= s_TextInputMaxEvents; ++index){
-            const TextInputPollResult poll = this.m_service.poll(this.m_token, this.m_event);
-            if(poll == TextInputPollResult::Pending)
-                break;
-            if(poll != TextInputPollResult::Event){
-                if(poll == TextInputPollResult::WrongThread)
-                    result.status = UiTextEditStatus::WrongThread;
-                else
-                    result.status = UiTextEditStatus::Cancelled;
-                model.cancelComposition();
-                if(!this.cancel())
-                    result.status = UiTextEditStatus::NativeFailure;
-                break;
-            }
-            if(this.m_event.token != this.m_token || !ValidateUiTextEditPollSequence(this.m_event.sequence, this.m_lastSequence, index, s_TextInputMaxEvents)){
-                result.status = UiTextEditStatus::InvalidEvent;
-            }
-            else{
-                this.m_lastSequence = this.m_event.sequence;
-                result.status = ApplyUiTextEditEvent(model, this.m_event, this.m_surroundingRevision, this.m_publishedModel.matchesSurrounding(model));
-            }
-            if(result.status != UiTextEditStatus::Applied){
-                model.cancelComposition();
-                if(!this.cancel())
-                    result.status = UiTextEditStatus::NativeFailure;
-                break;
-            }
-            ++result.eventsApplied;
-            this.m_expectedModel.capture(model);
-        }
-        result.textChanged = model.revision() != initialRevision;
-        if(this.m_token.valid() && !this.m_publishedModel.matchesSurrounding(model)){
-            if(this.publishSurrounding(model) != TextInputAdmission::Accepted){
-                model.cancelComposition();
-                result.status = UiTextEditStatus::NativeFailure;
-                if(!this.cancel())
-                    TerminateInvariant();
-            }
-        }
-        return result;
-    }
-
-    public TextInputPollResult pollOwned(mut TextInputEvent event){
-        if(!this.m_service.isOwnerThread())
-            return TextInputPollResult::WrongThread;
-        if(!this.m_token.valid())
-            return TextInputPollResult::InvalidSession;
-        return this.m_service.poll(this.m_token, event);
-    }
-
-    public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause){
-        return this.syncSession(owner, model, caret, cause, true);
-    }
-
-    public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
-        return this.adoptLocal(owner, model, caret, TextInputChangeCause::Other);
-    }
-
-    public b8 end(in UiTextEditOwner owner, mut EditModel model){
-        if(!this.m_service.isOwnerThread() || !this.m_token.valid() || this.m_owner != owner)
-            return false;
-        if(this.m_expectedModel.matches(model))
-            model.cancelComposition();
-        return this.cancel();
-    }
-
-    public b8 cancel(){
-        if(!this.m_token.valid())
-            return true;
-        if(!this.m_service.isOwnerThread())
-            return false;
-        if(!this.m_service.end(this.m_token) && this.m_service.activeSession() == this.m_token)
-            return false;
-        this.m_token = TextInputSessionToken();
-        this.m_owner = UiTextEditOwner();
-        this.m_expectedModel.clear();
-        this.m_publishedModel.clear();
-        return true;
-    }
-
-    public TextInputSessionToken token()const{
-        return this.m_token;
-    }
-
-    public in UiTextEditOwner owner()const{
-        return this.m_owner;
-    }
-
-    public u64 surroundingRevision()const{
-        if(this.m_token.valid())
-            return this.m_surroundingRevision;
-        return 0u;
-    }
-
-    public b8 matchesPublished(in UiTextEditOwner owner, in EditModel model)const{
-        return this.m_token.valid() && this.m_owner == owner && this.m_expectedModel.matches(model) && this.m_publishedModel.matchesSurrounding(model);
-    }
-
-    private TextInputAdmission syncSession(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause, in b8 adoptExpected){
-        if(!this.m_service.isOwnerThread())
-            return TextInputAdmission::WrongThread;
-        b8 sessionValid = false;
-        if(adoptExpected)
-            sessionValid = this.m_service.activeSession() == this.m_token;
-        else
-            sessionValid = this.m_expectedModel.matches(model);
-        if(!this.m_token.valid() || this.m_owner != owner || !sessionValid)
-            return TextInputAdmission::InvalidSession;
-        const TextInputAdmission admission = this.m_service.updateCaret(this.m_token, caret);
-        if(admission != TextInputAdmission::Accepted)
-            return admission;
-        if(!this.m_publishedModel.matchesSurrounding(model)){
-            const TextInputAdmission publish = this.publishSurrounding(model, cause);
-            if(publish != TextInputAdmission::Accepted)
-                return publish;
-        }
-        if(adoptExpected)
-            this.m_expectedModel.capture(model);
-        return TextInputAdmission::Accepted;
-    }
-
-    private TextInputAdmission publishSurrounding(in EditModel model, in TextInputChangeCause cause){
-        const TextInputAdmission admission = this.m_service.updateSurrounding(this.m_token, model.text(), model.anchor(), model.caret(), cause);
-        if(admission != TextInputAdmission::Accepted)
-            return admission;
-        this.m_publishedModel.captureSurrounding(model);
-        this.m_surroundingRevision = this.m_service.surroundingRevision(this.m_token);
-        return TextInputAdmission::Accepted;
-    }
-
-    private TextInputAdmission publishSurrounding(in EditModel model){
-        return this.publishSurrounding(model, TextInputChangeCause::InputMethod);
     }
 }
 

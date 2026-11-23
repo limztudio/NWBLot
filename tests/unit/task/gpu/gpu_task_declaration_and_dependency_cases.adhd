@@ -20,14 +20,9 @@ enum<u8> GpuDeclDenseScenario{
     kCount
 }
 
-FrameGraphBuilder GpuDecl_MakeFrameGraphBuilder(
-    mut TestScratchArena scratch,
-    mut FrameGraphNodeDescs nodes,
-    mut FrameGraphEdgeDescs edges,
-    mut FrameGraphPendingNameEdges pendingEdges
-){
-    return FrameGraphBuilder(scratch.scratchArena, nodes, edges, pendingEdges);
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class GpuDeclaredPayloadLifetime : NoCopy{
     private mut u32 m_destructions;
@@ -45,6 +40,19 @@ class GpuReentrantTelemetryResult{
     public b8 trackerUpdateSucceeded = true;
     public b8 appendAttempted = false;
     public b8 appendSucceeded = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+FrameGraphBuilder GpuDecl_MakeFrameGraphBuilder(
+    mut TestScratchArena scratch,
+    mut FrameGraphNodeDescs nodes,
+    mut FrameGraphEdgeDescs edges,
+    mut FrameGraphPendingNameEdges pendingEdges
+){
+    return FrameGraphBuilder(scratch.scratchArena, nodes, edges, pendingEdges);
 }
 
 Optional<GpuTaskQueueAssignmentTelemetry> GpuDecl_FindTrackedTelemetry(
@@ -1721,36 +1729,58 @@ void VerifyGpuDecl_RejectsDeepExplicitCyclesWithoutCallStackGrowth(){
     EXPECT_EQ(analysis.diagnostic().relatedTask, analysis.cycleEdges()[0u].producer);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsConcurrentReadersIndependentAfterStateEstablishingProducer, VerifyGpuDecl_KeepsConcurrentReadersIndependentAfterStateEstablishingProducer)
+
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsCompatibleTextureReadMasksIndependentWithoutChangingSemanticStates, VerifyGpuDecl_KeepsCompatibleTextureReadMasksIndependentWithoutChangingSemanticStates)
+
 NWB_ADHD_GTEST(GpuTaskGraph, JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange, VerifyGpuDecl_JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange)
+
 NWB_ADHD_GTEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange, VerifyGpuDecl_JoinsConcurrentReadersBeforeTaskInternalReadStateChange)
+
 NWB_ADHD_GTEST(GpuTaskGraph, PreservesReaderJoinAcrossPartialTaskInternalStateEpoch, VerifyGpuDecl_PreservesReaderJoinAcrossPartialTaskInternalStateEpoch)
+
 NWB_ADHD_GTEST(GpuTaskGraph, PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierStateSource, VerifyGpuDecl_PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierStateSource)
+
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange, VerifyGpuDecl_KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange)
+
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsSingleLaneAlternatingReadStateScratchGrowthLinear, VerifyGpuDecl_KeepsSingleLaneAlternatingReadStateScratchGrowthLinear)
+
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsConcurrentSingleLaneAlternatingReadStateScratchGrowthLinear, VerifyGpuDecl_KeepsConcurrentSingleLaneAlternatingReadStateScratchGrowthLinear)
+
 NWB_ADHD_GTEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset, VerifyGpuDecl_CopiesCallerMetadataAndDestroysTypedPayloadOnReset)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsInvalidExternalStateSourceWithoutDeclarationMutation, VerifyGpuDecl_RejectsInvalidExternalStateSourceWithoutDeclarationMutation)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation, VerifyGpuDecl_RejectsReentrantCompilerReadDuringDeclarationMutation)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithoutChangingOutputs, VerifyGpuDecl_RejectsReentrantTelemetryReadsDuringDeclarationMutationWithoutChangingOutputs)
+
 NWB_ADHD_GTEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset, VerifyGpuDecl_OwnsUploadBlobsAndInvalidatesThemOnReset)
+
 NWB_ADHD_GTEST(GpuTaskGraph, UploadBlobPreservesRequestedAlignmentAcrossGrowth, VerifyGpuDecl_UploadBlobPreservesRequestedAlignmentAcrossGrowth)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsOverflowingUploadBlobAllocation, VerifyGpuDecl_RejectsOverflowingUploadBlobAllocation)
+
 NWB_ADHD_GTEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset, VerifyGpuDecl_OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis, VerifyGpuDecl_RejectsStaleDependencyHandlesDuringAnalysis)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles, VerifyGpuDecl_RejectsEmptyLabelsAndStaleResourceAndExternalHandles)
+
 NWB_ADHD_GTEST(GpuTaskGraphAnalysis, DenseSequentialDependencyPairsBoundStorageAndPreserveTelemetryFlags, VerifyGpuDecl_DenseSequentialDependencyPairsBoundStorageAndPreserveTelemetryFlags)
+
 NWB_ADHD_GTEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingTheLastTarget, VerifyGpuDecl_ReductionRetainsAnUnreachedMiddleTargetAfterReachingTheLastTarget)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards, VerifyGpuDecl_ExpandsImmutableResourceSetsIntoConcreteHazards)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap, VerifyGpuDecl_RejectsMalformedBufferRangesAndDetectsTextureOverlap)
+
 NWB_ADHD_GTEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters, VerifyGpuDecl_TracksOnlyTheNearestWholeResourceWriters)
+
 NWB_ADHD_GTEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards, VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata, VerifyGpuDecl_RejectsExplicitCyclesAndExportsExternalMetadata)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth, VerifyGpuDecl_RejectsDeepExplicitCyclesWithoutCallStackGrowth)
 
 

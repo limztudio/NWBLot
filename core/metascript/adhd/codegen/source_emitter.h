@@ -127,6 +127,8 @@ private:
     [[nodiscard]] b8 instantiatedExprNeedsScratchArena(const Expr* expr)const;
     mutable const TypeRef* m_activeCallerArenaReturnType = nullptr;
     mutable u32 m_parallelWorkerDepth = 0u;
+    mutable b8 m_hasActiveTaskScope = false;
+    mutable u32 m_taskGuardCounter = 0u;
     mutable u32 m_activeSwitchBreakLabelLine = 0u;
     mutable TokenType::Enum m_unfusedLogicOp = TokenType::EndOfFile;
     mutable const MVector<const Expr*>* m_skippedCtorAssignExprs = nullptr;

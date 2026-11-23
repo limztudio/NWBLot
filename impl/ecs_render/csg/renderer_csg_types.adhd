@@ -11,62 +11,10 @@
 
 [cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_BOUNDS_VALID_FLAG")]
 extern const u32 s_ShaderCsgBoundsValidFlag;
-
 [cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_BOUNDS_FINITE_FLAG")]
 extern const u32 s_ShaderCsgBoundsFiniteFlag;
-
 [cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE")]
 extern const u32 s_ShaderCsgIntervalDispatchPushConstantByteSize;
-
-static_assert(s_CsgBoundsValidFlag == s_ShaderCsgBoundsValidFlag, "s_CsgBoundsValidFlag must match NWB_CSG_BOUNDS_VALID_FLAG");
-static_assert(s_CsgBoundsFiniteFlag == s_ShaderCsgBoundsFiniteFlag, "s_CsgBoundsFiniteFlag must match NWB_CSG_BOUNDS_FINITE_FLAG");
-static_assert(size_of<CsgReceiverRangeGpuData>() == size_of<u32>() * 12u + size_of<f32x3x4>() + size_of<CsgBoundsGpuData>(), "CsgReceiverRangeGpuData layout must match the CSG shader");
-static_assert(size_of<CsgCutterGpuData>() == size_of<f32x4>() + size_of<f32x3x4>() + size_of<f32x4>() * 2u, "CsgCutterGpuData layout must match the CSG shader");
-static_assert(size_of<CsgClipContextSlots>() == size_of<u32>() * 8u, "CSG clip context slots must stay two uint4 lanes");
-static_assert(size_of<CsgIntervalSampleStateGpuData>() == size_of<u32>() * 8u, "CSG interval sample state must match shader layout");
-static_assert(size_of<CsgIntervalDispatchPushConstants>() == s_ShaderCsgIntervalDispatchPushConstantByteSize, "CSG interval dispatch push constants must match shader layout");
-static_assert(align_of<CsgReceiverRangeGpuData>() >= align_of<f32x4>(), "CsgReceiverRangeGpuData must stay SIMD-aligned");
-static_assert(align_of<CsgCutterGpuData>() >= align_of<f32x4>(), "CsgCutterGpuData must stay SIMD-aligned");
-static_assert(align_of<CsgReceiverCpuBounds>() >= align_of<f32x4>(), "CsgReceiverCpuBounds must stay SIMD-friendly");
-static_assert(is_standard_layout<CsgReceiverCpuBounds>(), "CsgReceiverCpuBounds must stay cache-friendly");
-static_assert(is_trivially_copyable<CsgReceiverCpuBounds>(), "CsgReceiverCpuBounds must stay cheap to pass by value");
-static_assert(is_standard_layout<CsgReceiverRangeGpuData>(), "CsgReceiverRangeGpuData must stay GPU-uploadable");
-static_assert(is_trivially_copyable<CsgReceiverRangeGpuData>(), "CsgReceiverRangeGpuData must stay GPU-uploadable");
-static_assert(is_standard_layout<CsgCutterGpuData>(), "CsgCutterGpuData must stay GPU-uploadable");
-static_assert(is_trivially_copyable<CsgCutterGpuData>(), "CsgCutterGpuData must stay GPU-uploadable");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ResolveCsgClipWorkBounds(in CsgShapeRegistry shapeRegistry, in CsgShapeTypeInfo shapeType, in MatrixSingle shapeToWorld, in Span<u8> parameterBytes, in CsgClipWorkBounds receiverBounds, mut CsgClipWorkBounds outWorkBounds){
-    outWorkBounds = CsgClipWorkBounds();
-    if(!CsgClipCutterRequiresShapeBounds(receiverBounds.valid, shapeType.desc.shaderModule != s_NameNone, shapeType.desc.name))
-        return true;
-
-    const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
-    if(!cutterBounds.has_value()){
-        const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
-        if(!resolved.has_value())
-            return false;
-        outWorkBounds = resolved.value();
-        return true;
-    }
-
-    const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds.value().finiteBounds, LoadFloat(cutterBounds.value().minBounds), LoadFloat(cutterBounds.value().maxBounds));
-    if(!resolved.has_value())
-        return false;
-    outWorkBounds = resolved.value();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Rect ToCoreRect(in CsgWorkRect rect){
-    return Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,6 +63,42 @@ class CsgFrameGpuDataView{
     public b8 hasWork()const{
         return !this.receiverRanges.empty() && !this.cutters.empty();
     }
+}
+
+static_assert(s_CsgBoundsValidFlag == s_ShaderCsgBoundsValidFlag, "s_CsgBoundsValidFlag must match NWB_CSG_BOUNDS_VALID_FLAG");
+static_assert(s_CsgBoundsFiniteFlag == s_ShaderCsgBoundsFiniteFlag, "s_CsgBoundsFiniteFlag must match NWB_CSG_BOUNDS_FINITE_FLAG");
+static_assert(size_of<CsgReceiverRangeGpuData>() == size_of<u32>() * 12u + size_of<f32x3x4>() + size_of<CsgBoundsGpuData>(), "CsgReceiverRangeGpuData layout must match the CSG shader");
+static_assert(size_of<CsgCutterGpuData>() == size_of<f32x4>() + size_of<f32x3x4>() + size_of<f32x4>() * 2u, "CsgCutterGpuData layout must match the CSG shader");
+static_assert(size_of<CsgClipContextSlots>() == size_of<u32>() * 8u, "CSG clip context slots must stay two uint4 lanes");
+static_assert(size_of<CsgIntervalSampleStateGpuData>() == size_of<u32>() * 8u, "CSG interval sample state must match shader layout");
+static_assert(size_of<CsgIntervalDispatchPushConstants>() == s_ShaderCsgIntervalDispatchPushConstantByteSize, "CSG interval dispatch push constants must match shader layout");
+static_assert(align_of<CsgReceiverRangeGpuData>() >= align_of<f32x4>(), "CsgReceiverRangeGpuData must stay SIMD-aligned");
+static_assert(align_of<CsgCutterGpuData>() >= align_of<f32x4>(), "CsgCutterGpuData must stay SIMD-aligned");
+static_assert(align_of<CsgReceiverCpuBounds>() >= align_of<f32x4>(), "CsgReceiverCpuBounds must stay SIMD-friendly");
+static_assert(is_standard_layout<CsgReceiverCpuBounds>(), "CsgReceiverCpuBounds must stay cache-friendly");
+static_assert(is_trivially_copyable<CsgReceiverCpuBounds>(), "CsgReceiverCpuBounds must stay cheap to pass by value");
+static_assert(is_standard_layout<CsgReceiverRangeGpuData>(), "CsgReceiverRangeGpuData must stay GPU-uploadable");
+static_assert(is_trivially_copyable<CsgReceiverRangeGpuData>(), "CsgReceiverRangeGpuData must stay GPU-uploadable");
+static_assert(is_standard_layout<CsgCutterGpuData>(), "CsgCutterGpuData must stay GPU-uploadable");
+static_assert(is_trivially_copyable<CsgCutterGpuData>(), "CsgCutterGpuData must stay GPU-uploadable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CsgClipWorkBounds> ResolveCsgClipWorkBounds(in CsgShapeRegistry shapeRegistry, in CsgShapeTypeInfo shapeType, in MatrixSingle shapeToWorld, in Span<u8> parameterBytes, in CsgClipWorkBounds receiverBounds){
+    if(!CsgClipCutterRequiresShapeBounds(receiverBounds.valid, shapeType.desc.shaderModule != s_NameNone, shapeType.desc.name))
+        return CsgClipWorkBounds();
+
+    const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
+    if(!cutterBounds.has_value())
+        return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
+
+    return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds.value().finiteBounds, LoadFloat(cutterBounds.value().minBounds), LoadFloat(cutterBounds.value().maxBounds));
+}
+
+Rect ToCoreRect(in CsgWorkRect rect){
+    return Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
 }
 
 

@@ -205,18 +205,18 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
 
-    static_assert(std::is_nothrow_default_constructible_v<GpuTaskNode>, "GpuTaskNode default construction must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskId>, "GpuTaskId copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuExternalCompletionId>, "GpuExternalCompletionId copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskExternalStateSource>, "GpuTaskExternalStateSource copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskResourceUse>, "GpuTaskResourceUse copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskResourceVersionUse>, "GpuTaskResourceVersionUse copy must remain no-throw");
+    static_assert(IsNothrowDefaultConstructible_V<GpuTaskNode>, "GpuTaskNode default construction must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuTaskId>, "GpuTaskId copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuExternalCompletionId>, "GpuExternalCompletionId copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuTaskExternalStateSource>, "GpuTaskExternalStateSource copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuTaskResourceUse>, "GpuTaskResourceUse copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuTaskResourceVersionUse>, "GpuTaskResourceVersionUse copy must remain no-throw");
 
-    static_assert(std::is_trivially_copyable_v<GpuTaskId>, "GpuTaskId must remain trivially copyable");
-    static_assert(std::is_trivially_copyable_v<GpuExternalCompletionId>, "GpuExternalCompletionId must remain trivially copyable");
-    static_assert(std::is_trivially_copyable_v<GpuTaskResourceUse>, "GpuTaskResourceUse must remain trivially copyable");
-    static_assert(std::is_trivially_copyable_v<GpuTaskResourceVersionUse>, "GpuTaskResourceVersionUse must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<GpuTaskId>, "GpuTaskId must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<GpuExternalCompletionId>, "GpuExternalCompletionId must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<GpuTaskResourceUse>, "GpuTaskResourceUse must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<GpuTaskResourceVersionUse>, "GpuTaskResourceVersionUse must remain trivially copyable");
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
     const u32 index = static_cast<u32>(m_tasks.size());
@@ -424,9 +424,9 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
-    static_assert(std::is_nothrow_default_constructible_v<GpuGraphResourceNode>, "GpuGraphResourceNode default construction must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskGraphInitialOwnerHandoffSourceView>, "Initial owner handoff copy must remain no-throw");
-    static_assert(std::is_nothrow_copy_constructible_v<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
+    static_assert(IsNothrowDefaultConstructible_V<GpuGraphResourceNode>, "GpuGraphResourceNode default construction must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<GpuTaskGraphInitialOwnerHandoffSourceView>, "Initial owner handoff copy must remain no-throw");
+    static_assert(IsNothrowCopyConstructible_V<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
 
     const usize prevInitialOwnerSourceCount = m_initialOwnerHandoffSources.size();
     const usize prevInitialOwnerSnapshotCount = m_initialOwnerHandoffStateSnapshots.size();
@@ -449,7 +449,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         m_initialOwnerHandoffStateSnapshots.push_back(MakeNotNull((*initialOwnerHandoffStateSnapshots)[sourceIndex].get()));
     }
 
-    static_assert(std::is_trivially_copyable_v<u32>, "u32 must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<u32>, "u32 must remain trivially copyable");
 
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.emplace_back(GpuGraphResourceNode{
@@ -585,7 +585,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     resourceSet.markerLabelSize = markerLabelRange.size;
     resourceSet.memberOffset = static_cast<u32>(m_resourceSetMembers.size());
     resourceSet.memberCount = static_cast<u32>(desc.memberCount);
-    static_assert(std::is_trivially_copyable_v<GpuGraphResourceId>, "GpuGraphResourceId must remain trivially copyable");
+    static_assert(IsTriviallyCopyable_V<GpuGraphResourceId>, "GpuGraphResourceId must remain trivially copyable");
     if(desc.memberCount != 0u){
         const usize oldSize = m_resourceSetMembers.size();
         m_resourceSetMembers.resize(oldSize + desc.memberCount);

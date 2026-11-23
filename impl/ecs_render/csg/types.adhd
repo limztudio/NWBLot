@@ -164,44 +164,50 @@ class CsgFrameStateCacheSignature{
     public u64 shapeRegistryRevision = 0u;
 }
 
-b8 ResolveCsgStructuredBufferCapacity(
+class CsgStructuredBufferCapacity{
+    public usize capacity = 0u;
+    public u64 byteSize = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CsgStructuredBufferCapacity> ResolveCsgStructuredBufferCapacity(
     in usize currentCapacity,
     in usize requiredCount,
-    in usize elementByteSize,
-    mut usize outCapacity,
-    mut u64 outByteSize
+    in usize elementByteSize
 ){
     assert(elementByteSize != 0u);
     if(requiredCount > usize.max / elementByteSize)
-        return false;
+        return MakeUnexpected(Failure());
     const usize capacity = NextGrowingCapacity(currentCapacity, requiredCount);
     if(capacity > usize.max / elementByteSize)
-        return false;
-    outCapacity = capacity;
-    outByteSize = cast<u64>(capacity * elementByteSize);
-    return true;
+        return MakeUnexpected(Failure());
+    CsgStructuredBufferCapacity resolved = CsgStructuredBufferCapacity();
+    resolved.capacity = capacity;
+    resolved.byteSize = cast<u64>(capacity * elementByteSize);
+    return resolved;
 }
 
-b8 ResolveCsgTraceContextBufferCapacity(
+Expected<u64> ResolveCsgTraceContextBufferCapacity(
     in b8 heapInitialized,
     in usize byteCount,
     in u64 maxStorageBufferRange,
     in b8 hasExistingBuffer,
-    in u64 previousCapacity,
-    mut u64 outCapacity
+    in u64 previousCapacity
 ){
     const u64 maximumCapacity = Min(maxStorageBufferRange, cast<u64>(u32.max));
     if(!heapInitialized || byteCount == 0u || cast<u64>(byteCount) > maximumCapacity){
         error("RendererSystem: current CSG ray context exceeds storage capacity");
-        return false;
+        return MakeUnexpected(Failure());
     }
     u64 capacity = cast<u64>(byteCount);
     if(hasExistingBuffer){
         const u64 growth = Min(previousCapacity / 2u, maximumCapacity - previousCapacity);
         capacity = Max(capacity, previousCapacity + growth);
     }
-    outCapacity = capacity;
-    return true;
+    return capacity;
 }
 
 

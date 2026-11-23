@@ -18,6 +18,14 @@ const f32 s_UiWindowSmokeSeparatorHeight = 1.0f;
 const f32 s_UiWindowSmokeControlHeight = 26.0f;
 const f32 s_UiWindowSmokeControlWidth = 80.0f;
 const f32 s_UiWindowSmokeGap = 4.0f;
+const Array<StringView, 16u> s_UiTextAreaSmokeRectNames(
+    "bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside", "x_track", "x_thumb", "y_track", "y_thumb",
+    "corner"
+);
+const Array<StringView, 17u> s_UiTextureImageSmokeRectNames(
+    "before", "after", "default_tile", "alternate_tile", "tinted", "zero_alpha", "frozen", "external", "external_clip", "default_atlas", "alternate_atlas",
+    "skin_fill", "parent_image", "child_image", "parent", "child", "builder_image"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -123,16 +131,6 @@ class UiWindowSmokeScene : IUiSmokeScene{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const Array<StringView, 16u> s_UiTextAreaSmokeRectNames(
-    "bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside", "x_track", "x_thumb", "y_track", "y_thumb",
-    "corner"
-);
-
-const Array<StringView, 17u> s_UiTextureImageSmokeRectNames(
-    "before", "after", "default_tile", "alternate_tile", "tinted", "zero_alpha", "frozen", "external", "external_clip", "default_atlas", "alternate_atlas",
-    "skin_fill", "parent_image", "child_image", "parent", "child", "builder_image"
-);
 
 void CancelSmokeClipboardTokenOnExit(mut IClipboardService clipRef, in ClipboardRequestToken token){
     if(token.valid() && !clipRef.cancel(token))

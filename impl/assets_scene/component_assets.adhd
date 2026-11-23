@@ -8,6 +8,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_ComponentHeaderBinaryBytes = 80u;
+
+const usize s_TransformComponentPayloadBinaryBytes = 48u;
+const usize s_CameraComponentPayloadBinaryBytes = 16u;
+const usize s_LightComponentPayloadBinaryBytes = 40u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class SceneAssetEntryBinary{
+    public NameHash nicknameHash;
+    public NameHash assetHash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsValidLightComponentParameters(in LightComponent component){
     VectorSingle color = component.color();
     f32 intensity = component.intensity();
@@ -132,18 +152,6 @@ b8 ValidateLightComponentAssetPayload(in LightComponent component, in Name virtu
     );
     return false;
 }
-
-[serialize]
-class SceneAssetEntryBinary{
-    public NameHash nicknameHash;
-    public NameHash assetHash;
-}
-
-const usize s_ComponentHeaderBinaryBytes = 80u;
-
-const usize s_TransformComponentPayloadBinaryBytes = 48u;
-const usize s_CameraComponentPayloadBinaryBytes = 16u;
-const usize s_LightComponentPayloadBinaryBytes = 40u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

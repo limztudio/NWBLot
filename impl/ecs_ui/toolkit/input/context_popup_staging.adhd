@@ -8,14 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TryRegisterContextPopupScope(
+class PopupEndResult{
+    public PopupToken ended = PopupToken();
+    public u32 layer = 0u;
+}
+
+[cpp_unwind]
+Expected<PopupToken> TryRegisterContextPopupScope(
     in WidgetState state,
     in PopupToken currentPopup,
     in PopupScope scope,
-    mut Vector<ContextOwnedPopup> popups,
-    mut PopupToken outFenceToken
+    mut Vector<ContextOwnedPopup> popups
 ){
-    outFenceToken = PopupToken();
     if(
         state.kind != WidgetKind::Popup
         || !scope.token.valid()
@@ -25,10 +29,10 @@ b8 TryRegisterContextPopupScope(
         || popups.size() == s_InputMaxPopups
         || !HasValidPopupScopeGeometry(scope)
     )
-        return false;
+        return MakeUnexpected(Failure());
     for(in ContextOwnedPopup previous : popups){
         if(previous.scope.token.widget == scope.token.widget)
-            return false;
+            return MakeUnexpected(Failure());
     }
     PopupScope admitted = scope;
     if(popups.empty())
@@ -39,34 +43,29 @@ b8 TryRegisterContextPopupScope(
     owned.scope = admitted;
     owned.root = state.root;
     popups.push_back(owned);
-    outFenceToken = admitted.token;
-    return true;
+    return admitted.token;
 }
 
-b8 TryActivateContextPopupScope(
+Expected<u32> TryActivateContextPopupScope(
     in PopupToken token,
     in WidgetRoot root,
     in PopupToken currentPopup,
     in Span<ContextOwnedPopup> popups,
     mut Array<PopupToken, s_InputMaxPopups> popupStack,
-    mut usize inOutPopupDepth,
-    mut PopupToken outCurrentPopup,
-    mut u32 outPopupLayer
+    mut usize inOutPopupDepth
 ){
     if(!token.valid() || inOutPopupDepth == s_InputMaxPopups)
-        return false;
+        return MakeUnexpected(Failure());
     for(in ContextOwnedPopup owned : popups){
         if(owned.scope.token != token)
             continue;
         if(owned.root != root || owned.scope.parent != currentPopup)
-            return false;
+            return MakeUnexpected(Failure());
         popupStack[inOutPopupDepth] = token;
         ++inOutPopupDepth;
-        outCurrentPopup = token;
-        outPopupLayer = owned.scope.layer;
-        return true;
+        return owned.scope.layer;
     }
-    return false;
+    return MakeUnexpected(Failure());
 }
 
 b8 TryUpdateContextPopupScope(
@@ -99,38 +98,34 @@ u32 ResolveContextPopupLayer(in Span<ContextOwnedPopup> popups, in PopupToken to
     return 0u;
 }
 
-b8 TryEndContextPopupScope(
+Expected<PopupEndResult> TryEndContextPopupScope(
     in Span<ContextOwnedPopup> popups,
     mut Array<PopupToken, s_InputMaxPopups> popupStack,
     mut usize inOutPopupDepth,
-    mut PopupToken inOutCurrentPopup,
-    mut u32 outPopupLayer,
-    mut PopupToken outEndedToken
+    mut PopupToken inOutCurrentPopup
 ){
-    outEndedToken = PopupToken();
     if(inOutPopupDepth == 0u || !inOutCurrentPopup.valid())
-        return false;
-    outEndedToken = inOutCurrentPopup;
+        return MakeUnexpected(Failure());
+    PopupEndResult result = PopupEndResult();
+    result.ended = inOutCurrentPopup;
     --inOutPopupDepth;
     popupStack[inOutPopupDepth] = PopupToken();
     if(inOutPopupDepth == 0u)
         inOutCurrentPopup = PopupToken();
     else
         inOutCurrentPopup = popupStack[inOutPopupDepth - 1u];
-    outPopupLayer = ResolveContextPopupLayer(popups, inOutCurrentPopup);
-    return true;
+    result.layer = ResolveContextPopupLayer(popups, inOutCurrentPopup);
+    return result;
 }
 
-b8 DiscardContextPopupScope(
+Expected<b8> DiscardContextPopupScope(
     in PopupToken token,
     in Array<PopupToken, s_InputMaxPopups> popupStack,
     in usize popupDepth,
     mut Vector<HitTarget> targets,
     mut Vector<WidgetRoot> targetRoots,
-    mut Vector<ContextOwnedPopup> popups,
-    mut b8 outRemovedAny
+    mut Vector<ContextOwnedPopup> popups
 ){
-    outRemovedAny = false;
     Array<b8, s_InputMaxPopups> removed;
     b8 found = false;
     for(usize index = 0u; index < popups.size(); ++index){
@@ -141,12 +136,12 @@ b8 DiscardContextPopupScope(
         found = found || isRemoved;
     }
     if(!found)
-        return true;
+        return false;
     for(usize active = 0u; active < popupDepth; ++active){
         const PopupToken activeToken = popupStack[active];
         for(usize popup = 0u; popup < popups.size(); ++popup){
             if(removed[popup] && activeToken == popups[popup].scope.token)
-                return false;
+                return MakeUnexpected(Failure());
         }
     }
     usize keptTargets = 0u;
@@ -178,7 +173,6 @@ b8 DiscardContextPopupScope(
         }
     }
     popups.resize(keptPopups);
-    outRemovedAny = true;
     return true;
 }
 

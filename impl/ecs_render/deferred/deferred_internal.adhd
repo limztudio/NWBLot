@@ -5,18 +5,11 @@
 #include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.adhd>
 #include <impl/ecs_render/raytrace/raytracing_system.adhd>
-
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 #include <impl/ecs_render/deferred/import_types.adhd>
 #include <impl/ecs_render/deferred/renderer_deferred_state.adhd>
 #include <impl/ecs_render/shadow/quality_settings.adhd>
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_DeferredLightGpuByteCount == size_of<f32>() * s_ShaderSceneLightRecordFloatCount * s_SceneMaxLights, "RendererDeferredState light cache size drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +46,6 @@ class PostGbufferNormalizeGraphTask{
     }
 }
 
-
 class FrameTimingEndGraphTask{
     private mut GpuTimingFrameTransaction m_transaction;
 
@@ -71,7 +63,6 @@ class FrameTimingEndGraphTask{
         return this.m_transaction.recordEnd(commandList);
     }
 }
-
 
 class FrameRecoveryGraphTask{
     private mut GpuTimingFrameTransaction m_transaction;
@@ -108,14 +99,6 @@ class FrameRecoveryGraphTask{
         this.m_armed = false;
         this.m_retiresFrameTiming = false;
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 HasOpaquePartitionMaterialGeometry(in MaterialPassDrawItemPartitions drawItems){
-    return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
 }
 
 class DeferredBindlessDescriptorSources{
@@ -200,6 +183,16 @@ class DeferredAvboitResourceImports{
     public b8 validRefractionSpecular()const;
     public b8 validAvboitInputs()const;
     public void publish(mut DeferredGraphResourceImportResult result)const;
+}
+
+static_assert(s_DeferredLightGpuByteCount == size_of<f32>() * s_ShaderSceneLightRecordFloatCount * s_SceneMaxLights, "RendererDeferredState light cache size drifted");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasOpaquePartitionMaterialGeometry(in MaterialPassDrawItemPartitions drawItems){
+    return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
 }
 
 

@@ -38,13 +38,21 @@ class CsgIntervalRectClearDesc{
 }
 
 
+class OpaqueCsgIntervalClearBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+
+    public OpaqueCsgIntervalClearBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
+
+    [cpp_unwind]
+    public Expected<OpaqueCsgIntervalClearResult> declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState);
+}
+
+
 [cpp_unwind]
-b8 DeclareCsgIntervalRectClearTasks(
+Expected<OpaqueCsgIntervalClearResult> DeclareCsgIntervalRectClearTasks(
     in CsgIntervalRectClearDesc desc,
     mut GpuTaskGraph graph,
-    mut GraphClearTimingRecordState clearTimingState,
-    mut GpuTaskId outFirstTask,
-    mut GpuTaskId outTailTask
+    mut GraphClearTimingRecordState clearTimingState
 ){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
@@ -62,61 +70,53 @@ b8 DeclareCsgIntervalRectClearTasks(
     clear.recordHooks = clearTimingState.hooks(true, false);
     const auto firstTask = graph.addClearTextureRectUIntTask(firstDesc, clear);
     if(!firstTask.has_value()){
-        outFirstTask = GpuTaskId();
         warning("{}", desc.intervalClearWarningMessage);
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outFirstTask = firstTask.value();
 
     scheduling.allowMergeAcrossConsumerFrontier = true;
     GpuTaskDesc tailDesc;
     tailDesc.setIdentity(desc.receiverEventClearIdentity).setMarkerLabel(desc.receiverEventClearMarkerLabel).setScheduling(scheduling);
-    tailDesc.setDependency(outFirstTask);
+    tailDesc.setDependency(firstTask.value());
     clear.destination = desc.csgReceiverEventCount;
     clear.subresources = desc.csgReceiverEventCountSubresources;
     clear.recordHooks = clearTimingState.hooks(false, true);
     const auto tailTask = graph.addClearTextureRectUIntTask(tailDesc, clear);
     if(!tailTask.has_value()){
-        outTailTask = GpuTaskId();
         warning("{}", desc.receiverEventClearWarningMessage);
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTailTask = tailTask.value();
-    return true;
+
+    OpaqueCsgIntervalClearResult result;
+    result.clearFirstTask = firstTask.value();
+    result.clearTask = tailTask.value();
+    return result;
 }
 
 
-class OpaqueCsgIntervalClearBuilder : NoCopy{
-    private mut GpuTaskGraph m_graph;
-
-    public OpaqueCsgIntervalClearBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
-
-    [cpp_unwind]
-    public Expected<OpaqueCsgIntervalClearResult> declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState){
-        OpaqueCsgIntervalClearResult result;
-        if(!inputs.dependencyTask.valid())
-            return MakeUnexpected(Failure());
-        if(!inputs.hasOpaqueCsgFrameWork)
-            return result;
-        if(!inputs.csgIntervalId.valid() || !inputs.csgReceiverEventCount.valid())
-            return MakeUnexpected(Failure());
-        CsgIntervalRectClearDesc desc;
-        desc.intervalClearIdentity = s_RenderNameRenderGraphicsPrefixCsgIntervalClear;
-        desc.intervalClearMarkerLabel = "CSG Interval Id Clear";
-        desc.intervalClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG interval-id clear";
-        desc.receiverEventClearIdentity = s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear;
-        desc.receiverEventClearMarkerLabel = "CSG Receiver Event Count Clear";
-        desc.receiverEventClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG receiver-event clear";
-        desc.csgIntervalId = inputs.csgIntervalId;
-        desc.csgReceiverEventCount = inputs.csgReceiverEventCount;
-        desc.csgPeelSubresources = inputs.csgPeelSubresources;
-        desc.csgReceiverEventCountSubresources = inputs.csgReceiverEventCountSubresources;
-        desc.clearRect = ToCoreRect(inputs.workRegion.resolveRect(inputs.width, inputs.height));
-        desc.dependencyTask = inputs.dependencyTask;
-        if(!DeclareCsgIntervalRectClearTasks(desc, this.m_graph, clearTimingState, result.clearFirstTask, result.clearTask))
-            return MakeUnexpected(Failure());
+[cpp_unwind]
+Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState){
+    OpaqueCsgIntervalClearResult result;
+    if(!inputs.dependencyTask.valid())
+        return MakeUnexpected(Failure());
+    if(!inputs.hasOpaqueCsgFrameWork)
         return result;
-    }
+    if(!inputs.csgIntervalId.valid() || !inputs.csgReceiverEventCount.valid())
+        return MakeUnexpected(Failure());
+    CsgIntervalRectClearDesc desc;
+    desc.intervalClearIdentity = s_RenderNameRenderGraphicsPrefixCsgIntervalClear;
+    desc.intervalClearMarkerLabel = "CSG Interval Id Clear";
+    desc.intervalClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG interval-id clear";
+    desc.receiverEventClearIdentity = s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear;
+    desc.receiverEventClearMarkerLabel = "CSG Receiver Event Count Clear";
+    desc.receiverEventClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG receiver-event clear";
+    desc.csgIntervalId = inputs.csgIntervalId;
+    desc.csgReceiverEventCount = inputs.csgReceiverEventCount;
+    desc.csgPeelSubresources = inputs.csgPeelSubresources;
+    desc.csgReceiverEventCountSubresources = inputs.csgReceiverEventCountSubresources;
+    desc.clearRect = ToCoreRect(inputs.workRegion.resolveRect(inputs.width, inputs.height));
+    desc.dependencyTask = inputs.dependencyTask;
+    return DeclareCsgIntervalRectClearTasks(desc, this.m_graph, clearTimingState);
 }
 
 

@@ -425,6 +425,7 @@ struct BuiltinSpecialMethodInfo{
 [[nodiscard]] const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(MStringView name)noexcept;
 [[nodiscard]] const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(MStringView receiverTypeName, MStringView methodName)noexcept;
 [[nodiscard]] const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(MStringView receiverTypeName, MStringView methodName)noexcept;
+[[nodiscard]] const ClassDecl* FindBuiltinPolymorphicInterfaceDecl(MStringView adhdName)noexcept;
 [[nodiscard]] const BuiltinFieldInfo* FindBuiltinField(MStringView receiverTypeName, MStringView fieldName)noexcept;
 [[nodiscard]] const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
 [[nodiscard]] const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(BuiltinFunctionArgRule::Enum rule)noexcept;

@@ -10,6 +10,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class CausticEmissionTargetBuffer{
+    public BufferHandle buffer = BufferHandle();
+    public GpuDescriptorHandle heapHandle = GpuDescriptorHandle();
+    public usize capacity = 0u;
+
+    public b8 ensure(mut GraphicsRuntime graphics, in usize targetCount){
+        if(this.buffer.valid() && this.capacity >= targetCount && this.heapHandle.valid()){
+            assert(IsDescriptorClass(this.heapHandle, GpuDescriptorClass::StorageBuffer));
+            return true;
+        }
+        return EnsureCausticEmissionTargetBufferStorage(targetCount, graphics, this.buffer, this.heapHandle, this.capacity);
+    }
+
+    public void releaseDescriptor(mut GraphicsRuntime graphics){
+        if(!this.heapHandle.valid())
+            return;
+        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+        RetireDescriptor(heap, this.heapHandle);
+    }
+
+    public void reset(){
+        this.buffer.reset();
+        this.heapHandle = GpuDescriptorHandle();
+        this.capacity = 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u64 ComputeCausticEmissionTargetBufferByteSize(in usize capacity){
     return cast<u64>(s_CausticEmissionTargetGpuBytes * capacity);
 }
@@ -76,33 +107,6 @@ b8 EnsureCausticEmissionTargetBufferStorage(
     retireUnpublished.release();
     info("RendererSystem: created caustic emission-target buffer (capacity {} targets)", cast<u64>(capacity));
     return true;
-}
-
-class CausticEmissionTargetBuffer{
-    public BufferHandle buffer = BufferHandle();
-    public GpuDescriptorHandle heapHandle = GpuDescriptorHandle();
-    public usize capacity = 0u;
-
-    public b8 ensure(mut GraphicsRuntime graphics, in usize targetCount){
-        if(this.buffer.valid() && this.capacity >= targetCount && this.heapHandle.valid()){
-            assert(IsDescriptorClass(this.heapHandle, GpuDescriptorClass::StorageBuffer));
-            return true;
-        }
-        return EnsureCausticEmissionTargetBufferStorage(targetCount, graphics, this.buffer, this.heapHandle, this.capacity);
-    }
-
-    public void releaseDescriptor(mut GraphicsRuntime graphics){
-        if(!this.heapHandle.valid())
-            return;
-        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
-        RetireDescriptor(heap, this.heapHandle);
-    }
-
-    public void reset(){
-        this.buffer.reset();
-        this.heapHandle = GpuDescriptorHandle();
-        this.capacity = 0u;
-    }
 }
 
 

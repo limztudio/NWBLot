@@ -13,29 +13,12 @@
 
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CONSTANTS_FLOAT4_COUNT")]
 extern const u32 s_ShaderSurfelConstantsFloat4Count;
-
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPDATE_DIVISOR")]
 extern const u32 s_ShaderSurfelUpdateDivisor;
-
-
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_MAX_AGE")]
 extern const u32 s_ShaderSurfelMaxAge;
-
-
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_SPAWN_TILE")]
 extern const u32 s_ShaderSurfelSpawnTile;
-static_assert(size_of<NwbSurfelConstantsGpu>() == size_of<f32x4>() * s_ShaderSurfelConstantsFloat4Count, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
-static_assert(s_SurfelUpdateDivisor == s_ShaderSurfelUpdateDivisor, "s_SurfelUpdateDivisor must match NWB_SURFEL_UPDATE_DIVISOR");
-static_assert(s_SurfelCellSize == s_ShaderSurfelCellSize, "s_SurfelCellSize must match NWB_SURFEL_CELL_SIZE");
-static_assert(s_SurfelDefaultRadius == s_ShaderSurfelDefaultRadius, "s_SurfelDefaultRadius must match NWB_SURFEL_DEFAULT_RADIUS");
-static_assert(s_SurfelMaxAccum == s_ShaderSurfelMaxAccum, "s_SurfelMaxAccum must match NWB_SURFEL_MAX_ACCUM");
-static_assert(s_SurfelMaxAge == s_ShaderSurfelMaxAge, "s_SurfelMaxAge must match NWB_SURFEL_MAX_AGE");
-static_assert(s_SurfelRaysPerSurfel == s_ShaderSurfelRaysPerSurfel, "s_SurfelRaysPerSurfel must match NWB_SURFEL_RAYS_PER_SURFEL");
-static_assert(s_SurfelSpawnTile == s_ShaderSurfelSpawnTile, "s_SurfelSpawnTile must match NWB_SURFEL_SPAWN_TILE");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 enum<u8> SurfelGraphPhase{
     AgeFree,
@@ -48,9 +31,9 @@ enum<u8> SurfelGraphPhase{
     kCount
 }
 
-b8 RequiresActiveSurfelAsyncTiming(in b8 isComputeQueue, in b8 hasAsyncTimingValue){
-    return isComputeQueue && !hasAsyncTimingValue;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class SurfelGiPhaseTask{
     private mut RendererRayTracingSystem m_system;
@@ -148,6 +131,23 @@ class SurfelGiInitializationTask{
     public void discarded(){
         this.m_system.discardSurfelResourceInitialization();
     }
+}
+
+static_assert(size_of<NwbSurfelConstantsGpu>() == size_of<f32x4>() * s_ShaderSurfelConstantsFloat4Count, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
+static_assert(s_SurfelUpdateDivisor == s_ShaderSurfelUpdateDivisor, "s_SurfelUpdateDivisor must match NWB_SURFEL_UPDATE_DIVISOR");
+static_assert(s_SurfelCellSize == s_ShaderSurfelCellSize, "s_SurfelCellSize must match NWB_SURFEL_CELL_SIZE");
+static_assert(s_SurfelDefaultRadius == s_ShaderSurfelDefaultRadius, "s_SurfelDefaultRadius must match NWB_SURFEL_DEFAULT_RADIUS");
+static_assert(s_SurfelMaxAccum == s_ShaderSurfelMaxAccum, "s_SurfelMaxAccum must match NWB_SURFEL_MAX_ACCUM");
+static_assert(s_SurfelMaxAge == s_ShaderSurfelMaxAge, "s_SurfelMaxAge must match NWB_SURFEL_MAX_AGE");
+static_assert(s_SurfelRaysPerSurfel == s_ShaderSurfelRaysPerSurfel, "s_SurfelRaysPerSurfel must match NWB_SURFEL_RAYS_PER_SURFEL");
+static_assert(s_SurfelSpawnTile == s_ShaderSurfelSpawnTile, "s_SurfelSpawnTile must match NWB_SURFEL_SPAWN_TILE");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RequiresActiveSurfelAsyncTiming(in b8 isComputeQueue, in b8 hasAsyncTimingValue){
+    return isComputeQueue && !hasAsyncTimingValue;
 }
 
 [cpp_unwind]

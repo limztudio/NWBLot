@@ -18,11 +18,10 @@ namespace TextureBasis{
 
 
 void InitializeBasisTranscoder(){
-    static const b8 initialized = [](){
+    [[maybe_unused]] static const b8 s_Initialized = [](){
         basist::basisu_transcoder_init();
         return true;
     }();
-    (void)initialized;
 }
 
 b8 TranscodeBasisAstcBlock(const Span<const u8> source, const usize offset, const Span<u8> destination, const usize outputOffset){

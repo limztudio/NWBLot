@@ -9,23 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateOpaqueCsgReceiverPlanArraySizes(
-    in b8 captured,
-    in usize drawItemCount,
-    in usize outputBufferCount,
-    in usize outputLayoutCount,
-    in usize regularDrawItemCount,
-    in usize regularOutputBufferCount,
-    in usize regularOutputLayoutCount
-){
-    return captured
-        && outputBufferCount == drawItemCount
-        && outputLayoutCount == drawItemCount
-        && regularOutputBufferCount == regularDrawItemCount
-        && regularOutputLayoutCount == regularDrawItemCount
-    ;
-}
-
 class OpaqueCsgReceiverComputeEmulationGraphPlan{
     public Vector<MaterialPassDrawItem> meshDrawItems;
     public Vector<MaterialPassDrawItem> indexedDrawItems;
@@ -157,10 +140,6 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     public OpaqueRegularComputeEmulationGraphPlan geometry;
     public Vector<CsgReceiverRangeGpuData> receiverRanges;
@@ -190,6 +169,27 @@ class OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     public CsgFrameGpuDataView csgFrameDataView()const{
         return CsgFrameGpuDataView(this.receiverRanges, this.cutters, this.workRegion);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateOpaqueCsgReceiverPlanArraySizes(
+    in b8 captured,
+    in usize drawItemCount,
+    in usize outputBufferCount,
+    in usize outputLayoutCount,
+    in usize regularDrawItemCount,
+    in usize regularOutputBufferCount,
+    in usize regularOutputLayoutCount
+){
+    return captured
+        && outputBufferCount == drawItemCount
+        && outputLayoutCount == drawItemCount
+        && regularOutputBufferCount == regularDrawItemCount
+        && regularOutputLayoutCount == regularDrawItemCount
+    ;
 }
 
 

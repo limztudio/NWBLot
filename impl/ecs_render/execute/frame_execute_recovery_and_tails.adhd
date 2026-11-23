@@ -10,118 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ShouldExecuteFrameRecoveryTask(in b8 hasAcceptedPackets, in b8 timingNeedsRetirement){
-    return hasAcceptedPackets || timingNeedsRetirement;
-}
-
-b8 IsDeferredTransferTailAvailable(
-    in b8 finalPresentationValid,
-    in b8 deferredGraphScheduled,
-    in b8 tailTaskValid,
-    in b8 tailTaskCompiled,
-    in b8 queuePresent,
-    in b8 queueSupportsTransfer
-){
-    return finalPresentationValid && deferredGraphScheduled && tailTaskValid && tailTaskCompiled && queuePresent && queueSupportsTransfer;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RestorePrefixCpuState(mut RendererMeshSystem meshSystem, mut RendererDeferredSystem deferredSystem){
-    meshSystem.invalidateMeshViewBufferUploadMirror();
-    deferredSystem.invalidateSceneLightingUploadMirrors();
-}
-
-void RestorePostGbufferPacketCpuState(
-    in FrameExecuteCpuSnapshot snapshot,
-    in b8 restoreBindlessSlots,
-    mut RendererMeshSystem meshSystem,
-    mut RendererDeferredSystem deferredSystem,
-    mut RendererRayTracingState rayTracingState,
-    mut RendererAvboitSystem avboitSystem,
-    mut DeferredFrameTargets targets
-){
-    if(restoreBindlessSlots)
-        targets.bindless.slotsUploaded = snapshot.deferredBindlessSlotsUploaded;
-    RestorePrefixCpuState(meshSystem, deferredSystem);
-    rayTracingState.restoreShadowPacketCpuState(snapshot.rayTracing);
-    rayTracingState.restoreCausticPacketCpuState(snapshot.rayTracing);
-    rayTracingState.restoreSurfelGiPacketCpuState(snapshot.rayTracing);
-    avboitSystem.restoreTargetClearState(snapshot.avboitTargetsNeedClear);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
-    mut RendererFramePipeline renderer = this.m_renderer;
-    return renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration());
-}
-
-b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
-    mut RendererFramePipeline renderer = this.m_renderer;
-
-    if(renderer.m_graphics.getDevice().requiresRecreation()){
-        [essential] warning("RendererSystem: frame recovery packet skipped because the graphics device requires recreation");
-        renderer.m_deferredFrameRecoveryArmed = false;
-        renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        this.m_frameTimingTransaction.discard();
-        return false;
-    }
-    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !this.m_compiledPlan.findTask(renderer.m_deferredFrameRecoveryTask).valid()){
-        [essential] warning("RendererSystem: deferred frame recovery task was unavailable");
-        renderer.m_deferredFrameRecoveryArmed = false;
-        renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        this.m_frameTimingTransaction.discard();
-        return false;
-    }
-    b8 retireTiming = this.m_frameTimingTransaction.needsRetirement();
-    if(retireTiming && !this.m_frameTimingTransaction.prepareForRecovery()){
-        warning("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery");
-        this.m_frameTimingTransaction.discard();
-        retireTiming = false;
-    }
-    renderer.m_deferredFrameRecoveryArmed = true;
-    renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
-    in GpuTaskScheduler scheduler = renderer.m_graphics.gpuTasks();
-    const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
-        renderer.m_deferredLightingCompiledGraph,
-        renderer.m_deferredFrameRecoveryTask,
-        renderer.m_deferredLightingTaskGraph,
-        renderer.m_deferredLightingRecordedGraph,
-        renderer.m_deferredLightingSubmissionTransaction,
-        renderer.m_graphics.gpuTiming()
-    );
-    if(!recoveryAccepted){
-        [essential] warning("RendererSystem: deferred frame recovery record/submission was rejected");
-        return false;
-    }
-    return true;
-}
-
-b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
-    if(ShouldExecuteFrameRecoveryTask(this.m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), this.m_frameTimingTransaction.needsRetirement()))
-        return this.executeFrameRecoveryTask();
-    return true;
-}
-
-b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
-    const b8 recovered = this.recoverPendingFrameSubmission();
-    return this.discardUnacceptedGraphPackets() && recovered;
-}
-
-void FrameExecuteRecovery::failFrameRenderRecovery(){
-    mut RendererFramePipeline renderer = this.m_renderer;
-    if(renderer.m_frameRenderRecoveryFailed)
-        return;
-    renderer.m_frameRenderRecoveryFailed = true;
-    [essential] warning("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation");
-    renderer.m_graphics.requestDeviceRecreation();
-}
-
 class FrameHistoryCopyAcceptance{
     public mut GpuPersistentResourceStateCache shadowVisibilityReturnState;
     public mut GpuPersistentResourceStateCache causticIrradianceReturnState;
@@ -212,6 +100,114 @@ class SurfelCounterReadbackAcceptance{
             this.raytracingSystem.confirmSurfelCountReadbackSubmission(token);
         return this.acceptedStateReady;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldExecuteFrameRecoveryTask(in b8 hasAcceptedPackets, in b8 timingNeedsRetirement){
+    return hasAcceptedPackets || timingNeedsRetirement;
+}
+
+b8 IsDeferredTransferTailAvailable(
+    in b8 finalPresentationValid,
+    in b8 deferredGraphScheduled,
+    in b8 tailTaskValid,
+    in b8 tailTaskCompiled,
+    in b8 queuePresent,
+    in b8 queueSupportsTransfer
+){
+    return finalPresentationValid && deferredGraphScheduled && tailTaskValid && tailTaskCompiled && queuePresent && queueSupportsTransfer;
+}
+
+void RestorePrefixCpuState(mut RendererMeshSystem meshSystem, mut RendererDeferredSystem deferredSystem){
+    meshSystem.invalidateMeshViewBufferUploadMirror();
+    deferredSystem.invalidateSceneLightingUploadMirrors();
+}
+
+void RestorePostGbufferPacketCpuState(
+    in FrameExecuteCpuSnapshot snapshot,
+    in b8 restoreBindlessSlots,
+    mut RendererMeshSystem meshSystem,
+    mut RendererDeferredSystem deferredSystem,
+    mut RendererRayTracingState rayTracingState,
+    mut RendererAvboitSystem avboitSystem,
+    mut DeferredFrameTargets targets
+){
+    if(restoreBindlessSlots)
+        targets.bindless.slotsUploaded = snapshot.deferredBindlessSlotsUploaded;
+    RestorePrefixCpuState(meshSystem, deferredSystem);
+    rayTracingState.restoreShadowPacketCpuState(snapshot.rayTracing);
+    rayTracingState.restoreCausticPacketCpuState(snapshot.rayTracing);
+    rayTracingState.restoreSurfelGiPacketCpuState(snapshot.rayTracing);
+    avboitSystem.restoreTargetClearState(snapshot.avboitTargetsNeedClear);
+}
+
+b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
+    mut RendererFramePipeline renderer = this.m_renderer;
+    return renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration());
+}
+
+b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
+    mut RendererFramePipeline renderer = this.m_renderer;
+
+    if(renderer.m_graphics.getDevice().requiresRecreation()){
+        [essential] warning("RendererSystem: frame recovery packet skipped because the graphics device requires recreation");
+        renderer.m_deferredFrameRecoveryArmed = false;
+        renderer.m_deferredFrameRecoveryRetiresTiming = false;
+        this.m_frameTimingTransaction.discard();
+        return false;
+    }
+    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !this.m_compiledPlan.findTask(renderer.m_deferredFrameRecoveryTask).valid()){
+        [essential] warning("RendererSystem: deferred frame recovery task was unavailable");
+        renderer.m_deferredFrameRecoveryArmed = false;
+        renderer.m_deferredFrameRecoveryRetiresTiming = false;
+        this.m_frameTimingTransaction.discard();
+        return false;
+    }
+    b8 retireTiming = this.m_frameTimingTransaction.needsRetirement();
+    if(retireTiming && !this.m_frameTimingTransaction.prepareForRecovery()){
+        warning("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery");
+        this.m_frameTimingTransaction.discard();
+        retireTiming = false;
+    }
+    renderer.m_deferredFrameRecoveryArmed = true;
+    renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
+    in GpuTaskScheduler scheduler = renderer.m_graphics.gpuTasks();
+    const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
+        renderer.m_deferredLightingCompiledGraph,
+        renderer.m_deferredFrameRecoveryTask,
+        renderer.m_deferredLightingTaskGraph,
+        renderer.m_deferredLightingRecordedGraph,
+        renderer.m_deferredLightingSubmissionTransaction,
+        renderer.m_graphics.gpuTiming()
+    );
+    if(!recoveryAccepted){
+        [essential] warning("RendererSystem: deferred frame recovery record/submission was rejected");
+        return false;
+    }
+    return true;
+}
+
+b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
+    if(ShouldExecuteFrameRecoveryTask(this.m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), this.m_frameTimingTransaction.needsRetirement()))
+        return this.executeFrameRecoveryTask();
+    return true;
+}
+
+b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
+    const b8 recovered = this.recoverPendingFrameSubmission();
+    return this.discardUnacceptedGraphPackets() && recovered;
+}
+
+void FrameExecuteRecovery::failFrameRenderRecovery(){
+    mut RendererFramePipeline renderer = this.m_renderer;
+    if(renderer.m_frameRenderRecoveryFailed)
+        return;
+    renderer.m_frameRenderRecoveryFailed = true;
+    [essential] warning("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation");
+    renderer.m_graphics.requestDeviceRecreation();
 }
 
 [cpp_unwind]

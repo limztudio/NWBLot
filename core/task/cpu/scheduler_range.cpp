@@ -37,7 +37,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         WorkerWakePlan wakePlan;
         b8 wakeJoiners = false;
         {
-            ScopedLock lock(m_mutex);
+            NothrowScopedLock lock(m_mutex);
             const b8 completed = callerScope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel) == 1u;
             takeWorkerWakePlanLocked(wakePlan);
             wakeJoiners = publishJoinWakeLocked(completed);
@@ -82,7 +82,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             if(rangeCompletedCleanly)
                 m_fastRangeCompleted.fetch_add(1u, MemoryOrder::relaxed);
             if(m_activeFastRanges.fetch_sub(1u, MemoryOrder::seq_cst) == 1u && m_joinWaitersAtomic.load(MemoryOrder::seq_cst) != 0u){
-                ScopedLock lock(m_mutex);
+                NothrowScopedLock lock(m_mutex);
                 if(publishJoinWakeLocked(true))
                     m_joinEpoch.notify_all();
             }
@@ -181,7 +181,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             WorkerWakePlan errWakePlan;
             b8 errWakeJoiners = false;
             {
-                ScopedLock lock(m_mutex);
+                NothrowScopedLock lock(m_mutex);
                 unlinkRangeGroupLocked(group);
                 m_aborting = true;
                 m_abortingAtomic.store(true, MemoryOrder::release);
@@ -208,7 +208,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             b8 finishWakeJoiners = false;
             b8 drainDescendants = false;
             {
-                ScopedLock lock(m_mutex);
+                NothrowScopedLock lock(m_mutex);
                 TaskMeta& anchorMeta = m_slabs.meta(anchorHandle.index);
                 anchorMeta.canceled = true;
                 if(anchorMeta.children == 0u){

@@ -14,8 +14,10 @@ static_assert(size_of<FontBinaryHeader>() == 24u && align_of<FontBinaryHeader>()
 
 b8 Font::loadBinary(in Span<u8> binary){
     Font candidate(this.virtualPath());
-    if(!FontBinaryCodec().deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
+    const Expected<u32> faceIndex = FontBinaryCodec().deserialize(binary, candidate.m_fontBytes);
+    if(!faceIndex.has_value())
         return false;
+    candidate.m_faceIndex = faceIndex.value();
     if(!candidate.validatePayload())
         return false;
     this = candidate;

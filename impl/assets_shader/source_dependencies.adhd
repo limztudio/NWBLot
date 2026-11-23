@@ -80,8 +80,11 @@ b8 GatherShaderSourceDependencies<Directories, Dependencies>(
 
         const StringView text = StringView(sourceText);
         usize start = 0u;
-        StringView line = "";
-        while(NextSourceDependencyLine(text, start, line)){
+        while(start < text.size()){
+            const Expected<StringView> lineResult = NextTextLine(text, start);
+            if(!lineResult.has_value())
+                return false;
+            const StringView line = lineResult.value();
             const Expected<IncludeDirective> directive = TryExtractIncludeDirective(line);
             if(!directive.has_value())
                 continue;

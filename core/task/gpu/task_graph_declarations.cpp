@@ -73,7 +73,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     ResetCompletionScope resetCompletion(*this);
     b8 teardownValid = true;
     {
-        ScopedLock lock(m_lifecycleMutex);
+        NothrowScopedLock lock(m_lifecycleMutex);
         teardownValid = m_activeDiscardNotificationCount == 0u
             && m_activePacketRecordingClaimCount.load(MemoryOrder::acquire) == 0u
             && m_activeRecordingPreparationSerial == 0u

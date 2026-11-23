@@ -15,6 +15,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_DENSE_ARGUMENT_OFFSET")]
+extern const usize s_RefractionShaderDenseArgumentOffset;
+[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_ARGUMENT_BYTES")]
+extern const usize s_RefractionShaderTileArgumentBytes;
+[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_GROUP_SIZE")]
+extern const u32 s_RefractionShaderGroupSize;
+
+static_assert(size_of<RefractionPushConstants>() == s_RefractionPushConstantsByteSize, "Refraction push constants must match the shader");
+static_assert(s_RefractionShaderDenseArgumentOffset == s_RefractionDenseArgumentOffset, "Dense refraction argument offset must match the shader");
+static_assert(s_RefractionShaderTileArgumentBytes == s_RefractionTileArgumentBytes, "Refraction tile argument bytes must match the shader");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 CanEnableRefractionHardwareTracing(
     in b8 hardwareTracingEnabled,
     in b8 shadowVisibilityHardwareSupported,
@@ -41,16 +56,6 @@ b8 CanEnableRefractionHardwareTracing(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_DENSE_ARGUMENT_OFFSET")]
-extern const usize s_RefractionShaderDenseArgumentOffset;
-[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_ARGUMENT_BYTES")]
-extern const usize s_RefractionShaderTileArgumentBytes;
-[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_GROUP_SIZE")]
-extern const u32 s_RefractionShaderGroupSize;
-static_assert(size_of<RefractionPushConstants>() == s_RefractionPushConstantsByteSize, "Refraction push constants must match the shader");
-static_assert(s_RefractionShaderDenseArgumentOffset == s_RefractionDenseArgumentOffset, "Dense refraction argument offset must match the shader");
-static_assert(s_RefractionShaderTileArgumentBytes == s_RefractionTileArgumentBytes, "Refraction tile argument bytes must match the shader");
-
 [cpp_unwind]
 b8 EnsureRefractionProgram(mut RendererShaderSystem shaders, mut Device device, in BindingLayoutHandle layout, in b8 hardware, in b8 diagnostics, in b8 csg, in b8 dense, mut RefractionResolveProgram program){
     if(program.pipeline.valid())
@@ -64,10 +69,17 @@ b8 EnsureRefractionProgram(mut RendererShaderSystem shaders, mut Device device, 
         loaded = shaders.loadShader<ComputeShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.refractionResolveHwCs; }, variant, debugName, program.shader);
     else
         loaded = shaders.loadShader<ComputeShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.refractionResolveScreenCs; }, variant, debugName, program.shader);
-    if(!loaded || !CreateHeapComputePipeline(device, program.shader, layout, hardware, program.pipeline)){
+    if(!loaded){
         program.failed = true;
         return false;
     }
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, program.shader, layout, hardware);
+    if(!pipeline.has_value()){
+        program.pipeline.reset();
+        program.failed = true;
+        return false;
+    }
+    program.pipeline = pipeline.value();
     LogCreatedRefractionResolvePipeline(hardware, dense);
     return true;
 }

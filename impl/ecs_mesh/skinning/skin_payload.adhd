@@ -68,6 +68,7 @@ b8 BuildRuntimeSkinPayload(
     return true;
 }
 
+[cpp_unwind]
 Expected<Vector<MeshSkinningInfluenceGpu>> BuildSkinInfluences(in MeshSkinningRuntimeInstance instance){
     if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
         return MakeUnexpected(Failure());

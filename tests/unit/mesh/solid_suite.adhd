@@ -25,6 +25,9 @@ extern class NoThrowCornerVisitor;
 [cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::ThrowingCornerVisitor")]
 extern class ThrowingCornerVisitor;
 
+[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::VerifyMeshCookAllocationUnwindPropagates")]
+extern b8 VerifyMeshCookAllocationUnwindPropagates();
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -421,6 +424,10 @@ void VerifyMeshSolidTopology_RelativeComponentVolumePreservesTinyAndTranslatedSo
     }
 }
 
+void VerifyMeshSolidTopology_AllocationFailureUnwindsInsteadOfTerminating(){
+    EXPECT_TRUE(VerifyMeshCookAllocationUnwindPropagates());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -437,6 +444,7 @@ NWB_ADHD_GTEST(MeshSolidTopology, MembershipCrossesWordBoundariesWithoutSettingT
 NWB_ADHD_GTEST(MeshSolidTopology, NonFinitePositionsAndInvalidCornerRangesCannotProduceMembership, VerifyMeshSolidTopology_NonFinitePositionsAndInvalidCornerRangesCannotProduceMembership)
 NWB_ADHD_GTEST(MeshSolidTopology, OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces, VerifyMeshSolidTopology_OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces)
 NWB_ADHD_GTEST(MeshSolidTopology, RelativeComponentVolumePreservesTinyAndTranslatedSolids, VerifyMeshSolidTopology_RelativeComponentVolumePreservesTinyAndTranslatedSolids)
+NWB_ADHD_GTEST(MeshSolidTopology, AllocationFailureUnwindsInsteadOfTerminating, VerifyMeshSolidTopology_AllocationFailureUnwindsInsteadOfTerminating)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

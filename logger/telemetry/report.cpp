@@ -135,8 +135,8 @@ void AppendPerfCsvRow(const Core::Telemetry::PerfTimingSource::Enum source, cons
     );
 }
 
-namespace{
-void AccumulateTimingChannel(usize& eventCount, usize& sampleCount, f64& totalSeconds, b8& secondsValid, f64& maxSeconds, const Core::Perf::TimingStats& stats)noexcept{
+namespace __hidden_report_timing{
+static void AccumulateTimingChannel(usize& eventCount, usize& sampleCount, f64& totalSeconds, b8& secondsValid, f64& maxSeconds, const Core::Perf::TimingStats& stats)noexcept{
 #pragma STDC FENV_ACCESS ON
     ++eventCount;
     sampleCount += stats.sampleCount;
@@ -150,13 +150,13 @@ void AccumulateTimingChannel(usize& eventCount, usize& sampleCount, f64& totalSe
     if(stats.seconds > maxSeconds)
         maxSeconds = stats.seconds;
 }
-}
+};
 
 void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryReportSummary& summary)noexcept{
     if(payload.source == Core::Telemetry::PerfTimingSource::Cpu)
-        AccumulateTimingChannel(summary.cpuTimingEventCount, summary.cpuTimingSampleCount, summary.cpuTimingSeconds, summary.cpuTimingSecondsValid, summary.maxCpuTimingSeconds, payload.stats);
+        __hidden_report_timing::AccumulateTimingChannel(summary.cpuTimingEventCount, summary.cpuTimingSampleCount, summary.cpuTimingSeconds, summary.cpuTimingSecondsValid, summary.maxCpuTimingSeconds, payload.stats);
     else if(payload.source == Core::Telemetry::PerfTimingSource::Gpu)
-        AccumulateTimingChannel(summary.gpuTimingEventCount, summary.gpuTimingSampleCount, summary.gpuTimingSeconds, summary.gpuTimingSecondsValid, summary.maxGpuTimingSeconds, payload.stats);
+        __hidden_report_timing::AccumulateTimingChannel(summary.gpuTimingEventCount, summary.gpuTimingSampleCount, summary.gpuTimingSeconds, summary.gpuTimingSecondsValid, summary.maxGpuTimingSeconds, payload.stats);
 }
 
 void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept{

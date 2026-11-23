@@ -44,7 +44,7 @@ public:
     void appendInferred(const GpuTaskDependencyEdge& edge);
 
 private:
-    [[nodiscard]] u32 appendRawEdge(const GpuTaskDependencyEdge& edge);
+    void ensureRawEdge(const GpuTaskDependencyEdge& edge, u32* outRawEdgeIndex = nullptr);
     GraphicsVector<GpuTaskDependencyEdge>& m_edges;
     GraphicsVector<GpuTaskDependencyEdge>& m_inferredEdges;
     usize& m_explicitEdgeCount;

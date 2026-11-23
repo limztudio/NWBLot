@@ -18,6 +18,7 @@ b8 ShouldCollectMeshNode(in b8 hasNode, in b8 hasMesh, in b8 includeHidden, in b
     return hasNode && hasMesh && (includeHidden || visible);
 }
 
+[cpp_unwind]
 void AppendFbxMeshInstanceLine(
     in usize index,
     in b8 hasNode,

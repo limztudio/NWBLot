@@ -10,6 +10,11 @@
 
 const StringView s_SubsystemAssetKindLabel = "subsystem";
 
+type SubsystemTypeAutoRegistrar = AssetFamilyTypes<ISubsystem>;
+type SubsystemAssetCodec = FamilyAssetCodec<ISubsystem, SubsystemAssetPolicy>;
+type TypedSubsystemAssetCodec<T> = FamilyMemberAssetCodec<ISubsystem, T, SubsystemAssetPolicy>;
+type TypedSubsystemAutoRegistrar<T> = TypedAssetRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>>;
+
 [asset("subsystem")]
 interface ISubsystem{
     b8 loadBinary(in Span<u8> binary);
@@ -22,6 +27,53 @@ interface ISubsystem{
     Name fieldValue(in usize index, in usize elementIndex)const;
     void clearFieldValues(in usize index);
     void appendFieldValue(in usize index, in Name value);
+}
+
+class SubsystemAssetPolicy{
+    public StringView deserializeContext()const{ return "SubsystemAssetCodec::deserialize"; }
+    public StringView serializeContext()const{ return "SubsystemAssetCodec::serialize"; }
+    public StringView memberSerializeContext()const{ return "TypedSubsystemAssetCodec::serialize"; }
+
+    public Expected<NameHash> readType(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<SubsystemHeaderBinary> header = ReadMagicHeaderPayload<SubsystemHeaderBinary>(
+            binary, s_SubsystemMagic, "ISubsystem::loadBinary", s_SubsystemAssetKindLabel, cursor
+        );
+        if(!header.has_value())
+            return MakeUnexpected(Failure());
+        return header.value().subsystemTypeHash;
+    }
+
+    public b8 write(in ISubsystem subsystem, mut Vector<u8> outBinary)const{
+        if(!subsystem.validatePayload())
+            return false;
+
+        const usize fieldCount = subsystem.fieldCount();
+        Vector<NameHash> subsystemHashes;
+        Vector<u64> fieldCounts;
+        Vector<NameHash> assetHashes;
+        subsystemHashes.reserve(subsystem.parentRefs().size());
+        fieldCounts.reserve(fieldCount);
+
+        for(in AssetRef<ISubsystem> ref : subsystem.parentRefs())
+            subsystemHashes.push_back(ref.name().hash());
+
+        usize totalAssetCount = 0u;
+        for(usize i = 0u; i < fieldCount; ++i){
+            const usize valueCount = subsystem.fieldValueCount(i);
+            fieldCounts.push_back(cast<u64>(valueCount));
+            totalAssetCount += valueCount;
+        }
+
+        assetHashes.reserve(totalAssetCount);
+        for(usize i = 0u; i < fieldCount; ++i){
+            const usize valueCount = subsystem.fieldValueCount(i);
+            for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex)
+                assetHashes.push_back(subsystem.fieldValue(i, elementIndex).hash());
+        }
+
+        return SubsystemBinaryCodec().serialize(subsystem.assetType().hash(), subsystemHashes, fieldCounts, assetHashes, outBinary);
+    }
 }
 
 
@@ -94,13 +146,14 @@ b8 LoadSubsystemBinary(in Span<u8> binary, mut ISubsystem outSubsystem){
     Vector<NameHash> subsystemHashes;
     Vector<u64> fieldCounts;
     Vector<NameHash> assetHashes;
-    usize cursor = 0u;
-    usize subsystemCount = 0u;
-    usize fieldCount = 0u;
-    usize assetCount = 0u;
     const SubsystemBinaryCodec codec = SubsystemBinaryCodec();
-    if(!codec.readCounts(binary, outSubsystem.assetType(), expectedFieldCount, cursor, subsystemCount, fieldCount, assetCount))
+    const Expected<SubsystemBinaryCounts> decodedCounts = codec.readCounts(binary, outSubsystem.assetType(), expectedFieldCount);
+    if(!decodedCounts.has_value())
         return false;
+    const usize cursor = decodedCounts.value().cursor;
+    const usize subsystemCount = decodedCounts.value().subsystemCount;
+    const usize fieldCount = decodedCounts.value().fieldCount;
+    const usize assetCount = decodedCounts.value().assetCount;
     if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(subsystemHashes, subsystemCount), "subsystems"))
         return false;
     if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(fieldCounts, fieldCount), "field counts"))
@@ -138,62 +191,6 @@ b8 LoadSubsystemBinary(in Span<u8> binary, mut ISubsystem outSubsystem){
 
     return outSubsystem.validatePayload();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SubsystemAssetPolicy{
-    public StringView deserializeContext()const{ return "SubsystemAssetCodec::deserialize"; }
-    public StringView serializeContext()const{ return "SubsystemAssetCodec::serialize"; }
-    public StringView memberSerializeContext()const{ return "TypedSubsystemAssetCodec::serialize"; }
-
-    public Expected<NameHash> readType(in Span<u8> binary)const{
-        usize cursor = 0u;
-        const Expected<SubsystemHeaderBinary> header = ReadMagicHeaderPayload<SubsystemHeaderBinary>(
-            binary, s_SubsystemMagic, "ISubsystem::loadBinary", s_SubsystemAssetKindLabel, cursor
-        );
-        if(!header.has_value())
-            return MakeUnexpected(Failure());
-        return header.value().subsystemTypeHash;
-    }
-
-    public b8 write(in ISubsystem subsystem, mut Vector<u8> outBinary)const{
-        if(!subsystem.validatePayload())
-            return false;
-
-        const usize fieldCount = subsystem.fieldCount();
-        Vector<NameHash> subsystemHashes;
-        Vector<u64> fieldCounts;
-        Vector<NameHash> assetHashes;
-        subsystemHashes.reserve(subsystem.parentRefs().size());
-        fieldCounts.reserve(fieldCount);
-
-        for(in AssetRef<ISubsystem> ref : subsystem.parentRefs())
-            subsystemHashes.push_back(ref.name().hash());
-
-        usize totalAssetCount = 0u;
-        for(usize i = 0u; i < fieldCount; ++i){
-            const usize valueCount = subsystem.fieldValueCount(i);
-            fieldCounts.push_back(cast<u64>(valueCount));
-            totalAssetCount += valueCount;
-        }
-
-        assetHashes.reserve(totalAssetCount);
-        for(usize i = 0u; i < fieldCount; ++i){
-            const usize valueCount = subsystem.fieldValueCount(i);
-            for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex)
-                assetHashes.push_back(subsystem.fieldValue(i, elementIndex).hash());
-        }
-
-        return SubsystemBinaryCodec().serialize(subsystem.assetType().hash(), subsystemHashes, fieldCounts, assetHashes, outBinary);
-    }
-}
-
-type SubsystemTypeAutoRegistrar = AssetFamilyTypes<ISubsystem>;
-type SubsystemAssetCodec = FamilyAssetCodec<ISubsystem, SubsystemAssetPolicy>;
-type TypedSubsystemAssetCodec<T> = FamilyMemberAssetCodec<ISubsystem, T, SubsystemAssetPolicy>;
-type TypedSubsystemAutoRegistrar<T> = TypedAssetRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -30,50 +30,6 @@ class RadioChoiceVisualFlags{
     public b8 focused = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 IsPopupLoanCurrent(in b8 isOpen, in u64 stateInstanceGeneration, in u64 stateOpenGeneration, in PopupToken token){
-    return isOpen && stateInstanceGeneration == token.instanceGeneration && stateOpenGeneration == token.openGeneration;
-}
-
-RadioChoiceVisualFlags BuildRadioChoiceVisualFlags(
-    in b8 groupEnabled,
-    in b8 rowEnabled,
-    in u64 selectedKey,
-    in u64 cursorKey,
-    in u64 rowKey,
-    in WidgetId hoverId,
-    in WidgetId partId,
-    in b8 partPressed,
-    in b8 groupPressed,
-    in WidgetId focusId,
-    in WidgetId groupId
-){
-    RadioChoiceVisualFlags flags;
-    flags.enabled = groupEnabled && rowEnabled;
-    flags.checked = selectedKey == rowKey;
-    flags.hover = hoverId == partId;
-    flags.pressed = partPressed || (cursorKey == rowKey && groupPressed);
-    flags.focused = flags.enabled && focusId == groupId && cursorKey == rowKey;
-    return flags;
-}
-
-b8 ResolveSliderThumbPressedState(in b8 interactive, in b8 primaryDown, in WidgetId captureId, in WidgetId trackId, in WidgetId thumbId){
-    return interactive && primaryDown && (captureId == trackId || captureId == thumbId);
-}
-
-PopupOptions BuildCompoundPopupReservationOptions(){
-    PopupOptions options;
-    options.size = s_CompoundPopupPlaceholderSize;
-    return options;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RadioGroupPopupLoan{
     public in PopupState state;
     public PopupToken token;
@@ -114,6 +70,42 @@ class RadioGroupPopupGuard : IRadioGroupReconcileGuard{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsPopupLoanCurrent(in b8 isOpen, in u64 stateInstanceGeneration, in u64 stateOpenGeneration, in PopupToken token){
+    return isOpen && stateInstanceGeneration == token.instanceGeneration && stateOpenGeneration == token.openGeneration;
+}
+
+RadioChoiceVisualFlags BuildRadioChoiceVisualFlags(
+    in b8 groupEnabled,
+    in b8 rowEnabled,
+    in u64 selectedKey,
+    in u64 cursorKey,
+    in u64 rowKey,
+    in WidgetId hoverId,
+    in WidgetId partId,
+    in b8 partPressed,
+    in b8 groupPressed,
+    in WidgetId focusId,
+    in WidgetId groupId
+){
+    RadioChoiceVisualFlags flags;
+    flags.enabled = groupEnabled && rowEnabled;
+    flags.checked = selectedKey == rowKey;
+    flags.hover = hoverId == partId;
+    flags.pressed = partPressed || (cursorKey == rowKey && groupPressed);
+    flags.focused = flags.enabled && focusId == groupId && cursorKey == rowKey;
+    return flags;
+}
+
+b8 ResolveSliderThumbPressedState(in b8 interactive, in b8 primaryDown, in WidgetId captureId, in WidgetId trackId, in WidgetId thumbId){
+    return interactive && primaryDown && (captureId == trackId || captureId == thumbId);
+}
+
+PopupOptions BuildCompoundPopupReservationOptions(){
+    PopupOptions options;
+    options.size = s_CompoundPopupPlaceholderSize;
+    return options;
+}
 
 b8 Builder::beginPopup(in StringView stableKey, mut PopupState state, in PopupOptions options){
     const b8 nested = this.m_scope.value().m_popupState.has_value() && this.m_scope.value().m_panelActive;
@@ -343,10 +335,6 @@ b8 Builder::paintPopup(){
     return this.paintItems();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options){
     RadioGroupResult result;
     if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
@@ -472,14 +460,14 @@ b8 Builder::prepareRadioGroup(mut RadioGroupFrame frame){
         maximumLabel.y = Max(maximumLabel.y, measuredLabel.value().bounds.height);
         frame.m_labels.emplace_back(measuredLabel.value().layout, measuredLabel.value().bounds);
     }
-    if(!this.m_skin.has_value() || !ControlStyleMetrics().radioGroupMetrics(this.m_skin.value(), frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
+    if(!this.m_skin.has_value())
         return false;
+    const Expected<RadioGroupMetrics> metrics = ControlStyleMetrics().radioGroupMetrics(this.m_skin.value(), frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
+    if(!metrics.has_value())
+        return false;
+    frame.m_metrics = metrics.value();
     return this.radioGroupMatches(frame);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
     if(item.radioGroup >= this.m_scope.value().m_radioGroups.size())
@@ -550,10 +538,6 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOptions options){
     if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
         this.m_context.fail();
@@ -601,8 +585,10 @@ b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOpti
 b8 Builder::prepareSlider(mut SliderFrame frame){
     if(!this.sliderMatches(frame) || !this.m_skin.has_value())
         return false;
-    if(!ControlStyleMetrics().sliderMetrics(this.m_skin.value(), frame.m_options, frame.m_style, frame.m_metrics))
+    const Expected<SliderMetrics> metrics = ControlStyleMetrics().sliderMetrics(this.m_skin.value(), frame.m_options, frame.m_style);
+    if(!metrics.has_value())
         return false;
+    frame.m_metrics = metrics.value();
     return this.sliderMatches(frame);
 }
 
@@ -629,10 +615,6 @@ void Builder::publishSliderResults(in b8 valid){
         frame.m_state.m_result = result;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 Builder::paintSlider(in BuilderItem item, in LayoutBox box){
     if(item.slider >= this.m_scope.value().m_sliders.size())

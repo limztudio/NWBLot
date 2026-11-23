@@ -186,7 +186,8 @@ void CpuTaskScheduler::pumpMainThread(){
     u32 active = 0u;
     {
         ScopedLock lock(m_mutex);
-        (void)claimNextLocked(CpuAffinity::Any, true, executing, false, nullptr, 0u, claims[active]);
+        if(!claimNextLocked(CpuAffinity::Any, true, executing, false, nullptr, 0u, claims[active]))
+            claims[active].resetFast();
     }
     while(claims[active].hasWork()){
         const u32 next = active ^ 1u;
@@ -893,7 +894,7 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
             WorkerWakePlan wakePlan;
             b8 wakeJoiners = false;
             {
-                ScopedLock lock(m_mutex);
+                NothrowScopedLock lock(m_mutex);
                 if(!succeeded){
                     m_aborting = true;
                     m_abortingAtomic.store(true, MemoryOrder::release);
@@ -905,8 +906,8 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
                         (!pipeline->stopOnCompleteHandle || resolveLocked(*pipeline->stopOnCompleteHandle) != nullptr)
                         && (!pipeline->stopOnCompleteScope || pipeline->stopOnCompleteScope->m_pending.load(MemoryOrder::acquire) != 0u)
                         && (!pipeline->stopWhenNoOutstanding || m_outstanding != 0u || m_activeFastRanges.load(MemoryOrder::acquire) != 0u);
-                    if(keepRunning)
-                        (void)claimNextLocked(affinity, pipeline->mainThread, pipeline->executing, pipeline->cooperative, pipeline->preferredScope, workerIndex, *nextClaim, false);
+                    if(keepRunning && !claimNextLocked(affinity, pipeline->mainThread, pipeline->executing, pipeline->cooperative, pipeline->preferredScope, workerIndex, *nextClaim, false))
+                        nextClaim->resetFast();
                 }
                 if(!nextClaim || !nextClaim->hasWork())
                     removeActiveDepthLocked(workerIndex, affinity);
@@ -970,7 +971,7 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
         if(!spawnedChildren)
             payload.function.reset();
         {
-            ScopedLock lock(m_mutex);
+            NothrowScopedLock lock(m_mutex);
             if(claimed.profile){
                 if(claimed.readyProfile){
                     ProfileSample queued = *claimed.profile;
@@ -999,8 +1000,8 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
                         (!pipeline->stopOnCompleteHandle || resolveLocked(*pipeline->stopOnCompleteHandle) != nullptr)
                         && (!pipeline->stopOnCompleteScope || pipeline->stopOnCompleteScope->m_pending.load(MemoryOrder::acquire) != 0u)
                         && (!pipeline->stopWhenNoOutstanding || m_outstanding != 0u || m_activeFastRanges.load(MemoryOrder::acquire) != 0u);
-                    if(keepRunning)
-                        (void)claimNextLocked(affinity, pipeline->mainThread, pipeline->executing, pipeline->cooperative, pipeline->preferredScope, workerIndex, *nextClaim, false);
+                    if(keepRunning && !claimNextLocked(affinity, pipeline->mainThread, pipeline->executing, pipeline->cooperative, pipeline->preferredScope, workerIndex, *nextClaim, false))
+                        nextClaim->resetFast();
                 }
                 if(!nextClaim || !nextClaim->hasWork())
                     removeActiveDepthLocked(workerIndex, affinity);
@@ -1113,7 +1114,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskMeta& first, TaskPayload& f
         b8 scopeCompleted = false;
         b8 handleWaited = false;
         {
-            ScopedLock lock(m_mutex);
+            NothrowScopedLock lock(m_mutex);
             retireNodeLocked(handle, *meta, parentHandle, parentToRetire, parentPayload, madeReady, scopeCompleted, handleWaited);
             takeWorkerWakePlanLocked(wakePlan);
             wakeJoiners = publishJoinWakeLocked(madeReady || scopeCompleted || m_outstanding == 0u || handleWaited);
@@ -1160,7 +1161,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
             ++m_statistics.unclassifiedWorkers;
         affinity = CpuAffinity::Any;
     }
-    std::stop_callback stopCallback(stop, [this, slotIndex]()noexcept{
+    StopCallback stopCallback(stop, [this, slotIndex]()noexcept{
         m_stoppingAtomic.store(true, MemoryOrder::release);
         {
             NothrowScopedLock lock(m_mutex);
@@ -1249,11 +1250,12 @@ b8 CpuTaskScheduler::executeOne(const b8 cooperative, ScopeWait* const preferred
     const usize workerIndex = executing ? activeExec->workerIndex : 0u;
     const CpuAffinity::Enum affinity = executing ? activeExec->affinity : CpuAffinity::Any;
     const b8 mainThread = isMainThread();
+    b8 claimedWork = false;
     {
         ScopedLock lock(m_mutex);
-        (void)claimNextLocked(affinity, mainThread, executing, cooperative, preferredScope, workerIndex, claimed);
+        claimedWork = claimNextLocked(affinity, mainThread, executing, cooperative, preferredScope, workerIndex, claimed);
     }
-    if(!claimed.hasWork())
+    if(!claimedWork || !claimed.hasWork())
         return false;
     executeClaimed(claimed, workerIndex, affinity);
     return true;
@@ -1294,7 +1296,7 @@ CpuTaskScope::~CpuTaskScope()noexcept(false){
 
 void CpuTaskScope::drain()noexcept{
     {
-        ScopedLock lock(m_scheduler.m_mutex);
+        NothrowScopedLock lock(m_scheduler.m_mutex);
         m_scheduler.m_aborting = true;
         m_scheduler.m_abortingAtomic.store(true, MemoryOrder::release);
     }
@@ -1304,7 +1306,7 @@ void CpuTaskScope::drain()noexcept{
 
 void CpuTaskScope::cancel()noexcept{
     {
-        ScopedLock lock(m_scheduler.m_mutex);
+        NothrowScopedLock lock(m_scheduler.m_mutex);
         m_canceled.store(true, MemoryOrder::release);
     }
     m_scheduler.notifyProgress();

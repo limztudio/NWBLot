@@ -167,13 +167,13 @@ b8 DescriptorBufferManager::shutdown(){
 }
 
 b8 DescriptorBufferManager::isEnabled()const noexcept{
-    ScopedLock lifecycleLock(m_lifecycleMutex);
+    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
 
     return m_enabled && !m_lifecycleTransitioning && m_bindingGeneration != 0u;
 }
 
 u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptorType)const noexcept{
-    ScopedLock lifecycleLock(m_lifecycleMutex);
+    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
 
     return VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
 }

@@ -20,7 +20,7 @@ TrackedCommandBuffer::~TrackedCommandBuffer()noexcept{
 
     if(m_cmdBuf && m_cmdPool){
         if(m_sharedCommandPoolMutex){
-            ScopedLock lock(*m_sharedCommandPoolMutex);
+            NothrowScopedLock lock(*m_sharedCommandPoolMutex);
 
             m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
         }

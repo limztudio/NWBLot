@@ -30,28 +30,21 @@ b8 EnsurePushConstantBindingLayout(
     return false;
 }
 
-b8 CreateHeapComputePipeline(
+Expected<ComputePipelineHandle> CreateHeapComputePipeline(
     mut Device device,
     in ShaderHandle shader,
     in BindingLayoutHandle bindingLayout,
-    in b8 includeAccelStruct,
-    mut ComputePipelineHandle outPipeline
+    in b8 includeAccelStruct
 ){
     in GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || (includeAccelStruct && !heap.hasAccelStructLayout()))
-        return false;
+        return MakeUnexpected(Failure());
 
     ComputePipelineDesc desc = ComputePipelineDesc();
     desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     if(includeAccelStruct)
         desc.addBindingLayout(heap.getAccelStructLayout());
-    const Expected<ComputePipelineHandle> pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult.has_value()){
-        outPipeline = pipelineResult.value();
-        return true;
-    }
-    outPipeline.reset();
-    return false;
+    return device.createComputePipeline(desc);
 }
 
 b8 EnsurePushConstantComputePipeline<SubsystemT>(
@@ -76,7 +69,13 @@ b8 EnsurePushConstantComputePipeline<SubsystemT>(
         return false;
     if(!shaderSystem.loadShader<ComputeShader, SubsystemT>(selector, variantName, debugName, inOutShader))
         return false;
-    return CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline);
+    const Expected<ComputePipelineHandle> pipelineResult = CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct);
+    if(!pipelineResult.has_value()){
+        inOutPipeline.reset();
+        return false;
+    }
+    inOutPipeline = pipelineResult.value();
+    return true;
 }
 
 

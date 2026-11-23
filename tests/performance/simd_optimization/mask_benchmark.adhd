@@ -23,6 +23,18 @@ extern VectorDouble BenchmarkSignLanes(in VectorDouble value);
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::LowFloatBits")]
 extern VectorSingle BenchmarkLowSingleBits(in VectorDouble value);
 
+enum<u32> MaskOperation{
+    Move = 0u,
+    EqualFloat = 1u,
+    EqualDouble = 2u,
+    EqualDoubleXYZ = 3u
+};
+
+class MaskDataset{
+    public Array<u64x4, 64> left;
+    public Array<u64x4, 64> right;
+}
+
 u32 MaskKernelBaselineMoveDouble(in VectorDouble value){
     if(s_MaskHasAvx)
         return BenchmarkAvxMoveMask(value);
@@ -109,18 +121,6 @@ u32 MaskKernelAuditCompareImpl<const u32 KindIndex>(in VectorDouble a, in Vector
     if(candidateValue != baselineValue || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags || ReadPowerError() != baselineErrno)
         return 4u;
     return 0u;
-}
-
-enum<u32> MaskOperation{
-    Move = 0u,
-    EqualFloat = 1u,
-    EqualDouble = 2u,
-    EqualDoubleXYZ = 3u
-};
-
-class MaskDataset{
-    public Array<u64x4, 64> left;
-    public Array<u64x4, 64> right;
 }
 
 

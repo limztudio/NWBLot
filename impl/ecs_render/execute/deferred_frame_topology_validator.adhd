@@ -27,7 +27,7 @@ class DeferredFrameTopologyValidator : NoCopy{
         this.m_pipeline = pipeline;
     }
 
-    public b8 validate(
+    public Expected<DeferredFrameTopologyResult> validate(
         in GpuCompiledGraphReadView deferredCompiledPlan,
         in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
         mut FrameExecuteTimingState timing,
@@ -40,8 +40,7 @@ class DeferredFrameTopologyValidator : NoCopy{
         in b8 clearAvboitTargets,
         in b8 laggedAsyncLightingSchedule,
         in b8 laggedLightingHistoryWriterWaitPending,
-        in b8 surfelCounterReadbackCompletionValid,
-        mut DeferredFrameTopologyResult outResult
+        in b8 surfelCounterReadbackCompletionValid
     )const;
 }
 

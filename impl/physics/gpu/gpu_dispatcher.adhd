@@ -33,383 +33,6 @@ const usize s_GpuIslandJointOverflowColorIndex = cast<usize>(s_ShaderGpuIslandJo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 ComputeDispatchGroups(in u32 itemCount){
-    if(itemCount == 0u)
-        return 0u;
-    return (itemCount + s_GpuWorkgroupSize - 1u) / s_GpuWorkgroupSize;
-}
-
-u32 PackGpuShapeFlags(in Shape shape, in Body body, in Vector<HullShape> hullShapes){
-    u32 flags = 0u;
-    if(shape.type == ShapeType::Hull && hullShapes[shape.geometryIndex].halfExtentsFlags.w != 0u)
-        flags |= s_GpuShapeFlagIsBox;
-    if((cast<u32>(shape.flags) & cast<u32>(ShapeFlags::IsSensor)) != 0u)
-        flags |= s_GpuShapeFlagSensor;
-    if(body.type == BodyType::Dynamic)
-        flags |= s_GpuShapeFlagDynamicBody;
-    else if(body.type == BodyType::Kinematic)
-        flags |= s_GpuShapeFlagKinematicBody;
-    if(body.setIndex == s_AwakeSetIndex)
-        flags |= s_GpuShapeFlagAwakeBody;
-    return flags;
-}
-
-u32 ExtractFeatureIdAt(in GpuPhysicsNarrowphaseManifold gm, in u32 index){
-    return bit_cast<u32>(gm.anchorAFeature[index].w);
-}
-
-GpuPhysicsBodyPose PackGpuBodyPoseWithSweep(in BodySim sim, in VectorSingle sweepDisp, in u32 poseFlags){
-    GpuPhysicsBodyPose outPose;
-    outPose.originPad = f32x4(sim.transform.position.x, sim.transform.position.y, sim.transform.position.z, 0.0f);
-    outPose.rotation = sim.transform.rotation;
-    outPose.sweepDispFlags = f32x4(sweepDisp.x, sweepDisp.y, sweepDisp.z, bit_cast<f32>(poseFlags));
-    return outPose;
-}
-
-GpuPhysicsBodyPose PackGpuBodyPose(in BodySim sim){
-    return PackGpuBodyPoseWithSweep(sim, VectorSingle(0.0f), 0u);
-}
-
-void PackGpuAwakeBodyPoseAndFlags(
-    in b8 canEnlarge,
-    in f32 dt,
-    in VectorSingle gravity,
-    in f32 specHalfThreshSq,
-    mut BodySim sim,
-    mut BodyState state,
-    mut Body body,
-    mut u8 outHadEnlarged,
-    mut GpuPhysicsBodyPose outPose
-){
-    const u32 fastBit = cast<u32>(BodyFlags::IsFast);
-    const u32 speedCapBit = cast<u32>(BodyFlags::IsSpeedCapped);
-    const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
-    const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
-    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
-
-    b8 isFast = false;
-    b8 enlarge = false;
-    u32 poseFlags = 0u;
-    VectorSingle sweepDisp(0.0f);
-    const b8 isBullet = (body.type == BodyType::Dynamic) && ((body.flags & bulletBit) != 0u);
-    if(canEnlarge && body.type != BodyType::Static){
-        VectorSingle disp = VectorSingle(state.linearVelocity) * dt;
-        if(body.type == BodyType::Dynamic)
-            disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
-        disp = ApplyLinearLocks(disp, body.flags);
-        const f32 dispLenSq = Vector3LengthSq(VectorSingle(disp, 0.0f)).x;
-        const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
-        isFast = dispLenSq > fastThresh * fastThresh;
-        if(isBullet || isFast){
-            f32 maxDist = s_MaxSweptSpeculativeDistance;
-            if(isBullet)
-                maxDist = s_MaxBulletSweepDistance;
-            if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
-                disp = disp * (maxDist / Sqrt(dispLenSq));
-            sweepDisp = disp;
-            enlarge = true;
-        }
-        if(enlarge || isBullet || isFast || dispLenSq > specHalfThreshSq)
-            poseFlags = s_GpuShapeFlagFastOrBullet;
-    }
-    else if(isBullet){
-        poseFlags = s_GpuShapeFlagFastOrBullet;
-    }
-
-    const b8 hadEnlarged = (body.flags & hasEnlargedBit) != 0u;
-    ApplyBodyEnlargeFlags(body, sim, state, isFast, fastBit, speedCapBit, toiBit);
-    outHadEnlarged = 0u;
-    if(hadEnlarged){
-        body.flags &= ~hasEnlargedBit;
-        outHadEnlarged = 1u;
-    }
-    outPose = PackGpuBodyPoseWithSweep(sim, sweepDisp, poseFlags);
-}
-
-GpuPhysicsBodySim PackGpuBodySim(in Body body, in BodySim sim){
-    GpuPhysicsBodySim outSim;
-    outSim.positionInvMass = sim.centerInvMass;
-    outSim.rotation = sim.transform.rotation;
-    outSim.forceLinearDamping = sim.forceLinearDamping;
-    outSim.torqueAngularDamping = sim.torqueAngularDamping;
-    outSim.localCenterMinExtent = sim.localCenterMinExtent;
-    outSim.invInertiaWorld0 = f32x4(sim.invInertiaWorld.m00, sim.invInertiaWorld.m01, sim.invInertiaWorld.m02, sim.invInertiaWorld.m11);
-    outSim.invInertiaWorld1 = f32x4(sim.invInertiaWorld.m12, sim.invInertiaWorld.m22, sim.gravityScale, body.sleepTime);
-    outSim.invInertiaLocal0 = f32x4(sim.invInertiaLocal.m00, sim.invInertiaLocal.m01, sim.invInertiaLocal.m02, sim.invInertiaLocal.m11);
-    outSim.invInertiaLocal1 = f32x4(sim.invInertiaLocal.m12, sim.invInertiaLocal.m22, body.sleepThreshold, 0.0f);
-    return outSim;
-}
-
-GpuPhysicsBodyState PackGpuBodyState(in BodyState state){
-    GpuPhysicsBodyState outState;
-    outState.linearVelocityPad = f32x4(state.linearVelocity.x, state.linearVelocity.y, state.linearVelocity.z, bit_cast<f32>(state.deltaPositionFlags.w));
-    outState.angularVelocityPad = f32x4(state.angularVelocity.x, state.angularVelocity.y, state.angularVelocity.z, 0.0f);
-    outState.deltaPositionFlags = f32x4(state.deltaPositionFlags.x, state.deltaPositionFlags.y, state.deltaPositionFlags.z, bit_cast<f32>(state.deltaPositionFlags.w));
-    outState.deltaRotation = state.deltaRotation;
-    return outState;
-}
-
-GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
-    in Shape shape,
-    in Body body,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in Aabb3D localBox,
-    in u32 gpuBodyIdx,
-    in u32 shapeId,
-    in f32 sweepMargin,
-    in u32 dataOffset,
-    in u32 dataMeta
-){
-    GpuPhysicsShapeProxy outProxy;
-    const f32 margin = Max(s_MaxAabbMargin, sweepMargin);
-    u32 filterW = 0u;
-    u32 metaW = 0u;
-    if(shape.type == ShapeType::Sphere){
-        outProxy.localCenterRadius = shape.geom0;
-        outProxy.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, margin);
-        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-    }
-    else if(shape.type == ShapeType::Capsule){
-        outProxy.localCenterRadius = shape.geom0;
-        outProxy.localExtentOrP1 = f32x4(shape.geom1.x, shape.geom1.y, shape.geom1.z, margin);
-        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-    }
-    else if(shape.type == ShapeType::Hull){
-        in HullShape hull = hullShapes[shape.geometryIndex];
-        if(hull.halfExtentsFlags.w != 0u){
-            outProxy.localCenterRadius = hull.centroidRadius;
-            outProxy.localExtentOrP1 = f32x4(hull.halfExtentsFlags.x, hull.halfExtentsFlags.y, hull.halfExtentsFlags.z, margin);
-            outProxy.localRotationOrMeta = hull.boxRotation;
-        }
-        else{
-            filterW = dataOffset;
-            metaW = dataMeta;
-            const VectorSingle localMin = VectorSingle(localBox.lowerBound);
-            const VectorSingle localMax = VectorSingle(localBox.upperBound);
-            const VectorSingle centroid = hull.centroid();
-            const f32 r = hull.centroidRadius.w;
-            const VectorSingle extents = Max(
-                Max(Abs(localMax - centroid), Abs(centroid - localMin)) - VectorSingle(r),
-                VectorSingle(0.0f)
-            );
-            outProxy.localCenterRadius = f32x4(centroid.x, centroid.y, centroid.z, r);
-            outProxy.localExtentOrP1 = f32x4(extents.x, extents.y, extents.z, margin);
-            outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
-        }
-    }
-    else{
-        in MeshShape mesh = meshShapes[shape.geometryIndex];
-        filterW = dataOffset;
-        metaW = dataMeta;
-        const VectorSingle localMin = VectorSingle(localBox.lowerBound);
-        const VectorSingle localMax = VectorSingle(localBox.upperBound);
-        const VectorSingle center = (localMin + localMax) * 0.5f;
-        const f32 r = mesh.localAabbMinRadius.w;
-        const VectorSingle extents = Max((localMax - localMin) * 0.5f - VectorSingle(r), VectorSingle(0.0f));
-        outProxy.localCenterRadius = f32x4(center.x, center.y, center.z, r);
-        outProxy.localExtentOrP1 = f32x4(extents.x, extents.y, extents.z, margin);
-        outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
-    }
-
-    const u32 shapeFlags = PackGpuShapeFlags(shape, body, hullShapes);
-    outProxy.bodyIndexTypeShape = u32x4(gpuBodyIdx, cast<u32>(shape.type), shapeId, shapeFlags);
-    outProxy.filterData = u32x4(shape.filter.categoryBits, shape.filter.maskBits, bit_cast<u32>(shape.filter.groupIndex), filterW);
-    return outProxy;
-}
-
-GpuPhysicsShapeProxy PackGpuShapeProxy(
-    in Shape shape,
-    in Body body,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in u32 gpuBodyIdx,
-    in u32 shapeId,
-    in f32 sweepMargin,
-    in u32 dataOffset,
-    in u32 dataMeta
-){
-    const Aabb3D localBox = ComputeShapeLocalAabb(shape, hullShapes, meshShapes);
-    return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
-}
-
-u32 RemapAwakeIndexToGpu(in u32 awakeIdx, in Span<u32> awakeToGpuSlot){
-    if(awakeIdx == s_NullIndex || awakeIdx >= awakeToGpuSlot.size())
-        return s_GpuInvalidIndex;
-    return awakeToGpuSlot[awakeIdx];
-}
-
-GpuPhysicsContactConstraint PackGpuContactConstraint(in ContactConstraint c, in Span<u32> awakeToGpuSlot){
-    GpuPhysicsContactConstraint gc;
-    gc.indicesCountFlags = u32x4(
-        RemapAwakeIndexToGpu(c.indexA, awakeToGpuSlot),
-        RemapAwakeIndexToGpu(c.indexB, awakeToGpuSlot),
-        c.pointCount,
-        s_GpuInvalidIndex
-    );
-    gc.normalFriction = c.normalFriction;
-    gc.tangent1Restitution = c.tangent1Restitution;
-    gc.centerATwistMass = c.centerATwistMass;
-    gc.centerBTwistImpulse = c.centerBTwistImpulse;
-    gc.softnessTangent00 = f32x4(c.softness.biasRate, c.softness.massScale, c.softness.impulseScale, c.tangentMass00);
-    gc.tangentMassFriction = f32x4(c.tangentMass01, c.tangentMass11, c.frictionImpulse.x, c.frictionImpulse.y);
-    gc.tangentVelRollMaxLever = f32x4(c.tangentVelocity1, c.rollingResistance, c.maxLeverArm, 0.0f);
-    gc.rollingImpulsePad = f32x4(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
-    Array<f32, s_MaxManifoldPoints> normImpArr;
-    Array<f32, s_MaxManifoldPoints> normMassArr;
-    for(usize i = 0u; i < s_MaxManifoldPoints; ++i){
-        normImpArr[i] = 0.0f;
-        normMassArr[i] = 0.0f;
-    }
-    for(u32 i = 0u; i < c.pointCount; ++i){
-        in ManifoldConstraintPoint p = c.points[i];
-        mut GpuPhysicsContactPoint gp = gc.points[i];
-        gp.rABaseSep = p.rABaseSep;
-        gp.rBRelVel = p.rBRelVel;
-        normImpArr[i] = p.normalImpulse;
-        normMassArr[i] = p.normalMass;
-    }
-    gc.normalImpulses = f32x4(normImpArr[0u], normImpArr[1u], normImpArr[2u], normImpArr[3u]);
-    gc.normalMasses = f32x4(normMassArr[0u], normMassArr[1u], normMassArr[2u], normMassArr[3u]);
-    return gc;
-}
-
-SymMat3 ResolveGpuBodyEffectiveInvInertia(
-    in Span<GpuPhysicsBodySim> sims,
-    in Span<GpuPhysicsBodyState> states,
-    in u32 gpuUploadCount,
-    in u32 bodySlot
-){
-    if(bodySlot >= gpuUploadCount)
-        return ZeroSymMat3();
-    in GpuPhysicsBodySim sim = sims[bodySlot];
-    const u32 bodyFlags = bit_cast<u32>(states[bodySlot].deltaPositionFlags.w);
-    if(sim.positionInvMass.w <= 0.0f || (bodyFlags & cast<u32>(BodyFlags::Dynamic)) == 0u)
-        return ZeroSymMat3();
-    return MaskSymMat3AngularLocks(
-        SymMat3(
-            sim.invInertiaWorld0.x,
-            sim.invInertiaWorld0.y,
-            sim.invInertiaWorld0.z,
-            sim.invInertiaWorld0.w,
-            sim.invInertiaWorld1.x,
-            sim.invInertiaWorld1.y
-        ),
-        bodyFlags
-    );
-}
-
-u32x4 PackIslandColorCountsQuad(in Array<u8, s_GraphColorCount> counts, in usize baseColor){
-    Array<u32, 4u> words;
-    for(usize w = 0u; w < 4u; ++w){
-        u32 packed = 0u;
-        for(usize b = 0u; b < 4u; ++b){
-            const usize idx = baseColor + w * 4u + b;
-            if(idx < s_GraphColorCount)
-                packed |= cast<u32>(counts[idx]) << cast<u32>(b * 8u);
-        }
-        words[w] = packed;
-    }
-    return u32x4(words[0u], words[1u], words[2u], words[3u]);
-}
-
-GpuPhysicsJointConstraint PackGpuJointConstraint(in JointConstraint jc, in Span<u32> awakeToGpuSlot){
-    GpuPhysicsJointConstraint gjc;
-    const u32 jcFlags = cast<u32>(jc.flags);
-    u32 jFlags = 0u;
-    if((jcFlags & cast<u32>(JointFlags::EnableLimit)) != 0u)
-        jFlags |= s_GpuJointFlagEnableLimit;
-    if((jcFlags & cast<u32>(JointFlags::EnableMotor)) != 0u)
-        jFlags |= s_GpuJointFlagEnableMotor;
-    if((jcFlags & cast<u32>(JointFlags::EnableSpring)) != 0u)
-        jFlags |= s_GpuJointFlagEnableSpring;
-    if(jc.breakForce > 0.0f || jc.breakTorque > 0.0f)
-        jFlags |= s_GpuJointFlagBreakable;
-
-    gjc.indicesTypeFlags = u32x4(
-        RemapAwakeIndexToGpu(jc.indexA, awakeToGpuSlot),
-        RemapAwakeIndexToGpu(jc.indexB, awakeToGpuSlot),
-        cast<u32>(jc.type),
-        jFlags
-    );
-    gjc.params0 = f32x4(jc.baseCenterDeltaLength.w, jc.localAxisAMinLength.w, jc.localAxisBMaxLength.w, jc.linearOffsetCorrection.w);
-    gjc.qA0 = jc.qA0;
-    gjc.qB0 = jc.qB0;
-    gjc.rA0InvMassA = jc.rA0InvMassA;
-    gjc.rB0InvMassB = jc.rB0InvMassB;
-    gjc.baseCenterDeltaMaxMotor = f32x4(jc.baseCenterDeltaLength.x, jc.baseCenterDeltaLength.y, jc.baseCenterDeltaLength.z, jc.maxMotorForce);
-    gjc.localAxisALowerLimit = f32x4(jc.localAxisAMinLength.x, jc.localAxisAMinLength.y, jc.localAxisAMinLength.z, jc.lowerLimit);
-    gjc.localAxisBUpperLimit = f32x4(jc.localAxisBMaxLength.x, jc.localAxisBMaxLength.y, jc.localAxisBMaxLength.z, jc.upperLimit);
-    gjc.referenceRotation = jc.referenceRotation;
-    gjc.linearOffsetMaxTorque = f32x4(jc.linearOffsetCorrection.x, jc.linearOffsetCorrection.y, jc.linearOffsetCorrection.z, jc.maxTorque);
-    gjc.linearSoftnessMotorSpeed = f32x4(jc.linearSoftness.biasRate, jc.linearSoftness.massScale, jc.linearSoftness.impulseScale, jc.motorSpeed);
-    gjc.angularSoftnessSwingLimit = f32x4(jc.angularSoftness.biasRate, jc.angularSoftness.massScale, jc.angularSoftness.impulseScale, jc.swingLimit);
-    gjc.suspensionSoftness = f32x4(jc.suspensionSoftness.biasRate, jc.suspensionSoftness.massScale, jc.suspensionSoftness.impulseScale, 0.0f);
-    gjc.linearImpulse = jc.linearImpulseMax;
-    gjc.angularImpulse = jc.angularImpulseMax;
-    gjc.limitImpulses = f32x4(jc.lowerLimitImpulse, jc.upperLimitImpulse, jc.motorImpulse, jc.coneOrSuspensionImpulse);
-    return gjc;
-}
-
-void UnpackGpuJointImpulseOut(in GpuPhysicsJointImpulseOut imp, mut JointConstraint jc){
-    jc.linearImpulseMax = imp.linearImpulseMax;
-    jc.angularImpulseMax = imp.angularImpulseMax;
-    jc.lowerLimitImpulse = imp.limitImpulses.x;
-    jc.upperLimitImpulse = imp.limitImpulses.y;
-    jc.motorImpulse = imp.limitImpulses.z;
-    jc.coneOrSuspensionImpulse = imp.limitImpulses.w;
-}
-
-void ConvertGpuManifoldToCpu(
-    in GpuPhysicsNarrowphaseManifold gm,
-    in BodySim simA,
-    in BodySim simB,
-    in b8 swapped,
-    mut Manifold outManifold
-){
-    outManifold = Manifold();
-    const u32 ptCount = Min(gm.pairInfo.z, cast<u32>(s_MaxManifoldPoints));
-    outManifold.rollingImpulseMeta.w = (outManifold.rollingImpulseMeta.w & ~0xffu) | (ptCount & 0xffu);
-    if(ptCount == 0u)
-        return;
-
-    if(!swapped)
-        outManifold.normalTwist = f32x4(gm.normalPad.x, gm.normalPad.y, gm.normalPad.z, outManifold.normalTwist.w);
-    else
-        outManifold.normalTwist = f32x4(-gm.normalPad.x, -gm.normalPad.y, -gm.normalPad.z, outManifold.normalTwist.w);
-
-    for(u32 i = 0u; i < ptCount; ++i){
-        VectorSingle anchorA(0.0f);
-        VectorSingle anchorB(0.0f);
-        if(!swapped){
-            anchorA = VectorSingle(gm.anchorAFeature[i], 0.0f);
-            anchorB = VectorSingle(gm.anchorBSeparation[i], 0.0f);
-        }
-        else{
-            anchorA = VectorSingle(gm.anchorBSeparation[i], 0.0f);
-            anchorB = VectorSingle(gm.anchorAFeature[i], 0.0f);
-        }
-        const VectorSingle wA = VectorSingle(simA.transform.position) + anchorA;
-        const VectorSingle wB = VectorSingle(simB.transform.position) + anchorB;
-        outManifold.points[i].pointSeparation = f32x4((wA + wB) * 0.5f, gm.anchorBSeparation[i].w);
-        outManifold.points[i].anchorANormalImpulse = f32x4(anchorA, 0.0f);
-        outManifold.points[i].anchorBTotalImpulse = f32x4(anchorB, 0.0f);
-        const u32 featId = bit_cast<u32>(gm.anchorAFeature[i].w);
-        if(i == 0u)
-            outManifold.pointIds.x = featId;
-        else if(i == 1u)
-            outManifold.pointIds.y = featId;
-        else if(i == 2u)
-            outManifold.pointIds.z = featId;
-        else
-            outManifold.pointIds.w = featId;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PhysicsGpuBufferSlot{
     public BufferHandle buffer;
     public GpuDescriptorHandle descriptor;
@@ -463,168 +86,6 @@ class PhysicsGpuBufferGroup{
         this.slots2 = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
     }
 }
-
-[cpp_unwind]
-void ReleasePhysicsGpuBufferSlot(mut GpuDescriptorHeap heap, mut PhysicsGpuBufferSlot slot){
-    if(slot.descriptor.valid() && heap.isInitialized())
-        heap.free(slot.descriptor);
-    slot.descriptor = GpuDescriptorHandle();
-    slot.buffer.reset();
-    slot.readback.reset();
-    slot.capacity = 0u;
-    slot.readbackCapacity = 0u;
-    slot.stride = 0u;
-    slot.isIndirectArgs = false;
-    slot.cpuReadable = false;
-}
-
-[cpp_unwind]
-b8 EnsurePhysicsGpuStorageBuffer(
-    mut GraphicsRuntime graphics,
-    mut GpuDescriptorHeap heap,
-    in Name debugName,
-    in u32 stride,
-    in u32 requiredCount,
-    in b8 isIndirectArgs,
-    in b8 cpuReadable,
-    mut PhysicsGpuBufferSlot slot
-){
-    const u32 targetCount = Max(requiredCount, 64u);
-    if(slot.hasValidUav() && slot.stride == stride && slot.isIndirectArgs == isIndirectArgs && slot.cpuReadable == cpuReadable && slot.capacity >= targetCount)
-        return true;
-
-    const u32 newCap = Max(targetCount, slot.capacity * 2u);
-    if(slot.buffer.valid() || slot.descriptor.valid()){
-        if(!graphics.waitForIdle())
-            return false;
-        if(slot.descriptor.valid() && heap.isInitialized())
-            heap.free(slot.descriptor);
-        slot.descriptor = GpuDescriptorHandle();
-        slot.buffer.reset();
-        slot.capacity = 0u;
-        slot.isIndirectArgs = false;
-        slot.cpuReadable = false;
-    }
-
-    BufferDesc desc;
-    desc
-        .setDebugName(debugName)
-        .setByteSize(cast<u64>(newCap) * cast<u64>(stride))
-        .setStructStride(stride)
-        .setCanHaveUAVs(true)
-        .setIsDrawIndirectArgs(isIndirectArgs)
-        .enableAutomaticStateTracking(ResourceStates::UnorderedAccess)
-    ;
-    if(cpuReadable)
-        desc.setCpuAccess(CpuAccessMode::Read);
-    const Expected<BufferHandle> bufferResult = graphics.createBuffer(desc);
-    if(!bufferResult.has_value())
-        return false;
-
-    const Expected<GpuDescriptorHandle> descResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
-    if(!descResult.has_value())
-        return false;
-    GpuDescriptorRetirementGuard retire(heap, descResult.value());
-    if(!heap.write(descResult.value(), DescriptorWriteItemStructuredBufferUav(0u, bufferResult.value().deref())))
-        return false;
-    retire.release();
-
-    slot.buffer = bufferResult.value();
-    slot.descriptor = descResult.value();
-    slot.capacity = newCap;
-    slot.stride = stride;
-    slot.isIndirectArgs = isIndirectArgs;
-    slot.cpuReadable = cpuReadable;
-    return true;
-}
-
-[cpp_unwind]
-b8 EnsurePhysicsGpuReadbackBuffer(
-    mut GraphicsRuntime graphics,
-    in Name debugName,
-    in u32 stride,
-    in u32 requiredCount,
-    mut PhysicsGpuBufferSlot slot
-){
-    const u32 targetCount = Max(requiredCount, 64u);
-    if(slot.readback.valid() && slot.stride == stride && slot.readbackCapacity >= targetCount)
-        return true;
-
-    const u32 newCap = Max(targetCount, slot.readbackCapacity * 2u);
-    if(slot.readback.valid()){
-        if(!graphics.waitForIdle())
-            return false;
-        slot.readback.reset();
-        slot.readbackCapacity = 0u;
-    }
-
-    BufferDesc desc;
-    desc
-        .setDebugName(debugName)
-        .setByteSize(cast<u64>(newCap) * cast<u64>(stride))
-        .setStructStride(stride)
-        .setCanHaveUAVs(false)
-        .setCpuAccess(CpuAccessMode::Read)
-        .enableAutomaticStateTracking(ResourceStates::CopyDest)
-    ;
-    const Expected<BufferHandle> rbResult = graphics.createBuffer(desc);
-    if(!rbResult.has_value())
-        return false;
-
-    slot.readback = rbResult.value();
-    slot.readbackCapacity = newCap;
-    return true;
-}
-
-[cpp_unwind]
-b8 LoadPhysicsComputePipeline(
-    mut GraphicsRuntime graphics,
-    mut AssetManager assetManager,
-    mut ShaderArchivePathResolver shaderPathResolver,
-    in BindingLayoutHandle bindingLayout,
-    in Name shaderName,
-    in StringView variantName,
-    in Name debugName,
-    mut ShaderHandle outShader,
-    mut ComputePipelineHandle outPipeline
-){
-    if(outPipeline.valid())
-        return true;
-    if(!shaderName || !bindingLayout.valid())
-        return false;
-
-    if(!Load<ComputeShader, ShaderArchivePathResolver>(
-        shaderName,
-        variantName,
-        debugName,
-        s_PhysicsGpuAssetOwnerName,
-        graphics,
-        assetManager,
-        shaderPathResolver,
-        Optional<Name>(),
-        outShader
-    ))
-        return false;
-
-    mut Device device = graphics.getDevice();
-    in GpuDescriptorHeap heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-
-    ComputePipelineDesc desc;
-    desc.setComputeShader(outShader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    const Expected<ComputePipelineHandle> pipeResult = device.createComputePipeline(desc);
-    if(!pipeResult.has_value()){
-        outPipeline.reset();
-        return false;
-    }
-    outPipeline = pipeResult.value();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class PhysicsCollisionTask{
     public mut GpuDescriptorHeap heap;
@@ -1628,138 +1089,6 @@ class PhysicsSolverTask{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ResolveGpuManifoldEntry(
-    in Vector<Shape> shapes,
-    in Vector<Body> bodies,
-    in Vector<SolverSet> solverSets,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in GpuPhysicsNarrowphaseManifold gm,
-    in Contact c,
-    in VectorSingle gravVec,
-    in f32 dt,
-    in b8 enableContinuous,
-    in b8 isSensor,
-    in b8 swapped,
-    mut Manifold outManifold
-){
-    in Body bA = bodies[c.edges[0u].bodyId];
-    in Body bB = bodies[c.edges[1u].bodyId];
-    in BodySim simA = solverSets[bA.setIndex].sims[bA.localIndex];
-    in BodySim simB = solverSets[bB.setIndex].sims[bB.localIndex];
-    if((gm.pairInfo.w != 0u)){
-        const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, solverSets, gravVec, dt);
-        const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, solverSets, gravVec, dt);
-        const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-        in Shape sA = shapes[c.shapeIdA];
-        in Shape sB = shapes[c.shapeIdB];
-        outManifold = CollideContactPairWithSweep(sA, simA.transform, dispA, sB, simB.transform, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair, hullShapes, meshShapes);
-    }
-    else{
-        ConvertGpuManifoldToCpu(gm, simA, simB, swapped, outManifold);
-        if(!isSensor && enableContinuous && dt > 0.0f && outManifold.pointCount() == 0u){
-            in Shape sA = shapes[c.shapeIdA];
-            in Shape sB = shapes[c.shapeIdB];
-            if(!(sA.type == ShapeType::Mesh && sB.type == ShapeType::Mesh)){
-                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, solverSets, gravVec, dt);
-                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, solverSets, gravVec, dt);
-                if(Vector3LengthSq(dispB - dispA).x > s_SpeculativeDistance * s_SpeculativeDistance){
-                    const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-                    outManifold = SweepContactPairAfterMiss(sA, simA.transform, dispA, sB, simB.transform, dispB, isBulletPair, hullShapes, meshShapes, outManifold);
-                }
-            }
-        }
-    }
-}
-
-void ApplyGpuManifoldInPlaceAt(
-    in Vector<Shape> shapes,
-    in Vector<Body> bodies,
-    in Vector<SolverSet> solverSets,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in Span<GpuPhysicsNarrowphaseManifold> gpuManifolds,
-    in Span<u32> manifoldContactIds,
-    in Span<u8> manifoldSwapped,
-    in VectorSingle gravVec,
-    in f32 dt,
-    in b8 enableContinuous,
-    in b8 enableWarmStarting,
-    in usize mi,
-    mut Vector<Contact> contacts,
-    mut Vector<u8> transitionFlags
-){
-    const u32 cId = manifoldContactIds[mi];
-    if(cId == s_NullIndex)
-        return;
-
-    mut Contact c = contacts[cId];
-    const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-    const b8 swapped = (manifoldSwapped[mi] != 0u);
-    Manifold newM;
-    ResolveGpuManifoldEntry(shapes, bodies, solverSets, hullShapes, meshShapes, gpuManifolds[mi], c, gravVec, dt, enableContinuous, isSensor, swapped, newM);
-
-    MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
-    in Shape sA = shapes[c.shapeIdA];
-    in Shape sB = shapes[c.shapeIdB];
-    if(!isSensor){
-        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
-        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
-        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
-        c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
-    }
-    c.manifold = newM;
-
-    const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
-    b8 isTouching = false;
-    const u32 ptCount = newM.pointCount();
-    if(ptCount > 0u){
-        f32 minSep = newM.points[0u].separation();
-        for(u32 p = 1u; p < ptCount; ++p){
-            const f32 pSep = newM.points[p].separation();
-            if(pSep < minSep)
-                minSep = pSep;
-        }
-        f32 touchThreshold = s_LinearSlop;
-        if(isSensor)
-            touchThreshold = 0.0f;
-        if(minSep <= touchThreshold)
-            isTouching = true;
-    }
-
-    if(isTouching)
-        c.flags |= cast<u32>(ContactFlags::Touching);
-    else
-        c.flags &= ~cast<u32>(ContactFlags::Touching);
-
-    u8 txFlags = 0u;
-    if(!isSensor){
-        in Body bA = bodies[c.edges[0u].bodyId];
-        in Body bB = bodies[c.edges[1u].bodyId];
-        if(ptCount > 0u){
-            if((c.islandId == s_NullIndex && isTouching) || bA.setIndex >= 3u || bB.setIndex >= 3u || c.colorIndex == s_NullIndex)
-                txFlags |= 1u;
-        }
-        else if(c.colorIndex != s_NullIndex || c.islandId != s_NullIndex){
-            txFlags |= 1u;
-        }
-        if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
-            txFlags |= 2u;
-    }
-    else if((c.flags & cast<u32>(ContactFlags::EnableSensorEvents)) != 0u && wasTouching != isTouching){
-        txFlags |= 2u;
-    }
-    transitionFlags[mi] = txFlags;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [arena]
 class PhysicsGpuDispatcher{
     private Optional<mut GraphicsRuntime> m_graphics;
@@ -2364,44 +1693,40 @@ class PhysicsGpuDispatcher{
     }
 
     [cpp_unwind]
-    private b8 readbackCollisionResults(
+    private Expected<u32> readbackCollisionResults(
         mut Device device,
         in QueueSubmissionToken token,
         in u32 maxPairs,
-        mut u32 outRawPairCount,
-        mut u32 outClampedPairCount,
         mut Vector<GpuPhysicsNarrowphaseManifold> outManifolds
     ){
-        outRawPairCount = 0u;
-        outClampedPairCount = 0u;
         outManifolds.clear();
         if(!device.waitForSubmissionToken(token))
-            return false;
+            return MakeUnexpected(Failure());
         this.m_lastComputeToken = QueueSubmissionToken();
 
         Array<u32, 3u> counterWords;
         if(!device.readMappedBuffer(this.m_counterSlot.readback.deref(), counterWords))
-            return false;
+            return MakeUnexpected(Failure());
         const u32 rawPrim = counterWords[0u];
         const u32 rawComplex = counterWords[1u];
         if(rawPrim > maxPairs || rawComplex > maxPairs - rawPrim){
-            outRawPairCount = maxPairs + 1u;
+            u32 overflowCount = maxPairs + 1u;
             if(rawPrim <= 0xffffffffu - rawComplex)
-                outRawPairCount = rawPrim + rawComplex;
-            outClampedPairCount = maxPairs;
-            return true;
+                overflowCount = rawPrim + rawComplex;
+            return overflowCount;
         }
-        outRawPairCount = rawPrim + rawComplex;
-        outClampedPairCount = outRawPairCount;
-        if(outClampedPairCount == 0u)
-            return true;
+        const u32 rawPairCount = rawPrim + rawComplex;
+        if(rawPairCount == 0u)
+            return 0u;
 
-        const u32 emittedCount = Min(counterWords[2u], outClampedPairCount);
+        const u32 emittedCount = Min(counterWords[2u], rawPairCount);
         if(emittedCount == 0u)
-            return true;
+            return rawPairCount;
 
         outManifolds.resize(emittedCount);
-        return device.readMappedBuffer(this.m_manifoldSlot.buffer.deref(), outManifolds);
+        if(!device.readMappedBuffer(this.m_manifoldSlot.buffer.deref(), outManifolds))
+            return MakeUnexpected(Failure());
+        return rawPairCount;
     }
 
     [cpp_unwind]
@@ -3833,12 +3158,11 @@ class PhysicsGpuDispatcher{
                 world.m_sensorBeginEvents.clear();
                 world.m_sensorEndEvents.clear();
                 world.m_jointBreakEvents.clear();
-
-                u32 rawPairCount = 0u;
-                u32 clampedPairCount = 0u;
                 this.m_gpuManifoldsScratch.clear();
-                if(!this.readbackCollisionResults(device, colToken.value(), maxPairs, rawPairCount, clampedPairCount, this.m_gpuManifoldsScratch))
+                const Expected<u32> pairCountResult = this.readbackCollisionResults(device, colToken.value(), maxPairs, this.m_gpuManifoldsScratch);
+                if(!pairCountResult.has_value())
                     return false;
+                u32 rawPairCount = pairCountResult.value();
                 this.m_staticGeomDirtyUpload = false;
                 this.m_staticBodyGpuValid = true;
                 this.m_staticShapeGpuValid = true;
@@ -3897,8 +3221,10 @@ class PhysicsGpuDispatcher{
                     );
                     if(!retryToken.has_value())
                         return false;
-                    if(!this.readbackCollisionResults(device, retryToken.value(), maxPairs, rawPairCount, clampedPairCount, this.m_gpuManifoldsScratch))
+                    const Expected<u32> retryPairCount = this.readbackCollisionResults(device, retryToken.value(), maxPairs, this.m_gpuManifoldsScratch);
+                    if(!retryPairCount.has_value())
                         return false;
+                    rawPairCount = retryPairCount.value();
                     if(rawPairCount > maxPairs)
                         return false;
                 }
@@ -5283,6 +4609,665 @@ class PhysicsGpuDispatcher{
         world.m_inStep = false;
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ComputeDispatchGroups(in u32 itemCount){
+    if(itemCount == 0u)
+        return 0u;
+    return (itemCount + s_GpuWorkgroupSize - 1u) / s_GpuWorkgroupSize;
+}
+
+u32 PackGpuShapeFlags(in Shape shape, in Body body, in Vector<HullShape> hullShapes){
+    u32 flags = 0u;
+    if(shape.type == ShapeType::Hull && hullShapes[shape.geometryIndex].halfExtentsFlags.w != 0u)
+        flags |= s_GpuShapeFlagIsBox;
+    if((cast<u32>(shape.flags) & cast<u32>(ShapeFlags::IsSensor)) != 0u)
+        flags |= s_GpuShapeFlagSensor;
+    if(body.type == BodyType::Dynamic)
+        flags |= s_GpuShapeFlagDynamicBody;
+    else if(body.type == BodyType::Kinematic)
+        flags |= s_GpuShapeFlagKinematicBody;
+    if(body.setIndex == s_AwakeSetIndex)
+        flags |= s_GpuShapeFlagAwakeBody;
+    return flags;
+}
+
+u32 ExtractFeatureIdAt(in GpuPhysicsNarrowphaseManifold gm, in u32 index){
+    return bit_cast<u32>(gm.anchorAFeature[index].w);
+}
+
+GpuPhysicsBodyPose PackGpuBodyPoseWithSweep(in BodySim sim, in VectorSingle sweepDisp, in u32 poseFlags){
+    GpuPhysicsBodyPose outPose;
+    outPose.originPad = f32x4(sim.transform.position.x, sim.transform.position.y, sim.transform.position.z, 0.0f);
+    outPose.rotation = sim.transform.rotation;
+    outPose.sweepDispFlags = f32x4(sweepDisp.x, sweepDisp.y, sweepDisp.z, bit_cast<f32>(poseFlags));
+    return outPose;
+}
+
+GpuPhysicsBodyPose PackGpuBodyPose(in BodySim sim){
+    return PackGpuBodyPoseWithSweep(sim, VectorSingle(0.0f), 0u);
+}
+
+void PackGpuAwakeBodyPoseAndFlags(
+    in b8 canEnlarge,
+    in f32 dt,
+    in VectorSingle gravity,
+    in f32 specHalfThreshSq,
+    mut BodySim sim,
+    mut BodyState state,
+    mut Body body,
+    mut u8 outHadEnlarged,
+    mut GpuPhysicsBodyPose outPose
+){
+    const u32 fastBit = cast<u32>(BodyFlags::IsFast);
+    const u32 speedCapBit = cast<u32>(BodyFlags::IsSpeedCapped);
+    const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
+    const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
+    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
+
+    b8 isFast = false;
+    b8 enlarge = false;
+    u32 poseFlags = 0u;
+    VectorSingle sweepDisp(0.0f);
+    const b8 isBullet = (body.type == BodyType::Dynamic) && ((body.flags & bulletBit) != 0u);
+    if(canEnlarge && body.type != BodyType::Static){
+        VectorSingle disp = VectorSingle(state.linearVelocity) * dt;
+        if(body.type == BodyType::Dynamic)
+            disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
+        disp = ApplyLinearLocks(disp, body.flags);
+        const f32 dispLenSq = Vector3LengthSq(VectorSingle(disp, 0.0f)).x;
+        const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
+        isFast = dispLenSq > fastThresh * fastThresh;
+        if(isBullet || isFast){
+            f32 maxDist = s_MaxSweptSpeculativeDistance;
+            if(isBullet)
+                maxDist = s_MaxBulletSweepDistance;
+            if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
+                disp = disp * (maxDist / Sqrt(dispLenSq));
+            sweepDisp = disp;
+            enlarge = true;
+        }
+        if(enlarge || isBullet || isFast || dispLenSq > specHalfThreshSq)
+            poseFlags = s_GpuShapeFlagFastOrBullet;
+    }
+    else if(isBullet){
+        poseFlags = s_GpuShapeFlagFastOrBullet;
+    }
+
+    const b8 hadEnlarged = (body.flags & hasEnlargedBit) != 0u;
+    ApplyBodyEnlargeFlags(body, sim, state, isFast, fastBit, speedCapBit, toiBit);
+    outHadEnlarged = 0u;
+    if(hadEnlarged){
+        body.flags &= ~hasEnlargedBit;
+        outHadEnlarged = 1u;
+    }
+    outPose = PackGpuBodyPoseWithSweep(sim, sweepDisp, poseFlags);
+}
+
+GpuPhysicsBodySim PackGpuBodySim(in Body body, in BodySim sim){
+    GpuPhysicsBodySim outSim;
+    outSim.positionInvMass = sim.centerInvMass;
+    outSim.rotation = sim.transform.rotation;
+    outSim.forceLinearDamping = sim.forceLinearDamping;
+    outSim.torqueAngularDamping = sim.torqueAngularDamping;
+    outSim.localCenterMinExtent = sim.localCenterMinExtent;
+    outSim.invInertiaWorld0 = f32x4(sim.invInertiaWorld.m00, sim.invInertiaWorld.m01, sim.invInertiaWorld.m02, sim.invInertiaWorld.m11);
+    outSim.invInertiaWorld1 = f32x4(sim.invInertiaWorld.m12, sim.invInertiaWorld.m22, sim.gravityScale, body.sleepTime);
+    outSim.invInertiaLocal0 = f32x4(sim.invInertiaLocal.m00, sim.invInertiaLocal.m01, sim.invInertiaLocal.m02, sim.invInertiaLocal.m11);
+    outSim.invInertiaLocal1 = f32x4(sim.invInertiaLocal.m12, sim.invInertiaLocal.m22, body.sleepThreshold, 0.0f);
+    return outSim;
+}
+
+GpuPhysicsBodyState PackGpuBodyState(in BodyState state){
+    GpuPhysicsBodyState outState;
+    outState.linearVelocityPad = f32x4(state.linearVelocity.x, state.linearVelocity.y, state.linearVelocity.z, bit_cast<f32>(state.deltaPositionFlags.w));
+    outState.angularVelocityPad = f32x4(state.angularVelocity.x, state.angularVelocity.y, state.angularVelocity.z, 0.0f);
+    outState.deltaPositionFlags = f32x4(state.deltaPositionFlags.x, state.deltaPositionFlags.y, state.deltaPositionFlags.z, bit_cast<f32>(state.deltaPositionFlags.w));
+    outState.deltaRotation = state.deltaRotation;
+    return outState;
+}
+
+GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
+    in Shape shape,
+    in Body body,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Aabb3D localBox,
+    in u32 gpuBodyIdx,
+    in u32 shapeId,
+    in f32 sweepMargin,
+    in u32 dataOffset,
+    in u32 dataMeta
+){
+    GpuPhysicsShapeProxy outProxy;
+    const f32 margin = Max(s_MaxAabbMargin, sweepMargin);
+    u32 filterW = 0u;
+    u32 metaW = 0u;
+    if(shape.type == ShapeType::Sphere){
+        outProxy.localCenterRadius = shape.geom0;
+        outProxy.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, margin);
+        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+    else if(shape.type == ShapeType::Capsule){
+        outProxy.localCenterRadius = shape.geom0;
+        outProxy.localExtentOrP1 = f32x4(shape.geom1.x, shape.geom1.y, shape.geom1.z, margin);
+        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+    else if(shape.type == ShapeType::Hull){
+        in HullShape hull = hullShapes[shape.geometryIndex];
+        if(hull.halfExtentsFlags.w != 0u){
+            outProxy.localCenterRadius = hull.centroidRadius;
+            outProxy.localExtentOrP1 = f32x4(hull.halfExtentsFlags.x, hull.halfExtentsFlags.y, hull.halfExtentsFlags.z, margin);
+            outProxy.localRotationOrMeta = hull.boxRotation;
+        }
+        else{
+            filterW = dataOffset;
+            metaW = dataMeta;
+            const VectorSingle localMin = VectorSingle(localBox.lowerBound);
+            const VectorSingle localMax = VectorSingle(localBox.upperBound);
+            const VectorSingle centroid = hull.centroid();
+            const f32 r = hull.centroidRadius.w;
+            const VectorSingle extents = Max(
+                Max(Abs(localMax - centroid), Abs(centroid - localMin)) - VectorSingle(r),
+                VectorSingle(0.0f)
+            );
+            outProxy.localCenterRadius = f32x4(centroid.x, centroid.y, centroid.z, r);
+            outProxy.localExtentOrP1 = f32x4(extents.x, extents.y, extents.z, margin);
+            outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
+        }
+    }
+    else{
+        in MeshShape mesh = meshShapes[shape.geometryIndex];
+        filterW = dataOffset;
+        metaW = dataMeta;
+        const VectorSingle localMin = VectorSingle(localBox.lowerBound);
+        const VectorSingle localMax = VectorSingle(localBox.upperBound);
+        const VectorSingle center = (localMin + localMax) * 0.5f;
+        const f32 r = mesh.localAabbMinRadius.w;
+        const VectorSingle extents = Max((localMax - localMin) * 0.5f - VectorSingle(r), VectorSingle(0.0f));
+        outProxy.localCenterRadius = f32x4(center.x, center.y, center.z, r);
+        outProxy.localExtentOrP1 = f32x4(extents.x, extents.y, extents.z, margin);
+        outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
+    }
+
+    const u32 shapeFlags = PackGpuShapeFlags(shape, body, hullShapes);
+    outProxy.bodyIndexTypeShape = u32x4(gpuBodyIdx, cast<u32>(shape.type), shapeId, shapeFlags);
+    outProxy.filterData = u32x4(shape.filter.categoryBits, shape.filter.maskBits, bit_cast<u32>(shape.filter.groupIndex), filterW);
+    return outProxy;
+}
+
+GpuPhysicsShapeProxy PackGpuShapeProxy(
+    in Shape shape,
+    in Body body,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in u32 gpuBodyIdx,
+    in u32 shapeId,
+    in f32 sweepMargin,
+    in u32 dataOffset,
+    in u32 dataMeta
+){
+    const Aabb3D localBox = ComputeShapeLocalAabb(shape, hullShapes, meshShapes);
+    return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+}
+
+u32 RemapAwakeIndexToGpu(in u32 awakeIdx, in Span<u32> awakeToGpuSlot){
+    if(awakeIdx == s_NullIndex || awakeIdx >= awakeToGpuSlot.size())
+        return s_GpuInvalidIndex;
+    return awakeToGpuSlot[awakeIdx];
+}
+
+GpuPhysicsContactConstraint PackGpuContactConstraint(in ContactConstraint c, in Span<u32> awakeToGpuSlot){
+    GpuPhysicsContactConstraint gc;
+    gc.indicesCountFlags = u32x4(
+        RemapAwakeIndexToGpu(c.indexA, awakeToGpuSlot),
+        RemapAwakeIndexToGpu(c.indexB, awakeToGpuSlot),
+        c.pointCount,
+        s_GpuInvalidIndex
+    );
+    gc.normalFriction = c.normalFriction;
+    gc.tangent1Restitution = c.tangent1Restitution;
+    gc.centerATwistMass = c.centerATwistMass;
+    gc.centerBTwistImpulse = c.centerBTwistImpulse;
+    gc.softnessTangent00 = f32x4(c.softness.biasRate, c.softness.massScale, c.softness.impulseScale, c.tangentMass00);
+    gc.tangentMassFriction = f32x4(c.tangentMass01, c.tangentMass11, c.frictionImpulse.x, c.frictionImpulse.y);
+    gc.tangentVelRollMaxLever = f32x4(c.tangentVelocity1, c.rollingResistance, c.maxLeverArm, 0.0f);
+    gc.rollingImpulsePad = f32x4(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
+    Array<f32, s_MaxManifoldPoints> normImpArr;
+    Array<f32, s_MaxManifoldPoints> normMassArr;
+    for(usize i = 0u; i < s_MaxManifoldPoints; ++i){
+        normImpArr[i] = 0.0f;
+        normMassArr[i] = 0.0f;
+    }
+    for(u32 i = 0u; i < c.pointCount; ++i){
+        in ManifoldConstraintPoint p = c.points[i];
+        mut GpuPhysicsContactPoint gp = gc.points[i];
+        gp.rABaseSep = p.rABaseSep;
+        gp.rBRelVel = p.rBRelVel;
+        normImpArr[i] = p.normalImpulse;
+        normMassArr[i] = p.normalMass;
+    }
+    gc.normalImpulses = f32x4(normImpArr[0u], normImpArr[1u], normImpArr[2u], normImpArr[3u]);
+    gc.normalMasses = f32x4(normMassArr[0u], normMassArr[1u], normMassArr[2u], normMassArr[3u]);
+    return gc;
+}
+
+SymMat3 ResolveGpuBodyEffectiveInvInertia(
+    in Span<GpuPhysicsBodySim> sims,
+    in Span<GpuPhysicsBodyState> states,
+    in u32 gpuUploadCount,
+    in u32 bodySlot
+){
+    if(bodySlot >= gpuUploadCount)
+        return ZeroSymMat3();
+    in GpuPhysicsBodySim sim = sims[bodySlot];
+    const u32 bodyFlags = bit_cast<u32>(states[bodySlot].deltaPositionFlags.w);
+    if(sim.positionInvMass.w <= 0.0f || (bodyFlags & cast<u32>(BodyFlags::Dynamic)) == 0u)
+        return ZeroSymMat3();
+    return MaskSymMat3AngularLocks(
+        SymMat3(
+            sim.invInertiaWorld0.x,
+            sim.invInertiaWorld0.y,
+            sim.invInertiaWorld0.z,
+            sim.invInertiaWorld0.w,
+            sim.invInertiaWorld1.x,
+            sim.invInertiaWorld1.y
+        ),
+        bodyFlags
+    );
+}
+
+u32x4 PackIslandColorCountsQuad(in Array<u8, s_GraphColorCount> counts, in usize baseColor){
+    Array<u32, 4u> words;
+    for(usize w = 0u; w < 4u; ++w){
+        u32 packed = 0u;
+        for(usize b = 0u; b < 4u; ++b){
+            const usize idx = baseColor + w * 4u + b;
+            if(idx < s_GraphColorCount)
+                packed |= cast<u32>(counts[idx]) << cast<u32>(b * 8u);
+        }
+        words[w] = packed;
+    }
+    return u32x4(words[0u], words[1u], words[2u], words[3u]);
+}
+
+GpuPhysicsJointConstraint PackGpuJointConstraint(in JointConstraint jc, in Span<u32> awakeToGpuSlot){
+    GpuPhysicsJointConstraint gjc;
+    const u32 jcFlags = cast<u32>(jc.flags);
+    u32 jFlags = 0u;
+    if((jcFlags & cast<u32>(JointFlags::EnableLimit)) != 0u)
+        jFlags |= s_GpuJointFlagEnableLimit;
+    if((jcFlags & cast<u32>(JointFlags::EnableMotor)) != 0u)
+        jFlags |= s_GpuJointFlagEnableMotor;
+    if((jcFlags & cast<u32>(JointFlags::EnableSpring)) != 0u)
+        jFlags |= s_GpuJointFlagEnableSpring;
+    if(jc.breakForce > 0.0f || jc.breakTorque > 0.0f)
+        jFlags |= s_GpuJointFlagBreakable;
+
+    gjc.indicesTypeFlags = u32x4(
+        RemapAwakeIndexToGpu(jc.indexA, awakeToGpuSlot),
+        RemapAwakeIndexToGpu(jc.indexB, awakeToGpuSlot),
+        cast<u32>(jc.type),
+        jFlags
+    );
+    gjc.params0 = f32x4(jc.baseCenterDeltaLength.w, jc.localAxisAMinLength.w, jc.localAxisBMaxLength.w, jc.linearOffsetCorrection.w);
+    gjc.qA0 = jc.qA0;
+    gjc.qB0 = jc.qB0;
+    gjc.rA0InvMassA = jc.rA0InvMassA;
+    gjc.rB0InvMassB = jc.rB0InvMassB;
+    gjc.baseCenterDeltaMaxMotor = f32x4(jc.baseCenterDeltaLength.x, jc.baseCenterDeltaLength.y, jc.baseCenterDeltaLength.z, jc.maxMotorForce);
+    gjc.localAxisALowerLimit = f32x4(jc.localAxisAMinLength.x, jc.localAxisAMinLength.y, jc.localAxisAMinLength.z, jc.lowerLimit);
+    gjc.localAxisBUpperLimit = f32x4(jc.localAxisBMaxLength.x, jc.localAxisBMaxLength.y, jc.localAxisBMaxLength.z, jc.upperLimit);
+    gjc.referenceRotation = jc.referenceRotation;
+    gjc.linearOffsetMaxTorque = f32x4(jc.linearOffsetCorrection.x, jc.linearOffsetCorrection.y, jc.linearOffsetCorrection.z, jc.maxTorque);
+    gjc.linearSoftnessMotorSpeed = f32x4(jc.linearSoftness.biasRate, jc.linearSoftness.massScale, jc.linearSoftness.impulseScale, jc.motorSpeed);
+    gjc.angularSoftnessSwingLimit = f32x4(jc.angularSoftness.biasRate, jc.angularSoftness.massScale, jc.angularSoftness.impulseScale, jc.swingLimit);
+    gjc.suspensionSoftness = f32x4(jc.suspensionSoftness.biasRate, jc.suspensionSoftness.massScale, jc.suspensionSoftness.impulseScale, 0.0f);
+    gjc.linearImpulse = jc.linearImpulseMax;
+    gjc.angularImpulse = jc.angularImpulseMax;
+    gjc.limitImpulses = f32x4(jc.lowerLimitImpulse, jc.upperLimitImpulse, jc.motorImpulse, jc.coneOrSuspensionImpulse);
+    return gjc;
+}
+
+void UnpackGpuJointImpulseOut(in GpuPhysicsJointImpulseOut imp, mut JointConstraint jc){
+    jc.linearImpulseMax = imp.linearImpulseMax;
+    jc.angularImpulseMax = imp.angularImpulseMax;
+    jc.lowerLimitImpulse = imp.limitImpulses.x;
+    jc.upperLimitImpulse = imp.limitImpulses.y;
+    jc.motorImpulse = imp.limitImpulses.z;
+    jc.coneOrSuspensionImpulse = imp.limitImpulses.w;
+}
+
+void ConvertGpuManifoldToCpu(
+    in GpuPhysicsNarrowphaseManifold gm,
+    in BodySim simA,
+    in BodySim simB,
+    in b8 swapped,
+    mut Manifold outManifold
+){
+    outManifold = Manifold();
+    const u32 ptCount = Min(gm.pairInfo.z, cast<u32>(s_MaxManifoldPoints));
+    outManifold.rollingImpulseMeta.w = (outManifold.rollingImpulseMeta.w & ~0xffu) | (ptCount & 0xffu);
+    if(ptCount == 0u)
+        return;
+
+    if(!swapped)
+        outManifold.normalTwist = f32x4(gm.normalPad.x, gm.normalPad.y, gm.normalPad.z, outManifold.normalTwist.w);
+    else
+        outManifold.normalTwist = f32x4(-gm.normalPad.x, -gm.normalPad.y, -gm.normalPad.z, outManifold.normalTwist.w);
+
+    for(u32 i = 0u; i < ptCount; ++i){
+        VectorSingle anchorA(0.0f);
+        VectorSingle anchorB(0.0f);
+        if(!swapped){
+            anchorA = VectorSingle(gm.anchorAFeature[i], 0.0f);
+            anchorB = VectorSingle(gm.anchorBSeparation[i], 0.0f);
+        }
+        else{
+            anchorA = VectorSingle(gm.anchorBSeparation[i], 0.0f);
+            anchorB = VectorSingle(gm.anchorAFeature[i], 0.0f);
+        }
+        const VectorSingle wA = VectorSingle(simA.transform.position) + anchorA;
+        const VectorSingle wB = VectorSingle(simB.transform.position) + anchorB;
+        outManifold.points[i].pointSeparation = f32x4((wA + wB) * 0.5f, gm.anchorBSeparation[i].w);
+        outManifold.points[i].anchorANormalImpulse = f32x4(anchorA, 0.0f);
+        outManifold.points[i].anchorBTotalImpulse = f32x4(anchorB, 0.0f);
+        const u32 featId = bit_cast<u32>(gm.anchorAFeature[i].w);
+        if(i == 0u)
+            outManifold.pointIds.x = featId;
+        else if(i == 1u)
+            outManifold.pointIds.y = featId;
+        else if(i == 2u)
+            outManifold.pointIds.z = featId;
+        else
+            outManifold.pointIds.w = featId;
+    }
+}
+
+[cpp_unwind]
+void ReleasePhysicsGpuBufferSlot(mut GpuDescriptorHeap heap, mut PhysicsGpuBufferSlot slot){
+    if(slot.descriptor.valid() && heap.isInitialized())
+        heap.free(slot.descriptor);
+    slot.descriptor = GpuDescriptorHandle();
+    slot.buffer.reset();
+    slot.readback.reset();
+    slot.capacity = 0u;
+    slot.readbackCapacity = 0u;
+    slot.stride = 0u;
+    slot.isIndirectArgs = false;
+    slot.cpuReadable = false;
+}
+
+[cpp_unwind]
+b8 EnsurePhysicsGpuStorageBuffer(
+    mut GraphicsRuntime graphics,
+    mut GpuDescriptorHeap heap,
+    in Name debugName,
+    in u32 stride,
+    in u32 requiredCount,
+    in b8 isIndirectArgs,
+    in b8 cpuReadable,
+    mut PhysicsGpuBufferSlot slot
+){
+    const u32 targetCount = Max(requiredCount, 64u);
+    if(slot.hasValidUav() && slot.stride == stride && slot.isIndirectArgs == isIndirectArgs && slot.cpuReadable == cpuReadable && slot.capacity >= targetCount)
+        return true;
+
+    const u32 newCap = Max(targetCount, slot.capacity * 2u);
+    if(slot.buffer.valid() || slot.descriptor.valid()){
+        if(!graphics.waitForIdle())
+            return false;
+        if(slot.descriptor.valid() && heap.isInitialized())
+            heap.free(slot.descriptor);
+        slot.descriptor = GpuDescriptorHandle();
+        slot.buffer.reset();
+        slot.capacity = 0u;
+        slot.isIndirectArgs = false;
+        slot.cpuReadable = false;
+    }
+
+    BufferDesc desc;
+    desc
+        .setDebugName(debugName)
+        .setByteSize(cast<u64>(newCap) * cast<u64>(stride))
+        .setStructStride(stride)
+        .setCanHaveUAVs(true)
+        .setIsDrawIndirectArgs(isIndirectArgs)
+        .enableAutomaticStateTracking(ResourceStates::UnorderedAccess)
+    ;
+    if(cpuReadable)
+        desc.setCpuAccess(CpuAccessMode::Read);
+    const Expected<BufferHandle> bufferResult = graphics.createBuffer(desc);
+    if(!bufferResult.has_value())
+        return false;
+
+    const Expected<GpuDescriptorHandle> descResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    if(!descResult.has_value())
+        return false;
+    GpuDescriptorRetirementGuard retire(heap, descResult.value());
+    if(!heap.write(descResult.value(), DescriptorWriteItemStructuredBufferUav(0u, bufferResult.value().deref())))
+        return false;
+    retire.release();
+
+    slot.buffer = bufferResult.value();
+    slot.descriptor = descResult.value();
+    slot.capacity = newCap;
+    slot.stride = stride;
+    slot.isIndirectArgs = isIndirectArgs;
+    slot.cpuReadable = cpuReadable;
+    return true;
+}
+
+[cpp_unwind]
+b8 EnsurePhysicsGpuReadbackBuffer(
+    mut GraphicsRuntime graphics,
+    in Name debugName,
+    in u32 stride,
+    in u32 requiredCount,
+    mut PhysicsGpuBufferSlot slot
+){
+    const u32 targetCount = Max(requiredCount, 64u);
+    if(slot.readback.valid() && slot.stride == stride && slot.readbackCapacity >= targetCount)
+        return true;
+
+    const u32 newCap = Max(targetCount, slot.readbackCapacity * 2u);
+    if(slot.readback.valid()){
+        if(!graphics.waitForIdle())
+            return false;
+        slot.readback.reset();
+        slot.readbackCapacity = 0u;
+    }
+
+    BufferDesc desc;
+    desc
+        .setDebugName(debugName)
+        .setByteSize(cast<u64>(newCap) * cast<u64>(stride))
+        .setStructStride(stride)
+        .setCanHaveUAVs(false)
+        .setCpuAccess(CpuAccessMode::Read)
+        .enableAutomaticStateTracking(ResourceStates::CopyDest)
+    ;
+    const Expected<BufferHandle> rbResult = graphics.createBuffer(desc);
+    if(!rbResult.has_value())
+        return false;
+
+    slot.readback = rbResult.value();
+    slot.readbackCapacity = newCap;
+    return true;
+}
+
+[cpp_unwind]
+b8 LoadPhysicsComputePipeline(
+    mut GraphicsRuntime graphics,
+    mut AssetManager assetManager,
+    mut ShaderArchivePathResolver shaderPathResolver,
+    in BindingLayoutHandle bindingLayout,
+    in Name shaderName,
+    in StringView variantName,
+    in Name debugName,
+    mut ShaderHandle outShader,
+    mut ComputePipelineHandle outPipeline
+){
+    if(outPipeline.valid())
+        return true;
+    if(!shaderName || !bindingLayout.valid())
+        return false;
+
+    if(!Load<ComputeShader, ShaderArchivePathResolver>(
+        shaderName,
+        variantName,
+        debugName,
+        s_PhysicsGpuAssetOwnerName,
+        graphics,
+        assetManager,
+        shaderPathResolver,
+        Optional<Name>(),
+        outShader
+    ))
+        return false;
+
+    mut Device device = graphics.getDevice();
+    in GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    ComputePipelineDesc desc;
+    desc.setComputeShader(outShader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    const Expected<ComputePipelineHandle> pipeResult = device.createComputePipeline(desc);
+    if(!pipeResult.has_value()){
+        outPipeline.reset();
+        return false;
+    }
+    outPipeline = pipeResult.value();
+    return true;
+}
+
+void ResolveGpuManifoldEntry(
+    in Vector<Shape> shapes,
+    in Vector<Body> bodies,
+    in Vector<SolverSet> solverSets,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in GpuPhysicsNarrowphaseManifold gm,
+    in Contact c,
+    in VectorSingle gravVec,
+    in f32 dt,
+    in b8 enableContinuous,
+    in b8 isSensor,
+    in b8 swapped,
+    mut Manifold outManifold
+){
+    in Body bA = bodies[c.edges[0u].bodyId];
+    in Body bB = bodies[c.edges[1u].bodyId];
+    in BodySim simA = solverSets[bA.setIndex].sims[bA.localIndex];
+    in BodySim simB = solverSets[bB.setIndex].sims[bB.localIndex];
+    if((gm.pairInfo.w != 0u)){
+        const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, solverSets, gravVec, dt);
+        const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, solverSets, gravVec, dt);
+        const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
+        in Shape sA = shapes[c.shapeIdA];
+        in Shape sB = shapes[c.shapeIdB];
+        outManifold = CollideContactPairWithSweep(sA, simA.transform, dispA, sB, simB.transform, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair, hullShapes, meshShapes);
+    }
+    else{
+        ConvertGpuManifoldToCpu(gm, simA, simB, swapped, outManifold);
+        if(!isSensor && enableContinuous && dt > 0.0f && outManifold.pointCount() == 0u){
+            in Shape sA = shapes[c.shapeIdA];
+            in Shape sB = shapes[c.shapeIdB];
+            if(!(sA.type == ShapeType::Mesh && sB.type == ShapeType::Mesh)){
+                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, solverSets, gravVec, dt);
+                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, solverSets, gravVec, dt);
+                if(Vector3LengthSq(dispB - dispA).x > s_SpeculativeDistance * s_SpeculativeDistance){
+                    const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
+                    outManifold = SweepContactPairAfterMiss(sA, simA.transform, dispA, sB, simB.transform, dispB, isBulletPair, hullShapes, meshShapes, outManifold);
+                }
+            }
+        }
+    }
+}
+
+void ApplyGpuManifoldInPlaceAt(
+    in Vector<Shape> shapes,
+    in Vector<Body> bodies,
+    in Vector<SolverSet> solverSets,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Span<GpuPhysicsNarrowphaseManifold> gpuManifolds,
+    in Span<u32> manifoldContactIds,
+    in Span<u8> manifoldSwapped,
+    in VectorSingle gravVec,
+    in f32 dt,
+    in b8 enableContinuous,
+    in b8 enableWarmStarting,
+    in usize mi,
+    mut Vector<Contact> contacts,
+    mut Vector<u8> transitionFlags
+){
+    const u32 cId = manifoldContactIds[mi];
+    if(cId == s_NullIndex)
+        return;
+
+    mut Contact c = contacts[cId];
+    const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
+    const b8 swapped = (manifoldSwapped[mi] != 0u);
+    Manifold newM;
+    ResolveGpuManifoldEntry(shapes, bodies, solverSets, hullShapes, meshShapes, gpuManifolds[mi], c, gravVec, dt, enableContinuous, isSensor, swapped, newM);
+
+    MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
+    in Shape sA = shapes[c.shapeIdA];
+    in Shape sB = shapes[c.shapeIdB];
+    if(!isSensor){
+        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
+        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
+        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
+        c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
+    }
+    c.manifold = newM;
+
+    const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+    b8 isTouching = false;
+    const u32 ptCount = newM.pointCount();
+    if(ptCount > 0u){
+        f32 minSep = newM.points[0u].separation();
+        for(u32 p = 1u; p < ptCount; ++p){
+            const f32 pSep = newM.points[p].separation();
+            if(pSep < minSep)
+                minSep = pSep;
+        }
+        f32 touchThreshold = s_LinearSlop;
+        if(isSensor)
+            touchThreshold = 0.0f;
+        if(minSep <= touchThreshold)
+            isTouching = true;
+    }
+
+    if(isTouching)
+        c.flags |= cast<u32>(ContactFlags::Touching);
+    else
+        c.flags &= ~cast<u32>(ContactFlags::Touching);
+
+    u8 txFlags = 0u;
+    if(!isSensor){
+        in Body bA = bodies[c.edges[0u].bodyId];
+        in Body bB = bodies[c.edges[1u].bodyId];
+        if(ptCount > 0u){
+            if((c.islandId == s_NullIndex && isTouching) || bA.setIndex >= 3u || bB.setIndex >= 3u || c.colorIndex == s_NullIndex)
+                txFlags |= 1u;
+        }
+        else if(c.colorIndex != s_NullIndex || c.islandId != s_NullIndex){
+            txFlags |= 1u;
+        }
+        if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
+            txFlags |= 2u;
+    }
+    else if((c.flags & cast<u32>(ContactFlags::EnableSensorEvents)) != 0u && wasTouching != isTouching){
+        txFlags |= 2u;
+    }
+    transitionFlags[mi] = txFlags;
 }
 
 [cpp_unwind]

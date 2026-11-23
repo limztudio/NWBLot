@@ -178,6 +178,7 @@ const StringView s_MaterialBindIncludesDirectory = "material_bind_includes";
 const StringView s_ModelRigSegment = "rig";
 const StringView s_ModelBodySegment = "body";
 const StringView s_FieldTarget = "target";
+const StringView s_LinearWrapSamplerMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 0.0;\n";
 
 
 class ShaderMetadataCase{
@@ -185,7 +186,6 @@ class ShaderMetadataCase{
     public StringView fields = "";
     public b8 accepted = false;
 }
-
 
 
 class MaterialBinaryTypedLayoutOffsets{
@@ -203,9 +203,6 @@ class TextureMipCorruptionCase{
     public usize fieldOffset = 0u;
     public u32 value = 0u;
 }
-
-
-const StringView s_LinearWrapSamplerMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 0.0;\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

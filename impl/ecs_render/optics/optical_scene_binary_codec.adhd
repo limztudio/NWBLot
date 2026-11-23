@@ -9,29 +9,22 @@
 
 
 class OpticalSceneBinaryCodec{
-    public b8 computeByteSize(in usize instanceCount, mut usize outInstanceBytes, mut usize outByteCount)const{
+    public Expected<usize> computeByteSize(in usize instanceCount)const{
         if(!OpticalSceneInstanceCountFits(instanceCount)){
             error("Ray optical scene: instance table exceeds the shader address range");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outInstanceBytes = instanceCount * s_RayTracingOpticalInstanceBytes;
-        outByteCount = s_RayTracingOpticalSceneHeaderBytes + outInstanceBytes;
-        return true;
+        return s_RayTracingOpticalSceneHeaderBytes + instanceCount * s_RayTracingOpticalInstanceBytes;
     }
 
-    public void serialize(
-        in RayTracingOpticalSceneHeaderGpu header,
-        in Span<RayTracingOpticalInstanceGpu> instances,
-        mut Vector<u8> outBytes,
-        mut u32 outInstanceCount
-    )const{
+    public u32 serialize(in RayTracingOpticalSceneHeaderGpu header, in Span<RayTracingOpticalInstanceGpu> instances, mut Vector<u8> outBytes)const{
         const usize byteCount = s_RayTracingOpticalSceneHeaderBytes + instances.size() * s_RayTracingOpticalInstanceBytes;
         outBytes.clear();
         outBytes.reserve(byteCount);
         AppendPOD(outBytes, header);
         for(in RayTracingOpticalInstanceGpu instance : instances)
             AppendPOD(outBytes, instance);
-        outInstanceCount = cast<u32>(instances.size());
+        return cast<u32>(instances.size());
     }
 }
 

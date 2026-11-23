@@ -54,20 +54,6 @@ enum<u8> TestbedPhysicsBackendChoice{
     kCount
 }
 
-class TestbedPhysicsHudStats{
-    public u32 bodyCount = 0u;
-    public u32 awakeBodyCount = 0u;
-    public u32 contactCount = 0u;
-    public u32 jointCount = 0u;
-    public u32 islandCount = 0u;
-    public u32 cpuSolvedBodyCount = 0u;
-    public u32 gpuSolvedBodyCount = 0u;
-    public u32 cpuSolvedIslandCount = 0u;
-    public u32 gpuSolvedIslandCount = 0u;
-    public u8 backendUsed = 0u;
-    public f64 stepMs = 0.0;
-}
-
 interface IProjectUiLayerPainter{
     void paintUiLayer(mut UiPaintContext context);
 }
@@ -88,6 +74,62 @@ interface IUiFilteredListState{
     StringView text(in u64 index)const;
     StringView filteredText(in u64 index)const;
     b8 applyFilter(in StringView query);
+}
+
+class TestbedPhysicsHudStats{
+    public u32 bodyCount = 0u;
+    public u32 awakeBodyCount = 0u;
+    public u32 contactCount = 0u;
+    public u32 jointCount = 0u;
+    public u32 islandCount = 0u;
+    public u32 cpuSolvedBodyCount = 0u;
+    public u32 gpuSolvedBodyCount = 0u;
+    public u32 cpuSolvedIslandCount = 0u;
+    public u32 gpuSolvedIslandCount = 0u;
+    public u8 backendUsed = 0u;
+    public f64 stepMs = 0.0;
+}
+
+class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
+    private in PhysicsDebugScreenProjector m_projector;
+    private mut Vector<PaintLineSegment> m_outLines;
+    private u32 m_maxLines;
+
+    public TestbedProjectedDebugLineSink(
+        in borrow PhysicsDebugScreenProjector projector,
+        in u32 maxLines,
+        mut Vector<PaintLineSegment> outLines
+    ){
+        this.m_projector = projector;
+        this.m_maxLines = maxLines;
+        this.m_outLines = outLines;
+    }
+
+    public void clear()override{
+        this.m_outLines.clear();
+    }
+
+    public void reserve(in usize capacity)override{
+        this.m_outLines.reserve(capacity);
+    }
+
+    public b8 full()const override{
+        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
+    }
+
+    public void emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
+        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
+            return;
+        const Expected<VectorSingle> segment = this.m_projector.projectSegment(p0, p1);
+        if(segment.has_value()){
+            const VectorSingle seg = segment.value();
+            PaintLineSegment batchLine;
+            batchLine.start = Point(seg.x, seg.y);
+            batchLine.end = Point(seg.z, seg.w);
+            batchLine.color = Color(color.x, color.y, color.z, color.w);
+            this.m_outLines.push_back(batchLine);
+        }
+    }
 }
 
 
@@ -750,47 +792,6 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     if(!textureRef.valid())
         return MakeUnexpected(Failure());
     return LoadImageSource(pool, context.assetManager, textureRef);
-}
-
-class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
-    private in PhysicsDebugScreenProjector m_projector;
-    private mut Vector<PaintLineSegment> m_outLines;
-    private u32 m_maxLines;
-
-    public TestbedProjectedDebugLineSink(
-        in borrow PhysicsDebugScreenProjector projector,
-        in u32 maxLines,
-        mut Vector<PaintLineSegment> outLines
-    ){
-        this.m_projector = projector;
-        this.m_maxLines = maxLines;
-        this.m_outLines = outLines;
-    }
-
-    public void clear()override{
-        this.m_outLines.clear();
-    }
-
-    public void reserve(in usize capacity)override{
-        this.m_outLines.reserve(capacity);
-    }
-
-    public b8 full()const override{
-        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
-    }
-
-    public void emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
-        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
-            return;
-        VectorSingle seg(0.0f);
-        if(this.m_projector.projectSegment(p0, p1, seg)){
-            PaintLineSegment batchLine;
-            batchLine.start = Point(seg.x, seg.y);
-            batchLine.end = Point(seg.z, seg.w);
-            batchLine.color = Color(color.x, color.y, color.z, color.w);
-            this.m_outLines.push_back(batchLine);
-        }
-    }
 }
 
 void PaintPhysicsDebugOverlay(

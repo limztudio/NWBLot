@@ -9,48 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CanPackGlyphBitmapExtent(in u32 width, in u32 height){
-    const u32 maxGlyphExtent = s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter;
-    return width <= maxGlyphExtent && height <= maxGlyphExtent;
-}
-
-Rect MakePlacedGlyphAtlasPixelRect(in u32 placementX, in u32 placementY, in u32 width, in u32 height){
-    return Rect(cast<f32>(placementX + 1u), cast<f32>(placementY + 1u), cast<f32>(width), cast<f32>(height));
-}
-
-GlyphAtlasPlacement MakeInitialGlyphAtlasPlacement(in u32 paddedHeight){
-    GlyphAtlasPlacement placement;
-    placement.x = 0u;
-    placement.y = 0u;
-    placement.rowHeight = paddedHeight;
-    return placement;
-}
-
-Expected<GlyphPageBindingRecord<TFont>> TryMakeNextGlyphPageBinding<TFont>(
-    in AssetRef<TFont> font,
-    in u64 fontGeneration,
-    in u64 atlasIdentity,
-    in u64 currentGeneration,
-    in u32 pageIndex
-){
-    if(currentGeneration == u64.max)
-        return MakeUnexpected(Failure());
-    GlyphPageBindingRecord<TFont> binding;
-    binding.font = font;
-    binding.fontGeneration = fontGeneration;
-    binding.atlasIdentity = atlasIdentity;
-    binding.generation = currentGeneration + 1u;
-    binding.index = pageIndex;
-    binding.width = s_GlyphAtlasPageExtent;
-    binding.height = s_GlyphAtlasPageExtent;
-    return binding;
-}
+type AtlasGlyph = AtlasGlyphRecord<SharedFontFace>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-type AtlasGlyph = AtlasGlyphRecord<SharedFontFace>;
 
 class GlyphAtlasKey{
     public u64 faceIdentity;
@@ -87,10 +50,6 @@ class AtlasPage{
         this.pixels.resize(cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class GlyphAtlas : NoCopy{
     private SharedPool m_pool = SharedPool();
@@ -210,6 +169,47 @@ class GlyphAtlas : NoCopy{
         }
         return page.published;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanPackGlyphBitmapExtent(in u32 width, in u32 height){
+    const u32 maxGlyphExtent = s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter;
+    return width <= maxGlyphExtent && height <= maxGlyphExtent;
+}
+
+Rect MakePlacedGlyphAtlasPixelRect(in u32 placementX, in u32 placementY, in u32 width, in u32 height){
+    return Rect(cast<f32>(placementX + 1u), cast<f32>(placementY + 1u), cast<f32>(width), cast<f32>(height));
+}
+
+GlyphAtlasPlacement MakeInitialGlyphAtlasPlacement(in u32 paddedHeight){
+    GlyphAtlasPlacement placement;
+    placement.x = 0u;
+    placement.y = 0u;
+    placement.rowHeight = paddedHeight;
+    return placement;
+}
+
+Expected<GlyphPageBindingRecord<TFont>> TryMakeNextGlyphPageBinding<TFont>(
+    in AssetRef<TFont> font,
+    in u64 fontGeneration,
+    in u64 atlasIdentity,
+    in u64 currentGeneration,
+    in u32 pageIndex
+){
+    if(currentGeneration == u64.max)
+        return MakeUnexpected(Failure());
+    GlyphPageBindingRecord<TFont> binding;
+    binding.font = font;
+    binding.fontGeneration = fontGeneration;
+    binding.atlasIdentity = atlasIdentity;
+    binding.generation = currentGeneration + 1u;
+    binding.index = pageIndex;
+    binding.width = s_GlyphAtlasPageExtent;
+    binding.height = s_GlyphAtlasPageExtent;
+    return binding;
 }
 
 

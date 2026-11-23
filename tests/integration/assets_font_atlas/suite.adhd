@@ -21,10 +21,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/integration/assets_font_atlas/font_atlas_unwind_probe.h>"), cpp_name("::NWB::Tests::FontAtlasCases::VerifyFontAtlasOomUnwindPreservesExistingAtlas")]
+extern b8 VerifyFontAtlasOomUnwindPreservesExistingAtlas(in FontAtlasPayload baselinePayload, in Span<u8> replacementBinary, in Span<u8> fontBytes, in u32 sourceGlyphCount);
+
 const f32 s_InfinityF32 = BitCast<f32>(0x7f800000u);
 const f64 s_InfinityF64 = BitCast<f64>(0x7ff0000000000000ul);
 const f64 s_QuietNaNF64 = BitCast<f64>(0x7ff8000000000000ul);
-
 const StringView s_BodyFontPath = "project/fonts/body";
 const StringView s_BodyFontAtlasPath = "project/fonts/body_atlas";
 const StringView s_LatinFontFilename = "latin.font";
@@ -41,6 +43,10 @@ const StringView s_UnitsPerEmField = "units_per_em";
 const StringView s_ErrEmptyVirtualPath = "FontAtlas::validatePayload failed: virtual path is empty";
 const StringView s_ErrPixelHashMismatch = "pixel content hash mismatch";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class InvalidFieldCase{
     public usize m_offset;
     public u32 m_value;
@@ -51,6 +57,17 @@ class InvalidFieldCase{
     }
 };
 
+class AtlasBuilder : NoCopy{
+    [cpp_unwind, owner_result]
+    public Expected<FontAtlas> build(in FontAtlasCookEntry entry){
+        return BuildFontAtlasAsset(entry);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value);
     bytes[offset + 1u] = cast<u8>(value >> 8u);
@@ -58,6 +75,7 @@ void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset + 3u] = cast<u8>(value >> 24u);
 }
 
+[cpp_unwind]
 FontAtlasPayload MakePayload(){
     FontAtlasPayload payload;
     payload.font = AssetRef<Font>(Name(s_BodyFontPath));
@@ -111,14 +129,17 @@ FontAtlasPayload MakePayload(){
     return payload;
 }
 
+[cpp_unwind]
 b8 SerializePayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(payload, outBinary);
 }
 
+[cpp_unwind]
 b8 CanSerializePayload(in FontAtlasPayload payload){
     return SerializeFontAtlasPayload(payload).has_value();
 }
 
+[cpp_unwind]
 b8 DeserializePayloadInto(in Vector<u8> binary, mut FontAtlasPayload outPayload){
     Expected<FontAtlasPayload> result = DeserializeFontAtlasPayload(binary);
     if(!result.has_value())
@@ -127,15 +148,9 @@ b8 DeserializePayloadInto(in Vector<u8> binary, mut FontAtlasPayload outPayload)
     return true;
 }
 
+[cpp_unwind]
 b8 CanDeserializePayload(in Vector<u8> binary){
     return DeserializeFontAtlasPayload(binary).has_value();
-}
-
-class AtlasBuilder{
-    [owner_result]
-    public Expected<FontAtlas> build(in FontAtlasCookEntry entry){
-        return BuildFontAtlasAsset(entry);
-    }
 }
 
 Optional<ArenaMemoryStats> AtlasValidationMemory(){
@@ -146,10 +161,6 @@ Optional<ArenaMemoryStats> AtlasValidationMemory(){
             return snapshot.stats;
     }
     return Optional<ArenaMemoryStats>();
-}
-
-b8 TryGetAtlasGlyph(in FontAtlas atlas, in u32 glyphId, mut FontAtlasGlyph outGlyph){
-    return atlas.tryGlyph(glyphId, outGlyph);
 }
 
 b8 CopyDocumentVariable(mut MetascriptDocument document, in StringView name, mut MetascriptValue outValue){
@@ -247,12 +258,11 @@ void VerifyAssetsFontAtlas_EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMisse
     FontAtlas loaded(atlas.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
     EXPECT_EQ(loaded.payload().font.name(), atlas.payload().font.name());
-    FontAtlasGlyph glyph4 = FontAtlasGlyph();
-    ASSERT_TRUE(TryGetAtlasGlyph(loaded, 4u, glyph4));
-    EXPECT_EQ(glyph4.drawable, 0u);
-    EXPECT_FLOAT_EQ(glyph4.advanceUnits, 404.0f);
-    FontAtlasGlyph glyph5 = FontAtlasGlyph();
-    EXPECT_FALSE(TryGetAtlasGlyph(loaded, 5u, glyph5));
+    const Optional<FontAtlasGlyph> glyph4 = loaded.tryGlyph(4u);
+    ASSERT_TRUE(glyph4.has_value());
+    EXPECT_EQ(glyph4.value().drawable, 0u);
+    EXPECT_FLOAT_EQ(glyph4.value().advanceUnits, 404.0f);
+    EXPECT_FALSE(loaded.tryGlyph(5u).has_value());
 }
 
 void CheckBuiltAtlas(in Expected<FontAtlas> result, mut FontAtlasCookEntry entry, in HeapStorage resultArena, in Vector<u8> expected){
@@ -984,7 +994,6 @@ void VerifyAssetsFontAtlas_RejectedWidthDoesNotEvaluateOverflowingHeightDifferen
     EXPECT_EQ(exceptions, 0);
 }
 
-
 void VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction(){
     const f32 units = ObserveValue<f32>(1000.0f / 30.0f);
     const f32 origin = ObserveValue<f32>(-100.0f);
@@ -999,26 +1008,80 @@ void VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction(){
     EXPECT_EQ(BitCast<u32>(glyph.planeBottom), BitCast<u32>(expected));
 }
 
+[cpp_unwind]
+void VerifyAssetsFontAtlas_AllocationFailureUnwindsWithoutTerminatingOrClobberingExistingAtlas(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload baselinePayload = MakePayload();
+    ASSERT_TRUE(ValidateFontAtlasPayload(baselinePayload));
+    FontAtlasPayload replacementPayload(baselinePayload);
+    replacementPayload.ascenderUnits = 790.0f;
+    replacementPayload.descenderUnits = -210.0f;
+    ASSERT_TRUE(ValidateFontAtlasPayload(replacementPayload));
+    const Expected<Vector<u8>> replacementBinary = SerializeFontAtlasPayload(replacementPayload);
+    ASSERT_TRUE(replacementBinary.has_value());
+
+    const Path sourcePath = BundledFontFixtureDirectory(s_CookTestRepoRoot) / s_LatinFontFilename;
+    const Expected<Vector<u8>, StringView> bytesResult = ReadBundledFontBytes(sourcePath);
+    ASSERT_TRUE(bytesResult.has_value());
+    const Expected<FontSfntDirectory> directoryResult = ReadFontSfntDirectory(bytesResult.value());
+    ASSERT_TRUE(directoryResult.has_value());
+    u32 sourceGlyphCount = 0u;
+    for(u16 index = 0u; index < directoryResult.value().tableCount(); ++index){
+        const Expected<FontSfntTable> tableResult = directoryResult.value().table(index);
+        ASSERT_TRUE(tableResult.has_value());
+        if(tableResult.value().tag == s_FontSfntMaxpTag){
+            const Expected<u16> glyphCountResult = ReadU16BigEndian(tableResult.value().bytes, 4u);
+            ASSERT_TRUE(glyphCountResult.has_value());
+            sourceGlyphCount = glyphCountResult.value();
+        }
+    }
+    ASSERT_GT(sourceGlyphCount, 0u);
+    EXPECT_TRUE(VerifyFontAtlasOomUnwindPreservesExistingAtlas(baselinePayload, replacementBinary.value(), bytesResult.value(), sourceGlyphCount));
+}
+
+NWB_ADHD_GTEST(AssetsFontAtlas, AllocationFailureUnwindsWithoutTerminatingOrClobberingExistingAtlas, VerifyAssetsFontAtlas_AllocationFailureUnwindsWithoutTerminatingOrClobberingExistingAtlas)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, EmptyAndPaddingBoundaryDigestsRejectMalformedText, VerifyAssetsFontAtlas_EmptyAndPaddingBoundaryDigestsRejectMalformedText)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad, VerifyAssetsFontAtlas_EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena, VerifyAssetsFontAtlas_BuildOwnsGlyphsGroupsAndPositioningInCallerArena)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, FontIdentityPreservesUpperHashLanesAndRejectsOldVersion, VerifyAssetsFontAtlas_FontIdentityPreservesUpperHashLanesAndRejectsOldVersion)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas, VerifyAssetsFontAtlas_MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuards, VerifyAssetsFontAtlas_CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuards)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected, VerifyAssetsFontAtlas_UnsupportedVersionsAndCompactGroupHeadersAreRejected)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput, VerifyAssetsFontAtlas_CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization, VerifyAssetsFontAtlas_InvalidHashAndGeometryAreRejectedBySerialization)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, GuardedRegionsRejectSameChannelOverlapAndAllowIndependentChannels, VerifyAssetsFontAtlas_GuardedRegionsRejectSameChannelOverlapAndAllowIndependentChannels)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, GuardedOverlapReusesCallerScratchAcrossGroupsAndRejectedChannels, VerifyAssetsFontAtlas_GuardedOverlapReusesCallerScratchAcrossGroupsAndRejectedChannels)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize, VerifyAssetsFontAtlas_PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimits, VerifyAssetsFontAtlas_RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimits)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFont, VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapingFont)
+
 NWB_ADHD_GTEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublication, VerifyAssetsFontMetadata_BunchRejectsInvalidAndDuplicateChildrenWithoutPublication)
+
 NWB_ADHD_GTEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValues, VerifyAssetsFontMetadata_FieldlessAndEmptyFontDeclarationsRejectNonmapValues)
+
 NWB_ADHD_GTEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected, VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected)
+
 NWB_ADHD_GTEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected, VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected)
+
 NWB_ADHD_GTEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected, VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, RejectedWidthDoesNotEvaluateOverflowingHeightDifference, VerifyAssetsFontAtlas_RejectedWidthDoesNotEvaluateOverflowingHeightDifference)
+
 NWB_ADHD_GTEST(AssetsFontAtlas, PlaneBoundsPreserveMultiplyAddContraction, VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction)
 
 

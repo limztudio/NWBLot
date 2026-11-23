@@ -13,6 +13,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererOpticalVolumeSelection : NoCopy{
+    private HashSet<EntityID> m_suppressed;
+    private Vector<CoincidentOpticalVolumeCandidate> m_candidates;
+
+    public RendererOpticalVolumeSelection(){}
+
+    public void prepare(mut World world, mut IPreparedMaterialLookup materials){
+        const Optional<mut MeshSystem> meshSystem = world.borrowSystem<MeshSystem>();
+        if(!meshSystem.has_value() || world.view<RendererComponent>().candidateCount() < s_MinCoincidentCandidateCount){
+            this.reset();
+            return;
+        }
+
+        this.m_candidates.clear();
+        for(in auto row : world.view<RendererComponent>())
+            TryAppendCoincidentOpticalVolumeCandidate(world, meshSystem.value(), materials, Get<0>(row), Get<1>(row), this.m_candidates);
+        if(this.m_candidates.size() < s_MinCoincidentCandidateCount){
+            this.reset();
+            return;
+        }
+        this.select(Span<CoincidentOpticalVolumeCandidate>(this.m_candidates));
+    }
+
+    public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){
+        SelectSuppressedCoincidentOpticalVolumes(candidates, this.m_suppressed);
+    }
+
+    public void reset(){
+        this.m_suppressed.clear();
+        this.m_candidates.clear();
+    }
+
+    public b8 isSuppressed(in EntityID entity)const{
+        return !this.m_suppressed.empty() && this.m_suppressed.contains(entity);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void TryAppendCoincidentOpticalVolumeCandidate(
     mut World world,
     in MeshSystem meshSystem,
@@ -50,43 +91,6 @@ void TryAppendCoincidentOpticalVolumeCandidate(
         candidate.scale = borrowedTransform.value().scale;
     }
     candidates.push_back(candidate);
-}
-
-class RendererOpticalVolumeSelection : NoCopy{
-    private HashSet<EntityID> m_suppressed;
-    private Vector<CoincidentOpticalVolumeCandidate> m_candidates;
-
-    public RendererOpticalVolumeSelection(){}
-
-    public void prepare(mut World world, mut IPreparedMaterialLookup materials){
-        const Optional<mut MeshSystem> meshSystem = world.borrowSystem<MeshSystem>();
-        if(!meshSystem.has_value() || world.view<RendererComponent>().candidateCount() < s_MinCoincidentCandidateCount){
-            this.reset();
-            return;
-        }
-
-        this.m_candidates.clear();
-        for(in auto row : world.view<RendererComponent>())
-            TryAppendCoincidentOpticalVolumeCandidate(world, meshSystem.value(), materials, Get<0>(row), Get<1>(row), this.m_candidates);
-        if(this.m_candidates.size() < s_MinCoincidentCandidateCount){
-            this.reset();
-            return;
-        }
-        this.select(Span<CoincidentOpticalVolumeCandidate>(this.m_candidates));
-    }
-
-    public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){
-        SelectSuppressedCoincidentOpticalVolumes(candidates, this.m_suppressed);
-    }
-
-    public void reset(){
-        this.m_suppressed.clear();
-        this.m_candidates.clear();
-    }
-
-    public b8 isSuppressed(in EntityID entity)const{
-        return !this.m_suppressed.empty() && this.m_suppressed.contains(entity);
-    }
 }
 
 

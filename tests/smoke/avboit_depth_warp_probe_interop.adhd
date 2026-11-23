@@ -24,51 +24,6 @@ const u32 s_AvboitDepthWarpResultWords = s_AvboitDepthWarpWarpWords + s_AvboitDe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Array<u32, 4u> BuildAvboitDepthWarpFrameDims(in u32 ordinal){
-    Array<u32, 4u> dims;
-    dims[0u] = 1000u + ordinal % 997u;
-    dims[1u] = 300u + ordinal % 251u;
-    dims[2u] = (dims[0u] + 2u) / 3u;
-    dims[3u] = (dims[1u] + 3u) / 4u;
-    return dims;
-}
-
-b8 VerifyDepthWarpProbeCaseWords(in AvboitDepthWarpCase probe, in u32 ordinal, in Span<u32> resultWords){
-    const Array<u32, 4u> frameDims = BuildAvboitDepthWarpFrameDims(ordinal);
-    const AvboitDepthWarpResult oracle = BuildAvboitDepthWarpOracle(probe, frameDims);
-    for(u32 word = 0u; word < s_AvboitDepthWarpResultWords; ++word){
-        u32 expected = s_AvboitDepthWarpSentinel;
-        if(word < probe.virtualCount)
-            expected = oracle.warp[word];
-        else if(word >= s_AvboitDepthWarpWarpWords && word < s_AvboitDepthWarpWarpWords + s_AvboitProbeControlWordCount)
-            expected = oracle.control[word - s_AvboitDepthWarpWarpWords];
-        if(resultWords[word] != expected){
-            error(
-                "AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}"
-                , ordinal
-                , probe.scenario
-                , probe.virtualCount
-                , probe.physicalCount
-                , word
-                , expected
-                , resultWords[word]
-            );
-            return false;
-        }
-    }
-    return true;
-}
-
-RendererAvboitPushConstants BuildAvboitDepthWarpPush(in AvboitDepthWarpCase probe, in u32 ordinal, in u32 slots){
-    RendererAvboitPushConstants push;
-    push.frame = BuildAvboitDepthWarpFrameDims(ordinal);
-    push.volume[0u] = probe.virtualCount;
-    push.volume[1u] = probe.physicalCount;
-    push.volume[3u] = (probe.virtualCount + 31u) / 32u;
-    push.heapSlots[0u] = slots;
-    return push;
-}
-
 class DepthWarpProbeBatchTask{
     public BufferHandle coverage = BufferHandle();
     public BufferHandle warp = BufferHandle();
@@ -134,6 +89,60 @@ class DepthWarpProbeBatchTask{
     }
 }
 
+class DepthWarpUnfocusedPass : IRenderPass{
+    public DepthWarpUnfocusedPass(mut GraphicsRuntime graphics){}
+    public b8 shouldRenderUnfocused()override{ return true; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<u32, 4u> BuildAvboitDepthWarpFrameDims(in u32 ordinal){
+    Array<u32, 4u> dims;
+    dims[0u] = 1000u + ordinal % 997u;
+    dims[1u] = 300u + ordinal % 251u;
+    dims[2u] = (dims[0u] + 2u) / 3u;
+    dims[3u] = (dims[1u] + 3u) / 4u;
+    return dims;
+}
+
+b8 VerifyDepthWarpProbeCaseWords(in AvboitDepthWarpCase probe, in u32 ordinal, in Span<u32> resultWords){
+    const Array<u32, 4u> frameDims = BuildAvboitDepthWarpFrameDims(ordinal);
+    const AvboitDepthWarpResult oracle = BuildAvboitDepthWarpOracle(probe, frameDims);
+    for(u32 word = 0u; word < s_AvboitDepthWarpResultWords; ++word){
+        u32 expected = s_AvboitDepthWarpSentinel;
+        if(word < probe.virtualCount)
+            expected = oracle.warp[word];
+        else if(word >= s_AvboitDepthWarpWarpWords && word < s_AvboitDepthWarpWarpWords + s_AvboitProbeControlWordCount)
+            expected = oracle.control[word - s_AvboitDepthWarpWarpWords];
+        if(resultWords[word] != expected){
+            error(
+                "AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}"
+                , ordinal
+                , probe.scenario
+                , probe.virtualCount
+                , probe.physicalCount
+                , word
+                , expected
+                , resultWords[word]
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+RendererAvboitPushConstants BuildAvboitDepthWarpPush(in AvboitDepthWarpCase probe, in u32 ordinal, in u32 slots){
+    RendererAvboitPushConstants push;
+    push.frame = BuildAvboitDepthWarpFrameDims(ordinal);
+    push.volume[0u] = probe.virtualCount;
+    push.volume[1u] = probe.physicalCount;
+    push.volume[3u] = (probe.virtualCount + 31u) / 32u;
+    push.heapSlots[0u] = slots;
+    return push;
+}
+
 [cpp_unwind]
 Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mut GpuTaskGraph graph){
     const Array<BufferHandle, 5u> buffers(payload.coverage, payload.warp, payload.control, payload.slots, payload.readback);
@@ -169,11 +178,6 @@ Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mu
         return MakeUnexpected(Failure());
     }
     return task;
-}
-
-class DepthWarpUnfocusedPass : IRenderPass{
-    public DepthWarpUnfocusedPass(mut GraphicsRuntime graphics){}
-    public b8 shouldRenderUnfocused()override{ return true; }
 }
 
 b8 InitializeDepthWarpProbeProject(
@@ -216,7 +220,12 @@ b8 InitializeDepthWarpProbeProject(
         error("AvboitDepthWarpProbe: push layout creation failed");
         return false;
     }
-    const b8 pipelineReady = CreateHeapComputePipeline(device, outShader, outPushLayout, false, outPipeline);
+    const Expected<ComputePipelineHandle> pipelineResult = CreateHeapComputePipeline(device, outShader, outPushLayout, false);
+    if(pipelineResult.has_value())
+        outPipeline = pipelineResult.value();
+    else
+        outPipeline.reset();
+    const b8 pipelineReady = pipelineResult.has_value();
     const auto coverage = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeCoverage, s_AvboitCoverageWords, false, false, false);
     const auto warp = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeWarp, s_AvboitDepthWarpWarpWords, false, false, false);
     const auto control = CreateGpuProbeWordBuffer(graphics, s_SmokeNameDepthWarpProbeControl, s_AvboitDepthWarpControlWords, false, false, false);

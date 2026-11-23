@@ -8,26 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendDevicePhysicalQueueDiagnostics(
-    in GpuPhysicalQueueInfo queueInfo,
-    mut GraphicsRuntime graphics,
-    mut String label
-){
-    StringAppendFormat(
-        label,
-        "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
-        queueInfo.id.index,
-        queueInfo.id.deviceGeneration,
-        ResolveTelemetryPhysicalQueueClassLabel(cast<u8>(queueInfo.queueClass)),
-        queueInfo.familyIndex,
-        queueInfo.queueIndex,
-        cast<u32>(queueInfo.capabilities),
-        queueInfo.timestampValidBits,
-        queueInfo.timestampValidBits != 0u,
-        graphics.getDevice().supportsComparableGpuTimestamps(queueInfo.id)
-    );
-}
-
 class RendererDeviceDiagnosticsLabel{
     public void append(mut GraphicsRuntime graphics, mut String label)const{
         const GpuTimingRecorderStatistics gpuTimingStatistics = graphics.gpuTiming().statistics(graphics.getDevice());
@@ -81,6 +61,30 @@ class RendererDeviceDiagnosticsLabel{
             descriptorHeapLifecycleStatistics.abandonedHeapUseCount
         );
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendDevicePhysicalQueueDiagnostics(
+    in GpuPhysicalQueueInfo queueInfo,
+    mut GraphicsRuntime graphics,
+    mut String label
+){
+    StringAppendFormat(
+        label,
+        "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
+        queueInfo.id.index,
+        queueInfo.id.deviceGeneration,
+        ResolveTelemetryPhysicalQueueClassLabel(cast<u8>(queueInfo.queueClass)),
+        queueInfo.familyIndex,
+        queueInfo.queueIndex,
+        cast<u32>(queueInfo.capabilities),
+        queueInfo.timestampValidBits,
+        queueInfo.timestampValidBits != 0u,
+        graphics.getDevice().supportsComparableGpuTimestamps(queueInfo.id)
+    );
 }
 
 

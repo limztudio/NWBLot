@@ -23,14 +23,6 @@ class MaterialEmulationBufferIdentity{
     }
 }
 
-b8 EqualEmulationOutputIdentity(in MaterialEmulationBufferIdentity left, in MaterialEmulationBufferIdentity right){
-    return left == right;
-}
-
-b8 EqualEmulationOutputIdentity(in u32 left, in u32 right){
-    return left == right;
-}
-
 class MaterialPassEmulationOutputIndex<T> : NoCopy{
     private FixedVector<T, s_SmallInlineIndexCapacity> m_inline;
     private HashSet<T> m_index;
@@ -63,6 +55,18 @@ class MaterialPassEmulationOutputIndex<T> : NoCopy{
         this.m_promoted = true;
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EqualEmulationOutputIdentity(in MaterialEmulationBufferIdentity left, in MaterialEmulationBufferIdentity right){
+    return left == right;
+}
+
+b8 EqualEmulationOutputIdentity(in u32 left, in u32 right){
+    return left == right;
 }
 
 

@@ -8,6 +8,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShaderDependencyRoot{
+    public Path root;
+    public String key;
+    public usize depth = 0u;
+}
+
+class ShaderChecksumRoots{
+    public Vector<ShaderDependencyRoot> aliases;
+
+    public b8 append(in Path root, in StringView key);
+    public Expected<String> canonicalPath(in Path path, in b8 allowUnaliased)const;
+}
+
+class ShaderChecksumItem{
+    public String canonicalPath;
+    public Path source;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsBetterDependencyRootAliasMatch(in b8 hasCurrentBest, in usize candidateDepth, in usize currentBestDepth){
     return !hasCurrentBest || candidateDepth > currentBestDepth;
 }
@@ -66,90 +88,74 @@ Path NormalizeDependencyRootAliasPath(in Path source){
     return path;
 }
 
-
-class ShaderDependencyRoot{
-    public Path root;
-    public String key;
-    public usize depth = 0u;
+b8 ShaderChecksumRoots::append(in Path root, in StringView key){
+    if(!ValidateDependencyRootAliasInputs(root.empty(), key))
+        return false;
+    const Expected<Path, ErrorCode> absolute = AbsolutePath(root);
+    if(!absolute.has_value()){
+        error("Failed to resolve dependency root alias '{}' : {}", root, ErrorCodeMessage(absolute.error()));
+        return false;
+    }
+    AppendArenaElement<ShaderDependencyRoot>(this.aliases);
+    mut ShaderDependencyRoot alias = this.aliases[this.aliases.size() - 1u];
+    alias.root = NormalizeDependencyRootAliasPath(absolute.value());
+    alias.key.assign(key);
+    CanonicalizeTextInPlace(alias.key);
+    if(!ValidateCanonicalDependencyRootAliasKey(alias.key)){
+        this.aliases.pop_back();
+        return false;
+    }
+    alias.depth = PathDepth(alias.root);
+    return true;
 }
 
-class ShaderChecksumRoots{
-    public Vector<ShaderDependencyRoot> aliases;
-
-    public b8 append(in Path root, in StringView key){
-        if(!ValidateDependencyRootAliasInputs(root.empty(), key))
-            return false;
-        const Expected<Path, ErrorCode> absolute = AbsolutePath(root);
-        if(!absolute.has_value()){
-            error("Failed to resolve dependency root alias '{}' : {}", root, ErrorCodeMessage(absolute.error()));
-            return false;
-        }
-        AppendArenaElement<ShaderDependencyRoot>(this.aliases);
-        mut ShaderDependencyRoot alias = this.aliases[this.aliases.size() - 1u];
-        alias.root = NormalizeDependencyRootAliasPath(absolute.value());
-        alias.key.assign(key);
-        CanonicalizeTextInPlace(alias.key);
-        if(!ValidateCanonicalDependencyRootAliasKey(alias.key)){
-            this.aliases.pop_back();
-            return false;
-        }
-        alias.depth = PathDepth(alias.root);
-        return true;
+Expected<String> ShaderChecksumRoots::canonicalPath(in Path path, in b8 allowUnaliased)const{
+    const Expected<Path, ErrorCode> absolute = AbsolutePath(path);
+    if(!absolute.has_value()){
+        error("Failed to resolve dependency path '{}' : {}", path, ErrorCodeMessage(absolute.error()));
+        return MakeUnexpected(Failure());
     }
-
-    public Expected<String> canonicalPath(in Path path, in b8 allowUnaliased)const{
-        const Expected<Path, ErrorCode> absolute = AbsolutePath(path);
-        if(!absolute.has_value()){
-            error("Failed to resolve dependency path '{}' : {}", path, ErrorCodeMessage(absolute.error()));
+    const Path normalized = absolute.value().lexicallyNormal();
+    usize best = this.aliases.size();
+    usize depth = 0u;
+    for(usize index = 0u; index < this.aliases.size(); ++index){
+        in ShaderDependencyRoot alias = this.aliases[index];
+        if(normalized != alias.root && !PathHasDirectoryAncestor(normalized, alias.root))
+            continue;
+        if(IsBetterDependencyRootAliasMatch(best < this.aliases.size(), alias.depth, depth)){
+            best = index;
+            depth = alias.depth;
+        }
+    }
+    String result;
+    if(best == this.aliases.size()){
+        if(!allowUnaliased){
+            error("Dependency checksum path '{}' is outside the declared dependency root aliases", path);
             return MakeUnexpected(Failure());
         }
-        const Path normalized = absolute.value().lexicallyNormal();
-        usize best = this.aliases.size();
-        usize depth = 0u;
-        for(usize index = 0u; index < this.aliases.size(); ++index){
-            in ShaderDependencyRoot alias = this.aliases[index];
-            if(normalized != alias.root && !PathHasDirectoryAncestor(normalized, alias.root))
-                continue;
-            if(IsBetterDependencyRootAliasMatch(best < this.aliases.size(), alias.depth, depth)){
-                best = index;
-                depth = alias.depth;
-            }
-        }
-        String result;
-        if(best == this.aliases.size()){
-            if(!allowUnaliased){
-                error("Dependency checksum path '{}' is outside the declared dependency root aliases", path);
-                return MakeUnexpected(Failure());
-            }
-            const String text = PathToString(normalized);
-            result.reserve(AddSize(s_ShaderChecksumAbsolutePrefix.size(), text.size()));
-            result.append(s_ShaderChecksumAbsolutePrefix);
-            result.append(text);
-            return result;
-        }
-        in ShaderDependencyRoot alias = this.aliases[best];
-        const Path relative = normalized.lexicallyRelative(alias.root);
-        const String text = PathToString(relative);
-        StringView prefix = "";
-        if(allowUnaliased)
-            prefix = s_ShaderChecksumAliasPrefix;
-        const Expected<usize> capacity = TryComputeCanonicalAliasedDependencyPathCapacity(prefix.size(), alias.key.size(), text.size());
-        if(!capacity.has_value())
-            return MakeUnexpected(Failure());
-        result.reserve(capacity.value());
-        result.append(prefix);
-        result.append(alias.key);
-        if(!text.empty()){
-            result.push_back('/');
-            result.append(text);
-        }
+        const String text = PathToString(normalized);
+        result.reserve(AddSize(s_ShaderChecksumAbsolutePrefix.size(), text.size()));
+        result.append(s_ShaderChecksumAbsolutePrefix);
+        result.append(text);
         return result;
     }
-}
-
-class ShaderChecksumItem{
-    public String canonicalPath;
-    public Path source;
+    in ShaderDependencyRoot alias = this.aliases[best];
+    const Path relative = normalized.lexicallyRelative(alias.root);
+    const String text = PathToString(relative);
+    StringView prefix = "";
+    if(allowUnaliased)
+        prefix = s_ShaderChecksumAliasPrefix;
+    const Expected<usize> capacity = TryComputeCanonicalAliasedDependencyPathCapacity(prefix.size(), alias.key.size(), text.size());
+    if(!capacity.has_value())
+        return MakeUnexpected(Failure());
+    result.reserve(capacity.value());
+    result.append(prefix);
+    result.append(alias.key);
+    if(!text.empty()){
+        result.push_back('/');
+        result.append(text);
+    }
+    return result;
 }
 
 Expected<DependencyChecksum> ComputeShaderDependencyChecksum<Dependencies, Includes>(in Dependencies dependencies, in Includes includes, in ShaderChecksumRoots roots){

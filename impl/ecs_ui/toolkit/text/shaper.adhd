@@ -8,32 +8,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidTextFontSourceCount(in usize count){
-    return count != 0u && count <= s_TextMaxFontSources;
-}
-
-b8 HasValidTextFontSourceMetadata<TFont>(in AssetRef<TFont> identity, in u64 generation){
-    return identity.valid() && generation != 0u;
-}
-
-TextFontSpan MakeInitialTextClusterSpan(in usize begin, in usize end, in RawShapedGlyph leadGlyph){
-    return TextFontSpan(0u, begin, end, leadGlyph.byteBegin, leadGlyph.byteEnd);
-}
+type ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
+interface ITextShaper : NoCopy{
+    [cpp_unwind]
+    Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request);
+}
 
 class ShapedRun{
     public Vector<ShapedGlyph> glyphs;
     public FontMetrics metrics = FontMetrics();
-}
-
-interface ITextShaper : NoCopy{
-    [cpp_unwind]
-    Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request);
 }
 
 class TextShaper : ITextShaper{
@@ -134,6 +122,22 @@ class TextShaper : ITextShaper{
             return MakeUnexpected(status);
         return run;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidTextFontSourceCount(in usize count){
+    return count != 0u && count <= s_TextMaxFontSources;
+}
+
+b8 HasValidTextFontSourceMetadata<TFont>(in AssetRef<TFont> identity, in u64 generation){
+    return identity.valid() && generation != 0u;
+}
+
+TextFontSpan MakeInitialTextClusterSpan(in usize begin, in usize end, in RawShapedGlyph leadGlyph){
+    return TextFontSpan(0u, begin, end, leadGlyph.byteBegin, leadGlyph.byteEnd);
 }
 
 

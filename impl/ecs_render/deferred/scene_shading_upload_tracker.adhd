@@ -12,46 +12,7 @@ const usize s_SceneLightGpuDataBytes = 80u;
 const usize s_SceneLightGpuBufferBytes = 1280u;
 
 
-void EncodeF32LittleEndian(in f32 value, in usize baseOffset, mut Array<u8, 16u> outBytes){
-    const u32 word = BitCast<u32>(value);
-    outBytes[baseOffset + 0u] = cast<u8>(word & 0xffu);
-    outBytes[baseOffset + 1u] = cast<u8>((word >> 8u) & 0xffu);
-    outBytes[baseOffset + 2u] = cast<u8>((word >> 16u) & 0xffu);
-    outBytes[baseOffset + 3u] = cast<u8>((word >> 24u) & 0xffu);
-}
-
-Array<u8, 16u> EncodeF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w){
-    Array<u8, 16u> bytes;
-    EncodeF32LittleEndian(x, 0u, bytes);
-    EncodeF32LittleEndian(y, 4u, bytes);
-    EncodeF32LittleEndian(z, 8u, bytes);
-    EncodeF32LittleEndian(w, 12u, bytes);
-    return bytes;
-}
-
-b8 MatchesF32x4LittleEndian(in Span<u8> storedBytes, in usize baseOffset, in f32 x, in f32 y, in f32 z, in f32 w){
-    const Array<u8, 16u> expected = EncodeF32x4LittleEndian(x, y, z, w);
-    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex){
-        if(storedBytes[baseOffset + byteIndex] != expected[byteIndex])
-            return false;
-    }
-    return true;
-}
-
-b8 MatchesSceneLightGpuDataLittleEndian(in Span<u8> storedBytes, in usize baseOffset, in SceneLightGpuData light){
-    return MatchesF32x4LittleEndian(storedBytes, baseOffset + 0u, light.position.x, light.position.y, light.position.z, light.position.w)
-        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 16u, light.direction.x, light.direction.y, light.direction.z, light.direction.w)
-        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 32u, light.colorIntensity.x, light.colorIntensity.y, light.colorIntensity.z, light.colorIntensity.w)
-        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 48u, light.params.x, light.params.y, light.params.z, light.params.w)
-        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 64u, light.params2.x, light.params2.y, light.params2.z, light.params2.w)
-    ;
-}
-
-void WriteLightF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w, in usize baseOffset, mut Array<u8, 5120u> inOutLightGpuData){
-    const Array<u8, 16u> encoded = EncodeF32x4LittleEndian(x, y, z, w);
-    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex)
-        inOutLightGpuData[baseOffset + byteIndex] = encoded[byteIndex];
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class SceneShadingUploadTracker{
@@ -132,6 +93,51 @@ class SceneShadingUploadTracker{
             inOutSceneShadingGpuDataValid = true;
         }
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void EncodeF32LittleEndian(in f32 value, in usize baseOffset, mut Array<u8, 16u> outBytes){
+    const u32 word = BitCast<u32>(value);
+    outBytes[baseOffset + 0u] = cast<u8>(word & 0xffu);
+    outBytes[baseOffset + 1u] = cast<u8>((word >> 8u) & 0xffu);
+    outBytes[baseOffset + 2u] = cast<u8>((word >> 16u) & 0xffu);
+    outBytes[baseOffset + 3u] = cast<u8>((word >> 24u) & 0xffu);
+}
+
+Array<u8, 16u> EncodeF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w){
+    Array<u8, 16u> bytes;
+    EncodeF32LittleEndian(x, 0u, bytes);
+    EncodeF32LittleEndian(y, 4u, bytes);
+    EncodeF32LittleEndian(z, 8u, bytes);
+    EncodeF32LittleEndian(w, 12u, bytes);
+    return bytes;
+}
+
+b8 MatchesF32x4LittleEndian(in Span<u8> storedBytes, in usize baseOffset, in f32 x, in f32 y, in f32 z, in f32 w){
+    const Array<u8, 16u> expected = EncodeF32x4LittleEndian(x, y, z, w);
+    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex){
+        if(storedBytes[baseOffset + byteIndex] != expected[byteIndex])
+            return false;
+    }
+    return true;
+}
+
+b8 MatchesSceneLightGpuDataLittleEndian(in Span<u8> storedBytes, in usize baseOffset, in SceneLightGpuData light){
+    return MatchesF32x4LittleEndian(storedBytes, baseOffset + 0u, light.position.x, light.position.y, light.position.z, light.position.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 16u, light.direction.x, light.direction.y, light.direction.z, light.direction.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 32u, light.colorIntensity.x, light.colorIntensity.y, light.colorIntensity.z, light.colorIntensity.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 48u, light.params.x, light.params.y, light.params.z, light.params.w)
+        && MatchesF32x4LittleEndian(storedBytes, baseOffset + 64u, light.params2.x, light.params2.y, light.params2.z, light.params2.w)
+    ;
+}
+
+void WriteLightF32x4LittleEndian(in f32 x, in f32 y, in f32 z, in f32 w, in usize baseOffset, mut Array<u8, 5120u> inOutLightGpuData){
+    const Array<u8, 16u> encoded = EncodeF32x4LittleEndian(x, y, z, w);
+    for(usize byteIndex = 0u; byteIndex < 16u; ++byteIndex)
+        inOutLightGpuData[baseOffset + byteIndex] = encoded[byteIndex];
 }
 
 

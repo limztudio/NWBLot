@@ -48,7 +48,7 @@ VkResult InitializeVolkLoader()noexcept{
 
 void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, const VkInstance instance)noexcept{
     FOUNDATION_ASSERT(instance != VK_NULL_HANDLE);
-    ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
+    NothrowScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
     volkLoadInstanceTable(&instanceDispatch, instance);
 }
@@ -56,7 +56,7 @@ void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, const VkInsta
 void LoadVolkDeviceDispatch(VolkInstanceTable& instanceDispatch, VolkDeviceTable& deviceDispatch, const VkInstance instance, const VkDevice device)noexcept{
     FOUNDATION_ASSERT(instance != VK_NULL_HANDLE);
     FOUNDATION_ASSERT(device != VK_NULL_HANDLE);
-    ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
+    NothrowScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
     volkLoadInstanceTable(&instanceDispatch, instance);
     volkLoadDeviceTable(&deviceDispatch, device);

@@ -12,16 +12,34 @@
 
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::MinMaxIntersects")]
 extern b8 GeometryMinMaxIntersects(in VectorDouble minA, in VectorDouble maxA, in VectorDouble minB, in VectorDouble maxB);
-
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasPosixFpTraps")]
 extern const b8 s_HasGeometryTraps;
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::InstallFloatTrapExit")]
 extern b8 InstallFloatTrapExit(in i32 exitOffset);
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::EnableFloatTraps")]
 extern b8 EnableFloatTraps(in i32 mask);
+
+type GeometryIntersection = Func<0u, b8(in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble)>;
+const StringView s_ZeroAxisLabel = "zero_axis";
+const StringView s_ValidateMode = "validate";
+const StringView s_AbsoluteMode = "abs";
+const StringView s_GuardMode = "guard";
+const u32 s_GeometryFixtureCount = 64u;
+const u32 s_GeometryRounds = 7u;
+const u32 s_GeometryPasses = 512u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TrianglePair{
+    public Array<f64x4, 3> first;
+    public Array<f64x4, 3> second;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2){
     const VectorDouble first0 = VectorDoubleAndInt(a0, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u)));
@@ -404,8 +422,6 @@ b8 GeometryAbsHoisted(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-type GeometryIntersection = Func<0u, b8(in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble, in VectorDouble)>;
-
 GeometryIntersection SelectGeometryImplementation(in u32 implementation){
     switch(implementation){
     case 0u: return GeometryBaseline;
@@ -646,27 +662,6 @@ b8 ValidateGeometryContainmentAndTrapsKernel(in TrianglePair fixture0, in Triang
     }
     return valid;
 }
-
-const StringView s_ZeroAxisLabel = "zero_axis";
-const StringView s_ValidateMode = "validate";
-const StringView s_AbsoluteMode = "abs";
-const StringView s_GuardMode = "guard";
-const u32 s_GeometryFixtureCount = 64u;
-const u32 s_GeometryRounds = 7u;
-const u32 s_GeometryPasses = 512u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TrianglePair{
-    public Array<f64x4, 3> first;
-    public Array<f64x4, 3> second;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 StringView GeometryWorkloadName(in u32 kind){
     switch(kind){

@@ -61,6 +61,7 @@ class MeshSkinningDeformationState{
         );
     }
 
+    [cpp_unwind]
     public Expected<u64> stage(in MeshSkinningDeformationInputs inputs, in Span<SkeletonJointMatrix> joints){
         this.invalidateCurrent();
         const Expected<u64> candidate = TryStageMeshSkinningDeformationCandidate(

@@ -14,7 +14,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_asset_module{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@ namespace{
 
 #if !defined(NWB_COOK)
 template<typename ContextT>
-[[nodiscard]] b8 CheckVirtualPathImpl(const Name virtualPath, ContextT&& failureContext){
+[[nodiscard]] static b8 CheckVirtualPathImpl(const Name virtualPath, ContextT&& failureContext){
     if(virtualPath)
         return true;
 
@@ -32,7 +32,7 @@ template<typename ContextT>
 
 #else
 template<typename ContextT>
-[[nodiscard]] b8 CheckSerializeAssetTypeImpl(const IAsset& asset, const Name expectedAssetType, ContextT&& failureContext){
+[[nodiscard]] static b8 CheckSerializeAssetTypeImpl(const IAsset& asset, const Name expectedAssetType, ContextT&& failureContext){
     if(asset.assetType() == expectedAssetType)
         return true;
 
@@ -58,20 +58,20 @@ template<typename ContextT>
 
 #if !defined(NWB_COOK)
 b8 IAsset::checkVirtualPath(const TStringView failureContext)const{
-    return CheckVirtualPathImpl(virtualPath(), failureContext);
+    return __hidden_asset_module::CheckVirtualPathImpl(virtualPath(), failureContext);
 }
 #if defined(FOUNDATION_UNICODE)
 b8 IAsset::checkVirtualPath(const AStringView failureContext)const{
-    return CheckVirtualPathImpl(virtualPath(), ConvertString(failureContext));
+    return __hidden_asset_module::CheckVirtualPathImpl(virtualPath(), ConvertString(failureContext));
 }
 #endif
 #else
 b8 IAssetCodec::checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{
-    return CheckSerializeAssetTypeImpl(asset, assetType(), failureContext);
+    return __hidden_asset_module::CheckSerializeAssetTypeImpl(asset, assetType(), failureContext);
 }
 #if defined(FOUNDATION_UNICODE)
 b8 IAssetCodec::checkSerializeAssetType(const IAsset& asset, const AStringView failureContext)const{
-    return CheckSerializeAssetTypeImpl(asset, assetType(), ConvertString(failureContext));
+    return __hidden_asset_module::CheckSerializeAssetTypeImpl(asset, assetType(), ConvertString(failureContext));
 }
 #endif
 #endif

@@ -16,6 +16,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_CAP_NORMAL_CORE_FORMAT")]
+extern const Format s_ShaderCsgCapNormalCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT")]
+extern const Format s_ShaderCsgIntervalDepthCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_ID_CORE_FORMAT")]
+extern const Format s_ShaderCsgIntervalIdCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverEventDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverEventCountCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverSpanDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverSpanCountCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalDepthCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalCapNormalCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalCountCoreFormat;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Format s_CsgCapNormalCoreFormat = Format::RGBA16_FLOAT;
 const Format s_CsgIntervalDepthCoreFormat = Format::RGBA32_FLOAT;
 const Format s_CsgIntervalIdCoreFormat = Format::R32_UINT;
@@ -35,7 +72,7 @@ const Name s_DeferredOpaqueColorTargetName = "engine/deferred/opaque_color";
 const Name s_DeferredCompositeColorTargetName = "engine/deferred/composite_color";
 const Name s_DeferredDepthTargetName = "engine/deferred/depth";
 
-b8 CreateDeferredTargetTexture(
+Expected<TextureHandle> CreateDeferredTargetTexture(
     in u32 width,
     in u32 height,
     in Format format,
@@ -44,8 +81,7 @@ b8 CreateDeferredTargetTexture(
     in Color clearValue,
     in Name textureName,
     in StringView errorMessage,
-    mut GraphicsRuntime graphics,
-    mut TextureHandle outTexture
+    mut GraphicsRuntime graphics
 ){
     TextureDesc desc;
     desc
@@ -69,12 +105,10 @@ b8 CreateDeferredTargetTexture(
         desc.setClearValue(clearValue);
     const Expected<TextureHandle> result = graphics.createTexture(desc);
     if(!result.has_value()){
-        outTexture.reset();
         error(errorMessage);
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTexture = result.value();
-    return true;
+    return result.value();
 }
 
 
@@ -226,20 +260,34 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     createdTargets.csgReceiverSpanLayerCount = s_CsgReceiverSpanLayerCount;
     createdTargets.csgRemovedIntervalLayerCount = s_CsgRemovedIntervalLayerCount;
 
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.albedoFormat, false, true, s_ClearColor, s_DeferredAlbedoTargetName, "RendererSystem: failed to create deferred albedo target", this.m_graphics, createdTargets.albedo))
+    const Expected<TextureHandle> albedo = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.albedoFormat, false, true, s_ClearColor, s_DeferredAlbedoTargetName, "RendererSystem: failed to create deferred albedo target", this.m_graphics);
+    if(!albedo.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.normalFormat, false, true, s_GBufferNormalClearColor, s_DeferredNormalTargetName, "RendererSystem: failed to create deferred normal target", this.m_graphics, createdTargets.normal))
+    createdTargets.albedo = albedo.value();
+    const Expected<TextureHandle> normal = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.normalFormat, false, true, s_GBufferNormalClearColor, s_DeferredNormalTargetName, "RendererSystem: failed to create deferred normal target", this.m_graphics);
+    if(!normal.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.worldPositionFormat, false, true, s_GBufferWorldPositionClearColor, s_DeferredWorldPositionTargetName, "RendererSystem: failed to create deferred world-position target", this.m_graphics, createdTargets.worldPosition))
+    createdTargets.normal = normal.value();
+    const Expected<TextureHandle> worldPosition = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.worldPositionFormat, false, true, s_GBufferWorldPositionClearColor, s_DeferredWorldPositionTargetName, "RendererSystem: failed to create deferred world-position target", this.m_graphics);
+    if(!worldPosition.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.specularRoughnessFormat, false, true, s_GBufferSpecularRoughnessClearColor, s_DeferredSpecularRoughnessTargetName, "RendererSystem: failed to create deferred specular/roughness target", this.m_graphics, createdTargets.specularRoughness))
+    createdTargets.worldPosition = worldPosition.value();
+    const Expected<TextureHandle> specularRoughness = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.specularRoughnessFormat, false, true, s_GBufferSpecularRoughnessClearColor, s_DeferredSpecularRoughnessTargetName, "RendererSystem: failed to create deferred specular/roughness target", this.m_graphics);
+    if(!specularRoughness.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.opaqueColorFormat, true, true, s_ClearColor, s_DeferredOpaqueColorTargetName, "RendererSystem: failed to create deferred opaque color target", this.m_graphics, createdTargets.opaqueColor))
+    createdTargets.specularRoughness = specularRoughness.value();
+    const Expected<TextureHandle> opaqueColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.opaqueColorFormat, true, true, s_ClearColor, s_DeferredOpaqueColorTargetName, "RendererSystem: failed to create deferred opaque color target", this.m_graphics);
+    if(!opaqueColor.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.compositeColorFormat, true, true, s_ClearColor, s_DeferredCompositeColorTargetName, "RendererSystem: failed to create deferred composite color target", this.m_graphics, createdTargets.compositeColor))
+    createdTargets.opaqueColor = opaqueColor.value();
+    const Expected<TextureHandle> compositeColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.compositeColorFormat, true, true, s_ClearColor, s_DeferredCompositeColorTargetName, "RendererSystem: failed to create deferred composite color target", this.m_graphics);
+    if(!compositeColor.has_value())
         return MakeUnexpected(Failure());
-    if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.depthFormat, false, false, s_ClearColor, s_DeferredDepthTargetName, "RendererSystem: failed to create deferred depth target", this.m_graphics, createdTargets.depth))
+    createdTargets.compositeColor = compositeColor.value();
+    const Expected<TextureHandle> depth = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.depthFormat, false, false, s_ClearColor, s_DeferredDepthTargetName, "RendererSystem: failed to create deferred depth target", this.m_graphics);
+    if(!depth.has_value())
         return MakeUnexpected(Failure());
+    createdTargets.depth = depth.value();
 
     Array<FramebufferAttachment, s_MeshGbufferTargetCount> gbufferAttachments;
     gbufferAttachments[s_MeshGbufferBaseColorLocation].setTexture(createdTargets.albedo.deref()).setSubresources(s_FramebufferSubresources);
@@ -260,44 +308,6 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
 
     return createdTargets;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_CAP_NORMAL_CORE_FORMAT")]
-extern const Format s_ShaderCsgCapNormalCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT")]
-extern const Format s_ShaderCsgIntervalDepthCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_ID_CORE_FORMAT")]
-extern const Format s_ShaderCsgIntervalIdCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT")]
-extern const Format s_ShaderCsgReceiverEventDataCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT")]
-extern const Format s_ShaderCsgReceiverEventCountCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT")]
-extern const Format s_ShaderCsgReceiverSpanDataCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT")]
-extern const Format s_ShaderCsgReceiverSpanCountCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT")]
-extern const Format s_ShaderCsgRemovedIntervalDepthCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT")]
-extern const Format s_ShaderCsgRemovedIntervalCapNormalCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT")]
-extern const Format s_ShaderCsgRemovedIntervalDataCoreFormat;
-
-[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT")]
-extern const Format s_ShaderCsgRemovedIntervalCountCoreFormat;
-
 
 static_assert(s_CsgCapNormalCoreFormat == s_ShaderCsgCapNormalCoreFormat);
 static_assert(s_CsgIntervalDepthCoreFormat == s_ShaderCsgIntervalDepthCoreFormat);
@@ -408,39 +418,29 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(mut DeferredFram
     }
     history.surfelIrradiance = surfelIrradianceResult.value();
 
-    if(
-        !AssignSampledTexture(
-            heap,
-            GpuDescriptorClass::SampledImage2DArray,
-            history.shadowVisibility,
-            targets.shadowVisibilityFormat,
-            s_ShadowVisibilitySubresources,
-            TextureDimension::Texture2DArray,
-            history.shadowVisibilityDescriptor
-        )
-        || !AssignSampledTexture(
-            heap,
-            GpuDescriptorClass::SampledImage,
-            history.causticIrradiance,
-            targets.causticIrradianceFormat,
-            s_FramebufferSubresources,
-            TextureDimension::Texture2D,
-            history.causticIrradianceDescriptor
-        )
-        || !AssignSampledTexture(
-            heap,
-            GpuDescriptorClass::SampledImage,
-            history.surfelIrradiance,
-            targets.surfelIrradianceFormat,
-            s_FramebufferSubresources,
-            TextureDimension::Texture2D,
-            history.surfelIrradianceDescriptor
-        )
-    ){
+    const Expected<GpuDescriptorHandle> shadowVisibilityDescriptor = RegisterSampledTexture(heap, GpuDescriptorClass::SampledImage2DArray, history.shadowVisibility, targets.shadowVisibilityFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!shadowVisibilityDescriptor.has_value()){
         error("RendererSystem: failed to register lagged lighting-history images in the descriptor heap");
         this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
+    history.shadowVisibilityDescriptor = shadowVisibilityDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> causticIrradianceDescriptor = RegisterSampledTexture(heap, GpuDescriptorClass::SampledImage, history.causticIrradiance, targets.causticIrradianceFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!causticIrradianceDescriptor.has_value()){
+        error("RendererSystem: failed to register lagged lighting-history images in the descriptor heap");
+        this.resetLaggedLightingHistoryResources(targets);
+        return false;
+    }
+    history.causticIrradianceDescriptor = causticIrradianceDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> surfelIrradianceDescriptor = RegisterSampledTexture(heap, GpuDescriptorClass::SampledImage, history.surfelIrradiance, targets.surfelIrradianceFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!surfelIrradianceDescriptor.has_value()){
+        error("RendererSystem: failed to register lagged lighting-history images in the descriptor heap");
+        this.resetLaggedLightingHistoryResources(targets);
+        return false;
+    }
+    history.surfelIrradianceDescriptor = surfelIrradianceDescriptor.value();
 
     history.slots = DeferredBindlessSlotsBuilder().buildHistory(
         targets.bindless.slots,

@@ -19,6 +19,9 @@ type SceneAssetRef = AssetRef<IAsset>;
 type SubsystemRefVector = Vector<SubsystemRef>;
 type EntityRefVector = Vector<EntityRef>;
 type AssetMap = HashMap<Name, SceneAssetRef>;
+type ProjectRef = AssetRef<ProjectAsset>;
+type LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>>;
+type LoadedComponentVector = Vector<UniquePtr<IComponent>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,10 +106,6 @@ class SceneAsset{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-type ProjectRef = AssetRef<ProjectAsset>;
-type LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>>;
-type LoadedComponentVector = Vector<UniquePtr<IComponent>>;
 
 [move_only]
 class LoadedSceneEntity{

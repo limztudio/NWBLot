@@ -75,10 +75,11 @@ b8 ReserveCsgStructuredBuffer(
         return true;
     if(buffer.valid() && inOutCapacity >= requiredCount)
         return true;
-    usize capacity = 0u;
-    u64 byteSize = 0u;
-    if(!ResolveCsgStructuredBufferCapacity(inOutCapacity, requiredCount, elementByteSize, capacity, byteSize))
+    const Expected<CsgStructuredBufferCapacity> resolvedCapacity = ResolveCsgStructuredBufferCapacity(inOutCapacity, requiredCount, elementByteSize);
+    if(!resolvedCapacity.has_value())
         return false;
+    const usize capacity = resolvedCapacity.value().capacity;
+    const u64 byteSize = resolvedCapacity.value().byteSize;
 
     BufferDesc bufferDesc;
     bufferDesc
@@ -355,6 +356,7 @@ void CacheCsgFrameState(
     }
 }
 
+[cpp_unwind]
 CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup materialSurfaceLookup){
     const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
     Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure());

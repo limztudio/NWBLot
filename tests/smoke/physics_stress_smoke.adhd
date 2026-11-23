@@ -19,6 +19,113 @@ class PhysicsStressUnfocusedPass : IRenderPass{
     public b8 shouldRenderUnfocused()override{ return true; }
 }
 
+[arena]
+class PhysicsStressProject : IProjectEntryCallbacks{
+    public PhysicsStressProject(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_sceneSubsystems = ActiveSceneSubsystems();
+        this.m_gpuDispatcher = PhysicsGpuDispatcher();
+        this.m_unfocusedPass = PhysicsStressUnfocusedPass(context.graphics);
+    }
+
+    public b8 onStartup()override{
+        if(!this.m_context.graphics.getDevice().getDescriptorHeap().isInitialized()){
+            error("PhysicsStressSmoke: bindless descriptor heap is unavailable");
+            return false;
+        }
+        if(!this.m_sceneSubsystems.loadProjectStartScene(this.m_context.assetManager)){
+            error("PhysicsStressSmoke: failed to load project start scene subsystems");
+            return false;
+        }
+
+        this.m_gpuDispatcher.attachRuntime(this.m_context.graphics, this.m_context.assetManager, this.m_context.shaderPathResolver);
+        this.m_gpuDispatcher.setActiveSceneSubsystems(ActiveSceneSubsystemsRef(this.m_sceneSubsystems));
+        if(!this.m_gpuDispatcher.validateResources() || !this.m_gpuDispatcher.isReady()){
+            error("PhysicsStressSmoke: GPU physics compute pipelines failed validation");
+            return false;
+        }
+
+        [essential] info(
+            "PhysicsStressSmoke: device='{}' cpu_workers={}"
+            , this.m_context.graphics.getRendererString()
+            , this.m_context.cpuTasks.workerThreadCount()
+        );
+
+        mut GraphicsRuntime graphics = this.m_context.graphics;
+        graphics.addRenderPassToBack(this.m_unfocusedPass);
+        this.m_unfocusedPassRegistered = true;
+        return true;
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        if(this.m_completed)
+            return true;
+
+        String modeText = String("smoke");
+        const Expected<String> modeEnv = ReadSmokeEnvironmentString("NWB_PHYSICS_STRESS_MODE");
+        if(modeEnv.has_value() && !modeEnv.value().empty())
+            modeText = modeEnv.value();
+
+        const StringView mode = StringView(modeText);
+        if(mode != "smoke" && mode != "benchmark"){
+            error("PhysicsStressSmoke: invalid NWB_PHYSICS_STRESS_MODE='{}'", mode);
+            return false;
+        }
+
+        CpuTaskScheduler serialScheduler(0u);
+        u32 completedCases = 0u;
+
+        if(mode == "smoke"){
+            if(!RunPhysicsGpuParitySmoke(this.m_gpuDispatcher, this.m_context.cpuTasks))
+                return false;
+            if(!RunPhysicsStressTier(256u, 10u, 20u, false, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
+                return false;
+        }
+        else{
+            Array<u32, 4u> tiers;
+            tiers[0u] = 256u;
+            tiers[1u] = 512u;
+            tiers[2u] = 1024u;
+            tiers[3u] = 2048u;
+            for(usize ti = 0u; ti < tiers.size(); ++ti){
+                if(!RunPhysicsStressTier(tiers[ti], 15u, 60u, true, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
+                    return false;
+            }
+        }
+
+        this.m_completed = true;
+        [essential] info("PhysicsStressSmoke: completed mode={} cases={}", mode, completedCases);
+        RequestSmokeQuit(this.m_context);
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.m_gpuDispatcher.invalidateResources();
+        if(this.m_unfocusedPassRegistered){
+            mut GraphicsRuntime graphics = this.m_context.graphics;
+            graphics.removeRenderPass(this.m_unfocusedPass);
+            this.m_unfocusedPassRegistered = false;
+        }
+        if(!this.m_context.graphics.waitForIdle())
+            error("PhysicsStressSmoke: shutdown waitForIdle failed");
+        u32 completedVal = 0u;
+        if(this.m_completed)
+            completedVal = 1u;
+        [essential] info("PhysicsStressSmoke: shutdown completed={}", completedVal);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private ActiveSceneSubsystems m_sceneSubsystems;
+    private PhysicsGpuDispatcher m_gpuDispatcher;
+    private PhysicsStressUnfocusedPass m_unfocusedPass;
+    private b8 m_unfocusedPassRegistered = false;
+    private b8 m_completed = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StringView ResolveBackendLabel(in ExecutionBackendUsed backend){
     if(backend == ExecutionBackendUsed::Cpu)
         return "Cpu";
@@ -394,117 +501,6 @@ b8 RunPhysicsStressTier(
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[arena]
-class PhysicsStressProject : IProjectEntryCallbacks{
-    public PhysicsStressProject(mut ProjectRuntimeContext context){
-        this.m_context = context;
-        this.m_sceneSubsystems = ActiveSceneSubsystems();
-        this.m_gpuDispatcher = PhysicsGpuDispatcher();
-        this.m_unfocusedPass = PhysicsStressUnfocusedPass(context.graphics);
-    }
-
-    public b8 onStartup()override{
-        if(!this.m_context.graphics.getDevice().getDescriptorHeap().isInitialized()){
-            error("PhysicsStressSmoke: bindless descriptor heap is unavailable");
-            return false;
-        }
-        if(!this.m_sceneSubsystems.loadProjectStartScene(this.m_context.assetManager)){
-            error("PhysicsStressSmoke: failed to load project start scene subsystems");
-            return false;
-        }
-
-        this.m_gpuDispatcher.attachRuntime(this.m_context.graphics, this.m_context.assetManager, this.m_context.shaderPathResolver);
-        this.m_gpuDispatcher.setActiveSceneSubsystems(ActiveSceneSubsystemsRef(this.m_sceneSubsystems));
-        if(!this.m_gpuDispatcher.validateResources() || !this.m_gpuDispatcher.isReady()){
-            error("PhysicsStressSmoke: GPU physics compute pipelines failed validation");
-            return false;
-        }
-
-        [essential] info(
-            "PhysicsStressSmoke: device='{}' cpu_workers={}"
-            , this.m_context.graphics.getRendererString()
-            , this.m_context.cpuTasks.workerThreadCount()
-        );
-
-        mut GraphicsRuntime graphics = this.m_context.graphics;
-        graphics.addRenderPassToBack(this.m_unfocusedPass);
-        this.m_unfocusedPassRegistered = true;
-        return true;
-    }
-
-    public b8 onUpdate(in f32 delta)override{
-        if(this.m_completed)
-            return true;
-
-        String modeText = String("smoke");
-        const Expected<String> modeEnv = ReadSmokeEnvironmentString("NWB_PHYSICS_STRESS_MODE");
-        if(modeEnv.has_value() && !modeEnv.value().empty())
-            modeText = modeEnv.value();
-
-        const StringView mode = StringView(modeText);
-        if(mode != "smoke" && mode != "benchmark"){
-            error("PhysicsStressSmoke: invalid NWB_PHYSICS_STRESS_MODE='{}'", mode);
-            return false;
-        }
-
-        CpuTaskScheduler serialScheduler(0u);
-        u32 completedCases = 0u;
-
-        if(mode == "smoke"){
-            if(!RunPhysicsGpuParitySmoke(this.m_gpuDispatcher, this.m_context.cpuTasks))
-                return false;
-            if(!RunPhysicsStressTier(256u, 10u, 20u, false, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
-                return false;
-        }
-        else{
-            Array<u32, 4u> tiers;
-            tiers[0u] = 256u;
-            tiers[1u] = 512u;
-            tiers[2u] = 1024u;
-            tiers[3u] = 2048u;
-            for(usize ti = 0u; ti < tiers.size(); ++ti){
-                if(!RunPhysicsStressTier(tiers[ti], 15u, 60u, true, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
-                    return false;
-            }
-        }
-
-        this.m_completed = true;
-        [essential] info("PhysicsStressSmoke: completed mode={} cases={}", mode, completedCases);
-        RequestSmokeQuit(this.m_context);
-        return true;
-    }
-
-    public void onShutdown()override{
-        this.m_gpuDispatcher.invalidateResources();
-        if(this.m_unfocusedPassRegistered){
-            mut GraphicsRuntime graphics = this.m_context.graphics;
-            graphics.removeRenderPass(this.m_unfocusedPass);
-            this.m_unfocusedPassRegistered = false;
-        }
-        if(!this.m_context.graphics.waitForIdle())
-            error("PhysicsStressSmoke: shutdown waitForIdle failed");
-        u32 completedVal = 0u;
-        if(this.m_completed)
-            completedVal = 1u;
-        [essential] info("PhysicsStressSmoke: shutdown completed={}", completedVal);
-    }
-
-    private mut ProjectRuntimeContext m_context;
-    private ActiveSceneSubsystems m_sceneSubsystems;
-    private PhysicsGpuDispatcher m_gpuDispatcher;
-    private PhysicsStressUnfocusedPass m_unfocusedPass;
-    private b8 m_unfocusedPassRegistered = false;
-    private b8 m_completed = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(320u, 240u);

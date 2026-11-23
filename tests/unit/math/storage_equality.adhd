@@ -37,6 +37,15 @@ class MxcsrEqualityEnvironmentGuard{
     }
 }
 
+class PageBoundaryCaseResult{
+    public b8 pageSizePositive = false;
+    public b8 mapped = false;
+    public i32 protectStatus = -1;
+    public b8 equalMatch = false;
+    public b8 unequalMismatch = true;
+    public i32 unmapStatus = -1;
+}
+
 b8 CompareStorageLanes<T>(in T lhs, in T rhs, in usize count, in b8 strict){
     for(usize lane = 0u; lane < count; ++lane){
         if(strict){
@@ -129,15 +138,6 @@ void RunBooleanFallbackStepByIndex(in usize kind, in usize lane, mut b8 initial,
         BooleanFallback<17u>(lane, initial, flipped, legacy, restored);
     else
         BooleanFallback<33u>(lane, initial, flipped, legacy, restored);
-}
-
-class PageBoundaryCaseResult{
-    public b8 pageSizePositive = false;
-    public b8 mapped = false;
-    public i32 protectStatus = -1;
-    public b8 equalMatch = false;
-    public b8 unequalMismatch = true;
-    public i32 unmapStatus = -1;
 }
 
 PageBoundaryCaseResult ObservePageBoundary<T>(in usize count, in b8 boolean){

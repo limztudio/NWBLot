@@ -17,15 +17,9 @@ extern u32 ReadFlushControl();
 [cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteMxcsr")]
 extern void WriteFlushControl(in u32 control);
 
-u32 GetFloatingPointFlushMode(){
-    const u32 control = ReadFlushControl();
-    return ((control >> 15u) & 1u) | ((control >> 5u) & 2u);
-}
 
-void SetFloatingPointFlushMode(in u32 mode){
-    const u32 bits = (1u << 15u) | (1u << 6u);
-    WriteFlushControl((ReadFlushControl() & ~bits) | ((mode & 1u) << 15u) | ((mode & 2u) << 5u));
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class Dyadic{
     public Array<u64, 10> words;
@@ -91,17 +85,48 @@ class Dyadic{
     }
 }
 
+class OpticalBoundsInput{
+    public Array<f32, 12> transform;
+    public Array<f32, 4> low;
+    public Array<f32, 4> high;
+    public OpticalBoundsInput(){}
+
+    public MatrixSingle matrix(in VectorSingle fourthRow)const{
+        return MatrixSingle(VectorSingle(this.transform[0u], this.transform[1u], this.transform[2u], this.transform[3u]),
+            VectorSingle(this.transform[4u], this.transform[5u], this.transform[6u], this.transform[7u]),
+            VectorSingle(this.transform[8u], this.transform[9u], this.transform[10u], this.transform[11u]), fourthRow);
+    }
+    public VectorSingle minimum()const{ return VectorSingle(this.low[0u], this.low[1u], this.low[2u], this.low[3u]); }
+    public VectorSingle maximum()const{ return VectorSingle(this.high[0u], this.high[1u], this.high[2u], this.high[3u]); }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 GetFloatingPointFlushMode(){
+    const u32 control = ReadFlushControl();
+    return ((control >> 15u) & 1u) | ((control >> 5u) & 2u);
+}
+
+void SetFloatingPointFlushMode(in u32 mode){
+    const u32 bits = (1u << 15u) | (1u << 6u);
+    WriteFlushControl((ReadFlushControl() & ~bits) | ((mode & 1u) << 15u) | ((mode & 2u) << 5u));
+}
+
 u64 DyadicSignificand(in u32 bits, in u32 exponent){
     u64 result = bits & 0x7fffffu;
     if(exponent != 0u)
         result |= 0x800000u;
     return result;
 }
+
 i32 DyadicExponent(in u32 exponent){
     if(exponent != 0u)
         return cast<i32>(exponent) - 150;
     return -149;
 }
+
 Dyadic Product(in u32 a, in u32 b){
     const u32 aExponent = (a >> 23u) & 255u;
     const u32 bExponent = (b >> 23u) & 255u;
@@ -121,26 +146,13 @@ Dyadic Product(in u32 a, in u32 b){
 
 Dyadic Value(in u32 bits){ return Product(bits, 0x3f800000u); }
 
-class OpticalBoundsInput{
-    public Array<f32, 12> transform;
-    public Array<f32, 4> low;
-    public Array<f32, 4> high;
-    public OpticalBoundsInput(){}
-
-    public MatrixSingle matrix(in VectorSingle fourthRow)const{
-        return MatrixSingle(VectorSingle(this.transform[0u], this.transform[1u], this.transform[2u], this.transform[3u]),
-            VectorSingle(this.transform[4u], this.transform[5u], this.transform[6u], this.transform[7u]),
-            VectorSingle(this.transform[8u], this.transform[9u], this.transform[10u], this.transform[11u]), fourthRow);
-    }
-    public VectorSingle minimum()const{ return VectorSingle(this.low[0u], this.low[1u], this.low[2u], this.low[3u]); }
-    public VectorSingle maximum()const{ return VectorSingle(this.high[0u], this.high[1u], this.high[2u], this.high[3u]); }
-}
-
 u32 NextOpticalWord(mut u32 state){ state = state * 1664525u + 1013904223u; return state; }
+
 u32 NormalOpticalWord(mut u32 state){
     const u32 exponent = 67u + NextOpticalWord(state) % 121u;
     return (NextOpticalWord(state) & 0x807fffffu) | (exponent << 23u);
 }
+
 OpticalBoundsInput Cancellation(in u32 axis){
     OpticalBoundsInput input;
     input.transform[axis * 4u] = bit_cast<f32>(0x4b800001u);
@@ -149,6 +161,7 @@ OpticalBoundsInput Cancellation(in u32 axis){
     input.high = input.low;
     return input;
 }
+
 Dyadic Corner(in OpticalBoundsInput input, in u32 corner, in usize row){
     Dyadic value = Value(bit_cast<u32>(input.transform[row * 4u + 3u]));
     for(usize column = 0u; column < 3u; ++column){
@@ -285,7 +298,9 @@ void VerifySubnormalNonfiniteAndOverflowingAffineInputsNeverPublishAProof(){
         }
     }
 }
+
 NWB_ADHD_GTEST(OpticalSceneInteger, CancellationAndExtremeExponentBoxesEncloseExactDyadicCornersInEveryCpuMode, VerifyCancellationAndExtremeExponentBoxesEncloseExactDyadicCornersInEveryCpuMode)
+
 NWB_ADHD_GTEST(OpticalSceneInteger, SubnormalNonfiniteAndOverflowingAffineInputsNeverPublishAProof, VerifySubnormalNonfiniteAndOverflowingAffineInputsNeverPublishAProof)
 
 

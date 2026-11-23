@@ -16,6 +16,9 @@
 
 
 type UiConfigurableEditInputTests = UiEditNavigationHostTests;
+const usize s_ClipboardMaxPublications = s_UiClipboardMaxPublications;
+const usize s_EditInputMaxEvents = s_InputMaxEvents;
+type ClipboardChannelEnum = ClipboardChannel;
 
 class DelayedClipboard : QueuedClipboardService{
     [cpp_base(QueuedClipboardService, storage)]
@@ -43,14 +46,9 @@ class DelayedClipboardRig{
     public DelayedClipboardRig(){ this.service = DelayedClipboard(this.arena); }
 }
 
-const usize s_ClipboardMaxPublications = s_UiClipboardMaxPublications;
-const usize s_EditInputMaxEvents = s_InputMaxEvents;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-type ClipboardChannelEnum = ClipboardChannel;
 
 UiTextEditOwner MakeHostEditOwner(in u64 widgetValue, in u64 declarationGeneration, in u64 modelGeneration){
     UiTextEditOwner owner = UiTextEditOwner();

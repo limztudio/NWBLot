@@ -13,6 +13,11 @@ const Name s_MaterialCookEntryAssetTypeName = "material";
 const StringView s_MaterialNonStandaloneKindLabel = "material";
 const b8 s_MaterialLogCookBuildFailure = false;
 
+class MaterialStageDependency{
+    public Name path = s_NameNone;
+    public Name assetType = s_NameNone;
+}
+
 b8 IsValidMaterialResourceDependencyName(in b8 parsedOk, in Name resourceName){
     return parsedOk && resourceName != s_NameNone;
 }
@@ -68,11 +73,6 @@ register_asset Material using NonStandaloneAssetRegistration<Material>;
 [cook_entry("material", s_MaterialMetaDiagnosticPrefix, ParseMaterialCookMetadata, document_only, quiet)]
 Expected<Material> CookMaterialVolumeEntry(in MaterialCookEntry entry){
     return BuildMaterialAsset(entry);
-}
-
-class MaterialStageDependency{
-    public Name path = s_NameNone;
-    public Name assetType = s_NameNone;
 }
 
 b8 CollectMaterialDependencies(in MaterialCookEntry entry, mut ICookDependencyCollector collector){

@@ -243,14 +243,7 @@ b8 ValidateShaderReservedImplicitDefines(
     return ValidateShaderDoesNotUseImplicitDefine(entryName, s_CsgIntervalSampleEnabledImplicitDefineName, hasCsgIntervalSampleDefine);
 }
 
-b8 TryAccumulateGeneratedShaderEntryCapacity(
-    in usize baseCapacity,
-    in usize count0,
-    in usize count1,
-    in usize count2,
-    in usize count3,
-    mut usize outCapacity
-){
+Expected<usize> TryAccumulateGeneratedShaderEntryCapacity(in usize baseCapacity, in usize count0, in usize count1, in usize count2, in usize count3){
     usize capacity = baseCapacity;
     Array<usize, 4> counts;
     counts[0u] = count0;
@@ -260,19 +253,17 @@ b8 TryAccumulateGeneratedShaderEntryCapacity(
     for(in usize count : counts){
         if(count > usize.max - capacity){
             error("GraphicsCook: generated shader entry count exceeds container capacity");
-            return false;
+            return MakeUnexpected(Failure());
         }
         capacity += count;
     }
-    outCapacity = capacity;
-    return true;
+    return capacity;
 }
 
 b8 TryInsertUniqueShaderIdentityKey(in Name shaderName, in Name stageName, mut HashSet<ShaderStageKey> inOutSeenKeys){
     const ShaderStageKey shaderIdentityKey(shaderName, stageName);
-    if(inOutSeenKeys.contains(shaderIdentityKey))
+    if(!inOutSeenKeys.insert(shaderIdentityKey).second)
         return false;
-    inOutSeenKeys.insert(shaderIdentityKey);
     return true;
 }
 
@@ -292,13 +283,12 @@ b8 TryAccumulatePreparedShaderRecordCount(in u64 variantCount, mut u64 inOutShad
     return true;
 }
 
-b8 ValidatePreparedShaderRecordCountFitsCapacity(in u64 shaderRecordCount, mut usize outCount){
+Expected<usize> ValidatePreparedShaderRecordCountFitsCapacity(in u64 shaderRecordCount){
     if(shaderRecordCount > cast<u64>(usize.max)){
         error("GraphicsCook: shader record count exceeds container capacity");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outCount = cast<usize>(shaderRecordCount);
-    return true;
+    return cast<usize>(shaderRecordCount);
 }
 
 

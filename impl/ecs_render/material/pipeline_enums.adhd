@@ -46,10 +46,6 @@ const Name s_VertexAttributeTangentName = "TANGENT";
 const Name s_VertexAttributeTexCoordName = "TEXCOORD";
 const Name s_VertexAttributeColorName = "COLOR";
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 enum<u8> MaterialPipelinePass{
     Opaque,
     CsgReceiverSurface,
@@ -81,6 +77,10 @@ enum<u8> SampledTextureImportFailure{
     ImportFailed = 2u
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class MaterialPipelineCsgBindingUse{
     public b8 clip = false;
     public b8 avboitClip = false;
@@ -108,13 +108,6 @@ class GeneratedGeometryOutputLayout{
 
     public u32 indexByteOffset = 0u;
     public b8 indexed = false;
-}
-
-GeneratedGeometryOutputLayout MakeGeneratedGeometryOutputLayout(in u32 offset, in b8 indexed){
-    GeneratedGeometryOutputLayout layout;
-    layout.indexByteOffset = offset;
-    layout.indexed = indexed;
-    return layout;
 }
 
 class GeneratedGeometryEquivalenceKey{
@@ -160,6 +153,13 @@ class GeneratedGeometryEquivalenceKey{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+GeneratedGeometryOutputLayout MakeGeneratedGeometryOutputLayout(in u32 offset, in b8 indexed){
+    GeneratedGeometryOutputLayout layout;
+    layout.indexByteOffset = offset;
+    layout.indexed = indexed;
+    return layout;
+}
 
 GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(
     in Name meshKey,

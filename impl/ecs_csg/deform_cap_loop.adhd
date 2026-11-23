@@ -229,10 +229,6 @@ b8 OrderCsgDeformBoundaryLoopInto(in Span<CsgDeformCutLoopEdge> edges, mut Vecto
     return WalkCsgDeformSimpleCycle(edges, adj, start, firstEdge, edges.size(), edgeWalked, outLoop);
 }
 
-b8 OrderCsgDeformBoundaryLoop(in Span<CsgDeformCutLoopEdge> edges, mut Vector<u32> outLoop){
-    return OrderCsgDeformBoundaryLoopInto(edges, outLoop);
-}
-
 Expected<u32> FillCsgDeformCutCaps(
     mut Vector<CsgDeformCutLoopEdge> scratchEdges,
     mut Vector<CsgDeformVertex> inOutVertices,

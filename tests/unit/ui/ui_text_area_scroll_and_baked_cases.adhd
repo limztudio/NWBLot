@@ -13,6 +13,13 @@
 
 
 type UiTextAreaScrollTests = TextAreaFixture;
+const u32 s_UiTextScrollPosInfF32Bits = 0x7f800000u;
+const u32 s_UiTextScrollQuietNaNF32Bits = 0x7fc00000u;
+const AStringView s_UiTextScrollPanelKey = "panel";
+const AStringView s_UiTextScrollAreaKey = "area";
+const AStringView s_UiTextScrollParentPopupKey = "parent";
+const AStringView s_UiTextScrollChildPopupKey = "child";
+const AStringView s_UiTextBakedSampleGlyphText = "A";
 
 class UiTextAreaScrollLifetimeTests : TextAreaFixture{
     public PopupState m_parent;
@@ -129,6 +136,7 @@ class TextBakedTests{
         TestMoveAssign<TextLayout>(this.m_layout, layout.value());
         return true;
     }
+    [cpp_unwind]
     public b8 corruptPayloadFontHash(){
         const auto binary = SerializeFontAtlasPayload(this.m_atlas.payload());
         if(!binary.has_value())
@@ -140,6 +148,7 @@ class TextBakedTests{
         this.m_atlas.setPayload(payload.value());
         return true;
     }
+    [cpp_unwind]
     public b8 rebindPayloadFont(in StringView path){
         const auto binary = SerializeFontAtlasPayload(this.m_atlas.payload());
         if(!binary.has_value())
@@ -151,6 +160,7 @@ class TextBakedTests{
         this.m_atlas.setPayload(payload.value());
         return true;
     }
+    [cpp_unwind]
     public b8 replaceWithUnbakedFontAndClearAtlas(){
         const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_font, 2u));
         if(!this.m_text.setFonts(sources))
@@ -205,15 +215,6 @@ class UiTextControlLifetimeTests : RouterTestFixture{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u32 s_UiTextScrollPosInfF32Bits = 0x7f800000u;
-const u32 s_UiTextScrollQuietNaNF32Bits = 0x7fc00000u;
-const AStringView s_UiTextScrollPanelKey = "panel";
-const AStringView s_UiTextScrollAreaKey = "area";
-const AStringView s_UiTextScrollParentPopupKey = "parent";
-const AStringView s_UiTextScrollChildPopupKey = "child";
-const AStringView s_UiTextBakedSampleGlyphText = "A";
 
 
 void ExpectUiTextAreaScrollLifetimeModel(in UiTextAreaScrollLifetimeTests self, in EditModel model, in UiTextAreaModelSnapshot before){

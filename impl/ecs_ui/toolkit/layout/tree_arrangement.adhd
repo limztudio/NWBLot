@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class LayoutTreeArrangementStart{
+    public Rect childClip = Rect();
+    public f64 available = 0.0;
+    public f64 invWeight = 0.0;
+    public f64 cursor = 0.0;
+}
+
 Rect IntersectLayoutRectsScalar(in Rect lhs, in Rect rhs){
     const f32 x0 = Max(lhs.x, rhs.x);
     const f32 y0 = Max(lhs.y, rhs.y);
@@ -16,23 +23,16 @@ Rect IntersectLayoutRectsScalar(in Rect lhs, in Rect rhs){
     return Rect(x0, y0, Max(0.0f, x1 - x0), Max(0.0f, y1 - y0));
 }
 
-b8 TryBeginArrangeLayoutTreeNode(
+Expected<LayoutTreeArrangementStart> TryBeginArrangeLayoutTreeNode(
     in Span<LayoutTreeNode> nodes,
     in Span<LayoutBox> boxes,
     in Span<Rect> inheritedClips,
     in u32 index,
-    mut LayoutBox inoutBox,
-    mut Rect outChildClip,
-    mut f64 outAvailable,
-    mut f64 outInvWeight,
-    mut f64 outCursor
+    mut LayoutBox inoutBox
 ){
-    outChildClip = Rect();
-    outAvailable = 0.0;
-    outInvWeight = 0.0;
-    outCursor = 0.0;
+    LayoutTreeArrangementStart result;
     if(!IsValidUiRect(inoutBox.rectangle))
-        return false;
+        return MakeUnexpected(Failure());
     in LayoutTreeNode node = nodes[cast<usize>(index)];
     in LayoutNodeDesc description = node.description;
     in Rect inheritedClip = inheritedClips[cast<usize>(index)];
@@ -53,17 +53,17 @@ b8 TryBeginArrangeLayoutTreeNode(
     inoutBox.clip = IntersectLayoutRectsScalar(inoutBox.rectangle, inheritedClip);
     inoutBox.hit = inoutBox.clip;
     if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
-        return false;
+        return MakeUnexpected(Failure());
     if(node.firstChild == s_LayoutNoParent)
-        return true;
+        return result;
     if(description.clipChildren)
-        outChildClip = IntersectLayoutRectsScalar(inheritedClip, inoutBox.content);
+        result.childClip = IntersectLayoutRectsScalar(inheritedClip, inoutBox.content);
     else
-        outChildClip = inheritedClip;
+        result.childClip = inheritedClip;
     const b8 row = description.direction == LayoutDirection::Row;
     const b8 column = description.direction == LayoutDirection::Column;
     if(!row && !column)
-        return true;
+        return result;
     f64 consumed = 0.0;
     f64 weight = 0.0;
     u32 childCount = 0u;
@@ -88,14 +88,14 @@ b8 TryBeginArrangeLayoutTreeNode(
     f32 mainExtent = inoutBox.content.height;
     if(row)
         mainExtent = inoutBox.content.width;
-    outAvailable = Max(0.0, (cast<f64>(mainExtent) - consumed) - spacing);
+    result.available = Max(0.0, (cast<f64>(mainExtent) - consumed) - spacing);
     if(weight > 0.0)
-        outInvWeight = 1.0 / weight;
+        result.invWeight = 1.0 / weight;
     f32 startCoord = inoutBox.content.y;
     if(row)
         startCoord = inoutBox.content.x;
-    outCursor = cast<f64>(startCoord);
-    return true;
+    result.cursor = cast<f64>(startCoord);
+    return result;
 }
 
 Expected<Rect> TryArrangeLayoutTreeChild(
@@ -142,15 +142,13 @@ Expected<Rect> TryArrangeLayoutTreeChild(
 }
 
 b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutBox> boxes, mut Vector<Rect> inheritedClips){
-    Rect childClip;
-    f64 available = 0.0;
-    f64 invWeight = 0.0;
-    f64 cursor = 0.0;
-    if(!TryBeginArrangeLayoutTreeNode(nodes, Span<LayoutBox>(boxes), Span<Rect>(inheritedClips), index, boxes[cast<usize>(index)], childClip, available, invWeight, cursor))
+    const Expected<LayoutTreeArrangementStart> arrangement = TryBeginArrangeLayoutTreeNode(nodes, Span<LayoutBox>(boxes), Span<Rect>(inheritedClips), index, boxes[cast<usize>(index)]);
+    if(!arrangement.has_value())
         return false;
     in LayoutTreeNode node = nodes[cast<usize>(index)];
     if(node.firstChild == s_LayoutNoParent)
         return true;
+    f64 cursor = arrangement.value().cursor;
     in LayoutNodeDesc description = node.description;
     in Rect content = boxes[cast<usize>(index)].content;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
@@ -160,14 +158,14 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
             content,
             nodes[cast<usize>(child)].description,
             boxes[cast<usize>(child)].measuredSize,
-            available,
-            invWeight,
+            arrangement.value().available,
+            arrangement.value().invWeight,
             cursor
         );
         if(!childRect.has_value())
             return false;
         boxes[cast<usize>(child)].rectangle = childRect.value();
-        inheritedClips[cast<usize>(child)] = childClip;
+        inheritedClips[cast<usize>(child)] = arrangement.value().childClip;
     }
     return true;
 }

@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "vulkan_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/value_storage.adhd>
@@ -13,14 +12,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkOffset2D")]
-extern class VkOffset2D{ i32 x; i32 y; };
-
-[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkRect2D")]
-extern class VkRect2D{ VkOffset2D offset; VkExtent2D extent; };
-
-[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanViewportPolicy::BuildImplicitScissor")]
-extern Expected<VkRect2D> BuildImplicitScissor(in Viewport viewport);
+[cpp_header("<core/graphics/backend_selection/raster_validation.h>"), cpp_name("::NWB::Core::GraphicsBackend::IsImplicitScissorValid")]
+extern b8 IsImplicitScissorValid(in Viewport viewport);
 
 [cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::TryAggregateGpuPacketEnvelopeMetrics")]
 extern Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut ScratchStorage scratch, mut ScratchStorageVector<GpuQueuePacketEnvelopeMetrics> metrics);
@@ -28,6 +21,9 @@ extern Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(i
 type GpuPacketEnvelopeMetricScopeScratchVector = ScratchStorageVector<GpuPacketEnvelopeMetricScope>;
 type GpuTimingSinkSampleVector = ScratchStorageVector<GpuTimingSinkSample>;
 type GpuQueuePacketEnvelopeMetricsVector = ScratchStorageVector<GpuQueuePacketEnvelopeMetrics>;
+type ResourceQueueSharingMask = ResourceQueueSharing;
+const u64 s_F64InfinityBits = 0x7ff0000000000000u;
+const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
 
 static_assert(TestNothrowDestructible<GpuTimingMeasure>(), "GPU timing measures stored in Optional must unwind without throwing");
 static_assert(!IsResourceQueueSharingValid(cast<ResourceQueueSharing>(1u << 7u)));
@@ -147,10 +143,6 @@ void RecordCorrelatorTimestampRange(
     correlator.recordTimestampRange(name, frameIndex, range, scratch, samples);
 }
 
-type ResourceQueueSharingMask = ResourceQueueSharing;
-
-const u64 s_F64InfinityBits = 0x7ff0000000000000u;
-const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
 
 GpuComparableTimestampRange MakeComparableRange(in u64 beginTicks, in u64 endTicks, in f64 secondsPerTick, in GpuPhysicalQueueId queue){
     GpuComparableTimestampRange range = GpuComparableTimestampRange();
@@ -1060,15 +1052,16 @@ void VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunes
     ASSERT_TRUE(context.correlator.prepareOverlapMetric(secondQueueIdleScope, resetSecondInputScope, resetSecondOutputScope));
 }
 
-void VerifyVulkanViewportPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected(){
+void VerifyViewportScissorPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected(){
     const Viewport viewport = Viewport(1.2f, 10.2f, 2.1f, 8.7f, 0.0f, 1.0f);
-    const Expected<VkRect2D> rect = BuildImplicitScissor(viewport);
-    ASSERT_TRUE(rect.has_value());
-    EXPECT_EQ(rect.value().offset.x, 1);
-    EXPECT_EQ(rect.value().offset.y, 2);
-    EXPECT_EQ(rect.value().extent.width, 10u);
-    EXPECT_EQ(rect.value().extent.height, 7u);
-    EXPECT_FALSE(BuildImplicitScissor(Viewport(-0.1f, 10.0f, 0.0f, 8.0f, 0.0f, 1.0f)).has_value());
+    ASSERT_TRUE(IsImplicitScissorValid(viewport));
+    const Rect rect = RectFromViewport(viewport);
+    EXPECT_TRUE(rect.validScissor());
+    EXPECT_EQ(rect.minX, 1);
+    EXPECT_EQ(rect.minY, 2);
+    EXPECT_EQ(rect.width(), 10);
+    EXPECT_EQ(rect.height(), 7);
+    EXPECT_FALSE(IsImplicitScissorValid(Viewport(-0.1f, 10.0f, 0.0f, 8.0f, 0.0f, 1.0f)));
 }
 
 void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
@@ -1110,7 +1103,7 @@ NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, PublishesCompleteOutOfOrderEnvelo
 NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, RejectsOutputRoleAndPhysicalQueueCollisions, VerifyGpuTimingPacketEnvelopeMetrics_RejectsOutputRoleAndPhysicalQueueCollisions)
 NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, RetainsSuccessfulOutputRolesWhenSinkRegistrationFails, VerifyGpuTimingPacketEnvelopeMetrics_RetainsSuccessfulOutputRolesWhenSinkRegistrationFails)
 NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState, VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState)
-NWB_ADHD_GTEST(VulkanViewportPolicy, FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected, VerifyVulkanViewportPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected)
+NWB_ADHD_GTEST(ViewportScissorPolicy, FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected, VerifyViewportScissorPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected)
 NWB_ADHD_GTEST(ResourceQueueSharing, RejectsEveryUnknownSharingBit, VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit)
 
 

@@ -226,7 +226,7 @@ void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommand
     if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
         return;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     retireOwnerChunksLocked(queue, reusableVersion, nativeRecordingID, *owner);
     trimRetiredChunksLocked(queue, reusableVersion);
 }

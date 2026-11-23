@@ -14,15 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(in EntityID entity, in CsgReceiverPass pass, mut EcsTestWorld testWorld){
-    CsgFrameReceiverLookup lookup(testWorld.world);
-    return lookup.resolveReceiverDrawState(entity, pass);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class TestProjectSlabShape : ICsgShape{
     public Name shapeTypeName()const override{
         return Name(s_CsgInputNameProjectCsgSlab);
@@ -70,9 +61,22 @@ class OversizedProjectShape : ICsgShape{
     }
 }
 
+class CsgHiddenReceiver : ICsgReceiverVisibility{
+    public EntityID hidden = s_InvalidEntityId;
+
+    public b8 visible(mut World world, in EntityID entity, in CsgReceiverKind kind, in CsgReceiverComponent receiver)const override{
+        return entity != this.hidden;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(in EntityID entity, in CsgReceiverPass pass, mut EcsTestWorld testWorld){
+    CsgFrameReceiverLookup lookup(testWorld.world);
+    return lookup.resolveReceiverDrawState(entity, pass);
+}
 
 CsgDeformVertex MakeDeformVertex(in f32 x, in f32 y, in f32 z){
     CsgDeformVertex vertex = CsgDeformVertex();
@@ -364,14 +368,6 @@ void VerifyCsg_ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts
     }
 }
 
-class CsgHiddenReceiver : ICsgReceiverVisibility{
-    public EntityID hidden = s_InvalidEntityId;
-
-    public b8 visible(mut World world, in EntityID entity, in CsgReceiverKind kind, in CsgReceiverComponent receiver)const override{
-        return entity != this.hidden;
-    }
-}
-
 void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
     {
         EcsTestWorld testWorld = EcsTestWorld();
@@ -609,18 +605,22 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices, VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices)
+
 NWB_ADHD_GTEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit, VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit)
+
 NWB_ADHD_GTEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName, VerifyCsg_ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName)
+
 NWB_ADHD_GTEST(Csg, RepeatedBuiltInRegistrationPreservesTypeIdentityAndCount, VerifyCsg_RepeatedBuiltInRegistrationPreservesTypeIdentityAndCount)
+
 NWB_ADHD_GTEST(Csg, ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded, VerifyCsg_ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded)
+
 NWB_ADHD_GTEST(Csg, OversizedProjectShapeDoesNotChangeRegistry, VerifyCsg_OversizedProjectShapeDoesNotChangeRegistry)
+
 NWB_ADHD_GTEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts, VerifyCsg_ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts)
+
 NWB_ADHD_GTEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs, VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs)
+
 NWB_ADHD_GTEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs, VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs)
 
 

@@ -11,21 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsPreparedSceneBvhStorageReady(in RendererRayTracingState state, in usize nodeCount, in usize instanceCount){
-    return state.sceneBvh.m_sceneBvhNodeBuffer.valid()
-        && state.sceneBvh.m_sceneInstanceBuffer.valid()
-        && state.sceneBvh.m_sceneBvhNodeCapacity >= nodeCount
-        && state.sceneBvh.m_sceneInstanceCapacity >= instanceCount
-        && IsDescriptorClass(state.sceneBvh.m_sceneBvhNodeHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.sceneBvh.m_sceneInstanceHeapHandle, GpuDescriptorClass::StorageBuffer);
-}
-
-b8 HasPreparedSceneBvhBuffers(in RendererRayTracingState state, in u32 instanceCount){
-    assert(instanceCount > 0u);
-    const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
-    return IsPreparedSceneBvhStorageReady(state, requiredNodeCount, instanceCount);
-}
-
 [modular]
 class PreparedSceneBvhUpload : NoCopy{
     private Vector<u8> m_nodeBytes;
@@ -72,6 +57,25 @@ class PreparedSceneBvhUpload : NoCopy{
     public b8 uploadRequired()const{ return this.m_uploadRequired; }
     public in BufferHandle nodeBuffer()const{ return this.m_nodeBuffer; }
     public GpuDescriptorHandle nodeHeapHandle()const{ return this.m_nodeHeapHandle; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsPreparedSceneBvhStorageReady(in RendererRayTracingState state, in usize nodeCount, in usize instanceCount){
+    return state.sceneBvh.m_sceneBvhNodeBuffer.valid()
+        && state.sceneBvh.m_sceneInstanceBuffer.valid()
+        && state.sceneBvh.m_sceneBvhNodeCapacity >= nodeCount
+        && state.sceneBvh.m_sceneInstanceCapacity >= instanceCount
+        && IsDescriptorClass(state.sceneBvh.m_sceneBvhNodeHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.sceneBvh.m_sceneInstanceHeapHandle, GpuDescriptorClass::StorageBuffer);
+}
+
+b8 HasPreparedSceneBvhBuffers(in RendererRayTracingState state, in u32 instanceCount){
+    assert(instanceCount > 0u);
+    const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
+    return IsPreparedSceneBvhStorageReady(state, requiredNodeCount, instanceCount);
 }
 
 

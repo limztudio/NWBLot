@@ -52,14 +52,13 @@ class CausticEmissionTargetBuilder{
         inOutHash = UpdateFnv64Byte(inOutHash, cast<u8>(boundaryMode));
     }
 
-    public b8 validateUpload(
+    public Expected<usize> validateUpload(
         in u32 targetCount,
         in usize preparedByteSize,
         in b8 hasBuffer,
         in u32 capacity,
         in b8 heapHandleValid,
-        in b8 isStorageBufferClass,
-        mut usize outTargetByteCount
+        in b8 isStorageBufferClass
     )const{
         const usize targetByteCount = cast<usize>(targetCount) * s_CausticEmissionTargetGpuBytes;
         if(
@@ -70,10 +69,9 @@ class CausticEmissionTargetBuilder{
             || !isStorageBufferClass
         ){
             error("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outTargetByteCount = targetByteCount;
-        return true;
+        return targetByteCount;
     }
 
     public void captureBytes(

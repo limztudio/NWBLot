@@ -13,6 +13,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_RendererOpticalVolumeCoincidenceChoices = "'independent', 'identical_material', or 'shared_group'";
+const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_nested', or 'closed_priority'";
+
+type ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
+type MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
+type RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
+
+type ModelComponentCodec = TypedComponentAssetCodec<ModelComponentAsset>;
+type MeshComponentCodec = TypedComponentAssetCodec<MeshComponentAsset>;
+type RendererComponentCodec = TypedComponentAssetCodec<RendererComponentAsset>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateRendererOpticalVolumeGroupUnpadded(in StringView prefix, in Path nwbFilePath, in StringView fieldName, in b8 unpadded){
     if(unpadded)
         return true;
@@ -29,9 +44,6 @@ b8 ValidateRendererOpticalVolumeGroupParsedName(in StringView prefix, in Path nw
     return false;
 }
 
-const StringView s_RendererOpticalVolumeCoincidenceChoices = "'independent', 'identical_material', or 'shared_group'";
-const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_nested', or 'closed_priority'";
-
 b8 IsValidRendererOpticalVolumeGroupName(in b8 parsedOk, in Name groupName){
     return parsedOk && groupName != s_NameNone;
 }
@@ -40,25 +52,24 @@ b8 ReadOptionalRendererVisibleField(in Path nwbFilePath, in MetascriptValue asse
     return ReadOptionalMetadataBoolField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentVisibleField, inOutVisible);
 }
 
-b8 ReadOptionalRendererOpticalVolumeGroupField(in Path nwbFilePath, in MetascriptValue asset, mut Name outGroup){
+Expected<Name> ReadOptionalRendererOpticalVolumeGroupField(in Path nwbFilePath, in MetascriptValue asset){
     if(!asset.hasField(s_RendererComponentOpticalVolumeGroupField))
-        return true;
+        return s_NameNone;
 
     const Expected<MetadataStringField> groupField = ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeGroupField, true);
     if(!groupField.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     if(!ValidateRendererOpticalVolumeGroupUnpadded(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsUnpaddedRendererOpticalVolumeGroup(groupField.value().text)))
-        return false;
+        return MakeUnexpected(Failure());
 
     const Expected<Optional<Name>, NameTextError> groupName = ToName(groupField.value().text);
     Name resolvedGroup = s_NameNone;
     if(groupName.has_value() && groupName.value().has_value())
         resolvedGroup = groupName.value().value();
     if(!ValidateRendererOpticalVolumeGroupParsedName(s_RendererComponentDiagnosticPrefix, nwbFilePath, s_RendererComponentOpticalVolumeGroupField, IsValidRendererOpticalVolumeGroupName(groupName.has_value(), resolvedGroup)))
-        return false;
+        return MakeUnexpected(Failure());
 
-    outGroup = resolvedGroup;
-    return true;
+    return resolvedGroup;
 }
 
 b8 ReadOptionalRendererPriorityFields(in Path nwbFilePath, in MetascriptValue asset, mut i32 inOutVolumePriority, mut i32 inOutMediumPriority){
@@ -66,18 +77,6 @@ b8 ReadOptionalRendererPriorityFields(in Path nwbFilePath, in MetascriptValue as
         return false;
     return ReadOptionalI32Field(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalMediumPriorityField, inOutMediumPriority);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-type ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
-type MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
-type RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
-
-type ModelComponentCodec = TypedComponentAssetCodec<ModelComponentAsset>;
-type MeshComponentCodec = TypedComponentAssetCodec<MeshComponentAsset>;
-type RendererComponentCodec = TypedComponentAssetCodec<RendererComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,42 +129,36 @@ Expected<MeshComponentCookEntry> ParseMeshComponentCookMetadata(in Name virtualP
     return entry;
 }
 
-b8 ReadRendererOpticalVolumeCoincidence(in Path file, in MetascriptValue value, mut OpticalVolumeCoincidence output){
+Expected<OpticalVolumeCoincidence> ReadRendererOpticalVolumeCoincidence(in Path file, in MetascriptValue value){
     if(!value.hasField(s_RendererComponentOpticalVolumeCoincidenceField))
-        return true;
+        return OpticalVolumeCoincidence::Independent;
     const Expected<MetadataStringField> field = ReadMetadataStringField(file, value, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeCoincidenceField, true);
     if(!field.has_value())
-        return false;
+        return MakeUnexpected(field.error());
     if(field.value().text == s_OpticalVolumeCoincidenceIndependentText)
-        output = OpticalVolumeCoincidence::Independent;
-    else if(field.value().text == s_OpticalVolumeCoincidenceIdenticalMaterialText)
-        output = OpticalVolumeCoincidence::IdenticalMaterial;
-    else if(field.value().text == s_OpticalVolumeCoincidenceSharedGroupText)
-        output = OpticalVolumeCoincidence::SharedGroup;
-    else{
-        error("{} '{}': field '{}' {}", s_RendererComponentDiagnosticPrefix, file, s_RendererComponentOpticalVolumeCoincidenceField, s_RendererOpticalVolumeCoincidenceChoices);
-        return false;
-    }
-    return true;
+        return OpticalVolumeCoincidence::Independent;
+    if(field.value().text == s_OpticalVolumeCoincidenceIdenticalMaterialText)
+        return OpticalVolumeCoincidence::IdenticalMaterial;
+    if(field.value().text == s_OpticalVolumeCoincidenceSharedGroupText)
+        return OpticalVolumeCoincidence::SharedGroup;
+    error("{} '{}': field '{}' {}", s_RendererComponentDiagnosticPrefix, file, s_RendererComponentOpticalVolumeCoincidenceField, s_RendererOpticalVolumeCoincidenceChoices);
+    return MakeUnexpected(Failure());
 }
 
-b8 ReadRendererOpticalBoundaryMode(in Path file, in MetascriptValue value, mut OpticalBoundaryMode output){
+Expected<OpticalBoundaryMode> ReadRendererOpticalBoundaryMode(in Path file, in MetascriptValue value){
     if(!value.hasField(s_RendererComponentOpticalBoundaryModeField))
-        return true;
+        return OpticalBoundaryMode::Unspecified;
     const Expected<MetadataStringField> field = ReadMetadataStringField(file, value, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalBoundaryModeField, true);
     if(!field.has_value())
-        return false;
+        return MakeUnexpected(field.error());
     if(field.value().text == s_OpticalBoundaryModeUnspecifiedText)
-        output = OpticalBoundaryMode::Unspecified;
-    else if(field.value().text == s_OpticalBoundaryModeClosedNestedText)
-        output = OpticalBoundaryMode::ClosedNested;
-    else if(field.value().text == s_OpticalBoundaryModeClosedPriorityText)
-        output = OpticalBoundaryMode::ClosedPriority;
-    else{
-        error("{} '{}': field '{}' {}", s_RendererComponentDiagnosticPrefix, file, s_RendererComponentOpticalBoundaryModeField, s_RendererOpticalBoundaryModeChoices);
-        return false;
-    }
-    return true;
+        return OpticalBoundaryMode::Unspecified;
+    if(field.value().text == s_OpticalBoundaryModeClosedNestedText)
+        return OpticalBoundaryMode::ClosedNested;
+    if(field.value().text == s_OpticalBoundaryModeClosedPriorityText)
+        return OpticalBoundaryMode::ClosedPriority;
+    error("{} '{}': field '{}' {}", s_RendererComponentDiagnosticPrefix, file, s_RendererComponentOpticalBoundaryModeField, s_RendererOpticalBoundaryModeChoices);
+    return MakeUnexpected(Failure());
 }
 
 Expected<RendererComponentCookEntry> ParseRendererComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
@@ -181,11 +174,21 @@ Expected<RendererComponentCookEntry> ParseRendererComponentCookMetadata(in Name 
     if(!material.has_value())
         return MakeUnexpected(Failure());
     entry.component.material = material.value();
-    if(!ReadOptionalRendererVisibleField(file, asset, entry.component.visible)
-        || !ReadRendererOpticalVolumeCoincidence(file, asset, entry.component.opticalVolumeCoincidence)
-        || !ReadOptionalRendererOpticalVolumeGroupField(file, asset, entry.component.opticalVolumeGroup)
-        || !ReadRendererOpticalBoundaryMode(file, asset, entry.component.opticalBoundaryMode)
-        || !ReadOptionalRendererPriorityFields(file, asset, entry.component.opticalVolumePriority, entry.component.opticalMediumPriority))
+    if(!ReadOptionalRendererVisibleField(file, asset, entry.component.visible))
+        return MakeUnexpected(Failure());
+    const Expected<OpticalVolumeCoincidence> coincidence = ReadRendererOpticalVolumeCoincidence(file, asset);
+    if(!coincidence.has_value())
+        return MakeUnexpected(coincidence.error());
+    entry.component.opticalVolumeCoincidence = coincidence.value();
+    const Expected<Name> opticalVolumeGroup = ReadOptionalRendererOpticalVolumeGroupField(file, asset);
+    if(!opticalVolumeGroup.has_value())
+        return MakeUnexpected(opticalVolumeGroup.error());
+    entry.component.opticalVolumeGroup = opticalVolumeGroup.value();
+    const Expected<OpticalBoundaryMode> boundaryMode = ReadRendererOpticalBoundaryMode(file, asset);
+    if(!boundaryMode.has_value())
+        return MakeUnexpected(boundaryMode.error());
+    entry.component.opticalBoundaryMode = boundaryMode.value();
+    if(!ReadOptionalRendererPriorityFields(file, asset, entry.component.opticalVolumePriority, entry.component.opticalMediumPriority))
         return MakeUnexpected(Failure());
     if(!BuildComponentAssetFromEntry<RendererComponentAsset, RendererComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());

@@ -90,19 +90,28 @@ b8 RendererMeshSystem::createMeshRenderBindings(mut MeshResources mesh){
             error("RendererSystem: runtime local bounds require a complete raw GPU buffer");
             return false;
         }
-        if(!AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.deref()), mesh.runtimeLocalBoundsHeapHandle)){
+        const Expected<GpuDescriptorHandle> localBoundsHandle = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.deref()));
+        if(!localBoundsHandle.has_value()){
             this.releaseMeshGeometryHeapHandles(mesh);
             error("RendererSystem: failed to register runtime local bounds");
             return false;
         }
+        mesh.runtimeLocalBoundsHeapHandle = localBoundsHandle.value();
     }
 
     if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer.valid() && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
         mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
         in BufferDesc desc = mesh.runtimeMeshletLocalBoundsBuffer.deref().getCreationDescription();
         const u64 requiredBytes = RequiredRuntimeMeshletBoundsByteSize(mesh.meshletCount, s_RuntimeMeshBoundsByteSize);
-        if(!(HasCompleteMeshRawBoundsBuffer(heap.isInitialized(), desc.byteSize, requiredBytes, desc.canHaveRawViews)
-            && AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.deref()), mesh.runtimeMeshletLocalBoundsHeapHandle)))
+        b8 registered = false;
+        if(HasCompleteMeshRawBoundsBuffer(heap.isInitialized(), desc.byteSize, requiredBytes, desc.canHaveRawViews)){
+            const Expected<GpuDescriptorHandle> meshletBoundsHandle = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.deref()));
+            if(meshletBoundsHandle.has_value()){
+                mesh.runtimeMeshletLocalBoundsHeapHandle = meshletBoundsHandle.value();
+                registered = true;
+            }
+        }
+        if(!registered)
             warning("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows", mesh.meshName.resolvedText());
     }
 
@@ -149,8 +158,12 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(mut MeshResources mesh){
             return;
         }
 
-        if(!AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferSrv(0u, buffer.deref()), acquired[bindingSlot]))
+        const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferSrv(0u, buffer.deref()));
+        if(!descriptor.has_value()){
             registered = false;
+            return;
+        }
+        acquired[bindingSlot] = descriptor.value();
     });
 
     if(!registered)
@@ -221,11 +234,13 @@ b8 MeshEmulationResources::prepare(mut GraphicsRuntime graphics, mut MeshResourc
         error("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap");
         return false;
     }
-    if(AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, mesh.emulationVertexBuffer.deref()), mesh.emulationVertexHeapHandle))
-        return true;
-
-    error("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'", mesh.meshName.resolvedText());
-    return false;
+    const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, mesh.emulationVertexBuffer.deref()));
+    if(!descriptor.has_value()){
+        error("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'", mesh.meshName.resolvedText());
+        return false;
+    }
+    mesh.emulationVertexHeapHandle = descriptor.value();
+    return true;
 }
 
 b8 MeshSoftwareBvhBindings::ensure(mut GraphicsRuntime graphics, mut MeshResources mesh)const{

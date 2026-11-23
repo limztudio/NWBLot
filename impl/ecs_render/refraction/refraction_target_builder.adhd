@@ -10,6 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_RefractionDepthTargetName = "engine/avboit/refraction_depth";
+const Name s_RefractionResolveTargetName = "engine/avboit/refraction_resolve";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [modular]
 class RefractionTargetBuilder : NoCopy{
     private mut GraphicsRuntime m_graphics;
@@ -31,9 +38,6 @@ class RefractionTargetBuilder : NoCopy{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const Name s_RefractionDepthTargetName = "engine/avboit/refraction_depth";
-const Name s_RefractionResolveTargetName = "engine/avboit/refraction_resolve";
 
 u64 ComputeRefractionTileListByteSize(in u64 tileCount){
     return tileCount * 4u;

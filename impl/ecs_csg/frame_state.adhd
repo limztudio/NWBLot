@@ -55,64 +55,6 @@ class CsgPrecomputedCutter{
     public b8 valid = false;
 }
 
-CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterComponent cutter, in CsgShapeTypeInfo shapeType){
-    CsgPrecomputedCutter out;
-    Span<u8> resolved = cutter.parameterBytes;
-    if(cutter.parameterBytes.empty())
-        resolved = shapeType.desc.defaultParameterBytes;
-    if(resolved.size() != cast<usize>(shapeType.desc.parameterByteSize) || resolved.size() > s_CsgShapeInlineParameterMaxBytes)
-        return out;
-
-    out.entity = entity;
-    out.shapeType = cutter.shapeType;
-    out.shapeTypeId = shapeType.id;
-    out.shapeName = shapeType.desc.name;
-    out.shaderModule = shapeType.desc.shaderModule;
-    out.parameterByteSize = shapeType.desc.parameterByteSize;
-    for(usize byteIndex = 0u; byteIndex < resolved.size(); ++byteIndex)
-        out.parameterBytes.push_back(resolved[byteIndex]);
-    out.worldToShape = cutter.worldToShape;
-    out.shapeToWorld = cutter.shapeToWorld;
-    out.hasShaderModule = shapeType.desc.shaderModule != s_NameNone;
-    out.valid = true;
-    if(shapeType.desc.boundsCallback.has_value()){
-        const Span<u8> paramSpan(out.parameterBytes);
-        const auto bounds = shapeType.desc.boundsCallback.value()(MatrixSingle(cutter.shapeToWorld), paramSpan);
-        if(bounds.has_value() && (!bounds.value().finiteBounds || AabbValid(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))){
-            out.boundsMin = bounds.value().minBounds;
-            out.boundsMax = bounds.value().maxBounds;
-            out.finiteBounds = bounds.value().finiteBounds;
-            out.boundsResolved = true;
-        }
-    }
-    return out;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(is_standard_layout<CsgReceiverComponent>(), "CsgReceiverComponent must stay layout-stable for ECS storage");
-static_assert(is_trivially_copyable<CsgReceiverComponent>(), "CsgReceiverComponent must stay cheap to move in dense ECS storage");
-static_assert(is_standard_layout<StaticCsgMeshComponent>(), "StaticCsgMeshComponent must stay layout-stable for ECS storage");
-static_assert(is_trivially_copyable<StaticCsgMeshComponent>(), "StaticCsgMeshComponent must stay cheap to move in dense ECS storage");
-static_assert(is_standard_layout<SkinnedCsgMeshComponent>(), "SkinnedCsgMeshComponent must stay layout-stable for ECS storage");
-static_assert(is_trivially_copyable<SkinnedCsgMeshComponent>(), "SkinnedCsgMeshComponent must stay cheap to move in dense ECS storage");
-static_assert(is_standard_layout<CsgReceiverDrawState>(), "CsgReceiverDrawState must stay layout-stable for frame handoff");
-static_assert(is_trivially_copyable<CsgReceiverDrawState>(), "CsgReceiverDrawState must stay cheap to pass by value");
-static_assert(is_standard_layout<CsgFrameState>(), "CsgFrameState must stay layout-stable for frame handoff");
-static_assert(is_trivially_copyable<CsgFrameState>(), "CsgFrameState must stay cheap to pass by value");
-static_assert(is_standard_layout<CsgFrameCutterRange>(), "CsgFrameCutterRange must stay layout-stable for frame handoff");
-static_assert(is_trivially_copyable<CsgFrameCutterRange>(), "CsgFrameCutterRange must stay cheap to pass by value");
-static_assert(is_standard_layout<CsgFrameCutterRangeEntry>(), "CsgFrameCutterRangeEntry must stay layout-stable for frame handoff");
-static_assert(is_trivially_copyable<CsgFrameCutterRangeEntry>(), "CsgFrameCutterRangeEntry must stay cheap to pass by value");
-static_assert(is_standard_layout<CsgFrameBuildDesc>(), "CsgFrameBuildDesc must stay layout-stable");
-static_assert(is_trivially_copyable<CsgFrameBuildDesc>(), "CsgFrameBuildDesc must stay cheap to pass by value");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CsgFrameReceiverLookup : NoCopy{
     private mut World m_world;
     private HashMap<Name, CsgFrameCutterRangeEntry> m_cutterRanges;
@@ -250,9 +192,59 @@ class CsgFrameReceiverLookup : NoCopy{
     }
 }
 
+static_assert(is_standard_layout<CsgReceiverComponent>(), "CsgReceiverComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<CsgReceiverComponent>(), "CsgReceiverComponent must stay cheap to move in dense ECS storage");
+static_assert(is_standard_layout<StaticCsgMeshComponent>(), "StaticCsgMeshComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<StaticCsgMeshComponent>(), "StaticCsgMeshComponent must stay cheap to move in dense ECS storage");
+static_assert(is_standard_layout<SkinnedCsgMeshComponent>(), "SkinnedCsgMeshComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<SkinnedCsgMeshComponent>(), "SkinnedCsgMeshComponent must stay cheap to move in dense ECS storage");
+static_assert(is_standard_layout<CsgReceiverDrawState>(), "CsgReceiverDrawState must stay layout-stable for frame handoff");
+static_assert(is_trivially_copyable<CsgReceiverDrawState>(), "CsgReceiverDrawState must stay cheap to pass by value");
+static_assert(is_standard_layout<CsgFrameState>(), "CsgFrameState must stay layout-stable for frame handoff");
+static_assert(is_trivially_copyable<CsgFrameState>(), "CsgFrameState must stay cheap to pass by value");
+static_assert(is_standard_layout<CsgFrameCutterRange>(), "CsgFrameCutterRange must stay layout-stable for frame handoff");
+static_assert(is_trivially_copyable<CsgFrameCutterRange>(), "CsgFrameCutterRange must stay cheap to pass by value");
+static_assert(is_standard_layout<CsgFrameCutterRangeEntry>(), "CsgFrameCutterRangeEntry must stay layout-stable for frame handoff");
+static_assert(is_trivially_copyable<CsgFrameCutterRangeEntry>(), "CsgFrameCutterRangeEntry must stay cheap to pass by value");
+static_assert(is_standard_layout<CsgFrameBuildDesc>(), "CsgFrameBuildDesc must stay layout-stable");
+static_assert(is_trivially_copyable<CsgFrameBuildDesc>(), "CsgFrameBuildDesc must stay cheap to pass by value");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterComponent cutter, in CsgShapeTypeInfo shapeType){
+    CsgPrecomputedCutter out;
+    Span<u8> resolved = cutter.parameterBytes;
+    if(cutter.parameterBytes.empty())
+        resolved = shapeType.desc.defaultParameterBytes;
+    if(resolved.size() != cast<usize>(shapeType.desc.parameterByteSize) || resolved.size() > s_CsgShapeInlineParameterMaxBytes)
+        return out;
+
+    out.entity = entity;
+    out.shapeType = cutter.shapeType;
+    out.shapeTypeId = shapeType.id;
+    out.shapeName = shapeType.desc.name;
+    out.shaderModule = shapeType.desc.shaderModule;
+    out.parameterByteSize = shapeType.desc.parameterByteSize;
+    for(usize byteIndex = 0u; byteIndex < resolved.size(); ++byteIndex)
+        out.parameterBytes.push_back(resolved[byteIndex]);
+    out.worldToShape = cutter.worldToShape;
+    out.shapeToWorld = cutter.shapeToWorld;
+    out.hasShaderModule = shapeType.desc.shaderModule != s_NameNone;
+    out.valid = true;
+    if(shapeType.desc.boundsCallback.has_value()){
+        const Span<u8> paramSpan(out.parameterBytes);
+        const auto bounds = shapeType.desc.boundsCallback.value()(MatrixSingle(cutter.shapeToWorld), paramSpan);
+        if(bounds.has_value() && (!bounds.value().finiteBounds || AabbValid(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))){
+            out.boundsMin = bounds.value().minBounds;
+            out.boundsMax = bounds.value().maxBounds;
+            out.finiteBounds = bounds.value().finiteBounds;
+            out.boundsResolved = true;
+        }
+    }
+    return out;
+}
 
 void GatherCsgReceiverState<ReceiverT>(
     mut World world,

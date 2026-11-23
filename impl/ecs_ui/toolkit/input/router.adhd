@@ -19,80 +19,6 @@
 
 type InputVector<T> = Vector<T>;
 
-b8 IsCommandInputEventType(in InputEventType type){
-    return type == InputEventType::CommandDown || type == InputEventType::CommandUp;
-}
-
-void ApplyRouterFocusLostEvent(
-    in b8 hasActivePopup,
-    in WidgetId capture,
-    in b8 primaryConsumed,
-    in b8 secondaryConsumed,
-    in b8 wantsCommands,
-    mut u64 inOutFocusLossGeneration,
-    mut b8 outWindowFocused,
-    mut InputRoutingResult inOutResult
-){
-    AdvanceNonWrappingRevision(inOutFocusLossGeneration);
-    outWindowFocused = false;
-    if(hasActivePopup || capture.valid() || primaryConsumed || secondaryConsumed)
-        inOutResult.pointerConsumed = true;
-    if(wantsCommands)
-        inOutResult.commandConsumed = true;
-}
-
-void FinalizeRouterProcessResult(
-    in b8 wantsPointer,
-    in b8 wantsCommands,
-    in WidgetId hover,
-    in WidgetId focus,
-    in WidgetId capture,
-    mut InputRoutingResult inOutResult
-){
-    inOutResult.wantsPointer = wantsPointer;
-    inOutResult.wantsCommands = wantsCommands;
-    inOutResult.hover = hover;
-    inOutResult.focus = focus;
-    inOutResult.capture = capture;
-}
-
-b8 MatchesInputDeviceSource(in InputSource source, in u64 device){
-    return source.valid() && source.device == device;
-}
-
-b8 WouldConsumeIdlePointer(in b8 hasActivePopup, in WidgetId capture, in WidgetId hoveredTarget){
-    return hasActivePopup || capture.valid() || hoveredTarget.valid();
-}
-
-InputSource MakeKeyboardInputSource(in i32 key){
-    return InputSource(0u, cast<u64>(key) + 1u);
-}
-
-b8 CanCheckPointerSubmitPressedTarget(in b8 primaryDown, in b8 submitArmed, in WidgetId capture, in WidgetId targetId){
-    return primaryDown && submitArmed && capture == targetId;
-}
-
-void AccumulateTerminatedPointerSourceResult(
-    in b8 ownsActivate,
-    in b8 ownsContextMenu,
-    in InputSource activeSource,
-    in InputSource eventSource,
-    mut InputRoutingResult inOutResult
-){
-    if(ownsActivate || ownsContextMenu)
-        inOutResult.pointerConsumed = true;
-    if(activeSource == eventSource)
-        inOutResult.pointerRouted = true;
-}
-
-b8 IsSecondaryButtonInputEventType(in InputEventType type){
-    return type == InputEventType::SecondaryDown || type == InputEventType::SecondaryUp;
-}
-
-b8 IsPointerButtonReleaseEventType(in InputEventType type){
-    return type == InputEventType::PrimaryUp || type == InputEventType::SecondaryUp;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -723,6 +649,84 @@ class InputRouter : NoCopy{
             this.updateHover();
         }
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsCommandInputEventType(in InputEventType type){
+    return type == InputEventType::CommandDown || type == InputEventType::CommandUp;
+}
+
+void ApplyRouterFocusLostEvent(
+    in b8 hasActivePopup,
+    in WidgetId capture,
+    in b8 primaryConsumed,
+    in b8 secondaryConsumed,
+    in b8 wantsCommands,
+    mut u64 inOutFocusLossGeneration,
+    mut b8 outWindowFocused,
+    mut InputRoutingResult inOutResult
+){
+    AdvanceNonWrappingRevision(inOutFocusLossGeneration);
+    outWindowFocused = false;
+    if(hasActivePopup || capture.valid() || primaryConsumed || secondaryConsumed)
+        inOutResult.pointerConsumed = true;
+    if(wantsCommands)
+        inOutResult.commandConsumed = true;
+}
+
+void FinalizeRouterProcessResult(
+    in b8 wantsPointer,
+    in b8 wantsCommands,
+    in WidgetId hover,
+    in WidgetId focus,
+    in WidgetId capture,
+    mut InputRoutingResult inOutResult
+){
+    inOutResult.wantsPointer = wantsPointer;
+    inOutResult.wantsCommands = wantsCommands;
+    inOutResult.hover = hover;
+    inOutResult.focus = focus;
+    inOutResult.capture = capture;
+}
+
+b8 MatchesInputDeviceSource(in InputSource source, in u64 device){
+    return source.valid() && source.device == device;
+}
+
+b8 WouldConsumeIdlePointer(in b8 hasActivePopup, in WidgetId capture, in WidgetId hoveredTarget){
+    return hasActivePopup || capture.valid() || hoveredTarget.valid();
+}
+
+InputSource MakeKeyboardInputSource(in i32 key){
+    return InputSource(0u, cast<u64>(key) + 1u);
+}
+
+b8 CanCheckPointerSubmitPressedTarget(in b8 primaryDown, in b8 submitArmed, in WidgetId capture, in WidgetId targetId){
+    return primaryDown && submitArmed && capture == targetId;
+}
+
+void AccumulateTerminatedPointerSourceResult(
+    in b8 ownsActivate,
+    in b8 ownsContextMenu,
+    in InputSource activeSource,
+    in InputSource eventSource,
+    mut InputRoutingResult inOutResult
+){
+    if(ownsActivate || ownsContextMenu)
+        inOutResult.pointerConsumed = true;
+    if(activeSource == eventSource)
+        inOutResult.pointerRouted = true;
+}
+
+b8 IsSecondaryButtonInputEventType(in InputEventType type){
+    return type == InputEventType::SecondaryDown || type == InputEventType::SecondaryUp;
+}
+
+b8 IsPointerButtonReleaseEventType(in InputEventType type){
+    return type == InputEventType::PrimaryUp || type == InputEventType::SecondaryUp;
 }
 
 

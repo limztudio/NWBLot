@@ -41,7 +41,10 @@ template<typename Exception>
 template<typename Exception, typename Action>
 [[nodiscard]] ::testing::AssertionResult ThrowsException(Action&& action){
     try{
-        action();
+        if constexpr(IsSame_V<decltype(action()), void>)
+            action();
+        else
+            return ::testing::AssertionFailure() << "did not throw; returned " << ::testing::PrintToString(action());
     }
     catch(const Exception&){
         return ::testing::AssertionSuccess();
@@ -71,7 +74,7 @@ public:
 private:
     Core::Alloc::GlobalArena arena{Name("tests/fixture")};
     Fixture value = [&]() -> Fixture{
-        if constexpr(std::is_constructible_v<Fixture, ::ArenaBase&>)
+        if constexpr(IsConstructible_V<Fixture, ::ArenaBase&>)
             return Fixture(arena);
         else
             return Fixture();
@@ -79,11 +82,11 @@ private:
 };
 
 template<typename Fixture>
-using GoogleTestHost = std::conditional_t<std::is_base_of_v<::testing::Test, Fixture>, Fixture, HostedTestFixture<Fixture>>;
+using GoogleTestHost = Conditional_T<IsBaseOf_V<::testing::Test, Fixture>, Fixture, HostedTestFixture<Fixture>>;
 
 template<typename Fixture>
 [[nodiscard]] Fixture& TestFixtureValue(GoogleTestHost<Fixture>& host){
-    if constexpr(std::is_base_of_v<::testing::Test, Fixture>)
+    if constexpr(IsBaseOf_V<::testing::Test, Fixture>)
         return host;
     else
         return host.fixture();
@@ -133,10 +136,10 @@ NWB_END
 
 #define NWB_TEST_REQUIRE_NOTHROW(...) static_assert(noexcept(__VA_ARGS__))
 #define NWB_TEST_REQUIRE_THROWING(...) static_assert(!noexcept(__VA_ARGS__))
-#define NWB_TEST_EXPECT_ALLOCATION_SIZE_EXCEPTION(...) EXPECT_THROW((__VA_ARGS__), ::AllocationSizeException)
-#define NWB_TEST_EXPECT_RUNTIME_EXCEPTION(...) EXPECT_THROW((__VA_ARGS__), ::RuntimeException)
-#define NWB_TEST_EXPECT_UNSIGNED_EXCEPTION(...) EXPECT_THROW((__VA_ARGS__), u32)
-#define NWB_TEST_EXPECT_SIGNED_EXCEPTION(...) EXPECT_THROW((__VA_ARGS__), i32)
+#define NWB_TEST_EXPECT_ALLOCATION_SIZE_EXCEPTION(...) EXPECT_TRUE(::NWB::Tests::ThrowsException<::AllocationSizeException>([&]() -> decltype(auto){ return (__VA_ARGS__); }))
+#define NWB_TEST_EXPECT_RUNTIME_EXCEPTION(...) EXPECT_TRUE(::NWB::Tests::ThrowsException<::RuntimeException>([&]() -> decltype(auto){ return (__VA_ARGS__); }))
+#define NWB_TEST_EXPECT_UNSIGNED_EXCEPTION(...) EXPECT_TRUE(::NWB::Tests::ThrowsException<u32>([&]() -> decltype(auto){ return (__VA_ARGS__); }))
+#define NWB_TEST_EXPECT_SIGNED_EXCEPTION(...) EXPECT_TRUE(::NWB::Tests::ThrowsException<i32>([&]() -> decltype(auto){ return (__VA_ARGS__); }))
 
 #define NWB_GTEST_SKIP_REASON(reason) GTEST_SKIP() << (reason)
 

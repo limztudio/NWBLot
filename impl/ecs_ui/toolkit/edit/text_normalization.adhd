@@ -96,7 +96,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     return ValidateGraphemeText(text, true);
 }
 
-Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
+[cpp_unwind] Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
@@ -110,8 +110,8 @@ Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source
         normalizedBytes += step.value().outputBytes;
         offset += step.value().sourceBytes;
     }
-    outCandidate.clear();
     outCandidate.reserve(normalizedBytes);
+    outCandidate.clear();
     offset = 0u;
     while(offset < source.size()){
         const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
@@ -125,7 +125,7 @@ Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source
     return normalizedBytes;
 }
 
-Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
+[cpp_unwind] Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
@@ -139,8 +139,8 @@ Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source,
         normalizedBytes += step.value().outputBytes;
         offset += step.value().sourceBytes;
     }
-    outCandidate.clear();
     outCandidate.reserve(normalizedBytes);
+    outCandidate.clear();
     offset = 0u;
     while(offset < source.size()){
         const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
@@ -159,31 +159,31 @@ Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source,
     return normalizedBytes;
 }
 
-void BuildReplacedEditString(in StringView currentText, in usize begin, in usize end, in StringView replacement, mut String outCandidate){
+[cpp_unwind] void BuildReplacedEditString(in StringView currentText, in usize begin, in usize end, in StringView replacement, mut String outCandidate){
     const usize retainedBytes = currentText.size() - (end - begin);
-    outCandidate.clear();
     outCandidate.reserve(retainedBytes + replacement.size());
+    outCandidate.clear();
     outCandidate.append(currentText.substr(0u, begin));
     if(!replacement.empty())
         outCandidate.append(replacement);
     outCandidate.append(currentText.substr(end, currentText.size() - end));
 }
 
-void BuildErasedAroundSelectionEditString(in StringView currentText, in usize beforeBytes, in usize afterBytes, in usize start, in usize end, mut String outCandidate){
+[cpp_unwind] void BuildErasedAroundSelectionEditString(in StringView currentText, in usize beforeBytes, in usize afterBytes, in usize start, in usize end, mut String outCandidate){
     const usize prefixEnd = start - beforeBytes;
     const usize suffixStart = end + afterBytes;
-    outCandidate.clear();
     outCandidate.reserve(currentText.size() - beforeBytes - afterBytes);
+    outCandidate.clear();
     outCandidate.append(currentText.substr(0u, prefixEnd));
     outCandidate.append(currentText.substr(start, end - start));
     outCandidate.append(currentText.substr(suffixStart, currentText.size() - suffixStart));
 }
 
-b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vector<usize> outBoundaries){
+[cpp_unwind] b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vector<usize> outBoundaries){
     if(!ValidateGraphemeText(text, singleLine) || text.size() == usize.max)
         return false;
-    outBoundaries.clear();
     outBoundaries.reserve(text.size() + 1u);
+    outBoundaries.clear();
     GraphemeBoundaryState state;
     usize offset = 0u;
     while(offset < text.size()){

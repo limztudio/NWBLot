@@ -12,50 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeserializeMeshBinaryPayload(
-    in Span<u8> binary,
-    mut Vector<f32x3u> outPositions,
-    mut Vector<f16x4u> outNormals,
-    mut Vector<f16x4u> outTangents,
-    mut Vector<f32x2u> outUv0,
-    mut Vector<f16x4u> outColors,
-    mut Vector<MeshletDesc> outMeshlets,
-    mut Vector<MeshletBounds> outMeshletBounds,
-    mut Vector<u8> outMeshletPositionRefDeltas,
-    mut Vector<u8> outMeshletAttributeRefDeltas,
-    mut Vector<MeshletLocalVertexRef> outMeshletLocalVertexRefs,
-    mut Vector<u8> outMeshletPrimitiveIndices,
-    mut Vector<u32> outSolidTriangleWords
-){
-    MeshBinaryCodec codec;
-    return codec.deserialize(
-        binary,
-        outPositions,
-        outNormals,
-        outTangents,
-        outUv0,
-        outColors,
-        outMeshlets,
-        outMeshletBounds,
-        outMeshletPositionRefDeltas,
-        outMeshletAttributeRefDeltas,
-        outMeshletLocalVertexRefs,
-        outMeshletPrimitiveIndices,
-        outSolidTriangleWords
-    );
-}
-
-b8 DeserializeSkinBinaryPayload(
-    in Span<u8> binary,
-    mut Name outMesh,
-    mut Name outSkeleton,
-    mut Vector<SkinInfluence4> outInfluences,
-    mut Vector<SkeletonJointMatrix> outInverseBindMatrices
-){
-    SkinBinaryCodec codec;
-    return codec.deserialize(binary, outMesh, outSkeleton, outInfluences, outInverseBindMatrices);
-}
-
 b8 Mesh::validatePayload()const{
     return ValidateMeshAssetPayload(
         this.virtualPath(),
@@ -74,12 +30,13 @@ b8 Mesh::validatePayload()const{
     );
 }
 
+[cpp_unwind]
 b8 Mesh::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath("Mesh::loadBinary"))
         return false;
 
     Mesh candidate(this.virtualPath());
-    if(!DeserializeMeshBinaryPayload(
+    if(!MeshBinaryCodec().deserialize(
         binary,
         candidate.m_positionStream,
         candidate.m_normalStream,
@@ -102,14 +59,14 @@ b8 Mesh::loadBinary(in Span<u8> binary){
     return true;
 }
 
+[cpp_unwind]
 b8 Skin::loadBinary(in Span<u8> binary){
     Skin candidate(this.virtualPath());
-    Name meshPath;
-    Name skeletonPath;
-    if(!DeserializeSkinBinaryPayload(binary, meshPath, skeletonPath, candidate.m_influences, candidate.m_inverseBindMatrices))
+    const Expected<SkinBinaryReferences> references = SkinBinaryCodec().deserialize(binary, candidate.m_influences, candidate.m_inverseBindMatrices);
+    if(!references.has_value())
         return false;
-    candidate.setMesh(AssetRef<Mesh>(meshPath));
-    candidate.setSkeleton(AssetRef<Skeleton>(skeletonPath));
+    candidate.setMesh(AssetRef<Mesh>(Name(references.value().mesh)));
+    candidate.setSkeleton(AssetRef<Skeleton>(Name(references.value().skeleton)));
     if(!candidate.validatePayload())
         return false;
     this = candidate;

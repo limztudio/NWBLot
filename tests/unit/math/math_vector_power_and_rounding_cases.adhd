@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Array<i32, 2u> s_PowerInitialFlags = Array<i32, 2u>(0, s_FeInexact);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [layout(16)]
 class PowerObservation{
     public u32x4 bits = u32x4(0u, 0u, 0u, 0u);
@@ -52,7 +58,6 @@ class MxcsrEnvironmentGuard{
     }
 }
 
-const Array<i32, 2u> s_PowerInitialFlags = Array<i32, 2u>(0, s_FeInexact);
 
 VectorSingle ScalarPower(in VectorSingle x, in VectorSingle y){
     return VectorSingle(Pow(x.x, y.x), Pow(x.y, y.y), Pow(x.z, y.z), Pow(x.w, y.w));

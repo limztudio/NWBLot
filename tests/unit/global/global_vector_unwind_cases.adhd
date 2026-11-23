@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_vector_unwind.h>"), cpp_name("::NWB::Tests::GlobalCases::CopyVectorPropagatesAllocatorFailure")]
+extern b8 CopyVectorPropagatesAllocatorFailure();
+
+[cpp_header("<tests/unit/global/global_vector_unwind.h>"), cpp_name("::NWB::Tests::GlobalCases::CopyVectorPropagatesAllocationException")]
+extern b8 CopyVectorPropagatesAllocationException();
+
+void VerifyGlobalVector_CopyPropagatesAllocatorFailure(){
+    EXPECT_TRUE(CopyVectorPropagatesAllocatorFailure());
+}
+
+void VerifyGlobalVector_CopyPropagatesAllocationException(){
+    EXPECT_TRUE(CopyVectorPropagatesAllocationException());
+}
+
+NWB_ADHD_GTEST(GlobalVector, CopyPropagatesAllocatorFailure, VerifyGlobalVector_CopyPropagatesAllocatorFailure)
+NWB_ADHD_GTEST(GlobalVector, CopyPropagatesAllocationException, VerifyGlobalVector_CopyPropagatesAllocationException)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

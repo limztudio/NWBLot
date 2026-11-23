@@ -17,6 +17,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES")]
+extern const u32 s_IntegrationProbeActiveSlicesIndex;
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE")]
+extern const u32 s_IntegrationProbeExtinctionScaleIndex;
+[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_COUNTER_OFFSET")]
+extern const u32 s_RefractionProbeShaderCounterOffset;
+[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS")]
+extern const u32 s_RefractionProbeShaderGuardWords;
+[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS")]
+extern const u32 s_RefractionProbeShaderHeaderWords;
+
 const u32 s_AvboitIntegrationProbeWidth = 7u;
 const u32 s_AvboitIntegrationProbeHeight = 3u;
 const u32 s_AvboitIntegrationProbePixelCount = s_AvboitIntegrationProbeWidth * s_AvboitIntegrationProbeHeight;
@@ -27,7 +38,6 @@ const u32 s_AvboitIntegrationProbeWordCount = 5u * s_AvboitIntegrationProbePixel
 const u32 s_AvboitIntegrationProbePhaseCount = 5u;
 const u32 s_AvboitIntegrationProbeFixedScale = 16u;
 const u32 s_AvboitOverflowInvalid = 0xffffffffu;
-
 const u32 s_RefractionTileProbeSentinel = 0xa573d91bu;
 const u32 s_RefractionTileProbePhaseCount = 6u;
 const u32 s_RefractionTileProbeGuardWords = 16u;
@@ -38,6 +48,9 @@ const u32 s_RefractionTileProbePixelCount = s_RefractionTileProbeWidth * s_Refra
 const u32 s_RefractionTileProbeQueueWords = s_RefractionTileProbeTileCount + s_RefractionTileProbeGuardWords;
 const u32 s_RefractionTileProbeVisitWords = s_RefractionTileProbeHeaderWords + s_RefractionTileProbeTileCount + s_RefractionTileProbePixelCount + s_RefractionTileProbeGuardWords;
 const u32 s_RefractionTileProbeReadbackWords = s_RefractionTileProbeArgumentWords + s_RefractionTileProbeQueueWords + s_RefractionTileProbeVisitWords;
+type IntegrationProbeExtinctionWords = Array<u32, s_AvboitIntegrationProbeWordCount>;
+type IntegrationProbePixelWords = Array<u32, s_AvboitIntegrationProbePixelCount>;
+type IntegrationProbeControlWords = Array<u32, s_AvboitProbeControlWordCount>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,92 +117,9 @@ class AvboitIntegrationPhaseState{
     }
 }
 
-b8 VerifyAvboitIntegrationSliceValues(
-    in AvboitIntegrationPhaseState state,
-    in u32 phase,
-    in u32 slice,
-    in Span<f32> observedPixels,
-    in Span<f32> expectedPixels,
-    mut Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed
-){
-    for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
-        const f32 expected = expectedPixels[pixel];
-        const f32 actual = observedPixels[pixel];
-        b8 mismatch = !IsFinite(actual);
-        if(!mismatch){
-            if(extinctionFixed[pixel] == 0u)
-                mismatch = actual != 1.0f;
-            else
-                mismatch = Abs(actual - expected) > Max(0.0000002f, expected * 0.002f);
-        }
-        if(mismatch){
-            error(
-                "AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"
-                , phase
-                , pixel
-                , slice
-                , expected
-                , actual
-            );
-            return false;
-        }
-        if(slice < state.activeSlices){
-            if(slice >= state.overflowSlices[pixel]){
-                extinctionFixed[pixel] = 16u * s_AvboitIntegrationProbeFixedScale;
-            }
-            else{
-                const u32 packed = state.words[(slice / 4u) * s_AvboitIntegrationProbePixelCount + pixel];
-                const u32 byteVal = (packed >> ((slice % 4u) * 8u)) & 255u;
-                extinctionFixed[pixel] = Min(extinctionFixed[pixel] + byteVal, 16u * s_AvboitIntegrationProbeFixedScale);
-            }
-        }
-    }
-    return true;
-}
-
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES")]
-extern const u32 s_IntegrationProbeActiveSlicesIndex;
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE")]
-extern const u32 s_IntegrationProbeExtinctionScaleIndex;
-[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_COUNTER_OFFSET")]
-extern const u32 s_RefractionProbeShaderCounterOffset;
-[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS")]
-extern const u32 s_RefractionProbeShaderGuardWords;
-[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS")]
-extern const u32 s_RefractionProbeShaderHeaderWords;
-static_assert(size_of<RefractionPushConstants>() == 11u * size_of<u32>());
-static_assert(s_RefractionTileProbeTileCount == 66049u && s_RefractionTileProbeTileCount > s_RefractionTileProbeMaxGroupCountX);
-static_assert(s_RefractionShaderTileArgumentBytes == 32u && s_RefractionProbeShaderCounterOffset == 12u && s_RefractionShaderDenseArgumentOffset == 16u);
-static_assert(s_RefractionProbeShaderGuardWords == s_RefractionTileProbeGuardWords && s_RefractionProbeShaderHeaderWords == s_RefractionTileProbeHeaderWords);
-
 class GpuProbeProgress{
     public StringView stage = "probe initialization";
 }
-
-[cpp_unwind]
-Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(
-    mut GpuTaskGraph graph,
-    in Name probeName,
-    in StringView label,
-    in Span<GpuTaskResourceUse> uses,
-    in TaskT payload,
-    mut GpuProbeProgress progress
-){
-    progress.stage = "task declaration";
-    GpuTaskDesc desc;
-    desc.setIdentity(probeName).setMarkerLabel(label).setResourceUses(uses);
-    TaskT recorded = payload;
-    const auto task = graph.addPayloadTask(desc, recorded);
-    if(task.has_value())
-        progress.stage = "scheduling or initial-state recording admission";
-    return task;
-}
-
-type IntegrationProbeExtinctionWords = Array<u32, s_AvboitIntegrationProbeWordCount>;
-
-type IntegrationProbePixelWords = Array<u32, s_AvboitIntegrationProbePixelCount>;
-
-type IntegrationProbeControlWords = Array<u32, s_AvboitProbeControlWordCount>;
 
 class AvboitIntegrationProbeTask{
     public BufferHandle extinction = BufferHandle();
@@ -253,40 +183,6 @@ class AvboitIntegrationProbeTask{
         this.progress.stage = "native close and submission";
         return true;
     }
-}
-
-[cpp_unwind]
-Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask payload, mut GpuTaskGraph graph){
-    const Name probeName = s_SmokeNameAvboitIntegrationProbe;
-    payload.progress.stage = "buffer imports";
-    const Array<ProbeBufferImport, 4u> buffers(
-        ProbeBufferImport(payload.extinction, "Integration probe extinction", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
-        ProbeBufferImport(payload.overflow, "Integration probe overflow", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
-        ProbeBufferImport(payload.control, "Integration probe control", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
-        ProbeBufferImport(payload.slots, "Integration probe heap slots", ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
-    );
-    Array<GpuTaskResourceUse, 6u> uses;
-    if(!ImportProbeBufferUses(graph, buffers, uses))
-        return MakeUnexpected(Failure());
-    payload.progress.stage = "volume and staging imports";
-    const ResourceStates initial = payload.volumeInitialState;
-    GpuGraphResourceDesc textureDesc;
-    textureDesc.setIdentity(probeName).setMarkerLabel("Integration probe transmittance volume").setType(GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(ResourceStates::CopyDest);
-    const auto volume = graph.importTexture(payload.volume, textureDesc);
-    GpuGraphResourceDesc stagingDesc;
-    stagingDesc.setIdentity(s_SmokeNameAvboitIntegrationReadback).setMarkerLabel("Integration probe staging writes").setType(GpuGraphResourceType::HazardDomain);
-    const auto readback = graph.importHazardDomain(stagingDesc);
-    if(!volume.has_value())
-        return MakeUnexpected(Failure());
-    uses[4u].resource = volume.value();
-    uses[4u].requiredState = ResourceStates::CopyDest;
-    uses[4u].access = GpuTaskResourceAccess::Write;
-    if(!readback.has_value())
-        return MakeUnexpected(Failure());
-    uses[5u].resource = readback.value();
-    uses[5u].requiredState = ResourceStates::Unknown;
-    uses[5u].access = GpuTaskResourceAccess::Write;
-    return DeclareTrackedProbeTask(graph, probeName, "AVBOIT sparse integration boundary probe", uses, payload, payload.progress);
 }
 
 class RefractionTileProbeTask{
@@ -428,6 +324,111 @@ class RefractionTileProbeTask{
     }
 }
 
+static_assert(size_of<RefractionPushConstants>() == 11u * size_of<u32>());
+static_assert(s_RefractionTileProbeTileCount == 66049u && s_RefractionTileProbeTileCount > s_RefractionTileProbeMaxGroupCountX);
+static_assert(s_RefractionShaderTileArgumentBytes == 32u && s_RefractionProbeShaderCounterOffset == 12u && s_RefractionShaderDenseArgumentOffset == 16u);
+static_assert(s_RefractionProbeShaderGuardWords == s_RefractionTileProbeGuardWords && s_RefractionProbeShaderHeaderWords == s_RefractionTileProbeHeaderWords);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 VerifyAvboitIntegrationSliceValues(
+    in AvboitIntegrationPhaseState state,
+    in u32 phase,
+    in u32 slice,
+    in Span<f32> observedPixels,
+    in Span<f32> expectedPixels,
+    mut Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed
+){
+    for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
+        const f32 expected = expectedPixels[pixel];
+        const f32 actual = observedPixels[pixel];
+        b8 mismatch = !IsFinite(actual);
+        if(!mismatch){
+            if(extinctionFixed[pixel] == 0u)
+                mismatch = actual != 1.0f;
+            else
+                mismatch = Abs(actual - expected) > Max(0.0000002f, expected * 0.002f);
+        }
+        if(mismatch){
+            error(
+                "AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"
+                , phase
+                , pixel
+                , slice
+                , expected
+                , actual
+            );
+            return false;
+        }
+        if(slice < state.activeSlices){
+            if(slice >= state.overflowSlices[pixel]){
+                extinctionFixed[pixel] = 16u * s_AvboitIntegrationProbeFixedScale;
+            }
+            else{
+                const u32 packed = state.words[(slice / 4u) * s_AvboitIntegrationProbePixelCount + pixel];
+                const u32 byteVal = (packed >> ((slice % 4u) * 8u)) & 255u;
+                extinctionFixed[pixel] = Min(extinctionFixed[pixel] + byteVal, 16u * s_AvboitIntegrationProbeFixedScale);
+            }
+        }
+    }
+    return true;
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(
+    mut GpuTaskGraph graph,
+    in Name probeName,
+    in StringView label,
+    in Span<GpuTaskResourceUse> uses,
+    in TaskT payload,
+    mut GpuProbeProgress progress
+){
+    progress.stage = "task declaration";
+    GpuTaskDesc desc;
+    desc.setIdentity(probeName).setMarkerLabel(label).setResourceUses(uses);
+    TaskT recorded = payload;
+    const auto task = graph.addPayloadTask(desc, recorded);
+    if(task.has_value())
+        progress.stage = "scheduling or initial-state recording admission";
+    return task;
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask payload, mut GpuTaskGraph graph){
+    const Name probeName = s_SmokeNameAvboitIntegrationProbe;
+    payload.progress.stage = "buffer imports";
+    const Array<ProbeBufferImport, 4u> buffers(
+        ProbeBufferImport(payload.extinction, "Integration probe extinction", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.overflow, "Integration probe overflow", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.control, "Integration probe control", ResourceStates::CopyDest, GpuTaskResourceAccess::ReadWrite),
+        ProbeBufferImport(payload.slots, "Integration probe heap slots", ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
+    );
+    Array<GpuTaskResourceUse, 6u> uses;
+    if(!ImportProbeBufferUses(graph, buffers, uses))
+        return MakeUnexpected(Failure());
+    payload.progress.stage = "volume and staging imports";
+    const ResourceStates initial = payload.volumeInitialState;
+    GpuGraphResourceDesc textureDesc;
+    textureDesc.setIdentity(probeName).setMarkerLabel("Integration probe transmittance volume").setType(GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(ResourceStates::CopyDest);
+    const auto volume = graph.importTexture(payload.volume, textureDesc);
+    GpuGraphResourceDesc stagingDesc;
+    stagingDesc.setIdentity(s_SmokeNameAvboitIntegrationReadback).setMarkerLabel("Integration probe staging writes").setType(GpuGraphResourceType::HazardDomain);
+    const auto readback = graph.importHazardDomain(stagingDesc);
+    if(!volume.has_value())
+        return MakeUnexpected(Failure());
+    uses[4u].resource = volume.value();
+    uses[4u].requiredState = ResourceStates::CopyDest;
+    uses[4u].access = GpuTaskResourceAccess::Write;
+    if(!readback.has_value())
+        return MakeUnexpected(Failure());
+    uses[5u].resource = readback.value();
+    uses[5u].requiredState = ResourceStates::Unknown;
+    uses[5u].access = GpuTaskResourceAccess::Write;
+    return DeclareTrackedProbeTask(graph, probeName, "AVBOIT sparse integration boundary probe", uses, payload, payload.progress);
+}
+
 [cpp_unwind]
 Expected<GpuTaskId> DeclareRefractionTileProbe(in RefractionTileProbeTask payload, mut GpuTaskGraph graph){
     const Name probeName = s_SmokeNameRefractionTileProbe;
@@ -501,10 +502,12 @@ b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut Proje
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     const Name probeName = s_SmokeNameAvboitIntegrationProbe;
     const auto transparent = sceneSubsystems.findSubsystem<TransparentSubsystem>();
-    ComputePipelineHandle pipeline;
-    if(!transparent.has_value() || !transparent.value().avboitIntegrateCs.valid()
-        || !LoadGpuProbePipeline(context, transparent.value().avboitIntegrateCs.name(), s_DefaultVariant, probeName, "AvboitIntegrationProbe", size_of<RendererAvboitPushConstants>(), pipeline))
+    if(!transparent.has_value() || !transparent.value().avboitIntegrateCs.valid())
         return false;
+    const Expected<ComputePipelineHandle> pipelineResult = LoadGpuProbePipeline(context, transparent.value().avboitIntegrateCs.name(), s_DefaultVariant, probeName, "AvboitIntegrationProbe", size_of<RendererAvboitPushConstants>());
+    if(!pipelineResult.has_value())
+        return false;
+    const ComputePipelineHandle pipeline = pipelineResult.value();
     const auto extinction = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationExtinction, s_AvboitIntegrationProbeWordCount, false, false, false);
     const auto overflow = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationOverflow, s_AvboitIntegrationProbePixelCount, false, false, false);
     const auto control = CreateGpuProbeWordBuffer(graphics, s_SmokeNameAvboitIntegrationControl, s_AvboitProbeControlWordCount, false, false, false);
@@ -812,15 +815,16 @@ b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectR
     if(!subsystem.has_value() || !subsystem.value().refractionClassifyTilesCs.valid() || !subsystem.value().refractionFinalizeTilesCs.valid() || !verify.valid())
         return false;
     const u32 pushBytes = size_of<RefractionPushConstants>();
-    ComputePipelineHandle classify;
-    ComputePipelineHandle finalize;
-    ComputePipelineHandle verifyCompact;
-    ComputePipelineHandle verifyDense;
-    if(!LoadGpuProbePipeline(context, subsystem.value().refractionClassifyTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes, classify)
-        || !LoadGpuProbePipeline(context, subsystem.value().refractionFinalizeTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes, finalize)
-        || !LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=0", probeName, "RefractionTileProbe", pushBytes, verifyCompact)
-        || !LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=1", probeName, "RefractionTileProbe", pushBytes, verifyDense))
+    const Expected<ComputePipelineHandle> classifyResult = LoadGpuProbePipeline(context, subsystem.value().refractionClassifyTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes);
+    const Expected<ComputePipelineHandle> finalizeResult = LoadGpuProbePipeline(context, subsystem.value().refractionFinalizeTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes);
+    const Expected<ComputePipelineHandle> verifyCompactResult = LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=0", probeName, "RefractionTileProbe", pushBytes);
+    const Expected<ComputePipelineHandle> verifyDenseResult = LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=1", probeName, "RefractionTileProbe", pushBytes);
+    if(!classifyResult.has_value() || !finalizeResult.has_value() || !verifyCompactResult.has_value() || !verifyDenseResult.has_value())
         return false;
+    const ComputePipelineHandle classify = classifyResult.value();
+    const ComputePipelineHandle finalize = finalizeResult.value();
+    const ComputePipelineHandle verifyCompact = verifyCompactResult.value();
+    const ComputePipelineHandle verifyDense = verifyDenseResult.value();
     StandaloneBufferSetupDesc reversedSetup;
     reversedSetup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(cast<u64>(s_RefractionTileProbeQueueWords) * size_of<u32>()).setStructStride(size_of<u32>());
     reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(ResourceStates::ShaderResource);

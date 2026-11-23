@@ -20,6 +20,7 @@ Expected<String> BuildMaterialBindIncludeVirtualPath(in StringView virtualPath, 
     return includePath;
 }
 
+[cpp_unwind]
 Expected<String> BuildMaterialBindIncludeSourceFromData(
     in StringView source,
     in StringView virtualPath,
@@ -53,10 +54,12 @@ b8 WriteDeferredBxdfDispatchIncludeFile(in Path includeRoot, in Span<StringView>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<String> BuildMaterialBindIncludeSource(in MaterialBindEntry entry){
     return BuildMaterialBindIncludeSourceFromData(entry.source, entry.virtualPath, entry.structs, entry.instances);
 }
 
+[cpp_unwind]
 Expected<Path> EmitMaterialBindIncludes(in Path cache, in StringView configuration, in Span<MaterialBindEntry> entries){
     const Path root = cache / configuration / s_MaterialBindGeneratedIncludeCacheDirectoryText;
     if(!PrepareGeneratedIncludeRoot(root, s_MaterialBindIncludeGenerationLabel))
@@ -148,6 +151,7 @@ Expected<Path> EmitDeferredBxdfDispatchModule(in Path cache, in StringView confi
     return root;
 }
 
+[cpp_unwind]
 Expected<Path> EmitShadowSurfaceDispatch(in Path cache, in StringView configuration, in Span<MaterialBindEntry> binds, in Span<MaterialCookEntry> entries){
     const Path root = cache / configuration / s_ShadowSurfaceIncludeSubDir;
     if(!PrepareGeneratedIncludeRoot(root, s_ShadowSurfaceDispatchGenerationLabel))

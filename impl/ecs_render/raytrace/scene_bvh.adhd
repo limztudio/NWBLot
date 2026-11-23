@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_SceneBvhTotalSahBinCount = cast<usize>(s_SceneBvhAxisCount * s_SceneBvhSahBinCount);
+const u32 s_SceneBvhParallelThreshold = 512u;
+const u32 s_SceneBvhParallelMinSplitCount = 128u;
+const usize s_SceneBvhParallelMaxJobs = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [serialize]
 class SceneBvhNodeCalculation{
     public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
@@ -30,6 +39,35 @@ class SceneBvhSahSplit{
     public f32 loExtent = 0.0f;
     public f32 invExtent = 0.0f;
     public b8 valid = false;
+}
+
+class SceneBvhBuildWorkItem{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 instance = 0u;
+    public u32 leafCost = 0u;
+    public b8 transparentOccluder = false;
+}
+
+class SceneBvhBoundsSummary{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 containsTransparentOccluder = false;
+}
+
+class SceneBvhSubtreeJob{
+    public u32 lo = 0u;
+    public u32 hi = 0u;
+    public u32 nodeIndex = 0u;
+    public f32x4 centroidMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroidMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class SceneBvhTopInternalNode{
+    public u32 nodeIndex = 0u;
+    public u32 leftChild = 0u;
+    public u32 rightChild = 0u;
 }
 
 
@@ -115,8 +153,6 @@ u32 ResolveSceneBvhSplitMidpoint(in SceneBvhSahSplit split, in u32 lo, in u32 hi
         return lo + (hi - lo) / 2u;
     return partitionedMid;
 }
-
-const usize s_SceneBvhTotalSahBinCount = cast<usize>(s_SceneBvhAxisCount * s_SceneBvhSahBinCount);
 
 SceneBvhSahSplit SelectSceneBvhSahSplit(
     in u32 lo,
@@ -277,39 +313,6 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
     }
     return split;
 }
-
-class SceneBvhBuildWorkItem{
-    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 instance = 0u;
-    public u32 leafCost = 0u;
-    public b8 transparentOccluder = false;
-}
-
-class SceneBvhBoundsSummary{
-    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 containsTransparentOccluder = false;
-}
-
-class SceneBvhSubtreeJob{
-    public u32 lo = 0u;
-    public u32 hi = 0u;
-    public u32 nodeIndex = 0u;
-    public f32x4 centroidMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 centroidMax(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
-class SceneBvhTopInternalNode{
-    public u32 nodeIndex = 0u;
-    public u32 leftChild = 0u;
-    public u32 rightChild = 0u;
-}
-
-const u32 s_SceneBvhParallelThreshold = 512u;
-const u32 s_SceneBvhParallelMinSplitCount = 128u;
-const usize s_SceneBvhParallelMaxJobs = 32u;
 
 f32 ComputeSceneBvhAabbHalfArea(in VectorSingle minBounds, in VectorSingle maxBounds){
     const VectorSingle extent = maxBounds - minBounds;

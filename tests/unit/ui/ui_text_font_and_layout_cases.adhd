@@ -15,6 +15,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_UiTextFontLayoutQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiTextFontLayoutPosInfF32Bits = 0x7f800000u;
+const AStringView s_UiTextFontKoreanLanguage = "ko";
+const AStringView s_UiTextFontSampleGlyphText = "A";
+const AStringView s_UiTextFontWideGlyphText = "W";
+const AStringView s_UiTextLayoutInkCommittedText = "a";
+const AStringView s_UiTextLayoutInkReplacementText = "b";
+const AStringView s_UiTextLayoutInkTwoGlyphReplacementText = "bc";
+const AStringView s_UiTextLayoutLigatureText = "ffi";
+const AStringView s_UiTextLayoutCombiningMarkText = "A\xcc\x81";
+const AStringView s_UiTextLayoutTwoGlyphText = "AB";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [arena]
 class ThrowingFontConstructionLogger : Utf8LogSink{
     public b8 sawFaceFailure = false;
@@ -26,18 +42,6 @@ class ThrowingFontConstructionLogger : Utf8LogSink{
         this.sawFaceFailure = true;
         ThrowTestException<i32>(61);
     }
-}
-
-TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip, in Point scale){
-    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip, scale);
-}
-
-TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip){
-    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip);
-}
-
-Expected<Rect> UiTextGlyphAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
-    return AtlasRectangle(glyph, atlas.deref(), size, origin);
 }
 
 class GeometryShaper : ITextShaper{
@@ -99,7 +103,6 @@ class TextFontTests{
     public Expected<SharedFontFace> makeLatinFace(in u64 generation){ return MakeFontFace(this.pool, FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, generation)); }
     public SharedPool pool = SharedPool();}
 
-
 class TextGlyphVisibilityFontTests{
     public Font m_latin = Font(Name(s_TestLatinFontPath));
     public Font m_korean = Font(Name(s_TestKoreanFontPath));
@@ -120,7 +123,6 @@ class TextGlyphVisibilityFontTests{
     }
     public b8 loadFont(in StringView filename, mut Font font){ return LoadBundledFixtureFont(filename, font); }
     public SharedPool pool = SharedPool();}
-
 
 class TextGlyphVisibilityAtlasTests{
     public FontAtlas m_asset = FontAtlas(Name(s_UiCaseTestsUiGlyphVisibilityAtlas));
@@ -164,7 +166,6 @@ class TextGlyphVisibilityAtlasTests{
     }
     public SharedPool pool = SharedPool();}
 
-
 [ordered]
 class TextLayoutInkTests{
     public GeometryShaper m_shaper;
@@ -180,7 +181,6 @@ class TextLayoutInkTests{
         return true;
     }
 }
-
 
 [ordered]
 class TextLayoutTests{
@@ -202,18 +202,17 @@ class TextLayoutTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_UiTextFontLayoutQuietNaNF32Bits = 0x7fc00000u;
-const u32 s_UiTextFontLayoutPosInfF32Bits = 0x7f800000u;
-const AStringView s_UiTextFontKoreanLanguage = "ko";
-const AStringView s_UiTextFontSampleGlyphText = "A";
-const AStringView s_UiTextFontWideGlyphText = "W";
-const AStringView s_UiTextLayoutInkCommittedText = "a";
-const AStringView s_UiTextLayoutInkReplacementText = "b";
-const AStringView s_UiTextLayoutInkTwoGlyphReplacementText = "bc";
-const AStringView s_UiTextLayoutLigatureText = "ffi";
-const AStringView s_UiTextLayoutCombiningMarkText = "A\xcc\x81";
-const AStringView s_UiTextLayoutTwoGlyphText = "AB";
+TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip, in Point scale){
+    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip, scale);
+}
 
+TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip){
+    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip);
+}
+
+Expected<Rect> UiTextGlyphAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
+    return AtlasRectangle(glyph, atlas.deref(), size, origin);
+}
 
 GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
     GlyphCoverageBounds coverage = GlyphCoverageBounds();
@@ -221,10 +220,6 @@ GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
     coverage.known = known;
     return coverage;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 void VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory(){
@@ -516,10 +511,6 @@ void VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes(mut Text
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextGlyphVisibilityTests_TouchingEdgesAndEmptyAreasAreInvisible(){
     const Rect clip = Rect(10.0f, 20.0f, 30.0f, 40.0f);
     Array<Rect, 6u> rectangles;
@@ -710,10 +701,6 @@ void VerifyTextGlyphVisibilityTests_EmptyClipSkipsValidCandidatesAfterParameterV
     EXPECT_EQ(UiTextGlyphCandidateNoAtlas(glyph, 0.0f, 16.0f, Point(), Rect()), TextGlyphIntersection::Invalid);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextGlyphVisibilityFontTests_NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin(mut TextGlyphVisibilityFontTests self){
     PlacedGlyph glyph = PlacedGlyph();
     glyph.face = self.m_face;
@@ -746,10 +733,6 @@ void VerifyTextGlyphVisibilityFontTests_UntrustedUnknownInkRetainsAConservativeC
     EXPECT_EQ(UiTextGlyphCandidateNoAtlas(glyph, 16.0f, 16.0f, Point(), clip), TextGlyphIntersection::Invisible);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextGlyphVisibilityAtlasTests_SdfCandidateUsesExactPlanesRatherThanShapingInk(mut TextGlyphVisibilityAtlasTests self){
     PlacedGlyph glyph = PlacedGlyph();
     glyph.position = Point(10.0f, 20.0f);
@@ -776,10 +759,6 @@ void VerifyTextGlyphVisibilityAtlasTests_RejectedAtlasRectanglesRejectTheResult(
     glyph.position.x = f32.max;
     EXPECT_FALSE(UiTextGlyphAtlasRect(glyph, self.m_atlas, 32.0f, Point(f32.max, 0.0f)).has_value());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyTextLayoutInkTests_EmptyShapingInkRemainsAnUnknownPerGlyphRectangle(mut TextLayoutInkTests self){
     self.m_shaper.m_ink = Rect();
@@ -853,10 +832,6 @@ void VerifyTextLayoutInkTests_MalformedOrUnrepresentableKnownCoverageRejectsAtom
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutInkCommittedText);
     EXPECT_FALSE(self.m_layout.glyphs()[0u].coverage.known);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyTextLayoutTests_CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalLine(mut TextLayoutTests self){
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("A\r\nB\n")));
@@ -987,59 +962,95 @@ void VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAto
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory, VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory)
+
 NWB_ADHD_GTEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters, VerifyTextFontTests_MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters)
+
 NWB_ADHD_GTEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart, VerifyTextFontTests_RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart)
+
 NWB_ADHD_GTEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable, VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable)
+
 NWB_ADHD_GTEST_F(TextFontTests, AppendingGlyphKeepsEarlierCoverageBytesImmutable, VerifyTextFontTests_AppendingGlyphKeepsEarlierCoverageBytesImmutable)
+
 NWB_ADHD_GTEST_F(TextFontTests, RasterDpiChangesPagesWithoutChangingLogicalMeasurement, VerifyTextFontTests_RasterDpiChangesPagesWithoutChangingLogicalMeasurement)
+
 NWB_ADHD_GTEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads, VerifyTextFontTests_OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads)
+
 NWB_ADHD_GTEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset, VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset)
+
 NWB_ADHD_GTEST_F(TextFontTests, AtlasWrapsToNextRowWithoutChangingExistingGlyphs, VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs)
+
 NWB_ADHD_GTEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages, VerifyTextFontTests_AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages)
+
 NWB_ADHD_GTEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement, VerifyTextFontTests_NativeCffCoverageAndFaceSurviveFontReplacement)
+
 NWB_ADHD_GTEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes, VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, TouchingEdgesAndEmptyAreasAreInvisible, VerifyTextGlyphVisibilityTests_TouchingEdgesAndEmptyAreasAreInvisible)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, InvalidRectanglesAndOverflowingEndpointsAreRejected, VerifyTextGlyphVisibilityTests_InvalidRectanglesAndOverflowingEndpointsAreRejected)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtOneToOneScale, VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsToWholePhysicalPixelsAtOneToOneScale)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelScale, VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsUsingEachPhysicalPixelScale)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, InvalidCoverageGeometryRejectsTheResult, VerifyTextGlyphVisibilityTests_InvalidCoverageGeometryRejectsTheResult)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverage, VerifyTextGlyphVisibilityTests_InvalidPhysicalPixelScalesRejectNativeCoverage)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, UnrepresentableCoverageGeometryRejectsTheResult, VerifyTextGlyphVisibilityTests_UnrepresentableCoverageGeometryRejectsTheResult)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, MissingNativeFaceAndCoverageBoundsRejectsUnknownInk, VerifyTextGlyphVisibilityTests_MissingNativeFaceAndCoverageBoundsRejectsUnknownInk)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, KnownEmptyNativeOutlinesDoNotRequirePreparation, VerifyTextGlyphVisibilityTests_KnownEmptyNativeOutlinesDoNotRequirePreparation)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, NativeBoundsTakePriorityOverCompetingShapingInk, VerifyTextGlyphVisibilityTests_NativeBoundsTakePriorityOverCompetingShapingInk)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, NativeRasterAllowanceTracksPhysicalScale, VerifyTextGlyphVisibilityTests_NativeRasterAllowanceTracksPhysicalScale)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFringeAsCandidate, VerifyTextGlyphVisibilityTests_AnisotropicPhysicalScaleRetainsSnappedNativeFringeAsCandidate)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, CandidateRejectsInvalidParametersAndKnownBounds, VerifyTextGlyphVisibilityTests_CandidateRejectsInvalidParametersAndKnownBounds)
+
 NWB_ADHD_GTEST(TextGlyphVisibilityTests, EmptyClipSkipsValidCandidatesAfterParameterValidation, VerifyTextGlyphVisibilityTests_EmptyClipSkipsValidCandidatesAfterParameterValidation)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityFontTests, NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin, VerifyTextGlyphVisibilityFontTests_NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityFontTests, HarfBuzzScaleCorrectionRetainsScaledAndOriginalInk, VerifyTextGlyphVisibilityFontTests_HarfBuzzScaleCorrectionRetainsScaledAndOriginalInk)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityFontTests, UntrustedUnknownInkRetainsAConservativeCandidate, VerifyTextGlyphVisibilityFontTests_UntrustedUnknownInkRetainsAConservativeCandidate)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityAtlasTests, SdfCandidateUsesExactPlanesRatherThanShapingInk, VerifyTextGlyphVisibilityAtlasTests_SdfCandidateUsesExactPlanesRatherThanShapingInk)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityAtlasTests, NondrawableAtlasGlyphHasNoCandidateImage, VerifyTextGlyphVisibilityAtlasTests_NondrawableAtlasGlyphHasNoCandidateImage)
+
 NWB_ADHD_GTEST_F(TextGlyphVisibilityAtlasTests, RejectedAtlasRectanglesRejectTheResult, VerifyTextGlyphVisibilityAtlasTests_RejectedAtlasRectanglesRejectTheResult)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, EmptyShapingInkRemainsAnUnknownPerGlyphRectangle, VerifyTextLayoutInkTests_EmptyShapingInkRemainsAnUnknownPerGlyphRectangle)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, UnrepresentableRelativeInkEndpointRejectsTheShaperWithoutReplacingLayout, VerifyTextLayoutInkTests_UnrepresentableRelativeInkEndpointRejectsTheShaperWithoutReplacingLayout)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, UnrepresentableTranslatedInkRejectsAtomicallyEvenWithEmptyInk, VerifyTextLayoutInkTests_UnrepresentableTranslatedInkRejectsAtomicallyEvenWithEmptyInk)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, UnrepresentableUnionAcrossValidGlyphsRejectsAtomically, VerifyTextLayoutInkTests_UnrepresentableUnionAcrossValidGlyphsRejectsAtomically)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, UnrepresentablePositionOrAdvanceRejectsBeforeGlyphPublication, VerifyTextLayoutInkTests_UnrepresentablePositionOrAdvanceRejectsBeforeGlyphPublication)
+
 NWB_ADHD_GTEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomically, VerifyTextLayoutInkTests_MalformedOrUnrepresentableKnownCoverageRejectsAtomically)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalLine, VerifyTextLayoutTests_CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalLine)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, LigatureAndCombiningClustersHaveOnlyRealSourceEdges, VerifyTextLayoutTests_LigatureAndCombiningClustersHaveOnlyRealSourceEdges)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndices, VerifyTextLayoutTests_NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndices)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByteEnds, VerifyTextLayoutTests_RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByteEnds)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, FailedLaterLineAndSourceMutationPreserveCommittedLayout, VerifyTextLayoutTests_FailedLaterLineAndSourceMutationPreserveCommittedLayout)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, EmptyTextHasOneTypographicLineAndNoInk, VerifyTextLayoutTests_EmptyTextHasOneTypographicLineAndNoInk)
+
 NWB_ADHD_GTEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic, VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAtomic)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyTextGlyphVisibility_CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding(){
     const auto originalEnvironment = HoldFloatingPointExceptions();

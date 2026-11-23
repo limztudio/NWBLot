@@ -8,6 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShaderVariantAssignment{
+    public StringView key = "";
+    public StringView value = "";
+}
+
+class ShaderVariantSegmentFailure{
+    public VariantSignatureSegmentError reason = VariantSignatureSegmentError::None;
+    public StringView segment = "";
+}
+
+
 StringView ShaderOptimizationLevelText(in ShaderOptimizationLevel optimizationLevel){
     if(optimizationLevel == ShaderOptimizationLevel::None)
         return s_ShaderNoneOptText;
@@ -125,13 +136,9 @@ b8 IsValidShaderDefineValueText(in StringView valueView){
     return true;
 }
 
-b8 TryParseVariantSignatureSegment(
+Expected<ShaderVariantAssignment, ShaderVariantSegmentFailure> TryParseVariantSignatureSegment(
     in StringView variantSignature,
-    mut usize inOutCursor,
-    mut StringView outSegment,
-    mut StringView outDefineName,
-    mut StringView outDefineValue,
-    mut VariantSignatureSegmentError outError
+    mut usize inOutCursor
 ){
     const usize begin = inOutCursor;
     usize segmentEnd = variantSignature.size();
@@ -144,10 +151,11 @@ b8 TryParseVariantSignatureSegment(
     inOutCursor = segmentEnd + 1u;
 
     const StringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
-    outSegment = segment;
+    ShaderVariantSegmentFailure failure = ShaderVariantSegmentFailure();
+    failure.segment = segment;
     if(segment.empty()){
-        outError = VariantSignatureSegmentError::EmptySegment;
-        return false;
+        failure.reason = VariantSignatureSegmentError::EmptySegment;
+        return MakeUnexpected(failure);
     }
 
     usize equalPos = segment.size();
@@ -158,27 +166,23 @@ b8 TryParseVariantSignatureSegment(
         }
     }
     if(equalPos == 0u || equalPos + 1u >= segment.size()){
-        outError = VariantSignatureSegmentError::InvalidAssignment;
-        return false;
+        failure.reason = VariantSignatureSegmentError::InvalidAssignment;
+        return MakeUnexpected(failure);
     }
 
     const StringView defineName = TrimView(segment.substr(0u, equalPos));
     const StringView defineValue = TrimView(segment.substr(equalPos + 1u));
     if(defineName.empty() || defineValue.empty()){
-        outError = VariantSignatureSegmentError::InvalidAssignment;
-        return false;
+        failure.reason = VariantSignatureSegmentError::InvalidAssignment;
+        return MakeUnexpected(failure);
     }
 
-    outDefineName = defineName;
-    outDefineValue = defineValue;
-    outError = VariantSignatureSegmentError::None;
-    return true;
+    ShaderVariantAssignment assignment = ShaderVariantAssignment();
+    assignment.key = defineName;
+    assignment.value = defineValue;
+    return assignment;
 }
 
-class ShaderVariantAssignment{
-    public StringView key = "";
-    public StringView value = "";
-}
 
 b8 BuildSortedShaderVariantName(mut Vector<ShaderVariantAssignment> assignments, mut String result){
     if(assignments.empty()){
@@ -209,19 +213,13 @@ b8 BuildSortedShaderVariantName(mut Vector<ShaderVariantAssignment> assignments,
 b8 ValidateVariantSignaturePreamble(
     in StringView contextLabel,
     in StringView variantSignature,
-    in b8 definesEmpty,
-    mut b8 outIsComplete
+    in b8 definesEmpty
 ){
-    outIsComplete = false;
-    if(variantSignature.empty()){
-        outIsComplete = true;
+    if(variantSignature.empty())
         return true;
-    }
     if(variantSignature == s_ShaderDefaultVariantText){
-        if(definesEmpty){
-            outIsComplete = true;
+        if(definesEmpty)
             return true;
-        }
         error("Meta '{}': variant 'default' is only valid when no defines are specified", contextLabel);
         return false;
     }

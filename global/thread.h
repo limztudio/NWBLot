@@ -29,6 +29,8 @@
 
 
 using StopToken = std::stop_token;
+template<class Callback>
+using StopCallback = std::stop_callback<Callback>;
 using Latch = std::latch;
 
 using Thread = std::thread;

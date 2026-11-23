@@ -72,74 +72,6 @@ class DependencyQueueState{
     }
 }
 
-b8 ValidateSingleProviderAssetDeclaration(in usize declarationCount, in StringView providerPathText){
-    if(declarationCount != 1u){
-        error("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch", providerPathText);
-        return false;
-    }
-    return true;
-}
-
-void LogMissingMetadataAssetDeclaration(in StringView providerPathText){
-    error("DependencyComputer: meta '{}' is missing asset declaration 'asset'", providerPathText);
-}
-
-b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encodedListText){
-    const Expected<Path, ErrorCode> output = AbsolutePath(Path(outputPathText));
-    if(!output.has_value())
-        return false;
-    if(!EnsureDirectories(output.value().parentPath()).has_value())
-        return false;
-    return WriteTextFileAtomic(output.value(), encodedListText);
-}
-
-void LogUnrepresentableDependencyList(){
-    error("DependencyComputer: input paths cannot be represented in the dependency list");
-}
-
-void LogDependencyOutputWriteFailure(in StringView outputPath){
-    error("DependencyComputer: failed to write output '{}'", outputPath);
-}
-
-void LogReturnedDependencyInputCount(in usize count){
-    [essential] info("DependencyComputer: returned {} inputs", count);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_unwind]
-void CollectValuePathHints(in MetascriptValue value, mut DependencyPathHints hints){
-    if(value.isString()){
-        hints.record(value.asString());
-        return;
-    }
-    if(value.isList()){
-        for(in MetascriptValue item : value.listView())
-            CollectValuePathHints(item, hints);
-        return;
-    }
-    if(value.isMap())
-        value.forEachMapEntry(lambda[mut hints](in StringView key, in MetascriptValue item) -> b8{
-            hints.record(key);
-            CollectValuePathHints(item, hints);
-            return true;
-        });
-}
-
-[cpp_unwind]
-void CollectDocumentPathHints(in MetascriptDocument document, mut DependencyPathHints hints){
-    const Optional<in MetascriptDocument> owner(document);
-    document.forEachDeclaration(lambda[in owner, mut hints](in StringView typeName, in StringView variableName) -> b8{
-        owner.value().visitVariable(variableName, lambda[mut hints](in MetascriptValue value) -> b8{
-            CollectValuePathHints(value, hints);
-            return true;
-        });
-        return true;
-    });
-}
-
 class DependencyProviderCatalog : NoCopy{
     private mut AssetCookWorkspace workspace;
     public mut CookFileCatalog catalog;
@@ -266,26 +198,7 @@ class DependencyProviderCatalog : NoCopy{
     }
 
     [cpp_unwind]
-    public Expected<DependencyInputSelection> selectInputs(in AssetDependencyOptions options)const{
-        DependencyInputSelection result;
-        result.selected.resize(this.catalog.files.size(), 0u);
-        result.order.reserve(this.catalog.files.size());
-        if(options.inputs.empty()){
-            in DefaultCookEntryAssetDescriptor entry = this.access.registry.defaultEntryAsset();
-            if(!ValidateDefaultDependencyEntryAsset(entry.virtualPath))
-                return MakeUnexpected(Failure());
-            const auto provider = this.resolve(entry.virtualPath, entry.assetType, entry.virtualPathText);
-            if(!provider.has_value()){
-                LogProjectRootMissing(entry.virtualPathText);
-                return MakeUnexpected(Failure());
-            }
-            result.selected[provider.value()] = 1u;
-            result.order.push_back(provider.value());
-        }
-        else if(!this.catalog.select(options.inputs, result.selected, result.order, lambda[](in CookInputSelectionError failure) -> void{ LogCookInputSelectionFailure(failure, s_DiagnosticPrefix); }))
-            return MakeUnexpected(Failure());
-        return result;
-    }
+    public Expected<DependencyInputSelection> selectInputs(in AssetDependencyOptions options)const;
 }
 
 class DependencyTraversal : NoCopy{
@@ -319,45 +232,7 @@ class DependencyTraversal : NoCopy{
     }
 
     [cpp_unwind]
-    private b8 process(in usize index){
-        in DiscoveredNwbFile file = this.providers.catalog.files[index];
-        const auto doc = this.providers.access.read(file, s_DiagnosticPrefix);
-        if(!doc.has_value())
-            return false;
-        in MetascriptDocument document = doc.value();
-        CollectDocumentPathHints(document, this.hints);
-        const auto expanded = this.providers.access.expand(file, document);
-        if(expanded.has_value()){
-            for(in ExpandedAssetMetadata item : expanded.value())
-                CollectValuePathHints(item.value, this.hints);
-            for(in ExpandedAssetMetadata item : expanded.value()){
-                if(!this.extract(file, item.assetType, item.virtualPath, item.value, Optional<in MetascriptDocument>()))
-                    return false;
-            }
-            return true;
-        }
-        if(expanded.error() != AssetBunchExpandFailure::Unsupported)
-            return false;
-        if(document.declarationCount() != 1u && !ValidateSingleProviderAssetDeclaration(document.declarationCount(), PathToString(file.filePath)))
-            return false;
-        const auto declared = document.declarationType(s_MetadataAssetVariable);
-        if(!declared.has_value()){
-            LogMissingMetadataAssetDeclaration(PathToString(file.filePath));
-            return false;
-        }
-        const auto type = ParseName(declared.value());
-        if(!type.has_value())
-            return false;
-        if(!document.hasVariable(s_MetadataAssetVariable)){
-            error("{} '{}': missing asset declaration '{}'", s_DiagnosticPrefix, file.filePath, s_MetadataAssetVariable);
-            return false;
-        }
-        const Name declaredType = type.value();
-        const Optional<in MetascriptDocument> owner(document);
-        return document.visitVariable(s_MetadataAssetVariable, lambda[mut this, in index, in declaredType, in owner](in MetascriptValue value) -> b8{
-            return this.extract(this.providers.catalog.files[index], declaredType, this.providers.virtualPaths[index], value, owner);
-        });
-    }
+    private b8 process(in usize index);
 
     [cpp_unwind]
     public b8 traverse(in DependencyInputSelection selected){
@@ -370,6 +245,137 @@ class DependencyTraversal : NoCopy{
         }
         return true;
     }
+}
+
+b8 ValidateSingleProviderAssetDeclaration(in usize declarationCount, in StringView providerPathText){
+    if(declarationCount != 1u){
+        error("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch", providerPathText);
+        return false;
+    }
+    return true;
+}
+
+void LogMissingMetadataAssetDeclaration(in StringView providerPathText){
+    error("DependencyComputer: meta '{}' is missing asset declaration 'asset'", providerPathText);
+}
+
+b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encodedListText){
+    const Expected<Path, ErrorCode> output = AbsolutePath(Path(outputPathText));
+    if(!output.has_value())
+        return false;
+    if(!EnsureDirectories(output.value().parentPath()).has_value())
+        return false;
+    return WriteTextFileAtomic(output.value(), encodedListText);
+}
+
+void LogUnrepresentableDependencyList(){
+    error("DependencyComputer: input paths cannot be represented in the dependency list");
+}
+
+void LogDependencyOutputWriteFailure(in StringView outputPath){
+    error("DependencyComputer: failed to write output '{}'", outputPath);
+}
+
+void LogReturnedDependencyInputCount(in usize count){
+    [essential] info("DependencyComputer: returned {} inputs", count);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+void CollectValuePathHints(in MetascriptValue value, mut DependencyPathHints hints){
+    if(value.isString()){
+        hints.record(value.asString());
+        return;
+    }
+    if(value.isList()){
+        for(in MetascriptValue item : value.listView())
+            CollectValuePathHints(item, hints);
+        return;
+    }
+    if(value.isMap())
+        value.forEachMapEntry(lambda[mut hints](in StringView key, in MetascriptValue item) -> b8{
+            hints.record(key);
+            CollectValuePathHints(item, hints);
+            return true;
+        });
+}
+
+[cpp_unwind]
+void CollectDocumentPathHints(in MetascriptDocument document, mut DependencyPathHints hints){
+    const Optional<in MetascriptDocument> owner(document);
+    document.forEachDeclaration(lambda[in owner, mut hints](in StringView typeName, in StringView variableName) -> b8{
+        owner.value().visitVariable(variableName, lambda[mut hints](in MetascriptValue value) -> b8{
+            CollectValuePathHints(value, hints);
+            return true;
+        });
+        return true;
+    });
+}
+
+[cpp_unwind]
+Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(in AssetDependencyOptions options)const{
+    DependencyInputSelection result;
+    result.selected.resize(this.catalog.files.size(), 0u);
+    result.order.reserve(this.catalog.files.size());
+    if(options.inputs.empty()){
+        in DefaultCookEntryAssetDescriptor entry = this.access.registry.defaultEntryAsset();
+        if(!ValidateDefaultDependencyEntryAsset(entry.virtualPath))
+            return MakeUnexpected(Failure());
+        const auto provider = this.resolve(entry.virtualPath, entry.assetType, entry.virtualPathText);
+        if(!provider.has_value()){
+            LogProjectRootMissing(entry.virtualPathText);
+            return MakeUnexpected(Failure());
+        }
+        result.selected[provider.value()] = 1u;
+        result.order.push_back(provider.value());
+    }
+    else if(!this.catalog.select(options.inputs, result.selected, result.order, lambda[](in CookInputSelectionError failure) -> void{ LogCookInputSelectionFailure(failure, s_DiagnosticPrefix); }))
+        return MakeUnexpected(Failure());
+    return result;
+}
+
+[cpp_unwind]
+b8 DependencyTraversal::process(in usize index){
+    in DiscoveredNwbFile file = this.providers.catalog.files[index];
+    const auto doc = this.providers.access.read(file, s_DiagnosticPrefix);
+    if(!doc.has_value())
+        return false;
+    in MetascriptDocument document = doc.value();
+    CollectDocumentPathHints(document, this.hints);
+    const auto expanded = this.providers.access.expand(file, document);
+    if(expanded.has_value()){
+        for(in ExpandedAssetMetadata item : expanded.value())
+            CollectValuePathHints(item.value, this.hints);
+        for(in ExpandedAssetMetadata item : expanded.value()){
+            if(!this.extract(file, item.assetType, item.virtualPath, item.value, Optional<in MetascriptDocument>()))
+                return false;
+        }
+        return true;
+    }
+    if(expanded.error() != AssetBunchExpandFailure::Unsupported)
+        return false;
+    if(document.declarationCount() != 1u && !ValidateSingleProviderAssetDeclaration(document.declarationCount(), PathToString(file.filePath)))
+        return false;
+    const auto declared = document.declarationType(s_MetadataAssetVariable);
+    if(!declared.has_value()){
+        LogMissingMetadataAssetDeclaration(PathToString(file.filePath));
+        return false;
+    }
+    const auto type = ParseName(declared.value());
+    if(!type.has_value())
+        return false;
+    if(!document.hasVariable(s_MetadataAssetVariable)){
+        error("{} '{}': missing asset declaration '{}'", s_DiagnosticPrefix, file.filePath, s_MetadataAssetVariable);
+        return false;
+    }
+    const Name declaredType = type.value();
+    const Optional<in MetascriptDocument> owner(document);
+    return document.visitVariable(s_MetadataAssetVariable, lambda[mut this, in index, in declaredType, in owner](in MetascriptValue value) -> b8{
+        return this.extract(this.providers.catalog.files[index], declaredType, this.providers.virtualPaths[index], value, owner);
+    });
 }
 
 [cpp_unwind]

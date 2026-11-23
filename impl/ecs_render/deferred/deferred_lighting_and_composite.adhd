@@ -17,12 +17,72 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/deferred/binding_slots.h>"), cpp_name("NWB_DEFERRED_LIGHTING_GROUP_SIZE")]
+extern const u32 s_ShaderDeferredLightingGroupSize;
+[cpp_header("<impl/assets/graphics/deferred/binding_slots.h>"), cpp_name("NWB_DEFERRED_COMPOSITE_GROUP_SIZE")]
+extern const u32 s_ShaderDeferredCompositeGroupSize;
+
 const usize s_DeferredSceneMaxLights = 64u;
 const u32 s_DeferredLightingGroupSize = 8u;
 const u32 s_DeferredCompositeGroupSize = 8u;
 const Name s_DeferredLightingShaderDebugName = "ECSRender_DeferredLightingCS";
 const Name s_DeferredCompositeShaderDebugName = "ECSRender_DeferredCompositeCS";
 const Name s_DeferredPresentShaderDebugName = "ECSRender_DeferredPresentPS";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredLightingGraphTask{
+    private mut RendererDeferredSystem m_system;
+    private mut DeferredFrameTargets m_targets;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private b8 m_useLaggedLightingHistory;
+
+    public DeferredLightingGraphTask(mut RendererDeferredSystem system, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, in b8 useLaggedLightingHistory){
+        this.m_system = system;
+        this.m_targets = targets;
+        this.m_timingTicket = timingTicket;
+        this.m_useLaggedLightingHistory = useLaggedLightingHistory;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope recording(this.m_timingTicket);
+        return this.m_system.renderDeferredLighting(commands, this.m_targets, this.m_useLaggedLightingHistory);
+    }
+}
+
+class DeferredCompositeGraphTask{
+    private mut RendererDeferredSystem m_system;
+    private mut DeferredFrameTargets m_targets;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private ReflectionCompositeInputs m_reflectionInputs;
+
+    public DeferredCompositeGraphTask(mut RendererDeferredSystem system, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, in ReflectionCompositeInputs reflectionInputs){
+        this.m_system = system;
+        this.m_targets = targets;
+        this.m_timingTicket = timingTicket;
+        this.m_reflectionInputs = reflectionInputs;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope recording(this.m_timingTicket);
+        return this.m_system.renderDeferredComposite(commands, this.m_targets, this.m_reflectionInputs);
+    }
+}
+
+static_assert(s_DeferredSceneMaxLights == s_ShaderMaxSceneLights);
+static_assert(s_DeferredLightingGroupSize == s_ShaderDeferredLightingGroupSize);
+static_assert(s_DeferredCompositeGroupSize == s_ShaderDeferredCompositeGroupSize);
+static_assert(size_of<DeferredLightingPushConstants>() == size_of<u32>() * 2u);
+static_assert(size_of<DeferredCompositePushConstants>() == size_of<u32>() * 5u);
+static_assert(size_of<DeferredPresentPushConstants>() == size_of<u32>() * 6u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 EnsureDeferredBuffer(
     in BufferDesc desc,
@@ -42,10 +102,6 @@ b8 EnsureDeferredBuffer(
     outBuffer = result.value();
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 u32 ComputeDeferredDispatchGroupCount(in u32 extent, in u32 groupSize){
     return DivideUpWrapping(extent, groupSize);
@@ -83,10 +139,6 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
         this.m_deferredState.m_sceneShadingGpuDataValid
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 RendererDeferredSystem::createDeferredLightingResources(){
     mut Device device = this.m_graphics.getDevice();
@@ -140,10 +192,13 @@ b8 RendererDeferredSystem::createDeferredLightingPipeline(){
     if(this.m_deferredState.m_lightingPipeline.valid())
         return true;
 
-    if(!CreateHeapComputePipeline(this.m_graphics.getDevice(), this.m_deferredState.m_lightingComputeShader, this.m_deferredState.m_lightingBindingLayout, false, this.m_deferredState.m_lightingPipeline)){
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(this.m_graphics.getDevice(), this.m_deferredState.m_lightingComputeShader, this.m_deferredState.m_lightingBindingLayout, false);
+    if(!pipeline.has_value()){
+        this.m_deferredState.m_lightingPipeline.reset();
         error("RendererSystem: failed to create deferred lighting pipeline");
         return false;
     }
+    this.m_deferredState.m_lightingPipeline = pipeline.value();
 
     return true;
 }
@@ -214,10 +269,13 @@ b8 RendererDeferredSystem::createDeferredCompositePipeline(){
     if(this.m_deferredState.m_compositeComputePipeline.valid())
         return true;
 
-    if(!CreateHeapComputePipeline(this.m_graphics.getDevice(), this.m_deferredState.m_compositeComputeShader, this.m_deferredState.m_compositeComputeBindingLayout, false, this.m_deferredState.m_compositeComputePipeline)){
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(this.m_graphics.getDevice(), this.m_deferredState.m_compositeComputeShader, this.m_deferredState.m_compositeComputeBindingLayout, false);
+    if(!pipeline.has_value()){
+        this.m_deferredState.m_compositeComputePipeline.reset();
         error("RendererSystem: failed to create deferred composite-compute pipeline");
         return false;
     }
+    this.m_deferredState.m_compositeComputePipeline = pipeline.value();
 
     return true;
 }
@@ -317,27 +375,6 @@ b8 RendererDeferredSystem::renderDeferredPresent(mut CommandList commandList, mu
     return !commandList.isRenderPassActive();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/deferred/binding_slots.h>"), cpp_name("NWB_DEFERRED_LIGHTING_GROUP_SIZE")]
-extern const u32 s_ShaderDeferredLightingGroupSize;
-
-[cpp_header("<impl/assets/graphics/deferred/binding_slots.h>"), cpp_name("NWB_DEFERRED_COMPOSITE_GROUP_SIZE")]
-extern const u32 s_ShaderDeferredCompositeGroupSize;
-
-static_assert(s_DeferredSceneMaxLights == s_ShaderMaxSceneLights);
-static_assert(s_DeferredLightingGroupSize == s_ShaderDeferredLightingGroupSize);
-static_assert(s_DeferredCompositeGroupSize == s_ShaderDeferredCompositeGroupSize);
-static_assert(size_of<DeferredLightingPushConstants>() == size_of<u32>() * 2u);
-static_assert(size_of<DeferredCompositePushConstants>() == size_of<u32>() * 5u);
-static_assert(size_of<DeferredPresentPushConstants>() == size_of<u32>() * 6u);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RayTracingLightingClassification ClassifyDeferredSceneLights(in Span<f32> importance, in u32 refractiveInstanceCount, mut Span<SceneLightGpuData> lights, in u32 lightCount){
     auto activeLights = lights.subspan(0u, lightCount);
     RayTracingLightingClassification classification;
@@ -371,26 +408,6 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     return uploads;
 }
 
-class DeferredLightingGraphTask{
-    private mut RendererDeferredSystem m_system;
-    private mut DeferredFrameTargets m_targets;
-    private mut GpuTimingSubmissionTicket m_timingTicket;
-    private b8 m_useLaggedLightingHistory;
-
-    public DeferredLightingGraphTask(mut RendererDeferredSystem system, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, in b8 useLaggedLightingHistory){
-        this.m_system = system;
-        this.m_targets = targets;
-        this.m_timingTicket = timingTicket;
-        this.m_useLaggedLightingHistory = useLaggedLightingHistory;
-    }
-    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        GpuTimingTicketRecordingScope recording(this.m_timingTicket);
-        return this.m_system.renderDeferredLighting(commands, this.m_targets, this.m_useLaggedLightingHistory);
-    }
-}
-
 Expected<GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -399,27 +416,6 @@ Expected<GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(
     mut GpuTimingSubmissionTicket timingTicket
 ){
     return graph.addPayloadTask(desc, DeferredLightingGraphTask(this, targets, timingTicket, useLaggedLightingHistory));
-}
-
-
-class DeferredCompositeGraphTask{
-    private mut RendererDeferredSystem m_system;
-    private mut DeferredFrameTargets m_targets;
-    private mut GpuTimingSubmissionTicket m_timingTicket;
-    private ReflectionCompositeInputs m_reflectionInputs;
-
-    public DeferredCompositeGraphTask(mut RendererDeferredSystem system, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, in ReflectionCompositeInputs reflectionInputs){
-        this.m_system = system;
-        this.m_targets = targets;
-        this.m_timingTicket = timingTicket;
-        this.m_reflectionInputs = reflectionInputs;
-    }
-    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        GpuTimingTicketRecordingScope recording(this.m_timingTicket);
-        return this.m_system.renderDeferredComposite(commands, this.m_targets, this.m_reflectionInputs);
-    }
 }
 
 Expected<GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(

@@ -9,8 +9,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiRadioGroupLoanTests : RadioGroupFixture{
+const u32 s_UiRadioScrollQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiRadioScrollPosInfF32Bits = 0x7f800000u;
+const u32 s_UiRadioScrollNegInfF32Bits = 0xff800000u;
+const u64 s_UiRadioScrollQuietNaNF64Bits = 0x7ff8000000000000u;
+const u64 s_UiRadioScrollPosInfF64Bits = 0x7ff0000000000000u;
+const u64 s_UiRadioScrollNegZeroF64Bits = 0x8000000000000000u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiRadioGroupLoanTests : RadioGroupFixture{
 
 
 }
@@ -87,12 +97,6 @@ b8 AcceptUiRadioGroupPopupFamily(mut UiRadioGroupPopupTests self, in u64 generat
     return DeclareUiRadioGroupPopupFamily(self, generation) && FinishUiRadioGroupPopupParent(self) && self.m_context.commitFrame(generation);
 }
 
-const u32 s_UiRadioScrollQuietNaNF32Bits = 0x7fc00000u;
-const u32 s_UiRadioScrollPosInfF32Bits = 0x7f800000u;
-const u32 s_UiRadioScrollNegInfF32Bits = 0xff800000u;
-const u64 s_UiRadioScrollQuietNaNF64Bits = 0x7ff8000000000000u;
-const u64 s_UiRadioScrollPosInfF64Bits = 0x7ff0000000000000u;
-const u64 s_UiRadioScrollNegZeroF64Bits = 0x8000000000000000u;
 
 RadioGroupChoices MakeUiRadioGroupLayoutChoices(in u32 count){
     RadioGroupChoices choices = RadioGroupChoices();

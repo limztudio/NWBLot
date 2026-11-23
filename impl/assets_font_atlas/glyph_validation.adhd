@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class FontAtlasGuardedRect{
+    public u32 channel = 0u;
+    public u32 firstY = 0u;
+    public u32 endY = 0u;
+    public u32 firstX = 0u;
+    public u32 endX = 0u;
+    public u32 glyphId = 0u;
+}
+
 FontAtlasGroupCompactBounds ComputeFontAtlasGroupCompactBounds(
     in Span<FontAtlasGlyph> glyphs,
     in u32 groupIndex,
@@ -91,15 +100,8 @@ b8 ValidateFontAtlasGlyphRecord(
     return true;
 }
 
-class FontAtlasGuardedRect{
-    public u32 channel = 0u;
-    public u32 firstY = 0u;
-    public u32 endY = 0u;
-    public u32 firstX = 0u;
-    public u32 endX = 0u;
-    public u32 glyphId = 0u;
-}
 
+[cpp_unwind]
 b8 ValidateFontAtlasGroupGuardedOverlap(
     in Span<FontAtlasGlyph> glyphs,
     in u32 groupIndex,

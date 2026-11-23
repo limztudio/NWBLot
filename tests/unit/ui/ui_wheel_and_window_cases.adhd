@@ -18,6 +18,11 @@ extern f32 UiGlyphSdfDistance(in f32 encoded, in u32 spreadPixels);
 extern f32 UiGlyphSdfCoverage(in f32 distance, in f32 pixelWidth);
 
 type UiWindowTests = WidgetFixture;
+const u32 s_UiWheelWindowQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiWheelWindowMaxF32Bits = 0x7f7fffffu;
+const u64 s_UiWheelQuietNaNF64Bits = 0x7ff8000000000000u;
+const u64 s_UiWheelPosInfF64Bits = 0x7ff0000000000000u;
+const AStringView s_UiWindowSkinApplyKey = "apply";
 
 class UiWheelInputTests{
     public InputRouter m_router;
@@ -79,13 +84,6 @@ class UiWindowSkinTests : WidgetFixture{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u32 s_UiWheelWindowQuietNaNF32Bits = 0x7fc00000u;
-const u32 s_UiWheelWindowMaxF32Bits = 0x7f7fffffu;
-const u64 s_UiWheelQuietNaNF64Bits = 0x7ff8000000000000u;
-const u64 s_UiWheelPosInfF64Bits = 0x7ff0000000000000u;
-const AStringView s_UiWindowSkinApplyKey = "apply";
 
 
 HitTarget MakeUiWheelHost(){

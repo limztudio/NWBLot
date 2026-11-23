@@ -334,7 +334,7 @@ b8 Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageFla
         return true;
     }
 
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
+    NothrowScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if((requiredUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && buffer.m_deviceAddress == 0u)
         return false;
     if(buffer.m_buffer == VK_NULL_HANDLE)
@@ -348,7 +348,7 @@ b8 Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageFla
         return false;
 
     Heap& heap = *buffer.m_boundHeap.get();
-    ScopedLock heapLock(heap.m_bindingMutex);
+    NothrowScopedLock heapLock(heap.m_bindingMutex);
     return &heap.m_context == &m_context && &heap.m_allocator == &m_allocator && heap.m_allocation != nullptr && heap.m_memory != VK_NULL_HANDLE;
 }
 

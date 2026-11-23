@@ -8,70 +8,68 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class EditBoxSnapshotSizes{
+    public usize replaced = 0u;
+    public usize preeditBytes = 0u;
+    public usize displayBytes = 0u;
+}
+
 class EditBoxSnapshotBuilder{
-    private b8 resolveSizes(
+    private Expected<EditBoxSnapshotSizes> resolveSizes(
         in usize committedBytes,
-        in EditCompositionView composition,
-        mut usize outReplaced,
-        mut usize outPreeditBytes,
-        mut usize outDisplayBytes
+        in EditCompositionView composition
     )const{
-        outReplaced = 0u;
-        outPreeditBytes = 0u;
-        outDisplayBytes = 0u;
+        EditBoxSnapshotSizes sizes = EditBoxSnapshotSizes();
         if(composition.active){
-            outReplaced = composition.replacementEnd - composition.replacementStart;
-            outPreeditBytes = composition.text.size();
+            sizes.replaced = composition.replacementEnd - composition.replacementStart;
+            sizes.preeditBytes = composition.text.size();
         }
-        if(committedBytes > s_TextMaxBytes || outPreeditBytes > s_TextMaxBytes - (committedBytes - outReplaced))
-            return false;
-        outDisplayBytes = (committedBytes - outReplaced) + outPreeditBytes;
-        return true;
+        if(committedBytes > s_TextMaxBytes || sizes.preeditBytes > s_TextMaxBytes - (committedBytes - sizes.replaced))
+            return MakeUnexpected(Failure());
+        sizes.displayBytes = (committedBytes - sizes.replaced) + sizes.preeditBytes;
+        return sizes;
     }
 
     private EditCaretMapping makeCaretMapping(in usize committedByte, in usize displayByte)const{
-        EditCaretMapping item;
+        EditCaretMapping item = EditCaretMapping();
         item.committedByte = committedByte;
         item.displayByte = displayByte;
         return item;
     }
 
-    private b8 buildInto(
+    [cpp_unwind]
+    private Expected<usize> buildInto(
         in StringView committed,
         in Span<usize> graphemeBoundaries,
         in EditCompositionView composition,
         in EditTextMode textMode,
         mut String outDisplay,
-        mut Vector<EditCaretMapping> outStops,
-        mut usize outPreeditBytes
+        mut Vector<EditCaretMapping> outStops
     )const{
-        usize replaced = 0u;
-        usize preeditBytes = 0u;
-        usize displayBytes = 0u;
-        if(!this.resolveSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
-            return false;
+        const Expected<EditBoxSnapshotSizes> sizes = this.resolveSizes(committed.size(), composition);
+        if(!sizes.has_value())
+            return MakeUnexpected(Failure());
         outDisplay.clear();
-        outDisplay.reserve(displayBytes);
+        outDisplay.reserve(sizes.value().displayBytes);
         if(composition.active){
             outDisplay.append(committed.substr(0u, composition.replacementStart));
-            if(preeditBytes != 0u)
-                outDisplay.append(composition.text.substr(0u, preeditBytes));
+            if(sizes.value().preeditBytes != 0u)
+                outDisplay.append(composition.text.substr(0u, sizes.value().preeditBytes));
             outDisplay.append(committed.substr(composition.replacementEnd, committed.size() - composition.replacementEnd));
         }
         else if(!committed.empty())
             outDisplay.assign(committed);
         if(!ValidateEditTextForMode(outDisplay, textMode))
-            return false;
+            return MakeUnexpected(Failure());
         outStops.clear();
         outStops.reserve(graphemeBoundaries.size() + 1u);
         for(in usize boundary : graphemeBoundaries){
             if(!composition.active || boundary <= composition.replacementStart)
                 outStops.push_back(this.makeCaretMapping(boundary, boundary));
             if(composition.active && boundary >= composition.replacementEnd)
-                outStops.push_back(this.makeCaretMapping(boundary, boundary - replaced + preeditBytes));
+                outStops.push_back(this.makeCaretMapping(boundary, boundary - sizes.value().replaced + sizes.value().preeditBytes));
         }
-        outPreeditBytes = preeditBytes;
-        return true;
+        return sizes.value().preeditBytes;
     }
 
     private void resolveRanges(
@@ -104,6 +102,7 @@ class EditBoxSnapshotBuilder{
         }
     }
 
+    [cpp_unwind]
     public b8 commit(
         in StringView committed,
         in Span<usize> graphemeBoundaries,
@@ -125,17 +124,18 @@ class EditBoxSnapshotBuilder{
         mut b8 outComposing,
         mut b8 outReady
     )const{
-        String display;
-        Vector<EditCaretMapping> stops;
-        usize preeditBytes = 0u;
-        if(!this.buildInto(committed, graphemeBoundaries, composition, textMode, display, stops, preeditBytes))
+        String display = "";
+        Vector<EditCaretMapping> stops = Vector<EditCaretMapping>();
+        const Expected<usize> preeditBytes = this.buildInto(committed, graphemeBoundaries, composition, textMode, display, stops);
+        if(!preeditBytes.has_value())
             return false;
+        outMapping.reserve(stops.size());
         outDisplay.assign(display);
         AssignTriviallyCopyableVector(outMapping, Span<EditCaretMapping>(stops));
         outComposing = composition.active;
         this.resolveRanges(
             composition,
-            preeditBytes,
+            preeditBytes.value(),
             selectionStart,
             selectionEnd,
             modelCaret,

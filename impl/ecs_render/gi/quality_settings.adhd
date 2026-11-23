@@ -263,14 +263,8 @@ void AdvanceSurfelGiFrameState(
     inOutFrameIndex = inOutFrameIndex + 1u;
 }
 
-b8 BeginSurfelResourceInitializationLifecycle(
-    in b8 surfelResourcesNeedClear,
-    mut b8 outSurfelResourcesClearPending
-){
-    if(!surfelResourcesNeedClear)
-        return false;
-    outSurfelResourcesClearPending = true;
-    return true;
+b8 BeginSurfelResourceInitializationLifecycle(in b8 surfelResourcesNeedClear){
+    return surfelResourcesNeedClear;
 }
 
 void FinalizeSurfelResourceInitializationLifecycle(

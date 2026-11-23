@@ -31,6 +31,7 @@ public:
     [[nodiscard]] b8 isClassMoveConstructible(const ClassDecl& decl, Span<const FieldDecl* const> fields)const noexcept;
     [[nodiscard]] b8 isClassCopyAssignable(const ClassDecl& decl, Span<const FieldDecl* const> fields)const noexcept;
     [[nodiscard]] b8 isClassMoveAssignable(const ClassDecl& decl, Span<const FieldDecl* const> fields)const noexcept;
+    [[nodiscard]] b8 isClassNothrowDefaultConstructible(const ClassDecl& decl, Span<const FieldDecl* const> fields, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 containsSimdRegisterType(const TypeRef& type, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 shouldPackSerializeClass(Span<const FieldDecl* const> fields, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 isTypeConstructible(const TypeRef& type, b8 requireCopy)const noexcept;

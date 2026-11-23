@@ -13,21 +13,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/unit/ui/ui_root_unwind.h>"), cpp_name("::NWB::Tests::UiRootFailure::DisplayAllocationFailurePreservesEditSnapshot")]
+extern b8 DisplayAllocationFailurePreservesEditSnapshot();
+[cpp_header("<tests/unit/ui/ui_root_unwind.h>"), cpp_name("::NWB::Tests::UiRootFailure::AllocationFailurePreservesEditSnapshot")]
+extern b8 AllocationFailurePreservesEditSnapshot();
+[cpp_header("<tests/unit/ui/ui_root_unwind.h>"), cpp_name("::NWB::Tests::UiRootFailure::AllocationFailurePreservesRootState")]
+extern b8 AllocationFailurePreservesRootState();
+
+const u32 s_UiMultilineTextUtf8OneByteMaxExclusive = 0x80u;
+const u32 s_UiMultilineTextUnicodeTab = 0x09u;
+const u32 s_UiMultilineTextUnicodeLineFeed = 0x0Au;
+const u32 s_UiMultilineTextUnicodeCarriageReturn = 0x0Du;
+const u32 s_UiMultilineTextUnicodeSpace = 0x20u;
+const u32 s_UiMultilineTextAsciiTilde = 0x7Eu;
+const u32 s_UiMultilineTextUnicodeDelete = 0x7Fu;
+const u32 s_UiMultilineTextUnicodeNextLine = 0x85u;
+const u32 s_UiMultilineTextUnicodeC1Last = 0x9Fu;
+const u32 s_UiMultilineTextUtf8C1LeadByte = 0xC2u;
+const StringView s_UiMultilineTextNextLine = "\xC2\x85";
+const StringView s_UiMultilineTextLineSeparator = "\xE2\x80\xA8";
+const StringView s_UiMultilineTextParagraphSeparator = "\xE2\x80\xA9";
+const StringView s_UiMultilineTextThreeByteScalar = "\xED\x95\x9C";
+const StringView s_UiMultilineTextFourByteScalar = "\xF0\x9F\x92\xBB";
+const StringView s_UiMultilineTextBorrowedSourceText = "prefix a\r\nb\tz suffix";
+const StringView s_UiNestedPopupBuilderBeforeKey = "before";
+const StringView s_UiNestedPopupBuilderApplyKey = "apply";
+const StringView s_UiNestedPopupBuilderAfterKey = "after";
+const StringView s_UiNestedPopupContextParentKey = "parent";
+const StringView s_UiNestedPopupContextChildKey = "child";
+const StringView s_UiNestedPopupLifetimeComboKey = "combo";
+const StringView s_UiNestedPopupLifetimeComboRowsKey = "rows";
+const StringView s_UiNestedPopupLifetimeAnchorKey = "anchor";
+const StringView s_UiNestedPopupLifetimeSecondHalfQuery = "Second";
+const StringView s_UiNestedPopupLifetimeDeepKey = "deep";
+const StringView s_UiNestedPopupLifetimeLeafKey = "leaf";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class UiMultilineTextBytes<const usize Count>{
     public Array<u8, Count> bytes;
     public StringView view()const{ return ReadBinaryTextSlice(this.bytes, 0u, cast<isize>(Count)).value(); }
-}
-
-UiMultilineTextBytes<3u> MakeUiMultilineTextAsciiSandwich(in u32 scalar){
-    UiMultilineTextBytes<3u> result;
-    result.bytes = Array<u8, 3u>('a', cast<u8>(scalar), 'b');
-    return result;
-}
-
-UiMultilineTextBytes<4u> MakeUiMultilineTextC1Sandwich(in u32 leadByte, in u32 scalar){
-    UiMultilineTextBytes<4u> result;
-    result.bytes = Array<u8, 4u>('a', cast<u8>(leadByte), cast<u8>(scalar), 'b');
-    return result;
 }
 
 class UiMultilineViewTests : MultilineViewFixture{
@@ -46,7 +73,6 @@ class UiMultilineViewTests : MultilineViewFixture{
     }
     public b8 adoptBuiltLayout(mut Expected<TextLayout, TextLayoutStatus> layout){ return this.m_view.adoptLayout(layout.value()); }
 }
-
 
 class UiNestedPopupBuilderTests : WidgetFixture{
     public PopupState m_parent;
@@ -73,7 +99,6 @@ class UiNestedPopupBuilderTests : WidgetFixture{
     }
 }
 
-
 class UiNestedPopupContextPopupDeclaration{
     public WidgetState owner;
     public WidgetState action;
@@ -81,7 +106,6 @@ class UiNestedPopupContextPopupDeclaration{
 
 
 }
-
 
 class UiNestedPopupContextTests : ContextTestFixture{
 
@@ -123,7 +147,6 @@ class UiNestedPopupContextTests : ContextTestFixture{
         return this.m_context.endRoot() && this.m_context.finishFrame();
     }
 }
-
 
 class UiNestedPopupLifetimeTests : SearchFixture{
     public PopupState m_parent;
@@ -173,38 +196,36 @@ class UiNestedPopupLifetimeTests : SearchFixture{
     }
 }
 
+class UiMultilineTextExpectationCase{
+    public StringView source;
+    public StringView expected;
+
+    public UiMultilineTextExpectationCase(){
+        this.source = "";
+        this.expected = "";
+    }
+
+    public UiMultilineTextExpectationCase(in StringView inSource, in StringView inExpected){
+        this.source = inSource;
+        this.expected = inExpected;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_UiMultilineTextUtf8OneByteMaxExclusive = 0x80u;
-const u32 s_UiMultilineTextUnicodeTab = 0x09u;
-const u32 s_UiMultilineTextUnicodeLineFeed = 0x0Au;
-const u32 s_UiMultilineTextUnicodeCarriageReturn = 0x0Du;
-const u32 s_UiMultilineTextUnicodeSpace = 0x20u;
-const u32 s_UiMultilineTextAsciiTilde = 0x7Eu;
-const u32 s_UiMultilineTextUnicodeDelete = 0x7Fu;
-const u32 s_UiMultilineTextUnicodeNextLine = 0x85u;
-const u32 s_UiMultilineTextUnicodeC1Last = 0x9Fu;
-const u32 s_UiMultilineTextUtf8C1LeadByte = 0xC2u;
+UiMultilineTextBytes<3u> MakeUiMultilineTextAsciiSandwich(in u32 scalar){
+    UiMultilineTextBytes<3u> result;
+    result.bytes = Array<u8, 3u>('a', cast<u8>(scalar), 'b');
+    return result;
+}
 
-const StringView s_UiMultilineTextNextLine = "\xC2\x85";
-const StringView s_UiMultilineTextLineSeparator = "\xE2\x80\xA8";
-const StringView s_UiMultilineTextParagraphSeparator = "\xE2\x80\xA9";
-const StringView s_UiMultilineTextThreeByteScalar = "\xED\x95\x9C";
-const StringView s_UiMultilineTextFourByteScalar = "\xF0\x9F\x92\xBB";
-const StringView s_UiMultilineTextBorrowedSourceText = "prefix a\r\nb\tz suffix";
-
-const StringView s_UiNestedPopupBuilderBeforeKey = "before";
-const StringView s_UiNestedPopupBuilderApplyKey = "apply";
-const StringView s_UiNestedPopupBuilderAfterKey = "after";
-
-const StringView s_UiNestedPopupContextParentKey = "parent";
-const StringView s_UiNestedPopupContextChildKey = "child";
-
-const StringView s_UiNestedPopupLifetimeComboKey = "combo";
-const StringView s_UiNestedPopupLifetimeComboRowsKey = "rows";
-
+UiMultilineTextBytes<4u> MakeUiMultilineTextC1Sandwich(in u32 leadByte, in u32 scalar){
+    UiMultilineTextBytes<4u> result;
+    result.bytes = Array<u8, 4u>('a', cast<u8>(leadByte), cast<u8>(scalar), 'b');
+    return result;
+}
 
 WidgetOptions MakeUiNestedPopupControlOptions(in f32 width){
     WidgetOptions options = WidgetOptions();
@@ -339,33 +360,6 @@ void ExpectUiNestedPopupLifetimeParentControls(in UiNestedPopupLifetimeTests sel
     EXPECT_EQ(before.value().popup.openGeneration, self.m_parent.openGeneration());
     EXPECT_TRUE(self.m_parent.isOpen());
 }
-const StringView s_UiNestedPopupLifetimeAnchorKey = "anchor";
-const StringView s_UiNestedPopupLifetimeSecondHalfQuery = "Second";
-const StringView s_UiNestedPopupLifetimeDeepKey = "deep";
-const StringView s_UiNestedPopupLifetimeLeafKey = "leaf";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiMultilineTextExpectationCase{
-    public StringView source;
-    public StringView expected;
-
-    public UiMultilineTextExpectationCase(){
-        this.source = "";
-        this.expected = "";
-    }
-
-    public UiMultilineTextExpectationCase(in StringView inSource, in StringView inExpected){
-        this.source = inSource;
-        this.expected = inExpected;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void ExpectUiMultilineTextNormalizedError(in StringView text, in usize maxBytes, in EditTextStatus status){
     const auto normalized = NormalizeMultilineText(text, maxBytes);
@@ -373,10 +367,6 @@ void ExpectUiMultilineTextNormalizedError(in StringView text, in usize maxBytes,
     if(!normalized.has_value())
         EXPECT_EQ(normalized.error(), status);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiMultilineText_AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes(){
     Array<StringView, 5u> cases = Array<StringView, 5u>();
@@ -665,10 +655,6 @@ void VerifyUiMultilineText_RejectedBorrowedViewsPreserveSourceBytesAndStorage(){
         EXPECT_EQ(output.capacity(), invalidCapacity);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiMultilineViewTests_SnapshotOwnsMultilineModeTextAndCrossLineSelection(mut UiMultilineViewTests self){
     ASSERT_TRUE(self.m_model.setText("ab\ncd"));
@@ -992,10 +978,6 @@ void VerifyUiMultilineViewTests_SingleLineCenteringRejectsVerticalScrollInfluenc
     EXPECT_FLOAT_EQ(self.m_placement.caret.y, 34.0f);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNestedPopupBuilderTests_ChildLayoutDoesNotConsumeParentSpaceAndRestoresItsPopupToken(mut UiNestedPopupBuilderTests self){
     ASSERT_TRUE(self.beginParent(1u));
     const PopupToken parent = self.m_context.popupToken();
@@ -1169,10 +1151,6 @@ void VerifyUiNestedPopupBuilderTests_UnbalancedChildContainerPreventsTheOuterFra
     EXPECT_FALSE(self.m_context.finishFrame());
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiNestedPopupContextTests_NestedActivationRestoresExactParentScopeAndLayer(mut UiNestedPopupContextTests self){
     ASSERT_TRUE(self.begin(1u));
@@ -1497,10 +1475,6 @@ void VerifyUiNestedPopupContextTests_EighthNestedActivationIsBoundedAndNinthRese
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNestedPopupLifetimeTests_ParentReopeningRetiresTheOldPlainChildAndKeepsParentControls(mut UiNestedPopupLifetimeTests self){
     ASSERT_TRUE(self.acceptPlain(1u));
     ASSERT_TRUE(self.m_childVisible);
@@ -1710,68 +1684,132 @@ void VerifyUiNestedPopupLifetimeTests_AutomaticChildrenReserveTheirDeclaredLayer
     EXPECT_EQ(self.m_context.input().focus(), leafId);
 }
 
+void VerifyUiContext_EditSnapshotDisplayAllocationFailurePreservesState(){
+    EXPECT_TRUE(DisplayAllocationFailurePreservesEditSnapshot());
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void VerifyUiContext_EditSnapshotAllocationFailurePreservesState(){
+    EXPECT_TRUE(AllocationFailurePreservesEditSnapshot());
+}
 
+void VerifyUiContext_RootAllocationFailurePreservesState(){
+    EXPECT_TRUE(AllocationFailurePreservesRootState());
+}
 
 NWB_ADHD_GTEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes, VerifyUiMultilineText_AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes)
+
 NWB_ADHD_GTEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNormalization, VerifyUiMultilineText_ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNormalization)
+
 NWB_ADHD_GTEST(UiMultilineText, RejectsEveryC1ControlExceptNelDuringNormalization, VerifyUiMultilineText_RejectsEveryC1ControlExceptNelDuringNormalization)
+
 NWB_ADHD_GTEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSeparator, VerifyUiMultilineText_RequiresNormalizationForTabsAndEveryNoncanonicalLineSeparator)
+
 NWB_ADHD_GTEST(UiMultilineText, PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizingBreaks, VerifyUiMultilineText_PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizingBreaks)
+
 NWB_ADHD_GTEST(UiMultilineText, UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBytes, VerifyUiMultilineText_UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBytes)
+
 NWB_ADHD_GTEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequences, VerifyUiMultilineText_RejectsMalformedUtf8AndNonScalarSequences)
+
 NWB_ADHD_GTEST(UiMultilineText, RejectedControlsAfterNormalizedPrefixesFailWithInvalidText, VerifyUiMultilineText_RejectedControlsAfterNormalizedPrefixesFailWithInvalidText)
+
 NWB_ADHD_GTEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars, VerifyUiMultilineText_LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars)
+
 NWB_ADHD_GTEST(UiMultilineText, ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput, VerifyUiMultilineText_ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput)
+
 NWB_ADHD_GTEST(UiMultilineText, SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets, VerifyUiMultilineText_SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets)
+
 NWB_ADHD_GTEST(UiMultilineText, RejectedBorrowedViewsPreserveSourceBytesAndStorage, VerifyUiMultilineText_RejectedBorrowedViewsPreserveSourceBytesAndStorage)
 
 NWB_ADHD_GTEST_F(UiMultilineViewTests, SnapshotOwnsMultilineModeTextAndCrossLineSelection, VerifyUiMultilineViewTests_SnapshotOwnsMultilineModeTextAndCrossLineSelection)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrHits, VerifyUiMultilineViewTests_NewSnapshotRequiresMatchingLayoutBeforePlacementOrHits)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, EmptyAndTrailingHardLinesKeepDistinctCaretRows, VerifyUiMultilineViewTests_EmptyAndTrailingHardLinesKeepDistinctCaretRows)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine, VerifyUiMultilineViewTests_HitTestingUsesYAndClampsOutsideTheFirstAndLastLine)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets, VerifyUiMultilineViewTests_LigatureStopsRetainTheirHardLineAndCommittedOffsets)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrapheme, VerifyUiMultilineViewTests_CrossLinePreeditKeepsNativeScalarCaretInsideItsGrapheme)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeOrShrink, VerifyUiMultilineViewTests_BothScrollAxesRevealCaretAndClampAfterDocumentHomeOrShrink)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, PaddingAndOuterClipIntersectWithoutChangingLogicalLineGeometry, VerifyUiMultilineViewTests_PaddingAndOuterClipIntersectWithoutChangingLogicalLineGeometry)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, ZeroViewportKeepsFiniteCaretAndScrollAndProducesAnEmptyClip, VerifyUiMultilineViewTests_ZeroViewportKeepsFiniteCaretAndScrollAndProducesAnEmptyClip)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, FailedPlacementPreservesStateAndInvalidHitsAreRejected, VerifyUiMultilineViewTests_FailedPlacementPreservesStateAndInvalidHitsAreRejected)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, FailedLayoutAdoptionRetainsMultilineGeometryAndPlacement, VerifyUiMultilineViewTests_FailedLayoutAdoptionRetainsMultilineGeometryAndPlacement)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, MovingTheViewRetainsOwnedPreeditLineMappingsAndReadyGeometry, VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndReadyGeometry)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedHardLine, VerifyUiMultilineViewTests_PaintOwnsSelectionSegmentsIncludingAnEmptySelectedHardLine)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine, VerifyUiMultilineViewTests_PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine)
+
 NWB_ADHD_GTEST_F(UiMultilineViewTests, SingleLineCenteringRejectsVerticalScrollInfluence, VerifyUiMultilineViewTests_SingleLineCenteringRejectsVerticalScrollInfluence)
 
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestoresItsPopupToken, VerifyUiNestedPopupBuilderTests_ChildLayoutDoesNotConsumeParentSpaceAndRestoresItsPopupToken)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentContainer, VerifyUiNestedPopupBuilderTests_ChildOpenedInsideARowRestoresTheSameParentContainer)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, ClosedChildBeginLeavesParentScopeAndFollowingControlsIntact, VerifyUiNestedPopupBuilderTests_ClosedChildBeginLeavesParentScopeAndFollowingControlsIntact)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrdered, VerifyUiNestedPopupBuilderTests_ChildPaintEscapesParentClipAndLayersRemainOrdered)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, ChildActionLeavesBothParentControlsAvailableOnLaterDeclarations, VerifyUiNestedPopupBuilderTests_ChildActionLeavesBothParentControlsAvailableOnLaterDeclarations)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutPublishingTheCandidate, VerifyUiNestedPopupBuilderTests_NestedScopeCapacityRejectsTheNextChildWithoutPublishingTheCandidate)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublishIt, VerifyUiNestedPopupBuilderTests_WrongPanelEndCannotCloseTheChildPopupOrPublishIt)
+
 NWB_ADHD_GTEST_F(UiNestedPopupBuilderTests, UnbalancedChildContainerPreventsTheOuterFrameFromPublishing, VerifyUiNestedPopupBuilderTests_UnbalancedChildContainerPreventsTheOuterFrameFromPublishing)
 
+NWB_ADHD_GTEST(UiContext, EditSnapshotDisplayAllocationFailurePreservesState, VerifyUiContext_EditSnapshotDisplayAllocationFailurePreservesState)
+
+NWB_ADHD_GTEST(UiContext, EditSnapshotAllocationFailurePreservesState, VerifyUiContext_EditSnapshotAllocationFailurePreservesState)
+
+NWB_ADHD_GTEST(UiContext, RootAllocationFailurePreservesState, VerifyUiContext_RootAllocationFailurePreservesState)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, NestedActivationRestoresExactParentScopeAndLayer, VerifyUiNestedPopupContextTests_NestedActivationRestoresExactParentScopeAndLayer)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, ReservationOrderControlsLayersAcrossReactivationAndReversePaintOrder, VerifyUiNestedPopupContextTests_ReservationOrderControlsLayersAcrossReactivationAndReversePaintOrder)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, HiddenAncestorDropsReservedDescendantsAndTheirPublishedTargets, VerifyUiNestedPopupContextTests_HiddenAncestorDropsReservedDescendantsAndTheirPublishedTargets)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, DiscardingInactiveFamilyPreservesAnUnrelatedTopLevelScopeAndItsLayer, VerifyUiNestedPopupContextTests_DiscardingInactiveFamilyPreservesAnUnrelatedTopLevelScopeAndItsLayer)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, DiscardingInactiveChildKeepsItsActiveParentBalanced, VerifyUiNestedPopupContextTests_DiscardingInactiveChildKeepsItsActiveParentBalanced)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, DiscardingAnActiveAncestorFailsWithoutRemovingItsActivation, VerifyUiNestedPopupContextTests_DiscardingAnActiveAncestorFailsWithoutRemovingItsActivation)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, ChildCannotActivateWithoutItsExactCurrentParent, VerifyUiNestedPopupContextTests_ChildCannotActivateWithoutItsExactCurrentParent)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, RegistrationRejectsAnAncestorTokenFromAnotherOpenEpoch, VerifyUiNestedPopupContextTests_RegistrationRejectsAnAncestorTokenFromAnotherOpenEpoch)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, FinalGeometryCannotRebindParentTokenOrReservedLayer, VerifyUiNestedPopupContextTests_FinalGeometryCannotRebindParentTokenOrReservedLayer)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, InvalidFinalGeometryCannotPublishThePreparedFamily, VerifyUiNestedPopupContextTests_InvalidFinalGeometryCannotPublishThePreparedFamily)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThatChildActivation, VerifyUiNestedPopupContextTests_AcceptedChildActionCanOnlyBeConsumedDuringThatChildActivation)
+
 NWB_ADHD_GTEST_F(UiNestedPopupContextTests, EighthNestedActivationIsBoundedAndNinthReservationFails, VerifyUiNestedPopupContextTests_EighthNestedActivationIsBoundedAndNinthReservationFails)
 
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, ParentReopeningRetiresTheOldPlainChildAndKeepsParentControls, VerifyUiNestedPopupLifetimeTests_ParentReopeningRetiresTheOldPlainChildAndKeepsParentControls)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, DeliberateChildReopeningAfterParentReopeningUsesANewPermittedLifetime, VerifyUiNestedPopupLifetimeTests_DeliberateChildReopeningAfterParentReopeningUsesANewPermittedLifetime)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, ParentReopeningClosesTheOldComboPopupAndPreservesItsCommittedKey, VerifyUiNestedPopupLifetimeTests_ParentReopeningClosesTheOldComboPopupAndPreservesItsCommittedKey)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, ExplicitComboOpeningAfterParentReopeningKeepsTheNewPopupOpen, VerifyUiNestedPopupLifetimeTests_ExplicitComboOpeningAfterParentReopeningKeepsTheNewPopupOpen)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, SearchParentReplacementCancelsStalePreeditAndPermitsAFreshOpening, VerifyUiNestedPopupLifetimeTests_SearchParentReplacementCancelsStalePreeditAndPermitsAFreshOpening)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, ParentReopeningClosesTheOldContextMenuWithoutRemovingItsAnchor, VerifyUiNestedPopupLifetimeTests_ParentReopeningClosesTheOldContextMenuWithoutRemovingItsAnchor)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, ExplicitMenuOpeningAfterParentReopeningKeepsTheNewCommandLifetime, VerifyUiNestedPopupLifetimeTests_ExplicitMenuOpeningAfterParentReopeningKeepsTheNewCommandLifetime)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclaredLayersAndCountTowardTheEightScopeLimit, VerifyUiNestedPopupLifetimeTests_AutomaticChildrenReserveTheirDeclaredLayersAndCountTowardTheEightScopeLimit)
 
 

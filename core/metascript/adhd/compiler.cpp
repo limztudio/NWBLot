@@ -84,7 +84,9 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
         entry.headerPath = MStringView(cliHdr.data(), cliHdr.size());
         entry.span = SourceSpan{ 1u, 1u };
         b8 isQuoted = false;
-        (void)StripHeaderDelimiters(entry.headerPath, nullptr, &isQuoted);
+        const MStringView strippedPath = StripHeaderDelimiters(entry.headerPath, nullptr, &isQuoted);
+        if(strippedPath.empty())
+            continue;
         entry.isSystemHeader = !isQuoted;
         allCppHeaders.push_back(entry);
     }

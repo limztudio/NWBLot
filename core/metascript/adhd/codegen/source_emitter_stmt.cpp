@@ -22,14 +22,18 @@ NWB_ADHD_BEGIN
 void SourceEmitter::emitStatementList(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     const usize prevLocalDeclCount = m_activeLocalVarDecls.size();
     const Span<const Stmt* const> prevRemaining = m_remainingBlockStatements;
+    ParallelStatementEmitter::BlockTaskScopeTracker taskScopeTracker(*this, statements);
     for(usize i = 0u; i < statements.size(); ++i){
         const Stmt* stmt = statements[i];
         if(!stmt)
             continue;
-        m_remainingBlockStatements = Span<const Stmt* const>(statements.data() + (i + 1u), statements.size() - (i + 1u));
+        taskScopeTracker.beforeStatement(out, i, indent);
+        const Span<const Stmt* const> remaining(statements.data() + (i + 1u), statements.size() - (i + 1u));
+        m_remainingBlockStatements = remaining;
         emitStmt(out, *stmt, indent);
         if(stmt->kind == StmtKind::VarDecl && !stmt->name.empty())
             m_activeLocalVarDecls.push_back(stmt);
+        taskScopeTracker.afterStatement(out, *stmt, remaining, indent);
     }
     m_remainingBlockStatements = prevRemaining;
     m_activeLocalVarDecls.resize(prevLocalDeclCount);
@@ -288,6 +292,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         const usize prevForRangeDecls = m_activeLocalVarDecls.size();
         if(!stmt.name.empty())
             m_activeLocalVarDecls.push_back(&stmt);
+        ParallelStatementEmitter(*this).emitLoopBodyTaskGuardIfNeeded(out, stmt.statements, indent + 1u);
         emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         m_activeLocalVarDecls.resize(prevForRangeDecls);
         emitIndent(out, indent);
@@ -322,6 +327,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.stepExpr)
             emitExpr(out, *stmt.stepExpr);
         out.append("){\r\n");
+        ParallelStatementEmitter(*this).emitLoopBodyTaskGuardIfNeeded(out, stmt.statements, indent + 1u);
         emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         m_activeLocalVarDecls.resize(prevForIdxDecls);
         emitIndent(out, indent);

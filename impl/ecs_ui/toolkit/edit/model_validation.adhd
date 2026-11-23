@@ -51,7 +51,39 @@ usize ResolveReplacedEditCaret(in Span<usize> boundaries, in usize begin, in usi
 
 
 
-void CommitEditModelSetText(
+void CommitEditModelBuffersAndComposition(
+    in StringView candidate,
+    in Span<usize> newBoundaries,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration
+){
+    if(candidate.empty())
+        inOutText.clear();
+    else
+        inOutText.assign(candidate);
+    inOutBoundaries.clear();
+    for(usize i = 0u; i < newBoundaries.size(); ++i)
+        inOutBoundaries.push_back(newBoundaries[i]);
+    EditCompositionRules compositionRules;
+    compositionRules.cancel(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+}
+
+[cpp_unwind] void CommitEditModelSetText(
     in StringView value,
     in Span<usize> newBoundaries,
     mut String inOutText,
@@ -76,15 +108,18 @@ void CommitEditModelSetText(
     if(!value.empty())
         candidate.assign(value);
     const b8 changed = StringView(candidate) != StringView(inOutText);
-    inOutText.assign(candidate);
-    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
-    outAnchor = inOutText.size();
+    inOutText.reserve(candidate.size());
+    inOutBoundaries.reserve(newBoundaries.size());
+    outAnchor = candidate.size();
     outCaret = outAnchor;
     ++inOutSelectionGeneration;
     EditHistoryRules historyRules;
     historyRules.clear(inOutHistory, outHistoryCursor, outHistoryBytes);
-    EditCompositionRules compositionRules;
-    compositionRules.cancel(
+    CommitEditModelBuffersAndComposition(
+        candidate,
+        newBoundaries,
+        inOutText,
+        inOutBoundaries,
         inOutPreedit,
         outPreeditAnchor,
         outPreeditCaret,
@@ -103,12 +138,13 @@ void CommitEditModelSetText(
 
 
 
-b8 CommitEditModelEraseAroundSelection(
+[cpp_unwind] b8 CommitEditModelEraseAroundSelection(
     in StringView candidate,
     in Span<usize> newBoundaries,
     in usize beforeBytes,
     in usize maxHistoryRecords,
     in usize maxHistoryBytes,
+    mut EditHistoryRecord inOutStagedRecord,
     mut String inOutText,
     mut Vector<usize> inOutBoundaries,
     mut usize inOutAnchor,
@@ -130,8 +166,10 @@ b8 CommitEditModelEraseAroundSelection(
     const usize caret = inOutCaret - beforeBytes;
     if(!IsEditBoundary(newBoundaries, anchor) || !IsEditBoundary(newBoundaries, caret))
         return false;
+    inOutText.reserve(candidate.size());
+    inOutBoundaries.reserve(newBoundaries.size());
     EditHistoryRules historyRules;
-    historyRules.record(
+    const b8 recordHistory = historyRules.prepareRecord(
         StringView(inOutText),
         inOutAnchor,
         inOutCaret,
@@ -140,17 +178,29 @@ b8 CommitEditModelEraseAroundSelection(
         caret,
         maxHistoryRecords,
         maxHistoryBytes,
-        inOutHistory,
         inOutHistoryCursor,
-        inOutHistoryBytes
+        inOutHistoryBytes,
+        inOutStagedRecord,
+        inOutHistory
     );
-    inOutText.assign(candidate);
-    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
-    inOutAnchor = anchor;
-    inOutCaret = caret;
-    ++inOutSelectionGeneration;
-    EditCompositionRules compositionRules;
-    compositionRules.cancel(
+    if(recordHistory){
+        historyRules.commitPrepared(
+            maxHistoryRecords,
+            maxHistoryBytes,
+            inOutStagedRecord,
+            inOutHistory,
+            inOutHistoryCursor,
+            inOutHistoryBytes
+        );
+    }
+    else{
+        historyRules.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
+    }
+    CommitEditModelBuffersAndComposition(
+        candidate,
+        newBoundaries,
+        inOutText,
+        inOutBoundaries,
         inOutPreedit,
         outPreeditAnchor,
         outPreeditCaret,
@@ -159,17 +209,21 @@ b8 CommitEditModelEraseAroundSelection(
         inOutCompositionActive,
         inOutCompositionGeneration
     );
+    inOutAnchor = anchor;
+    inOutCaret = caret;
+    ++inOutSelectionGeneration;
     ++inOutRevision;
     return true;
 }
 
-void CommitEditModelReplaceRange(
+[cpp_unwind] void CommitEditModelReplaceRange(
     in StringView candidate,
     in Span<usize> newBoundaries,
     in usize begin,
     in usize replacementSize,
     in usize maxHistoryRecords,
     in usize maxHistoryBytes,
+    mut EditHistoryRecord inOutStagedRecord,
     mut String inOutText,
     mut Vector<usize> inOutBoundaries,
     mut usize inOutAnchor,
@@ -189,9 +243,12 @@ void CommitEditModelReplaceRange(
 ){
     const usize caret = ResolveReplacedEditCaret(newBoundaries, begin, replacementSize);
     const b8 changed = candidate != StringView(inOutText);
+    inOutText.reserve(candidate.size());
+    inOutBoundaries.reserve(newBoundaries.size());
+    EditHistoryRules historyRules;
+    b8 recordHistory = false;
     if(changed){
-        EditHistoryRules historyRules;
-        historyRules.record(
+        recordHistory = historyRules.prepareRecord(
             StringView(inOutText),
             inOutAnchor,
             inOutCaret,
@@ -200,18 +257,32 @@ void CommitEditModelReplaceRange(
             caret,
             maxHistoryRecords,
             maxHistoryBytes,
-            inOutHistory,
             inOutHistoryCursor,
-            inOutHistoryBytes
+            inOutHistoryBytes,
+            inOutStagedRecord,
+            inOutHistory
         );
     }
-    inOutText.assign(candidate);
-    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
-    inOutAnchor = caret;
-    inOutCaret = caret;
-    ++inOutSelectionGeneration;
-    EditCompositionRules compositionRules;
-    compositionRules.cancel(
+    if(changed){
+        if(recordHistory){
+            historyRules.commitPrepared(
+                maxHistoryRecords,
+                maxHistoryBytes,
+                inOutStagedRecord,
+                inOutHistory,
+                inOutHistoryCursor,
+                inOutHistoryBytes
+            );
+        }
+        else{
+            historyRules.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
+        }
+    }
+    CommitEditModelBuffersAndComposition(
+        candidate,
+        newBoundaries,
+        inOutText,
+        inOutBoundaries,
         inOutPreedit,
         outPreeditAnchor,
         outPreeditCaret,
@@ -220,19 +291,22 @@ void CommitEditModelReplaceRange(
         inOutCompositionActive,
         inOutCompositionGeneration
     );
+    inOutAnchor = caret;
+    inOutCaret = caret;
+    ++inOutSelectionGeneration;
     if(changed)
         ++inOutRevision;
 }
 
 
 
-b8 TryBuildEditModelBoundaries(in StringView value, in EditTextMode textMode, mut Vector<usize> outBoundaries){
+[cpp_unwind] b8 TryBuildEditModelBoundaries(in StringView value, in EditTextMode textMode, mut Vector<usize> outBoundaries){
     if(textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
         return false;
     return TryBuildGraphemeBoundariesInto(value, textMode == EditTextMode::SingleLine, outBoundaries);
 }
 
-b8 ApplyEditModelSetText(
+[cpp_unwind] b8 ApplyEditModelSetText(
     in StringView value,
     in usize maxBytes,
     in EditTextMode textMode,
@@ -283,12 +357,13 @@ b8 ApplyEditModelSetText(
     return true;
 }
 
-b8 ApplyEditModelEraseAroundSelection(
+[cpp_unwind] b8 ApplyEditModelEraseAroundSelection(
     in usize beforeBytes,
     in usize afterBytes,
     in EditTextMode textMode,
     in usize maxHistoryRecords,
     in usize maxHistoryBytes,
+    mut EditHistoryRecord inOutStagedRecord,
     mut String inOutText,
     mut Vector<usize> inOutBoundaries,
     mut usize inOutAnchor,
@@ -324,6 +399,7 @@ b8 ApplyEditModelEraseAroundSelection(
         beforeBytes,
         maxHistoryRecords,
         maxHistoryBytes,
+        inOutStagedRecord,
         inOutText,
         inOutBoundaries,
         inOutAnchor,
@@ -343,7 +419,7 @@ b8 ApplyEditModelEraseAroundSelection(
     );
 }
 
-b8 ApplyEditModelReplaceRange(
+[cpp_unwind] b8 ApplyEditModelReplaceRange(
     in usize begin,
     in usize end,
     in StringView replacement,
@@ -351,6 +427,7 @@ b8 ApplyEditModelReplaceRange(
     in EditTextMode textMode,
     in usize maxHistoryRecords,
     in usize maxHistoryBytes,
+    mut EditHistoryRecord inOutStagedRecord,
     mut String inOutText,
     mut Vector<usize> inOutBoundaries,
     mut usize inOutAnchor,
@@ -382,6 +459,7 @@ b8 ApplyEditModelReplaceRange(
         replacement.size(),
         maxHistoryRecords,
         maxHistoryBytes,
+        inOutStagedRecord,
         inOutText,
         inOutBoundaries,
         inOutAnchor,

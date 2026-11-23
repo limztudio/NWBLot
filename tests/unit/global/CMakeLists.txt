@@ -1,8 +1,8 @@
 nwb_declare_static_library(nwb_global_hex_case_types)
-nwb_target_adhd_sources(nwb_global_hex_case_types NAMESPACE "__hidden_hex_failure_tests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/hex_case_types.adhd")
+nwb_target_adhd_sources(nwb_global_hex_case_types NAMESPACE "HexFailureTests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/hex_case_types.adhd")
 
 nwb_declare_static_library(nwb_global_fixed_vector_case_types)
-nwb_target_adhd_sources(nwb_global_fixed_vector_case_types NAMESPACE "__hidden_fixed_vector_failure_tests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/fixed_vector_case_types.adhd")
+nwb_target_adhd_sources(nwb_global_fixed_vector_case_types NAMESPACE "FixedVectorFailureTests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/fixed_vector_case_types.adhd")
 
 nwb_declare_static_library(nwb_global_scope_case_types)
 nwb_target_adhd_sources(nwb_global_scope_case_types NAMESPACE "__hidden_scope_exit_tests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/scope_case_types.adhd")

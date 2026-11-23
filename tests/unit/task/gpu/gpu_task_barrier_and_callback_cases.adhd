@@ -11,6 +11,11 @@
 
 
 const u64 s_GpuBarrierAcceptedTokenValue = 7u;
+const usize s_GpuBarrierInlineCount = 8u;
+const usize s_GpuBarrierIndexedCount = 9u;
+const usize s_GpuBarrierMergeGroupSize = 2u;
+const usize s_GpuBarrierExtraRangeTasks = 4u;
+const usize s_GpuBarrierExcludedPacketCount = 1u;
 
 class GpuBarrierCallbackInvocationState{
     public mut ScratchStorageVector<u32> order;
@@ -165,12 +170,6 @@ void CheckInvalidCallbackBindings<TCallback>(
     EXPECT_FALSE(bindings.findCallback(saved.task).has_value());
 }
 
-
-const usize s_GpuBarrierInlineCount = 8u;
-const usize s_GpuBarrierIndexedCount = 9u;
-const usize s_GpuBarrierMergeGroupSize = 2u;
-const usize s_GpuBarrierExtraRangeTasks = 4u;
-const usize s_GpuBarrierExcludedPacketCount = 1u;
 
 GpuTaskResourceUse GpuBarrier_MakeResourceUse(
     in GpuGraphResourceId resource,

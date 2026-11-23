@@ -185,8 +185,9 @@ Value& Value::operator=(Value&& other){
 Value Value::operator+(const Value& rhs)const{
     if(isNumeric() && rhs.isNumeric()){
         Value out(m_arena);
-        (void)__hidden_metascript_value::TryApplyNumericAdd(out, *this, rhs);
-        return out;
+        if(__hidden_metascript_value::TryApplyNumericAdd(out, *this, rhs))
+            return out;
+        return Value(m_arena);
     }
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){

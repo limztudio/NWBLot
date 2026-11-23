@@ -12,19 +12,13 @@
 
 [cpp_header("<cerrno>"), cpp_name("EDOM")]
 extern const i32 s_PowEDOM;
-
 [cpp_header("<cerrno>"), cpp_name("ERANGE")]
 extern const i32 s_PowERANGE;
-
-VectorSingle ReferencePow(in VectorSingle x, in VectorSingle y){
-    return VectorSingle(Pow(x.x, y.x), Pow(x.y, y.y), Pow(x.z, y.z), Pow(x.w, y.w));
-}
 
 const Array<f64, 16> s_LogCoefficients = Array<f64, 16>(
     1.0, 1.0 / 3.0, 1.0 / 5.0, 1.0 / 7.0, 1.0 / 9.0, 1.0 / 11.0, 1.0 / 13.0, 1.0 / 15.0,
     1.0 / 17.0, 1.0 / 19.0, 1.0 / 21.0, 1.0 / 23.0, 1.0 / 25.0, 1.0 / 27.0, 1.0 / 29.0, 1.0 / 31.0
 );
-
 const Array<f64, 21> s_InverseFactorials = Array<f64, 21>(
     1.0,
     1.0,
@@ -48,6 +42,102 @@ const Array<f64, 21> s_InverseFactorials = Array<f64, 21>(
     1.0 / 121645100408832000.0,
     1.0 / 2432902008176640000.0
 );
+const StringView s_ExceptionalLabel = "exceptional";
+const StringView s_RandomLabel = "random";
+const StringView s_PositiveFiniteLabel = "positive_finite";
+const f32 s_EncodeExponent = 1.0f / 2.4f;
+const f32 s_DecodeScale = 1.0f / 1.055f;
+const usize s_PowExceptionalCount = 29u;
+
+enum<u8> PowVariant{
+    Production = 0u,
+    PackedSingle = 1u,
+    PackedDouble = 2u,
+    kCount = 3u
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[ordered]
+class PowQualificationEnvironmentScope : NoCopy{
+    private i32 m_error = 0;
+    private u64 m_status = 0u;
+    private u64 m_control = 0u;
+    private Expected<FloatingPointEnvironment> m_environment = MakeUnexpected(Failure());
+    private b8 m_restoreControl = false;
+
+    public PowQualificationEnvironmentScope(){ this.capture(false); }
+    public PowQualificationEnvironmentScope(in b8 restoreControl){ this.capture(restoreControl); }
+
+    private void capture(in b8 restoreControl){
+        this.m_restoreControl = restoreControl;
+        this.m_error = ReadPowerError();
+        if(restoreControl){
+            this.m_status = ReadRawStatus();
+            this.m_control = ReadRawControl();
+        }
+        this.m_environment = HoldFloatingPointExceptions();
+        if(!restoreControl)
+            this.m_status = ReadRawStatus();
+    }
+
+    public b8 available()const{ return this.m_environment.has_value(); }
+
+    public ~PowQualificationEnvironmentScope(){
+        if(!this.available())
+            return;
+        if(!SetFloatingPointEnvironment(this.m_environment.value()))
+            TerminateInvariant();
+        WriteRawStatus(this.m_status);
+        if(this.m_restoreControl)
+            WriteRawControl(this.m_control);
+        WritePowerError(this.m_error);
+    }
+}
+
+class PowTrapEdge{
+    public u32 code = 0u;
+    public u32 flags = 0u;
+    public u32 control = 0u;
+    public u32 valueBits = 0u;
+    public i32 error = 0;
+    public u64 nativeStatus = 0u;
+    public u64 nativeControl = 0u;
+    public b8 operator==(in PowTrapEdge rhs)const{
+        return this.code == rhs.code && this.flags == rhs.flags && this.control == rhs.control && this.valueBits == rhs.valueBits &&
+            this.error == rhs.error && this.nativeStatus == rhs.nativeStatus && this.nativeControl == rhs.nativeControl;
+    }
+}
+
+class PowFlagsSnapshot{
+    public i32 standard = 0;
+    public u32 mapped = 0u;
+    public u64 nativeBits = 0u;
+}
+
+class PowObservation{
+    public Array<u32, 4> bits;
+    public PowFlagsSnapshot flags = PowFlagsSnapshot();
+    public i32 error = 0;
+}
+
+class PowCounts{
+    public u64 vectors = 0u;
+    public u64 bits = 0u;
+    public u64 flags = 0u;
+    public u64 errors = 0u;
+    public u64 quantized = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle ReferencePow(in VectorSingle x, in VectorSingle y){
+    return VectorSingle(Pow(x.x, y.x), Pow(x.y, y.y), Pow(x.z, y.z), Pow(x.w, y.w));
+}
 
 VectorSingle PackedDoublePow(in VectorSingle x, in VectorSingle y){
     u32x4 safeBits(0u);
@@ -209,43 +299,6 @@ b8 ObservePowKernel(
     return true;
 }
 
-[ordered]
-class PowQualificationEnvironmentScope : NoCopy{
-    private i32 m_error = 0;
-    private u64 m_status = 0u;
-    private u64 m_control = 0u;
-    private Expected<FloatingPointEnvironment> m_environment = MakeUnexpected(Failure());
-    private b8 m_restoreControl = false;
-
-    public PowQualificationEnvironmentScope(){ this.capture(false); }
-    public PowQualificationEnvironmentScope(in b8 restoreControl){ this.capture(restoreControl); }
-
-    private void capture(in b8 restoreControl){
-        this.m_restoreControl = restoreControl;
-        this.m_error = ReadPowerError();
-        if(restoreControl){
-            this.m_status = ReadRawStatus();
-            this.m_control = ReadRawControl();
-        }
-        this.m_environment = HoldFloatingPointExceptions();
-        if(!restoreControl)
-            this.m_status = ReadRawStatus();
-    }
-
-    public b8 available()const{ return this.m_environment.has_value(); }
-
-    public ~PowQualificationEnvironmentScope(){
-        if(!this.available())
-            return;
-        if(!SetFloatingPointEnvironment(this.m_environment.value()))
-            TerminateInvariant();
-        WriteRawStatus(this.m_status);
-        if(this.m_restoreControl)
-            WriteRawControl(this.m_control);
-        WritePowerError(this.m_error);
-    }
-}
-
 u32 ObservePowTrap(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y){
     u32 initial = 0u;
     u32 control = 0u;
@@ -263,20 +316,6 @@ u32 ObservePowTrap(in u8 variant, in b8 reference, in VectorSingle x, in VectorS
         return 3u;
     WriteBenchmarkStdout(StringFormat("trap exception=0x{:x} flags=0x{:x} mask=0x{:x}\n", code, flags, control & s_ControlExceptionMask));
     return code;
-}
-
-class PowTrapEdge{
-    public u32 code = 0u;
-    public u32 flags = 0u;
-    public u32 control = 0u;
-    public u32 valueBits = 0u;
-    public i32 error = 0;
-    public u64 nativeStatus = 0u;
-    public u64 nativeControl = 0u;
-    public b8 operator==(in PowTrapEdge rhs)const{
-        return this.code == rhs.code && this.flags == rhs.flags && this.control == rhs.control && this.valueBits == rhs.valueBits &&
-            this.error == rhs.error && this.nativeStatus == rhs.nativeStatus && this.nativeControl == rhs.nativeControl;
-    }
 }
 
 Expected<PowTrapEdge> ObservePowTrapEdge(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, in u32 enabled){
@@ -386,48 +425,6 @@ i32 VerifyPowTrapEdgesKernel(in u8 variant){
         return 2;
     return cast<i32>(differences != 0u);
 }
-
-const StringView s_ExceptionalLabel = "exceptional";
-const StringView s_RandomLabel = "random";
-const StringView s_PositiveFiniteLabel = "positive_finite";
-const f32 s_EncodeExponent = 1.0f / 2.4f;
-const f32 s_DecodeScale = 1.0f / 1.055f;
-const usize s_PowExceptionalCount = 29u;
-
-enum<u8> PowVariant{
-    Production = 0u,
-    PackedSingle = 1u,
-    PackedDouble = 2u,
-    kCount = 3u
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PowFlagsSnapshot{
-    public i32 standard = 0;
-    public u32 mapped = 0u;
-    public u64 nativeBits = 0u;
-}
-
-class PowObservation{
-    public Array<u32, 4> bits;
-    public PowFlagsSnapshot flags = PowFlagsSnapshot();
-    public i32 error = 0;
-}
-
-class PowCounts{
-    public u64 vectors = 0u;
-    public u64 bits = 0u;
-    public u64 flags = 0u;
-    public u64 errors = 0u;
-    public u64 quantized = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 Expected<PowVariant> ParsePowVariant(in StringView text){
     if(text == "production")

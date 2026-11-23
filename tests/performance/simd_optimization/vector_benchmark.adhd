@@ -12,6 +12,66 @@
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::DoubleRow")]
 extern VectorDouble BenchmarkDoubleRow(in MatrixDouble matrix, in usize index);
 
+enum<u32> VectorOperation{
+    Dot2 = 0u,
+    Dot3 = 1u,
+    Dot4 = 2u,
+    Sum = 3u,
+    RotationX = 4u,
+    PerspectiveFov = 5u,
+    QuaternionNormal = 6u,
+    kCount = 7u
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class VectorKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return VectorKernelReduce<KindIndex, Candidate>(lhs, rhs); }
+}
+
+class VectorEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
+        return VectorKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
+    }
+}
+
+class VectorWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWorkloadRunner{
+    private in Dataset m_data;
+    private usize m_iterations;
+    private b8 m_latency;
+
+    public VectorWorkloadRunner(in Dataset data, in usize iterations, in b8 latency){
+        this.m_data = data;
+        this.m_iterations = iterations;
+        this.m_latency = latency;
+    }
+
+    public VectorDouble run()const override{
+        return VectorKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations, this.m_latency);
+    }
+}
+
+class VectorRoundingVerifier : IRoundingModeVerifier{
+    public u32 verify(mut u64 seed)const override{
+        u32 failures = 0u;
+        failures += VerifyVectorReduction<0u>(seed);
+        failures += VerifyVectorReduction<1u>(seed);
+        failures += VerifyVectorReduction<2u>(seed);
+        failures += VerifyVectorReduction<3u>(seed);
+        failures += VerifyVectorFactory<4u>();
+        failures += VerifyVectorFactory<5u>();
+        failures += VerifyVectorFactory<6u>();
+        failures += VerifyQuaternionAxes();
+        return failures;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MatrixDouble VectorKernelRotationX<const b8 Candidate>(in f64 angle){
     if(Candidate)
         return MatrixDoubleRotationX(angle);
@@ -104,10 +164,6 @@ VectorDouble VectorKernelEvaluateQuaternionAxis<const b8 Candidate>(in VectorDou
     }, axis, angle);
 }
 
-class VectorKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
-    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return VectorKernelReduce<KindIndex, Candidate>(lhs, rhs); }
-}
-
 VectorDouble VectorKernelRunWorkload<const u32 KindIndex, const b8 Candidate>(in Dataset data, in usize dataCount, in usize iterations, in b8 latency){
     if(KindIndex <= 3u){
         if(!latency){
@@ -197,21 +253,6 @@ b8 CompareQuaternionAxisPair(in VectorDouble axis, in u64 angleBits, mut b8 outM
     return true;
 }
 
-enum<u32> VectorOperation{
-    Dot2 = 0u,
-    Dot3 = 1u,
-    Dot4 = 2u,
-    Sum = 3u,
-    RotationX = 4u,
-    PerspectiveFov = 5u,
-    QuaternionNormal = 6u,
-    kCount = 7u
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 StringView VectorOperationName(in u32 kindIndex){
     switch(kindIndex){
     case 0u: return "dot2";
@@ -222,32 +263,6 @@ StringView VectorOperationName(in u32 kindIndex){
     case 5u: return "perspective_fov";
     case 6u: return "quaternion_normal";
     default: return "";
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class VectorEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
-    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        return VectorKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
-    }
-}
-
-class VectorWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWorkloadRunner{
-    private in Dataset m_data;
-    private usize m_iterations;
-    private b8 m_latency;
-
-    public VectorWorkloadRunner(in Dataset data, in usize iterations, in b8 latency){
-        this.m_data = data;
-        this.m_iterations = iterations;
-        this.m_latency = latency;
-    }
-
-    public VectorDouble run()const override{
-        return VectorKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations, this.m_latency);
     }
 }
 
@@ -368,21 +383,6 @@ u32 VerifyQuaternionAxes(){
         }
     }
     return failures;
-}
-
-class VectorRoundingVerifier : IRoundingModeVerifier{
-    public u32 verify(mut u64 seed)const override{
-        u32 failures = 0u;
-        failures += VerifyVectorReduction<0u>(seed);
-        failures += VerifyVectorReduction<1u>(seed);
-        failures += VerifyVectorReduction<2u>(seed);
-        failures += VerifyVectorReduction<3u>(seed);
-        failures += VerifyVectorFactory<4u>();
-        failures += VerifyVectorFactory<5u>();
-        failures += VerifyVectorFactory<6u>();
-        failures += VerifyQuaternionAxes();
-        return failures;
-    }
 }
 
 u32 VerifyVectorBenchmark(){

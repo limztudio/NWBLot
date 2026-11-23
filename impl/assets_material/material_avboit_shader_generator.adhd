@@ -19,13 +19,6 @@ const StringView s_MaterialGeneratedPixelShaderDirLeaf = "material_pixel_shaders
 const StringView s_MaterialGeneratedPixelShaderHeaderLine = "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
 const StringView s_MaterialGeneratedPixelShaderAuthoringHeader = "mesh/material_ps_authoring.slangi";
 const StringView s_MaterialGeneratedPixelShaderNamePrefix = "generated/material_ps/";
-b8 ShouldEmitMaterialAvboitPixelShader(in b8 transparent, in StringView surfaceSource){
-    return transparent && !surfaceSource.empty();
-}
-
-b8 ShouldEmitGeneratedMaterialPixelShader(in b8 hasExplicitShaders, in StringView surfaceSource){
-    return !hasExplicitShaders && !surfaceSource.empty();
-}
 
 enum<u8> MaterialPixelPass{
     Surface = 0,
@@ -42,6 +35,14 @@ class MaterialPixelShaderPassSpec{
     public StringView prefix = s_MaterialGeneratedPixelShaderNamePrefix;
     public StringView label = "Material pixel shader generation";
     public StringView passLabel = "";
+}
+
+b8 ShouldEmitMaterialAvboitPixelShader(in b8 transparent, in StringView surfaceSource){
+    return transparent && !surfaceSource.empty();
+}
+
+b8 ShouldEmitGeneratedMaterialPixelShader(in b8 hasExplicitShaders, in StringView surfaceSource){
+    return !hasExplicitShaders && !surfaceSource.empty();
 }
 
 MaterialPixelShaderPassSpec MaterialShaderPassSpec(in MaterialPixelPass pass){

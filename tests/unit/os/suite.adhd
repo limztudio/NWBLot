@@ -5,27 +5,31 @@
 #include <tests/common/input_service_fixture.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
+#include <tests/unit/os/service_sdk.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/common/threads.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/os/service_sdk.adhd>
-#include <tests/common/value_storage.adhd>
-#include <tests/common/threads.adhd>
-
 type OsServiceHook = Func<128u, void()>;
 type OsSessionHook = Func<128u, void(in TextInputSessionToken)>;
+type ClipboardChannelEnum = ClipboardChannel;
+type ClipboardOperationEnum = ClipboardOperation;
+type ClipboardPollResultEnum = ClipboardPollResult;
+type ClipboardStatusEnum = ClipboardStatus;
+type TextInputCancelReasonEnum = TextInputCancelReason;
+type TextInputChangeCauseEnum = TextInputChangeCause;
+type TextInputPollResultEnum = TextInputPollResult;
+type ClipboardAdmissionEnum = ClipboardAdmission;
+type TextInputAdmissionEnum = TextInputAdmission;
+type TextInputDeletionBasisEnum = TextInputDeletionBasis;
+type TextInputEventKindEnum = TextInputEventKind;
 
-TextInputSessionDesc MakeSessionDesc(in StringView text, in usize anchor, in usize caret){
-    return TextInputSessionDesc(TextInputRect(), text, anchor, caret);
-}
-TextInputDeletionBasis MakeInvalidDeletionBasis(){ return cast<TextInputDeletionBasis>(255u); }
-TextInputChangeCause MakeInvalidChangeCause(){ return cast<TextInputChangeCause>(255u); }
 
-void FillGlobalString(mut String target, in usize count, in u8 byteValue){ target.assign(count, cast<u8>(byteValue)); }
-void AssignGlobalString(mut String target, in StringView value){ target.assign(value); }
-void AppendByteGlobalString(mut String target, in u8 value){ target.push_back(cast<u8>(value)); }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class SelectionTextInput : QueuedTextInputService{
     [cpp_base(QueuedTextInputService, storage)]
@@ -216,6 +220,7 @@ class FakeTextInputContext{
 }
 
 class StandaloneTextInputEvent{ public TextInputEvent event = TextInputEvent(); }
+
 class StandaloneClipboardCompletion{ public ClipboardCompletion completion = ClipboardCompletion(); }
 
 [ordered]
@@ -240,6 +245,7 @@ class EncodedCodePointBuffer{
     public Expected<usize, TextInputAdmission> encode(in u32 codePoint){ return EncodeOsTextInputCodePoint(codePoint, this.bytes); }
     public StringView view(in usize length)const{ return EncodedBytesView(this.bytes, length); }
 }
+
 [ordered]
 class UnsupportedClipboardContext{
     private HeapStorage storage = HeapStorage();
@@ -286,18 +292,19 @@ class UnsupportedTextInputContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type ClipboardChannelEnum = ClipboardChannel;
-type ClipboardOperationEnum = ClipboardOperation;
-type ClipboardPollResultEnum = ClipboardPollResult;
-type ClipboardStatusEnum = ClipboardStatus;
-type TextInputCancelReasonEnum = TextInputCancelReason;
-type TextInputChangeCauseEnum = TextInputChangeCause;
-type TextInputPollResultEnum = TextInputPollResult;
+TextInputSessionDesc MakeSessionDesc(in StringView text, in usize anchor, in usize caret){
+    return TextInputSessionDesc(TextInputRect(), text, anchor, caret);
+}
 
-type ClipboardAdmissionEnum = ClipboardAdmission;
-type TextInputAdmissionEnum = TextInputAdmission;
-type TextInputDeletionBasisEnum = TextInputDeletionBasis;
-type TextInputEventKindEnum = TextInputEventKind;
+TextInputDeletionBasis MakeInvalidDeletionBasis(){ return cast<TextInputDeletionBasis>(255u); }
+
+TextInputChangeCause MakeInvalidChangeCause(){ return cast<TextInputChangeCause>(255u); }
+
+void FillGlobalString(mut String target, in usize count, in u8 byteValue){ target.assign(count, cast<u8>(byteValue)); }
+
+void AssignGlobalString(mut String target, in StringView value){ target.assign(value); }
+
+void AppendByteGlobalString(mut String target, in u8 value){ target.push_back(cast<u8>(value)); }
 
 void VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits(){
     SelectionTextInputContext ctx = SelectionTextInputContext();
@@ -413,10 +420,6 @@ void VerifyTextInputSelection_DeletionPreservesThePreeditCommitOrderingBarrier()
     }
     EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyClipboard_RequestsCopyTextAndPublishOnlyWhenPumped(){
     FakeClipboardContext ctx = FakeClipboardContext();
@@ -620,10 +623,6 @@ void VerifyClipboard_ConsumedCompletionOutlivesServiceAndItsArena(){
     EXPECT_EQ(out.completion.text, "owned result");
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyClipboardAsync_PendingNativeRequestPreservesFifoAndCopiedWriteInput(){
     DelayedClipboardContext ctx = DelayedClipboardContext();
     const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> firstAdmission = ctx.service.requestReadText(ClipboardChannel::Clipboard);
@@ -777,10 +776,6 @@ void VerifyClipboardAsync_DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes()
     EXPECT_FALSE(ctx.service.deliver(valid, ClipboardStatus::Success, "duplicate reply"));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyClipboardText_Utf8RejectsMalformedUnicodeAndEmbeddedNull(){
     EXPECT_EQ(ValidateClipboardUtf8Text(StringView()), ClipboardStatus::Success);
     EXPECT_EQ(ValidateClipboardUtf8Text("\xF4\x8F\xBF\xBF"), ClipboardStatus::Success);
@@ -871,10 +866,6 @@ void VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit(){
     EXPECT_EQ(DecodeClipboardLatin1(StringView(ctx.first), ctx.second), ClipboardStatus::TooLarge);
     EXPECT_TRUE(ctx.second.empty());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession(){
     FakeTextInputContext ctx = FakeTextInputContext();
@@ -1223,10 +1214,6 @@ void VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNative
     EXPECT_EQ(ctx.service.m_nativeCause, TextInputChangeCause::Other);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextInputText_ValidatesStrictUtf8AndEmbeddedNul(){
     EXPECT_EQ(ValidateTextInputUtf8(StringView(), 100u), TextInputAdmission::Accepted);
     EXPECT_EQ(ValidateTextInputUtf8("\xC0\x80", 100u), TextInputAdmission::InvalidText);
@@ -1287,62 +1274,100 @@ void VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength()
     EXPECT_EQ(invalid110000.error(), TextInputAdmission::InvalidText);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits, VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits)
+
 NWB_ADHD_GTEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent, VerifyTextInputSelection_UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent)
+
 NWB_ADHD_GTEST(TextInputSelection, OuterUtf8EndpointsMustRemainScalarBoundaries, VerifyTextInputSelection_OuterUtf8EndpointsMustRemainScalarBoundaries)
+
 NWB_ADHD_GTEST(TextInputSelection, PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput, VerifyTextInputSelection_PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutput)
+
 NWB_ADHD_GTEST(TextInputSelection, DeletionPreservesThePreeditCommitOrderingBarrier, VerifyTextInputSelection_DeletionPreservesThePreeditCommitOrderingBarrier)
 
 NWB_ADHD_GTEST(Clipboard, RequestsCopyTextAndPublishOnlyWhenPumped, VerifyClipboard_RequestsCopyTextAndPublishOnlyWhenPumped)
+
 NWB_ADHD_GTEST(Clipboard, CancelPreventsPendingWritesAndRejectsReusedGenerations, VerifyClipboard_CancelPreventsPendingWritesAndRejectsReusedGenerations)
+
 NWB_ADHD_GTEST(Clipboard, ReusedSlotsKeepRequestOrdering, VerifyClipboard_ReusedSlotsKeepRequestOrdering)
+
 NWB_ADHD_GTEST(Clipboard, TokensCannotCrossServicesOrSurviveServiceRecreation, VerifyClipboard_TokensCannotCrossServicesOrSurviveServiceRecreation)
+
 NWB_ADHD_GTEST(Clipboard, CanceledNativeCompletionCannotReachNewRequest, VerifyClipboard_CanceledNativeCompletionCannotReachNewRequest)
+
 NWB_ADHD_GTEST(Clipboard, UnsupportedChannelsAndUnavailableReadsStayExplicit, VerifyClipboard_UnsupportedChannelsAndUnavailableReadsStayExplicit)
+
 NWB_ADHD_GTEST(Clipboard, UnsupportedFactoryDoesNotAccessNativeClipboard, VerifyClipboard_UnsupportedFactoryDoesNotAccessNativeClipboard)
+
 NWB_ADHD_GTEST(Clipboard, AdmissionBoundsOutstandingRequestsAndText, VerifyClipboard_AdmissionBoundsOutstandingRequestsAndText)
+
 NWB_ADHD_GTEST(Clipboard, WrongThreadCallsNeverTouchRequestStorage, VerifyClipboard_WrongThreadCallsNeverTouchRequestStorage)
+
 NWB_ADHD_GTEST(Clipboard, ConsumedCompletionOutlivesServiceAndItsArena, VerifyClipboard_ConsumedCompletionOutlivesServiceAndItsArena)
 
 NWB_ADHD_GTEST(ClipboardAsync, PendingNativeRequestPreservesFifoAndCopiedWriteInput, VerifyClipboardAsync_PendingNativeRequestPreservesFifoAndCopiedWriteInput)
+
 NWB_ADHD_GTEST(ClipboardAsync, CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement, VerifyClipboardAsync_CancellationReleasesFifoAndLateNativeRepliesCannotCompleteReplacement)
+
 NWB_ADHD_GTEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup, VerifyClipboardAsync_CancellationInvalidatesTokenBeforeReentrantNativeCleanup)
+
 NWB_ADHD_GTEST(ClipboardAsync, ReentrantStartCancellationDefersNewGenerationToNextPump, VerifyClipboardAsync_ReentrantStartCancellationDefersNewGenerationToNextPump)
+
 NWB_ADHD_GTEST(ClipboardAsync, DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes, VerifyClipboardAsync_DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes)
 
 NWB_ADHD_GTEST(ClipboardText, Utf8RejectsMalformedUnicodeAndEmbeddedNull, VerifyClipboardText_Utf8RejectsMalformedUnicodeAndEmbeddedNull)
+
 NWB_ADHD_GTEST(ClipboardText, IncrementalChunksCanSplitUnicodeUntilFinalValidation, VerifyClipboardText_IncrementalChunksCanSplitUnicodeUntilFinalValidation)
+
 NWB_ADHD_GTEST(ClipboardText, IncrementalFailuresDiscardBytesAndRemainStickyUntilClear, VerifyClipboardText_IncrementalFailuresDiscardBytesAndRemainStickyUntilClear)
+
 NWB_ADHD_GTEST(ClipboardText, ByteLimitIsInclusiveAndBoundsIncrementalAccumulation, VerifyClipboardText_ByteLimitIsInclusiveAndBoundsIncrementalAccumulation)
+
 NWB_ADHD_GTEST(ClipboardText, Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput, VerifyClipboardText_Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput)
+
 NWB_ADHD_GTEST(ClipboardText, Latin1ConversionAcceptsAliasedOutputAndSubviews, VerifyClipboardText_Latin1ConversionAcceptsAliasedOutputAndSubviews)
+
 NWB_ADHD_GTEST(ClipboardText, Latin1ExpansionCannotExceedUtf8ByteLimit, VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit)
 
 NWB_ADHD_GTEST(TextInput, BeginRequiresFocusCapabilityAndOnlyOneActiveSession, VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession)
+
 NWB_ADHD_GTEST(TextInput, InputsAndPolledEventsOwnCopiedUtf8Bytes, VerifyTextInput_InputsAndPolledEventsOwnCopiedUtf8Bytes)
+
 NWB_ADHD_GTEST(TextInput, EndRejectsLateEventsForeignTokensAndReusedGenerations, VerifyTextInput_EndRejectsLateEventsForeignTokensAndReusedGenerations)
+
 NWB_ADHD_GTEST(TextInput, FocusLossReplacesQueuedWorkWithOneTerminalCancellation, VerifyTextInput_FocusLossReplacesQueuedWorkWithOneTerminalCancellation)
+
 NWB_ADHD_GTEST(TextInput, NewSessionInvalidatesUnpolledCancellation, VerifyTextInput_NewSessionInvalidatesUnpolledCancellation)
+
 NWB_ADHD_GTEST(TextInput, ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion, VerifyTextInput_ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion)
+
 NWB_ADHD_GTEST(TextInput, QueueOverflowCancelsInsteadOfApplyingPartialCommittedText, VerifyTextInput_QueueOverflowCancelsInsteadOfApplyingPartialCommittedText)
+
 NWB_ADHD_GTEST(TextInput, QueuedByteBudgetCancelsEvenBelowEventCountLimit, VerifyTextInput_QueuedByteBudgetCancelsEvenBelowEventCountLimit)
+
 NWB_ADHD_GTEST(TextInput, InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision, VerifyTextInput_InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndRevision)
+
 NWB_ADHD_GTEST(TextInput, MalformedNativeTextAndPreeditSelectionsCannotEnterQueue, VerifyTextInput_MalformedNativeTextAndPreeditSelectionsCannotEnterQueue)
+
 NWB_ADHD_GTEST(TextInput, CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry, VerifyTextInput_CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry)
+
 NWB_ADHD_GTEST(TextInput, NativeStartFailureRetiresTokenAndAnyEarlyEvent, VerifyTextInput_NativeStartFailureRetiresTokenAndAnyEarlyEvent)
+
 NWB_ADHD_GTEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession, VerifyTextInput_WrongThreadCannotMutateOrPollOwnerSession)
+
 NWB_ADHD_GTEST(TextInput, NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput, VerifyTextInput_NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput)
+
 NWB_ADHD_GTEST(TextInput, ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent, VerifyTextInput_ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent)
+
 NWB_ADHD_GTEST(TextInput, ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent, VerifyTextInput_ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTerminalEvent)
+
 NWB_ADHD_GTEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState, VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState)
 
 NWB_ADHD_GTEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul, VerifyTextInputText_ValidatesStrictUtf8AndEmbeddedNul)
+
 NWB_ADHD_GTEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars, VerifyTextInputText_BoundariesUseBytesForBmpAndSupplementaryScalars)
+
 NWB_ADHD_GTEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins, VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins)
+
 NWB_ADHD_GTEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength, VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength)
 
 void VerifyTextInput_QueuedPayloadKeepsItsDestinationArenaWhenMoved(){

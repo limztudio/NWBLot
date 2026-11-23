@@ -22,6 +22,26 @@ class MaterialInstanceParameterNames{
     public Name fieldName;
 }
 
+class MaterialOverrideFieldKey{
+    public Name blockName = s_NameNone;
+    public Name fieldName = s_NameNone;
+
+    public usize hash()const{
+        usize seed = HashValue(this.blockName);
+        return HashCombineValue(seed, this.fieldName);
+    }
+
+    public b8 operator==(in MaterialOverrideFieldKey rhs)const{
+        return this.blockName == rhs.blockName && this.fieldName == rhs.fieldName;
+    }
+}
+
+class MaterialOverrideFieldEntry{
+    public u32 byteOffset = 0u;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::f32;
+    public b8 mutableBlock = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -193,26 +213,6 @@ f16x4u ConvertMaterialInstanceHalf4(in VectorSingle value){
 
 void LogMissingMaterialInstanceComponent(in EntityID entity){
     error("MaterialInstanceComponent: entity {} has no material instance component", entity.id);
-}
-
-class MaterialOverrideFieldKey{
-    public Name blockName = s_NameNone;
-    public Name fieldName = s_NameNone;
-
-    public usize hash()const{
-        usize seed = HashValue(this.blockName);
-        return HashCombineValue(seed, this.fieldName);
-    }
-
-    public b8 operator==(in MaterialOverrideFieldKey rhs)const{
-        return this.blockName == rhs.blockName && this.fieldName == rhs.fieldName;
-    }
-}
-
-class MaterialOverrideFieldEntry{
-    public u32 byteOffset = 0u;
-    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::f32;
-    public b8 mutableBlock = false;
 }
 
 void BuildMaterialOverrideFieldLookup(

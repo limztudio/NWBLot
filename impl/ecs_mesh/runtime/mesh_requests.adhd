@@ -15,6 +15,7 @@ class RuntimeMeshRequestSet : NoCopy{
     private usize m_remainingCount = 0u;
     private Optional<HashMap<RuntimeMeshRequestKey, b8>> m_index;
 
+    [cpp_unwind]
     public RuntimeMeshRequestSet(in usize expectedRequestCount){
         this.m_expectedRequestCount = expectedRequestCount;
         if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity){
@@ -23,6 +24,7 @@ class RuntimeMeshRequestSet : NoCopy{
         }
     }
 
+    [cpp_unwind]
     public void add(in Name meshKey, in u64 version){
         if(meshKey == s_NameNone)
             return;
@@ -61,6 +63,7 @@ class RuntimeMeshRequestSet : NoCopy{
         return this.m_remainingCount == 0u;
     }
 
+    [cpp_unwind]
     private void promoteIndex(){
         this.m_index = Optional<HashMap<RuntimeMeshRequestKey, b8>>(HashMap<RuntimeMeshRequestKey, b8>());
         this.m_index.value().reserve(Max(this.m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u) * s_RuntimeMeshIndexBucketsPerRequest);

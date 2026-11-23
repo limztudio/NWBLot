@@ -11,7 +11,7 @@
 #include <core/frame/module.h>
 #include <core/graphics/runtime/render_pass_collection.h>
 
-#include <cstdio>
+#include <global/compile.h>
 #include <windows.h>
 
 
@@ -68,8 +68,7 @@ void SetFrameUpdateObserver(Core::Frame& frame, Observer& observer)noexcept{
 [[nodiscard]] inline const Core::IRenderPass& LastRenderPass(const Core::GraphicsModuleDetail::RenderPassCollection& collection)noexcept{ return *collection.passes().back(); }
 
 inline void PrintFrameLog(const AStringView message){
-    std::fwrite(message.data(), 1u, message.size(), stderr);
-    std::fputc('\n', stderr);
+    FOUNDATION_CERR << message << '\n';
 }
 
 

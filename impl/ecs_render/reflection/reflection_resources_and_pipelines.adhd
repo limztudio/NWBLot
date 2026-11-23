@@ -185,36 +185,66 @@ b8 RendererReflectionSystem::prepareResources(in u32 width, in u32 height, in b8
         return false;
     }
 
-    auto registerDescriptor = lambda[mut heap](mut GpuDescriptorHandle descriptor, in GpuDescriptorClass descriptorClass, in DescriptorWriteItem item) -> b8{
-        return AssignDescriptor(heap, descriptorClass, item, descriptor);
+    const auto registrationFailed = lambda[mut this]() -> b8{
+        this.releaseTargets();
+        return false;
     };
-    if(
-        !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::OpaqueSampled], GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, this.m_resources.opaqueRadiance.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::OpaqueStorage], GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, this.m_resources.opaqueRadiance.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::GlassSampled], GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, this.m_resources.glassRadiance.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::GlassStorage], GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, this.m_resources.glassRadiance.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::Queue], GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.queue.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::Counters], GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.counters.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::Args], GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.indirectArgs.deref()))
-        || !registerDescriptor(this.m_descriptors[ReflectionDescriptorIndex::Parameters], GpuDescriptorClass::UniformBuffer, DescriptorWriteItemConstantBuffer(0u, this.m_resources.frameParameters.deref()))
-    ){
-        this.releaseTargets();
-        return false;
-    }
-    if(!registerDescriptor(this.m_depthSampledDescriptor, GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, depthPyramid.texture.deref()))){
-        this.releaseTargets();
-        return false;
-    }
+
+    const Expected<GpuDescriptorHandle> opaqueSampledDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, this.m_resources.opaqueRadiance.deref()));
+    if(!opaqueSampledDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::OpaqueSampled] = opaqueSampledDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> opaqueStorageDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, this.m_resources.opaqueRadiance.deref()));
+    if(!opaqueStorageDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::OpaqueStorage] = opaqueStorageDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> glassSampledDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, this.m_resources.glassRadiance.deref()));
+    if(!glassSampledDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::GlassSampled] = glassSampledDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> glassStorageDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, this.m_resources.glassRadiance.deref()));
+    if(!glassStorageDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::GlassStorage] = glassStorageDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> queueDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.queue.deref()));
+    if(!queueDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::Queue] = queueDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> countersDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.counters.deref()));
+    if(!countersDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::Counters] = countersDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> argsDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_resources.indirectArgs.deref()));
+    if(!argsDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::Args] = argsDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> parametersDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::UniformBuffer, DescriptorWriteItemConstantBuffer(0u, this.m_resources.frameParameters.deref()));
+    if(!parametersDescriptor.has_value())
+        return registrationFailed();
+    this.m_descriptors[ReflectionDescriptorIndex::Parameters] = parametersDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> depthSampled = RegisterDescriptor(heap, GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, depthPyramid.texture.deref()));
+    if(!depthSampled.has_value())
+        return registrationFailed();
+    this.m_depthSampledDescriptor = depthSampled.value();
     depthPyramid.sampledSlot = this.m_depthSampledDescriptor.slot();
     for(u32 mipIndex = 0u; mipIndex < depthPyramid.mipCount; ++mipIndex){
         const TextureSubresourceSet subresources(mipIndex, 1u, 0u, 1u);
-        if(
-            !registerDescriptor(this.m_depthMipSampledDescriptors[mipIndex], GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, depthPyramid.texture.deref(), depthFormat, subresources))
-            || !registerDescriptor(this.m_depthMipStorageDescriptors[mipIndex], GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, depthPyramid.texture.deref(), depthFormat, subresources))
-        ){
-            this.releaseTargets();
-            return false;
-        }
+        const Expected<GpuDescriptorHandle> mipSampled = RegisterDescriptor(heap, GpuDescriptorClass::SampledImage, DescriptorWriteItemTextureSrv(0u, depthPyramid.texture.deref(), depthFormat, subresources));
+        if(!mipSampled.has_value())
+            return registrationFailed();
+        this.m_depthMipSampledDescriptors[mipIndex] = mipSampled.value();
+        const Expected<GpuDescriptorHandle> mipStorage = RegisterDescriptor(heap, GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, depthPyramid.texture.deref(), depthFormat, subresources));
+        if(!mipStorage.has_value())
+            return registrationFailed();
+        this.m_depthMipStorageDescriptors[mipIndex] = mipStorage.value();
         depthPyramid.mips[mipIndex].sampledSlot = this.m_depthMipSampledDescriptors[mipIndex].slot();
         depthPyramid.mips[mipIndex].storageSlot = this.m_depthMipStorageDescriptors[mipIndex].slot();
     }

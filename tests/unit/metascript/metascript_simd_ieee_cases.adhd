@@ -11,15 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Array<i32, 4u> s_MetascriptRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-
-T SelectIeeeOperandBits<T>(in usize sample, in T first, in T second, in T nan, in T ordinary){
-    if(sample == 0u) return first;
-    if(sample == 1u) return second;
-    if(sample == 6u || sample == 7u) return nan;
-    return ordinary;
-}
-
 [cpp_name("::Min")]
 extern T ScalarReferenceMin<T>(in T a, in T b);
 
@@ -55,6 +46,15 @@ extern T ScalarPostDecrementReference<T>(in T a);
 
 [cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarPreDecrementReference")]
 extern T ScalarPreDecrementReference<T>(in T a);
+
+const Array<i32, 4u> s_MetascriptRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+
+T SelectIeeeOperandBits<T>(in usize sample, in T first, in T second, in T nan, in T ordinary){
+    if(sample == 0u) return first;
+    if(sample == 1u) return second;
+    if(sample == 6u || sample == 7u) return nan;
+    return ordinary;
+}
 
 f32 ReferenceScalar32(in f32 first, in f32 second, in f64 wider, in u32 operation){
     switch(operation){

@@ -8,19 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RemapMeshStreamIndex(
+[cpp_unwind]
+Expected<Optional<usize>> RemapMeshStreamIndex(
     in Name virtualPath,
     in StringView metaKind,
     in StringView streamName,
     in usize sourceCount,
     in usize reorderedCount,
     mut Vector<u32> inOutRemap,
-    mut u32 inOutIndex,
-    mut b8 outAppendedNew,
-    mut usize outSourceIndex
+    mut u32 inOutIndex
 ){
-    outAppendedNew = false;
-    outSourceIndex = 0u;
     if(inOutIndex == s_MeshMissingStreamIndex){
         error(
             "{} meta '{}': meshlet {} stream reference is missing"
@@ -28,7 +25,7 @@ b8 RemapMeshStreamIndex(
             , virtualPath.resolvedText()
             , streamName
         );
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     const u32 sourceIndex = inOutIndex;
@@ -39,10 +36,11 @@ b8 RemapMeshStreamIndex(
             , virtualPath.resolvedText()
             , streamName
         );
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     u32 mappedIndex = inOutRemap[cast<usize>(sourceIndex)];
+    Optional<usize> appendedSource = Optional<usize>();
     if(mappedIndex == s_MeshMissingStreamIndex){
         if(reorderedCount >= cast<usize>(s_MeshMissingStreamIndex)){
             error(
@@ -51,18 +49,18 @@ b8 RemapMeshStreamIndex(
                 , virtualPath.resolvedText()
                 , streamName
             );
-            return false;
+            return MakeUnexpected(Failure());
         }
         mappedIndex = cast<u32>(reorderedCount);
         inOutRemap[cast<usize>(sourceIndex)] = mappedIndex;
-        outAppendedNew = true;
-        outSourceIndex = cast<usize>(sourceIndex);
+        appendedSource = Optional<usize>(cast<usize>(sourceIndex));
     }
 
     inOutIndex = mappedIndex;
-    return true;
+    return appendedSource;
 }
 
+[cpp_unwind]
 b8 RemapMeshStreamRef<T>(
     in Name virtualPath,
     in StringView metaKind,
@@ -72,19 +70,20 @@ b8 RemapMeshStreamRef<T>(
     mut Vector<T> inOutReordered,
     mut u32 inOutIndex
 ){
-    b8 appendedNew = false;
-    usize sourceIndex = 0u;
-    if(!RemapMeshStreamIndex(virtualPath, metaKind, streamName, source.size(), inOutReordered.size(), inOutRemap, inOutIndex, appendedNew, sourceIndex))
+    const Expected<Optional<usize>> appendedSource = RemapMeshStreamIndex(virtualPath, metaKind, streamName, source.size(), inOutReordered.size(), inOutRemap, inOutIndex);
+    if(!appendedSource.has_value())
         return false;
-    if(appendedNew)
-        inOutReordered.push_back(source[sourceIndex]);
+    if(appendedSource.value().has_value())
+        inOutReordered.push_back(source[appendedSource.value().value()]);
     return true;
 }
 
+[cpp_unwind]
 void CopyReorderedMeshStream<T>(in Vector<T> reordered, mut Vector<T> outStream){
     AssignTriviallyCopyableVector(outStream, Span<T>(reordered));
 }
 
+[cpp_unwind]
 b8 ReorderMeshStreamsByMeshletTraversal(
     in Name virtualPath,
     in Span<MeshletDesc> meshlets,

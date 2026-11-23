@@ -222,8 +222,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
 void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, ResourceStates::Mask state, const BufferRange& resolvedRange, const b8 seedOnly, BufferRangeStates* const existingRanges){
     if(!existingRanges){
         invalidateBufferCache();
-        auto [it, inserted] = m_bufferStates.emplace(MakeNotNull(&buffer), BufferRangeStates(m_context.objectArena));
-        (void)inserted;
+        const auto it = m_bufferStates.emplace(MakeNotNull(&buffer), BufferRangeStates(m_context.objectArena)).first;
         it.value().push_back(BufferRangeState{ resolvedRange, state });
         if(buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read)
             m_hasReadbackBuffers = true;

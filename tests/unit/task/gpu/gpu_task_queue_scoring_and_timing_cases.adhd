@@ -9,6 +9,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_GpuScoringTaskCount = 8u;
+const usize s_GpuScoringFragmentBufferCount = 64u;
+const usize s_GpuScoringFragmentCutCount = 128u;
+const usize s_GpuScoringInitialState = usize.max;
+const Name s_GpuScoringCrossClassTimingComputeToGraphics = "tests/task_graph/cross_class_timing_compute_to_graphics";
+const Name s_GpuScoringCrossClassTimingGraphicsToCompute = "tests/task_graph/cross_class_timing_graphics_to_compute";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 FragmentHasNullState(in TrackedResourceStateFragment fragment){
     return !fragment.borrowState().has_value();
 }
@@ -32,13 +43,6 @@ void SeedFragmentWithFirstState(in TrackedStates states, mut TrackedStateFragmen
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const usize s_GpuScoringTaskCount = 8u;
-const usize s_GpuScoringFragmentBufferCount = 64u;
-const usize s_GpuScoringFragmentCutCount = 128u;
-const usize s_GpuScoringInitialState = usize.max;
-const Name s_GpuScoringCrossClassTimingComputeToGraphics = "tests/task_graph/cross_class_timing_compute_to_graphics";
-const Name s_GpuScoringCrossClassTimingGraphicsToCompute = "tests/task_graph/cross_class_timing_graphics_to_compute";
 
 i32 GpuScoringSaturateReferenceTerm(in u64 value){
     if(value > cast<u64>(i32.max))

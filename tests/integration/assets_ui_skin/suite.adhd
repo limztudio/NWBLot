@@ -114,6 +114,11 @@ const StringView s_ErrUnsupportedField = "unsupported asset field";
 const StringView s_ErrToolkitContractWidgets = "toolkit_contract must be 'widgets'";
 const StringView s_ErrUnsupportedSliceField = "unsupported asset field 'slice'";
 
+class AuthoredSkinLoadResult{
+    public UiSkin skin;
+    public b8 complete = false;
+}
+
 UiSkinRegion MakeRegion(in Name name, in u32 ordinal){
     UiSkinRegion region = UiSkinRegion();
     region.name = name;
@@ -159,24 +164,25 @@ b8 RepeatFirstDocumentAssetRegion(mut MetascriptDocument document, in u32 count)
     });
 }
 
-b8 LoadAuthoredSkin(in Path assetRoot, in Path atlasPath, in StringView virtualRoot, mut UiSkin outSkin, mut b8 outComplete){
+Expected<AuthoredSkinLoadResult> LoadAuthoredSkin(in Path assetRoot, in Path atlasPath, in StringView virtualRoot){
     String metadata = "";
     if(!ReadTextFile(atlasPath, metadata).has_value())
-        return false;
+        return MakeUnexpected(Failure());
     MetascriptDocumentWorkspace documentOwner(s_OneOffNameTestsIntegrationAssetsUiSkinCook);
     mut MetascriptDocument document = documentOwner.document;
     if(!document.parse(metadata))
-        return false;
+        return MakeUnexpected(Failure());
     Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document);
     if(!entryResult.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const UiSkinCookEntry entry = entryResult.value();
     Expected<UiSkin> skinResult = BuildUiSkinAsset(entry);
     if(!skinResult.has_value())
-        return false;
-    outSkin = skinResult.value();
-    outComplete = entry.completeToolkitSkin;
-    return true;
+        return MakeUnexpected(Failure());
+    AuthoredSkinLoadResult result;
+    result.skin = skinResult.value();
+    result.complete = entry.completeToolkitSkin;
+    return result;
 }
 
 void CopyWithoutRegion(in UiSkin source, in Name removed, mut UiSkin outSkin){
@@ -449,10 +455,10 @@ void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclared
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     const Path assetRoot = Path(s_CookTestRepoRoot) / s_EngineDirectory / s_AssetsDirectory;
     const Path atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
-    UiSkin source;
-    b8 complete = false;
-    ASSERT_TRUE(LoadAuthoredSkin(assetRoot, atlasPath, "engine", source, complete));
-    EXPECT_TRUE(complete);
+    const Expected<AuthoredSkinLoadResult> loaded = LoadAuthoredSkin(assetRoot, atlasPath, "engine");
+    ASSERT_TRUE(loaded.has_value());
+    in UiSkin source = loaded.value().skin;
+    EXPECT_TRUE(loaded.value().complete);
 
     Vector<Name> required = Vector<Name>();
     required.push_back(s_UiTitle);
@@ -492,8 +498,9 @@ void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclared
     for(usize index = 0u; index < noResize.regions().size(); ++index)
         regions.push_back(noResize.regions()[index]);
     UiSkin explicitResize(source.virtualPath());
-    UiSkinRegion resize = UiSkinRegion();
-    ASSERT_TRUE(source.tryFindRegion(Name(s_TestWhiteRegionName), resize));
+    const Expected<UiSkinRegion> resizeResult = source.tryFindRegion(Name(s_TestWhiteRegionName));
+    ASSERT_TRUE(resizeResult.has_value());
+    UiSkinRegion resize = resizeResult.value();
     resize.name = s_UiTestWindowResize;
     regions.push_back(resize);
     explicitResize.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), regions);

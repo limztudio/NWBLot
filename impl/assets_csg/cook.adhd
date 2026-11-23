@@ -167,8 +167,10 @@ b8 AssignCsgShapeCookIds(mut CsgShapeCookEntryVector entries){
     HashMap<CsgShapeTypeId, Name> names;
     names.reserve(entries.size());
     for(usize index = 0u; index < entries.size(); ++index){
-        if(!ResolveAndCheckCsgShapeTypeIdCollision(index, entries[index].shapeName, names, entries[index].shapeTypeId))
+        const Expected<CsgShapeTypeId> shapeTypeId = ResolveAndCheckCsgShapeTypeIdCollision(index, entries[index].shapeName, names);
+        if(!shapeTypeId.has_value())
             return false;
+        entries[index].shapeTypeId = shapeTypeId.value();
     }
     return true;
 }

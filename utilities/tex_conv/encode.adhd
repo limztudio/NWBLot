@@ -20,15 +20,15 @@ TexConvPayloadFormat ResolveTexConvPayloadFormat(in b8 hdr){
     return TexConvPayloadFormat::UastcLdr4x4;
 }
 
-b8 ValidateTexConvInputPathsHdrConsistency(in Span<Path> inputPaths, mut b8 outHdr){
-    outHdr = IsHdrTexConvInputPath(inputPaths[0u]);
+Expected<b8> ValidateTexConvInputPathsHdrConsistency(in Span<Path> inputPaths){
+    const b8 hdr = IsHdrTexConvInputPath(inputPaths[0u]);
     for(usize i = 1u; i < inputPaths.size(); ++i){
-        if(IsHdrTexConvInputPath(inputPaths[i]) != outHdr){
+        if(IsHdrTexConvInputPath(inputPaths[i]) != hdr){
             error("tex_conv: an individual texture conversion cannot mix HDR and LDR source images.");
-            return false;
+            return MakeUnexpected(Failure());
         }
     }
-    return true;
+    return hdr;
 }
 
 

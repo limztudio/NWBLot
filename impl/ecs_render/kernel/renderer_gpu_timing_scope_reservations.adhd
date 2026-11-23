@@ -8,14 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ReserveGpuTimingScope(in Name scope, in u32 queryCount, mut GraphicsRuntime graphics){
-    if(graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), queryCount))
-        return true;
-
-    warning("RendererSystem: failed to prepare GPU timing scope '{}'", scope.resolvedText());
-    return false;
-}
-
 class RendererGpuTimingScopeReservations{
     public b8 prepare(mut GraphicsRuntime graphics)const{
         return
@@ -84,6 +76,18 @@ class RendererGpuTimingScopeReservations{
             && ReserveGpuTimingScope(Name("render.surfel_upsample"), s_GpuTimingQueriesPerRange, graphics)
         ;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReserveGpuTimingScope(in Name scope, in u32 queryCount, mut GraphicsRuntime graphics){
+    if(graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), queryCount))
+        return true;
+
+    warning("RendererSystem: failed to prepare GPU timing scope '{}'", scope.resolvedText());
+    return false;
 }
 
 

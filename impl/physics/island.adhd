@@ -8,6 +8,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class IslandSplitScratch{
+    public Vector<u32> dsuParents;
+    public Vector<u8> dsuRanks;
+    public Vector<u32> islandBodies;
+    public Vector<ContactLink> islandContacts;
+    public Vector<JointLink> islandJoints;
+    public Vector<u32> rootToIsland;
+    public Vector<u32> bodyAssignedIsland;
+    public Vector<u32> contactTargetIslands;
+    public Vector<u32> jointTargetIslands;
+
+    public void clear(){
+        this.dsuParents.clear();
+        this.dsuRanks.clear();
+        this.islandBodies.clear();
+        this.islandContacts.clear();
+        this.islandJoints.clear();
+        this.rootToIsland.clear();
+        this.bodyAssignedIsland.clear();
+        this.contactTargetIslands.clear();
+        this.jointTargetIslands.clear();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u32 CreateIslandInWorld(mut Vector<Island> islands, mut Vector<u32> freeIslandIds, mut Vector<SolverSet> sets, in u32 setIndex){
     u32 islandId = s_NullIndex;
     if(!freeIslandIds.empty()){
@@ -269,30 +297,6 @@ void UnlinkJointFromIsland(mut Vector<Island> islands, mut Vector<Joint> joints,
     ++island.constraintRemoveCount;
     joint.islandId = s_NullIndex;
     joint.islandIndex = s_NullIndex;
-}
-
-class IslandSplitScratch{
-    public Vector<u32> dsuParents;
-    public Vector<u8> dsuRanks;
-    public Vector<u32> islandBodies;
-    public Vector<ContactLink> islandContacts;
-    public Vector<JointLink> islandJoints;
-    public Vector<u32> rootToIsland;
-    public Vector<u32> bodyAssignedIsland;
-    public Vector<u32> contactTargetIslands;
-    public Vector<u32> jointTargetIslands;
-
-    public void clear(){
-        this.dsuParents.clear();
-        this.dsuRanks.clear();
-        this.islandBodies.clear();
-        this.islandContacts.clear();
-        this.islandJoints.clear();
-        this.rootToIsland.clear();
-        this.bodyAssignedIsland.clear();
-        this.contactTargetIslands.clear();
-        this.jointTargetIslands.clear();
-    }
 }
 
 void CopyIslandVectorInto<T>(in Vector<T> src, mut Vector<T> dst){

@@ -8,6 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SlangCompilerValidatedInputs{
+    public StringView stage = "";
+    public StringView optimization = "";
+}
+
+class SlangCompilerArgumentCounts{
+    public usize argumentReserve = 0u;
+    public usize ownedArgumentCount = 0u;
+}
+
 class SlangCompilerRequestValidator{
     private Expected<StringView> mapStage(in StringView stage, in Span<SlangStageMapping> mappings)const{
         for(in SlangStageMapping mapping : mappings){
@@ -17,57 +27,55 @@ class SlangCompilerRequestValidator{
         return MakeUnexpected(Failure());
     }
 
-    public b8 validateInputs(
+    public Expected<SlangCompilerValidatedInputs> validateInputs(
         in StringView shaderName,
         in b8 sourcePathEmpty,
         in b8 outputPathEmpty,
         in StringView entryPoint,
         in StringView stage,
         in u8 optimizationLevelValue,
-        in Span<SlangStageMapping> stageMappings,
-        mut StringView outSlangStage,
-        mut StringView outOptimizationArgument
+        in Span<SlangStageMapping> stageMappings
     )const{
         if(sourcePathEmpty){
             error("Failed to compile shader '{}' : source path is empty", shaderName);
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(outputPathEmpty){
             error("Failed to compile shader '{}' : output path is empty", shaderName);
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(entryPoint.empty()){
             error("Failed to compile shader '{}' : entry point is empty", shaderName);
-            return false;
+            return MakeUnexpected(Failure());
         }
         const Expected<StringView> slangStage = this.mapStage(stage, stageMappings);
         if(!slangStage.has_value()){
             error("Unknown shader stage '{}' in entry '{}'", stage, shaderName);
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(optimizationLevelValue >= cast<u8>(ShaderOptimizationLevel::kCount)){
             error("Shader '{}' uses an invalid optimization level {}", shaderName, cast<u32>(optimizationLevelValue));
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outSlangStage = slangStage.value();
-        outOptimizationArgument = SlangOptimizationArgument(cast<ShaderOptimizationLevel>(optimizationLevelValue));
-        return true;
+        SlangCompilerValidatedInputs result = SlangCompilerValidatedInputs();
+        result.stage = slangStage.value();
+        result.optimization = SlangOptimizationArgument(cast<ShaderOptimizationLevel>(optimizationLevelValue));
+        return result;
     }
 
-    public b8 argumentCounts(
+    public Expected<SlangCompilerArgumentCounts> argumentCounts(
         in StringView shaderName,
         in usize includeDirectoryCount,
-        in usize defineCount,
-        mut usize outArgumentReserve,
-        mut usize outOwnedArgumentCount
+        in usize defineCount
     )const{
         if(defineCount > usize.max - s_MaxFixedArgumentCount || includeDirectoryCount > (usize.max - s_MaxFixedArgumentCount - defineCount) / 2u){
             error("ShaderCook: compiler request for '{}' has too many arguments", shaderName);
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outArgumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
-        outOwnedArgumentCount = s_SlangFixedOwnedArgumentCount + includeDirectoryCount + defineCount;
-        return true;
+        SlangCompilerArgumentCounts result = SlangCompilerArgumentCounts();
+        result.argumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
+        result.ownedArgumentCount = s_SlangFixedOwnedArgumentCount + includeDirectoryCount + defineCount;
+        return result;
     }
 }
 

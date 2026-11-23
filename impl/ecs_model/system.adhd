@@ -15,9 +15,12 @@
 
 
 const StringView s_ModelSystemAssetLoadContext = "ModelSystem";
-
 type ModelObjectRendererApplyFn = Func<void(in EntityID, in AssetRef<Material>, mut World, mut Entity)>;
 type ModelObjectRendererCallback = Optional<ModelObjectRendererApplyFn>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ModelObjectRendererHooks{
     public ModelObjectRendererCallback apply;
@@ -35,217 +38,6 @@ class ModelObjectRendererHooks{
         for(in ComponentAccess access : inAccesses)
             this.accesses.push_back(access);
     }
-}
-
-void ResetModelRuntimeState(mut ModelRuntimeComponent outRuntime){
-    outRuntime.model = s_NameNone;
-    outRuntime.objectCount = 0u;
-}
-
-b8 MatchesModelObjectIdentity(in ModelObjectComponent object, in EntityID owner, in Name objectName){
-    return object.owner == owner && object.object == objectName;
-}
-
-MatrixSingle ComputeModelObjectWorldMatrix(in MatrixSingle parentMatrix, in MatrixSingle localMatrix){
-    return Mul(parentMatrix, localMatrix);
-}
-
-MatrixSingle ComputeModelJointAttachmentWorldMatrix(
-    in MatrixSingle parentMatrix,
-    in MatrixSingle jointMatrix,
-    in MatrixSingle localMatrix
-){
-    return Mul(Mul(parentMatrix, jointMatrix), localMatrix);
-}
-
-void ResolveModelAttachmentJointQueries(
-    in Span<usize> parentOrder,
-    in World world,
-    mut Vector<SkeletonJointMatrix> jointPalette,
-    mut Vector<ModelAttachmentJointQuery> queries
-){
-    const usize queryCount = queries.size();
-    usize groupBegin = 0u;
-    while(groupBegin < queryCount){
-        const EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
-        const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, queries, groupBegin);
-
-        if(world.hasComponent<SkeletonPoseComponent>(parentEntity)){
-            in SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(parentEntity);
-            if(TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, jointPalette).has_value())
-                ResolveModelAttachmentJointQueryGroup(parentOrder, jointPalette, groupBegin, groupEnd, queries);
-        }
-        groupBegin = groupEnd;
-    }
-}
-
-EntityID FindSpawnedModelObjectInMap(in HashMap<Name, EntityID> spawnedObjects, in Name objectName){
-    const auto found = spawnedObjects.find(objectName);
-    if(found != spawnedObjects.end())
-        return found.value();
-    return s_InvalidEntityId;
-}
-
-b8 IsInactiveModelObjectOwner(in World world, in EntityID owner){
-    return !world.hasComponent<ModelRuntimeComponent>(owner) || !world.hasComponent<ModelComponent>(owner);
-}
-
-void RemoveInactiveModelEntities(mut World world, in usize inactiveObjectCount, in usize inactiveRuntimeCount){
-    Vector<EntityID> inactiveEntities = Vector<EntityID>();
-    inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
-    if(inactiveObjectCount != 0u){
-        world.view<ModelObjectComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelObjectComponent object) -> void{
-            if(IsInactiveModelObjectOwner(world, object.owner))
-                inactiveEntities.push_back(entity);
-        });
-        for(in EntityID entity : inactiveEntities)
-            world.destroyEntity(entity);
-    }
-    if(inactiveRuntimeCount != 0u){
-        inactiveEntities.clear();
-        world.view<ModelRuntimeComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelRuntimeComponent runtime) -> void{
-            if(!world.hasComponent<ModelComponent>(entity))
-                inactiveEntities.push_back(entity);
-        });
-        for(in EntityID entity : inactiveEntities)
-            world.removeComponent<ModelRuntimeComponent>(entity);
-    }
-}
-
-void DestroyOwnedModelEntities(mut World world, in EntityID entity, in usize ownedCount){
-    Vector<EntityID> ownedEntities = Vector<EntityID>();
-    ownedEntities.reserve(ownedCount);
-    world.view<ModelObjectComponent>().each(lambda[in entity, mut ownedEntities](in EntityID objectEntity, in ModelObjectComponent object) -> void{
-        if(object.owner == entity)
-            ownedEntities.push_back(objectEntity);
-    });
-    for(in EntityID objectEntity : ownedEntities)
-        world.destroyEntity(objectEntity);
-}
-
-b8 IsPureTranslationMatrix(in MatrixSingle matrix){
-    const VectorSingle r0 = matrix[0u];
-    const VectorSingle r1 = matrix[1u];
-    const VectorSingle r2 = matrix[2u];
-    return
-        r0.x == 1.0f && r0.y == 0.0f && r0.z == 0.0f && IsFinite(r0.w)
-        && r1.x == 0.0f && r1.y == 1.0f && r1.z == 0.0f && IsFinite(r1.w)
-        && r2.x == 0.0f && r2.y == 0.0f && r2.z == 1.0f && IsFinite(r2.w)
-    ;
-}
-
-void UpdateNonStaticModelObjectTransform(in World world, in ModelObjectComponent object, mut TransformComponent outTransform){
-    if(object.kind == ModelObjectKind::StaticMesh)
-        return;
-
-    const MatrixSingle localMatrix = MatrixSingle(object.localTransform);
-    const b8 hasOwner = world.hasComponent<TransformComponent>(object.owner);
-    if(IsPureTranslationMatrix(localMatrix)){
-        const VectorSingle localPos(localMatrix[0u].w, localMatrix[1u].w, localMatrix[2u].w, 0.0f);
-        if(!hasOwner){
-            AssignDecomposedTransformComponent(
-                localPos,
-                VectorSingle(0.0f, 0.0f, 0.0f, 1.0f),
-                VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
-                outTransform
-            );
-            return;
-        }
-        in TransformComponent owner = world.getComponent<TransformComponent>(object.owner);
-        const VectorSingle ownerPos(owner.position);
-        const VectorSingle ownerRot(owner.rotation);
-        const VectorSingle ownerScale(owner.scale);
-        const f32 rotLenSq = LengthSq(ownerRot);
-        if(
-            IsFinite(ownerPos.xyz)
-            && IsFinite(ownerScale.xyz)
-            && ownerScale.x >= s_SceneMatrixDecomposeEpsilon
-            && ownerScale.y >= s_SceneMatrixDecomposeEpsilon
-            && ownerScale.z >= s_SceneMatrixDecomposeEpsilon
-            && IsFinite(ownerRot)
-            && IsFinite(rotLenSq)
-            && Abs(rotLenSq - 1.0f) <= s_SceneMatrixDecomposeEpsilon * 0.01f
-        ){
-            if(localPos.x == 0.0f && localPos.y == 0.0f && localPos.z == 0.0f){
-                AssignDecomposedTransformComponent(ownerPos, ownerRot, ownerScale, outTransform);
-                return;
-            }
-            AssignDecomposedTransformComponent(
-                ownerPos + RotateSceneVector3(ownerScale * localPos, ownerRot),
-                ownerRot,
-                ownerScale,
-                outTransform
-            );
-            return;
-        }
-    }
-
-    MatrixSingle ownerMatrix = MatrixIdentity();
-    if(hasOwner)
-        ownerMatrix = LoadTransformMatrix(world.getComponent<TransformComponent>(object.owner));
-    TryDecomposeAndAssignTransformComponent(
-        ComputeModelObjectWorldMatrix(ownerMatrix, localMatrix),
-        outTransform
-    );
-}
-
-void AppendModelStaticMeshAttachmentJointQuery(
-    in ModelStaticMeshAttachmentComponent attachment,
-    mut b8 inOutSharedParent,
-    mut Vector<ModelAttachmentJointQuery> inOutJointQueries
-){
-    if(!attachment.hasJointAttachment())
-        return;
-    if(!inOutJointQueries.empty() && inOutJointQueries.front().parentEntity != attachment.parentEntity)
-        inOutSharedParent = false;
-    inOutJointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
-}
-
-MatrixSingle ResolveModelStaticMeshAttachmentParentMatrix(in World world, in EntityID owner, in EntityID parentEntity){
-    if(parentEntity.valid() && world.hasComponent<TransformComponent>(parentEntity))
-        return LoadTransformMatrix(world.getComponent<TransformComponent>(parentEntity));
-    return LoadEntityTransformMatrix(world, owner);
-}
-
-void UpdateModelStaticMeshAttachmentTransform(
-    in World world,
-    in usize queryCount,
-    in Span<ModelAttachmentJointQuery> jointQueries,
-    in ModelObjectComponent object,
-    in ModelStaticMeshAttachmentComponent attachment,
-    mut usize inOutNextQuery,
-    mut TransformComponent outTransform
-){
-    const MatrixSingle parentMatrix = ResolveModelStaticMeshAttachmentParentMatrix(world, object.owner, attachment.parentEntity);
-    const MatrixSingle localMatrix = MatrixSingle(attachment.localTransform);
-    if(!attachment.hasJointAttachment()){
-        TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(parentMatrix, localMatrix), outTransform);
-        return;
-    }
-
-    MatrixSingle jointMatrix = MatrixIdentity();
-    if(queryCount > 1u){
-        in ModelAttachmentJointQuery query = jointQueries[inOutNextQuery];
-        ++inOutNextQuery;
-        if(!query.resolved)
-            return;
-        jointMatrix = MatrixSingle(query.jointMatrix);
-    }
-    else{
-        if(!world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity))
-            return;
-        const Expected<MatrixSingle> resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(
-            world.getComponent<SkeletonPoseComponent>(attachment.parentEntity),
-            attachment.parentJointIndex
-        );
-        if(!resolvedJointMatrix.has_value())
-            return;
-        jointMatrix = resolvedJointMatrix.value();
-    }
-    TryDecomposeAndAssignTransformComponent(
-        ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix),
-        outTransform
-    );
 }
 
 [arena, system("model")]
@@ -463,6 +255,217 @@ class ModelSystem{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void ResetModelRuntimeState(mut ModelRuntimeComponent outRuntime){
+    outRuntime.model = s_NameNone;
+    outRuntime.objectCount = 0u;
+}
+
+b8 MatchesModelObjectIdentity(in ModelObjectComponent object, in EntityID owner, in Name objectName){
+    return object.owner == owner && object.object == objectName;
+}
+
+MatrixSingle ComputeModelObjectWorldMatrix(in MatrixSingle parentMatrix, in MatrixSingle localMatrix){
+    return Mul(parentMatrix, localMatrix);
+}
+
+MatrixSingle ComputeModelJointAttachmentWorldMatrix(
+    in MatrixSingle parentMatrix,
+    in MatrixSingle jointMatrix,
+    in MatrixSingle localMatrix
+){
+    return Mul(Mul(parentMatrix, jointMatrix), localMatrix);
+}
+
+void ResolveModelAttachmentJointQueries(
+    in Span<usize> parentOrder,
+    in World world,
+    mut Vector<SkeletonJointMatrix> jointPalette,
+    mut Vector<ModelAttachmentJointQuery> queries
+){
+    const usize queryCount = queries.size();
+    usize groupBegin = 0u;
+    while(groupBegin < queryCount){
+        const EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
+        const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, queries, groupBegin);
+
+        if(world.hasComponent<SkeletonPoseComponent>(parentEntity)){
+            in SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(parentEntity);
+            if(TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, jointPalette).has_value())
+                ResolveModelAttachmentJointQueryGroup(parentOrder, jointPalette, groupBegin, groupEnd, queries);
+        }
+        groupBegin = groupEnd;
+    }
+}
+
+EntityID FindSpawnedModelObjectInMap(in HashMap<Name, EntityID> spawnedObjects, in Name objectName){
+    const auto found = spawnedObjects.find(objectName);
+    if(found != spawnedObjects.end())
+        return found.value();
+    return s_InvalidEntityId;
+}
+
+b8 IsInactiveModelObjectOwner(in World world, in EntityID owner){
+    return !world.hasComponent<ModelRuntimeComponent>(owner) || !world.hasComponent<ModelComponent>(owner);
+}
+
+void RemoveInactiveModelEntities(mut World world, in usize inactiveObjectCount, in usize inactiveRuntimeCount){
+    Vector<EntityID> inactiveEntities = Vector<EntityID>();
+    inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
+    if(inactiveObjectCount != 0u){
+        world.view<ModelObjectComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelObjectComponent object) -> void{
+            if(IsInactiveModelObjectOwner(world, object.owner))
+                inactiveEntities.push_back(entity);
+        });
+        for(in EntityID entity : inactiveEntities)
+            world.destroyEntity(entity);
+    }
+    if(inactiveRuntimeCount != 0u){
+        inactiveEntities.clear();
+        world.view<ModelRuntimeComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelRuntimeComponent runtime) -> void{
+            if(!world.hasComponent<ModelComponent>(entity))
+                inactiveEntities.push_back(entity);
+        });
+        for(in EntityID entity : inactiveEntities)
+            world.removeComponent<ModelRuntimeComponent>(entity);
+    }
+}
+
+void DestroyOwnedModelEntities(mut World world, in EntityID entity, in usize ownedCount){
+    Vector<EntityID> ownedEntities = Vector<EntityID>();
+    ownedEntities.reserve(ownedCount);
+    world.view<ModelObjectComponent>().each(lambda[in entity, mut ownedEntities](in EntityID objectEntity, in ModelObjectComponent object) -> void{
+        if(object.owner == entity)
+            ownedEntities.push_back(objectEntity);
+    });
+    for(in EntityID objectEntity : ownedEntities)
+        world.destroyEntity(objectEntity);
+}
+
+b8 IsPureTranslationMatrix(in MatrixSingle matrix){
+    const VectorSingle r0 = matrix[0u];
+    const VectorSingle r1 = matrix[1u];
+    const VectorSingle r2 = matrix[2u];
+    return
+        r0.x == 1.0f && r0.y == 0.0f && r0.z == 0.0f && IsFinite(r0.w)
+        && r1.x == 0.0f && r1.y == 1.0f && r1.z == 0.0f && IsFinite(r1.w)
+        && r2.x == 0.0f && r2.y == 0.0f && r2.z == 1.0f && IsFinite(r2.w)
+    ;
+}
+
+void UpdateNonStaticModelObjectTransform(in World world, in ModelObjectComponent object, mut TransformComponent outTransform){
+    if(object.kind == ModelObjectKind::StaticMesh)
+        return;
+
+    const MatrixSingle localMatrix = MatrixSingle(object.localTransform);
+    const b8 hasOwner = world.hasComponent<TransformComponent>(object.owner);
+    if(IsPureTranslationMatrix(localMatrix)){
+        const VectorSingle localPos(localMatrix[0u].w, localMatrix[1u].w, localMatrix[2u].w, 0.0f);
+        if(!hasOwner){
+            AssignDecomposedTransformComponent(
+                localPos,
+                VectorSingle(0.0f, 0.0f, 0.0f, 1.0f),
+                VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+                outTransform
+            );
+            return;
+        }
+        in TransformComponent owner = world.getComponent<TransformComponent>(object.owner);
+        const VectorSingle ownerPos(owner.position);
+        const VectorSingle ownerRot(owner.rotation);
+        const VectorSingle ownerScale(owner.scale);
+        const f32 rotLenSq = LengthSq(ownerRot);
+        if(
+            IsFinite(ownerPos.xyz)
+            && IsFinite(ownerScale.xyz)
+            && ownerScale.x >= s_SceneMatrixDecomposeEpsilon
+            && ownerScale.y >= s_SceneMatrixDecomposeEpsilon
+            && ownerScale.z >= s_SceneMatrixDecomposeEpsilon
+            && IsFinite(ownerRot)
+            && IsFinite(rotLenSq)
+            && Abs(rotLenSq - 1.0f) <= s_SceneMatrixDecomposeEpsilon * 0.01f
+        ){
+            if(localPos.x == 0.0f && localPos.y == 0.0f && localPos.z == 0.0f){
+                AssignDecomposedTransformComponent(ownerPos, ownerRot, ownerScale, outTransform);
+                return;
+            }
+            AssignDecomposedTransformComponent(
+                ownerPos + RotateSceneVector3(ownerScale * localPos, ownerRot),
+                ownerRot,
+                ownerScale,
+                outTransform
+            );
+            return;
+        }
+    }
+
+    MatrixSingle ownerMatrix = MatrixIdentity();
+    if(hasOwner)
+        ownerMatrix = LoadTransformMatrix(world.getComponent<TransformComponent>(object.owner));
+    TryDecomposeAndAssignTransformComponent(
+        ComputeModelObjectWorldMatrix(ownerMatrix, localMatrix),
+        outTransform
+    );
+}
+
+void AppendModelStaticMeshAttachmentJointQuery(
+    in ModelStaticMeshAttachmentComponent attachment,
+    mut b8 inOutSharedParent,
+    mut Vector<ModelAttachmentJointQuery> inOutJointQueries
+){
+    if(!attachment.hasJointAttachment())
+        return;
+    if(!inOutJointQueries.empty() && inOutJointQueries.front().parentEntity != attachment.parentEntity)
+        inOutSharedParent = false;
+    inOutJointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
+}
+
+MatrixSingle ResolveModelStaticMeshAttachmentParentMatrix(in World world, in EntityID owner, in EntityID parentEntity){
+    if(parentEntity.valid() && world.hasComponent<TransformComponent>(parentEntity))
+        return LoadTransformMatrix(world.getComponent<TransformComponent>(parentEntity));
+    return LoadEntityTransformMatrix(world, owner);
+}
+
+void UpdateModelStaticMeshAttachmentTransform(
+    in World world,
+    in usize queryCount,
+    in Span<ModelAttachmentJointQuery> jointQueries,
+    in ModelObjectComponent object,
+    in ModelStaticMeshAttachmentComponent attachment,
+    mut usize inOutNextQuery,
+    mut TransformComponent outTransform
+){
+    const MatrixSingle parentMatrix = ResolveModelStaticMeshAttachmentParentMatrix(world, object.owner, attachment.parentEntity);
+    const MatrixSingle localMatrix = MatrixSingle(attachment.localTransform);
+    if(!attachment.hasJointAttachment()){
+        TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(parentMatrix, localMatrix), outTransform);
+        return;
+    }
+
+    MatrixSingle jointMatrix = MatrixIdentity();
+    if(queryCount > 1u){
+        in ModelAttachmentJointQuery query = jointQueries[inOutNextQuery];
+        ++inOutNextQuery;
+        if(!query.resolved)
+            return;
+        jointMatrix = MatrixSingle(query.jointMatrix);
+    }
+    else{
+        if(!world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity))
+            return;
+        const Expected<MatrixSingle> resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(
+            world.getComponent<SkeletonPoseComponent>(attachment.parentEntity),
+            attachment.parentJointIndex
+        );
+        if(!resolvedJointMatrix.has_value())
+            return;
+        jointMatrix = resolvedJointMatrix.value();
+    }
+    TryDecomposeAndAssignTransformComponent(
+        ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix),
+        outTransform
+    );
+}
 
 void ModelSystem::syncModelRuntimes(){
     this.clearInactiveModelRuntimes();

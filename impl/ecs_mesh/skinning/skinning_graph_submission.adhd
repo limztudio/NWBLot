@@ -13,6 +13,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class UnpublishedSkinningDescriptors : NoCopy{
+    private mut MeshSkinningSystem m_system;
+    private mut MeshSkinningRuntimeResources m_resources;
+    public b8 published = false;
+
+    public UnpublishedSkinningDescriptors(mut MeshSkinningSystem system, mut MeshSkinningRuntimeResources resources){
+        this.m_system = system;
+        this.m_resources = resources;
+    }
+
+    public ~UnpublishedSkinningDescriptors(){
+        if(!this.published)
+            this.m_system.releaseRuntimeResourceBindlessHeapHandles(this.m_resources);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u32 ResolveRuntimeSkinningJointCount(in b8 hasSkinPayload, in u32 skeletonJointCount){
     if(hasSkinPayload)
         return skeletonJointCount;
@@ -100,14 +120,36 @@ b8 RegisterSkinningStorageSlot(
     mut GpuDescriptorHeap heap,
     in RuntimeStorageDescriptorSlot slot,
     in DescriptorWriteItem item,
-    mut MeshSkinningRuntimeResources resources,
-    mut u32 outSlot
+    mut MeshSkinningRuntimeResources resources
 ){
     const Expected<GpuDescriptorHandle> handle = RegisterSkinningStorageBufferDescriptor(heap, item);
     if(!handle.has_value())
         return false;
     resources.bindlessHeapHandles.storageBuffers[cast<usize>(slot)] = handle.value();
-    outSlot = handle.value().slot();
+    const u32 slotIndex = handle.value().slot();
+    switch(slot){
+    case RuntimeStorageDescriptorSlot::RestPosition: resources.bindlessResourceSlots.restPosition = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::SkinnedPosition: resources.bindlessResourceSlots.skinnedPosition = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::RestNormal: resources.bindlessResourceSlots.restNormal = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::SkinnedNormal: resources.bindlessResourceSlots.skinnedNormal = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::RestTangent: resources.bindlessResourceSlots.restTangent = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::SkinnedTangent: resources.bindlessResourceSlots.skinnedTangent = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::MeshletDesc: resources.bindlessResourceSlots.meshletDesc = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::PositionRefDeltas: resources.bindlessResourceSlots.positionRefDeltas = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::AttributeRefDeltas: resources.bindlessResourceSlots.attributeRefDeltas = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::AttributeSkins: resources.bindlessResourceSlots.attributeSkins = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::LocalVertexRefs: resources.bindlessResourceSlots.localVertexRefs = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::PrimitiveIndices: resources.bindlessResourceSlots.primitiveIndices = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::MeshletBounds: resources.bindlessResourceSlots.meshletBounds = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::MeshletLocalBounds: resources.bindlessResourceSlots.meshletLocalBounds = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::LocalBounds: resources.bindlessResourceSlots.localBounds = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::SkinInfluences: resources.bindlessResourceSlots.skinInfluences = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::JointPalette: resources.bindlessResourceSlots.jointPalette = slotIndex; break;
+    case RuntimeStorageDescriptorSlot::AttributeBuffer: resources.bindlessResourceSlots.attributeBuffer = slotIndex; break;
+    default:
+        assert(false);
+        return false;
+    }
     return true;
 }
 
@@ -172,21 +214,21 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(
     }
 
     const b8 requiredRegistered =
-        RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestPosition, DescriptorWriteItemStructuredBufferSrv(0, instance.restPositionBuffer.deref()), resources, resources.bindlessResourceSlots.restPosition)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedPosition, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedPositionBuffer.deref()), resources, resources.bindlessResourceSlots.skinnedPosition)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestNormal, DescriptorWriteItemStructuredBufferSrv(0, instance.restNormalBuffer.deref()), resources, resources.bindlessResourceSlots.restNormal)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedNormal, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedNormalBuffer.deref()), resources, resources.bindlessResourceSlots.skinnedNormal)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestTangent, DescriptorWriteItemStructuredBufferSrv(0, instance.restTangentBuffer.deref()), resources, resources.bindlessResourceSlots.restTangent)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedTangent, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedTangentBuffer.deref()), resources, resources.bindlessResourceSlots.skinnedTangent)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletDesc, DescriptorWriteItemStructuredBufferSrv(0, instance.meshletDescBuffer.deref()), resources, resources.bindlessResourceSlots.meshletDesc)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::PositionRefDeltas, DescriptorWriteItemRawBufferSrv(0, instance.meshletPositionRefDeltaBuffer.deref()), resources, resources.bindlessResourceSlots.positionRefDeltas)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeRefDeltas, DescriptorWriteItemRawBufferSrv(0, instance.meshletAttributeRefDeltaBuffer.deref()), resources, resources.bindlessResourceSlots.attributeRefDeltas)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeSkins, DescriptorWriteItemStructuredBufferSrv(0, instance.attributeSkinBuffer.deref()), resources, resources.bindlessResourceSlots.attributeSkins)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::LocalVertexRefs, DescriptorWriteItemStructuredBufferSrv(0, instance.meshletLocalVertexRefBuffer.deref()), resources, resources.bindlessResourceSlots.localVertexRefs)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::PrimitiveIndices, DescriptorWriteItemRawBufferSrv(0, instance.meshletPrimitiveIndexBuffer.deref()), resources, resources.bindlessResourceSlots.primitiveIndices)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletBounds, DescriptorWriteItemRawBufferUav(0, instance.meshletBoundsBuffer.deref()), resources, resources.bindlessResourceSlots.meshletBounds)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletLocalBounds, DescriptorWriteItemRawBufferUav(0, instance.meshletLocalBoundsBuffer.deref()), resources, resources.bindlessResourceSlots.meshletLocalBounds)
-        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::LocalBounds, DescriptorWriteItemRawBufferUav(0, instance.localBoundsBuffer.deref()), resources, resources.bindlessResourceSlots.localBounds)
+        RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestPosition, DescriptorWriteItemStructuredBufferSrv(0, instance.restPositionBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedPosition, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedPositionBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestNormal, DescriptorWriteItemStructuredBufferSrv(0, instance.restNormalBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedNormal, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedNormalBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::RestTangent, DescriptorWriteItemStructuredBufferSrv(0, instance.restTangentBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinnedTangent, DescriptorWriteItemStructuredBufferUav(0, instance.skinnedTangentBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletDesc, DescriptorWriteItemStructuredBufferSrv(0, instance.meshletDescBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::PositionRefDeltas, DescriptorWriteItemRawBufferSrv(0, instance.meshletPositionRefDeltaBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeRefDeltas, DescriptorWriteItemRawBufferSrv(0, instance.meshletAttributeRefDeltaBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeSkins, DescriptorWriteItemStructuredBufferSrv(0, instance.attributeSkinBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::LocalVertexRefs, DescriptorWriteItemStructuredBufferSrv(0, instance.meshletLocalVertexRefBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::PrimitiveIndices, DescriptorWriteItemRawBufferSrv(0, instance.meshletPrimitiveIndexBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletBounds, DescriptorWriteItemRawBufferUav(0, instance.meshletBoundsBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletLocalBounds, DescriptorWriteItemRawBufferUav(0, instance.meshletLocalBoundsBuffer.deref()), resources)
+        && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::LocalBounds, DescriptorWriteItemRawBufferUav(0, instance.localBoundsBuffer.deref()), resources)
     ;
     if(!requiredRegistered){
         this.releaseRuntimeResourceBindlessHeapHandles(resources);
@@ -201,8 +243,8 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(
             return false;
         }
         const b8 skinRegistered =
-            RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinInfluences, DescriptorWriteItemStructuredBufferSrv(0, resources.skinBuffer.deref()), resources, resources.bindlessResourceSlots.skinInfluences)
-            && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::JointPalette, DescriptorWriteItemStructuredBufferSrv(0, resources.jointPaletteBuffer.deref()), resources, resources.bindlessResourceSlots.jointPalette)
+            RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinInfluences, DescriptorWriteItemStructuredBufferSrv(0, resources.skinBuffer.deref()), resources)
+            && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::JointPalette, DescriptorWriteItemStructuredBufferSrv(0, resources.jointPaletteBuffer.deref()), resources)
         ;
         if(!skinRegistered){
             this.releaseRuntimeResourceBindlessHeapHandles(resources);
@@ -212,7 +254,7 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(
     }
 
     if(instance.attributeBuffer.valid()){
-        if(!RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeBuffer, DescriptorWriteItemRawBufferUav(0, instance.attributeBuffer.deref()), resources, resources.bindlessResourceSlots.attributeBuffer)){
+        if(!RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeBuffer, DescriptorWriteItemRawBufferUav(0, instance.attributeBuffer.deref()), resources)){
             this.releaseRuntimeResourceBindlessHeapHandles(resources);
             error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
             return false;
@@ -229,26 +271,6 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UnpublishedSkinningDescriptors : NoCopy{
-    private mut MeshSkinningSystem m_system;
-    private mut MeshSkinningRuntimeResources m_resources;
-    public b8 published = false;
-
-    public UnpublishedSkinningDescriptors(mut MeshSkinningSystem system, mut MeshSkinningRuntimeResources resources){
-        this.m_system = system;
-        this.m_resources = resources;
-    }
-
-    public ~UnpublishedSkinningDescriptors(){
-        if(!this.published)
-            this.m_system.releaseRuntimeResourceBindlessHeapHandles(this.m_resources);
-    }
-}
-
 Expected<BufferHandle, BufferSetupFailure> SetupSkinningStructuredBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in StringView label){
     if(MultiplyOverflows<usize>(payload.size(), size_of<T>())){
         error("MeshSkinningSystem: {} payload byte size overflows", label);
@@ -256,10 +278,6 @@ Expected<BufferHandle, BufferSetupFailure> SetupSkinningStructuredBuffer<T>(mut 
     }
     return SetupBuffer<T>(graphics, debugName, payload, BufferFlags(false, false, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     mut Device device = this.m_graphics.getDevice();

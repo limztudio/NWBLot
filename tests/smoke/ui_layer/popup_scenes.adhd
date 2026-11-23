@@ -23,6 +23,15 @@ const StringView s_UiPopupSmokeSecondKey = "second";
 const StringView s_UiPopupToolsSmokeTag = "UiPopupToolsSmoke";
 const StringView s_UiPopupToolsAnchorKey = "anchor";
 const StringView s_UiPopupToolsSentinelKey = "sentinel";
+const Array<StringView, 26u> s_UiNestedPopupSmokeRectNames(
+    "open", "counter", "parent", "child", "before_button", "before_edit", "before_list", "before_row2", "child_open", "after_button", "after_edit", "after_list",
+    "after_row2", "child_action", "child_edit", "close_branch", "combo", "combo_popup", "combo_row2", "search", "search_popup", "search_query", "search_row2",
+    "menu_anchor", "menu", "menu_row2"
+);
+const Array<StringView, 12u> s_UiNumericEditSmokeRectNames(
+    "integer_bounds", "integer_content", "integer_caret", "integer_selection", "float_bounds", "float_content", "float_caret", "float_selection",
+    "clipboard_bounds", "clipboard_content", "clipboard_caret", "clipboard_selection"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,17 +183,6 @@ class UiPopupToolsSmokeScene : IUiSmokeInputScene{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const Array<StringView, 26u> s_UiNestedPopupSmokeRectNames(
-    "open", "counter", "parent", "child", "before_button", "before_edit", "before_list", "before_row2", "child_open", "after_button", "after_edit", "after_list",
-    "after_row2", "child_action", "child_edit", "close_branch", "combo", "combo_popup", "combo_row2", "search", "search_popup", "search_query", "search_row2",
-    "menu_anchor", "menu", "menu_row2"
-);
-
-const Array<StringView, 12u> s_UiNumericEditSmokeRectNames(
-    "integer_bounds", "integer_content", "integer_caret", "integer_selection", "float_bounds", "float_content", "float_caret", "float_selection",
-    "clipboard_bounds", "clipboard_content", "clipboard_caret", "clipboard_selection"
-);
 
 b8 IsCoherentNumericSmokeEdit(in EditModel model, in EditBoxState state){
     return state.modelGeneration == model.instanceGeneration()

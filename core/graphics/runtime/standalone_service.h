@@ -71,7 +71,6 @@ public:
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
         usize regionCount = 0u;
-        QueueSubmissionToken* acceptedToken = nullptr;
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
         CommandQueue::Enum queue = CommandQueue::kCount;
@@ -90,14 +89,13 @@ public:
 
 public:
     [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
-    [[nodiscard]] b8 uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
-    [[nodiscard]] b8 uploadTextureBatch(
-        const TextureHandle& destination, const Span<const TextureUploadRegion> regions, const ResourceStates::Mask finalState,
-        const ResourceStates::Mask initialState, QueueSubmissionToken& acceptedToken
+    [[nodiscard]] Expected<QueueSubmissionToken> uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
+    [[nodiscard]] Expected<QueueSubmissionToken> uploadTextureBatch(
+        const TextureHandle& destination, const Span<const TextureUploadRegion> regions, const ResourceStates::Mask finalState, const ResourceStates::Mask initialState
     )const{
         return uploadTextureBatch(TextureUploadBatchDesc{
-            .destination = destination, .regions = regions.data(), .regionCount = regions.size(), .acceptedToken = &acceptedToken,
-            .finalState = finalState, .physicalInitialState = initialState, .hasPhysicalInitialState = true,
+            .destination = destination, .regions = regions.data(), .regionCount = regions.size(), .finalState = finalState, .physicalInitialState = initialState,
+            .hasPhysicalInitialState = true,
         });
     }
     [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(

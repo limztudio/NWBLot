@@ -74,6 +74,7 @@ b8 ValidatePairedFontSourceMetrics(in Path path, in b8 valid){
     return false;
 }
 
+[cpp_unwind]
 void CopySourceGroups(in PreparedFontSource source, mut FontAtlasPayload payload){
     payload.groups.reserve(source.groups.size());
     for(in PreparedFontImageGroup prepared : source.groups){
@@ -87,6 +88,7 @@ void CopySourceGroups(in PreparedFontSource source, mut FontAtlasPayload payload
     }
 }
 
+[cpp_unwind]
 void MoveSourceGroups(mut PreparedFontSource source, mut FontAtlasPayload payload){
     payload.groups.reserve(source.groups.size());
     for(usize index = 0u; index < source.groups.size(); ++index){
@@ -120,30 +122,6 @@ Expected<u32> ReadFontAtlasMetadataU32(
     return ValidateFontAtlasMetadataU32Field(path, diagnosticPrefix, field, hasInteger, rawValue, minimum, maximum);
 }
 
-b8 ReadFontAtlasU32Field(
-    in Path path,
-    in MetascriptValue map,
-    in StringView diagnosticPrefix,
-    in StringView field,
-    in u32 minimum,
-    in u32 maximum,
-    mut u32 outValue
-){
-    const Expected<u32> result = ReadFontAtlasMetadataU32(path, map, diagnosticPrefix, field, minimum, maximum);
-    if(!result.has_value())
-        return false;
-    outValue = result.value();
-    return true;
-}
-
-b8 ReadFontAtlasFiniteF32Field(in Path path, in MetascriptValue map, in StringView diagnosticPrefix, in StringView field, mut f32 outValue){
-    const Expected<f32> result = ReadMetadataFiniteF32Field(path, map, diagnosticPrefix, field, true);
-    if(!result.has_value())
-        return false;
-    outValue = result.value();
-    return true;
-}
-
 Expected<FontAtlasGlyph> ReadFontAtlasGlyphMetadata(in Path path, in MetascriptValue map, in u32 glyphId, in f32 unitsPerPixel){
     if(!CheckMetadataAssetMap(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix))
         return MakeUnexpected(Failure());
@@ -161,28 +139,52 @@ Expected<FontAtlasGlyph> ReadFontAtlasGlyphMetadata(in Path path, in MetascriptV
 
     FontAtlasGlyph glyph;
     glyph.glyphId = glyphId;
-    if(!ReadFontAtlasFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphAdvanceUnitsField, glyph.advanceUnits))
-        return MakeUnexpected(Failure());
+    const Expected<f32> advanceUnits = ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphAdvanceUnitsField, true);
+    if(!advanceUnits.has_value())
+        return MakeUnexpected(advanceUnits.error());
+    glyph.advanceUnits = advanceUnits.value();
     if(!hasBitmap)
         return glyph;
 
-    if(
-        !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphGroupField, 0u, s_FontAtlasMaxGroupCount - 1u, glyph.group)
-        || !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphChannelField, 0u, s_FontAtlasMaxChannelCount - 1u, glyph.channel)
-        || !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphXField, 0u, s_FontAtlasMaxExtent, glyph.x)
-        || !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphYField, 0u, s_FontAtlasMaxExtent, glyph.y)
-        || !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphWidthField, 0u, s_FontAtlasMaxExtent, glyph.width)
-        || !ReadFontAtlasU32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphHeightField, 0u, s_FontAtlasMaxExtent, glyph.height)
-        || !ReadFontAtlasFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneLeftField, glyph.planeLeft)
-        || !ReadFontAtlasFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneTopField, glyph.planeTop)
-    )
-        return MakeUnexpected(Failure());
+    const Expected<u32> group = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphGroupField, 0u, s_FontAtlasMaxGroupCount - 1u);
+    if(!group.has_value())
+        return MakeUnexpected(group.error());
+    glyph.group = group.value();
+    const Expected<u32> channel = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphChannelField, 0u, s_FontAtlasMaxChannelCount - 1u);
+    if(!channel.has_value())
+        return MakeUnexpected(channel.error());
+    glyph.channel = channel.value();
+    const Expected<u32> x = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphXField, 0u, s_FontAtlasMaxExtent);
+    if(!x.has_value())
+        return MakeUnexpected(x.error());
+    glyph.x = x.value();
+    const Expected<u32> y = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphYField, 0u, s_FontAtlasMaxExtent);
+    if(!y.has_value())
+        return MakeUnexpected(y.error());
+    glyph.y = y.value();
+    const Expected<u32> width = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphWidthField, 0u, s_FontAtlasMaxExtent);
+    if(!width.has_value())
+        return MakeUnexpected(width.error());
+    glyph.width = width.value();
+    const Expected<u32> height = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphHeightField, 0u, s_FontAtlasMaxExtent);
+    if(!height.has_value())
+        return MakeUnexpected(height.error());
+    glyph.height = height.value();
+    const Expected<f32> planeLeft = ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneLeftField, true);
+    if(!planeLeft.has_value())
+        return MakeUnexpected(planeLeft.error());
+    glyph.planeLeft = planeLeft.value();
+    const Expected<f32> planeTop = ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneTopField, true);
+    if(!planeTop.has_value())
+        return MakeUnexpected(planeTop.error());
+    glyph.planeTop = planeTop.value();
     if(!ValidateFontAtlasPositiveGlyphBitmapDimensions(path, glyph.width, glyph.height))
         return MakeUnexpected(Failure());
     ComputeFontAtlasGlyphPlaneBounds(unitsPerPixel, glyph);
     return glyph;
 }
 
+[cpp_unwind]
 Expected<Vector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(in Path nwbFilePath, in MetascriptValue asset, in FontAtlasPayload payload){
     const Expected<Span<MetascriptValue>> glyphsResult = ReadMetadataListField(nwbFilePath, asset, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphsResult.has_value())
@@ -204,14 +206,26 @@ Expected<Vector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(in Path nwbFilePath
 }
 
 b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPayload payload){
-    if(
-        !ReadFontAtlasU32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasBakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem, payload.bakePpem)
-        || !ReadFontAtlasU32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasSpreadPixelsField, s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels, payload.spreadPixels)
-        || !ReadFontAtlasFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasAscenderUnitsField, payload.ascenderUnits)
-        || !ReadFontAtlasFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasDescenderUnitsField, payload.descenderUnits)
-        || !ReadFontAtlasFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasLineGapUnitsField, payload.lineGapUnits)
-    )
+    const Expected<u32> bakePpem = ReadFontAtlasMetadataU32(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasBakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
+    if(!bakePpem.has_value())
         return false;
+    payload.bakePpem = bakePpem.value();
+    const Expected<u32> spreadPixels = ReadFontAtlasMetadataU32(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasSpreadPixelsField, s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
+    if(!spreadPixels.has_value())
+        return false;
+    payload.spreadPixels = spreadPixels.value();
+    const Expected<f32> ascenderUnits = ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasAscenderUnitsField, true);
+    if(!ascenderUnits.has_value())
+        return false;
+    payload.ascenderUnits = ascenderUnits.value();
+    const Expected<f32> descenderUnits = ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasDescenderUnitsField, true);
+    if(!descenderUnits.has_value())
+        return false;
+    payload.descenderUnits = descenderUnits.value();
+    const Expected<f32> lineGapUnits = ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasLineGapUnitsField, true);
+    if(!lineGapUnits.has_value())
+        return false;
+    payload.lineGapUnits = lineGapUnits.value();
 
     const Expected<MetadataStringField> rasterModeResult = ReadMetadataStringField(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasRasterModeField, true);
     if(!rasterModeResult.has_value())
@@ -223,7 +237,7 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
     return true;
 }
 
-[asset_writer]
+[cpp_unwind, asset_writer]
 b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
         return false;
@@ -232,6 +246,7 @@ b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
 }
 
+[cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtualPath, in FontAtlasPayload payload, in b8 validatePayloadFlag){
     FontAtlas candidate(virtualPath);
     candidate.setPayload(payload);
@@ -246,10 +261,12 @@ Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtual
     return candidate;
 }
 
+[cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload){
     return BuildFontAtlasAssetFromPayloadWithValidation(virtualPath, payload, true);
 }
 
+[cpp_unwind]
 b8 FinalizeFontAtlasPayloadFromPreparedSource(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -283,6 +300,7 @@ b8 FinalizeFontAtlasPayloadFromPreparedSource(
     return ValidateFontAtlasPayloadWithOptions(inOutPayload, verifyPixelDigests);
 }
 
+[cpp_unwind]
 b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -295,6 +313,7 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
     return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
 }
 
+[cpp_unwind]
 b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -307,6 +326,7 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
     return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
 }
 
+[cpp_unwind]
 b8 PopulateFontAtlasPayloadFromPreparedSource(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -328,7 +348,7 @@ b8 PopulateFontAtlasPayloadFromPreparedSource(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_sidecar(s_PreparedFontExtension)]
+[cpp_unwind, cook_sidecar(s_PreparedFontExtension)]
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
     if(virtualPath == s_NameNone || !CheckMetadataAssetMap(path, asset, s_FontAtlasMetaDiagnosticPrefix))
         return MakeUnexpected(Failure());
@@ -363,12 +383,14 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
     return ParseCookMetadataDocument<FontAtlasCookEntry>(root, virtualRoot, file, document, s_FontAtlasMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<FontAtlasCookEntry>{
         return ParseFontAtlasCookMetadataValue(path, file, value);
     });
 }
 
+[cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAsset(in FontAtlasCookEntry entry){
     return BuildFontAtlasAssetFromPayloadWithValidation(entry.virtualPath, entry.payload, !entry.payloadValidated);
 }

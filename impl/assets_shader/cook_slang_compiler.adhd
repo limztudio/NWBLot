@@ -30,6 +30,37 @@ const Array<StringView, s_CommonCompilerArgumentCount> s_CommonCompilerArguments
     s_SlangProfileArgument, s_Spirv15TargetProfileText
 );
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SlangArguments{
+    public Vector<StringView> views;
+    private Vector<String> owned;
+
+    public void reserve(in usize count, in usize ownedCount){
+        this.views.reserve(count);
+        this.owned.reserve(ownedCount);
+    }
+    public b8 appendOwned(in Expected<String> argument){
+        if(!argument.has_value())
+            return false;
+        AppendArenaElement<String>(this.owned);
+        mut String text = this.owned[this.owned.size() - 1u];
+        text.assign(StringView(argument.value()));
+        this.views.push_back(StringView(text));
+        return true;
+    }
+    public ~SlangArguments(){
+        while(!this.owned.empty())
+            this.owned.pop_back();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Array<SlangStageMapping, 14u> BuildSlangStageMappings(){
     const Array<SlangStageMapping, 14u> mappings(
         SlangStageMapping(ArchiveStageTextFromShaderType(ShaderType::VertexStage), s_SlangStageVertex),
@@ -155,36 +186,12 @@ Expected<String> BuildSlangDefineArgument(in ShaderMacroDefinition define, in Sh
     return argument;
 }
 
-class SlangArguments{
-    public Vector<StringView> views;
-    private Vector<String> owned;
-
-    public void reserve(in usize count, in usize ownedCount){
-        this.views.reserve(count);
-        this.owned.reserve(ownedCount);
-    }
-    public b8 appendOwned(in Expected<String> argument){
-        if(!argument.has_value())
-            return false;
-        AppendArenaElement<String>(this.owned);
-        mut String text = this.owned[this.owned.size() - 1u];
-        text.assign(StringView(argument.value()));
-        this.views.push_back(StringView(text));
-        return true;
-    }
-    public ~SlangArguments(){
-        while(!this.owned.empty())
-            this.owned.pop_back();
-    }
-}
-
 b8 RunSlangShaderCompiler(in ShaderCompilerRequest request, in Path overlay, in SlangCompilerInputs inputs, in Path output, in Path diagnostics, in StringView slangStage, in StringView optimization){
-    usize count = 0u;
-    usize ownedCount = 0u;
-    if(!SlangCompilerRequestValidator().argumentCounts(request.shaderName, inputs.includeDirectories.size(), request.defines.size(), count, ownedCount))
+    const Expected<SlangCompilerArgumentCounts> counts = SlangCompilerRequestValidator().argumentCounts(request.shaderName, inputs.includeDirectories.size(), request.defines.size());
+    if(!counts.has_value())
         return false;
     SlangArguments args;
-    args.reserve(count, ownedCount);
+    args.reserve(counts.value().argumentReserve, counts.value().ownedArgumentCount);
     args.views.push_back(ConfiguredSlangExecutable());
     if(!args.appendOwned(BuildSlangPathText(inputs.sourcePath)))
         return false;
@@ -248,9 +255,8 @@ b8 RunSlangShaderCompiler(in ShaderCompilerRequest request, in Path overlay, in 
 
 b8 CompileSlangShaderVariant(in ShaderCompilerRequest request, mut Vector<u8> bytecode){
     bytecode.clear();
-    StringView stage = "";
-    StringView optimization = "";
-    if(!SlangCompilerRequestValidator().validateInputs(request.shaderName, request.sourcePath.empty(), request.outputPath.empty(), request.entryPoint, request.stage, cast<u8>(request.optimizationLevel), BuildSlangStageMappings(), stage, optimization))
+    const Expected<SlangCompilerValidatedInputs> validated = SlangCompilerRequestValidator().validateInputs(request.shaderName, request.sourcePath.empty(), request.outputPath.empty(), request.entryPoint, request.stage, cast<u8>(request.optimizationLevel), BuildSlangStageMappings());
+    if(!validated.has_value())
         return false;
     Path parent = request.outputPath.parentPath();
     if(parent.empty())
@@ -263,7 +269,7 @@ b8 CompileSlangShaderVariant(in ShaderCompilerRequest request, mut Vector<u8> by
     const Path output = directory.value() / s_ModuleSpvFileName;
     const Path overlay = directory.value() / s_SourcesDirName;
     const Expected<SlangCompilerInputs> inputs = PrepareSlangCompilerInputs(request, overlay);
-    if(!inputs.has_value() || !RunSlangShaderCompiler(request, overlay, inputs.value(), output, diagnostics, stage, optimization))
+    if(!inputs.has_value() || !RunSlangShaderCompiler(request, overlay, inputs.value(), output, diagnostics, validated.value().stage, validated.value().optimization))
         return false;
     const Expected<void, ErrorCode> read = ReadBinaryFile(output, bytecode);
     if(!read.has_value()){

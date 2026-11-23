@@ -191,6 +191,7 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(in MeshRayTracingResourc
         mesh.blasGeometryContentRevision,
         mesh.swBvhGeometryContentRevision
     );
+    desired = MeshRayTracingSnapshotPolicy().capture(mesh);
     return true;
 }
 

@@ -9,6 +9,7 @@
 #include <impl/assets_mesh/meshlet_triangle_indices.adhd>
 #include <impl/assets_mesh/mesh_binary_codec.adhd>
 #include <impl/assets_mesh/skin_asset.adhd>
+#include <impl/assets_mesh/skin_binary_codec.adhd>
 #include <impl/assets_mesh/skin_cook.adhd>
 #include <impl/assets_skeleton/cook.adhd>
 
@@ -34,39 +35,8 @@ class MeshCookEntry{
     public Vector<u8> meshletPrimitiveIndices;
 }
 
-b8 SerializeMeshBinaryPayload(
-    in Span<f32x3u> positions,
-    in Span<f16x4u> normals,
-    in Span<f16x4u> tangents,
-    in Span<f32x2u> uv0,
-    in Span<f16x4u> colors,
-    in Span<MeshletDesc> meshlets,
-    in Span<MeshletBounds> meshletBounds,
-    in Span<u8> meshletPositionRefDeltas,
-    in Span<u8> meshletAttributeRefDeltas,
-    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
-    in Span<u8> meshletPrimitiveIndices,
-    in Span<u32> solidTriangleWords,
-    mut Vector<u8> outBinary
-){
-    MeshBinaryCodec codec;
-    return codec.serialize(
-        positions,
-        normals,
-        tangents,
-        uv0,
-        colors,
-        meshlets,
-        meshletBounds,
-        meshletPositionRefDeltas,
-        meshletAttributeRefDeltas,
-        meshletLocalVertexRefs,
-        meshletPrimitiveIndices,
-        solidTriangleWords,
-        outBinary
-    );
-}
 
+[cpp_unwind]
 Expected<Vector<SkeletonJointMatrix>> ParseSkinCookInverseBindMatrices(in Path nwbFilePath, in MetascriptValue asset){
     Vector<SkeletonJointMatrix> values;
 
@@ -92,6 +62,7 @@ Expected<Vector<SkeletonJointMatrix>> ParseSkinCookInverseBindMatrices(in Path n
     return values;
 }
 
+[cpp_unwind]
 b8 ValidateSkinCookInfluenceJointIndexBounds(in Path nwbFilePath, in usize jointCount, in Span<SkinInfluence4> influences){
     b8 invalid = jointCount > cast<usize>(u16.max) + 1u;
     if(!invalid){
@@ -109,6 +80,7 @@ b8 ValidateSkinCookInfluenceJointIndexBounds(in Path nwbFilePath, in usize joint
     return ValidateSkinCookInfluenceJointIndices(filePathText, jointCount, influences);
 }
 
+[cpp_unwind]
 Expected<Skin> BuildSkinAssetFromPayload(
     in Name virtualPath,
     in AssetRef<Mesh> mesh,
@@ -125,12 +97,12 @@ Expected<Skin> BuildSkinAssetFromPayload(
     return asset;
 }
 
-[asset_writer]
+[cpp_unwind, asset_writer]
 b8 SerializeMeshAsset(in Mesh mesh, mut Vector<u8> outBinary){
     if(!mesh.validatePayload())
         return false;
 
-    return SerializeMeshBinaryPayload(
+    return MeshBinaryCodec().serialize(
         mesh.positionStream(),
         mesh.normalStream(),
         mesh.tangentStream(),
@@ -147,12 +119,12 @@ b8 SerializeMeshAsset(in Mesh mesh, mut Vector<u8> outBinary){
     );
 }
 
-[asset_writer]
+[cpp_unwind, asset_writer]
 b8 SerializeSkinAsset(in Skin skin, mut Vector<u8> outBinary){
     if(!skin.validatePayload())
         return false;
 
-    return SerializeSkinBinaryPayload(
+    return SkinBinaryCodec().serialize(
         skin.mesh().name().hash(),
         skin.skeleton().name().hash(),
         skin.influences(),
@@ -165,6 +137,7 @@ b8 SerializeSkinAsset(in Skin skin, mut Vector<u8> outBinary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<SkinCookEntry> ParseSkinCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     SkinCookEntry entry;
     if(!CheckMetadataAssetMap(file, value, s_SkinMetaDiagnosticPrefix)
@@ -193,12 +166,14 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(in Name virtualPath, in Path file,
     return entry;
 }
 
+[cpp_unwind]
 Expected<SkinCookEntry> ParseSkinCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
     return ParseCookMetadataDocument<SkinCookEntry>(root, virtualRoot, file, document, s_SkinMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<SkinCookEntry>{
         return ParseSkinCookMetadata(path, file, value);
     });
 }
 
+[cpp_unwind]
 Expected<Skin> BuildSkinAsset(in SkinCookEntry entry){
     return BuildSkinAssetFromPayload(entry.virtualPath, entry.mesh, entry.skeleton, entry.influences, entry.inverseBindMatrices);
 }
@@ -250,6 +225,7 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(in Path root, in StringView virtua
     });
 }
 
+[cpp_unwind]
 b8 CollectMeshletTriangleIndicesFromStreamRefs(in MeshCookEntry entry, mut Vector<u32> outIndices){
     outIndices.resize(entry.meshletPrimitiveIndices.size());
     const usize positionCount = entry.positions.size();
@@ -285,6 +261,7 @@ b8 CollectMeshletTriangleIndicesFromStreamRefs(in MeshCookEntry entry, mut Vecto
     return true;
 }
 
+[cpp_unwind]
 b8 BuildMeshSolidWords(in MeshCookEntry entry, mut Vector<u32> solidWords){
     const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(entry.meshlets, entry.meshletLocalVertexRefs, entry.meshletPositionRefDeltas, entry.meshletPrimitiveIndices, entry.positions.size());
     return indices.has_value() && BuildSolidTriangleWordsInto(entry.positions, indices.value(), solidWords);

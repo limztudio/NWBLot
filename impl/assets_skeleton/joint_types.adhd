@@ -126,7 +126,7 @@ b8 BuildSkeletonCookJoints(
             }
             parentIndex = outJointIndices[cookJoint.parent];
         }
-        if(outJointIndices.contains(cookJoint.name)){
+        if(!outJointIndices.try_emplace(cookJoint.name, cast<u32>(outJoints.size())).second){
             error(
                 "Skeleton meta '{}': duplicate joint name '{}'"
                 , virtualPath.resolvedText()
@@ -134,7 +134,6 @@ b8 BuildSkeletonCookJoints(
             );
             return false;
         }
-        outJointIndices.try_emplace(cookJoint.name, cast<u32>(outJoints.size()));
 
         SkeletonJoint joint;
         joint.localBindPose = cookJoint.localBindPose;

@@ -16,6 +16,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextAreaEditActions : IEditActionSink{
+    private in EditModel m_model;
+    private in TextAreaState m_state;
+    private in Context m_context;
+    private u64 m_instanceGeneration;
+    private u64 m_revision;
+
+    public TextAreaEditActions(in EditModel model, in TextAreaState state, in Context context){
+        this.m_model = model;
+        this.m_state = state;
+        this.m_context = context;
+        this.m_instanceGeneration = model.instanceGeneration();
+        this.m_revision = state.revision();
+    }
+
+    public b8 apply(mut EditModel model, in EditAction action, in b8 readOnly)override{
+        return !this.m_context.failed() && SameAddress(model, this.m_model)
+            && model.instanceGeneration() == this.m_instanceGeneration && this.m_state.revision() == this.m_revision
+            && action <= EditAction::Abandon;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsValidTextAreaWheelLines(in f32 wheelLines){
     return IsFinite(wheelLines) && wheelLines > 0.0f;
 }
@@ -82,36 +108,6 @@ b8 ShouldDismissPaintedTooltip(
         || (topPopup.valid() && topPopup != statePopup)
         || !UiRectIntersectionContainsPoint(anchorRect, clip, pointer);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextAreaEditActions : IEditActionSink{
-    private in EditModel m_model;
-    private in TextAreaState m_state;
-    private in Context m_context;
-    private u64 m_instanceGeneration;
-    private u64 m_revision;
-
-    public TextAreaEditActions(in EditModel model, in TextAreaState state, in Context context){
-        this.m_model = model;
-        this.m_state = state;
-        this.m_context = context;
-        this.m_instanceGeneration = model.instanceGeneration();
-        this.m_revision = state.revision();
-    }
-
-    public b8 apply(mut EditModel model, in EditAction action, in b8 readOnly)override{
-        return !this.m_context.failed() && SameAddress(model, this.m_model)
-            && model.instanceGeneration() == this.m_instanceGeneration && this.m_state.revision() == this.m_revision
-            && action <= EditAction::Abandon;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 Builder::tooltip(in StringView stableKey, in StringView anchorKey, in StringView text, mut TooltipState state, in TooltipOptions options){
     const auto anchorIndex = this.annotationAnchorIndex(anchorKey);
@@ -225,10 +221,6 @@ b8 Builder::paintTooltips(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state, in TextAreaOptions options){
     if(this.itemDeclarationBlocked() || !IsValidTextAreaWheelLines(options.wheelLines) || model.textMode() != EditTextMode::Multiline){
@@ -361,10 +353,6 @@ b8 Builder::textAreaMatches(in BuilderTextAreaFrame frame)const{
         && frame.state.value().m_visual.matchesStamp(frame.modelStamp, frame.focused)
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(item.textArea >= this.m_scope.value().m_textAreas.size() || item.editBox >= this.m_scope.value().m_editBoxes.size())

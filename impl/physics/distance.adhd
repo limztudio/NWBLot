@@ -114,6 +114,39 @@ class LocalRayHit{
     }
 }
 
+class Sweep3D{
+    public f32x4 c0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 c1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 q0(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 q1(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 localCenter(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class TimeOfImpactOutput{
+    public f32x4 pointFraction(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x3_u32 normalFlags(0.0f, 1.0f, 0.0f, 0u);
+
+    public VectorSingle point()const{
+        return VectorSingle(this.pointFraction, 0.0f);
+    }
+
+    public f32 fraction()const{
+        return this.pointFraction.w;
+    }
+
+    public VectorSingle normal()const{
+        return VectorSingle(this.normalFlags, 0.0f);
+    }
+
+    public b8 hit()const{
+        return (this.normalFlags.w & 1u) != 0u;
+    }
+
+    public b8 initialOverlap()const{
+        return (this.normalFlags.w & 2u) != 0u;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1047,39 +1080,6 @@ LocalRayHit ShapeCastProxies(
     return ShapeCastProxyViews(MakeShapeProxyView(proxyA), xfA, translationA, MakeShapeProxyView(proxyB), xfB, translationB, maxFraction);
 }
 
-class Sweep3D{
-    public f32x4 c0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 c1(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 q0(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x4 q1(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x4 localCenter(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
-class TimeOfImpactOutput{
-    public f32x4 pointFraction(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x3_u32 normalFlags(0.0f, 1.0f, 0.0f, 0u);
-
-    public VectorSingle point()const{
-        return VectorSingle(this.pointFraction, 0.0f);
-    }
-
-    public f32 fraction()const{
-        return this.pointFraction.w;
-    }
-
-    public VectorSingle normal()const{
-        return VectorSingle(this.normalFlags, 0.0f);
-    }
-
-    public b8 hit()const{
-        return (this.normalFlags.w & 1u) != 0u;
-    }
-
-    public b8 initialOverlap()const{
-        return (this.normalFlags.w & 2u) != 0u;
-    }
-}
-
 f32 ComputeProxyViewBoundingRadius(in ShapeProxyView proxy, in VectorSingle localCenter){
     f32 maxSq = 0.0f;
     for(usize i = 0u; i < proxy.points.size(); ++i){
@@ -1344,8 +1344,7 @@ u32 CountClosedMeshRayParityHits(in MeshShape mesh, in VectorSingle localPoint, 
         --fixedCount;
         const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
-        f32 tBox = 0.0f;
-        if(!AabbRayCast(node.aabb(), localPoint, rayDir, 1.0f, tBox))
+        if(!AabbRayCast(node.aabb(), localPoint, rayDir, 1.0f))
             continue;
         if(node.isLeaf()){
             const u32 endTri = node.leftOrFirst() + node.rightOrCount();
@@ -1516,8 +1515,8 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
                 LocalRayHit h;
                 VectorSingle localHitN(0.0f, 1.0f, 0.0f, 0.0f);
                 if(meshRadius > 0.0f){
-                    f32 tTriBox = 0.0f;
                     const Aabb3D triBox = FattenAabb(Aabb3D(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2))), meshRadius);
+                    f32 tTriBox = 0.0f;
                     if(AabbRayCastFast(triBox, localRay, curMax, tTriBox)){
                         Array<f32x3u, 3u> triPts;
                         triPts[0u] = tri.v0;

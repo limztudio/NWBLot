@@ -62,22 +62,15 @@ b8 IsDeferredGraphPresentationAndHistoryReady(in b8 backBufferMatchesAttachment,
     return backBufferMatchesAttachment && hasTransparentRenderers == featureHasTransparentRenderers && (!useLaggedLightingHistory || historyValid) && (!capturesLaggedLightingHistory || captureHistoryValid);
 }
 
-b8 ImportDeferredExternalCompletion(
+Expected<GpuExternalCompletionId> ImportDeferredExternalCompletion(
     in Name identity,
     in StringView markerLabel,
     in QueueSubmissionToken token,
-    mut GpuTaskGraph graph,
-    mut GpuExternalCompletionId outCompletion
+    mut GpuTaskGraph graph
 ){
     GpuExternalCompletionDesc desc;
     desc.setIdentity(identity).setMarkerLabel(markerLabel).setToken(token);
-    const Expected<GpuExternalCompletionId> completionResult = graph.importExternalCompletion(desc);
-    if(!completionResult.has_value()){
-        outCompletion = GpuExternalCompletionId();
-        return false;
-    }
-    outCompletion = completionResult.value();
-    return true;
+    return graph.importExternalCompletion(desc);
 }
 
 
@@ -320,20 +313,35 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         causticOpticalScene = optical.value().resource;
     }
 
-    if(useLaggedLightingHistory && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady), "Lagged Lighting History Read Ready", laggedLightingHistoryReadReadyToken,
-        this.m_deferredLightingTaskGraph, this.m_deferredLightingHistoryReadReadyCompletion)){
-        warning("RendererSystem: could not import lagged-lighting history read-ready completion");
-        return;
+    if(useLaggedLightingHistory){
+        const Expected<GpuExternalCompletionId> completion = ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady), "Lagged Lighting History Read Ready", laggedLightingHistoryReadReadyToken,
+            this.m_deferredLightingTaskGraph);
+        if(!completion.has_value()){
+            this.m_deferredLightingHistoryReadReadyCompletion = GpuExternalCompletionId();
+            warning("RendererSystem: could not import lagged-lighting history read-ready completion");
+            return;
+        }
+        this.m_deferredLightingHistoryReadReadyCompletion = completion.value();
     }
-    if(features.laggedLightingHistoryWriterWaitPending && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain), "Lagged Lighting History Writer Drain",
-        laggedLightingHistoryWriterDrainToken, this.m_deferredLightingTaskGraph, this.m_deferredLightingHistoryWriterDrainCompletion)){
-        warning("RendererSystem: could not import lagged-lighting history writer-drain completion");
-        return;
+    if(features.laggedLightingHistoryWriterWaitPending){
+        const Expected<GpuExternalCompletionId> completion = ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain), "Lagged Lighting History Writer Drain",
+            laggedLightingHistoryWriterDrainToken, this.m_deferredLightingTaskGraph);
+        if(!completion.has_value()){
+            this.m_deferredLightingHistoryWriterDrainCompletion = GpuExternalCompletionId();
+            warning("RendererSystem: could not import lagged-lighting history writer-drain completion");
+            return;
+        }
+        this.m_deferredLightingHistoryWriterDrainCompletion = completion.value();
     }
-    if(this.m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid() && !ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderSurfelGiCounterReadbackComplete),
-        "Surfel Counter Readback Complete", surfelCounterReadbackCompletionToken, this.m_deferredLightingTaskGraph, this.m_deferredSurfelGiCounterReadbackCompletion)){
-        warning("RendererSystem: could not import surfel counter-readback completion");
-        return;
+    if(this.m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid()){
+        const Expected<GpuExternalCompletionId> completion = ImportDeferredExternalCompletion(Name(s_FrameGraphNameRenderSurfelGiCounterReadbackComplete),
+            "Surfel Counter Readback Complete", surfelCounterReadbackCompletionToken, this.m_deferredLightingTaskGraph);
+        if(!completion.has_value()){
+            this.m_deferredSurfelGiCounterReadbackCompletion = GpuExternalCompletionId();
+            warning("RendererSystem: could not import surfel counter-readback completion");
+            return;
+        }
+        this.m_deferredSurfelGiCounterReadbackCompletion = completion.value();
     }
 
     GpuExternalCompletionId writerDrain;

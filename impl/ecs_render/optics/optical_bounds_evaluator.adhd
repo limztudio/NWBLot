@@ -27,6 +27,14 @@ const i32 s_OpticalBoundsMinMarginExponent = -120;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[layout(16)]
+class OpticalWorldBounds{
+    public f32x4 minimum = f32x4();
+    public f32x4 maximum = f32x4();
+}
+
+static_assert(align_of<Expected<OpticalWorldBounds>>() >= align_of<OpticalWorldBounds>());
+
 class OpticalBoundsEvaluator{
     private b8 admitted(in u32 bits)const{
         u32 magnitude = bits & s_OpticalBoundsMagnitudeMask;
@@ -165,14 +173,14 @@ class OpticalBoundsEvaluator{
         return (bits & s_OpticalBoundsSignBit) | magnitude;
     }
 
-    public b8 computeWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax, mut VectorSingle outMinimum, mut VectorSingle outMaximum)const{
+    public Expected<OpticalWorldBounds> computeWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax)const{
         Array<u32, 4> magnitude = Array<u32, 4>();
         magnitude[3u] = s_OpticalBoundsOneBits;
         for(u32 lane = 0u; lane < 3u; ++lane){
             u32 low = bit_cast<u32>(localMin[lane]);
             u32 high = bit_cast<u32>(localMax[lane]);
             if(!this.admitted(low) || !this.admitted(high) || this.ordered(low) > this.ordered(high))
-                return false;
+                return MakeUnexpected(Failure());
             magnitude[lane] = Max(low & s_OpticalBoundsMagnitudeMask, high & s_OpticalBoundsMagnitudeMask);
         }
         VectorSingle localMagnitude = VectorSetInt(magnitude[0u], magnitude[1u], magnitude[2u], magnitude[3u]);
@@ -180,7 +188,7 @@ class OpticalBoundsEvaluator{
         for(u32 row = 0u; row < 3u; ++row){
             Expected<i32> exponent = this.magnitudeExponent(objectToWorld[row], localMagnitude);
             if(!exponent.has_value())
-                return false;
+                return MakeUnexpected(Failure());
             exponents[row] = exponent.value();
         }
         Array<u32, 3> minimum = Array<u32, 3>();
@@ -189,9 +197,10 @@ class OpticalBoundsEvaluator{
             minimum[row] = this.expanded(this.endpoint(objectToWorld[row], localMin, localMax, exponents[row], false), exponents[row], false);
             maximum[row] = this.expanded(this.endpoint(objectToWorld[row], localMin, localMax, exponents[row], true), exponents[row], true);
         }
-        outMinimum = VectorSetInt(minimum[0u], minimum[1u], minimum[2u], 0u);
-        outMaximum = VectorSetInt(maximum[0u], maximum[1u], maximum[2u], 0u);
-        return true;
+        OpticalWorldBounds bounds;
+        bounds.minimum = f32x4(VectorSetInt(minimum[0u], minimum[1u], minimum[2u], 0u));
+        bounds.maximum = f32x4(VectorSetInt(maximum[0u], maximum[1u], maximum[2u], 0u));
+        return bounds;
     }
 }
 

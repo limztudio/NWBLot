@@ -283,7 +283,8 @@ void GpuGraphResourceImportIndex::prepareResourceIndexes(const Span<const Resour
         usize pointerCount = pendingPointer.pointer ? 1u : 0u;
         for(usize index = 0u; index < resources.size(); ++index){
             const ResourceNode& resource = resources[index];
-            (void)m_resourceIdentityIndex.emplace(resource.identity.identityHash(), static_cast<u32>(index));
+            if(!m_resourceIdentityIndex.emplace(resource.identity.identityHash(), static_cast<u32>(index)))
+                FOUNDATION_ASSERT(false);
             if(MakeResourcePointerKey(resource).pointer)
                 ++pointerCount;
         }
@@ -291,8 +292,8 @@ void GpuGraphResourceImportIndex::prepareResourceIndexes(const Span<const Resour
             m_resourcePointerIndex.reserveForCount(pointerCount);
             for(usize index = 0u; index < resources.size(); ++index){
                 const ResourcePointerKey key = MakeResourcePointerKey(resources[index]);
-                if(key.pointer)
-                    (void)m_resourcePointerIndex.emplace(key, static_cast<u32>(index));
+                if(key.pointer && !m_resourcePointerIndex.emplace(key, static_cast<u32>(index)))
+                    FOUNDATION_ASSERT(false);
             }
         }
     }
@@ -310,8 +311,10 @@ void GpuGraphResourceImportIndex::prepareResourceSetIndex(const Span<const Resou
             return;
 
         m_resourceSetIdentityIndex.reserveForCount(identityCount);
-        for(usize index = 0u; index < sets.size(); ++index)
-            (void)m_resourceSetIdentityIndex.emplace(sets[index].identity.identityHash(), static_cast<u32>(index));
+        for(usize index = 0u; index < sets.size(); ++index){
+            if(!m_resourceSetIdentityIndex.emplace(sets[index].identity.identityHash(), static_cast<u32>(index)))
+                FOUNDATION_ASSERT(false);
+        }
         return;
     }
     m_resourceSetIdentityIndex.reserveForCount(identityCount);

@@ -4,6 +4,7 @@
 
 #include <impl/assets_mesh/asset.adhd>
 #include <impl/assets_mesh/meshlet_ref_encode.adhd>
+#include <impl/assets_mesh/meshlet_ref_validation.adhd>
 #include <impl/ecs_mesh/runtime/buffer_upload.adhd>
 #include <impl/ecs_mesh/skinning/local_bounds.adhd>
 #include <impl/ecs_mesh/skinning/runtime_cache.adhd>
@@ -13,6 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_MeshSkinningAssetLoadContext = "MeshSkinningRuntimeCache";
+
 enum<u8> ExistingRuntimeMeshDisposition{
     CreateNew = 0,
     ReuseClean = 1,
@@ -21,6 +24,28 @@ enum<u8> ExistingRuntimeMeshDisposition{
     kCount
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SkinningBatchUploadReadyTask{
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
+
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return !commands.commandRecordingFailed();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
 b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, mut MeshSkinningRuntimeInstance instance){
     const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
     if(!totalCounts.has_value())
@@ -51,14 +76,21 @@ b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, m
     ))
         return false;
 
-    if(!ResolveRuntimeZippedAttributeSkins(
+    const Expected<void, MeshletAttributeSkinFailure> resolvedSkins = ResolveMeshletAttributeSkins(
         instance.meshlets,
         runtimePositionRefs,
         instance.meshletLocalVertexRefs,
         runtimeAttributeRefs.size(),
         instance.attributeSkins
-    ))
+    );
+    if(!resolvedSkins.has_value()){
+        const MeshletAttributeSkinFailure failure = resolvedSkins.error();
+        if(failure.kind == MeshletAttributeSkinFailureKind::ConflictingSkin)
+            error("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities", failure.meshletIndex);
+        else
+            error("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced", failure.attributeIndex);
         return false;
+    }
 
     if(!EncodeMeshletRefDeltas(
         runtimePositionRefs,
@@ -76,7 +108,13 @@ b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, m
 
     instance.meshletPositionRefCount = cast<u32>(runtimePositionRefs.size());
     instance.meshletAttributeRefCount = cast<u32>(runtimeAttributeRefs.size());
-    return BuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions, instance.localBounds);
+    const Expected<RuntimeMeshLocalBounds> bounds = TryBuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions);
+    if(!bounds.has_value()){
+        instance.localBounds = RuntimeMeshLocalBounds();
+        return false;
+    }
+    instance.localBounds = bounds.value();
+    return true;
 }
 
 ExistingRuntimeMeshDisposition ClassifyExistingRuntimeMesh(
@@ -100,26 +138,16 @@ b8 ReleaseSkinningSourceReference(mut u32 inOutReferenceCount){
     return inOutReferenceCount == 0u;
 }
 
-b8 FinalizeRuntimeBufferUpload(
+Expected<BufferHandle> FinalizeRuntimeBufferUpload(
     in Expected<BufferHandle, BufferSetupFailure> buffer,
     in u64 handleValue,
-    in StringView label,
-    mut BufferHandle outBuffer
+    in StringView label
 ){
-    if(buffer.has_value()){
-        outBuffer = buffer.value();
-        return true;
-    }
-    outBuffer.reset();
+    if(buffer.has_value())
+        return buffer.value();
     ReportRuntimeBufferUploadFailure(buffer.error(), label, handleValue);
-    return false;
+    return MakeUnexpected(Failure());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_MeshSkinningAssetLoadContext = "MeshSkinningRuntimeCache";
 
 b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
     if(!ValidateRuntimeMeshUploadPayloadStreams(instance.sourceName, instance.hasCompleteSplitMeshPayload(), instance.restPositions.size(),
@@ -135,19 +163,6 @@ b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
         assert(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
     return true;
-}
-
-class SkinningBatchUploadReadyTask{
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
-        requirements.requiresPrimaryGraphicsQueue = true;
-        return requirements;
-    }
-
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        return !commands.commandRecordingFailed();
-    }
 }
 
 Expected<BufferHandle, BufferSetupFailure> CreateSkinningRuntimeBuffer(
@@ -192,13 +207,28 @@ b8 CreateTypedRuntimeBuffer<T>(
         outBuffer.reset();
         return false;
     }
-    if(payload.empty())
-        return FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label, outBuffer);
+    if(payload.empty()){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
     const Expected<usize> byteCount = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(T));
-    if(!byteCount.has_value())
-        return FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label, outBuffer);
-    const auto created = CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(byteCount.value()), cast<u32>(sizeof(T)), BufferFlags(writable, raw, buildInput, sharing, indexBuffer));
-    return FinalizeRuntimeBufferUpload(created, instance.handle.value, label, outBuffer);
+    if(!byteCount.has_value()){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
+    const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(
+        CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(byteCount.value()), cast<u32>(sizeof(T)), BufferFlags(writable, raw, buildInput, sharing, indexBuffer)),
+        instance.handle.value,
+        label
+    );
+    if(!finalized.has_value()){
+        outBuffer.reset();
+        return false;
+    }
+    outBuffer = finalized.value();
+    return true;
 }
 
 b8 CreatePaddedRawRuntimeBuffer(
@@ -214,13 +244,28 @@ b8 CreatePaddedRawRuntimeBuffer(
         outBuffer.reset();
         return false;
     }
-    if(payload.empty())
-        return FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label, outBuffer);
+    if(payload.empty()){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
     const Expected<usize> paddedBytes = TryComputePaddedRawByteCount(payload.size());
-    if(!paddedBytes.has_value())
-        return FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label, outBuffer);
-    const auto created = CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(paddedBytes.value()), cast<u32>(sizeof(u8)), BufferFlags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false));
-    return FinalizeRuntimeBufferUpload(created, instance.handle.value, label, outBuffer);
+    if(!paddedBytes.has_value()){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
+    const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(
+        CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(paddedBytes.value()), cast<u32>(sizeof(u8)), BufferFlags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false)),
+        instance.handle.value,
+        label
+    );
+    if(!finalized.has_value()){
+        outBuffer.reset();
+        return false;
+    }
+    outBuffer = finalized.value();
+    return true;
 }
 
 GpuTaskSchedulingHint MakeSkinningBatchUploadScheduling(){
@@ -234,6 +279,7 @@ GpuTaskSchedulingHint MakeSkinningBatchUploadScheduling(){
     return scheduling;
 }
 
+[cpp_unwind]
 b8 DeclareSkinningBatchBufferUploadBlob(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,
@@ -272,6 +318,7 @@ b8 DeclareSkinningBatchBufferUploadBlob(
     return true;
 }
 
+[cpp_unwind]
 b8 DeclareSkinningBatchTypedUpload<T>(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,
@@ -282,6 +329,7 @@ b8 DeclareSkinningBatchTypedUpload<T>(
     return DeclareSkinningBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadElements<T>(payload), outTasks);
 }
 
+[cpp_unwind]
 b8 DeclareSkinningBatchPaddedRawUpload(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,

@@ -237,6 +237,13 @@ def main() -> int:
     radiance_path = output_dir / "radiance.hdr"
     radiance_pixels = ((4.5, 0.25, 1.5, 1.0),) * 8
     TextureImageFixtures.write_radiance_hdr_pixels(radiance_path, 4, 2, radiance_pixels)
+    mixed_original = (prepared.with_suffix(LIT_METADATA_SUFFIX).read_bytes(), prepared.read_bytes())
+    mixed = subprocess.run([args.tex_conv, LIT_VOLUME_2, str(gray), str(radiance_path), LIT_FORCE, LIT_OUTPUT, str(prepared.with_suffix(LIT_METADATA_SUFFIX))], cwd=output_dir, text=True, capture_output=True)
+    if mixed.returncode != 1:
+        raise AssertionError(f"mixed HDR and LDR volume was accepted\n{mixed.stdout}\n{mixed.stderr}")
+    if (prepared.with_suffix(LIT_METADATA_SUFFIX).read_bytes(), prepared.read_bytes()) != mixed_original:
+        raise AssertionError("mixed HDR and LDR volume changed the existing texture pair")
+
     radiance = run_conversion(args.tex_conv, output_dir, "radiance", (radiance_path,))
     require_pixels(decode_pixels(args.prepared_decode, radiance), radiance_pixels, absolute=0.025, relative=0.05)
     if PreparedTextureReader.read_raw_pair(radiance)[LIT_ALPHA_MODE] != 0:

@@ -25,7 +25,6 @@ const Array<GpuTimingScopeDefinition, s_CsgCausticGpuScopeCount> s_CausticGpuTim
     s_TimingScopeDeferredComposite,
     s_TimingScopeDeferredPresent
 );
-
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
 const b8 s_CsgCausticSmokeEnabled = true;
 const SmokeMaterialRef s_CsgShadowGlassMaterial = "project/smoke/csg_caustic/materials/glass";
@@ -35,15 +34,6 @@ const b8 s_CsgCausticSmokeEnabled = false;
 const SmokeMaterialRef s_CsgShadowGlassMaterial = "project/smoke/csg_shadow/materials/glass";
 const SmokeMaterialRef s_CsgShadowOpaqueMaterial = "project/smoke/csg_shadow/materials/opaque";
 #endif
-
-StringView CsgCausticProbeOwnerLabel(){
-    return "csg_caustic";
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const usize s_CsgCausticCpuScopeCount = 5u;
 const usize s_CsgCausticScopeCount = s_CsgCausticGpuScopeCount + s_CsgCausticCpuScopeCount;
 const usize s_CsgCausticMaxIntervals = 2048u;
@@ -52,7 +42,6 @@ const u64 s_CsgCausticPreparationPresentations = 64u;
 const u32 s_CsgCausticMinimumPositiveIntervals = 11u;
 const u32 s_CsgCausticQueryInFlightRanges = 32u;
 const i32 s_CsgCausticTimingOutputPrecision = 17;
-
 const SmokeMeshRef s_CsgShadowCubeMesh = "project/meshes/cube_hard_edges";
 const SmokeMeshRef s_CsgCausticSplitMesh = "project/meshes/csg_caustic_split";
 const SmokeMeshRef s_CsgShadowOpenPairMesh = "project/meshes/csg_shadow_open_2";
@@ -86,32 +75,6 @@ class CsgCausticTimingInterval{
     public PresentationFpsSample presentation = PresentationFpsSample();
     public u64 firstSource = 0u;
     public u64 endSource = 0u;
-}
-
-Name CsgCausticGpuTimingScopeName(in usize index){
-    if(index == 0u)
-        return s_TimingScopeFrame.identity;
-    if(index == 1u)
-        return s_TimingScopeCausticPhotons.identity;
-    if(index == 2u)
-        return s_TimingScopeCausticResolve.identity;
-    if(index == 3u)
-        return s_TimingScopeOpaqueRegular.identity;
-    if(index == 4u)
-        return s_TimingScopeDeferredComposite.identity;
-    return s_TimingScopeDeferredPresent.identity;
-}
-
-Name CsgCausticCpuTimingScopeName(in usize index){
-    if(index == 0u)
-        return s_SmokeTimingNameGraphicsFrame;
-    if(index == 1u)
-        return s_SmokeTimingNameGraphicsPrepareResources;
-    if(index == 2u)
-        return s_SmokeTimingNameGraphicsRenderPasses;
-    if(index == 3u)
-        return s_SmokeTimingNameGraphicsBeginFrame;
-    return s_SmokeTimingNameGraphicsPresent;
 }
 
 class CsgCausticTimingProbe{
@@ -526,35 +489,6 @@ class CsgCausticTimingProbe{
     private b8 m_complete = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Name CsgShadowGroupName(in u32 index){
-    if(index == 0u) return s_SmokeSceneNameCsgShadowOpaqueHole;
-    if(index == 1u) return s_SmokeSceneNameCsgShadowOpaqueCap;
-    if(index == 2u) return s_SmokeSceneNameCsgShadowGlassDepth;
-    if(index == 3u) return s_SmokeSceneNameCsgShadowGlassHole;
-    if(index == 4u) return s_SmokeSceneNameCsgShadowOverlapA;
-    if(index == 5u) return s_SmokeSceneNameCsgShadowOverlapB;
-    return s_SmokeSceneNameCsgShadowGlassControl;
-}
-
-Name CsgShadowAnalyticGroupName(in u32 index){
-    if(index == 0u) return s_SmokeSceneNameCsgShadowAnalyticPlane;
-    if(index == 1u) return s_SmokeSceneNameCsgShadowAnalyticSphere;
-    if(index == 2u) return s_SmokeSceneNameCsgShadowAnalyticCapsule;
-    if(index == 3u) return s_SmokeSceneNameCsgShadowAnalyticAxialCapsule;
-    if(index == 4u) return s_SmokeSceneNameCsgShadowAnalyticUnion;
-    return s_SmokeSceneNameCsgShadowAnalyticControl;
-}
-
-Name CsgShadowOpenGroupName(in u32 index){
-    if(index == 0u)
-        return s_SmokeSceneNameCsgShadowOpenFive;
-    return s_SmokeSceneNameCsgShadowOpenSix;
-}
-
 class CsgShadowAtlas{
     public b8 create(in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
         if(mode.openAtlas)
@@ -816,6 +750,65 @@ class CsgShadowAtlas{
     private Array<f32x4, 2u> m_finalCutterCenters = Array<f32x4, 2u>();
     private Array<EntityID, 2u> m_movingCutters = Array<EntityID, 2u>();
     private u32 m_movingCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView CsgCausticProbeOwnerLabel(){
+    return "csg_caustic";
+}
+
+Name CsgCausticGpuTimingScopeName(in usize index){
+    if(index == 0u)
+        return s_TimingScopeFrame.identity;
+    if(index == 1u)
+        return s_TimingScopeCausticPhotons.identity;
+    if(index == 2u)
+        return s_TimingScopeCausticResolve.identity;
+    if(index == 3u)
+        return s_TimingScopeOpaqueRegular.identity;
+    if(index == 4u)
+        return s_TimingScopeDeferredComposite.identity;
+    return s_TimingScopeDeferredPresent.identity;
+}
+
+Name CsgCausticCpuTimingScopeName(in usize index){
+    if(index == 0u)
+        return s_SmokeTimingNameGraphicsFrame;
+    if(index == 1u)
+        return s_SmokeTimingNameGraphicsPrepareResources;
+    if(index == 2u)
+        return s_SmokeTimingNameGraphicsRenderPasses;
+    if(index == 3u)
+        return s_SmokeTimingNameGraphicsBeginFrame;
+    return s_SmokeTimingNameGraphicsPresent;
+}
+
+Name CsgShadowGroupName(in u32 index){
+    if(index == 0u) return s_SmokeSceneNameCsgShadowOpaqueHole;
+    if(index == 1u) return s_SmokeSceneNameCsgShadowOpaqueCap;
+    if(index == 2u) return s_SmokeSceneNameCsgShadowGlassDepth;
+    if(index == 3u) return s_SmokeSceneNameCsgShadowGlassHole;
+    if(index == 4u) return s_SmokeSceneNameCsgShadowOverlapA;
+    if(index == 5u) return s_SmokeSceneNameCsgShadowOverlapB;
+    return s_SmokeSceneNameCsgShadowGlassControl;
+}
+
+Name CsgShadowAnalyticGroupName(in u32 index){
+    if(index == 0u) return s_SmokeSceneNameCsgShadowAnalyticPlane;
+    if(index == 1u) return s_SmokeSceneNameCsgShadowAnalyticSphere;
+    if(index == 2u) return s_SmokeSceneNameCsgShadowAnalyticCapsule;
+    if(index == 3u) return s_SmokeSceneNameCsgShadowAnalyticAxialCapsule;
+    if(index == 4u) return s_SmokeSceneNameCsgShadowAnalyticUnion;
+    return s_SmokeSceneNameCsgShadowAnalyticControl;
+}
+
+Name CsgShadowOpenGroupName(in u32 index){
+    if(index == 0u)
+        return s_SmokeSceneNameCsgShadowOpenFive;
+    return s_SmokeSceneNameCsgShadowOpenSix;
 }
 
 

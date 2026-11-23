@@ -16,11 +16,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_SkinningBenchmarkProjectName = "SkinningCullingBenchmark";
+const StringView s_SkinningUnknownLabel = "unknown";
+const u32 s_SkinningCharacterCount = 64u;
+const u32 s_BenchmarkRepeatCount = 4u;
+const u32 s_SkinningWarmupFrameCount = 8u;
+const u32 s_SkinningSampleFrameCount = 16u;
+const u32 s_SkinningFinishDrainFrameCount = 30u;
+const u32 s_FastSmokeCharacterCount = 1u;
+const u32 s_FastSmokeWarmupFrameCount = 1u;
+const u32 s_FastSmokeSampleFrameCount = 3u;
+const u32 s_FastSmokeFinishDrainFrameCount = 1u;
+const usize s_BenchmarkCaseCount = 12u;
+const f32 s_FrontCameraDistance = 3.2f;
+const f32 s_BackCameraDistance = 3.2f;
+const f32 s_CloseCameraDistance = 1.65f;
+const f32 s_FarCameraDistance = 5.6f;
+const f32 s_SkinningCameraHeight = 1.1f;
+const SmokeModelRef s_BenchmarkModel = "project/characters/body/model";
+const SmokeMaterialRef s_SkinningBenchmarkMaterial = "project/smoke/skinning_culling_benchmark/materials/solid";
+const StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
+const StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
+const StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
+
 enum<u8> BenchmarkMode{
     NoCulling,
     FrustumOnly,
     FrustumCone
 }
+
+enum<u8> BenchmarkView{
+    Front,
+    Back,
+    Close,
+    Far
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class BenchmarkRuntimeMeshProvider : IRuntimeMeshProvider{
     private Optional<mut MeshSystem> m_meshSystem;
@@ -74,17 +108,6 @@ class BenchmarkRuntimeMeshProvider : IRuntimeMeshProvider{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> BenchmarkView{
-    Front,
-    Back,
-    Close,
-    Far
-}
-
 class BenchmarkCase{
     public BenchmarkMode mode;
     public BenchmarkView view;
@@ -98,117 +121,6 @@ class BenchmarkCase{
         this.mode = m;
         this.view = v;
     }
-}
-
-const StringView s_SkinningBenchmarkProjectName = "SkinningCullingBenchmark";
-const StringView s_SkinningUnknownLabel = "unknown";
-const u32 s_SkinningCharacterCount = 64u;
-const u32 s_BenchmarkRepeatCount = 4u;
-const u32 s_SkinningWarmupFrameCount = 8u;
-const u32 s_SkinningSampleFrameCount = 16u;
-const u32 s_SkinningFinishDrainFrameCount = 30u;
-const u32 s_FastSmokeCharacterCount = 1u;
-const u32 s_FastSmokeWarmupFrameCount = 1u;
-const u32 s_FastSmokeSampleFrameCount = 3u;
-const u32 s_FastSmokeFinishDrainFrameCount = 1u;
-const usize s_BenchmarkCaseCount = 12u;
-const f32 s_FrontCameraDistance = 3.2f;
-const f32 s_BackCameraDistance = 3.2f;
-const f32 s_CloseCameraDistance = 1.65f;
-const f32 s_FarCameraDistance = 5.6f;
-const f32 s_SkinningCameraHeight = 1.1f;
-const SmokeModelRef s_BenchmarkModel = "project/characters/body/model";
-const SmokeMaterialRef s_SkinningBenchmarkMaterial = "project/smoke/skinning_culling_benchmark/materials/solid";
-const StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
-const StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
-const StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-BenchmarkCase GetSkinningBenchmarkCase(in usize caseIndex){
-    switch(caseIndex){
-    case 0u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Front);
-    case 1u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Back);
-    case 2u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Close);
-    case 3u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Far);
-    case 4u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Front);
-    case 5u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Back);
-    case 6u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Close);
-    case 7u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Far);
-    case 8u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Front);
-    case 9u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Back);
-    case 10u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Close);
-    case 11u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Far);
-    }
-    return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Front);
-}
-
-StringView BenchmarkModeName(in BenchmarkMode mode){
-    switch(mode){
-    case BenchmarkMode::NoCulling: return "no_culling";
-    case BenchmarkMode::FrustumOnly: return "frustum_only";
-    case BenchmarkMode::FrustumCone: return "frustum_cone";
-    }
-    return s_SkinningUnknownLabel;
-}
-
-StringView BenchmarkViewName(in BenchmarkView view){
-    switch(view){
-    case BenchmarkView::Front: return "front";
-    case BenchmarkView::Back: return "back";
-    case BenchmarkView::Close: return "close";
-    case BenchmarkView::Far: return "far";
-    }
-    return s_SkinningUnknownLabel;
-}
-
-b8 PopulateSkinningBenchmarkScene(
-    in u32 characterCount,
-    in b8 staticPreview,
-    in SmokeModelRef model,
-    in SmokeMaterialRef material,
-    in Name skeletonObject,
-    in VectorSingle cameraPosition,
-    mut World world,
-    mut Vector<EntityID> skeletonEntities,
-    mut EntityID cameraEntity
-){
-    cameraEntity = CreateSmokeCamera(cameraPosition.y, -cameraPosition.z, 0.0f, world);
-    const EntityID directionalLight = CreateSmokeDirectionalLight(-0.65f, 0.65f, 0.0f, VectorSingle(1.0f, 0.96f, 0.88f, 1.0f), 2.0f, world);
-    if(!cameraEntity.valid() || !directionalLight.valid()){
-        error("SkinningCullingBenchmark: failed to create the benchmark camera or directional light");
-        return false;
-    }
-
-    skeletonEntities.reserve(characterCount);
-    Vector<EntityID> modelOwners = Vector<EntityID>();
-    modelOwners.reserve(characterCount);
-    for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
-        f32 posX = 0.0f;
-        if(!staticPreview)
-            posX = (cast<f32>(characterIndex) - 1.0f) * 1.15f;
-        const f32x4 position = f32x4(posX, 0.0f, 0.0f, 0.0f);
-        Entity entity = world.createEntity();
-        mut TransformComponent transform = entity.addComponent<TransformComponent>();
-        transform.position = position;
-        transform.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-        entity.addComponent<ModelComponent>().model = model;
-        entity.addComponent<RendererComponent>().material = material;
-        modelOwners.push_back(entity.id());
-    }
-
-    SyncSmokeModelRuntimes(world);
-    for(in EntityID owner : modelOwners){
-        const EntityID skeletonEntity = FindSpawnedModelObject(owner, skeletonObject, ModelObjectKind::Skeleton, world);
-        if(!skeletonEntity.valid()){
-            error("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object");
-            return false;
-        }
-        skeletonEntities.push_back(skeletonEntity);
-    }
-    return true;
 }
 
 [arena]
@@ -472,6 +384,90 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+BenchmarkCase GetSkinningBenchmarkCase(in usize caseIndex){
+    switch(caseIndex){
+    case 0u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Front);
+    case 1u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Back);
+    case 2u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Close);
+    case 3u: return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Far);
+    case 4u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Front);
+    case 5u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Back);
+    case 6u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Close);
+    case 7u: return BenchmarkCase(BenchmarkMode::FrustumOnly, BenchmarkView::Far);
+    case 8u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Front);
+    case 9u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Back);
+    case 10u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Close);
+    case 11u: return BenchmarkCase(BenchmarkMode::FrustumCone, BenchmarkView::Far);
+    }
+    return BenchmarkCase(BenchmarkMode::NoCulling, BenchmarkView::Front);
+}
+
+StringView BenchmarkModeName(in BenchmarkMode mode){
+    switch(mode){
+    case BenchmarkMode::NoCulling: return "no_culling";
+    case BenchmarkMode::FrustumOnly: return "frustum_only";
+    case BenchmarkMode::FrustumCone: return "frustum_cone";
+    }
+    return s_SkinningUnknownLabel;
+}
+
+StringView BenchmarkViewName(in BenchmarkView view){
+    switch(view){
+    case BenchmarkView::Front: return "front";
+    case BenchmarkView::Back: return "back";
+    case BenchmarkView::Close: return "close";
+    case BenchmarkView::Far: return "far";
+    }
+    return s_SkinningUnknownLabel;
+}
+
+b8 PopulateSkinningBenchmarkScene(
+    in u32 characterCount,
+    in b8 staticPreview,
+    in SmokeModelRef model,
+    in SmokeMaterialRef material,
+    in Name skeletonObject,
+    in VectorSingle cameraPosition,
+    mut World world,
+    mut Vector<EntityID> skeletonEntities,
+    mut EntityID cameraEntity
+){
+    cameraEntity = CreateSmokeCamera(cameraPosition.y, -cameraPosition.z, 0.0f, world);
+    const EntityID directionalLight = CreateSmokeDirectionalLight(-0.65f, 0.65f, 0.0f, VectorSingle(1.0f, 0.96f, 0.88f, 1.0f), 2.0f, world);
+    if(!cameraEntity.valid() || !directionalLight.valid()){
+        error("SkinningCullingBenchmark: failed to create the benchmark camera or directional light");
+        return false;
+    }
+
+    skeletonEntities.reserve(characterCount);
+    Vector<EntityID> modelOwners = Vector<EntityID>();
+    modelOwners.reserve(characterCount);
+    for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
+        f32 posX = 0.0f;
+        if(!staticPreview)
+            posX = (cast<f32>(characterIndex) - 1.0f) * 1.15f;
+        const f32x4 position = f32x4(posX, 0.0f, 0.0f, 0.0f);
+        Entity entity = world.createEntity();
+        mut TransformComponent transform = entity.addComponent<TransformComponent>();
+        transform.position = position;
+        transform.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        entity.addComponent<ModelComponent>().model = model;
+        entity.addComponent<RendererComponent>().material = material;
+        modelOwners.push_back(entity.id());
+    }
+
+    SyncSmokeModelRuntimes(world);
+    for(in EntityID owner : modelOwners){
+        const EntityID skeletonEntity = FindSpawnedModelObject(owner, skeletonObject, ModelObjectKind::Skeleton, world);
+        if(!skeletonEntity.valid()){
+            error("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object");
+            return false;
+        }
+        skeletonEntities.push_back(skeletonEntity);
+    }
+    return true;
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

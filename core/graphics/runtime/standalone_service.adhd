@@ -22,7 +22,7 @@ extern class StandaloneTextureUploadRegion{
 extern class GraphicsStandaloneService{
     Expected<QueueSubmissionToken> submitStandaloneTaskGraph(in auto declare, in GpuPhysicalQueueId queue)const;
     Expected<QueueSubmissionToken> submitStandaloneTaskGraphWithTiming(in auto declare, in GpuPhysicalQueueId queue, mut GpuTimingRecorder recorder, mut GpuTimingFrameTransaction timing)const;
-    b8 uploadTextureBatch(in TextureHandle destination, in Span<StandaloneTextureUploadRegion> regions, in ResourceStates finalState, in ResourceStates initialState, mut QueueSubmissionToken acceptedToken)const;
+    Expected<QueueSubmissionToken> uploadTextureBatch(in TextureHandle destination, in Span<StandaloneTextureUploadRegion> regions, in ResourceStates finalState, in ResourceStates initialState)const;
     Expected<BufferHandle> setupBuffer(in StandaloneBufferSetupDesc setup)const;
 };
 

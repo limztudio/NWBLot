@@ -15,16 +15,24 @@
 
 const usize s_TokenCapacity = s_TextLength + 1u;
 const usize s_ResolvedCapacity = s_MaxResolvedTextLength;
+const u32 s_SymbolRecorderIterations = 400u;
+const u32 s_ConcurrentLoggerThreadCount = 4u;
+const u32 s_ConcurrentLoggerMessagesPerThread = 512u;
+const u32 s_ConcurrentLoggerExpectedMessages = s_ConcurrentLoggerThreadCount * s_ConcurrentLoggerMessagesPerThread;
+const u32 s_ConcurrentLoggerExpectedErrors = s_ConcurrentLoggerExpectedMessages / 2u;
+const StringView s_TargetText = "concurrent/symbol_entry";
+const StringView s_ParallelLoggerMessageText = "parallel logger message";
+const StringView s_TestsNamesymbolsBeforeRegistryLive = "tests/namesymbols/before_registry_live";
+const StringView s_TestsNamesymbolsBeforeRegistryRetire = "tests/namesymbols/before_registry_retired";
+const StringView s_GlobalArenaMemoryHeapBacking = "global/arena_memory/heap_backing";
+const StringView s_OriginalEscapedSymbol = "symbols/line\ncarriage\rtab\tend";
+const StringView s_RetainedAdmissionSymbol = "admission/retained";
+const StringView s_DecodeKnownSymbol = "decode/known";
+const StringView s_DecodeShortSymbol = "decode/short";
 
-void CopyAsciiText(in StringView source, mut MeasuredText text){
-    text.append(source);
-}
 
-void CopyAsciiToPlatform(in StringView source, mut MeasuredPlatformText text){
-    text.reserve(source.size());
-    for(usize index = 0u; index < source.size(); ++index)
-        text.push_back(cast<u8>(source[index]));
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class SymbolRegistryScope{
     private b8 m_restore;
@@ -80,15 +88,15 @@ class CallbackUnregisterLogger : Utf8LogSink{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_TargetText = "concurrent/symbol_entry";
-const StringView s_ParallelLoggerMessageText = "parallel logger message";
-const StringView s_TestsNamesymbolsBeforeRegistryLive = "tests/namesymbols/before_registry_live";
-const StringView s_TestsNamesymbolsBeforeRegistryRetire = "tests/namesymbols/before_registry_retired";
-const StringView s_GlobalArenaMemoryHeapBacking = "global/arena_memory/heap_backing";
-const StringView s_OriginalEscapedSymbol = "symbols/line\ncarriage\rtab\tend";
-const StringView s_RetainedAdmissionSymbol = "admission/retained";
-const StringView s_DecodeKnownSymbol = "decode/known";
-const StringView s_DecodeShortSymbol = "decode/short";
+void CopyAsciiText(in StringView source, mut MeasuredText text){
+    text.append(source);
+}
+
+void CopyAsciiToPlatform(in StringView source, mut MeasuredPlatformText text){
+    text.reserve(source.size());
+    for(usize index = 0u; index < source.size(); ++index)
+        text.push_back(cast<u8>(source[index]));
+}
 
 void BuildBoundaryTokenSource(in Name known, mut String source){
     String knownTokenText = "";
@@ -568,7 +576,6 @@ void VerifyNameSymbolDecodeTests_NameSymbolsCollectArenaOwnersWithoutPerformance
 }
 
 void VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySynchronized(){
-    const u32 expectedRecorderIterations = 400u;
     const usize maxAllowedEntries = 64u;
     u32 completedIterations = 0u;
     b8 sawIdentityMismatch = false;
@@ -589,9 +596,9 @@ void VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySyn
         Latch startLatch(4);
 
         {
-            JoiningThread recorderThread(lambda[mut startLatch, in expectedRecorderIterations, in targetHash, mut identityMismatch, mut recordedCount, mut stop]() -> void{
+            JoiningThread recorderThread(lambda[mut startLatch, in targetHash, mut identityMismatch, mut recordedCount, mut stop]() -> void{
                 startLatch.arrive_and_wait();
-                for(u32 i = 0u; i < expectedRecorderIterations; ++i){
+                for(u32 i = 0u; i < s_SymbolRecorderIterations; ++i){
                     const Name recorded(s_TargetText);
                     if(recorded.identityHash() != targetHash)
                         identityMismatch.store(true, MemoryOrder::relaxed);
@@ -634,7 +641,7 @@ void VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySyn
         observedPeakEntryCount = maxCount.load(MemoryOrder::relaxed);
     }
 
-    EXPECT_EQ(completedIterations, expectedRecorderIterations);
+    EXPECT_EQ(completedIterations, s_SymbolRecorderIterations);
     EXPECT_FALSE(sawIdentityMismatch);
     EXPECT_FALSE(sawResolvedTextMismatch);
     EXPECT_LE(observedPeakEntryCount, maxAllowedEntries);
@@ -654,24 +661,20 @@ void VerifyCommonLoggingBoundaries_LoggerMacrosBehaveAsSingleStatements(){
 }
 
 void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAndReaders(){
-    const u32 threadCount = 4u;
-    const u32 messagesPerThread = 512u;
-    const u32 expectedMessageCount = threadCount * messagesPerThread;
-    const u32 expectedErrorCount = expectedMessageCount / 2u;
     CapturingLogger logger = CapturingLogger();
     b8 sawInvalidObservation = false;
     u32 observedMessageTotal = 0u;
     u32 observedErrorTotal = 0u;
 
     {
-        Latch startGate(threadCount + 2u);
-        TestAtomic<u32> activeWriters(threadCount);
+        Latch startGate(s_ConcurrentLoggerThreadCount + 2u);
+        TestAtomic<u32> activeWriters(s_ConcurrentLoggerThreadCount);
         TestAtomic<u32> observedMessages(0u);
         TestAtomic<u32> observedErrors(0u);
         TestAtomic<b8> invalidObservation(false);
-        JoiningThread reader(lambda[mut startGate, mut activeWriters, in threadCount, mut logger, in expectedMessageCount, in expectedErrorCount, mut invalidObservation, mut observedMessages, mut observedErrors]() -> void{
+        JoiningThread reader(lambda[mut startGate, mut activeWriters, mut logger, mut invalidObservation, mut observedMessages, mut observedErrors]() -> void{
             startGate.arrive_and_wait();
-            while(activeWriters.load(MemoryOrder::acquire) == threadCount)
+            while(activeWriters.load(MemoryOrder::acquire) == s_ConcurrentLoggerThreadCount)
                 YieldThread();
             u32 lastMessageCount = 0u;
             u32 lastErrorCount = 0u;
@@ -679,7 +682,7 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
                 const u32 messageCount = logger.messageCount();
                 const u32 errorCount = logger.errorCount();
                 const LogType lastType = logger.lastType();
-                if(messageCount > expectedMessageCount || errorCount > expectedErrorCount || (lastType != LogType::Info && lastType != LogType::Error))
+                if(messageCount > s_ConcurrentLoggerExpectedMessages || errorCount > s_ConcurrentLoggerExpectedErrors || (lastType != LogType::Info && lastType != LogType::Error))
                     invalidObservation.store(true, MemoryOrder::relaxed);
                 if(messageCount > lastMessageCount){
                     observedMessages.fetch_add(messageCount - lastMessageCount, MemoryOrder::relaxed);
@@ -701,10 +704,10 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
                 observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
         });
         Array<Optional<JoiningThread>, 4> writers;
-        for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-            writers[threadIndex].emplace(lambda[mut logger, mut startGate, mut activeWriters, in messagesPerThread]() -> void{
+        for(u32 threadIndex = 0u; threadIndex < s_ConcurrentLoggerThreadCount; ++threadIndex){
+            writers[threadIndex].emplace(lambda[mut logger, mut startGate, mut activeWriters]() -> void{
                 startGate.arrive_and_wait();
-                for(u32 messageIndex = 0u; messageIndex < messagesPerThread; ++messageIndex){
+                for(u32 messageIndex = 0u; messageIndex < s_ConcurrentLoggerMessagesPerThread; ++messageIndex){
                     LogType kind = LogType::Info;
                     if((messageIndex & 1u) != 0u)
                         kind = LogType::Error;
@@ -727,8 +730,8 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
     EXPECT_FALSE(sawInvalidObservation);
     EXPECT_GT(observedMessageTotal, 0u);
     EXPECT_GT(observedErrorTotal, 0u);
-    EXPECT_EQ(logger.messageCount(), expectedMessageCount);
-    EXPECT_EQ(logger.errorCount(), expectedErrorCount);
+    EXPECT_EQ(logger.messageCount(), s_ConcurrentLoggerExpectedMessages);
+    EXPECT_EQ(logger.errorCount(), s_ConcurrentLoggerExpectedErrors);
     EXPECT_TRUE(SawCapturedMessage(logger, s_ParallelLoggerMessageText));
     EXPECT_TRUE(SawCapturedError(logger, s_ParallelLoggerMessageText));
 }
@@ -784,31 +787,28 @@ void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReader
     EXPECT_TRUE(SawCapturedMessage(baseLogger, "routed-to-base-after-self-unregister"));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate)
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 registration GoogleTestUnicodeCase(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate);
+
 registration GoogleTestUnicodeCase(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(NameSymbolDecodeTests, EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished, VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished)
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbols, VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols)
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, FileLoadSeparatesHeaderAnswerFromNativeReadFailure, VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFailure)
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture, VerifyNameSymbolDecodeTests_NameSymbolsCollectArenaOwnersWithoutPerformanceCapture)
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, ConcurrentRecordResolveClearAndUninstallStaySynchronized, VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySynchronized)
+
 NWB_ADHD_GTEST(CommonLoggingBoundaries, LoggerMacrosBehaveAsSingleStatements, VerifyCommonLoggingBoundaries_LoggerMacrosBehaveAsSingleStatements)
+
 NWB_ADHD_GTEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReaders, VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAndReaders)
+
 NWB_ADHD_GTEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWithoutSelfDeadlock, VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReaderWithoutSelfDeadlock)
 
 

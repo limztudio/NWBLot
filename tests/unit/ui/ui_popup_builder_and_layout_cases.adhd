@@ -9,6 +9,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_UiPopupBuilderPopupKey = "popup";
+const StringView s_UiPopupBuilderApplyKey = "apply";
+const StringView s_UiPopupBuilderCloseKey = "close";
+const StringView s_UiPopupBuilderLaterKey = "later";
+const StringView s_UiPopupContextBaseKey = "base";
+const StringView s_UiPopupContextPopupKey = "popup";
+const StringView s_UiPopupContextChildKey = "child";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static_assert(!is_cpp_constructible<PopupState, in PopupState>());
 static_assert(!is_cpp_constructible<PopupState, PopupState>());
 
@@ -323,13 +335,6 @@ Expected<PopupFrame> FocusUiPopupContextBase(mut UiPopupContextTests self){
     return frame;
 }
 
-const StringView s_UiPopupBuilderPopupKey = "popup";
-const StringView s_UiPopupBuilderApplyKey = "apply";
-const StringView s_UiPopupBuilderCloseKey = "close";
-const StringView s_UiPopupBuilderLaterKey = "later";
-const StringView s_UiPopupContextBaseKey = "base";
-const StringView s_UiPopupContextPopupKey = "popup";
-const StringView s_UiPopupContextChildKey = "child";
 
 PopupOptions MakeUiPopupAnchoredOptions(){
     PopupOptions options = PopupOptions();

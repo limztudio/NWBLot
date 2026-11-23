@@ -112,6 +112,10 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
         }
         totalByteCount += region.dataSize;
     }
+    if(totalByteCount == 0u){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to upload texture batch '{}': upload byte count is zero"), ConvertString(textureDesc.name.resolvedText()));
+        return MakeUnexpected(Failure{});
+    }
     return totalByteCount;
 }
 
@@ -222,15 +226,12 @@ struct TextureUploadBatchSubmissionData{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
-    auto& device = m_graphics.getDevice();
-    if(desc.acceptedToken)
-        *desc.acceptedToken = {};
-
+Expected<QueueSubmissionToken> GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
     const auto totalByteCount = __hidden_graphics_texture_upload::ValidateTextureUploadBatch(desc);
-    if(!totalByteCount)
-        return false;
+    if(!totalByteCount || *totalByteCount == 0u)
+        return MakeUnexpected(Failure{});
 
+    auto& device = m_graphics.getDevice();
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState ? desc.physicalInitialState : textureDesc.initialState;
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(device, desc.queue, *totalByteCount, textureDesc);
@@ -258,12 +259,10 @@ b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& d
     );
     if(!submitted){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to submit graph-owned texture upload batch '{}'"), ConvertString(textureDesc.name.resolvedText()));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(desc.acceptedToken)
-        *desc.acceptedToken = uploadToken;
-    return true;
+    return uploadToken;
 }
 
 

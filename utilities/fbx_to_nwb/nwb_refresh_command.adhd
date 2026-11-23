@@ -21,6 +21,7 @@ b8 IsNwbRefreshInputPath(in b8 refreshNwbFlag, in StringView inputPathText){
     return PathHasListedExtension(inputPath, extensions);
 }
 
+[cpp_unwind]
 void AppendNwbRefreshCountLine(in StringView name, in usize beforeCount, in usize afterCount, mut String outReport){
     outReport.append("  ");
     outReport.append(name);
@@ -31,6 +32,7 @@ void AppendNwbRefreshCountLine(in StringView name, in usize beforeCount, in usiz
     outReport.append(s_ReportLineEndText);
 }
 
+[cpp_unwind]
 String FormatNwbRefreshReport(
     in StringView outputText,
     in StringView inputText,

@@ -22,40 +22,7 @@ const f32 s_DefaultDirectionalLightYaw = 0.45f;
 const f32 s_DefaultDirectionalLightIntensity = 3.0f;
 const f32 s_CubeRotationSpeed = 0.25f;
 const f32 s_MaxAnimationDelta = 1.0f / 15.0f;
-
-
-StringView CsgVisibleFpsLabel(){
-    return "CsgVisibleSmokeProject";
-}
-
-Expected<NotNullUniquePtr<World>> CreateCsgVisibleWorld(mut ProjectRuntimeContext context){
-    auto created = CreateSmokeWorld(CsgVisibleFpsLabel(), context);
-    if(!created.has_value())
-        return MakeUnexpected(Failure());
-    mut NotNullUniquePtr<World> world = created.value();
-
-    if(context.graphics.queryFeatureSupport(Feature::Meshlets))
-        [essential] info("CsgVisibleSmokeProject: natural native mesh-shader route selected");
-    else
-        [essential] info("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable");
-
-    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
-    if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
-        ReflectionSettings reflection;
-        reflection.traceMode = ReflectionTraceMode::Disabled;
-        [essential] assert(renderer.setReflectionSettings(reflection), "Invalid temporal reflection settings");
-        renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
-    }
-
-    return TakeSmokeWorld(world);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 type CsgVisibleMaterialRef = SmokeMaterialRef;
-
 const CsgVisibleMaterialRef s_SolidMaterial = "project/smoke/csg_visible/materials/solid";
 const CsgVisibleMaterialRef s_IndirectMaterial = "project/smoke/csg_visible/materials/indirect";
 const CsgVisibleMaterialRef s_DirectMaterial = "project/smoke/csg_visible/materials/direct";
@@ -283,6 +250,32 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks, ISmokeCapturePredicate{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView CsgVisibleFpsLabel(){
+    return "CsgVisibleSmokeProject";
+}
+
+Expected<NotNullUniquePtr<World>> CreateCsgVisibleWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(CsgVisibleFpsLabel(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+
+    if(context.graphics.queryFeatureSupport(Feature::Meshlets))
+        [essential] info("CsgVisibleSmokeProject: natural native mesh-shader route selected");
+    else
+        [essential] info("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable");
+
+    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
+    if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
+        ReflectionSettings reflection;
+        reflection.traceMode = ReflectionTraceMode::Disabled;
+        [essential] assert(renderer.setReflectionSettings(reflection), "Invalid temporal reflection settings");
+        renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
+    }
+
+    return TakeSmokeWorld(world);
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

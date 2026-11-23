@@ -9,24 +9,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(16)]
-class OpticalWorldBounds{
-    public f32x4 minimum = f32x4();
-    public f32x4 maximum = f32x4();
-}
-
-static_assert(align_of<Expected<OpticalWorldBounds>>() >= align_of<OpticalWorldBounds>());
-
-Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax){
-    VectorSingle minimum = VectorSingle();
-    VectorSingle maximum = VectorSingle();
-    if(!OpticalBoundsEvaluator().computeWorldBounds(objectToWorld, localMin, localMax, minimum, maximum))
-        return MakeUnexpected(Failure());
-    OpticalWorldBounds bounds;
-    bounds.minimum = f32x4(minimum);
-    bounds.maximum = f32x4(maximum);
-    return bounds;
-}
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_HEADER_BYTES")]
+extern const u32 s_ShaderRtOpticalSceneHeaderBytes;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET")]
+extern const u32 s_ShaderRtOpticalSceneTransparentCountOffset;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET")]
+extern const u32 s_ShaderRtOpticalSceneFlagsOffset;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BYTES")]
+extern const u32 s_ShaderRtOpticalInstanceBytes;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_PRIORITY_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstancePriorityOffset;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstanceBoundaryOffset;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstanceFlagsOffset;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_SIGN_BIT")]
+extern const u32 s_ShaderOpticalBoundsSignBit;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK")]
+extern const u32 s_ShaderOpticalBoundsMagnitudeMask;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FRACTION_MASK")]
+extern const u32 s_ShaderOpticalBoundsFractionMask;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_HIDDEN_BIT")]
+extern const u32 s_ShaderOpticalBoundsHiddenBit;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MANTISSA_BITS")]
+extern const i32 s_ShaderOpticalBoundsMantissaBits;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_EXPONENT_BIAS")]
+extern const i32 s_ShaderOpticalBoundsExponentBias;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ONE_BITS")]
+extern const u32 s_ShaderOpticalBoundsOneBits;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMinInputExponent;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMaxInputExponent;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMaxMagnitudeExponent;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ZERO_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsZeroExponent;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FIXED_BITS")]
+extern const i32 s_ShaderOpticalBoundsFixedBits;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT")]
+extern const i32 s_ShaderOpticalBoundsRelativeMarginShift;
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMinMarginExponent;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,9 +143,37 @@ class RayTracingOpticalSceneGather{
     }
 }
 
+static_assert(size_of<RayTracingOpticalSceneHeaderGpu>() == s_ShaderRtOpticalSceneHeaderBytes);
+static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(transparentCount) == s_ShaderRtOpticalSceneTransparentCountOffset);
+static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(flags) == s_ShaderRtOpticalSceneFlagsOffset);
+static_assert(size_of<RayTracingOpticalInstanceGpu>() == s_ShaderRtOpticalInstanceBytes);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(mediumPriority) == s_ShaderRtOpticalInstancePriorityOffset);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(boundaryMode) == s_ShaderRtOpticalInstanceBoundaryOffset);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(flags) == s_ShaderRtOpticalInstanceFlagsOffset);
+static_assert(s_OpticalBoundsSignBit == s_ShaderOpticalBoundsSignBit);
+static_assert(s_OpticalBoundsMagnitudeMask == s_ShaderOpticalBoundsMagnitudeMask);
+static_assert(s_OpticalBoundsFractionMask == s_ShaderOpticalBoundsFractionMask);
+static_assert(s_OpticalBoundsHiddenBit == s_ShaderOpticalBoundsHiddenBit);
+static_assert(s_OpticalBoundsMantissaBits == s_ShaderOpticalBoundsMantissaBits);
+static_assert(s_OpticalBoundsExponentBias == s_ShaderOpticalBoundsExponentBias);
+static_assert(s_OpticalBoundsOneBits == s_ShaderOpticalBoundsOneBits);
+static_assert(s_OpticalBoundsMinInputExponent == s_ShaderOpticalBoundsMinInputExponent);
+static_assert(s_OpticalBoundsMaxInputExponent == s_ShaderOpticalBoundsMaxInputExponent);
+static_assert(s_OpticalBoundsMaxMagnitudeExponent == s_ShaderOpticalBoundsMaxMagnitudeExponent);
+static_assert(s_OpticalBoundsZeroExponent == s_ShaderOpticalBoundsZeroExponent);
+static_assert(s_OpticalBoundsFixedBits == s_ShaderOpticalBoundsFixedBits);
+static_assert(s_OpticalBoundsRelativeMarginShift == s_ShaderOpticalBoundsRelativeMarginShift);
+static_assert(s_OpticalBoundsMinMarginExponent == s_ShaderOpticalBoundsMinMarginExponent);
+static_assert(align_of<RayTracingOpticalRuntimeBounds>() >= 16u);
+static_assert(offset_of<RayTracingOpticalRuntimeBounds>(objectToWorld) % 16u == 0u);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax){
+    return OpticalBoundsEvaluator().computeWorldBounds(objectToWorld, localMin, localMax);
+}
 
 b8 ValidOpticalRuntimeBoundsHandle(in b8 hasBuffer, in b8 descriptorValid, in b8 isStorageBufferClass){
     return hasBuffer && descriptorValid && isStorageBufferClass;
@@ -173,96 +225,6 @@ b8 ValidOpticalBoundsFinalizeDeclareInputs(
 ){
     return hasFinalize && hasUploadBuffer && sourceValid && inputCount != 0u && inputCount == boundsBufferCount;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_HEADER_BYTES")]
-extern const u32 s_ShaderRtOpticalSceneHeaderBytes;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET")]
-extern const u32 s_ShaderRtOpticalSceneTransparentCountOffset;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET")]
-extern const u32 s_ShaderRtOpticalSceneFlagsOffset;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BYTES")]
-extern const u32 s_ShaderRtOpticalInstanceBytes;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_PRIORITY_OFFSET")]
-extern const u32 s_ShaderRtOpticalInstancePriorityOffset;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET")]
-extern const u32 s_ShaderRtOpticalInstanceBoundaryOffset;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET")]
-extern const u32 s_ShaderRtOpticalInstanceFlagsOffset;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_SIGN_BIT")]
-extern const u32 s_ShaderOpticalBoundsSignBit;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK")]
-extern const u32 s_ShaderOpticalBoundsMagnitudeMask;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FRACTION_MASK")]
-extern const u32 s_ShaderOpticalBoundsFractionMask;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_HIDDEN_BIT")]
-extern const u32 s_ShaderOpticalBoundsHiddenBit;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MANTISSA_BITS")]
-extern const i32 s_ShaderOpticalBoundsMantissaBits;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_EXPONENT_BIAS")]
-extern const i32 s_ShaderOpticalBoundsExponentBias;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ONE_BITS")]
-extern const u32 s_ShaderOpticalBoundsOneBits;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT")]
-extern const i32 s_ShaderOpticalBoundsMinInputExponent;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT")]
-extern const i32 s_ShaderOpticalBoundsMaxInputExponent;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT")]
-extern const i32 s_ShaderOpticalBoundsMaxMagnitudeExponent;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ZERO_EXPONENT")]
-extern const i32 s_ShaderOpticalBoundsZeroExponent;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FIXED_BITS")]
-extern const i32 s_ShaderOpticalBoundsFixedBits;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT")]
-extern const i32 s_ShaderOpticalBoundsRelativeMarginShift;
-
-[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT")]
-extern const i32 s_ShaderOpticalBoundsMinMarginExponent;
-static_assert(size_of<RayTracingOpticalSceneHeaderGpu>() == s_ShaderRtOpticalSceneHeaderBytes);
-static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(transparentCount) == s_ShaderRtOpticalSceneTransparentCountOffset);
-static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(flags) == s_ShaderRtOpticalSceneFlagsOffset);
-static_assert(size_of<RayTracingOpticalInstanceGpu>() == s_ShaderRtOpticalInstanceBytes);
-static_assert(offset_of<RayTracingOpticalInstanceGpu>(mediumPriority) == s_ShaderRtOpticalInstancePriorityOffset);
-static_assert(offset_of<RayTracingOpticalInstanceGpu>(boundaryMode) == s_ShaderRtOpticalInstanceBoundaryOffset);
-static_assert(offset_of<RayTracingOpticalInstanceGpu>(flags) == s_ShaderRtOpticalInstanceFlagsOffset);
-static_assert(s_OpticalBoundsSignBit == s_ShaderOpticalBoundsSignBit);
-static_assert(s_OpticalBoundsMagnitudeMask == s_ShaderOpticalBoundsMagnitudeMask);
-static_assert(s_OpticalBoundsFractionMask == s_ShaderOpticalBoundsFractionMask);
-static_assert(s_OpticalBoundsHiddenBit == s_ShaderOpticalBoundsHiddenBit);
-static_assert(s_OpticalBoundsMantissaBits == s_ShaderOpticalBoundsMantissaBits);
-static_assert(s_OpticalBoundsExponentBias == s_ShaderOpticalBoundsExponentBias);
-static_assert(s_OpticalBoundsOneBits == s_ShaderOpticalBoundsOneBits);
-static_assert(s_OpticalBoundsMinInputExponent == s_ShaderOpticalBoundsMinInputExponent);
-static_assert(s_OpticalBoundsMaxInputExponent == s_ShaderOpticalBoundsMaxInputExponent);
-static_assert(s_OpticalBoundsMaxMagnitudeExponent == s_ShaderOpticalBoundsMaxMagnitudeExponent);
-static_assert(s_OpticalBoundsZeroExponent == s_ShaderOpticalBoundsZeroExponent);
-static_assert(s_OpticalBoundsFixedBits == s_ShaderOpticalBoundsFixedBits);
-static_assert(s_OpticalBoundsRelativeMarginShift == s_ShaderOpticalBoundsRelativeMarginShift);
-static_assert(s_OpticalBoundsMinMarginExponent == s_ShaderOpticalBoundsMinMarginExponent);
-static_assert(align_of<RayTracingOpticalRuntimeBounds>() >= 16u);
-static_assert(offset_of<RayTracingOpticalRuntimeBounds>(objectToWorld) % 16u == 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

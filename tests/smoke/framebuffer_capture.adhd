@@ -10,6 +10,13 @@
 
 
 const u64 s_UncapturedGraphicsFrame = 0xffffffffffffffffu;
+const u64 s_FramebufferCaptureMaxFrameCount = 4294967295u;
+type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface ISmokeCapturePredicate{
     b8 shouldCaptureFrame(in u64 frame)const;
 }
@@ -450,6 +457,62 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
 
 }
 
+class SmokeCaptureSeries{
+    public Vector<String> paths;
+    public UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
+}
+
+class SmokeCaptureFactory{
+    public SmokeCaptureFactory(mut ProjectRuntimeContext context){
+        this.m_context = context;
+    }
+
+    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
+        UniquePtr<FramebufferCapture> capture;
+        if(!ConfigureSmokeFramebufferCapture(this.m_context, projectName, defaultFrameCount, options, capture))
+            return MakeUnexpected(Failure());
+        return capture;
+    }
+
+    public Expected<SmokeCaptureSeries> prepareSeries(in StringView outputPath, in u32 sampleCount, in FramebufferCaptureOptions options){
+        SmokeCaptureSeries result;
+        if(!this.prepareSeriesInto(outputPath, sampleCount, options, result.paths, result.capture))
+            return MakeUnexpected(Failure());
+        return result;
+    }
+
+    public b8 prepareSeriesInto(
+        in StringView outputPath,
+        in u32 sampleCount,
+        in FramebufferCaptureOptions options,
+        mut Vector<String> outPaths,
+        mut UniquePtr<FramebufferCapture> outCapture
+    ){
+        if(sampleCount == 0u)
+            return false;
+
+        outPaths.clear();
+        outPaths.reserve(sampleCount);
+        for(u32 sample = 0u; sample < sampleCount; ++sample){
+            String samplePath = String();
+            if(sample + 1u == sampleCount)
+                samplePath = String(outputPath);
+            else
+                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
+            outPaths.push_back(samplePath);
+        }
+
+        const StringView firstPath = StringView(outPaths[0u]);
+        return StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, outCapture);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_unwind]
 b8 StartNewSmokeFramebufferCapture(in StringView outputPath, in u32 count, mut ProjectRuntimeContext context, in FramebufferCaptureOptions options, mut UniquePtr<FramebufferCapture> outCapture){
     auto capture = MakeUnique<FramebufferCapture>(context.graphics, outputPath, count, context, options);
@@ -511,16 +574,6 @@ FramebufferCaptureOptions MakeSmokeCaptureOptions(in borrow ISmokeCapturePredica
     return MakeSmokeCaptureOptions(owner, width, height, true);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u64 s_FramebufferCaptureMaxFrameCount = 4294967295u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<u32> ReadSmokeCaptureFrameCount(in u32 defaultFrameCount){
     const auto frameCount = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
     if(!frameCount.has_value())
@@ -529,58 +582,6 @@ Expected<u32> ReadSmokeCaptureFrameCount(in u32 defaultFrameCount){
     if(!value.has_value() || value.value() == 0u || value.value() > s_FramebufferCaptureMaxFrameCount)
         return MakeUnexpected(Failure());
     return cast<u32>(value.value());
-}
-
-class SmokeCaptureSeries{
-    public Vector<String> paths;
-    public UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
-}
-
-class SmokeCaptureFactory{
-    public SmokeCaptureFactory(mut ProjectRuntimeContext context){
-        this.m_context = context;
-    }
-
-    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
-        UniquePtr<FramebufferCapture> capture;
-        if(!ConfigureSmokeFramebufferCapture(this.m_context, projectName, defaultFrameCount, options, capture))
-            return MakeUnexpected(Failure());
-        return capture;
-    }
-
-    public Expected<SmokeCaptureSeries> prepareSeries(in StringView outputPath, in u32 sampleCount, in FramebufferCaptureOptions options){
-        SmokeCaptureSeries result;
-        if(!this.prepareSeriesInto(outputPath, sampleCount, options, result.paths, result.capture))
-            return MakeUnexpected(Failure());
-        return result;
-    }
-
-    public b8 prepareSeriesInto(
-        in StringView outputPath,
-        in u32 sampleCount,
-        in FramebufferCaptureOptions options,
-        mut Vector<String> outPaths,
-        mut UniquePtr<FramebufferCapture> outCapture
-    ){
-        if(sampleCount == 0u)
-            return false;
-
-        outPaths.clear();
-        outPaths.reserve(sampleCount);
-        for(u32 sample = 0u; sample < sampleCount; ++sample){
-            String samplePath = String();
-            if(sample + 1u == sampleCount)
-                samplePath = String(outputPath);
-            else
-                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
-            outPaths.push_back(samplePath);
-        }
-
-        const StringView firstPath = StringView(outPaths[0u]);
-        return StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, outCapture);
-    }
-
-    private mut ProjectRuntimeContext m_context;
 }
 
 b8 ConfigureSmokeFramebufferCapture(
@@ -610,8 +611,6 @@ b8 ConfigureSmokeFramebufferCapture(
 ){
     return ConfigureSmokeFramebufferCapture(context, projectName, defaultFrameCount, FramebufferCaptureOptions(), outCapture);
 }
-
-type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
 
 b8 TickSmokeWorld(in f32 delta, mut World world){
     const TickAdmissionResult updated = world.tick(delta);

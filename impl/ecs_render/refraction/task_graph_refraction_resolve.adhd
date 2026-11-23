@@ -162,19 +162,6 @@ class FrameGraphRefractionResolve : NoCopy{
     public Expected<GpuTaskId> declare(in FrameGraphRefractionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads);
 }
 
-
-b8 IsRefractionHardwareDispatchReady(in b8 hardwareEnabled, in b8 hasPreparationFlag, in b8 preparationReady){
-    return hardwareEnabled && hasPreparationFlag && preparationReady;
-}
-
-usize ComputeRefractionResolveResourceUseCapacity(in usize inputCount, in usize sceneUseCount, in usize csgUseCount){
-    return inputCount + s_RefractionFixedUseCapacity + sceneUseCount + csgUseCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RefractionClearTileArgumentsGraphTask{
     private mut GraphicsRuntime m_graphics;
     private BufferHandle m_destination;
@@ -201,10 +188,6 @@ class RefractionClearTileArgumentsGraphTask{
         return true;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class RefractionClearStatisticsGraphTask{
     private BufferHandle m_destination;
@@ -235,6 +218,18 @@ class RefractionClearStatisticsGraphTask{
         commandList.clearBufferUInt(this.m_destination.deref(), 0u);
         return !commandList.commandRecordingFailed();
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsRefractionHardwareDispatchReady(in b8 hardwareEnabled, in b8 hasPreparationFlag, in b8 preparationReady){
+    return hardwareEnabled && hasPreparationFlag && preparationReady;
+}
+
+usize ComputeRefractionResolveResourceUseCapacity(in usize inputCount, in usize sceneUseCount, in usize csgUseCount){
+    return inputCount + s_RefractionFixedUseCapacity + sceneUseCount + csgUseCount;
 }
 
 

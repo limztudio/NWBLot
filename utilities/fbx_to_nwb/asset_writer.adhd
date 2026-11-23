@@ -20,6 +20,7 @@ StringView ResolveEffectiveVirtualRoot(in StringView trimmedVirtualRoot){
     return trimmedVirtualRoot;
 }
 
+[cpp_unwind]
 String BuildFbxVirtualBasePath(in StringView genericNoExtPath, in StringView filenameNoExt, in StringView virtualRoot){
     const StringView trimmedVirtualRoot = TrimView(virtualRoot);
     String relativeText;
@@ -67,6 +68,7 @@ String BuildFbxVirtualBasePath(in StringView genericNoExtPath, in StringView fil
     return virtualPath;
 }
 
+[cpp_unwind]
 String BuildFbxSplitAssetName(in StringView virtualBase, in StringView suffix){
     String name;
     name.reserve(virtualBase.size() + suffix.size());

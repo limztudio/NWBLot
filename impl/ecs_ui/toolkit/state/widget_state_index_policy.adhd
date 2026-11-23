@@ -8,6 +8,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class WidgetStateAppendRollback : NoCopy{
+    private mut Vector<WidgetState> m_entries;
+    private b8 m_armed = true;
+
+    public WidgetStateAppendRollback(mut Vector<WidgetState> entries){
+        this.m_entries = entries;
+    }
+    public ~WidgetStateAppendRollback(){
+        if(this.m_armed)
+            this.m_entries.pop_back();
+    }
+    public void release(){ this.m_armed = false; }
+};
+
+
 class WidgetStateIndexPolicy{
     private b8 validTouchRequest(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration)const{
         return id.valid() && root.generation != 0u && frameGeneration != 0u && cast<u8>(kind) <= cast<u8>(WidgetKind::Image);
@@ -35,15 +50,18 @@ class WidgetStateIndexPolicy{
         ;
     }
 
+    [cpp_unwind]
     private b8 rebuildIndex(in Span<WidgetState> entries, mut HashMap<u64, usize> outIndex)const{
         outIndex.clear();
         for(usize index = 0u; index < entries.size(); ++index){
-            if(!outIndex.try_emplace(entries[index].id.value, index).second)
+            const u64 idValue = entries[index].id.value;
+            if(!outIndex.try_emplace(idValue, index).second)
                 return false;
         }
         return true;
     }
 
+    [cpp_unwind]
     public b8 refreshIndex(in Span<WidgetState> entries, mut HashMap<u64, usize> indexById, mut b8 dirty)const{
         if(!dirty)
             return true;
@@ -62,6 +80,7 @@ class WidgetStateIndexPolicy{
         return index;
     }
 
+    [cpp_unwind]
     public Expected<usize> findIndex(
         in Span<WidgetState> entries,
         in WidgetId id,
@@ -88,6 +107,7 @@ class WidgetStateIndexPolicy{
         outIndexDirty = true;
     }
 
+    [cpp_unwind]
     public void compactRetireUnseen(
         in u64 frameGeneration,
         mut Vector<WidgetState> inOutEntries,
@@ -112,6 +132,7 @@ class WidgetStateIndexPolicy{
         }
     }
 
+    [cpp_unwind]
     public void compactRetainRoots(
         in HashSet<WidgetRoot> retainedRoots,
         mut Vector<WidgetState> inOutEntries,
@@ -136,6 +157,7 @@ class WidgetStateIndexPolicy{
         }
     }
 
+    [cpp_unwind]
     public Expected<usize> touch(
         in WidgetId id,
         in WidgetRoot root,
@@ -182,11 +204,12 @@ class WidgetStateIndexPolicy{
         }
         const usize newIndex = inOutEntries.size();
         inOutEntries.push_back(WidgetState(id, root, inOutNextDeclarationGeneration, frameGeneration, kind));
+        WidgetStateAppendRollback rollbackEntry(inOutEntries);
         if(!inOutIndex.try_emplace(id.value, newIndex).second){
-            inOutEntries.pop_back();
             outInvariantFailed = true;
             return MakeUnexpected(Failure());
         }
+        rollbackEntry.release();
         ++inOutNextDeclarationGeneration;
         return newIndex;
     }

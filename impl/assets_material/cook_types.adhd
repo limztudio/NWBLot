@@ -140,24 +140,19 @@ b8 ValidateMaterialCookEntryRequiredFields(
     return true;
 }
 
-b8 TryResolveOptionalMaterialAvboitPixelShader(
-    in StringView materialVirtualPath,
-    in StringView shaderNameText,
-    in StringView passLabel,
-    mut AssetRef<PixelShader> outShaderRef
-){
-    outShaderRef = AssetRef<PixelShader>();
+Expected<AssetRef<PixelShader>> TryResolveOptionalMaterialAvboitPixelShader(in StringView materialVirtualPath, in StringView shaderNameText, in StringView passLabel){
     if(shaderNameText.empty())
-        return true;
+        return AssetRef<PixelShader>();
 
     const Expected<Name> shaderName = TryParseMaterialBindName(shaderNameText);
     if(!shaderName.has_value()){
         error("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name", materialVirtualPath, passLabel);
-        return false;
+        return MakeUnexpected(shaderName.error());
     }
 
-    outShaderRef.virtualPath = shaderName.value();
-    return true;
+    AssetRef<PixelShader> shaderRef;
+    shaderRef.virtualPath = shaderName.value();
+    return shaderRef;
 }
 
 b8 ValidateMaterialGeneratedPixelShaderEntry(

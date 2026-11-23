@@ -493,10 +493,17 @@ b8 Builder::image(in StringView stableKey, in Name regionName, in ImageOptions o
     const auto widget = this.m_context.declare(stableKey, WidgetKind::Image);
     ImageFrame frame;
     frame.options = options;
-    if(!widget.has_value() || !ControlStyleMetrics().imageMetrics(this.m_skin.value(), regionName, options, frame.metrics, frame.region)){
+    if(!widget.has_value()){
         this.m_context.fail();
         return false;
     }
+    const Expected<ImageResolvedMetrics> imageMetrics = ControlStyleMetrics().imageMetrics(this.m_skin.value(), regionName, options);
+    if(!imageMetrics.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    frame.metrics = imageMetrics.value().metrics;
+    frame.region = imageMetrics.value().region;
     return this.publishImageFrame(widget.value(), frame);
 }
 
@@ -574,10 +581,12 @@ b8 Builder::progress(in StringView stableKey, in f64 fraction, in ProgressOption
     frame.fraction = fraction;
     frame.options = options;
     frame.style = this.m_progressStyle;
-    if(!ControlStyleMetrics().progressMetrics(this.m_skin.value(), fraction, options, frame.style, frame.metrics)){
+    const Expected<ProgressMetrics> progressMetrics = ControlStyleMetrics().progressMetrics(this.m_skin.value(), fraction, options, frame.style);
+    if(!progressMetrics.has_value()){
         this.m_context.fail();
         return false;
     }
+    frame.metrics = progressMetrics.value();
     auto item = this.makeItem();
     item.state = widget.value();
     item.progress = cast<u32>(this.m_scope.value().m_progress.size());

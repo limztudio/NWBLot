@@ -9,6 +9,51 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextAreaScrollState{
+    public ControlToken prepare(
+        in WidgetState widget,
+        in PopupToken popup,
+        in u64 stateGeneration,
+        in u64 stateRevision,
+        in TextAreaModelStamp modelStamp,
+        in b8 enabled,
+        in b8 readOnly,
+        in ScrollViewportPlacement placement,
+        in Point step
+    ){
+        return PrepareTextAreaScrollState(
+            widget,
+            popup,
+            stateGeneration,
+            stateRevision,
+            modelStamp,
+            enabled,
+            readOnly,
+            placement,
+            step,
+            this.snapshot,
+            this.placement,
+            this.step,
+            this.revision,
+            this.prepared
+        );
+    }
+
+    public void retire(){
+        RetireTextAreaScrollState(this.snapshot, this.placement, this.step, this.revision, this.prepared);
+    }
+
+    public TextAreaScrollSnapshot snapshot;
+    public ScrollViewportPlacement placement;
+    public Point step;
+    public u64 revision = 1u;
+    public b8 prepared = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 TryApplyTextAreaScrollControlAction(
     in ControlAction action,
     in ScrollViewportPlacement accepted,
@@ -155,51 +200,6 @@ void RetireTextAreaScrollState(
     outSnapshot = TextAreaScrollSnapshot();
     outPlacement = ScrollViewportPlacement();
     outStep = Point();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextAreaScrollState{
-    public ControlToken prepare(
-        in WidgetState widget,
-        in PopupToken popup,
-        in u64 stateGeneration,
-        in u64 stateRevision,
-        in TextAreaModelStamp modelStamp,
-        in b8 enabled,
-        in b8 readOnly,
-        in ScrollViewportPlacement placement,
-        in Point step
-    ){
-        return PrepareTextAreaScrollState(
-            widget,
-            popup,
-            stateGeneration,
-            stateRevision,
-            modelStamp,
-            enabled,
-            readOnly,
-            placement,
-            step,
-            this.snapshot,
-            this.placement,
-            this.step,
-            this.revision,
-            this.prepared
-        );
-    }
-
-    public void retire(){
-        RetireTextAreaScrollState(this.snapshot, this.placement, this.step, this.revision, this.prepared);
-    }
-
-    public TextAreaScrollSnapshot snapshot;
-    public ScrollViewportPlacement placement;
-    public Point step;
-    public u64 revision = 1u;
-    public b8 prepared = false;
 }
 
 

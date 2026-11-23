@@ -8,6 +8,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SliderActionOutcome{
+    public f64 value = 0.0;
+    public b8 advanceRevision = false;
+}
+
+class SliderGestureOutcome{
+    public f64 value = 0.0;
+    public InputActionId press = InputActionId();
+    public b8 pressMoved = false;
+    public b8 advanceRevision = false;
+}
+
+class SliderDragResult{
+    public f64 value = 0.0;
+    public b8 moved = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
     if(configuredStep > 0.0)
         return configuredStep;
@@ -63,29 +84,30 @@ Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGest
     return InterpolateFiniteRange(options.minimum, options.maximum, normalized);
 }
 
-b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved, mut f64 outValue, mut b8 outMoved){
-    outValue = currentValue;
-    outMoved = previouslyMoved;
+Expected<SliderDragResult> TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved){
+    SliderDragResult result;
+    result.value = currentValue;
+    result.moved = previouslyMoved;
     const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
     const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
     if(delta == 0.0){
         if(previouslyMoved)
-            outValue = baseline;
-        return true;
+            result.value = baseline;
+        return result;
     }
     const Expected<f64> normalized = NormalizeFiniteRange(options.minimum, options.maximum, baseline);
     if(!normalized.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
         dragged = Min(1.0, normalizedValue);
     const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
-        return false;
-    outValue = interpolated.value();
-    outMoved = true;
-    return true;
+        return MakeUnexpected(Failure());
+    result.value = interpolated.value();
+    result.moved = true;
+    return result;
 }
 
 b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
@@ -112,7 +134,7 @@ Expected<b8> TryEvaluateSliderAdmission(
         || !SameSliderPlacementGeometry(stateAdmission, placement);
 }
 
-b8 TryApplySliderControlAction(
+Expected<SliderActionOutcome> TryApplySliderControlAction(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
@@ -122,23 +144,21 @@ b8 TryApplySliderControlAction(
     in f64 currentValue,
     in SliderOptions options,
     in ControlAction action,
-    mut f64 outValue,
-    mut b8 outAdvanceRevision,
     mut SliderResult inOutResult
 ){
-    outValue = currentValue;
-    outAdvanceRevision = false;
+    SliderActionOutcome outcome = SliderActionOutcome();
+    outcome.value = currentValue;
     if(
         !IsValidSliderOptions(options) || !admitted || !action.id.valid() || action.control != stateToken
         || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options) || action.kind > ControlActionKind::Right
     )
-        return false;
+        return MakeUnexpected(Failure());
     SliderResult accepted = inOutResult;
     accepted.valid = true;
     if(!options.enabled || options.minimum == options.maximum){
         accepted.dragging = false;
         inOutResult = accepted;
-        return true;
+        return outcome;
     }
     if(
         action.kind != ControlActionKind::Left && action.kind != ControlActionKind::Down
@@ -147,16 +167,16 @@ b8 TryApplySliderControlAction(
         && action.kind != ControlActionKind::Home && action.kind != ControlActionKind::End
     ){
         inOutResult = accepted;
-        return true;
+        return outcome;
     }
     const Expected<f64> value = TryStepSliderValue(currentValue, options, action.kind);
     if(!value.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value.value());
-    outValue = value.value();
-    outAdvanceRevision = true;
+    outcome.value = value.value();
+    outcome.advanceRevision = true;
     inOutResult = accepted;
-    return true;
+    return outcome;
 }
 
 

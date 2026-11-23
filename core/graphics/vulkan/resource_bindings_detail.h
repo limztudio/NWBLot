@@ -93,7 +93,7 @@ inline u64 g_NextDescriptorBufferStorageIdentity = 1u;
 
 
 [[nodiscard]] inline Expected<u64> AllocateDescriptorBufferStorageIdentity()noexcept{
-    ScopedLock lock(g_DescriptorBufferStorageIdentityMutex);
+    NothrowScopedLock lock(g_DescriptorBufferStorageIdentityMutex);
 
     if(g_NextDescriptorBufferStorageIdentity == 0u)
         return MakeUnexpected(Failure{});

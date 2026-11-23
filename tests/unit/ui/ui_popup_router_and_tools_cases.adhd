@@ -10,6 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_UiPopupToolsCasePanelKey = "panel";
+const StringView s_UiPopupToolsCaseAnchorKey = "anchor";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class UiPopupRouterTests : RouterTestFixture{
 
 
@@ -76,12 +83,10 @@ class PopupToolsCaseFixture : PopupToolsFixture{
 class UiPopupToolsBuilderTests : PopupToolsCaseFixture{
 
 
-
 }
 
 
 class UiPopupToolsLoanTests : PopupToolsCaseFixture{
-
 
 
 }
@@ -123,15 +128,11 @@ class RevisionArmingComboSource : IListDataSource{
 class UiPopupToolsNavigationTests : PopupToolsCaseFixture{
 
 
-
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const StringView s_UiPopupToolsCasePanelKey = "panel";
-const StringView s_UiPopupToolsCaseAnchorKey = "anchor";
 
 HitTarget MakeUiPopupRouterButtonOrdered(in u64 idValue, in Rect rectangle, in u32 paintOrder){
     HitTarget target = HitTarget();

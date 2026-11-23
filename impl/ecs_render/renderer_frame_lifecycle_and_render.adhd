@@ -326,9 +326,8 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     const GpuTaskGraphDeclarationReadView deferredTaskGraphView(this.m_deferredLightingTaskGraph);
     const GpuCompiledGraphReadView deferredCompiledPlan(this.m_deferredLightingCompiledGraph);
     const b8 captureLaggedLightingHistory = this.m_deferredLaggedLightingHistoryTask.valid();
-    DeferredFrameTopologyResult topology = DeferredFrameTopologyResult();
     DeferredFrameTopologyValidator topologyValidator(this);
-    if(!topologyValidator.validate(
+    const Expected<DeferredFrameTopologyResult> topologyResult = topologyValidator.validate(
         deferredCompiledPlan,
         deferredTaskGraphView,
         timing,
@@ -341,13 +340,14 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
         clearAvboitTargets,
         laggedAsyncLightingSchedule,
         laggedLightingHistoryWriterWaitPending,
-        surfelCounterReadbackCompletionToken.valid(),
-        topology
-    )){
+        surfelCounterReadbackCompletionToken.valid()
+    );
+    if(!topologyResult.has_value()){
         timing.discardTickets();
         this.m_rayTracingState.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
+    in DeferredFrameTopologyResult topology = topologyResult.value();
 
     const usize graphicsPrefixUniquePacketCount = topology.graphicsPrefixUniquePacketCount;
     in RendererAvboitTaskGraphValidation avboitValidation = topology.avboitValidation;

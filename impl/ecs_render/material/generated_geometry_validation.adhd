@@ -9,10 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsAliasFreeCaptureCountConsistent(in usize drawCount, in usize outputBufferCount, in usize outputHeapSlotCount){
-    return drawCount != 0u && drawCount == outputBufferCount && outputBufferCount == outputHeapSlotCount;
-}
-
 class AliasFreeComputeEmulationGraphPlan{
     public Vector<MaterialPassDrawItem> drawItems;
     public Vector<BufferHandle> outputBuffers;
@@ -60,6 +56,14 @@ class AliasFreeComputeEmulationGraphPlan{
     public b8 matches()const{
         return MatchesRetainedGeneratedGeometryOutputs(this.captured, this.drawItems, this.outputBuffers, this.outputLayouts, this.outputHeapSlots);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAliasFreeCaptureCountConsistent(in usize drawCount, in usize outputBufferCount, in usize outputHeapSlotCount){
+    return drawCount != 0u && drawCount == outputBufferCount && outputBufferCount == outputHeapSlotCount;
 }
 
 

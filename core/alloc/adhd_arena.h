@@ -45,13 +45,8 @@ template<typename T, typename ArenaT>
 [[nodiscard]] b8 TryCopyVector(Vector<T, ArenaT>& destination, const Span<const T> source){
     if(source.size() > destination.max_size())
         return false;
-    try{
-        destination.assign(source.begin(), source.end());
-        return true;
-    }
-    catch(const AllocationException&){
-        return false;
-    }
+    destination.assign(source.begin(), source.end());
+    return true;
 }
 
 
@@ -86,7 +81,7 @@ template<typename T>
 struct IsStdExpected : FalseType{};
 
 template<typename V, typename E>
-struct IsStdExpected<std::expected<V, E>> : TrueType{
+struct IsStdExpected<Expected<V, E>> : TrueType{
     using Value = V;
     using Error = E;
 };
@@ -95,10 +90,10 @@ template<typename T>
 struct IsStdUnexpected : FalseType{};
 
 template<typename E>
-struct IsStdUnexpected<std::unexpected<E>> : TrueType{};
+struct IsStdUnexpected<Unexpected<E>> : TrueType{};
 
 template<typename TargetT, typename SrcT, usize... Indices>
-[[nodiscard]] FOUNDATION_INLINE TargetT RebindConstructFixedArrayImpl(::ArenaBase& targetArena, SrcT&& src, std::index_sequence<Indices...>){
+[[nodiscard]] FOUNDATION_INLINE TargetT RebindConstructFixedArrayImpl(::ArenaBase& targetArena, SrcT&& src, IndexSequence<Indices...>){
     using Elem = typename IsFixedArray<TargetT>::Element;
     if constexpr(IsLValueReference_V<SrcT>)
         return TargetT{ ::AdhdRebindConstruct<Elem>(targetArena, src[Indices])... };
@@ -203,23 +198,23 @@ template<typename TargetT, typename SrcT>
         using ErrT = typename TargetT::error_type;
         using SrcRaw = RemoveCVRef_T<SrcT>;
         if constexpr(AdhdArenaDetail::IsStdUnexpected<SrcRaw>::value){
-            return TargetT(std::unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
+            return TargetT(s_Unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
         }
         else if constexpr(AdhdArenaDetail::IsStdExpected<SrcRaw>::value){
             if(!src.has_value())
-                return TargetT(std::unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
+                return TargetT(s_Unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
             if constexpr(!IsSame_V<ValT, void>){
                 if constexpr(IsLValueReference_V<SrcT>)
-                    return TargetT(std::in_place, AdhdRebindConstruct<ValT>(targetArena, *src));
+                    return TargetT(s_InPlace, AdhdRebindConstruct<ValT>(targetArena, *src));
                 else
-                    return TargetT(std::in_place, AdhdRebindConstruct<ValT>(targetArena, Move(*src)));
+                    return TargetT(s_InPlace, AdhdRebindConstruct<ValT>(targetArena, Move(*src)));
             }
             else{
                 return TargetT();
             }
         }
         else if constexpr(!IsSame_V<ValT, void>){
-            return TargetT(std::in_place, AdhdRebindConstruct<ValT>(targetArena, Forward<SrcT>(src)));
+            return TargetT(s_InPlace, AdhdRebindConstruct<ValT>(targetArena, Forward<SrcT>(src)));
         }
         else{
             return TargetT(Forward<SrcT>(src));
@@ -227,26 +222,26 @@ template<typename TargetT, typename SrcT>
     }
     else if constexpr(ContainerDetail::AdaptorDetail::IsStdOptional<TargetT>::value){
         using Inner = typename TargetT::value_type;
-        if constexpr(IsSame_V<RemoveCVRef_T<SrcT>, std::nullopt_t>){
+        if constexpr(IsSame_V<RemoveCVRef_T<SrcT>, NullOptional>){
             return TargetT();
         }
         else if constexpr(ContainerDetail::AdaptorDetail::IsStdOptional<RemoveCVRef_T<SrcT>>::value){
             if(!src.has_value())
                 return TargetT();
             if constexpr(IsLValueReference_V<SrcT>)
-                return TargetT(std::in_place, AdhdRebindConstruct<Inner>(targetArena, *src));
+                return TargetT(s_InPlace, AdhdRebindConstruct<Inner>(targetArena, *src));
             else
-                return TargetT(std::in_place, AdhdRebindConstruct<Inner>(targetArena, Move(*src)));
+                return TargetT(s_InPlace, AdhdRebindConstruct<Inner>(targetArena, Move(*src)));
         }
         else{
-            return TargetT(std::in_place, AdhdRebindConstruct<Inner>(targetArena, Forward<SrcT>(src)));
+            return TargetT(s_InPlace, AdhdRebindConstruct<Inner>(targetArena, Forward<SrcT>(src)));
         }
     }
     else if constexpr(AdhdArenaDetail::IsFixedArray<TargetT>::value && IsSame_V<RemoveCVRef_T<SrcT>, TargetT>){
         return AdhdArenaDetail::RebindConstructFixedArrayImpl<TargetT>(
             targetArena,
             Forward<SrcT>(src),
-            std::make_index_sequence<AdhdArenaDetail::IsFixedArray<TargetT>::s_Count>{}
+            MakeIndexSequence<AdhdArenaDetail::IsFixedArray<TargetT>::s_Count>{}
         );
     }
     else if constexpr(AdhdArenaDetail::IsBoundedFixedVector<TargetT>::value && IsSame_V<RemoveCVRef_T<SrcT>, TargetT>){
@@ -289,9 +284,9 @@ template<typename TargetT>
     else if constexpr(AdhdArenaDetail::IsFixedArray<TargetT>::value){
         using ElemT = typename AdhdArenaDetail::IsFixedArray<TargetT>::Element;
         constexpr usize s_Count = AdhdArenaDetail::IsFixedArray<TargetT>::s_Count;
-        return [&]<usize... Indices>(std::index_sequence<Indices...>){
-            return TargetT{ ((void)Indices, AdhdDefaultConstructInArena<ElemT>(targetArena))... };
-        }(std::make_index_sequence<s_Count>{});
+        return [&]<usize... Indices>(IndexSequence<Indices...>){
+            return TargetT{ (static_cast<void>(Indices), AdhdDefaultConstructInArena<ElemT>(targetArena))... };
+        }(MakeIndexSequence<s_Count>{});
     }
     else{
         return TargetT{};
@@ -426,7 +421,7 @@ FOUNDATION_INLINE LhsT& AdhdAssignLocked(::Futex& mutex, LhsT& lhs, RhsT&& rhs){
 template<typename InnerT, typename RhsT>
 FOUNDATION_INLINE Optional<InnerT>& AdhdAssignWrapped(::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
     using RhsRaw = RemoveCVRef_T<RhsT>;
-    if constexpr(IsSame_V<RhsRaw, std::nullopt_t>){
+    if constexpr(IsSame_V<RhsRaw, NullOptional>){
         lhs.reset();
         return lhs;
     }
@@ -484,8 +479,7 @@ template<typename MapT, typename KeyT>
     using MappedT = typename MapT::mapped_type;
     ::ArenaBase& mapArena = map.get_allocator().arena();
     if constexpr(::LeadingArenaConstructible<MappedT> && IsConstructible_V<MappedT, ::ArenaBase&>){
-        auto [it, inserted] = map.try_emplace(Forward<KeyT>(key), mapArena);
-        (void)inserted;
+        const auto it = map.try_emplace(Forward<KeyT>(key), mapArena).first;
         if constexpr(requires{ it.value(); })
             return it.value();
         else
@@ -496,8 +490,7 @@ template<typename MapT, typename KeyT>
         requires IsConstructible_V<typename MappedT::allocator_type, ::ArenaBase&>;
         requires IsConstructible_V<MappedT, typename MappedT::allocator_type>;
     }){
-        auto [it, inserted] = map.try_emplace(Forward<KeyT>(key), typename MappedT::allocator_type(mapArena));
-        (void)inserted;
+        const auto it = map.try_emplace(Forward<KeyT>(key), typename MappedT::allocator_type(mapArena)).first;
         if constexpr(requires{ it.value(); })
             return it.value();
         else

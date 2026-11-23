@@ -20,6 +20,39 @@
 
 type SmokeMaterialRef = AssetRef<Material>;
 type SmokeMeshRef = AssetRef<Mesh>;
+const u64 s_SmokeMaxU32Setting = 4294967295u;
+const u64 s_SmokeBytesPerMiB = 1048576u;
+const u64 s_SmokeMaxSoftwareShadowBudgetMiB = s_SmokeMaxU32Setting / s_SmokeBytesPerMiB;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SmokeRenderSystems{
+    public mut MeshSystem mesh;
+    public mut RendererSystem renderer;
+
+    public SmokeRenderSystems(mut MeshSystem mesh, mut RendererSystem renderer){
+        this.mesh = mesh;
+        this.renderer = renderer;
+    }
+}
+
+class SmokeRenderQualitySettings{
+    public CausticQualitySettings caustic = CausticQualitySettings();
+    public SurfelGiQualitySettings surfelGi = SurfelGiQualitySettings();
+    public ShadowQualitySettings shadow = ShadowQualitySettings();
+    public SoftwareShadowSettings softwareShadow = SoftwareShadowSettings();
+}
+
+class SmokeTintedEntitySetup{
+    public Name materialInterface = s_NameNone;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<SmokeMeshRef, NameTextError> SmokeMeshRefFromText(in StringView path){
     const Expected<Name, NameTextError> name = NameFromText(path);
@@ -43,35 +76,6 @@ mut RendererSystem SmokeRendererSystemRef(mut World world){
 mut MeshSystem SmokeMeshSystemRef(mut World world){
     const Optional<mut MeshSystem> system = world.borrowSystem<MeshSystem>();
     return system.value();
-}
-
-class SmokeRenderSystems{
-    public mut MeshSystem mesh;
-    public mut RendererSystem renderer;
-
-    public SmokeRenderSystems(mut MeshSystem mesh, mut RendererSystem renderer){
-        this.mesh = mesh;
-        this.renderer = renderer;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u64 s_SmokeMaxU32Setting = 4294967295u;
-const u64 s_SmokeBytesPerMiB = 1048576u;
-const u64 s_SmokeMaxSoftwareShadowBudgetMiB = s_SmokeMaxU32Setting / s_SmokeBytesPerMiB;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SmokeRenderQualitySettings{
-    public CausticQualitySettings caustic = CausticQualitySettings();
-    public SurfelGiQualitySettings surfelGi = SurfelGiQualitySettings();
-    public ShadowQualitySettings shadow = ShadowQualitySettings();
-    public SoftwareShadowSettings softwareShadow = SoftwareShadowSettings();
 }
 
 b8 SetSmokeEntityRotation(in EntityID entity, in VectorSingle rotation, mut World world){
@@ -363,11 +367,6 @@ EntityID CreateSmokeDirectionalLight(
         comp.enableCaustics = enableCaustics;
     }
     return light;
-}
-
-class SmokeTintedEntitySetup{
-    public Name materialInterface = s_NameNone;
-    public EntityID entity = s_InvalidEntityId;
 }
 
 b8 ApplyCausticQualitySmokeSettings(mut RendererSystem renderer, in CausticQualitySettings baseSettings){
@@ -684,10 +683,6 @@ void DestroyCapturedSmokeRenderWorld(mut ProjectRuntimeContext context, mut NotN
     DestroySmokeRenderWorld(context, world);
     StopAndResetSmokeFramebufferCapture(capture);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 mut RendererSystem AddSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context){
     SetupSmokeRenderSystems(world, context);

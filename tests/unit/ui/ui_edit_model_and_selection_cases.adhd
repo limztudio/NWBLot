@@ -14,6 +14,16 @@
 #include <tests/unit/ui/name_cases.adhd>
 
 
+[cpp_header("<tests/unit/ui/ui_edit_unwind.h>"), cpp_name("::NWB::Tests::UiEditUnwind::EditModelUnwindCases")]
+extern b8 EditModelUnwindCases();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_UiEditSelectionSampleText = "abcDEFghi";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -67,8 +77,6 @@ class UiEditHistoryTests{
 class FloatModelTests{
     public FloatEditModel m_model = FloatEditModel();
 }
-
-const StringView s_UiEditSelectionSampleText = "abcDEFghi";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1274,6 +1282,10 @@ void VerifyFloatModelTests_ExternalFiniteValueCanRemainOutsideUserBounds(mut Flo
     EXPECT_EQ(self.m_model.draft().text(), "1000.25");
 }
 
+void VerifyEditModelTests_AllocationFailurePreservesModelState(){
+    EXPECT_TRUE(EditModelUnwindCases());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1353,6 +1365,8 @@ NWB_ADHD_GTEST_F(FloatModelTests, OverflowUnderflowAndNonfiniteSpellingsNeverCla
 NWB_ADHD_GTEST_F(FloatModelTests, NonfiniteExternalAssignmentsPreserveEveryExistingDraftField, VerifyFloatModelTests_NonfiniteExternalAssignmentsPreserveEveryExistingDraftField)
 NWB_ADHD_GTEST_F(FloatModelTests, ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExactBits, VerifyFloatModelTests_ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExactBits)
 NWB_ADHD_GTEST_F(FloatModelTests, ExternalFiniteValueCanRemainOutsideUserBounds, VerifyFloatModelTests_ExternalFiniteValueCanRemainOutsideUserBounds)
+
+NWB_ADHD_GTEST(EditModelTests, AllocationFailurePreservesModelState, VerifyEditModelTests_AllocationFailurePreservesModelState)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

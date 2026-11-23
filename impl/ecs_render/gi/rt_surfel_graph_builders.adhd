@@ -21,6 +21,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_INVALID")]
+extern const u32 s_SurfelInvalidCell;
+
 const StringView s_SurfelIrradianceClearMarkerLabel = "Surfel Irradiance Clear";
 const StringView s_SurfelAgeFreeMarkerLabel = "Surfel GI Age Free";
 const StringView s_SurfelCellHeadClearMarkerLabel = "Surfel GI Cell Head Clear";
@@ -36,6 +39,22 @@ const StringView s_SurfelInitCounterClearMarkerLabel = "Surfel GI Initialize Cou
 const StringView s_SurfelInitFreeListClearMarkerLabel = "Surfel GI Initialize Free-List Clear";
 const StringView s_SurfelInitLifecycleMarkerLabel = "Surfel GI Initialize Lifecycle";
 const StringView s_SurfelSnapshotCopyMarkerLabel = "Surfel GI Snapshot Copy";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SurfelGiTaskStateSourceSet{
+    public Array<GpuTaskExternalStateSource, s_SurfelGiStateSourceCapacity> values;
+    public usize count = 0u;
+
+    public void append(in GpuTaskExternalStateSource source, in b8 enabled){
+        if(enabled && source.hasState()){
+            this.values[this.count] = source;
+            ++this.count;
+        }
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,29 +79,6 @@ b8 HasCompleteSurfelGiLifecycleGraphResources(
         && hasPoolSnapshot
         && hasCellHeadSnapshot
     ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_INVALID")]
-extern const u32 s_SurfelInvalidCell;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelGiTaskStateSourceSet{
-    public Array<GpuTaskExternalStateSource, s_SurfelGiStateSourceCapacity> values;
-    public usize count = 0u;
-
-    public void append(in GpuTaskExternalStateSource source, in b8 enabled){
-        if(enabled && source.hasState()){
-            this.values[this.count] = source;
-            ++this.count;
-        }
-    }
 }
 
 SurfelGiTaskStateSourceSet MakeSurfelTaskStateSources(in GpuTaskExternalStateSource compute, in GpuTaskExternalStateSource counter, in GpuTaskExternalStateSource irradiance, in b8 includeCounter, in b8 includeIrradiance){
@@ -127,10 +123,6 @@ Expected<GpuTaskId> AddSurfelInitializationClear(
         dependency = task.value();
     return task;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     in SurfelGiGraphContext context,

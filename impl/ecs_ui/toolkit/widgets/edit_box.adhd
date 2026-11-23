@@ -11,16 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
-TextLayoutStatus AdoptEditBoxShapingResult<T>(mut EditBoxView view, mut forward T shaped){
-    mut Expected<TextLayout, TextLayoutStatus> result = shaped;
-    if(!result.has_value())
-        return result.error();
-    if(!view.adoptLayout(result.value()))
-        return TextLayoutStatus::FontFailure;
-    return TextLayoutStatus::Success;
-}
-
 [move_only]
 class EditBoxView{
     private String m_display;
@@ -75,7 +65,11 @@ class EditBoxView{
     }
     [cpp_unwind]
     public b8 measure(mut TextService text, in DisplayMetrics display){
-        return MeasureEditBoxViewVisual(this.m_ready, this.layout(), display, text, this.m_visualBounds);
+        const Expected<Rect> measured = MeasureEditBoxViewVisual(this.m_ready, this.layout(), display, text);
+        if(!measured.has_value())
+            return false;
+        this.m_visualBounds = measured.value();
+        return true;
     }
 
     public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll)const{
@@ -144,6 +138,20 @@ class EditBoxView{
     public EditBoxRange replacementRange()const{ return this.m_replacement; }
     public b8 composing()const{ return this.m_composing; }
     public b8 ready()const{ return this.m_ready; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+TextLayoutStatus AdoptEditBoxShapingResult<T>(mut EditBoxView view, mut forward T shaped){
+    mut Expected<TextLayout, TextLayoutStatus> result = shaped;
+    if(!result.has_value())
+        return result.error();
+    if(!view.adoptLayout(result.value()))
+        return TextLayoutStatus::FontFailure;
+    return TextLayoutStatus::Success;
 }
 
 

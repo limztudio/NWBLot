@@ -47,21 +47,155 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 StmtsContainTaskScope(const Span<const Stmt* const> statements)noexcept{
+    for(const Stmt* s : statements){
+        if(s && ParallelStatementEmitter::StmtUsesTaskScope(*s))
+            return true;
+    }
+    return false;
+}
+
+
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ParallelStatementEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
+ParallelStatementEmitter::BlockTaskScopeTracker::BlockTaskScopeTracker(const SourceEmitter& emitter, const Span<const Stmt* const> statements)noexcept
+    : m_emitter(emitter)
+    , m_prevHasActiveTaskScope(emitter.m_hasActiveTaskScope)
+{
+    if(!emitter.m_hasActiveTaskScope && NeedsLocalTaskScopeInList(statements, m_firstTaskStmtIndex))
+        m_pendingLocalScope = true;
+}
+
+ParallelStatementEmitter::BlockTaskScopeTracker::~BlockTaskScopeTracker()noexcept{
+    m_emitter.m_hasActiveTaskScope = m_prevHasActiveTaskScope;
+}
+
+void ParallelStatementEmitter::BlockTaskScopeTracker::beforeStatement(MString& out, const usize index, const u32 indent){
+    if(m_pendingLocalScope && index == m_firstTaskStmtIndex){
+        ParallelStatementEmitter(m_emitter).emitTaskScopeDecl(out, indent);
+        m_emitter.m_hasActiveTaskScope = true;
+        m_pendingLocalScope = false;
+    }
+}
+
+void ParallelStatementEmitter::BlockTaskScopeTracker::afterStatement(MString& out, const Stmt& stmt, const Span<const Stmt* const> remaining, const u32 indent){
+    if(m_emitter.m_hasActiveTaskScope && stmt.kind == StmtKind::VarDecl && StatementsContainAsyncParallelStmt(remaining))
+        ParallelStatementEmitter(m_emitter).emitTaskScopeJoinGuard(out, indent, m_emitter.m_taskGuardCounter++);
+}
+
+b8 ParallelStatementEmitter::StmtUsesTaskScope(const Stmt& stmt)noexcept{
+    switch(stmt.kind){
+    case StmtKind::ParallelForRange:
+    case StmtKind::ParallelForIndex:
+    case StmtKind::ParallelBlock:
+    case StmtKind::ParallelCall:
+        return true;
+    case StmtKind::ExprStmt:
+        return IsParallelWaitCallExpr(stmt.expr);
+    case StmtKind::Block:
+    case StmtKind::While:
+    case StmtKind::DoWhile:
+    case StmtKind::ForRange:
+    case StmtKind::ForIndex:
+        return __hidden_adhd_source_emitter_parallel::StmtsContainTaskScope(stmt.statements);
+    case StmtKind::If:
+        return __hidden_adhd_source_emitter_parallel::StmtsContainTaskScope(stmt.statements)
+            || __hidden_adhd_source_emitter_parallel::StmtsContainTaskScope(stmt.elseStatements);
+    case StmtKind::Switch:{
+        for(const SwitchCase& sc : stmt.switchCases){
+            if(__hidden_adhd_source_emitter_parallel::StmtsContainTaskScope(sc.statements))
+                return true;
+        }
+        return false;
+    }
+    default:
+        return false;
+    }
+}
+
+b8 ParallelStatementEmitter::StatementsContainAsyncParallelStmt(const Span<const Stmt* const> statements)noexcept{
+    for(const Stmt* s : statements){
+        if(!s)
+            continue;
+        switch(s->kind){
+        case StmtKind::ParallelBlock:
+        case StmtKind::ParallelCall:
+            return true;
+        case StmtKind::Block:
+        case StmtKind::While:
+        case StmtKind::DoWhile:
+        case StmtKind::ForRange:
+        case StmtKind::ForIndex:
+            if(StatementsContainAsyncParallelStmt(s->statements))
+                return true;
+            break;
+        case StmtKind::If:
+            if(StatementsContainAsyncParallelStmt(s->statements) || StatementsContainAsyncParallelStmt(s->elseStatements))
+                return true;
+            break;
+        case StmtKind::Switch:{
+            for(const SwitchCase& sc : s->switchCases){
+                if(StatementsContainAsyncParallelStmt(sc.statements))
+                    return true;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    return false;
+}
+
+b8 ParallelStatementEmitter::NeedsLocalTaskScopeInList(const Span<const Stmt* const> statements, usize& outFirstTaskStmtIndex)noexcept{
+    usize count = 0u;
+    usize firstIdx = 0u;
+    for(usize i = 0u; i < statements.size(); ++i){
+        const Stmt* const s = statements[i];
+        if(s && StmtUsesTaskScope(*s)){
+            if(count == 0u)
+                firstIdx = i;
+            ++count;
+        }
+    }
+    if(count == 0u)
+        return false;
+    const Stmt* const first = statements[firstIdx];
+    if(
+        count == 1u
+        && (first->kind == StmtKind::Block || first->kind == StmtKind::If || first->kind == StmtKind::Switch || IsSequentialLoopStmtKind(first->kind))
+    )
+        return false;
+    outFirstTaskStmtIndex = firstIdx;
+    return true;
+}
+
+void ParallelStatementEmitter::emitTaskSchedulerPrologue(MString& out, const u32 indent)const{
     m_emitter.emitIndent(out, indent);
     out.append("::NWB::Core::CpuTaskScheduler& s_AdhdTaskScheduler = ::NWB::Core::SharedCpuTaskScheduler();\r\n");
     m_emitter.emitIndent(out, indent);
-    out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
-    m_emitter.emitIndent(out, indent);
     out.append("[[maybe_unused]] ::Futex __adhd_parallel_arena_mutex;\r\n");
+}
+
+void ParallelStatementEmitter::emitTaskScopeDecl(MString& out, const u32 indent)const{
     m_emitter.emitIndent(out, indent);
-    out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
+    out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
+}
+
+void ParallelStatementEmitter::emitTaskScopeJoinGuard(MString& out, const u32 indent, const u32 guardId)const{
+    m_emitter.emitIndent(out, indent);
+    out.append("const ::NWB::Core::CpuTaskScope::JoinGuard __adhd_task_guard_");
+    AppendUnsignedDecimal(out, guardId);
+    out.append("(__adhd_task_scope);\r\n");
+}
+
+void ParallelStatementEmitter::emitLoopBodyTaskGuardIfNeeded(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
+    if(m_emitter.m_hasActiveTaskScope && StatementsContainAsyncParallelStmt(statements))
+        emitTaskScopeJoinGuard(out, indent, m_emitter.m_taskGuardCounter++);
 }
 
 b8 ParallelStatementEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
@@ -91,12 +225,15 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
     const auto emitWorkerStatements = [&](const Stmt* const declToPush){
         const usize prevDecls = m_emitter.m_activeLocalVarDecls.size();
         const TypeRef* prevRet = m_emitter.m_activeCallerArenaReturnType;
+        const b8 prevActiveTaskScope = m_emitter.m_hasActiveTaskScope;
         if(declToPush)
             m_emitter.m_activeLocalVarDecls.push_back(declToPush);
         m_emitter.m_activeCallerArenaReturnType = nullptr;
+        m_emitter.m_hasActiveTaskScope = false;
         ++m_emitter.m_parallelWorkerDepth;
         m_emitter.emitStatementList(out, stmt.statements, indent + 1u);
         --m_emitter.m_parallelWorkerDepth;
+        m_emitter.m_hasActiveTaskScope = prevActiveTaskScope;
         m_emitter.m_activeCallerArenaReturnType = prevRet;
         m_emitter.m_activeLocalVarDecls.resize(prevDecls);
     };
@@ -104,7 +241,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
     switch(stmt.kind){
     case StmtKind::ParallelForRange:{
         m_emitter.emitIndent(out, indent);
-        out.append("(void)__adhd_task_scope.parallelFor(0u, (");
+        out.append("__adhd_task_scope.parallelForChecked(0u, (");
         if(stmt.expr)
             m_emitter.emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
@@ -136,7 +273,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
     }
     case StmtKind::ParallelForIndex:{
         m_emitter.emitIndent(out, indent);
-        out.append("(void)__adhd_task_scope.parallelFor(static_cast<usize>(");
+        out.append("__adhd_task_scope.parallelForChecked(static_cast<usize>(");
         if(stmt.initStmt && stmt.initStmt->expr)
             m_emitter.emitExpr(out, *stmt.initStmt->expr);
         else if(stmt.initStmt && stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
@@ -217,7 +354,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
         };
         if(!stmt.parallelDependencies.empty()){
             m_emitter.emitIndent(out, indent);
-            out.append("const ::NWB::Array<::NWB::Core::CpuTaskHandle, ");
+            out.append("const ::Array<::NWB::Core::CpuTaskHandle, ");
             AppendUnsignedDecimal(out, stmt.parallelDependencies.size());
             out.append("u> __adhd_deps_");
             appendBlockSuffix();
@@ -232,14 +369,13 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
         }
         m_emitter.emitIndent(out, indent);
         if(!stmt.name.empty()){
-            out.append("const auto __adhd_submit_");
+            out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
             appendBlockSuffix();
-            out.append(" = ");
+            out.append(" = __adhd_task_scope.submitChecked([&]()noexcept{\r\n");
         }
         else{
-            out.append("(void)");
+            out.append("__adhd_task_scope.submitDetachedChecked([&]()noexcept{\r\n");
         }
-        out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
         if(m_emitter.statementsNeedSimdFloatingPointEnv(stmt.statements))
             out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(stmt.usesScratchArena)
@@ -256,16 +392,6 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             out.push_back('u');
         }
         out.append(");\r\n");
-        if(!stmt.name.empty()){
-            m_emitter.emitIndent(out, indent);
-            out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
-            appendBlockSuffix();
-            out.append(" = __adhd_submit_");
-            appendBlockSuffix();
-            out.append(".has_value() ? *__adhd_submit_");
-            appendBlockSuffix();
-            out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
-        }
         break;
     }
     case StmtKind::ParallelCall:{
@@ -285,7 +411,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 out.append(");\r\n");
             }
             m_emitter.emitIndent(out, indent + 1u);
-            out.append("(void)__adhd_task_scope.submit([&");
+            out.append("__adhd_task_scope.submitDetachedChecked([&");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
                 if(!arg || !arg->isMutArg){
@@ -346,7 +472,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
         }
         else{
             m_emitter.emitIndent(out, indent);
-            out.append("(void)__adhd_task_scope.submit([&]()noexcept{ ");
+            out.append("__adhd_task_scope.submitDetachedChecked([&]()noexcept{ ");
             if(stmt.usesScratchArena){
                 out.append("\r\n");
                 m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");

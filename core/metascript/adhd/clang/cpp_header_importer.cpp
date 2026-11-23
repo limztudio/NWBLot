@@ -174,6 +174,12 @@ void BuildClangArguments(
 #endif
     for(const MStringView arg : CppImporterSemantics::s_ClangWindowsArgs)
         pushArg(arg);
+#elif defined(FOUNDATION_PLATFORM_LINUX)
+#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__)
+    pushArg(CppImporterSemantics::s_TargetArm64LinuxGnu);
+#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__)
+    pushArg(CppImporterSemantics::s_TargetX64LinuxGnu);
+#endif
 #endif
 
     for(const MStringView arg : CppImporterSemantics::s_ClangDefaultArgs)

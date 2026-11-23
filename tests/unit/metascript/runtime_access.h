@@ -67,10 +67,10 @@ inline constexpr auto s_InvalidCharacterResult = DecodeConstantCharacter("'\\U10
 inline constexpr b8 s_InvalidCharacterDecoded = s_InvalidCharacterResult.valid;
 inline constexpr i64 s_InvalidCharacterValue = s_InvalidCharacterResult.value;
 
-inline constexpr b8 s_CountsCopyConstructible = std::is_copy_constructible_v<OwnedCounts>;
-inline constexpr b8 s_CountsCopyAssignable = std::is_copy_assignable_v<OwnedCounts>;
-inline constexpr b8 s_CountsMoveConstructible = std::is_move_constructible_v<OwnedCounts>;
-inline constexpr b8 s_CountsMoveAssignable = std::is_move_assignable_v<OwnedCounts>;
+inline constexpr b8 s_CountsCopyConstructible = IsCopyConstructible_V<OwnedCounts>;
+inline constexpr b8 s_CountsCopyAssignable = IsAssignable_V<OwnedCounts&, const OwnedCounts&>;
+inline constexpr b8 s_CountsMoveConstructible = IsConstructible_V<OwnedCounts, OwnedCounts&&>;
+inline constexpr b8 s_CountsMoveAssignable = IsAssignable_V<OwnedCounts&, OwnedCounts&&>;
 inline constexpr b8 s_ReadyNothrow = noexcept(DeclVal<const CppUnwindCallback&>().ready());
 inline constexpr b8 s_ConcreteRecordNothrow = noexcept(DeclVal<const CppUnwindCallback&>().record(DeclVal<InplaceFunction<0u, u32()>&>()));
 inline constexpr b8 s_VirtualRecordNothrow = noexcept(DeclVal<const IUnwindCallback&>().record(DeclVal<InplaceFunction<0u, u32()>&>()));

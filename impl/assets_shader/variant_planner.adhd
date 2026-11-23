@@ -25,21 +25,19 @@ b8 CheckShaderVariantSignature(in StringView owner, in Optional<Name> stage, in 
     if(signature.empty() || (signature == s_ShaderDefaultVariantText && defines.empty()))
         return true;
     if(signature == s_ShaderDefaultVariantText || defines.empty()){
-        b8 complete = false;
-        return ValidateVariantSignaturePreamble(ShaderVariantDiagnosticLabel(owner, stage), signature, defines.empty(), complete);
+        return ValidateVariantSignaturePreamble(ShaderVariantDiagnosticLabel(owner, stage), signature, defines.empty());
     }
     HashSet<StringView> seen;
     seen.reserve(defines.size());
     usize cursor = 0u;
     while(cursor < signature.size()){
-        StringView segment = "";
-        StringView key = "";
-        StringView value = "";
-        VariantSignatureSegmentError failure = VariantSignatureSegmentError::None;
-        if(!TryParseVariantSignatureSegment(signature, cursor, segment, key, value, failure)){
-            ReportVariantSignatureSegmentError(ShaderVariantDiagnosticLabel(owner, stage), signature, failure, segment);
+        const Expected<ShaderVariantAssignment, ShaderVariantSegmentFailure> parsed = TryParseVariantSignatureSegment(signature, cursor);
+        if(!parsed.has_value()){
+            ReportVariantSignatureSegmentError(ShaderVariantDiagnosticLabel(owner, stage), signature, parsed.error().reason, parsed.error().segment);
             return false;
         }
+        const StringView key = parsed.value().key;
+        const StringView value = parsed.value().value;
         const b8 known = defines.contains(key);
         b8 found = false;
         if(known){
@@ -159,8 +157,12 @@ Expected<Vector<ShaderDefineCombo>> ExpandShaderDefineCombinations(in ShaderDefi
                     next.swap(combo);
                 else{
                     next.reserve(defines.size());
-                    for(in auto existing : combo)
-                        next.try_emplace(existing.first, existing.second);
+                    for(in auto existing : combo){
+                        if(!next.try_emplace(existing.first, existing.second).second){
+                            assert(false);
+                            return MakeUnexpected(Failure());
+                        }
+                    }
                 }
                 if(!next.try_emplace(name, StringView(values[index])).second){
                     assert(false);

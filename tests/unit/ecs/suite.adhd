@@ -18,32 +18,29 @@
 extern class AddressTrapComponent{
     u32 addressCalls;
 };
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ThrowingMoveAssignmentComponent")]
 extern class ThrowingMoveAssignmentComponent{
     u32 value;
 };
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ThrowingMoveMessage")]
 extern class ThrowingMoveMessage;
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::SetCallerThreadFlag")]
 extern void SetCallerThreadFlag(in b8 value);
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::IsCallerThreadFlagSet")]
 extern b8 IsCallerThreadFlagSet();
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::TryComponentAddress")]
 extern usize TryComponentAddress<T>(mut World world, in EntityID id);
-
 [cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ConstTryComponentAddress")]
 extern usize ConstTryComponentAddress<T>(in World world, in EntityID id);
-
 [cpp_header("<core/ecs/entity_id.h>"), cpp_name("::NWB::Core::ECS::ECSDetail::s_EntityGenerationMask")]
 extern const u32 s_EntityGenerationMask;
 
 type TaskSubmitResult = Expected<CpuTaskHandle, CpuTaskAdmissionError>;
 type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [layout(32)]
 class OverAlignedComponent{
@@ -65,40 +62,6 @@ class ThrowingConstructionComponent{
             ThrowTestException<u32>(61u);
     }
 }
-
-Array<usize, 64u> RegisterPoolSlotTypes64(){
-    return Array<usize, 64u>(
-        ComponentType<PoolSlotComponent<0u>>(), ComponentType<PoolSlotComponent<1u>>(), ComponentType<PoolSlotComponent<2u>>(), ComponentType<PoolSlotComponent<3u>>(),
-        ComponentType<PoolSlotComponent<4u>>(), ComponentType<PoolSlotComponent<5u>>(), ComponentType<PoolSlotComponent<6u>>(), ComponentType<PoolSlotComponent<7u>>(),
-        ComponentType<PoolSlotComponent<8u>>(), ComponentType<PoolSlotComponent<9u>>(), ComponentType<PoolSlotComponent<10u>>(), ComponentType<PoolSlotComponent<11u>>(),
-        ComponentType<PoolSlotComponent<12u>>(), ComponentType<PoolSlotComponent<13u>>(), ComponentType<PoolSlotComponent<14u>>(), ComponentType<PoolSlotComponent<15u>>(),
-        ComponentType<PoolSlotComponent<16u>>(), ComponentType<PoolSlotComponent<17u>>(), ComponentType<PoolSlotComponent<18u>>(), ComponentType<PoolSlotComponent<19u>>(),
-        ComponentType<PoolSlotComponent<20u>>(), ComponentType<PoolSlotComponent<21u>>(), ComponentType<PoolSlotComponent<22u>>(), ComponentType<PoolSlotComponent<23u>>(),
-        ComponentType<PoolSlotComponent<24u>>(), ComponentType<PoolSlotComponent<25u>>(), ComponentType<PoolSlotComponent<26u>>(), ComponentType<PoolSlotComponent<27u>>(),
-        ComponentType<PoolSlotComponent<28u>>(), ComponentType<PoolSlotComponent<29u>>(), ComponentType<PoolSlotComponent<30u>>(), ComponentType<PoolSlotComponent<31u>>(),
-        ComponentType<PoolSlotComponent<32u>>(), ComponentType<PoolSlotComponent<33u>>(), ComponentType<PoolSlotComponent<34u>>(), ComponentType<PoolSlotComponent<35u>>(),
-        ComponentType<PoolSlotComponent<36u>>(), ComponentType<PoolSlotComponent<37u>>(), ComponentType<PoolSlotComponent<38u>>(), ComponentType<PoolSlotComponent<39u>>(),
-        ComponentType<PoolSlotComponent<40u>>(), ComponentType<PoolSlotComponent<41u>>(), ComponentType<PoolSlotComponent<42u>>(), ComponentType<PoolSlotComponent<43u>>(),
-        ComponentType<PoolSlotComponent<44u>>(), ComponentType<PoolSlotComponent<45u>>(), ComponentType<PoolSlotComponent<46u>>(), ComponentType<PoolSlotComponent<47u>>(),
-        ComponentType<PoolSlotComponent<48u>>(), ComponentType<PoolSlotComponent<49u>>(), ComponentType<PoolSlotComponent<50u>>(), ComponentType<PoolSlotComponent<51u>>(),
-        ComponentType<PoolSlotComponent<52u>>(), ComponentType<PoolSlotComponent<53u>>(), ComponentType<PoolSlotComponent<54u>>(), ComponentType<PoolSlotComponent<55u>>(),
-        ComponentType<PoolSlotComponent<56u>>(), ComponentType<PoolSlotComponent<57u>>(), ComponentType<PoolSlotComponent<58u>>(), ComponentType<PoolSlotComponent<59u>>(),
-        ComponentType<PoolSlotComponent<60u>>(), ComponentType<PoolSlotComponent<61u>>(), ComponentType<PoolSlotComponent<62u>>(), ComponentType<PoolSlotComponent<63u>>()
-    );
-}
-
-[cpp_unwind]
-void ThrowDuringSingleVisit(in EntityID entity, mut PositionComponent position){ ThrowTestException<u32>(43u); }
-
-[cpp_unwind]
-void ThrowDuringMultipleVisit(mut EntityID entity, mut PositionComponent position, mut VelocityComponent velocity){ ThrowTestException<u32>(47u); }
-
-[cpp_unwind]
-void ThrowDuringMessageVisit(in u32 value){ ThrowTestException<u32>(53u); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [arena, system("counting")]
 class CountingSystem{
@@ -227,6 +190,40 @@ class LifetimeSystem{
         return Expected<void, CpuTaskAdmissionError>();
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<usize, 64u> RegisterPoolSlotTypes64(){
+    return Array<usize, 64u>(
+        ComponentType<PoolSlotComponent<0u>>(), ComponentType<PoolSlotComponent<1u>>(), ComponentType<PoolSlotComponent<2u>>(), ComponentType<PoolSlotComponent<3u>>(),
+        ComponentType<PoolSlotComponent<4u>>(), ComponentType<PoolSlotComponent<5u>>(), ComponentType<PoolSlotComponent<6u>>(), ComponentType<PoolSlotComponent<7u>>(),
+        ComponentType<PoolSlotComponent<8u>>(), ComponentType<PoolSlotComponent<9u>>(), ComponentType<PoolSlotComponent<10u>>(), ComponentType<PoolSlotComponent<11u>>(),
+        ComponentType<PoolSlotComponent<12u>>(), ComponentType<PoolSlotComponent<13u>>(), ComponentType<PoolSlotComponent<14u>>(), ComponentType<PoolSlotComponent<15u>>(),
+        ComponentType<PoolSlotComponent<16u>>(), ComponentType<PoolSlotComponent<17u>>(), ComponentType<PoolSlotComponent<18u>>(), ComponentType<PoolSlotComponent<19u>>(),
+        ComponentType<PoolSlotComponent<20u>>(), ComponentType<PoolSlotComponent<21u>>(), ComponentType<PoolSlotComponent<22u>>(), ComponentType<PoolSlotComponent<23u>>(),
+        ComponentType<PoolSlotComponent<24u>>(), ComponentType<PoolSlotComponent<25u>>(), ComponentType<PoolSlotComponent<26u>>(), ComponentType<PoolSlotComponent<27u>>(),
+        ComponentType<PoolSlotComponent<28u>>(), ComponentType<PoolSlotComponent<29u>>(), ComponentType<PoolSlotComponent<30u>>(), ComponentType<PoolSlotComponent<31u>>(),
+        ComponentType<PoolSlotComponent<32u>>(), ComponentType<PoolSlotComponent<33u>>(), ComponentType<PoolSlotComponent<34u>>(), ComponentType<PoolSlotComponent<35u>>(),
+        ComponentType<PoolSlotComponent<36u>>(), ComponentType<PoolSlotComponent<37u>>(), ComponentType<PoolSlotComponent<38u>>(), ComponentType<PoolSlotComponent<39u>>(),
+        ComponentType<PoolSlotComponent<40u>>(), ComponentType<PoolSlotComponent<41u>>(), ComponentType<PoolSlotComponent<42u>>(), ComponentType<PoolSlotComponent<43u>>(),
+        ComponentType<PoolSlotComponent<44u>>(), ComponentType<PoolSlotComponent<45u>>(), ComponentType<PoolSlotComponent<46u>>(), ComponentType<PoolSlotComponent<47u>>(),
+        ComponentType<PoolSlotComponent<48u>>(), ComponentType<PoolSlotComponent<49u>>(), ComponentType<PoolSlotComponent<50u>>(), ComponentType<PoolSlotComponent<51u>>(),
+        ComponentType<PoolSlotComponent<52u>>(), ComponentType<PoolSlotComponent<53u>>(), ComponentType<PoolSlotComponent<54u>>(), ComponentType<PoolSlotComponent<55u>>(),
+        ComponentType<PoolSlotComponent<56u>>(), ComponentType<PoolSlotComponent<57u>>(), ComponentType<PoolSlotComponent<58u>>(), ComponentType<PoolSlotComponent<59u>>(),
+        ComponentType<PoolSlotComponent<60u>>(), ComponentType<PoolSlotComponent<61u>>(), ComponentType<PoolSlotComponent<62u>>(), ComponentType<PoolSlotComponent<63u>>()
+    );
+}
+
+[cpp_unwind]
+void ThrowDuringSingleVisit(in EntityID entity, mut PositionComponent position){ ThrowTestException<u32>(43u); }
+
+[cpp_unwind]
+void ThrowDuringMultipleVisit(mut EntityID entity, mut PositionComponent position, mut VelocityComponent velocity){ ThrowTestException<u32>(47u); }
+
+[cpp_unwind]
+void ThrowDuringMessageVisit(in u32 value){ ThrowTestException<u32>(53u); }
 
 b8 HasTryPositionComponent(mut World world, in EntityID entityId){
     return TryComponentAddress<PositionComponent>(world, entityId) != 0u;
@@ -1020,39 +1017,64 @@ void VerifyEcs_WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems(){
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(Ecs, ParallelEachNestedInTaskBatchCompletes, VerifyEcs_ParallelEachNestedInTaskBatchCompletes)
+
 NWB_ADHD_GTEST(Ecs, DuplicateSchedulerAddIsStable, VerifyEcs_DuplicateSchedulerAddIsStable)
+
 NWB_ADHD_GTEST(Ecs, WorldTickPropagatesRangeRejectionAndSkipsDependentSystems, VerifyEcs_WorldTickPropagatesRangeRejectionAndSkipsDependentSystems)
+
 NWB_ADHD_GTEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents, VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents)
+
 NWB_ADHD_GTEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork, VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork)
+
 NWB_ADHD_GTEST(Ecs, MainThreadSystemRespectsWorkerDependencies, VerifyEcs_MainThreadSystemRespectsWorkerDependencies)
+
 NWB_ADHD_GTEST(Ecs, DependentSystemObservesAllNestedQueryTasks, VerifyEcs_DependentSystemObservesAllNestedQueryTasks)
+
 NWB_ADHD_GTEST(Ecs, SystemCompletionIncludesAsynchronousDescendants, VerifyEcs_SystemCompletionIncludesAsynchronousDescendants)
+
 NWB_ADHD_GTEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks, VerifyEcs_WorldClearDoesNotWaitForUnrelatedSchedulerTasks)
+
 NWB_ADHD_GTEST(Ecs, ComponentStoragePreservesOverAlignment, VerifyEcs_ComponentStoragePreservesOverAlignment)
+
 NWB_ADHD_GTEST(Ecs, StoredComponentLookupBypassesThrowingAddressOperators, VerifyEcs_StoredComponentLookupBypassesThrowingAddressOperators)
+
 NWB_ADHD_GTEST(Ecs, ViewAndMessageConsumersPreserveCallbackExceptionContracts, VerifyEcs_ViewAndMessageConsumersPreserveCallbackExceptionContracts)
+
 NWB_ADHD_GTEST(Ecs, EmptyViewDoesNotAllocateComponentPools, VerifyEcs_EmptyViewDoesNotAllocateComponentPools)
+
 NWB_ADHD_GTEST(Ecs, DestroyedEntityGenerationCannotReachRecycledComponents, VerifyEcs_DestroyedEntityGenerationCannotReachRecycledComponents)
+
 NWB_ADHD_GTEST(Ecs, ExhaustedEntityGenerationNeverRevivesAStaleId, VerifyEcs_ExhaustedEntityGenerationNeverRevivesAStaleId)
+
 NWB_ADHD_GTEST(Ecs, ClearingAtTheLastGenerationRetiresTheIndex, VerifyEcs_ClearingAtTheLastGenerationRetiresTheIndex)
+
 NWB_ADHD_GTEST(Ecs, ClearedEntityFacadesCannotReachOrDestroyReplacementComponents, VerifyEcs_ClearedEntityFacadesCannotReachOrDestroyReplacementComponents)
+
 NWB_ADHD_GTEST(Ecs, NextGenerationIdForAFreeSlotCannotDestroyOrUnderflowEntityCount, VerifyEcs_NextGenerationIdForAFreeSlotCannotDestroyOrUnderflowEntityCount)
+
 NWB_ADHD_GTEST(Ecs, DuplicateAddAndRemovePreserveComponentMutationVersions, VerifyEcs_DuplicateAddAndRemovePreserveComponentMutationVersions)
+
 NWB_ADHD_GTEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation, VerifyEcs_ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation)
+
 NWB_ADHD_GTEST(Ecs, ComponentPoolsCanBeRecreatedAfterWorldClear, VerifyEcs_ComponentPoolsCanBeRecreatedAfterWorldClear)
+
 NWB_ADHD_GTEST(Ecs, ClearingPendingMoveOnlyMessagesPreventsPublication, VerifyEcs_ClearingPendingMoveOnlyMessagesPreventsPublication)
+
 NWB_ADHD_GTEST(Ecs, DuplicateComponentAddIsStable, VerifyEcs_DuplicateComponentAddIsStable)
+
 NWB_ADHD_GTEST(Ecs, FailedComponentConstructionDoesNotPublishMembership, VerifyEcs_FailedComponentConstructionDoesNotPublishMembership)
+
 NWB_ADHD_GTEST(Ecs, FailedComponentMoveAssignmentPreservesEntityMappings, VerifyEcs_FailedComponentMoveAssignmentPreservesEntityMappings)
+
 NWB_ADHD_GTEST(Ecs, FailedEntityDestructionRetainsRemainingMembershipForRetry, VerifyEcs_FailedEntityDestructionRetainsRemainingMembershipForRetry)
+
 NWB_ADHD_GTEST(Ecs, WorldUnwindDestroysPendingMessagesWithoutMovingThem, VerifyEcs_WorldUnwindDestroysPendingMessagesWithoutMovingThem)
+
 NWB_ADHD_GTEST(Ecs, OrdinaryWorldDestructionDestroysPendingMessagesWithoutMovingThem, VerifyEcs_OrdinaryWorldDestructionDestroysPendingMessagesWithoutMovingThem)
+
 NWB_ADHD_GTEST(Ecs, FailedWorldTaskJoinStillRetiresBorrowingSystemsInOrder, VerifyEcs_FailedWorldTaskJoinStillRetiresBorrowingSystemsInOrder)
+
 NWB_ADHD_GTEST(Ecs, WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems, VerifyEcs_WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems)
 
 

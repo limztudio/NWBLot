@@ -22,6 +22,7 @@ StringView ResolveBakeFontAtlasRasterModeText(in FontAtlasRasterMode mode){
     return s_FontAtlasRasterModeOutline;
 }
 
+[cpp_unwind]
 void CompactAtlasGroups(mut FontAtlasPayload payload){
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         mut FontAtlasGroup group = payload.groups[groupIndex];
@@ -46,6 +47,7 @@ void CompactAtlasGroups(mut FontAtlasPayload payload){
     }
 }
 
+[cpp_unwind]
 void BuildFontMetadata(in FontAtlasPayload payload, mut String outText){
     outText.assign("font face;\r\n\r\nfont_atlas atlas;\r\natlas.font = face;\r\n");
     StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);

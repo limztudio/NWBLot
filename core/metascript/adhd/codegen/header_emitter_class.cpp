@@ -430,6 +430,8 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
         const b8 canCopyAssign = canCopy && layoutAnalyzer.isClassCopyAssignable(decl, orderedFields);
         const b8 canMoveAssign = canMove && layoutAnalyzer.isClassMoveAssignable(decl, orderedFields);
 
+        const b8 nothrowDefaultCtor = layoutAnalyzer.isClassNothrowDefaultConstructible(decl, orderedFields);
+
         if(!hasUserConstructor || canCopy || canMove || hasNoCopyBase || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
             out.append("public:\r\n");
             if(!hasUserConstructor){
@@ -437,7 +439,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 out.append(decl.name.data(), decl.name.size());
                 out.append("(::ArenaBase& ");
                 out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
-                out.append(")noexcept : ");
+                out.append(nothrowDefaultCtor ? ")noexcept : " : ") : ");
                 if(decl.concreteBase && decl.concreteBase->canBorrowMotherArena() && decl.concreteBase->needsClassArena)
                     out.append(decl.concreteBase->name).append("(").append(CodegenSymbols::s_MotherArenaVar).append("), ");
                 if(!decl.systemTypeName.empty()){
@@ -484,10 +486,12 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     out.append("    ");
                     out.append(decl.name.data(), decl.name.size());
                     out.append("(::ArenaBase& __adhd_mother_arena, ");
+                    if(orderedFields.empty() && decl.assetTypeName.empty())
+                        out.append("[[maybe_unused]] ");
                     if(!isMove)
                         out.append("const ");
                     out.append(decl.name.data(), decl.name.size());
-                    out.append(isMove ? "&& __adhd_rhs)noexcept : " : "& __adhd_rhs)noexcept : ");
+                    out.append(isMove ? "&& __adhd_rhs) : " : "& __adhd_rhs) : ");
                     if(!decl.assetTypeName.empty()){
                         __hidden_adhd_header_emitter_class::EmitTypedAssetBaseType(out, decl, m_symbols, m_typeEmitter);
                         out.append("(__adhd_rhs.virtualPath()), ");
@@ -535,7 +539,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     if(!isMove)
                         out.append("const ");
                     out.append(decl.name.data(), decl.name.size());
-                    out.append(isMove ? "&& __adhd_rhs)noexcept{\r\n" : "& __adhd_rhs)noexcept{\r\n");
+                    out.append(isMove ? "&& __adhd_rhs){\r\n" : "& __adhd_rhs){\r\n");
                     if(!orderedFields.empty() || !decl.assetTypeName.empty()){
                         out.append("        if(this != &__adhd_rhs){\r\n");
                         if(!decl.assetTypeName.empty()){

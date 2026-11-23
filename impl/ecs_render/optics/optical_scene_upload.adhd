@@ -9,16 +9,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type RayTracingOpticalSceneUploadHandle = Shared<RayTracingOpticalSceneUpload>;
+type RayTracingOpticalUploadControlHandle = Shared<RayTracingOpticalUploadState>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RayTracingOpticalSceneUpload{
     public Vector<u8> bytes;
-    public u32 instanceCount = 0u;
+    public u32 instanceCount;
 
     public RayTracingOpticalSceneUpload(in RayTracingOpticalSceneGather gather){
-        OpticalSceneBinaryCodec().serialize(gather.header, Span<RayTracingOpticalInstanceGpu>(gather.instances), this.bytes, this.instanceCount);
+        this.instanceCount = OpticalSceneBinaryCodec().serialize(gather.header, Span<RayTracingOpticalInstanceGpu>(gather.instances), this.bytes);
     }
 }
-
-type RayTracingOpticalSceneUploadHandle = Shared<RayTracingOpticalSceneUpload>;
 
 class RayTracingOpticalUploadPlan{
     public BufferHandle buffer;
@@ -35,60 +40,6 @@ class RayTracingOpticalUploadPlan{
         return this.available && this.buffer.valid() && this.upload.valid() && this.owner != 0u && this.sequence != 0u && this.queue.valid();
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CanPlanRayTracingOpticalUpload(
-    in b8 retired,
-    in b8 quarantined,
-    in u64 reservedSequence,
-    in b8 hasBuffer,
-    in b8 hasUploadBytes,
-    in b8 primaryQueueValid,
-    in u64 primaryQueueGeneration,
-    in u64 bufferGeneration,
-    in u64 nextSequence
-){
-    return
-        !retired
-        && !quarantined
-        && reservedSequence == 0u
-        && hasBuffer
-        && hasUploadBytes
-        && primaryQueueValid
-        && primaryQueueGeneration == bufferGeneration
-        && nextSequence != u64.max
-    ;
-}
-
-b8 CanReserveRayTracingOpticalUpload(
-    in b8 matchesBuffer,
-    in b8 reused,
-    in u64 reservedSequence,
-    in u64 planAcceptedSequence,
-    in u64 acceptedSequence,
-    in u64 planSequence,
-    in u64 nextSequence
-){
-    return matchesBuffer && !reused && reservedSequence == 0u && planAcceptedSequence == acceptedSequence && planSequence < nextSequence;
-}
-
-b8 ValidAcceptedOpticalSubmissionToken(
-    in b8 tokenValid,
-    in b8 isGraphicsQueue,
-    in b8 matchesPhysicalQueue,
-    in b8 hasPreviousAcceptedToken,
-    in u64 tokenValue,
-    in u64 previousTokenValue
-){
-    return tokenValid && isGraphicsQueue && matchesPhysicalQueue && (!hasPreviousAcceptedToken || tokenValue > previousTokenValue);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class RayTracingOpticalUploadState : NoCopy{
     private BufferHandle m_buffer;
@@ -208,14 +159,6 @@ class RayTracingOpticalUploadState : NoCopy{
     }
 }
 
-type RayTracingOpticalUploadControlHandle = Shared<RayTracingOpticalUploadState>;
-
-Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(in SharedPool pool, in BufferHandle buffer, in GpuPhysicalQueueId primaryQueue){
-    if(!buffer.valid() || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer.deref().getDeviceGeneration())
-        return MakeUnexpected(Failure());
-    return pool.make<RayTracingOpticalUploadState>(buffer, primaryQueue);
-}
-
 [move_only]
 class RayTracingOpticalUploadReservation{
     private PlanReservation<RayTracingOpticalUploadControlHandle, RayTracingOpticalUploadPlan> m_lease;
@@ -246,6 +189,62 @@ class RayTracingOpticalUploadReservation{
     public void discard(){
         this.m_lease.discard();
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanPlanRayTracingOpticalUpload(
+    in b8 retired,
+    in b8 quarantined,
+    in u64 reservedSequence,
+    in b8 hasBuffer,
+    in b8 hasUploadBytes,
+    in b8 primaryQueueValid,
+    in u64 primaryQueueGeneration,
+    in u64 bufferGeneration,
+    in u64 nextSequence
+){
+    return
+        !retired
+        && !quarantined
+        && reservedSequence == 0u
+        && hasBuffer
+        && hasUploadBytes
+        && primaryQueueValid
+        && primaryQueueGeneration == bufferGeneration
+        && nextSequence != u64.max
+    ;
+}
+
+b8 CanReserveRayTracingOpticalUpload(
+    in b8 matchesBuffer,
+    in b8 reused,
+    in u64 reservedSequence,
+    in u64 planAcceptedSequence,
+    in u64 acceptedSequence,
+    in u64 planSequence,
+    in u64 nextSequence
+){
+    return matchesBuffer && !reused && reservedSequence == 0u && planAcceptedSequence == acceptedSequence && planSequence < nextSequence;
+}
+
+b8 ValidAcceptedOpticalSubmissionToken(
+    in b8 tokenValid,
+    in b8 isGraphicsQueue,
+    in b8 matchesPhysicalQueue,
+    in b8 hasPreviousAcceptedToken,
+    in u64 tokenValue,
+    in u64 previousTokenValue
+){
+    return tokenValid && isGraphicsQueue && matchesPhysicalQueue && (!hasPreviousAcceptedToken || tokenValue > previousTokenValue);
+}
+
+Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(in SharedPool pool, in BufferHandle buffer, in GpuPhysicalQueueId primaryQueue){
+    if(!buffer.valid() || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer.deref().getDeviceGeneration())
+        return MakeUnexpected(Failure());
+    return pool.make<RayTracingOpticalUploadState>(buffer, primaryQueue);
 }
 
 

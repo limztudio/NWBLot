@@ -33,26 +33,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 RequestedShadowReceiverResolutionFactor(in ShadowReceiverResolution receiverResolution){
-    return cast<u32>(receiverResolution);
-}
-
-b8 IsShadowVisibilitySoftwareResourcesPreflighted(in b8 traceResourcesPreflighted, in b8 hardwareSupported){
-    return traceResourcesPreflighted && !hardwareSupported;
-}
-
-b8 RequiresSurfelResourceInitialization(in b8 surfelEnabled, in b8 surfelResourcesNeedClear){
-    return surfelEnabled && surfelResourcesNeedClear;
-}
-
-b8 PreparedTraversalStorageMatchesCurrent(in b8 sceneBvhStorageMatches, in b8 shadowMaterialContextStorageMatches){
-    return sceneBvhStorageMatches && shadowMaterialContextStorageMatches;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RayTracingSceneGatherScratch : NoCopy{
     public Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
     public InstanceGpuDataVector shadowInstanceData;
@@ -105,6 +85,26 @@ class RayTracingSceneGatherScratch : NoCopy{
         this.pendingMeshBuildSnapshots.clear();
         this.clearHandles();
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 RequestedShadowReceiverResolutionFactor(in ShadowReceiverResolution receiverResolution){
+    return cast<u32>(receiverResolution);
+}
+
+b8 IsShadowVisibilitySoftwareResourcesPreflighted(in b8 traceResourcesPreflighted, in b8 hardwareSupported){
+    return traceResourcesPreflighted && !hardwareSupported;
+}
+
+b8 RequiresSurfelResourceInitialization(in b8 surfelEnabled, in b8 surfelResourcesNeedClear){
+    return surfelEnabled && surfelResourcesNeedClear;
+}
+
+b8 PreparedTraversalStorageMatchesCurrent(in b8 sceneBvhStorageMatches, in b8 shadowMaterialContextStorageMatches){
+    return sceneBvhStorageMatches && shadowMaterialContextStorageMatches;
 }
 
 

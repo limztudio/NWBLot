@@ -11,20 +11,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-HitTarget MakeControlInputPart(in HitTarget host, in u64 id, in Rect rectangle, in u64 value){
-    HitTarget target;
-    target.id = WidgetId(id);
-    target.rectangle = rectangle;
-    target.clip = host.clip;
-    target.declarationGeneration = host.declarationGeneration;
-    target.paintOrder = 1u;
-    target.control = host.control;
-    target.owner = host.id;
-    target.ownerDeclarationGeneration = host.declarationGeneration;
-    target.value = value;
-    target.activatable = true;
-    return target;
-}
+const Name s_UiEditBoxSkinAssetName = "tests/ui/edit_box/skin";
+const Name s_UiEditBoxFontAssetName = "tests/ui/edit_box/font";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class UiControlInputTests : RouterTestFixture{
     public Array<HitTarget, 3u> m_targets;
@@ -60,7 +52,6 @@ class UiControlInputTests : RouterTestFixture{
         return this.m_router.consumeControlAction(this.m_targets[0u].id, this.m_targets[0u].declarationGeneration, this.m_targets[0u].control);
     }
 }
-
 
 [ordered]
 class EditBoxLayoutTests{
@@ -128,6 +119,24 @@ class EditBoxLayoutTests{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HitTarget MakeControlInputPart(in HitTarget host, in u64 id, in Rect rectangle, in u64 value){
+    HitTarget target;
+    target.id = WidgetId(id);
+    target.rectangle = rectangle;
+    target.clip = host.clip;
+    target.declarationGeneration = host.declarationGeneration;
+    target.paintOrder = 1u;
+    target.control = host.control;
+    target.owner = host.id;
+    target.ownerDeclarationGeneration = host.declarationGeneration;
+    target.value = value;
+    target.activatable = true;
+    return target;
+}
+
 b8 UiEditCaretAdoptMismatchedSource(mut EditCaretFixture self){
     auto layout = self.layout("new");
     if(!layout.has_value() || !self.identityMapping("new"))
@@ -142,6 +151,7 @@ b8 UiEditCaretAdoptMismatchedSource(mut EditCaretFixture self){
 b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutText, in StringView sourceText, in usize committedBytes, in EditTextMode mode){
     return UiEditCaretAdoptBuiltLayout(self, layoutText, sourceText, committedBytes, mode, TextDirection::LeftToRight);
 }
+
 b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutText, in StringView sourceText, in usize committedBytes, in EditTextMode mode, in TextDirection direction){
     auto candidate = self.layout(layoutText, direction);
     EXPECT_TRUE(candidate.has_value());
@@ -172,17 +182,6 @@ b8 UiEditCaretAdoptMutatedLineRecord(mut EditCaretFixture self, in u32 mutation)
     faults.invalidateLineRecord(malformed, mutation);
     return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const Name s_UiEditBoxSkinAssetName = "tests/ui/edit_box/skin";
-const Name s_UiEditBoxFontAssetName = "tests/ui/edit_box/font";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 EditBoxRange MakeUiEditCaretRange(in usize begin, in usize end){
     EditBoxRange range = EditBoxRange();
@@ -215,10 +214,6 @@ HitTarget MakeUiControlInputHost(in u64 id, in f32 x){
     target.gestureMaximum = 2399900.0;
     return target;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiControlInputTests_AcceptedWheelOwnsItsStepAfterCallerTargetMutation(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u));
@@ -762,10 +757,6 @@ void VerifyUiControlInputTests_EscapeAndControlRebindingCancelHeldSubmitWithoutR
     EXPECT_EQ(action.value().kind, ControlActionKind::Submit);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyEditBoxLayoutTests_LigaturesExposeEachGraphemeCaretAndPartialSelection(mut EditBoxLayoutTests self){
     ASSERT_TRUE(self.m_model.setText("ffi"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
@@ -1101,10 +1092,6 @@ void VerifyEditBoxLayoutTests_NegativeZeroScrollClampsToPositiveZero(mut EditBox
         EXPECT_FALSE(SignBit(placement.value().scroll));
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyEditCaretFixture_UnreadyGeometryRejectsEveryQuery(mut EditCaretFixture self){
     EXPECT_FALSE(self.m_geometry.caretRect(0u).has_value());
@@ -1522,10 +1509,6 @@ void VerifyEditCaretFixture_InvalidCoordinatesAndCaretOffsetsRejectQueries(mut E
     EXPECT_FALSE(self.m_geometry.caretRect(6u).has_value());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyEditCaretRangeFixture_SingleLineLigatureRangesUseInterpolatedCaretEdges(mut EditCaretFixture self){
     ASSERT_TRUE(self.adoptText("ffi", EditTextMode::SingleLine));
     self.expectRange(MakeUiEditCaretRange(1u, 2u), 0u, Rect(10.0f, 0.0f, 10.0f, 12.0f));
@@ -1618,90 +1601,160 @@ void VerifyEditCaretRangeFixture_OverflowingSelectedBreakWidthRejectsQuery(mut E
     self.expectRange(MakeUiEditCaretRange(0u, 1u), 0u, Rect(0.0f, 0.0f, f32.max, 12.0f));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation, VerifyUiControlInputTests_AcceptedWheelOwnsItsStepAfterCallerTargetMutation)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, OverlappingUnrelatedControlBlocksUnderlyingWheelRouting, VerifyUiControlInputTests_OverlappingUnrelatedControlBlocksUnderlyingWheelRouting)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, HorizontalOnlyWheelIsConsumedWithoutVerticalMutation, VerifyUiControlInputTests_HorizontalOnlyWheelIsConsumedWithoutVerticalMutation)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, SceneHeldPrimarySequenceCannotStartScrollingWhenPointerCrossesList, VerifyUiControlInputTests_SceneHeldPrimarySequenceCannotStartScrollingWhenPointerCrossesList)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, NavigationCopiesAcceptedPageSizeAndSubmissionDoesNotRepeat, VerifyUiControlInputTests_NavigationCopiesAcceptedPageSizeAndSubmissionDoesNotRepeat)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList, VerifyUiControlInputTests_HeldNavigationCannotRetargetAnotherFocusedList)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcceptance, VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilAcceptance)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease, VerifyUiControlInputTests_CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ReplacedRowDeclarationRejectsItsQueuedClickWhileHostWheelSurvives, VerifyUiControlInputTests_ReplacedRowDeclarationRejectsItsQueuedClickWhileHostWheelSurvives)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives, VerifyUiControlInputTests_RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, HostRetirementRemovesPartsAndGesturesButPreservesHeldOwnership, VerifyUiControlInputTests_HostRetirementRemovesPartsAndGesturesButPreservesHeldOwnership)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResize, VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResize)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ChangedThumbEpochRejectsAQueuedCompletedGesture, VerifyUiControlInputTests_ChangedThumbEpochRejectsAQueuedCompletedGesture)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, FocusHintRestoresReplacedHostOnlyAtMatchingAcceptance, VerifyUiControlInputTests_FocusHintRestoresReplacedHostOnlyAtMatchingAcceptance)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, FocusHintCannotStealAnotherFocusOrSurviveDelayedFocusLoss, VerifyUiControlInputTests_FocusHintCannotStealAnotherFocusOrSurviveDelayedFocusLoss)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, RepeatedNavigationDoesNotJumpToAcceptedReplacementEpoch, VerifyUiControlInputTests_RepeatedNavigationDoesNotJumpToAcceptedReplacementEpoch)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, InvalidOwnerReferencesRejectAtomicPublicationAndPreserveActions, VerifyUiControlInputTests_InvalidOwnerReferencesRejectAtomicPublicationAndPreserveActions)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, MalformedControlMetadataRejectsPublicationBeforeChangingFocus, VerifyUiControlInputTests_MalformedControlMetadataRejectsPublicationBeforeChangingFocus)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, MissingDisabledOrFocusablePartOwnerIsRejected, VerifyUiControlInputTests_MissingDisabledOrFocusablePartOwnerIsRejected)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, InvalidWheelCoordinatesAndDeltasNeverReachAcceptedActions, VerifyUiControlInputTests_InvalidWheelCoordinatesAndDeltasNeverReachAcceptedActions)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, BoundedControlActionsUseOneSharedSequenceAndOverflowOncePerProcess, VerifyUiControlInputTests_BoundedControlActionsUseOneSharedSequenceAndOverflowOncePerProcess)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, FocusLossCancelsActionsAndResetDoesNotRestartTheirSequence, VerifyUiControlInputTests_FocusLossCancelsActionsAndResetDoesNotRestartTheirSequence)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, AcceptedPopupMaskOwnsWheelAndListFocusAboveLowerHosts, VerifyUiControlInputTests_AcceptedPopupMaskOwnsWheelAndListFocusAboveLowerHosts)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ClosingPopupBlocksFocusHintAndHeldNavigationCannotReachReopenedScope, VerifyUiControlInputTests_ClosingPopupBlocksFocusHintAndHeldNavigationCannotReachReopenedScope)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ActivationAlsoFencesItsCopiedControlEpoch, VerifyUiControlInputTests_ActivationAlsoFencesItsCopiedControlEpoch)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, ControlActivationAndGestureActionsShareOneMonotonicSequence, VerifyUiControlInputTests_ControlActivationAndGestureActionsShareOneMonotonicSequence)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, NativeUnfocusedAcceptanceCannotApplyAControlFocusHint, VerifyUiControlInputTests_NativeUnfocusedAcceptanceCannotApplyAControlFocusHint)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenReturns, VerifyUiControlInputTests_RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenReturns)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel, VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel)
+
 NWB_ADHD_GTEST_F(UiControlInputTests, EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage, VerifyUiControlInputTests_EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage)
 
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, LigaturesExposeEachGraphemeCaretAndPartialSelection, VerifyEditBoxLayoutTests_LigaturesExposeEachGraphemeCaretAndPartialSelection)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, CombiningAndDecomposedHangulHitsStayOnWholeGraphemes, VerifyEditBoxLayoutTests_CombiningAndDecomposedHangulHitsStayOnWholeGraphemes)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUnderline, VerifyEditBoxLayoutTests_PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUnderline)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, NativePreeditCaretCanAddressScalarEdgesInsideOneGrapheme, VerifyEditBoxLayoutTests_NativePreeditCaretCanAddressScalarEdgesInsideOneGrapheme)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, HorizontalScrollFollowsCaretAndClampsWhenTextShrinks, VerifyEditBoxLayoutTests_HorizontalScrollFollowsCaretAndClampsWhenTextShrinks)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, PlacementIntersectsFrameAndContentClipsAndRejectsInvalidInputs, VerifyEditBoxLayoutTests_PlacementIntersectsFrameAndContentClipsAndRejectsInvalidInputs)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry, VerifyEditBoxLayoutTests_MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, SnapshotOwnsModelBytesAndReshapingRejectsUnsupportedSingleLineControls, VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupportedSingleLineControls)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSkinRegion, VerifyEditBoxLayoutTests_EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSkinRegion)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, EmptySelectionRejectsInvalidCaretWidthsAndRestoresClippingWithoutADrawnCaret, VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestoresClippingWithoutADrawnCaret)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping, VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales, VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales)
+
 NWB_ADHD_GTEST_F(EditBoxLayoutTests, NegativeZeroScrollClampsToPositiveZero, VerifyEditBoxLayoutTests_NegativeZeroScrollClampsToPositiveZero)
 
 NWB_ADHD_GTEST_F(EditCaretFixture, UnreadyGeometryRejectsEveryQuery, VerifyEditCaretFixture_UnreadyGeometryRejectsEveryQuery)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, HardLinesRetainEmptyAndTrailingLineStops, VerifyEditCaretFixture_HardLinesRetainEmptyAndTrailingLineStops)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, LineBreakCaretBelongsToItsPrecedingLineAndFollowingByteStartsTheNext, VerifyEditCaretFixture_LineBreakCaretBelongsToItsPrecedingLineAndFollowingByteStartsTheNext)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, MultilineHitTestingChoosesYBeforeXAndKeepsExactMidpointTies, VerifyEditCaretFixture_MultilineHitTestingChoosesYBeforeXAndKeepsExactMidpointTies)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, SingleLineLigatureInterpolationAndTieBehaviorRemainUnchanged, VerifyEditCaretFixture_SingleLineLigatureInterpolationAndTieBehaviorRemainUnchanged)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, CombiningHitsStayOnGraphemesWhileScalarCaretQueriesRemainAvailable, VerifyEditCaretFixture_CombiningHitsStayOnGraphemesWhileScalarCaretQueriesRemainAvailable)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, CollapsedPreeditRetainsBothMappedEdgesAndHangulScalarInterpolation, VerifyEditCaretFixture_CollapsedPreeditRetainsBothMappedEdgesAndHangulScalarInterpolation)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, PreeditOnlyLinesFallBackToTheClosestCommittedReplacementEdge, VerifyEditCaretFixture_PreeditOnlyLinesFallBackToTheClosestCommittedReplacementEdge)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, PreeditOnlyFallbackCannotSelectUnrelatedCommittedPrefixOrSuffixStops, VerifyEditCaretFixture_PreeditOnlyFallbackCannotSelectUnrelatedCommittedSuffixOrPrefixStops)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, VerticalTargetsRetainTheCallerPreferredColumnAcrossShortLines, VerifyEditCaretFixture_VerticalTargetsRetainTheCallerPreferredColumnAcrossShortLines)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, VerticalDocumentBoundaryKeepsTheActiveCaretRatherThanReapplyingPreferredX, VerifyEditCaretFixture_VerticalDocumentBoundaryKeepsTheActiveCaretRatherThanReapplyingPreferredX)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, VerticalMovementCanTargetEmptyAndTrailingLines, VerifyEditCaretFixture_VerticalMovementCanTargetEmptyAndTrailingLines)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, EmptyTextAndEmptyCollapsedPreeditHaveValidOwnedGeometry, VerifyEditCaretFixture_EmptyTextAndEmptyCollapsedPreeditHaveValidOwnedGeometry)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, MismatchedSourceFailurePreservesBothPriorGeometryAndCandidateOwnership, VerifyEditCaretFixture_MismatchedSourceFailurePreservesBothPriorGeometryAndCandidateOwnership)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, MappingEndpointOrderAndBoundsFailuresPreservePriorGeometry, VerifyEditCaretFixture_MappingEndpointOrderAndBoundsFailuresPreservePriorGeometry)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, NativeMappingAcceptsScalarEdgesButRejectsContinuationBytes, VerifyEditCaretFixture_NativeMappingAcceptsScalarEdgesButRejectsContinuationBytes)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, MultilineRequiresCanonicalLfAndSingleLineRejectsHardBreaks, VerifyEditCaretFixture_MultilineRequiresCanonicalLfAndSingleLineRejectsHardBreaks)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry, VerifyEditCaretFixture_RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry, VerifyEditCaretFixture_NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, MalformedLineRecordsCannotReplaceReadyGeometry, VerifyEditCaretFixture_MalformedLineRecordsCannotReplaceReadyGeometry)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, OwnedGeometrySurvivesSourceAndMappingChangesAndMoves, VerifyEditCaretFixture_OwnedGeometrySurvivesSourceAndMappingChangesAndMoves)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, ZeroAdvanceStopsKeepTheFirstExactTieAndFiniteExtremesStayQueryable, VerifyEditCaretFixture_ZeroAdvanceStopsKeepTheFirstExactTieAndFiniteExtremesStayQueryable)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, VariableLineHeightsDetermineCaretAndHitBoundaries, VerifyEditCaretFixture_VariableLineHeightsDetermineCaretAndHitBoundaries)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, InvalidCoordinatesAndCaretOffsetsRejectQueries, VerifyEditCaretFixture_InvalidCoordinatesAndCaretOffsetsRejectQueries)
 
 NWB_ADHD_GTEST_F(EditCaretFixture, SingleLineLigatureRangesUseInterpolatedCaretEdges, VerifyEditCaretRangeFixture_SingleLineLigatureRangesUseInterpolatedCaretEdges)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, CrossLineSelectionIncludesContentAndEachSelectedBreakCap, VerifyEditCaretRangeFixture_CrossLineSelectionIncludesContentAndEachSelectedBreakCap)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, SelectingOnlyLfPaintsItsPrecedingLineCap, VerifyEditCaretRangeFixture_SelectingOnlyLfPaintsItsPrecedingLineCap)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, EmptyLineLfSelectionHasAVisibleCap, VerifyEditCaretRangeFixture_EmptyLineLfSelectionHasAVisibleCap)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, TrailingLfDoesNotAddASecondCapOnTheEmptyTerminalLine, VerifyEditCaretRangeFixture_TrailingLfDoesNotAddASecondCapOnTheEmptyTerminalLine)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, NonintersectingAndCollapsedRangesReturnEmptyRectangles, VerifyEditCaretRangeFixture_NonintersectingAndCollapsedRangesReturnEmptyRectangles)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, ScalarPreeditRangesCanCrossLinesInsideDisplayGraphemes, VerifyEditCaretRangeFixture_ScalarPreeditRangesCanCrossLinesInsideDisplayGraphemes)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, BreakCapWidthIsAppliedOnlyToSelectedLfBytes, VerifyEditCaretRangeFixture_BreakCapWidthIsAppliedOnlyToSelectedLfBytes)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, InvalidRangeEndpointsAndLineIndicesRejectQueries, VerifyEditCaretRangeFixture_InvalidRangeEndpointsAndLineIndicesRejectQueries)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, InvalidBreakCapsRejectEvenCollapsedRanges, VerifyEditCaretRangeFixture_InvalidBreakCapsRejectEvenCollapsedRanges)
+
 NWB_ADHD_GTEST_F(EditCaretFixture, OverflowingSelectedBreakWidthRejectsQuery, VerifyEditCaretRangeFixture_OverflowingSelectedBreakWidthRejectsQuery)
 
 

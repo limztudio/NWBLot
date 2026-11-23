@@ -60,14 +60,6 @@ class RefractionLifecyclePhase{
     public b8 enabled;
 }
 
-b8 ShouldCaptureRefractionQueryDiagnostics(in b8 reported, in u64 graphicsFrame, in u64 sourceFrame){
-    return reported && graphicsFrame > sourceFrame;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RefractionGalleryBuilder{
     public RefractionGalleryBuilder(in b8 preview, mut World world){
         this.m_world = world;
@@ -420,6 +412,10 @@ class RefractionGalleryBuilder{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 ShouldCaptureRefractionQueryDiagnostics(in b8 reported, in u64 graphicsFrame, in u64 sourceFrame){
+    return reported && graphicsFrame > sourceFrame;
+}
 
 b8 CreateRefractionGalleryScene(in StringView caseName, in b8 geometryPreview, mut World world){
     const EntityID camera = CreateSmokeCamera(s_RefractionGalleryCenterHeight, s_RefractionGalleryCameraDistance, 0.0f, world);

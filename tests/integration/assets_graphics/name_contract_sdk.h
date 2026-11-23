@@ -74,9 +74,9 @@ public:
 };
 
 template<typename T, typename Arena>
-constexpr b8 StorageNameConstructor()noexcept{ return std::is_nothrow_constructible_v<T, Arena&>; }
+constexpr b8 StorageNameConstructor()noexcept{ return IsNothrowConstructible_V<T, Arena&>; }
 template<typename T, typename Arena>
-constexpr b8 PathNameConstructor()noexcept{ return std::is_nothrow_constructible_v<T, Arena&, const Name&>; }
+constexpr b8 PathNameConstructor()noexcept{ return IsNothrowConstructible_V<T, Arena&, const Name&>; }
 template<typename Asset>
 constexpr b8 ExplicitConversion()noexcept{ return noexcept(Name(Asset::AssetTypeName())); }
 template<typename Asset>

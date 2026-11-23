@@ -9,6 +9,212 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuImageResources : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut GpuImageCache m_imageCache;
+    private in SharedPool m_versions;
+
+    public GpuImageResources(mut GraphicsRuntime graphics, mut GpuImageCache imageCache, in SharedPool versions){
+        this.m_graphics = graphics;
+        this.m_imageCache = imageCache;
+        this.m_versions = versions;
+    }
+
+    [cpp_unwind]
+    private Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(in SharedGlyphPage page){
+        usize replaceIndex = this.m_imageCache.glyphs().size();
+        for(usize index = 0u; index < this.m_imageCache.glyphs().size(); ++index){
+            in GpuVersion<GpuGlyphVersion> existing = this.m_imageCache.glyphs()[index];
+            if(!SameGlyphPageKey(existing.deref().m_page.deref().binding(), page.deref().binding()))
+                continue;
+            replaceIndex = index;
+            if(existing.deref().m_page.deref().binding().generation != page.deref().binding().generation)
+                break;
+            if(!SameGlyphPageVersion(existing.deref().m_page.deref().binding(), existing.deref().m_page.deref().pixels(), page.deref().binding(), page.deref().pixels(), existing.deref().m_page == page))
+                return MakeUnexpected(Failure());
+            GpuVersion<GpuGlyphVersion> reused = existing;
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, Format::R8_UNORM, reused.deref().m_sampledImage))
+                return MakeUnexpected(Failure());
+            return reused;
+        }
+        mut Device device = this.m_graphics.getDevice();
+        if(!SupportsTextureFormat(Format::R8_UNORM, device))
+            return MakeUnexpected(Failure());
+        const Expected<GpuVersion<GpuGlyphVersion>> versionResult = this.m_versions.make<GpuGlyphVersion>(this.m_graphics, page);
+        if(!versionResult.has_value())
+            return MakeUnexpected(versionResult.error());
+        GpuVersion<GpuGlyphVersion> version = versionResult.value();
+        in GlyphPageBinding binding = page.deref().binding();
+        GpuSampledTextures textures;
+        const Expected<GpuPageUploadResult> uploadedPage = textures.createAndUploadPage(
+            this.m_graphics,
+            GpuPageTextureUploadDesc(
+                s_GpuGlyphPageTextureName,
+                Span<u8>(page.deref().pixels()),
+                binding.width,
+                binding.width,
+                binding.height,
+                Format::R8_UNORM
+            )
+        );
+        if(!uploadedPage.has_value())
+            return MakeUnexpected(Failure());
+        version.deref().m_texture = uploadedPage.value().texture;
+        version.deref().m_readinessToken = uploadedPage.value().readinessToken;
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+        if(replaceIndex < this.m_imageCache.glyphs().size())
+            this.m_imageCache.glyphs()[replaceIndex] = version;
+        else{
+            if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
+                this.m_imageCache.evict();
+            this.m_imageCache.glyphs().push_back(version);
+        }
+        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, Format::R8_UNORM, version.deref().m_sampledImage))
+            return MakeUnexpected(Failure());
+        return version;
+    }
+
+    [cpp_unwind]
+    public b8 prepareGlyphPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuGlyphVersion>> versions){
+        in Vector<SharedGlyphPage> pages = snapshot.glyphPages();
+        versions.reserve(pages.size());
+        while(versions.size() < pages.size()){
+            const Expected<GpuVersion<GpuGlyphVersion>> version = this.prepareGlyphPage(pages[versions.size()]);
+            if(!version.has_value())
+                return false;
+            versions.push_back(version.value());
+        }
+        return true;
+    }
+
+    [cpp_unwind]
+    private Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(in SharedSdfAtlasPage page){
+        for(usize index = 0u; index < this.m_imageCache.sdfs().size(); ++index){
+            in GpuVersion<GpuSdfAtlasVersion> existing = this.m_imageCache.sdfs()[index];
+            if(!SameSdfAtlasPageKey(existing.deref().m_page.deref().binding(), page.deref().binding()))
+                continue;
+            if(!(existing.deref().m_page.deref().binding() == page.deref().binding()))
+                return MakeUnexpected(Failure());
+            GpuVersion<GpuSdfAtlasVersion> reused = existing;
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, reused.deref().m_texture.deref().getDescription().format, reused.deref().m_sampledImage))
+                return MakeUnexpected(Failure());
+            return reused;
+        }
+        mut Device device = this.m_graphics.getDevice();
+        in SdfAtlasPageBinding binding = page.deref().binding();
+        Format format = Format::RGBA8_UNORM;
+        if(binding.channelCount == 1u) format = Format::R8_UNORM;
+        else if(binding.channelCount == 2u) format = Format::RG8_UNORM;
+        else if(binding.channelCount == 3u) format = Format::RGB8_UNORM;
+        u32 uploadChannels = binding.channelCount;
+        if(ShouldExpandGpuRgbSdfUpload(binding.channelCount, SupportsTextureFormat(format, device))){
+            format = Format::RGBA8_UNORM;
+            uploadChannels = s_GpuRgbaChannelCount;
+        }
+        if(!SupportsTextureFormat(format, device))
+            return MakeUnexpected(Failure());
+        const Expected<GpuVersion<GpuSdfAtlasVersion>> versionResult = this.m_versions.make<GpuSdfAtlasVersion>(this.m_graphics, page);
+        if(!versionResult.has_value())
+            return MakeUnexpected(versionResult.error());
+        GpuVersion<GpuSdfAtlasVersion> version = versionResult.value();
+        Vector<u8> expanded;
+        Span<u8> uploadPixels = Span<u8>(page.deref().pixels());
+        if(uploadChannels != binding.channelCount){
+            ExpandGpuSdfPagePixels(binding.width, binding.height, binding.channelCount, uploadChannels, uploadPixels, expanded);
+            uploadPixels = Span<u8>(expanded);
+        }
+        GpuSampledTextures textures;
+        const Expected<GpuPageUploadResult> uploadedPage = textures.createAndUploadPage(
+            this.m_graphics,
+            GpuPageTextureUploadDesc(
+                s_GpuSdfPageTextureName,
+                uploadPixels,
+                cast<usize>(binding.width) * uploadChannels,
+                binding.width,
+                binding.height,
+                format
+            )
+        );
+        if(!uploadedPage.has_value())
+            return MakeUnexpected(Failure());
+        version.deref().m_texture = uploadedPage.value().texture;
+        version.deref().m_readinessToken = uploadedPage.value().readinessToken;
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+        if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
+            this.m_imageCache.evict();
+        this.m_imageCache.sdfs().push_back(version);
+        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, version.deref().m_texture.deref().getDescription().format, version.deref().m_sampledImage))
+            return MakeUnexpected(Failure());
+        return version;
+    }
+
+    [cpp_unwind]
+    public b8 prepareSdfPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuSdfAtlasVersion>> versions){
+        in Vector<SharedSdfAtlasPage> pages = snapshot.sdfPages();
+        versions.reserve(pages.size());
+        while(versions.size() < pages.size()){
+            const Expected<GpuVersion<GpuSdfAtlasVersion>> version = this.prepareSdfPage(pages[versions.size()]);
+            if(!version.has_value())
+                return false;
+            versions.push_back(version.value());
+        }
+        return true;
+    }
+
+    [cpp_unwind]
+    private Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(in SharedImageSource source){
+        if(!source.valid() || !ValidUiTextureImageSource(source.deref()))
+            return MakeUnexpected(Failure());
+        for(usize index = 0u; index < this.m_imageCache.textures().size(); ++index){
+            in GpuVersion<GpuTextureImageVersion> existing = this.m_imageCache.textures()[index];
+            if(existing.deref().m_source.deref().generation() != source.deref().generation())
+                continue;
+            if(!SameTextureImageKey(existing.deref().m_source.deref(), source.deref()) || (!existing.deref().m_validated && !ValidGpuTextureImageVersion(existing.deref())))
+                return MakeUnexpected(Failure());
+            GpuVersion<GpuTextureImageVersion> reused = existing;
+            reused.deref().m_validated = true;
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+            return reused;
+        }
+        assert(source.deref().texture().validatePayload());
+        const Expected<GpuVersion<GpuTextureImageVersion>> versionResult = this.m_versions.make<GpuTextureImageVersion>(this.m_graphics, source);
+        if(!versionResult.has_value())
+            return MakeUnexpected(versionResult.error());
+        GpuVersion<GpuTextureImageVersion> version = versionResult.value();
+        if(!CreateTextureGpuResource(source.deref().texture(), source.deref().identity().name(), "UI Texture Image", this.m_graphics, version.deref().m_texture))
+            return MakeUnexpected(Failure());
+        if(!ValidGpuTextureImageVersion(version.deref())){
+            error("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness", source.deref().generation());
+            return MakeUnexpected(Failure());
+        }
+        version.deref().m_validated = true;
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
+        if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
+            this.m_imageCache.evict();
+        this.m_imageCache.textures().push_back(version);
+        return version;
+    }
+
+    [cpp_unwind]
+    public b8 prepareTextureImages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuTextureImageVersion>> versions){
+        in Vector<SharedImageSource> images = snapshot.textureImages();
+        versions.reserve(images.size());
+        while(versions.size() < images.size()){
+            const Expected<GpuVersion<GpuTextureImageVersion>> version = this.prepareTextureImage(images[versions.size()]);
+            if(!version.has_value())
+                return false;
+            versions.push_back(version.value());
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ShouldExpandGpuRgbSdfUpload(in u32 channelCount, in b8 rgbSampledSupported){
     return channelCount == s_GpuRgbChannelCount && !rgbSampledSupported;
 }
@@ -151,210 +357,6 @@ b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
     }
     return true;
 }
-
-class GpuImageResources : NoCopy{
-    private mut GraphicsRuntime m_graphics;
-    private mut GpuImageCache m_imageCache;
-    private in SharedPool m_versions;
-
-    public GpuImageResources(mut GraphicsRuntime graphics, mut GpuImageCache imageCache, in SharedPool versions){
-        this.m_graphics = graphics;
-        this.m_imageCache = imageCache;
-        this.m_versions = versions;
-    }
-
-    [cpp_unwind]
-    private Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(in SharedGlyphPage page){
-        usize replaceIndex = this.m_imageCache.glyphs().size();
-        for(usize index = 0u; index < this.m_imageCache.glyphs().size(); ++index){
-            in GpuVersion<GpuGlyphVersion> existing = this.m_imageCache.glyphs()[index];
-            if(!SameGlyphPageKey(existing.deref().m_page.deref().binding(), page.deref().binding()))
-                continue;
-            replaceIndex = index;
-            if(existing.deref().m_page.deref().binding().generation != page.deref().binding().generation)
-                break;
-            if(!SameGlyphPageVersion(existing.deref().m_page.deref().binding(), existing.deref().m_page.deref().pixels(), page.deref().binding(), page.deref().pixels(), existing.deref().m_page == page))
-                return MakeUnexpected(Failure());
-            GpuVersion<GpuGlyphVersion> reused = existing;
-            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, Format::R8_UNORM, reused.deref().m_sampledImage))
-                return MakeUnexpected(Failure());
-            return reused;
-        }
-        mut Device device = this.m_graphics.getDevice();
-        if(!SupportsTextureFormat(Format::R8_UNORM, device))
-            return MakeUnexpected(Failure());
-        const Expected<GpuVersion<GpuGlyphVersion>> versionResult = this.m_versions.make<GpuGlyphVersion>(this.m_graphics, page);
-        if(!versionResult.has_value())
-            return MakeUnexpected(versionResult.error());
-        GpuVersion<GpuGlyphVersion> version = versionResult.value();
-        in GlyphPageBinding binding = page.deref().binding();
-        GpuSampledTextures textures;
-        if(!textures.createAndUploadPage(
-            this.m_graphics,
-            GpuPageTextureUploadDesc(
-                s_GpuGlyphPageTextureName,
-                Span<u8>(page.deref().pixels()),
-                binding.width,
-                binding.width,
-                binding.height,
-                Format::R8_UNORM
-            ),
-            version.deref().m_texture,
-            version.deref().m_readinessToken
-        ))
-            return MakeUnexpected(Failure());
-        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-        if(replaceIndex < this.m_imageCache.glyphs().size())
-            this.m_imageCache.glyphs()[replaceIndex] = version;
-        else{
-            if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
-                this.m_imageCache.evict();
-            this.m_imageCache.glyphs().push_back(version);
-        }
-        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, Format::R8_UNORM, version.deref().m_sampledImage))
-            return MakeUnexpected(Failure());
-        return version;
-    }
-
-    [cpp_unwind]
-    public b8 prepareGlyphPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuGlyphVersion>> versions){
-        in Vector<SharedGlyphPage> pages = snapshot.glyphPages();
-        versions.reserve(pages.size());
-        while(versions.size() < pages.size()){
-            const Expected<GpuVersion<GpuGlyphVersion>> version = this.prepareGlyphPage(pages[versions.size()]);
-            if(!version.has_value())
-                return false;
-            versions.push_back(version.value());
-        }
-        return true;
-    }
-
-    [cpp_unwind]
-    private Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(in SharedSdfAtlasPage page){
-        for(usize index = 0u; index < this.m_imageCache.sdfs().size(); ++index){
-            in GpuVersion<GpuSdfAtlasVersion> existing = this.m_imageCache.sdfs()[index];
-            if(!SameSdfAtlasPageKey(existing.deref().m_page.deref().binding(), page.deref().binding()))
-                continue;
-            if(!(existing.deref().m_page.deref().binding() == page.deref().binding()))
-                return MakeUnexpected(Failure());
-            GpuVersion<GpuSdfAtlasVersion> reused = existing;
-            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, reused.deref().m_texture.deref().getDescription().format, reused.deref().m_sampledImage))
-                return MakeUnexpected(Failure());
-            return reused;
-        }
-        mut Device device = this.m_graphics.getDevice();
-        in SdfAtlasPageBinding binding = page.deref().binding();
-        Format format = Format::RGBA8_UNORM;
-        if(binding.channelCount == 1u) format = Format::R8_UNORM;
-        else if(binding.channelCount == 2u) format = Format::RG8_UNORM;
-        else if(binding.channelCount == 3u) format = Format::RGB8_UNORM;
-        u32 uploadChannels = binding.channelCount;
-        if(ShouldExpandGpuRgbSdfUpload(binding.channelCount, SupportsTextureFormat(format, device))){
-            format = Format::RGBA8_UNORM;
-            uploadChannels = s_GpuRgbaChannelCount;
-        }
-        if(!SupportsTextureFormat(format, device))
-            return MakeUnexpected(Failure());
-        const Expected<GpuVersion<GpuSdfAtlasVersion>> versionResult = this.m_versions.make<GpuSdfAtlasVersion>(this.m_graphics, page);
-        if(!versionResult.has_value())
-            return MakeUnexpected(versionResult.error());
-        GpuVersion<GpuSdfAtlasVersion> version = versionResult.value();
-        Vector<u8> expanded;
-        Span<u8> uploadPixels = Span<u8>(page.deref().pixels());
-        if(uploadChannels != binding.channelCount){
-            ExpandGpuSdfPagePixels(binding.width, binding.height, binding.channelCount, uploadChannels, uploadPixels, expanded);
-            uploadPixels = Span<u8>(expanded);
-        }
-        GpuSampledTextures textures;
-        if(!textures.createAndUploadPage(
-            this.m_graphics,
-            GpuPageTextureUploadDesc(
-                s_GpuSdfPageTextureName,
-                uploadPixels,
-                cast<usize>(binding.width) * uploadChannels,
-                binding.width,
-                binding.height,
-                format
-            ),
-            version.deref().m_texture,
-            version.deref().m_readinessToken
-        ))
-            return MakeUnexpected(Failure());
-        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-        if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
-            this.m_imageCache.evict();
-        this.m_imageCache.sdfs().push_back(version);
-        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, version.deref().m_texture.deref().getDescription().format, version.deref().m_sampledImage))
-            return MakeUnexpected(Failure());
-        return version;
-    }
-
-    [cpp_unwind]
-    public b8 prepareSdfPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuSdfAtlasVersion>> versions){
-        in Vector<SharedSdfAtlasPage> pages = snapshot.sdfPages();
-        versions.reserve(pages.size());
-        while(versions.size() < pages.size()){
-            const Expected<GpuVersion<GpuSdfAtlasVersion>> version = this.prepareSdfPage(pages[versions.size()]);
-            if(!version.has_value())
-                return false;
-            versions.push_back(version.value());
-        }
-        return true;
-    }
-
-    [cpp_unwind]
-    private Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(in SharedImageSource source){
-        if(!source.valid() || !ValidUiTextureImageSource(source.deref()))
-            return MakeUnexpected(Failure());
-        for(usize index = 0u; index < this.m_imageCache.textures().size(); ++index){
-            in GpuVersion<GpuTextureImageVersion> existing = this.m_imageCache.textures()[index];
-            if(existing.deref().m_source.deref().generation() != source.deref().generation())
-                continue;
-            if(!SameTextureImageKey(existing.deref().m_source.deref(), source.deref()) || (!existing.deref().m_validated && !ValidGpuTextureImageVersion(existing.deref())))
-                return MakeUnexpected(Failure());
-            GpuVersion<GpuTextureImageVersion> reused = existing;
-            reused.deref().m_validated = true;
-            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-            return reused;
-        }
-        assert(source.deref().texture().validatePayload());
-        const Expected<GpuVersion<GpuTextureImageVersion>> versionResult = this.m_versions.make<GpuTextureImageVersion>(this.m_graphics, source);
-        if(!versionResult.has_value())
-            return MakeUnexpected(versionResult.error());
-        GpuVersion<GpuTextureImageVersion> version = versionResult.value();
-        if(!CreateTextureGpuResource(source.deref().texture(), source.deref().identity().name(), "UI Texture Image", this.m_graphics, version.deref().m_texture))
-            return MakeUnexpected(Failure());
-        if(!ValidGpuTextureImageVersion(version.deref())){
-            error("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness", source.deref().generation());
-            return MakeUnexpected(Failure());
-        }
-        version.deref().m_validated = true;
-        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-        if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
-            this.m_imageCache.evict();
-        this.m_imageCache.textures().push_back(version);
-        return version;
-    }
-
-    [cpp_unwind]
-    public b8 prepareTextureImages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuTextureImageVersion>> versions){
-        in Vector<SharedImageSource> images = snapshot.textureImages();
-        versions.reserve(images.size());
-        while(versions.size() < images.size()){
-            const Expected<GpuVersion<GpuTextureImageVersion>> version = this.prepareTextureImage(images[versions.size()]);
-            if(!version.has_value())
-                return false;
-            versions.push_back(version.value());
-        }
-        return true;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(

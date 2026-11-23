@@ -661,15 +661,21 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
             emitScratchArenaPrologue(out, 2u, "lambda");
         }
         if(expr.lambdaUsesTaskScope)
-            ParallelStatementEmitter(*this).emitTaskScopePrologue(out, 2u);
+            ParallelStatementEmitter(*this).emitTaskSchedulerPrologue(out, 2u);
         const TypeRef* prevLambdaCallerRet = m_activeCallerArenaReturnType;
         const u32 prevLambdaParallelDepth = m_parallelWorkerDepth;
+        const b8 prevLambdaHasActiveTaskScope = m_hasActiveTaskScope;
+        const u32 prevLambdaTaskGuardCounter = m_taskGuardCounter;
         const u32 prevSwitchBreak = m_activeSwitchBreakLabelLine;
         m_activeCallerArenaReturnType = expr.lambdaInjectsCallerArena ? expr.lambdaReturnType : nullptr;
         m_parallelWorkerDepth = 0u;
+        m_hasActiveTaskScope = false;
+        m_taskGuardCounter = 0u;
         m_activeSwitchBreakLabelLine = 0u;
         emitStatementList(out, expr.lambdaBody, 2u);
         m_activeSwitchBreakLabelLine = prevSwitchBreak;
+        m_taskGuardCounter = prevLambdaTaskGuardCounter;
+        m_hasActiveTaskScope = prevLambdaHasActiveTaskScope;
         m_parallelWorkerDepth = prevLambdaParallelDepth;
         m_activeCallerArenaReturnType = prevLambdaCallerRet;
         out.append("    }");

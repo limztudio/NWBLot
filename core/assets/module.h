@@ -12,7 +12,7 @@
 #include <global/expected.h>
 #include <global/span.h>
 
-#include <cstdlib>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +95,7 @@ template<typename T, usize Count>
 [[nodiscard]] consteval usize RequireAssetTypeIndex(const Array<AssetTypeDescriptor, Count>& types){
     const usize index = FindAssetTypeIndex<T>(types);
     if(index == Count)
-        std::abort();
+        TerminateInvariant();
     return index;
 }
 

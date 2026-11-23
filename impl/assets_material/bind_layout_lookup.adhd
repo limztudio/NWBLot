@@ -9,6 +9,7 @@
 
 
 class MaterialBindLayoutLookupBuilder{
+    [cpp_unwind]
     public b8 buildMaterialBindTypedLayoutBlockLookup(
         in StringView contextLabel,
         in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
@@ -31,11 +32,10 @@ class MaterialBindLayoutLookupBuilder{
             entry.blockIndex = cast<u32>(blockIndex);
             entry.byteBegin = cast<u32>(blockByteBegin);
             entry.constantByteBegin = constantByteBegin;
-            if(outBlockLookup.contains(block.blockName)){
+            if(!outBlockLookup.try_emplace(block.blockName, entry).second){
                 error("Material bind typed layout: duplicate block in '{}'", contextLabel);
                 return false;
             }
-            outBlockLookup.try_emplace(block.blockName, entry);
             assert(cast<usize>(block.byteSize) <= usize.max - blockByteBegin);
 
             blockByteBegin += cast<usize>(block.byteSize);
@@ -48,6 +48,7 @@ class MaterialBindLayoutLookupBuilder{
         return true;
     }
 
+    [cpp_unwind]
     public b8 tryInsertMaterialBindTypedLayoutParameterLookupEntry(
         in StringView interfacePath,
         in StringView contextLabel,
@@ -87,14 +88,14 @@ class MaterialBindLayoutLookupBuilder{
         entry.byteOffset = blockEntry.byteBegin + field.offset;
         entry.constantByteOffset = blockEntry.constantByteBegin + field.offset;
         entry.blockName = block.blockName;
-        if(inOutParameterLookup.contains(parameterName.value())){
+        if(!inOutParameterLookup.try_emplace(parameterName.value(), entry).second){
             error("Material bind typed layout: duplicate parameter '{}' in '{}'", parameterName.value().view(), contextLabel);
             return false;
         }
-        inOutParameterLookup.try_emplace(parameterName.value(), entry);
         return true;
     }
 
+    [cpp_unwind]
     public b8 insertMaterialBindInstanceParameterLookupEntries(
         in StringView interfaceVirtualPath,
         in StringView contextLabel,
@@ -134,6 +135,7 @@ class MaterialBindLayoutLookupBuilder{
         return true;
     }
 
+    [cpp_unwind]
     public b8 buildMaterialBindTypedLayoutParameterLookup(
         in StringView interfaceVirtualPath,
         in StringView contextLabel,

@@ -107,7 +107,11 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(mut MeshResources mesh, in Com
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    return AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, cache.buffer.deref()), cache.heapHandle);
+    const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, cache.buffer.deref()));
+    if(!descriptor.has_value())
+        return false;
+    cache.heapHandle = descriptor.value();
+    return true;
 }
 
 b8 RendererMeshSystem::confirmObjectGeometryCache(in Name meshKey, in RuntimeMeshBuffers sourceBuffers, in ObjectGeometryCacheSnapshot expected, in b8 runtimeMesh){

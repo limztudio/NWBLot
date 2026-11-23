@@ -9,6 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextureDecodeWorkItem{
+    public usize mipIndex = 0u;
+    public u32 slice = 0u;
+    public usize offset = 0u;
+    public usize count = 0u;
+    public u32 blockRowBegin = 0u;
+    public u32 blockRowEnd = 0u;
+}
+
 usize ComputeUastcBlockByteOffset(in u32 blockX, in u32 blockY, in u32 blockCountX){
     const u64 blockIndex = cast<u64>(blockY) * cast<u64>(blockCountX) + cast<u64>(blockX);
     return cast<usize>(blockIndex * s_TextureUastcBytesPerBlock);
@@ -268,18 +277,18 @@ b8 MergeHdrAlpha(
     mut Span<u8> output,
     in b8 allowStripParallel
 ){
-    usize texels = 0u;
-    if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, count, texels))
+    const Expected<usize> texels = ValidateHdrRgba16FloatAlphaMergeLayout(mip, count);
+    if(!texels.has_value())
         return false;
     if(asset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
         const u8 alpha = ResolveHdrUniformAlphaUnorm8(asset.alphaMode() == TextureAlphaMode::ConstantUnorm8, asset.alphaConstantUnorm8());
         const u16 half = BasisFloatToHalf(NormalizeTextureAlphaUnorm8(alpha));
         const u8 halfLo = cast<u8>(half);
         const u8 halfHi = cast<u8>(half >> 8u);
-        for(usize i = 0u; i < texels; ++i){
-            const usize alphaOffset = offset + i * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
-            output[alphaOffset] = halfLo;
-            output[alphaOffset + 1u] = halfHi;
+        for(usize i = 0u; i < texels.value(); ++i){
+            const usize byteOffset = offset + i * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
+            output[byteOffset] = halfLo;
+            output[byteOffset + 1u] = halfHi;
         }
         return true;
     }
@@ -319,11 +328,10 @@ b8 DecodeHdrTextureSlice(
         LogUastcTranscodeFailure("unsupported HDR UASTC upload format");
         return false;
     }
-    u32 elements = 0u;
-    u32 rowPitch = 0u;
-    if(!ValidateHdrUastcTranscodeLayout(mip, source.value(), target != BasisTranscodeFormat::RgbaHalf, count, elements, rowPitch))
+    const Expected<HdrUastcOutputLayout> outputLayout = ValidateHdrUastcTranscodeLayout(mip, source.value(), target != BasisTranscodeFormat::RgbaHalf, count);
+    if(!outputLayout.has_value())
         return false;
-    const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, elements, rowPitch);
+    const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, outputLayout.value().elementCount, outputLayout.value().rowBlocksOrPixels);
     if(!TranscodeBasisImageMaybeParallel(mip, target, layout, source.value().bytes, output, offset, count, allowStripParallel)){
         LogUastcTranscodeFailure("HDR UASTC transcoding failed");
         return false;
@@ -331,6 +339,7 @@ b8 DecodeHdrTextureSlice(
     return format != Format::RGBA16_FLOAT || MergeHdrAlpha(asset, mip, slice, offset, count, output, allowStripParallel);
 }
 
+[cpp_unwind]
 b8 DecodeTextureMipSlice(
     in b8 isHdr,
     in Texture asset,
@@ -348,6 +357,7 @@ b8 DecodeTextureMipSlice(
     return DecodeLdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, allowStripParallel);
 }
 
+[cpp_unwind]
 b8 DecodeTextureMipSlices(
     in b8 isHdr,
     in Texture asset,
@@ -375,6 +385,7 @@ b8 DecodeTextureMipSlices(
     return true;
 }
 
+[cpp_unwind]
 Expected<TextureDecodedMipUpload> DecodeLdrTextureMip(
     in Texture asset,
     in TextureMipLevel mip,
@@ -386,15 +397,18 @@ Expected<TextureDecodedMipUpload> DecodeLdrTextureMip(
     if(!ValidateSupportedLdrTextureUploadFormat(format == Format::ASTC_4x4_UNORM || format == Format::BC7_UNORM || format == Format::RGBA8_UNORM))
         return MakeUnexpected(Failure());
     TextureDecodedMipUpload upload;
-    usize total = 0u;
-    if(!ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM, upload.rowPitch, upload.sliceByteCount, total))
+    const Expected<TextureMipUploadLayout> layout = ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM);
+    if(!layout.has_value())
         return MakeUnexpected(Failure());
-    upload.bytes.resize(total);
-    if(!DecodeTextureMipSlices(false, asset, mip, mipLevel, format, upload.sliceByteCount, total, upload.bytes, allowStripParallel))
+    upload.rowPitch = layout.value().rowPitch;
+    upload.sliceByteCount = layout.value().sliceByteCount;
+    upload.bytes.resize(layout.value().totalByteCount);
+    if(!DecodeTextureMipSlices(false, asset, mip, mipLevel, format, upload.sliceByteCount, layout.value().totalByteCount, upload.bytes, allowStripParallel))
         return MakeUnexpected(Failure());
     return upload;
 }
 
+[cpp_unwind]
 Expected<TextureDecodedMipUpload> DecodeHdrTextureMip(
     in Texture asset,
     in TextureMipLevel mip,
@@ -407,15 +421,18 @@ Expected<TextureDecodedMipUpload> DecodeHdrTextureMip(
     if(!ValidateSupportedHdrTextureUploadFormat(compressed || format == Format::RGBA16_FLOAT))
         return MakeUnexpected(Failure());
     TextureDecodedMipUpload upload;
-    usize total = 0u;
-    if(!ValidateAndComputeHdrMipUploadLayout(mip, compressed, upload.rowPitch, upload.sliceByteCount, total))
+    const Expected<TextureMipUploadLayout> layout = ValidateAndComputeHdrMipUploadLayout(mip, compressed);
+    if(!layout.has_value())
         return MakeUnexpected(Failure());
-    upload.bytes.resize(total);
-    if(!DecodeTextureMipSlices(true, asset, mip, mipLevel, format, upload.sliceByteCount, total, upload.bytes, allowStripParallel))
+    upload.rowPitch = layout.value().rowPitch;
+    upload.sliceByteCount = layout.value().sliceByteCount;
+    upload.bytes.resize(layout.value().totalByteCount);
+    if(!DecodeTextureMipSlices(true, asset, mip, mipLevel, format, upload.sliceByteCount, layout.value().totalByteCount, upload.bytes, allowStripParallel))
         return MakeUnexpected(Failure());
     return upload;
 }
 
+[cpp_unwind]
 Expected<TextureDecodedMipUpload> DecodeTextureMipWithParallel(
     in b8 isHdr,
     in Texture asset,
@@ -429,22 +446,16 @@ Expected<TextureDecodedMipUpload> DecodeTextureMipWithParallel(
     return DecodeLdrTextureMip(asset, mip, mipLevel, format, allowStripParallel);
 }
 
+[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeLdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
+[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeHdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
-class TextureDecodeWorkItem{
-    public usize mipIndex = 0u;
-    public u32 slice = 0u;
-    public usize offset = 0u;
-    public usize count = 0u;
-    public u32 blockRowBegin = 0u;
-    public u32 blockRowEnd = 0u;
-}
 
 b8 DecodeLdrTextureSliceRowRange(
     in Texture asset,
@@ -515,8 +526,7 @@ b8 MergeHdrAlphaRowRange(
     in u32 blockRowBegin,
     in u32 blockRowEnd
 ){
-    usize texels = 0u;
-    if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, count, texels))
+    if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, count).has_value())
         return false;
     if(asset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
         const u8 alpha = ResolveHdrUniformAlphaUnorm8(asset.alphaMode() == TextureAlphaMode::ConstantUnorm8, asset.alphaConstantUnorm8());
@@ -573,11 +583,10 @@ b8 DecodeHdrTextureSliceRowRange(
         LogUastcTranscodeFailure("unsupported HDR UASTC upload format");
         return false;
     }
-    u32 elements = 0u;
-    u32 rowPitch = 0u;
-    if(!ValidateHdrUastcTranscodeLayout(mip, source.value(), target != BasisTranscodeFormat::RgbaHalf, count, elements, rowPitch))
+    const Expected<HdrUastcOutputLayout> outputLayout = ValidateHdrUastcTranscodeLayout(mip, source.value(), target != BasisTranscodeFormat::RgbaHalf, count);
+    if(!outputLayout.has_value())
         return false;
-    const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, elements, rowPitch);
+    const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, outputLayout.value().elementCount, outputLayout.value().rowBlocksOrPixels);
     if(!TranscodeBasisImageRowRange(target, layout, source.value().bytes, output, offset, count, blockRowBegin, blockRowEnd)){
         LogUastcTranscodeFailure("HDR UASTC transcoding failed");
         return false;
@@ -603,15 +612,13 @@ b8 DecodeTextureMipSliceRowRange(
     return DecodeLdrTextureSliceRowRange(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd);
 }
 
-b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
+[cpp_unwind]
+Expected<QueueSubmissionToken, TextureUploadFailure> TextureMipDecoder::decodeAndUploadStaticTextureMips(
     in Texture asset,
     in Format format,
     mut GraphicsRuntime graphics,
-    in TextureHandle texture,
-    mut QueueSubmissionToken outUploadToken,
-    mut b8 outDecoded
+    in TextureHandle texture
 ){
-    outDecoded = false;
     InitializeBasisTranscoder();
     const usize mipCount = asset.mipLevels().size();
     Vector<TextureDecodedMipUpload> decodedMips;
@@ -620,30 +627,31 @@ b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
         const b8 isHdr = asset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4;
         if(!isHdr && asset.payloadFormat() != TexturePayloadFormat::UastcLdr4x4){
             error("TextureAssetLoader: unsupported texture payload format");
-            return false;
+            return MakeUnexpected(TextureUploadFailure::Decode);
         }
         if(isHdr){
             const b8 compressed = IsHdrCompressedFormat(format);
             if(!ValidateSupportedHdrTextureUploadFormat(compressed || format == Format::RGBA16_FLOAT))
-                return false;
+                return MakeUnexpected(TextureUploadFailure::Decode);
         }
         else if(!ValidateSupportedLdrTextureUploadFormat(format == Format::ASTC_4x4_UNORM || format == Format::BC7_UNORM || format == Format::RGBA8_UNORM))
-            return false;
+            return MakeUnexpected(TextureUploadFailure::Decode);
 
         Vector<TextureDecodeWorkItem> workItems;
         workItems.reserve(mipCount * 4u);
         for(usize mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
             in TextureMipLevel mip = asset.mipLevels()[mipIndex];
             mut TextureDecodedMipUpload mipUpload = decodedMips[mipIndex];
-            usize total = 0u;
-            if(isHdr){
-                const b8 compressed = IsHdrCompressedFormat(format);
-                if(!ValidateAndComputeHdrMipUploadLayout(mip, compressed, mipUpload.rowPitch, mipUpload.sliceByteCount, total))
-                    return false;
-            }
-            else if(!ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM, mipUpload.rowPitch, mipUpload.sliceByteCount, total))
-                return false;
-            mipUpload.bytes.resize(total);
+            Expected<TextureMipUploadLayout> layout = MakeUnexpected(Failure());
+            if(isHdr)
+                layout = ValidateAndComputeHdrMipUploadLayout(mip, IsHdrCompressedFormat(format));
+            else
+                layout = ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM);
+            if(!layout.has_value())
+                return MakeUnexpected(TextureUploadFailure::Decode);
+            mipUpload.rowPitch = layout.value().rowPitch;
+            mipUpload.sliceByteCount = layout.value().sliceByteCount;
+            mipUpload.bytes.resize(layout.value().totalByteCount);
 
             const b8 splitStrips = ShouldParallelizeTextureStrips(mip, true);
             usize stripCount = 1u;
@@ -669,7 +677,7 @@ b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
             in TextureMipLevel mip = asset.mipLevels()[item.mipIndex];
             mut TextureDecodedMipUpload mipUpload = decodedMips[item.mipIndex];
             if(!DecodeTextureMipSliceRowRange(isHdr, asset, mip, cast<u32>(item.mipIndex), item.slice, format, item.offset, item.count, mipUpload.bytes, item.blockRowBegin, item.blockRowEnd))
-                return false;
+                return MakeUnexpected(TextureUploadFailure::Decode);
         }
         else if(!workItems.empty()){
             Vector<u8> workOk;
@@ -683,10 +691,9 @@ b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
                     workOk[itemIndex] = 1u;
             }
             if(!AllParallelFlagsSucceeded(workOk))
-                return false;
+                return MakeUnexpected(TextureUploadFailure::Decode);
         }
     }
-    outDecoded = true;
 
     Vector<StandaloneTextureUploadRegion> regions;
     const b8 volume = asset.dimension() == TexturePayloadDimension::Texture3D;
@@ -711,7 +718,10 @@ b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
             regions.push_back(region);
         }
     }
-    return graphics.standaloneGraph().uploadTextureBatch(texture, Span<StandaloneTextureUploadRegion>(regions), ResourceStates::ShaderResource, ResourceStates::Unknown, outUploadToken);
+    const Expected<QueueSubmissionToken> token = graphics.standaloneGraph().uploadTextureBatch(texture, Span<StandaloneTextureUploadRegion>(regions), ResourceStates::ShaderResource, ResourceStates::Unknown);
+    if(!token.has_value())
+        return MakeUnexpected(TextureUploadFailure::Submit);
+    return token.value();
 }
 
 

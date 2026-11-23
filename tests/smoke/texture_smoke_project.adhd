@@ -16,8 +16,6 @@
 
 
 const StringView s_TextureSmokeProjectName = "TextureSmokeProject";
-
-
 const SmokeMeshRef s_TextureGroundPlaneMesh = "project/meshes/shadow_plane";
 const SmokeMeshRef s_TexturedSphereMesh = "project/meshes/caustic_sphere";
 const SmokeMaterialRef s_WhiteGroundMaterial = "project/smoke/texture/materials/white_ground";
@@ -32,6 +30,121 @@ const f32 s_TextureDirectionalLightPitch = 0.48f;
 const f32 s_TextureDirectionalLightYaw = 2.2f;
 const f32 s_TextureDirectionalLightIntensity = 2.0f;
 const u32 s_TextureFramebufferCaptureDefaultFrameCount = 360u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SrgbClearEdgeTask{
+    public TextureHandle destination;
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        if(!this.destination.valid() || context.hasCommandIrCapture())
+            return false;
+        for(u32 index = 0u; index < 4u; ++index){
+            const Array<f32, 4u> rgba = TextureSrgbClearEdgeColor(index);
+            commands.clearTextureRectFloat(this.destination.deref(), TextureSubresourceSet(0u, 1u, 0u, 1u),
+                Rect(cast<i32>(index + 1u), cast<i32>(index + 2u), 1, 3), Color(rgba[0u], rgba[1u], rgba[2u], rgba[3u]));
+        }
+        return !commands.commandRecordingFailed();
+    }
+}
+
+class SrgbClearEdgeReadbackTask{
+    public TextureHandle source;
+    public StagingTextureHandle destination;
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Transfer;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        if(!this.source.valid() || !this.destination.valid() || context.hasCommandIrCapture())
+            return false;
+        commands.copyTexture(this.destination.deref(), TextureSlice(), this.source.deref(), TextureSlice());
+        return !commands.commandRecordingFailed();
+    }
+}
+
+[arena]
+class TextureSmokeProject : IProjectEntryCallbacks{
+    public TextureSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_world = TakeSmokeWorld(world);
+        this.m_captureConfigurationValid = ConfigureSmokeFramebufferCapture(
+            this.m_context,
+            "TextureSmokeProject",
+            s_TextureFramebufferCaptureDefaultFrameCount,
+            this.m_framebufferCapture
+        );
+    }
+
+    public ~TextureSmokeProject(){
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
+    }
+
+    public b8 onStartup()override{
+        if(!this.m_captureConfigurationValid)
+            return false;
+        if(!VerifyTextureSrgbClear(this.m_context.graphics))
+            return false;
+
+        const EntityID activeCamera = CreateSmokeCamera(s_TextureCameraHeight, s_TextureCameraDistance, s_TextureCameraPitch, SmokeWorldRef(this.m_world));
+        this.m_whiteGround = CreateTintedStaticMeshEntity(
+            s_TextureGroundPlaneMesh,
+            s_WhiteGroundMaterial,
+            NameTextAscii(s_WhiteGroundMaterialInterface),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(3.25f, 1.0f, 3.25f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        this.m_texturedSphere = CreateTintedStaticMeshEntity(
+            s_TexturedSphereMesh,
+            s_TextureMaterial,
+            NameTextAscii(s_TextureMaterialInterface),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            VectorSingle(0.0f, 1.16f, 0.15f, 0.0f),
+            VectorSingle(1.1f, 1.1f, 1.1f, 0.0f),
+            s_TextureRuntimeTintParameter,
+            SmokeWorldRef(this.m_world)
+        );
+
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f,
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity, SmokeWorldRef(this.m_world)
+        );
+        [essential] assert(
+            activeCamera.valid() && directionalLight.valid() && this.m_whiteGround.valid() && this.m_texturedSphere.valid(),
+            "TextureSmokeProject failed to create the white receiver and textured sphere"
+        );
+
+        [essential] info("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created");
+        return true;
+    }
+
+    public void onShutdown()override{
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
+        [essential] info("TextureSmokeProject: shutdown");
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        return TickSmokeWorldWithCapture(delta, SmokeWorldRef(this.m_world), this.m_framebufferCapture);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private NotNullUniquePtr<World> m_world;
+    private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
+    private EntityID m_whiteGround = s_InvalidEntityId;
+    private EntityID m_texturedSphere = s_InvalidEntityId;
+    private b8 m_captureConfigurationValid;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,43 +193,6 @@ u8 ExpectedSRGBClearByte(in f32 value, in b8 srgb){
     }
     const f32 quantized = cast<f32>(cast<f64>(Clamp(encoded, 0.0f, 1.0f)) * 255.0);
     return cast<u8>(Floor(cast<f32>(cast<f64>(quantized) + 0.5)));
-}
-
-class SrgbClearEdgeTask{
-    public TextureHandle destination;
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
-        return commands;
-    }
-    [cpp_unwind]
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        if(!this.destination.valid() || context.hasCommandIrCapture())
-            return false;
-        for(u32 index = 0u; index < 4u; ++index){
-            const Array<f32, 4u> rgba = TextureSrgbClearEdgeColor(index);
-            commands.clearTextureRectFloat(this.destination.deref(), TextureSubresourceSet(0u, 1u, 0u, 1u),
-                Rect(cast<i32>(index + 1u), cast<i32>(index + 2u), 1, 3), Color(rgba[0u], rgba[1u], rgba[2u], rgba[3u]));
-        }
-        return !commands.commandRecordingFailed();
-    }
-}
-
-class SrgbClearEdgeReadbackTask{
-    public TextureHandle source;
-    public StagingTextureHandle destination;
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = GpuQueueCapability::Transfer;
-        return commands;
-    }
-    [cpp_unwind]
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        if(!this.source.valid() || !this.destination.valid() || context.hasCommandIrCapture())
-            return false;
-        commands.copyTexture(this.destination.deref(), TextureSlice(), this.source.deref(), TextureSlice());
-        return !commands.commandRecordingFailed();
-    }
 }
 
 [cpp_unwind]
@@ -260,84 +336,6 @@ b8 VerifyTextureSrgbClear(mut GraphicsRuntime graphics){
     [essential] info("TextureSmokeProject: bounded sRGB clear edges preserve alpha and neighboring pixels");
     return true;
 }
-
-[arena]
-class TextureSmokeProject : IProjectEntryCallbacks{
-    public TextureSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
-        this.m_context = context;
-        this.m_world = TakeSmokeWorld(world);
-        this.m_captureConfigurationValid = ConfigureSmokeFramebufferCapture(
-            this.m_context,
-            "TextureSmokeProject",
-            s_TextureFramebufferCaptureDefaultFrameCount,
-            this.m_framebufferCapture
-        );
-    }
-
-    public ~TextureSmokeProject(){
-        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
-    }
-
-    public b8 onStartup()override{
-        if(!this.m_captureConfigurationValid)
-            return false;
-        if(!VerifyTextureSrgbClear(this.m_context.graphics))
-            return false;
-
-        const EntityID activeCamera = CreateSmokeCamera(s_TextureCameraHeight, s_TextureCameraDistance, s_TextureCameraPitch, SmokeWorldRef(this.m_world));
-        this.m_whiteGround = CreateTintedStaticMeshEntity(
-            s_TextureGroundPlaneMesh,
-            s_WhiteGroundMaterial,
-            NameTextAscii(s_WhiteGroundMaterialInterface),
-            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
-            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
-            VectorSingle(3.25f, 1.0f, 3.25f, 0.0f),
-            SmokeWorldRef(this.m_world)
-        );
-        this.m_texturedSphere = CreateTintedStaticMeshEntity(
-            s_TexturedSphereMesh,
-            s_TextureMaterial,
-            NameTextAscii(s_TextureMaterialInterface),
-            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
-            VectorSingle(0.0f, 1.16f, 0.15f, 0.0f),
-            VectorSingle(1.1f, 1.1f, 1.1f, 0.0f),
-            s_TextureRuntimeTintParameter,
-            SmokeWorldRef(this.m_world)
-        );
-
-        const EntityID directionalLight = CreateSmokeDirectionalLight(
-            s_TextureDirectionalLightPitch, s_TextureDirectionalLightYaw, 0.0f,
-            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), s_TextureDirectionalLightIntensity, SmokeWorldRef(this.m_world)
-        );
-        [essential] assert(
-            activeCamera.valid() && directionalLight.valid() && this.m_whiteGround.valid() && this.m_texturedSphere.valid(),
-            "TextureSmokeProject failed to create the white receiver and textured sphere"
-        );
-
-        [essential] info("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created");
-        return true;
-    }
-
-    public void onShutdown()override{
-        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_framebufferCapture);
-        [essential] info("TextureSmokeProject: shutdown");
-    }
-
-    public b8 onUpdate(in f32 delta)override{
-        return TickSmokeWorldWithCapture(delta, SmokeWorldRef(this.m_world), this.m_framebufferCapture);
-    }
-
-    private mut ProjectRuntimeContext m_context;
-    private NotNullUniquePtr<World> m_world;
-    private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
-    private EntityID m_whiteGround = s_InvalidEntityId;
-    private EntityID m_texturedSphere = s_InvalidEntityId;
-    private b8 m_captureConfigurationValid;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

@@ -12,6 +12,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_UiListCasePanelKey = "panel";
+const StringView s_UiListCaseListKey = "list";
+const StringView s_UiListCaseRowsKey = "rows";
+const StringView s_UiListCaseFirstRowText = "Ax";
+const StringView s_UiMultilineLineSeparator = "\xE2\x80\xA8";
+const StringView s_UiMultilineParagraphSeparator = "\xE2\x80\xA9";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> ListMutationKind{ None, TextSelect, KeySelect, EnabledScroll, RevisionScroll }
 type MultilineCommandTests = MultilineFixture;
 type MultilineCompositionTests = MultilineFixture;
@@ -106,17 +117,6 @@ void SetUiListBuilderRowStyle(mut Builder builder, in SelectableStyle row){ buil
 StringView MakeUiMultilineByteView(in Span<u8> bytes){
     return ReadBinaryTextSlice(bytes, 0u, cast<isize>(bytes.size())).value();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_UiListCasePanelKey = "panel";
-const StringView s_UiListCaseListKey = "list";
-const StringView s_UiListCaseRowsKey = "rows";
-const StringView s_UiListCaseFirstRowText = "Ax";
-const StringView s_UiMultilineLineSeparator = "\xE2\x80\xA8";
-const StringView s_UiMultilineParagraphSeparator = "\xE2\x80\xA9";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

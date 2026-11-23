@@ -57,7 +57,7 @@ public:
         static_assert(IsSame_V<typename OutputVectorT::value_type, ValueT>, "auto-registration queue value types must match");
         static_assert(IsTriviallyCopyable_V<ValueT>, "auto-registration queue values must be trivially copyable");
 
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         if constexpr(IsDefaultConstructible_V<ValueT>)
             AssignTriviallyCopyableVector(outValues, m_values);
         else

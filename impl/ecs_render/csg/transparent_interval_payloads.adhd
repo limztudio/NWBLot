@@ -15,6 +15,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> TransparentCsgIntervalPass{
+    ReceiverSpan,
+    Combine,
+}
+
 class TransparentCsgIntervalGraphSnapshot{
     private MaterialPassDrawItems m_drawItems;
     public CsgFrameGpuData frameData;
@@ -98,12 +103,6 @@ class AvboitPreGraphTaskPayload{
     public void discarded(){
         DiscardGpuTimingMeasure(this.transparentCsgIntervalsTiming);
     }
-}
-
-
-enum<u8> TransparentCsgIntervalPass{
-    ReceiverSpan,
-    Combine,
 }
 
 

@@ -127,7 +127,7 @@ public:
     [[nodiscard]] T* allocate(){
         void* mem = allocateRaw(alignof(T), sizeof(T));
         T* obj = ::new(mem) T(m_arena);
-        if constexpr(!std::is_trivially_destructible_v<T>){
+        if constexpr(!IsTriviallyDestructible_V<T>){
             DestructorNode* const dtor = static_cast<DestructorNode*>(allocateRaw(alignof(DestructorNode), sizeof(DestructorNode)));
             dtor->prev = m_dtorHead;
             dtor->object = obj;

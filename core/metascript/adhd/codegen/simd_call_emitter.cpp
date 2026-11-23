@@ -173,8 +173,8 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             u32 effLanes = 4u;
             if(vecExpr.kind == ExprKind::MemberAccess && vecExpr.isSwizzle && vecExpr.text.size() >= 2u && vecExpr.text.size() <= 4u)
                 effLanes = static_cast<u32>(vecExpr.text.size());
-            else
-                (void)SymbolTable::IsSimdVectorType(vecExpr.resolvedSimdType, effLanes);
+            else if(!SymbolTable::IsSimdVectorType(vecExpr.resolvedSimdType, effLanes))
+                effLanes = 4u;
             AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, CodegenSymbols::s_SimdTransformSuffix);
             m_emitter.emitSimdRegExpr(out, vecExpr, vecExpr.resolvedSimdType);
             out.append(", ");

@@ -14,6 +14,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_OwnerConcurrentIterations = 256u;
+const u64 s_OwnerTransferAllocationCount = 64u;
+const u32 s_OwnerChurnAllocationCount = 8192u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void WaitForFlag(in TestAtomic<b8> flag){
     AtomicBackOff backoff;
     while(!flag.load(MemoryOrder::acquire))
@@ -27,8 +35,7 @@ void WaitForFlag(in TestAtomic<b8> flag){
 void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosingHistory(){
     const Name owner = s_AllocationOwnerConcurrentLifetimes;
     const usize threadCount = 4u;
-    const usize iterations = 256u;
-    const u64 expectedAllocations = cast<u64>(threadCount * iterations * 5u);
+    const u64 expectedAllocations = cast<u64>(threadCount * s_OwnerConcurrentIterations * 5u);
     const ArenaMemoryStats before = OwnerStats(owner);
     ArenaMemoryStats simultaneouslyLive = ArenaMemoryStats();
     b8 failedValue = false;
@@ -42,8 +49,8 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
         Array<Optional<JoiningThread>, 4u> workers;
 
         for(mut Optional<JoiningThread> worker : workers){
-            worker.emplace(lambda[in owner, mut failed, mut releaseFirstAllocations, mut completed, mut firstAllocationsReady, in poolBytes, in iterations]() -> void{
-                for(usize iteration = 0u; iteration < iterations; ++iteration){
+            worker.emplace(lambda[in owner, mut failed, mut releaseFirstAllocations, mut completed, mut firstAllocationsReady, in poolBytes]() -> void{
+                for(usize iteration = 0u; iteration < s_OwnerConcurrentIterations; ++iteration){
                     {
                         HeapStorage arena(owner);
                         RawAllocation allocation = AllocateBytes(arena, 1u, 128u);
@@ -124,12 +131,11 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
     EXPECT_EQ(after.allocationCount - before.allocationCount, expectedAllocations);
     EXPECT_EQ(after.deallocationCount - before.deallocationCount, expectedAllocations);
-    EXPECT_EQ(after.reallocationCount - before.reallocationCount, cast<u64>(threadCount * iterations));
+    EXPECT_EQ(after.reallocationCount - before.reallocationCount, cast<u64>(threadCount * s_OwnerConcurrentIterations));
     EXPECT_EQ(after.peakUsedBytes, expectedPeak);
 }
 
 void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettledBackingTotals(){
-    const u64 allocationCount = 64u;
     u64 allocatedBytes = 0u;
     b8 failedValue = false;
     ArenaMemoryStats before = ArenaMemoryStats();
@@ -147,12 +153,12 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
         TestAtomic<b8> consumed(false);
         TestAtomic<b8> releaseWorkers(false);
 
-        JoiningThread producer(lambda[mut producerReady, mut startProducer, mut failed, mut allocations, mut allocatedBytes, mut produced, mut releaseWorkers, in allocationCount]() -> void{
+        JoiningThread producer(lambda[mut producerReady, mut startProducer, mut failed, mut allocations, mut allocatedBytes, mut produced, mut releaseWorkers]() -> void{
             const RawAllocation warmup = AllocateBacking(1u);
             FreeBacking(warmup);
             producerReady.store(true, MemoryOrder::release);
             WaitForFlag(startProducer);
-            for(usize index = 0u; index < allocationCount; ++index){
+            for(usize index = 0u; index < s_OwnerTransferAllocationCount; ++index){
                 const RawAllocation allocation = AllocateBacking(13u);
                 allocations[index] = allocation;
                 if(allocation.address() == 0u){
@@ -166,12 +172,12 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
             produced.store(true, MemoryOrder::release);
             WaitForFlag(releaseWorkers);
         });
-        JoiningThread consumer(lambda[mut consumerReady, mut startConsumer, mut failed, mut allocations, mut consumed, mut releaseWorkers, in allocationCount]() -> void{
+        JoiningThread consumer(lambda[mut consumerReady, mut startConsumer, mut failed, mut allocations, mut consumed, mut releaseWorkers]() -> void{
             const RawAllocation warmup = AllocateBacking(1u);
             FreeBacking(warmup);
             consumerReady.store(true, MemoryOrder::release);
             WaitForFlag(startConsumer);
-            for(usize index = 0u; index < allocationCount; ++index){
+            for(usize index = 0u; index < s_OwnerTransferAllocationCount; ++index){
                 RawAllocation allocation = allocations[index];
                 if(allocation.address() == 0u)
                     continue;
@@ -208,12 +214,12 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
     EXPECT_EQ(held.usedBytes - before.usedBytes, allocatedBytes);
     EXPECT_EQ(held.reservedBytes, held.usedBytes);
     EXPECT_GE(held.peakUsedBytes, held.usedBytes);
-    EXPECT_EQ(held.allocationCount - before.allocationCount, allocationCount);
+    EXPECT_EQ(held.allocationCount - before.allocationCount, s_OwnerTransferAllocationCount);
     EXPECT_EQ(settled.usedBytes, before.usedBytes);
     EXPECT_EQ(settled.reservedBytes, settled.usedBytes);
-    EXPECT_EQ(settled.allocationCount - before.allocationCount, allocationCount);
-    EXPECT_EQ(settled.reallocationCount - before.reallocationCount, allocationCount);
-    EXPECT_EQ(settled.deallocationCount - before.deallocationCount, allocationCount);
+    EXPECT_EQ(settled.allocationCount - before.allocationCount, s_OwnerTransferAllocationCount);
+    EXPECT_EQ(settled.reallocationCount - before.reallocationCount, s_OwnerTransferAllocationCount);
+    EXPECT_EQ(settled.deallocationCount - before.deallocationCount, s_OwnerTransferAllocationCount);
     EXPECT_GE(settled.peakUsedBytes, held.peakUsedBytes);
     EXPECT_GE(retired.allocationCount, settled.allocationCount);
     EXPECT_GE(retired.reallocationCount, settled.reallocationCount);
@@ -528,7 +534,6 @@ void VerifyAllocationOwners_BackingDomainCannotCollideWithAnArenaName(){
 void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     const Name owner = s_AllocationOwnerConcurrent;
     const u32 threadCount = 4u;
-    const u32 allocationCount = 8192u;
     const ArenaMemoryStats before = OwnerStats(owner);
     b8 failedValue = false;
     u64 elapsed = 0u;
@@ -537,10 +542,10 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
         TestAtomic<b8> failed(false);
         Array<Optional<JoiningThread>, 4u> workers;
         for(mut Optional<JoiningThread> worker : workers){
-            worker.emplace(lambda[in owner, mut startGate, mut failed, in allocationCount]() -> void{
+            worker.emplace(lambda[in owner, mut startGate, mut failed]() -> void{
                 HeapStorage arena(owner);
                 startGate.arrive_and_wait();
-                for(u32 index = 0u; index < allocationCount; ++index){
+                for(u32 index = 0u; index < s_OwnerChurnAllocationCount; ++index){
                     RawAllocation allocation = AllocateBytes(arena, 1u, 128u);
                     if(allocation.address() == 0u){
                         failed.store(true, MemoryOrder::relaxed);
@@ -561,8 +566,8 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     EXPECT_FALSE(failedValue);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, cast<u64>(threadCount * allocationCount));
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, cast<u64>(threadCount * allocationCount));
+    EXPECT_EQ(after.allocationCount - before.allocationCount, cast<u64>(threadCount * s_OwnerChurnAllocationCount));
+    EXPECT_EQ(after.deallocationCount - before.deallocationCount, cast<u64>(threadCount * s_OwnerChurnAllocationCount));
     const u64 expectedPeak = Max(before.peakUsedBytes, cast<u64>(128u));
     EXPECT_EQ(after.peakUsedBytes, expectedPeak);
     RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);

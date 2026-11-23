@@ -59,6 +59,54 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
             appendInclude(extraHdr);
     }
 
+    const auto exprUsesTaskScopeLambda = [](const auto& self, const Expr* const expr)noexcept -> b8{
+        if(!expr)
+            return false;
+        if(expr->kind == ExprKind::Lambda && expr->lambdaUsesTaskScope)
+            return true;
+        if(self(self, expr->lhs) || self(self, expr->rhs))
+            return true;
+        for(const Expr* const arg : expr->arguments){
+            if(self(self, arg))
+                return true;
+        }
+        return false;
+    };
+    const auto stmtsUseTaskScope = [&](const auto& self, const Span<const Stmt* const> stmts)noexcept -> b8{
+        for(const Stmt* s : stmts){
+            if(!s)
+                continue;
+            if(
+                s->kind == StmtKind::ParallelForRange
+                || s->kind == StmtKind::ParallelForIndex
+                || s->kind == StmtKind::ParallelBlock
+                || s->kind == StmtKind::ParallelCall
+            )
+                return true;
+            if(
+                exprUsesTaskScopeLambda(exprUsesTaskScopeLambda, s->expr)
+                || exprUsesTaskScopeLambda(exprUsesTaskScopeLambda, s->condition)
+                || exprUsesTaskScopeLambda(exprUsesTaskScopeLambda, s->stepExpr)
+            )
+                return true;
+            for(const Expr* const arg : s->arguments){
+                if(exprUsesTaskScopeLambda(exprUsesTaskScopeLambda, arg))
+                    return true;
+            }
+            if(s->initStmt){
+                const Stmt* const initPtr = s->initStmt;
+                if(self(self, Span<const Stmt* const>(&initPtr, 1u)))
+                    return true;
+            }
+            if(self(self, s->statements) || self(self, s->elseStatements))
+                return true;
+            for(const SwitchCase& sc : s->switchCases){
+                if(self(self, sc.statements))
+                    return true;
+            }
+        }
+        return false;
+    };
     const auto stmtsUseDiagnostic = [](const auto& self, const Span<const Stmt* const> stmts)noexcept -> b8{
         for(const Stmt* s : stmts){
             if(!s)
@@ -92,7 +140,7 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
             if(!method || method->isImported || method->isExtern)
                 continue;
             if(ShouldEmitCallableInHeader(classDecl, *method)){
-                if(method->usesTaskScope)
+                if(method->usesTaskScope || (!hasHeaderTaskScope && stmtsUseTaskScope(stmtsUseTaskScope, method->body)))
                     hasHeaderTaskScope = true;
                 if(!hasHeaderDiagnostic && stmtsUseDiagnostic(stmtsUseDiagnostic, method->body))
                     hasHeaderDiagnostic = true;
@@ -123,7 +171,7 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         emitRoleHeader(ClassRoleKind::Component);
     for(const MethodDecl* fn : unit.freeFunctions){
         if(fn && !fn->isImported && !fn->isExtern && ShouldEmitCallableInHeader(nullptr, *fn)){
-            if(fn->usesTaskScope)
+            if(fn->usesTaskScope || (!hasHeaderTaskScope && stmtsUseTaskScope(stmtsUseTaskScope, fn->body)))
                 hasHeaderTaskScope = true;
             if(!hasHeaderDiagnostic && stmtsUseDiagnostic(stmtsUseDiagnostic, fn->body))
                 hasHeaderDiagnostic = true;

@@ -14,6 +14,16 @@
 type UiTextAreaBuilderTests = TextAreaFixture;
 type UiTextAreaLoanTests = TextAreaLoanFixture;
 type UiTextAreaReentryTests = TextAreaLoanFixture;
+const u32 s_UiTextAreaQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiTextAreaPosInfF32Bits = 0x7f800000u;
+const u32 s_UiTextAreaNegInfF32Bits = 0xff800000u;
+const AStringView s_UiTextAreaPanelKey = "panel";
+const AStringView s_UiTextAreaWidgetKey = "area";
+const AStringView s_UiTextAreaPopupKey = "popup";
+const AStringView s_UiTextAreaChildPopupKey = "child";
+const AStringView s_UiTextAreaVerticalThumbPart = "scroll.y.thumb";
+const AStringView s_UiTextAreaKoreanLanguage = "ko";
+const AStringView s_UiTextAreaReenteredKey = "reentered";
 
 class UiTextAreaOrdinaryHost : IEditBoxHost{
     public usize ordinaryLoans = 0u;
@@ -218,17 +228,6 @@ b8 FrameUiTextAreaPopup(mut UiTextAreaInputScrollTests self, in u64 generation, 
         && self.m_context.finishFrame()
         && self.m_context.commitFrame(generation);
 }
-
-const u32 s_UiTextAreaQuietNaNF32Bits = 0x7fc00000u;
-const u32 s_UiTextAreaPosInfF32Bits = 0x7f800000u;
-const u32 s_UiTextAreaNegInfF32Bits = 0xff800000u;
-const AStringView s_UiTextAreaPanelKey = "panel";
-const AStringView s_UiTextAreaWidgetKey = "area";
-const AStringView s_UiTextAreaPopupKey = "popup";
-const AStringView s_UiTextAreaChildPopupKey = "child";
-const AStringView s_UiTextAreaVerticalThumbPart = "scroll.y.thumb";
-const AStringView s_UiTextAreaKoreanLanguage = "ko";
-const AStringView s_UiTextAreaReenteredKey = "reentered";
 
 
 ShapeRequest MakeUiTextAreaFontSizeShapeRequest(in f32 fontSize){

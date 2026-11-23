@@ -15,11 +15,6 @@ type ShadowShaderHandle = ShaderHandle;
 type ShadowComputePipelineHandle = ComputePipelineHandle;
 type ShadowBufferHandle = BufferHandle;
 type ShadowDescriptorHandle = GpuDescriptorHandle;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_HardwareShadowCrossings = "hardware_shadow_crossings";
 const Name s_HardwareShadowOverflowList = "hardware_shadow_overflow_list";
 const Name s_HardwareShadowOverflowArgs = "hardware_shadow_overflow_args";
@@ -64,7 +59,6 @@ const Name s_ShadowPassTransparentTemporalMerge = "render.shadow_visibility.tran
 const Name s_ShadowPassCombinedFirstWavelet = "render.shadow_visibility.combined_first_wavelet";
 const Name s_ShadowPassTransparentFirstWavelet = "render.shadow_visibility.transparent_first_wavelet";
 const Name s_ShadowPassSoftTransparentFold = "render.shadow_visibility.soft_transparent_fold";
-
 const StringView s_ShadowSoftHalfAName = "render.shadow_visibility.soft_half_a";
 const StringView s_ShadowSoftHalfALabel = "Shadow Soft Half A";
 const StringView s_ShadowSoftHalfBName = "render.shadow_visibility.soft_half_b";
@@ -145,10 +139,6 @@ const usize s_SoftShadowLightSpaceReadCapacity = 9u;
 const Color s_ShadowVisibilityAllLitClearColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
 const TextureSubresourceSet s_ShadowVisibilitySubresources = TextureSubresourceSet(0u, 1u, 0u, s_SceneShadowSlotCount);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 enum<u8> SoftShadowOpaqueResolvePhase{
     TemporalAndWavelet,
     TemporalOnly,
@@ -181,6 +171,10 @@ flag<u8> PreparedShadowTraceGeometryRole{
     SoftwareIndex,
     SoftwareAttribute
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class SoftShadowResolveStageState{
     public ShadowShaderHandle m_shader = ShadowShaderHandle();
@@ -374,6 +368,52 @@ class ShadowTraceBufferRecord{
     public b8 accepted;
 }
 
+class OpaqueSoftShadowResolveOptions{
+    public b8 frontIsA = false;
+    public b8 temporalActive = false;
+    public b8 graphOwnsGeometryEntry = false;
+    public b8 graphOwnsTraceToFirstWavelet = false;
+    public b8 dispatchResolve = false;
+    public b8 dispatchResolveTail = false;
+    public SoftShadowOpaqueResolvePhase phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+}
+
+class TransparentSoftShadowResolveOptions{
+    public b8 frontIsA = false;
+    public b8 temporalActive = false;
+    public b8 dispatchResolve = false;
+    public b8 dispatchResolveTail = false;
+    public b8 splitResolve = false;
+    public b8 dispatchTemporalMerge = false;
+    public b8 graphOwnsTraceToResolve = false;
+}
+
+class SoftwareTransparentShadowTraceInputs{
+    public u32 frameIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 groupsX = 0u;
+    public u32 groupsY = 0u;
+    public b8 graphOwnsOpaqueToTransparentBoundary = false;
+    public b8 temporalHistoryReadable = false;
+    public b8 historyFrontIsA = false;
+}
+
+class RtMeshHeapHandleCacheEntry{
+    public BufferHandle keepAlive;
+    public GpuDescriptorHandle handle;
+    public b8 seenThisFrame = false;
+}
+
+class SoftwareTransparentSamplingState{
+    public BindingLayoutHandle m_layout;
+    public Array<ShaderHandle, 2u> m_shaders;
+    public Array<ComputePipelineHandle, 2u> m_pipelines;
+    public SoftwareTransparentSamplingHistory m_history;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void ResetSoftShadowTemporalHistoryState(
     mut b8 outSoftShadowTemporalSeeded,
@@ -402,53 +442,6 @@ Expected<u32> TryResolveShadowEdgeListCapacityRecords(in u32 width, in u32 heigh
         return MakeUnexpected(Failure());
     }
     return cast<u32>(edgeListCapacity);
-}
-
-
-class OpaqueSoftShadowResolveOptions{
-    public b8 frontIsA = false;
-    public b8 temporalActive = false;
-    public b8 graphOwnsGeometryEntry = false;
-    public b8 graphOwnsTraceToFirstWavelet = false;
-    public b8 dispatchResolve = false;
-    public b8 dispatchResolveTail = false;
-    public SoftShadowOpaqueResolvePhase phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
-}
-
-
-class TransparentSoftShadowResolveOptions{
-    public b8 frontIsA = false;
-    public b8 temporalActive = false;
-    public b8 dispatchResolve = false;
-    public b8 dispatchResolveTail = false;
-    public b8 splitResolve = false;
-    public b8 dispatchTemporalMerge = false;
-    public b8 graphOwnsTraceToResolve = false;
-}
-
-
-class SoftwareTransparentShadowTraceInputs{
-    public u32 frameIndex = 0u;
-    public u32 sampleCount = 0u;
-    public u32 groupsX = 0u;
-    public u32 groupsY = 0u;
-    public b8 graphOwnsOpaqueToTransparentBoundary = false;
-    public b8 temporalHistoryReadable = false;
-    public b8 historyFrontIsA = false;
-}
-
-class RtMeshHeapHandleCacheEntry{
-    public BufferHandle keepAlive;
-    public GpuDescriptorHandle handle;
-    public b8 seenThisFrame = false;
-}
-
-
-class SoftwareTransparentSamplingState{
-    public BindingLayoutHandle m_layout;
-    public Array<ShaderHandle, 2u> m_shaders;
-    public Array<ComputePipelineHandle, 2u> m_pipelines;
-    public SoftwareTransparentSamplingHistory m_history;
 }
 
 

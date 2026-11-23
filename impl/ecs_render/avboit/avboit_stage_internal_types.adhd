@@ -9,13 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ResolveRefractionCaptureSetUseCount(in b8 sampledTextureSetValid){
-    if(sampledTextureSetValid)
-        return s_RefractionCaptureGeometryAndTextureSetUseCount;
-    return 1u;
-}
-
-
 class FrameGraphAvboitStageTiming{
     public mut GpuTimingSubmissionTicket preTimingTicket;
     public mut GpuTimingSubmissionTicket depthWarpTimingTicket;
@@ -102,6 +95,16 @@ class FrameGraphAvboitStage : NoCopy{
         mut AvboitGeneratedGeometryReuse generatedGeometry,
         mut AvboitUploadedStreamState uploadedStreams
     );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ResolveRefractionCaptureSetUseCount(in b8 sampledTextureSetValid){
+    if(sampledTextureSetValid)
+        return s_RefractionCaptureGeometryAndTextureSetUseCount;
+    return 1u;
 }
 
 

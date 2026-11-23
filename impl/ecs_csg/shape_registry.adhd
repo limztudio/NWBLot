@@ -133,7 +133,8 @@ class CsgShapeRegistry : NoCopy{
         }
         if(!ValidateCsgShapeRegistryInsertion(desc.name, id, this.m_types.size(), occupied, conflictingName))
             return MakeUnexpected(Failure());
-        this.m_types.try_emplace(id, this.makeEntry(id, desc));
+        if(!this.m_types.try_emplace(id, this.makeEntry(id, desc)).second)
+            return MakeUnexpected(Failure());
         ++this.m_revision;
         return id;
     }
@@ -214,10 +215,10 @@ class CsgShapeRegistry : NoCopy{
         b8 found = false;
         const FutexGuard guard = AcquireFutex(this.m_mutex);
         for(in auto entry : this.m_types){
-            b8 adopt = false;
-            if(!CanSelectCsgShaderModuleInclude(module, entry.second.desc.shaderModule, includeText, entry.second.desc.shaderModuleInclude, found, adopt))
+            const Expected<b8> adopt = CanSelectCsgShaderModuleInclude(module, entry.second.desc.shaderModule, includeText, entry.second.desc.shaderModuleInclude, found);
+            if(!adopt.has_value())
                 return MakeUnexpected(Failure());
-            if(adopt)
+            if(adopt.value())
                 includeText = entry.second.desc.shaderModuleInclude;
         }
         if(!found)

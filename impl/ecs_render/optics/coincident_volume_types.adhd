@@ -22,6 +22,24 @@ class CoincidentOpticalVolumeCandidate{
     public i32 mediumPriority = 0;
 }
 
+class CoincidentOpticalVolumeKey{
+    public in CoincidentOpticalVolumeCandidate candidate;
+
+
+    public CoincidentOpticalVolumeKey(in CoincidentOpticalVolumeCandidate inCandidate){
+        this.candidate = inCandidate;
+    }
+
+
+    public b8 operator==(in CoincidentOpticalVolumeKey rhs)const{
+        return EqualCoincidentOpticalVolumeCandidates(this.candidate, rhs.candidate);
+    }
+
+    public usize hash()const{
+        return HashCoincidentOpticalVolumeCandidate(this.candidate);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -160,24 +178,6 @@ CoincidentOpticalVolumeCandidate MakeCoincidentOpticalVolumeCandidate(
     candidate.mediumPriority = renderer.opticalMediumPriority;
     candidate.mutableTypedBytes = mutableTypedBytes;
     return candidate;
-}
-
-class CoincidentOpticalVolumeKey{
-    public in CoincidentOpticalVolumeCandidate candidate;
-
-
-    public CoincidentOpticalVolumeKey(in CoincidentOpticalVolumeCandidate inCandidate){
-        this.candidate = inCandidate;
-    }
-
-
-    public b8 operator==(in CoincidentOpticalVolumeKey rhs)const{
-        return EqualCoincidentOpticalVolumeCandidates(this.candidate, rhs.candidate);
-    }
-
-    public usize hash()const{
-        return HashCoincidentOpticalVolumeCandidate(this.candidate);
-    }
 }
 
 void SelectSuppressedCoincidentOpticalVolumes(

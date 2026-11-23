@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,7 +48,6 @@ b8 IsAvboitComputeEmulationFrameReady(in b8 planMatches, in b8 materialDrawBuffe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 [cpp_unwind]
 Expected<AvboitPassUploadResult> GatherAvboitPassUpload(
     mut RendererMaterialSystem materials,

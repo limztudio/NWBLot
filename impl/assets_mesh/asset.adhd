@@ -41,10 +41,10 @@ class Mesh{
         );
     }
 
-    public b8 loadBinary(in Span<u8> binary);
+    [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
-    public void setPayload(
+    [cpp_unwind] public void setPayload(
         in Vector<f32x3u> positions,
         in Vector<f16x4u> normals,
         in Vector<f16x4u> tangents,

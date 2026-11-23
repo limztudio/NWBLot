@@ -84,6 +84,7 @@ MeshletBounds BuildMeshletBounds(
     return bounds;
 }
 
+[cpp_unwind]
 b8 FlushBuiltMeshlet(
     in StringView metaKind,
     in StringView filePathText,

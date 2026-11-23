@@ -20,12 +20,75 @@ const StringView s_Crash002 = "crash-002";
 const StringView s_Crash003 = "crash-003";
 const StringView s_CrashTests = "crash_tests";
 const StringView s_Test = "test";
-
 const Name s_OperationScratch = s_CrashTestNameTestsIntegrationCrashOperationScratch;
 const Name s_InstallArena = s_CrashTestNameTestsIntegrationCrashInstall;
 const Name s_SignalChildInstallArena = s_CrashTestNameTestsIntegrationCrashSignalChildInstall;
 const Name s_ArchiveFixtureArena = s_CrashTestNameTestsIntegrationCrashArchiveUpload;
 const Name s_ArchiveOperationScratch = s_CrashTestNameTestsIntegrationCrashArchiveUploadScratch;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CrashDiagnosticObserver{
+    public StringView category;
+    public u32 count = 0u;
+    public u32 unlocked = 0u;
+    public Array<CrashChar, 192u> message;
+    public Array<CrashChar, 64u> operation;
+    public b8 checkMutex;
+
+    public CrashDiagnosticObserver(in StringView observedCategory, in b8 check){
+        this.category = observedCategory;
+        this.checkMutex = check;
+    }
+
+    public void observe(in DiagnosticEventRecord record){
+        if(record.category != this.category)
+            return;
+        ++this.count;
+        CopyFixedBuffer(this.message, record.message);
+        CopyFixedBuffer(this.operation, record.expression);
+        if(this.checkMutex){
+            mut CrashRuntimeState state = TestCrashState();
+            if(state.mutex.try_lock()){
+                ++this.unlocked;
+                state.mutex.unlock();
+            }
+        }
+    }
+}
+
+[ordered]
+class CrashArchiveUpload{
+    public HeapStorage m_arena = HeapStorage(s_ArchiveFixtureArena);
+    public ScratchStorage m_scratch = ScratchStorage(s_ArchiveOperationScratch);
+    public Path m_root;
+    private b8 m_rootReady = false;
+
+    public void setup(){
+        const ExecutablePaths paths = ExecutablePaths();
+        const auto directory = paths.directory();
+        ASSERT_TRUE(directory.has_value());
+        this.m_root = directory.value() / "crashes" / "test_storage" / CurrentCrashTestName();
+        this.m_rootReady = true;
+        ASSERT_TRUE(RemoveAllIfExists(this.m_root).has_value());
+        ASSERT_TRUE(EnsureDirectories(this.m_root).has_value());
+    }
+
+    public void teardown(){
+        if(this.m_rootReady)
+            EXPECT_TRUE(RemoveAllIfExists(this.m_root).has_value());
+    }
+}
+
+class CrashHandlerCleanup{
+    public ~CrashHandlerCleanup(){ UninstallCrashHandler(); }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Path BucketDirectory(in StringView testGroup, in StringView bucketName){
     return SpoolDirectory(testGroup) / bucketName;
@@ -111,62 +174,6 @@ b8 BytesContain(in ObservationArchiveBytes bytes, in StringView needle){
             return true;
     }
     return false;
-}
-
-class CrashDiagnosticObserver{
-    public StringView category;
-    public u32 count = 0u;
-    public u32 unlocked = 0u;
-    public Array<CrashChar, 192u> message;
-    public Array<CrashChar, 64u> operation;
-    public b8 checkMutex;
-
-    public CrashDiagnosticObserver(in StringView observedCategory, in b8 check){
-        this.category = observedCategory;
-        this.checkMutex = check;
-    }
-
-    public void observe(in DiagnosticEventRecord record){
-        if(record.category != this.category)
-            return;
-        ++this.count;
-        CopyFixedBuffer(this.message, record.message);
-        CopyFixedBuffer(this.operation, record.expression);
-        if(this.checkMutex){
-            mut CrashRuntimeState state = TestCrashState();
-            if(state.mutex.try_lock()){
-                ++this.unlocked;
-                state.mutex.unlock();
-            }
-        }
-    }
-}
-
-[ordered]
-class CrashArchiveUpload{
-    public HeapStorage m_arena = HeapStorage(s_ArchiveFixtureArena);
-    public ScratchStorage m_scratch = ScratchStorage(s_ArchiveOperationScratch);
-    public Path m_root;
-    private b8 m_rootReady = false;
-
-    public void setup(){
-        const ExecutablePaths paths = ExecutablePaths();
-        const auto directory = paths.directory();
-        ASSERT_TRUE(directory.has_value());
-        this.m_root = directory.value() / "crashes" / "test_storage" / CurrentCrashTestName();
-        this.m_rootReady = true;
-        ASSERT_TRUE(RemoveAllIfExists(this.m_root).has_value());
-        ASSERT_TRUE(EnsureDirectories(this.m_root).has_value());
-    }
-
-    public void teardown(){
-        if(this.m_rootReady)
-            EXPECT_TRUE(RemoveAllIfExists(this.m_root).has_value());
-    }
-}
-
-class CrashHandlerCleanup{
-    public ~CrashHandlerCleanup(){ UninstallCrashHandler(); }
 }
 
 Expected<ObservationArchiveBytes, ErrorCode> BuildCrashArchiveInTemporaryScratch(mut HeapStorage heap, in Path root){
@@ -412,9 +419,13 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
 }
 
 NWB_ADHD_GTEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError, VerifyCrashArchiveUpload_PreservesNativeMissingDirectoryError)
+
 NWB_ADHD_GTEST_F(CrashArchiveUpload, ResultOwnsBytesAfterWorkingScratchExpires, VerifyCrashArchiveUpload_ResultOwnsBytesAfterWorkingScratchExpires)
+
 NWB_ADHD_GTEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry, VerifyCrashArchiveUpload_UnsupportedProtocolPreservesFailureAndPendingRetry)
+
 NWB_ADHD_GTEST(Crash, RequestAdmissionRejectsCorruptCountsAndUnterminatedText, VerifyCrash_RequestAdmissionRejectsCorruptCountsAndUnterminatedText)
+
 NWB_ADHD_GTEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity, VerifyCrash_AckAdmissionRequiresBoundedTerminatedIdentity)
 
 

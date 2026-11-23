@@ -11,6 +11,39 @@
 
 const StringView s_SubsystemStringValueRequirement = "must be a string";
 
+type SubsystemCookEntry<T> = PreparedAssetCookEntry<T>;
+type SubsystemCookRegistration<T> = FamilyCookRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>, SubsystemCookPolicy>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SubsystemCookPolicy{
+    public StringView prefix()const{ return s_SubsystemDiagnosticPrefix; }
+    public StringView kind()const{ return s_SubsystemAssetKindLabel; }
+    public void registerType(in Name assetType)const{ RegisterCompositeRootAssetType(assetType); }
+
+    public b8 read(in Path file, in MetascriptValue value, mut ISubsystem subsystem)const;
+
+    public b8 validate(in ISubsystem subsystem)const{ return subsystem.validatePayload(); }
+
+    public b8 collect(in ISubsystem subsystem, mut ICookDependencyCollector collector)const{
+        for(in AssetRef<ISubsystem> ref : subsystem.parentRefs()){
+            if(!collector.addAssetDependency(ref.name(), ISubsystem::AssetTypeName()))
+                return false;
+        }
+        for(usize i = 0u; i < subsystem.fieldCount(); ++i){
+            const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+            const usize count = subsystem.fieldValueCount(i);
+            for(usize element = 0u; element < count; ++element){
+                if(!collector.addAssetDependency(subsystem.fieldValue(i, element), descriptor.expectedAssetType))
+                    return false;
+            }
+        }
+        return true;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -187,40 +220,9 @@ b8 ParseSubsystemMetadataFields(in Path file, in MetascriptValue asset, mut ISub
     return subsystem.validatePayload();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SubsystemCookPolicy{
-    public StringView prefix()const{ return s_SubsystemDiagnosticPrefix; }
-    public StringView kind()const{ return s_SubsystemAssetKindLabel; }
-    public void registerType(in Name assetType)const{ RegisterCompositeRootAssetType(assetType); }
-
-    public b8 read(in Path file, in MetascriptValue value, mut ISubsystem subsystem)const{
-        return ParseSubsystemMetadataFields(file, value, subsystem);
-    }
-
-    public b8 validate(in ISubsystem subsystem)const{ return subsystem.validatePayload(); }
-
-    public b8 collect(in ISubsystem subsystem, mut ICookDependencyCollector collector)const{
-        for(in AssetRef<ISubsystem> ref : subsystem.parentRefs()){
-            if(!collector.addAssetDependency(ref.name(), ISubsystem::AssetTypeName()))
-                return false;
-        }
-        for(usize i = 0u; i < subsystem.fieldCount(); ++i){
-            const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
-            const usize count = subsystem.fieldValueCount(i);
-            for(usize element = 0u; element < count; ++element){
-                if(!collector.addAssetDependency(subsystem.fieldValue(i, element), descriptor.expectedAssetType))
-                    return false;
-            }
-        }
-        return true;
-    }
+b8 SubsystemCookPolicy::read(in Path file, in MetascriptValue value, mut ISubsystem subsystem)const{
+    return ParseSubsystemMetadataFields(file, value, subsystem);
 }
-
-type SubsystemCookEntry<T> = PreparedAssetCookEntry<T>;
-type SubsystemCookRegistration<T> = FamilyCookRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>, SubsystemCookPolicy>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

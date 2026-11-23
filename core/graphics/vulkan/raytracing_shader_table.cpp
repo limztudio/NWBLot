@@ -140,7 +140,7 @@ Expected<u32> ShaderTable::addCallableShader(const AStringView exportName){
 }
 
 void ShaderTable::clearMissShaders()noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     m_missBuffer.reset();
     m_missGroupIndices.clear();
     m_missOffset = 0u;
@@ -148,7 +148,7 @@ void ShaderTable::clearMissShaders()noexcept{
 }
 
 void ShaderTable::clearHitShaders()noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     m_hitBuffer.reset();
     m_hitGroupIndices.clear();
     m_hitOffset = 0u;
@@ -156,7 +156,7 @@ void ShaderTable::clearHitShaders()noexcept{
 }
 
 void ShaderTable::clearCallableShaders()noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     m_callableBuffer.reset();
     m_callableGroupIndices.clear();
     m_callableOffset = 0u;
@@ -164,7 +164,7 @@ void ShaderTable::clearCallableShaders()noexcept{
 }
 
 Object ShaderTable::getNativeHandle(const ObjectType objectType)noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     if(objectType == ObjectTypes::s_Buffer && m_raygenBuffer)
         return Object(m_raygenBuffer->m_buffer);
     return Object(nullptr);
@@ -173,7 +173,7 @@ Object ShaderTable::getNativeHandle(const ObjectType objectType)noexcept{
 ShaderTable::DispatchSnapshot ShaderTable::captureDispatchSnapshot()const noexcept{
     DispatchSnapshot snapshot;
 
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     snapshot.pipeline = m_pipeline;
 
     snapshot.rayGeneration.buffer = m_raygenBuffer;

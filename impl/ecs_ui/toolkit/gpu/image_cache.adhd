@@ -8,16 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SameCachedGpuGlyph(in GpuVersion<GpuGlyphVersion> cached, in SharedGlyphPage page){
-    return SameGlyphPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
-}
-b8 SameCachedGpuSdf(in GpuVersion<GpuSdfAtlasVersion> cached, in SharedSdfAtlasPage page){
-    return SameSdfAtlasPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
-}
-b8 SameCachedGpuTexture(in GpuVersion<GpuTextureImageVersion> cached, in SharedImageSource source){
-    return SameTextureImageKey(cached.deref().m_source.deref(), source.deref());
-}
-
 class GpuImageCache : NoCopy{
     private Vector<GpuVersion<GpuGlyphVersion>> m_glyphCache;
     private Vector<GpuVersion<GpuSdfAtlasVersion>> m_sdfCache;
@@ -108,6 +98,22 @@ class GpuImageCache : NoCopy{
             this.m_textureCache.pop_back();
         }
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SameCachedGpuGlyph(in GpuVersion<GpuGlyphVersion> cached, in SharedGlyphPage page){
+    return SameGlyphPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
+}
+
+b8 SameCachedGpuSdf(in GpuVersion<GpuSdfAtlasVersion> cached, in SharedSdfAtlasPage page){
+    return SameSdfAtlasPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
+}
+
+b8 SameCachedGpuTexture(in GpuVersion<GpuTextureImageVersion> cached, in SharedImageSource source){
+    return SameTextureImageKey(cached.deref().m_source.deref(), source.deref());
 }
 
 

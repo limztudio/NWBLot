@@ -20,6 +20,11 @@
 #include <tests/common/memory.adhd>
 
 
+const f32 s_EcsUiViewportWidth = 500.0f;
+const f32 s_EcsUiViewportHeight = 200.0f;
+const usize s_EcsUiInputMaxEvents = 256u;
+
+
 class FakeTextInput : QueuedTextInputService{
     [cpp_base(QueuedTextInputService, storage)]
     public FakeTextInput(mut HeapStorage storage){}
@@ -74,22 +79,6 @@ class FakeClipboard : QueuedClipboardService{
     public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{
         StartEcsUiFakeClipboardRequest(this, token, operation, text);
     }
-}
-
-b8 DeclareEcsUiWidget(mut Context context, in StringView key, in WidgetKind kind, mut WidgetState outWidget){
-    auto widget = context.declare(key, kind);
-    if(!widget.has_value())
-        return false;
-    outWidget = widget.value();
-    return true;
-}
-
-b8 DeclareEcsUiPartWidget(mut Context context, in WidgetState owner, in StringView key, in WidgetKind kind, mut WidgetState outWidget){
-    auto widget = context.declarePart(owner, key, kind);
-    if(!widget.has_value())
-        return false;
-    outWidget = widget.value();
-    return true;
 }
 
 [ordered]
@@ -203,10 +192,6 @@ class UiEditActionHostTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_EcsUiViewportWidth = 500.0f;
-const f32 s_EcsUiViewportHeight = 200.0f;
-const usize s_EcsUiInputMaxEvents = 256u;
-
 Rect MakeEcsUiRect(in f32 x, in f32 y, in f32 width, in f32 height){
     Rect rect = Rect();
     rect.x = x;
@@ -281,7 +266,13 @@ b8 BeginEcsUiRootFrame(mut UiEditBoxHostTests self){
 }
 
 b8 BeginEcsUiEditFrame(mut UiEditBoxHostTests self){
-    return BeginEcsUiRootFrame(self) && DeclareEcsUiWidget(self.m_context, "edit", WidgetKind::EditBox, self.m_widget);
+    if(!BeginEcsUiRootFrame(self))
+        return false;
+    const auto declared = self.m_context.declare("edit", WidgetKind::EditBox);
+    if(!declared.has_value())
+        return false;
+    self.m_widget = declared.value();
+    return true;
 }
 
 b8 PublishEcsUiEditBox(mut UiEditBoxHostTests self, mut EditModel model, in EditBoxOptions options, in Rect bounds, in Point previousScroll){
@@ -313,9 +304,11 @@ b8 FinishEcsUiEditBoxPrepare(mut UiEditBoxHostTests self, mut EditModel model, i
         return false;
     }
     if(self.m_includeButton){
-        if(!DeclareEcsUiWidget(self.m_context, "other", WidgetKind::Button, self.m_otherWidget)){
+        const auto declaredOther = self.m_context.declare("other", WidgetKind::Button);
+        if(!declaredOther.has_value()){
             return false;
         }
+        self.m_otherWidget = declaredOther.value();
         HitTarget other = HitTarget();
         other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
         other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);

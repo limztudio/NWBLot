@@ -33,6 +33,8 @@ type KeyEnum = Key;
 type LayoutSizePolicyEnum = LayoutSizePolicy;
 type UiSkinDrawModeEnum = UiSkinDrawMode;
 type PopupPlacementSideEnum = PopupPlacementSide;
+const StringView s_UiFixtureParentPopupKey = "parent";
+const StringView s_UiFixtureChildPopupKey = "child";
 
 
 enum<u8> UiFixtureShaperFault{
@@ -296,8 +298,6 @@ WidgetId RequireUiWidgetPartId(in WidgetId parent, in u64 partKey){
     return WidgetId();
 }
 
-const StringView s_UiFixtureParentPopupKey = "parent";
-const StringView s_UiFixtureChildPopupKey = "child";
 
 PopupOptions MakeNestedParentPopupOptions(){
     PopupOptions options = PopupOptions();

@@ -83,8 +83,11 @@ inline void SilenceConsole()noexcept{
     const int nullFd = ::open("/dev/null", O_WRONLY);
     if(nullFd < 0)
         return;
-    (void)::dup2(nullFd, STDOUT_FILENO);
-    (void)::dup2(nullFd, STDERR_FILENO);
+    if(::dup2(nullFd, STDOUT_FILENO) < 0 || ::dup2(nullFd, STDERR_FILENO) < 0){
+        if(nullFd > STDERR_FILENO)
+            ::close(nullFd);
+        return;
+    }
     if(nullFd > STDERR_FILENO)
         ::close(nullFd);
 #endif

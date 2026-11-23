@@ -11,32 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView TransparentMultiProjectName(){
-    return "TransparentMultiSmokeProject";
-}
-
-StringView CausticSphereProjectName(){
-    return "CausticSphereSmokeProject";
-}
-
-StringView TransparentMultiFpsLabel(){
-#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return "FrameLaggedAsyncLightingSmokeProject";
-#elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return "TransparentCsgSmokeProject";
-#elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return CausticSphereProjectName();
-#else
-    return TransparentMultiProjectName();
-#endif
-}
-
 const u32 s_CausticSphereTemporalPhaseCount = s_CausticTemporalPhaseCount;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_CausticSparsePreset = "sparse";
 const StringView s_CausticPopulatedPreset = "populated";
 const u32 s_CausticSphereDefaultCaptureFrameCount = 360u;
@@ -260,6 +235,26 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+StringView TransparentMultiProjectName(){
+    return "TransparentMultiSmokeProject";
+}
+
+StringView CausticSphereProjectName(){
+    return "CausticSphereSmokeProject";
+}
+
+StringView TransparentMultiFpsLabel(){
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    return "FrameLaggedAsyncLightingSmokeProject";
+#elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+    return "TransparentCsgSmokeProject";
+#elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    return CausticSphereProjectName();
+#else
+    return TransparentMultiProjectName();
+#endif
+}
+
 Expected<NotNullUniquePtr<World>> CreateTransparentMultiWorld(mut ProjectRuntimeContext context){
     auto created = CreateSmokeWorld(TransparentMultiProjectName(), context);
     if(!created.has_value())
@@ -294,10 +289,6 @@ f32 ParseTransparentMultiFrozenAngle(){
         return angle;
     return bit_cast<f32>(s_TransparentMultiQuietNaNBits);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

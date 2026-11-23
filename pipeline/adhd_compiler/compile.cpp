@@ -1044,7 +1044,10 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         }
     }
     else{
-        (void)Adhd::BuiltinPreludeLoadError();
+        if(const MStringView preludeError = Adhd::BuiltinPreludeLoadError(); !preludeError.empty()){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: {}"), ConvertString(preludeError));
+            return false;
+        }
 
         const usize inputCount = options.inputs.size();
         MVector<__hidden_compile::CompileWorkerSlot> slots(arena);
@@ -1160,7 +1163,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
             }
         };
 
-        const usize hwThreads = static_cast<usize>(std::thread::hardware_concurrency());
+        const usize hwThreads = static_cast<usize>(Thread::hardware_concurrency());
         const usize workerCount = Min(inputCount, Max<usize>(1u, hwThreads > 0u ? hwThreads : 4u));
         {
             MVector<JoiningThread> threads(arena);

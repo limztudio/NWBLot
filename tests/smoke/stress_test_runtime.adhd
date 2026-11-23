@@ -10,42 +10,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView StressTestProjectName(){
-    return "StressTestSmokeProject";
-}
-
-StringView StressCpuTimingOwnerName(){
-    return "stress";
-}
-
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 const b8 s_StressAsyncShadowM4Benchmark = true;
 #else
 const b8 s_StressAsyncShadowM4Benchmark = false;
 #endif
-
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
 const b8 s_StressAsyncComputeRequested = false;
 #else
 const b8 s_StressAsyncComputeRequested = true;
 #endif
-
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
 const b8 s_StressHardwareShadowBenchmark = true;
 #else
 const b8 s_StressHardwareShadowBenchmark = false;
 #endif
-
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
 const b8 s_StressContinuousBenchmarkRendering = true;
 #else
 const b8 s_StressContinuousBenchmarkRendering = false;
 #endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const f64 s_StressTimingWarmupSeconds = 5.0;
 const f64 s_StressDefaultWarmupSeconds = 0.25;
 const f64 s_StressTimingMeasurementSeconds = 30.0;
@@ -360,6 +344,14 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+StringView StressTestProjectName(){
+    return "StressTestSmokeProject";
+}
+
+StringView StressCpuTimingOwnerName(){
+    return "stress";
+}
+
 Expected<NotNullUniquePtr<World>> CreateStressTestWorld(mut ProjectRuntimeContext context){
     SmokeRenderQualitySettings settings = SmokeRenderQualitySettings();
     settings.shadow.transparentSampling = TransparentShadowSampling::TemporalOne;
@@ -548,10 +540,6 @@ b8 ValidateStressM4QueueTopology(mut ProjectRuntimeContext context){
     );
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

@@ -117,6 +117,7 @@ Expected<u16> TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs
     return MakeUnexpected(Failure());
 }
 
+[cpp_unwind]
 b8 BuildZippedMeshletRefsFixed(
     in StringView metaKind,
     in StringView filePathText,

@@ -13,6 +13,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Bytes")]
+extern AssetByteBuffer NewGraphicsBytes(mut HeapStorage storage);
+
 const StringView s_ModelMetaMeshObjectField = "mesh_0";
 const StringView s_SharedModelPath = "tests/model_cook_metadata/shared";
 const StringView s_UnknownModelPath = "tests/model_cook_metadata/unknown";
@@ -32,8 +35,7 @@ const StringView s_SkeletonJointRoot = "root";
 const StringView s_SkeletonJointRight = "right";
 
 
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Bytes")]
-extern AssetByteBuffer NewGraphicsBytes(mut HeapStorage storage);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [ordered]
@@ -132,19 +134,6 @@ class ModelMetadata{
     }
 }
 
-void AddIndexedModelObjects(in usize skeletonCount, in usize meshCount, mut ModelMetadata metadata){
-    for(usize index = 0u; index < skeletonCount; ++index){
-        const String object = StringFormat("rig_{}", index);
-        const String asset = StringFormat("tests/model_cook_metadata/skeleton_{}", index);
-        metadata.addSkeleton(object, asset);
-    }
-    for(usize index = 0u; index < meshCount; ++index){
-        const String mesh = StringFormat("mesh_{}", index);
-        const String object = StringFormat("rig_{}", (index * 73u) % skeletonCount);
-        metadata.addSkinnedMesh(mesh, object, object);
-    }
-}
-
 [ordered]
 class ModelInputs{
     public HeapStorage storage = HeapStorage(s_AssetCaseTestsModelPayloadInputs);
@@ -182,10 +171,6 @@ class ModelInputs{
         return unnamed.validatePayload();
     }
     public ArenaMemoryStats scratchStats()const{ return this.scratchArena.memoryStats(); }
-}
-
-usize ExpectedSingleTripleModelBinaryBytes(){
-    return size_of<ModelHeaderBinary>() + size_of<ModelSkeletonObjectBinary>() + size_of<ModelStaticMeshObjectBinary>() + size_of<ModelSkinnedMeshObjectBinary>();
 }
 
 [ordered]
@@ -231,6 +216,27 @@ class SkeletonInputs{
         const JointVector joints = this.skeleton.joints();
         this.skeleton.setJoints(joints, indices);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AddIndexedModelObjects(in usize skeletonCount, in usize meshCount, mut ModelMetadata metadata){
+    for(usize index = 0u; index < skeletonCount; ++index){
+        const String object = StringFormat("rig_{}", index);
+        const String asset = StringFormat("tests/model_cook_metadata/skeleton_{}", index);
+        metadata.addSkeleton(object, asset);
+    }
+    for(usize index = 0u; index < meshCount; ++index){
+        const String mesh = StringFormat("mesh_{}", index);
+        const String object = StringFormat("rig_{}", (index * 73u) % skeletonCount);
+        metadata.addSkinnedMesh(mesh, object, object);
+    }
+}
+
+usize ExpectedSingleTripleModelBinaryBytes(){
+    return size_of<ModelHeaderBinary>() + size_of<ModelSkeletonObjectBinary>() + size_of<ModelStaticMeshObjectBinary>() + size_of<ModelSkinnedMeshObjectBinary>();
 }
 
 

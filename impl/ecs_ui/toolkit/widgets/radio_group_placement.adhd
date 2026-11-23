@@ -8,6 +8,85 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+interface IRadioGroupReconcileGuard{
+    b8 current()const;
+}
+
+class RadioGroupSelectionOutcome{
+    public u64 selected = 0u;
+    public u64 cursor = 0u;
+}
+
+class RadioGroupState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public RadioGroupPlacement m_placement;
+    public b8 m_reconciling = false;
+    public b8 m_reentryObserved = false;
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selected;
+    }
+
+    public u64 cursorKey()const{
+        return this.m_cursor;
+    }
+
+    public in RadioGroupPlacement placement()const{
+        return this.m_placement;
+    }
+
+    public RadioGroupSnapshot snapshot()const{
+        RadioGroupSnapshot value;
+        value.instanceGeneration = this.m_instanceGeneration;
+        value.inputGeneration = this.m_inputGeneration;
+        value.revision = this.m_revision;
+        value.selectedKey = this.m_selected;
+        value.cursorKey = this.m_cursor;
+        value.sourceGeneration = this.m_sourceGeneration;
+        value.sourceRevision = this.m_sourceRevision;
+        return value;
+    }
+
+    public b8 matches(in RadioGroupSnapshot value)const{
+        return this.snapshot() == value;
+    }
+
+    public void select(in u64 key){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selected = key;
+        this.m_cursor = key;
+    }
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        ResetRadioGroupStateFields(this.m_selected, this.m_cursor, this.m_sourceGeneration, this.m_sourceRevision, this.m_placement);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
         return MakeUnexpected(Failure());
@@ -100,25 +179,24 @@ void ReconcileRadioGroupSelectionAndCursor(
     outCursor = cursor;
 }
 
-b8 TryApplyRadioGroupControlAction(
+Expected<RadioGroupSelectionOutcome> TryApplyRadioGroupControlAction(
     in RadioGroupChoices choices,
     in RadioGroupOptions options,
     in ControlAction action,
     in ControlToken stateToken,
     in u64 currentSelected,
     in u64 currentCursor,
-    mut u64 outSelected,
-    mut u64 outCursor,
     mut RadioGroupResult inOutResult
 ){
-    outSelected = currentSelected;
-    outCursor = currentCursor;
+    RadioGroupSelectionOutcome outcome = RadioGroupSelectionOutcome();
+    outcome.selected = currentSelected;
+    outcome.cursor = currentCursor;
     if(
         !IsValidRadioGroupOptions(options) || !IsValidRadioGroupChoices(choices)
         || !stateToken.valid() || stateToken != action.control
         || choices.sourceGeneration != stateToken.contentGeneration || choices.sourceRevision != stateToken.contentRevision
     )
-        return false;
+        return MakeUnexpected(Failure());
     u64 candidate = 0u;
     b8 activate = false;
     switch(action.kind){
@@ -138,7 +216,7 @@ b8 TryApplyRadioGroupControlAction(
         const Expected<u32> index = TryFindRadioGroupChoice(choices, candidate);
         if(!index.has_value() || !choices.rows[index.value()].enabled){
             if(action.kind == ControlActionKind::Activate)
-                return false;
+                return MakeUnexpected(Failure());
             candidate = 0u;
         }
         activate = candidate != 0u;
@@ -149,18 +227,18 @@ b8 TryApplyRadioGroupControlAction(
     case ControlActionKind::PageDown:
         break;
     default:
-        return false;
+        return MakeUnexpected(Failure());
     }
     RadioGroupResult candidateResult = inOutResult;
     candidateResult.valid = true;
     if(candidate != 0u){
         candidateResult.selectionChanged = candidateResult.selectionChanged || currentSelected != candidate;
         candidateResult.activated = candidateResult.activated || activate;
-        outSelected = candidate;
-        outCursor = candidate;
+        outcome.selected = candidate;
+        outcome.cursor = candidate;
     }
     inOutResult = candidateResult;
-    return true;
+    return outcome;
 }
 
 void ResolveRadioGroupIndicatorNames(
@@ -233,80 +311,6 @@ void CommitRadioGroupReconcileState(
     inOutResult = candidateResult;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-interface IRadioGroupReconcileGuard{
-    b8 current()const;
-}
-
-class RadioGroupState : NoCopy{
-    public u64 m_instanceGeneration = AllocateServiceIdentity();
-    public u64 m_inputGeneration = AllocateServiceIdentity();
-    public u64 m_revision = 1u;
-    public u64 m_selected = 0u;
-    public u64 m_cursor = 0u;
-    public u64 m_sourceGeneration = 0u;
-    public u64 m_sourceRevision = 0u;
-    public RadioGroupPlacement m_placement;
-    public b8 m_reconciling = false;
-    public b8 m_reentryObserved = false;
-
-    public u64 instanceGeneration()const{
-        return this.m_instanceGeneration;
-    }
-
-    public u64 inputGeneration()const{
-        return this.m_inputGeneration;
-    }
-
-    public u64 revision()const{
-        return this.m_revision;
-    }
-
-    public u64 selectedKey()const{
-        return this.m_selected;
-    }
-
-    public u64 cursorKey()const{
-        return this.m_cursor;
-    }
-
-    public in RadioGroupPlacement placement()const{
-        return this.m_placement;
-    }
-
-    public RadioGroupSnapshot snapshot()const{
-        RadioGroupSnapshot value;
-        value.instanceGeneration = this.m_instanceGeneration;
-        value.inputGeneration = this.m_inputGeneration;
-        value.revision = this.m_revision;
-        value.selectedKey = this.m_selected;
-        value.cursorKey = this.m_cursor;
-        value.sourceGeneration = this.m_sourceGeneration;
-        value.sourceRevision = this.m_sourceRevision;
-        return value;
-    }
-
-    public b8 matches(in RadioGroupSnapshot value)const{
-        return this.snapshot() == value;
-    }
-
-    public void select(in u64 key){
-        AdvanceNonWrappingRevision(this.m_revision);
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selected = key;
-        this.m_cursor = key;
-    }
-
-    public void reset(){
-        AdvanceNonWrappingRevision(this.m_revision);
-        this.m_inputGeneration = AllocateServiceIdentity();
-        ResetRadioGroupStateFields(this.m_selected, this.m_cursor, this.m_sourceGeneration, this.m_sourceRevision, this.m_placement);
-    }
-}
-
 b8 ApplyRadioGroupControlAction(
     in RadioGroupChoices choices,
     in RadioGroupOptions options,
@@ -322,13 +326,12 @@ b8 ApplyRadioGroupControlAction(
     token.instanceGeneration = state.m_inputGeneration;
     token.contentGeneration = state.m_sourceGeneration;
     token.contentRevision = state.m_sourceRevision;
-    u64 selected = state.m_selected;
-    u64 cursor = state.m_cursor;
-    if(!TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, selected, cursor, result))
+    const Expected<RadioGroupSelectionOutcome> outcome = TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, result);
+    if(!outcome.has_value())
         return false;
     AdvanceNonWrappingRevision(state.m_revision);
-    state.m_selected = selected;
-    state.m_cursor = cursor;
+    state.m_selected = outcome.value().selected;
+    state.m_cursor = outcome.value().cursor;
     return true;
 }
 

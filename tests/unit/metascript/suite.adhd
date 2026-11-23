@@ -9,20 +9,118 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_SuiteDedupAdhdSource =
+    "#include \"shared_defs.adhd\"\r\n#include \"shared_defs.adhd\"\r\nu32 Compute(in u32 x) {\r\n    return x + kSharedLimit;\r\n}\r\n";
+const StringView s_SuiteReorderFieldsSource =
+    "flag<u8> NodeFlags {\r\n    Active,\r\n    Visible,\r\n}\r\nclass TransformNode {\r\n    public b8 dirty = false;\r\n    public u32 entityId = 0;\r\n    public f32x4 translation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n    public u64 handle = 0;\r\n    public NodeFlags flags = NodeFlags::Active;\r\n    public u16 layer = 1;\r\n}\r\n";
+const StringView s_SuiteBinaryHeaderSource =
+    "[serialize]\r\nclass BinaryHeader {\r\n    public u8 magic = 1;\r\n    public u32 version = 2;\r\n    public u16 flags = 3;\r\n}\r\n";
+const StringView s_SuiteSimdPayloadSource =
+    "[serialize]\r\nclass SimdPayload {\r\n    public u32 header = 1u;\r\n    public Array<u32, 3> pad;\r\n    public f32x4 vector(0.0f, 0.0f, 0.0f, 1.0f);\r\n    public u32 trailer = 2u;\r\n}\r\n";
+const StringView s_SuiteMissingOverrideSource =
+    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass BadTask : ITask {\r\n    public void execute(in f32 dt) {\r\n    }\r\n}\r\n";
+const StringView s_SuiteClassInheritanceSource =
+    "class BaseClass {\r\n    public u32 x = 0;\r\n}\r\nclass DerivedClass : BaseClass {\r\n    public u32 y = 1;\r\n}\r\n";
+const StringView s_SuiteDoubleInitCtorSource =
+    "class DoubleInit {\r\n    private u32 value = 10;\r\n    public DoubleInit(in u32 v) {\r\n        this.value = v;\r\n    }\r\n}\r\n";
+const StringView s_SuiteMoveCallSource =
+    "void Consume(in u32 x) {}\r\nvoid Caller(in u32 a) {\r\n    u32 local = a;\r\n    Consume(Move(local));\r\n}\r\n";
+const StringView s_SuiteTemplateInstReorderSource =
+    "class Pair<T, U> {\r\n    public T first = 0;\r\n    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n}\r\nclass Holder {\r\n    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n}\r\n";
+const StringView s_SuiteUnimplementedMethodSource =
+    "class Incomplete {\r\n    public u32 x = 0;\r\n    public void missingBody(in u32 v);\r\n}\r\n";
+const StringView s_SuiteMutLiteralCallSource =
+    "void Increment(mut u32 target) {\r\n    target += 1;\r\n}\r\nvoid Caller(in u32 inputVal) {\r\n    Increment(inputVal);\r\n}\r\n";
+const StringView s_SuiteUnsafeParallelVectorSource =
+    "void GatherBad(mut Vector<u32> outItems) {\r\n    parallel_for(u32 i = 0; i < 16; ++i) {\r\n        outItems.push_back(i);\r\n    }\r\n}\r\n";
+const StringView s_SuiteSafeParallelVectorSource =
+    "void GatherGood(mut ParallelVector<u32> outItems, mut Vector<u32> indexedOut) {\r\n    parallel_for(u32 i = 0; i < 16; ++i) {\r\n        outItems.push_back(i);\r\n        indexedOut[i] = i;\r\n    }\r\n}\r\n";
+const StringView s_SuiteOverflowFlagEnumSource =
+    "flag<u8> TooManyFlags {\r\n    F0,\r\n    F1,\r\n    F2,\r\n    F3,\r\n    F4,\r\n    F5,\r\n    F6,\r\n    F7,\r\n    F8\r\n}\r\n";
+const StringView s_SuiteBadFloatSwitchSource =
+    "void BadSwitch(in f32 v) {\r\n    switch(v) {\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
+const StringView s_SuiteDupCaseSwitchSource =
+    "void DupSwitch(in i32 v) {\r\n    switch(v) {\r\n    case 1:\r\n        break;\r\n    case 1:\r\n        break;\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
+const StringView s_SuitePartialCtorInitSource =
+    "class PartialInit {\r\n    public i32 x;\r\n    public PartialInit(in b8 cond) {\r\n        if(cond) {\r\n            this.x = 1;\r\n        }\r\n    }\r\n}\r\n";
+const StringView s_SuiteCallNonFuncFieldSource =
+    "class NonCallableField {\r\n    public i32 value = 0;\r\n    public void run() {\r\n        this.value();\r\n    }\r\n}\r\n";
+const StringView s_SuiteEarlyReturnCtorSource =
+    "class EarlyRetClass {\r\n    public i32 x;\r\n    public EarlyRetClass(in b8 skip) {\r\n        if(skip) {\r\n            return;\r\n        }\r\n        this.x = 5;\r\n    }\r\n}\r\n";
+const StringView s_SuiteBadDependentBoundSource =
+    "interface IBound {\r\n    void step();\r\n}\r\nclass ReqBound<T : IBound> {\r\n    public T item;\r\n}\r\nclass UnboundedWrapper<U> {\r\n    public ReqBound<U> inner;\r\n}\r\n";
+const StringView s_SuiteBadInInterfaceMutCallSource =
+    "interface IMutator {\r\n    void mutate();\r\n}\r\nvoid CallInInterface(in IMutator m) {\r\n    m.mutate();\r\n}\r\n";
+const StringView s_SuiteBadParallelContainerLambdaSource =
+    "void BadParLambda() {\r\n    Vector<i32> items;\r\n    auto pushFn = lambda[mut items](in i32 v) -> void {\r\n        items.push_back(v);\r\n    };\r\n    parallel_for(u32 i = 0u; i < 4u; ++i) {\r\n        pushFn(cast<i32>(i));\r\n    }\r\n}\r\n";
+const StringView s_SuiteScalarLimitsValidSource =
+    "type ShapeId = u32;\r\nconst ShapeId kInvalidShape = ShapeId.max;\r\nf32 LowestFloat() { return f32.min; }\r\n";
+const StringView s_SuiteSingleArgExpectedAndNumericBuiltinsSource =
+    "Expected<i64> ParseTrimmedInt(in StringView text) {\r\n    const StringView trimmed = TrimView(text);\r\n    if(trimmed.empty()) {\r\n        return MakeUnexpected(Failure());\r\n    }\r\n    StringView number = trimmed;\r\n    if(trimmed.front() == '+') {\r\n        number = trimmed.substr(1u);\r\n    }\r\n    const Expected<i64> parsed = ParseI64(number);\r\n    if(!parsed.has_value()) {\r\n        return MakeUnexpected(parsed.error());\r\n    }\r\n    return parsed.value();\r\n}\r\n";
+const StringView s_SuiteUtf8DecodeBuiltinsValidSource =
+    "b8 ValidateUtf8(in StringView text, mut u32 outLastScalar) {\r\n    outLastScalar = 0u;\r\n    usize offset = 0u;\r\n    while(offset < text.size()) {\r\n        u32 codePoint = 0u;\r\n        usize byteCount = 0u;\r\n        if(!TryDecodeUtf8Scalar(text.substr(offset), codePoint, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!TryDecodeUtf8CodePoint(text.substr(offset), outLastScalar, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!IsUtf8ScalarBoundary(text, offset)) {\r\n            return false;\r\n        }\r\n        offset += byteCount;\r\n    }\r\n    return IsUtf8ScalarBoundary(text, offset);\r\n}\r\n";
+const StringView s_SuiteBadUtf8DecodeConstOutSource =
+    "b8 BadUtf8(in StringView text) {\r\n    const u32 codePoint = 0u;\r\n    usize byteCount = 0u;\r\n    return TryDecodeUtf8Scalar(text, codePoint, byteCount);\r\n}\r\n";
+const StringView s_SuiteBadTempMemberViewVarSource =
+    "class TempOwner { public CompactString label = CompactString(\"hi\"); }\r\nTempOwner MakeOwner() { return TempOwner(); }\r\nusize BadTempMemberView() {\r\n    auto view = TrimLeftView(MakeOwner().label.view());\r\n    return view.size();\r\n}\r\n";
+const StringView s_SuiteBadReturnLocalViewAliasSource =
+    "StringView BadReturnAlias() {\r\n    CompactString local = CompactString(\"  scoped  \");\r\n    StringView trimmed = TrimView(local);\r\n    return trimmed.substr(1u);\r\n}\r\n";
+const StringView s_SuiteBadShorterBlockViewAssignSource =
+    "usize BadOuterAssign(in StringView fallback) {\r\n    StringView outer = fallback;\r\n    {\r\n        String inner = \"block\";\r\n        outer = TrimView(inner);\r\n    }\r\n    return outer.size();\r\n}\r\n";
+const StringView s_SuiteSingleLetterMacroSuffixSource =
+    "/*\r\n#include <nonexistent_cpp_header.h>\r\n#define UNCLOSED_MACRO(a, b\r\n*/\r\n#define f 999 /* trailing block comment on define */\r\n#define u 888\r\n#define x 777\r\ni32 ComputeLiteralWithMacros() {\r\n    f32 scale = 1.0f;\r\n    u32 mask = 0x10u + 10u;\r\n    return cast<i32>(scale) + cast<i32>(mask);\r\n}\r\n";
+const StringView s_SuiteCyclicInterfaceSource =
+    "interface IAlpha : IBeta {\r\n    void step();\r\n}\r\ninterface IBeta : IAlpha {\r\n    void tick();\r\n}\r\n";
+const StringView s_SuiteMutateInReturnValueSource =
+    "in i32 GetConstRef(in i32 x) {\r\n    return x;\r\n}\r\nvoid BadMutateConstRef(in i32 a) {\r\n    GetConstRef(a) = 5;\r\n}\r\n";
+const StringView s_SuiteByValueInterfaceTemplateArgSource =
+    "interface IJob {\r\n    void tick();\r\n}\r\nvoid BadIfaceVec() {\r\n    Vector<IJob> jobs;\r\n}\r\n";
+const StringView s_SuiteWrongParameterizedBoundSource =
+    "interface IStream<T> {\r\n    T read()const;\r\n}\r\nclass IntStream : IStream<i32> {\r\n    public i32 read()const override { return 0; }\r\n}\r\nf32 ConsumeFloat<S : IStream<f32>>(in S s) {\r\n    return s.read();\r\n}\r\nf32 BadCall(in IntStream is) {\r\n    return ConsumeFloat<IntStream>(is);\r\n}\r\n";
+const StringView s_SuiteDoubleRefAliasSource =
+    "interface IFoo {\r\n    void tick();\r\n}\r\ntype FooRef = in IFoo;\r\nvoid BadDoubleRef(in FooRef f) {\r\n    mut FooRef local = f;\r\n}\r\n";
+const StringView s_SuiteEscapingMutLambdaSource =
+    "Func<i32()> BadReturnMutLambda() {\r\n    i32 counter = 0;\r\n    return lambda[mut counter]() -> i32 {\r\n        counter += 1;\r\n        return counter;\r\n    };\r\n}\r\n";
+const StringView s_SuiteTopoLayoutAccessSource =
+    "#define VER_GE(maj, min) (((maj) * 10 + (min)) >= 21)\r\n#if VER_GE(2, 1)\r\ntype AliasB = AliasA;\r\ntype AliasA = i32;\r\n#else\r\ntype AliasB = i64;\r\n#endif\r\n\r\ninterface IDerivedNode : IBaseNode {\r\n    i32 derivedId()const;\r\n}\r\ninterface IBaseNode {\r\n    i32 baseId()const;\r\n}\r\n\r\nclass ConcreteNode : IDerivedNode {\r\n    private i32 secret = 42;\r\n    public i32 baseId()const override { return this.secret; }\r\n    public i32 derivedId()const override { return this.secret + 1; }\r\n}\r\n\r\nclass GrandOuter {\r\n    public u8 tag = 1;\r\n    public MidOuter mid = MidOuter();\r\n}\r\nclass MidOuter {\r\n    public u8 flag = 2;\r\n    public LeafInner leaf = LeafInner();\r\n}\r\nclass LeafInner {\r\n    public u64 payload = 99;\r\n}\r\n";
+const StringView s_SuiteMutRebindConstSource =
+    "interface INode {\r\n    void step();\r\n}\r\nclass NodeImpl : INode {\r\n    public void step()override {}\r\n}\r\nvoid BadRebind(mut NodeImpl a, in NodeImpl b) {\r\n    mut INode ref = a;\r\n    ref = b;\r\n}\r\n";
+const StringView s_SuiteNamedEnumSpecSource =
+    "enum<u8> Mode {\r\n    Idle,\r\n    Active,\r\n    kCount,\r\n}\r\n\r\nclass Box<T> {\r\n    public T item = T();\r\n    public u8 tag = 0;\r\n}\r\n\r\nclass Wrapper {\r\n    public Box<Payload> boxed = Box<Payload>();\r\n}\r\n\r\nclass Payload {\r\n    public i32 count = 0;\r\n    public Mode mode = Mode::Idle;\r\n}\r\n";
+const StringView s_SuiteMutLambdaSuppressMoveSource =
+    "u32 ConsumeIds(in Vector<u32> ids) {\r\n    return cast<u32>(ids.size());\r\n}\r\n\r\nu32 TestMutLambdaCaptureSuppressesMove() {\r\n    Vector<u32> captured;\r\n    auto mutator = lambda[mut captured]() -> void {\r\n        captured.push_back(1u);\r\n    };\r\n    return ConsumeIds(captured);\r\n}\r\n";
+const StringView s_SuiteBadOolTemplateParamsSource =
+    "class Pair<T, U> {\r\n    public T a;\r\n    public U b;\r\n    public void reset(in T x, in U y);\r\n}\r\nvoid Pair<X, Y>::reset(in X x, in Y y) {\r\n    this.a = x;\r\n    this.b = y;\r\n}\r\n";
+const StringView s_SuiteDeducedBoundViolationSource =
+    "interface ISource {\r\n    i32 read()const;\r\n}\r\nclass Unrelated {\r\n    public i32 x = 0;\r\n}\r\ni32 ReadFrom<T : ISource>(in T src) {\r\n    return src.read();\r\n}\r\nvoid BadCall(in Unrelated u) {\r\n    ReadFrom(u);\r\n}\r\n";
+const StringView s_SuiteMutateInRefInCtorSource =
+    "interface ISource {\r\n    void write(in i32 v);\r\n}\r\nclass BadHolder {\r\n    public in ISource roRef;\r\n    public BadHolder(in ISource initRef) {\r\n        this.roRef = initRef;\r\n        this.roRef.write(1);\r\n    }\r\n}\r\n";
+const StringView s_SuiteProhibitedBoolSource =
+    "class BadFlagHolder {\r\n    public bool enabled = false;\r\n}\r\n";
+const StringView s_SuiteValidEdgeCasesSource =
+    "const usize kBaseCount = 2u;\r\nconst u32 kSepDec = 1'000'000u;\r\nconst u32 kSepHex = 0xFF'00u;\r\nconst u32 kSepBin = 0b1010'0101u;\r\nconst f32 kSepFloat = 3.141'592f;\r\nflag<u32> RenderFlags {\r\n    None = 0u,\r\n    Opaque,\r\n    Shadow,\r\n    Both = Opaque | Shadow,\r\n}\r\nu32 EvalFlags(in RenderFlags f) {\r\n    Array<u32, (kBaseCount + 2u)> lut = Array<u32, (kBaseCount + 2u)>();\r\n    RenderFlags combined = f | RenderFlags::Opaque;\r\n    combined |= RenderFlags::Shadow;\r\n    return cast<u32>(combined) + kSepDec + kSepHex + kSepBin + cast<u32>(lut.size());\r\n}\r\n";
+const StringView s_SuiteBadDupConstCaseSource =
+    "i32 BadSwitch(in i32 v) {\r\n    switch(v) {\r\n    case 3:\r\n        return 1;\r\n    case 1 + 2:\r\n        return 2;\r\n    default:\r\n        return 0;\r\n    }\r\n}\r\n";
+const StringView s_SuiteValidModernFeaturesSource =
+    "#define THRESHOLD 1'000\r\n#if THRESHOLD == 1'000\r\nconst f32 kHexFloat = 0x1.5p-4f;\r\nconst f32 kTrailingDot = 1.f;\r\n#endif\r\nenum<u8> BlendStep {\r\n    StepTowards,\r\n    HoldValue,\r\n}\r\ninterface IComparable<T> {\r\n    b8 equals(in T other)const;\r\n}\r\nclass Item : IComparable<Item> {\r\n    public i32 id = 0;\r\n    public b8 equals(in Item other)const override {\r\n        return this.id == other.id;\r\n    }\r\n}\r\nb8 CheckFirst<T : IComparable<T>>(in Span<T> items, in T target) {\r\n    if(items.empty())\r\n        return false;\r\n    return items[0u].equals(target);\r\n}\r\nb8 UseDeducedSpan(in Span<Item> items, in Item target) {\r\n    return CheckFirst(items, target) && (kHexFloat < kTrailingDot);\r\n}\r\n";
+const StringView s_SuiteDeducedInstantiationAndSimdHashSource =
+    "class Box<T> {\r\n    public T value;\r\n    public Box(in T v) {\r\n        this.value = v;\r\n    }\r\n}\r\nBox<T> WrapInBox<T>(in T v) {\r\n    return Box<T>(v);\r\n}\r\n[reflect]\r\nclass NameTable {\r\n    public Vector<Name> names;\r\n    public HashMap<Name, u32> lookup;\r\n}\r\nusize HashSimdAndWrap(in VectorSingle a, in VectorSingle b) {\r\n    auto wrapped = WrapInBox(42u);\r\n    f32x4 sum(a + b);\r\n    return HashCombineValue(usize(wrapped.value), sum);\r\n}\r\n";
+const StringView s_SuiteMotherArenaHierarchyAndGenericSpecSource =
+    "[arena]\r\nclass RootOwner {\r\n    public MidChild mid = MidChild();\r\n    public Holder<u32> podHolder = Holder<u32>();\r\n    public Holder<String> strHolder = Holder<String>();\r\n}\r\nclass MidChild {\r\n    public LeafChild leaf = LeafChild();\r\n}\r\nclass LeafChild {\r\n    public String label = \"seed\";\r\n}\r\nclass Holder<T> {\r\n    public T value = T();\r\n}\r\nclass MoveOnlyChild {\r\n    public String label = \"owned\";\r\n    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n}\r\n";
+const StringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
+    "enum<u8> Format {\r\n    Custom8 = 0,\r\n}\r\nclass Color {\r\n    public f32 luma = 1.0f;\r\n}\r\nf32 Viewport(in Color c) {\r\n    return c.luma;\r\n}\r\n[serialize]\r\nclass PackedUnalignedMat {\r\n    public u8 tag = 1u;\r\n    public f32x4x4u world = f32x4x4u();\r\n}\r\n[serialize]\r\nclass AlignedBoundsPacket {\r\n    public u8 tag = 1u;\r\n    public BoundingBox bounds = BoundingBox();\r\n}\r\nclass CustomInputHandler : IInputEventHandler {\r\n    public b8 keyboardCharInput(in u32 codePoint, in i32 mods)override {\r\n        return codePoint != 0u || mods != 0;\r\n    }\r\n}\r\nb8 InspectExports(in IFilesystem fs, in Path entryPath, in Span<u8> rawBytes, in f32x4x4u srcMat, mut f32x4x4u dstMat) {\r\n    Color localColor;\r\n    Format localFmt = Format::Custom8;\r\n    in IFilesystem localFs = fs;\r\n    DirectoryEntry entry = DirectoryEntry(entryPath);\r\n    ResourceStates mask = (ResourceStates::ShaderResource | ResourceStates::CopySource) ^ ResourceStates::CopySource;\r\n    MatrixSingle reg = MatrixSingle(srcMat);\r\n    dstMat = f32x4x4u(reg);\r\n    MatrixDecomposition decomp = MatrixDecomposition();\r\n    Sha1Digest digest = ComputeSha1(rawBytes);\r\n    usize alignedBytes = PersistentArenaStructureAlignedSize(64u);\r\n    DescriptorWriteItem emptyWrite = DescriptorWriteItem::None();\r\n    f32x3x4 joint = MatrixIdentity<f32x3x4>();\r\n    joint._14 = 2.0f;\r\n    MatrixSingle ident = MatrixIdentity();\r\n    f32x4x4 identStore = f32x4x4(ident);\r\n    return joint._14 == 2.0f && identStore._11 == 1.0f && localFs.mounted() && CanRepresentU64<u32>(cast<u32>(localFmt)) && Viewport(localColor) > 0.0f && mask == ResourceStates::ShaderResource && digest.bytes[0u] <= 255u && Sha1Digest::s_HexTextLength == 40u && BufferRange::s_AllBytes > 0u && alignedBytes >= 64u && emptyWrite.slot == 0u && !entry.path().empty() && IsFinite(decomp.scale.xyz);\r\n}\r\n";
+const StringView s_SuiteHandleDerefRhiAndAssetExportsSource =
+    "b8 AcceptMutBuffer(mut Buffer buf) {\r\n    return buf.getDeviceGeneration() != 0u;\r\n}\r\nb8 AcceptMutAsset(mut IAsset asset, mut Framebuffer fb) {\r\n    return fb.getDescription().colorAttachments.empty() || !asset.name().empty();\r\n}\r\nb8 ExerciseHandleRhiAndAssetExports(\r\n    mut GraphicsRuntime rt,\r\n    mut CommandList cmd,\r\n    mut BufferHandle buf,\r\n    mut TextureHandle tex,\r\n    mut UniquePtr<IAsset> assetPtr,\r\n    mut RefCountPtr<IAsset> rcAsset,\r\n    in Span<u8> indexBytes,\r\n    mut CookEntryRegistry entryRegistry,\r\n    in Name vp,\r\n    in AssetBunchExpandContext bunchCtx\r\n) {\r\n    mut Device dev = rt.getDevice();\r\n    b8 bufOk = buf.valid() && AcceptMutBuffer(buf.deref());\r\n    DescriptorWriteItem srv = DescriptorWriteItem::TextureSrv(0u, tex.deref());\r\n    srv.setDimension(TextureDimension::Texture2D);\r\n    cmd.open();\r\n    if(IsValidFramebufferPtr(rt.getFramebuffer(0u))){\r\n        cmd.setResourceStatesForFramebuffer(DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n    }\r\n    cmd.clearState();\r\n    cmd.close();\r\n    auto vpRes = BuildVirtualPathName(vp, \"default\", vp);\r\n    auto cmdStreamRes = ValidateGpuCommandIrStream(indexBytes);\r\n    auto bunchRes = ExpandAssetBunchForAssetCook(bunchCtx);\r\n    b8 assetOk = assetPtr.valid() && rcAsset.valid() && AcceptMutAsset(assetPtr.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u))) && AcceptMutAsset(rcAsset.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n    return dev.getDeviceGeneration() != 0u && bufOk && srv.slot == 0u && vpRes.hasValue() && cmdStreamRes.valid() && bunchRes.hasValue() && entryRegistry.has(vp) && entryRegistry.entryCount() == 0u && assetOk;\r\n}\r\n";
+const StringView s_SuiteCrossNamespaceImportSource =
+    "#include \"foreign_bridge.adhd\"\r\n[reflect]\r\nclass LocalMirror {\r\n    public ForeignMode mode = ForeignMode::Beta;\r\n    public ForeignItem item;\r\n    public FixedVector<u32, kForeignCap> caps;\r\n    public HashMap<ForeignMode, ForeignItem> modeMap;\r\n    public ForeignMode sentinel = ForeignMode::kCount;\r\n    public AssetRef<ForeignAsset> asset;\r\n}\r\nu32 UseForeign(in u32 x) {\r\n    u32 kForeignConst = 100u;\r\n    ForeignMode m = ForeignMode::Alpha;\r\n    ForeignItem it = ForeignItem();\r\n    if(ForeignAsset::s_AssetTypeName.empty())\r\n        return kForeignConst;\r\n    return ForeignFn(x) + kForeignConst + kForeignOther + kSameBridgeConst;\r\n}\r\n";
+const StringView s_SuiteNestedTemplateAndDocumentVisitorSource =
+    "[arena, asset(\"mock_nested\")]\r\nclass MockNestedAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nb8 ExerciseNestedTemplatesAndVisitors(\r\n    mut AssetDocumentMetadataParseContext docCtx,\r\n    in Path nwbPath,\r\n    mut GpuDescriptorRetirementGuard guard,\r\n    in AssetManager assetMgr,\r\n    in Name vp\r\n) {\r\n    if(!docCtx.doc.parse(\"asset = { items = [1, 2], ref = \\\"mock/a\\\" };\")) {\r\n        for(in MetascriptParseError err : docCtx.doc.errors()) {\r\n            if(err.line > 0u)\r\n                return false;\r\n        }\r\n    }\r\n    if(!docCtx.doc.hasVariable(\"asset\"))\r\n        return false;\r\n    const b8 visited = docCtx.doc.visitVariable(\"asset\", lambda[in nwbPath](in MetascriptValue assetVal) -> b8 {\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\"))\r\n            return false;\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\", lambda[](in StringView key) -> b8 { return key == \"items\" || key == \"ref\"; }))\r\n            return false;\r\n        if(!assetVal.forEachMapEntry(lambda[](in StringView k, in MetascriptValue v) -> b8 { return !k.empty() && !v.isNull(); }))\r\n            return false;\r\n        assetVal.visitField(\"items\", lambda[](in MetascriptValue listVal) -> void {\r\n            for(in MetascriptValue item : listVal.listView()) {\r\n                if(!item.isNumeric())\r\n                    return;\r\n            }\r\n        });\r\n        Expected<AssetRef<MockNestedAsset>> refRes = ReadMetadataAssetRefField<MockNestedAsset>(nwbPath, assetVal, \"test\", \"ref\", false);\r\n        if(!refRes.hasValue())\r\n            return false;\r\n        AssetRef<MockNestedAsset> refVal = refRes.value();\r\n        refVal.reset();\r\n        return !refVal.valid();\r\n    });\r\n    guard.release();\r\n    Expected<UniquePtr<MockNestedAsset>> loaded = LoadTypedAssetSync<MockNestedAsset>(assetMgr, vp, \"test\");\r\n    return visited && loaded.hasValue() && loaded.value().valid();\r\n}\r\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class AdhdTestArena{ public HeapStorage arena; }
-
-b8 CompileWithResolver(in StringView source, in StringView path, mut MetascriptIIncludeResolver resolver, mut HeapStorage arena, mut CompileResult result){
-    CompilerOptions options;
-    options.source = source;
-    options.virtualFilePath = path;
-    SetCompilerResolver(options, resolver);
-    return CompileOptionsResult(options, arena, result);
-}
-
-StringView GeneratedHeaderView(in CompileResult result){ return StringView(result.generatedHeader); }
-StringView GeneratedSourceView(in CompileResult result){ return StringView(result.generatedSource); }
-StringView FirstErrorMessage(in CompileResult result){ return StringView(result.errors[0u].message); }
-StringView MStringAsView(in GlobalString text){ return StringView(text); }
 
 class MockIncludeResolver : MetascriptIIncludeResolver{
     public u32 resolveCallCount = 0u;
@@ -64,181 +162,57 @@ class MockIncludeResolver : MetascriptIIncludeResolver{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CompileWithResolver(in StringView source, in StringView path, mut MetascriptIIncludeResolver resolver, mut HeapStorage arena, mut CompileResult result){
+    CompilerOptions options;
+    options.source = source;
+    options.virtualFilePath = path;
+    SetCompilerResolver(options, resolver);
+    return CompileOptionsResult(options, arena, result);
+}
+
+StringView GeneratedHeaderView(in CompileResult result){ return StringView(result.generatedHeader); }
+
+StringView GeneratedSourceView(in CompileResult result){ return StringView(result.generatedSource); }
+
+StringView FirstErrorMessage(in CompileResult result){ return StringView(result.errors[0u].message); }
+
+StringView MStringAsView(in GlobalString text){ return StringView(text); }
+
 usize UnitClassCount(in CompileResult result){ return result.unit.classes.size(); }
+
 b8 UnitClassIsSerialize(in CompileResult result, in usize classIdx){ return BorrowAstNode(result.unit.classes, classIdx).value().isSerialize; }
+
 usize UnitClassTotalAlign(in CompileResult result, in usize classIdx){ return BorrowAstNode(result.unit.classes, classIdx).value().totalAlign; }
+
 usize UnitClassTotalSize(in CompileResult result, in usize classIdx){ return BorrowAstNode(result.unit.classes, classIdx).value().totalSize; }
+
 StringView UnitClassName(in CompileResult result, in usize classIdx){ return StringView(BorrowAstNode(result.unit.classes, classIdx).value().name); }
+
 usize UnitClassOrderedFieldCount(in CompileResult result, in usize classIdx){ return BorrowAstNode(result.unit.classes, classIdx).value().orderedFields.size(); }
+
 StringView UnitClassOrderedFieldName(in CompileResult result, in usize classIdx, in usize fieldIdx){ return StringView(BorrowAstNode(BorrowAstNode(result.unit.classes, classIdx).value().orderedFields, fieldIdx).value().name); }
+
 usize UnitClassOrderedFieldAlign(in CompileResult result, in usize classIdx, in usize fieldIdx){ return BorrowAstNode(BorrowAstNode(result.unit.classes, classIdx).value().orderedFields, fieldIdx).value().resolvedAlign; }
+
 usize UnitClassOrderedFieldOffset(in CompileResult result, in usize classIdx, in usize fieldIdx){ return BorrowAstNode(BorrowAstNode(result.unit.classes, classIdx).value().orderedFields, fieldIdx).value().resolvedOffset; }
+
 usize UnitTemplateInstCount(in CompileResult result){ return result.unit.templateInstantiations.size(); }
+
 usize UnitTemplateInstOrderedFieldCount(in CompileResult result, in usize instIdx){ return BorrowAstNode(result.unit.templateInstantiations, instIdx).value().orderedFields.size(); }
+
 StringView UnitTemplateInstOrderedFieldName(in CompileResult result, in usize instIdx, in usize fieldIdx){ return StringView(BorrowAstNode(BorrowAstNode(result.unit.templateInstantiations, instIdx).value().orderedFields, fieldIdx).value().name); }
+
 usize UnitIncludedAdhdFileCount(in CompileResult result){ return result.unit.includedAdhdFiles.size(); }
+
 StringView UnitIncludedAdhdFileView(in CompileResult result, in usize idx){ return StringView(result.unit.includedAdhdFiles[idx]); }
+
 usize UnitResolvedIncludedFileCount(in CompileResult result){ return result.unit.resolvedIncludedFiles.size(); }
+
 StringView UnitResolvedIncludedFileView(in CompileResult result, in usize idx){ return StringView(result.unit.resolvedIncludedFiles[idx]); }
-
-const StringView s_SuiteDedupAdhdSource =
-    "#include \"shared_defs.adhd\"\r\n#include \"shared_defs.adhd\"\r\nu32 Compute(in u32 x) {\r\n    return x + kSharedLimit;\r\n}\r\n";
-
-const StringView s_SuiteReorderFieldsSource =
-    "flag<u8> NodeFlags {\r\n    Active,\r\n    Visible,\r\n}\r\nclass TransformNode {\r\n    public b8 dirty = false;\r\n    public u32 entityId = 0;\r\n    public f32x4 translation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n    public u64 handle = 0;\r\n    public NodeFlags flags = NodeFlags::Active;\r\n    public u16 layer = 1;\r\n}\r\n";
-
-const StringView s_SuiteBinaryHeaderSource =
-    "[serialize]\r\nclass BinaryHeader {\r\n    public u8 magic = 1;\r\n    public u32 version = 2;\r\n    public u16 flags = 3;\r\n}\r\n";
-
-const StringView s_SuiteSimdPayloadSource =
-    "[serialize]\r\nclass SimdPayload {\r\n    public u32 header = 1u;\r\n    public Array<u32, 3> pad;\r\n    public f32x4 vector(0.0f, 0.0f, 0.0f, 1.0f);\r\n    public u32 trailer = 2u;\r\n}\r\n";
-
-const StringView s_SuiteMissingOverrideSource =
-    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass BadTask : ITask {\r\n    public void execute(in f32 dt) {\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteClassInheritanceSource =
-    "class BaseClass {\r\n    public u32 x = 0;\r\n}\r\nclass DerivedClass : BaseClass {\r\n    public u32 y = 1;\r\n}\r\n";
-
-const StringView s_SuiteDoubleInitCtorSource =
-    "class DoubleInit {\r\n    private u32 value = 10;\r\n    public DoubleInit(in u32 v) {\r\n        this.value = v;\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteMoveCallSource =
-    "void Consume(in u32 x) {}\r\nvoid Caller(in u32 a) {\r\n    u32 local = a;\r\n    Consume(Move(local));\r\n}\r\n";
-
-const StringView s_SuiteTemplateInstReorderSource =
-    "class Pair<T, U> {\r\n    public T first = 0;\r\n    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n}\r\nclass Holder {\r\n    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n}\r\n";
-
-const StringView s_SuiteUnimplementedMethodSource =
-    "class Incomplete {\r\n    public u32 x = 0;\r\n    public void missingBody(in u32 v);\r\n}\r\n";
-
-const StringView s_SuiteMutLiteralCallSource =
-    "void Increment(mut u32 target) {\r\n    target += 1;\r\n}\r\nvoid Caller(in u32 inputVal) {\r\n    Increment(inputVal);\r\n}\r\n";
-
-const StringView s_SuiteUnsafeParallelVectorSource =
-    "void GatherBad(mut Vector<u32> outItems) {\r\n    parallel_for(u32 i = 0; i < 16; ++i) {\r\n        outItems.push_back(i);\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteSafeParallelVectorSource =
-    "void GatherGood(mut ParallelVector<u32> outItems, mut Vector<u32> indexedOut) {\r\n    parallel_for(u32 i = 0; i < 16; ++i) {\r\n        outItems.push_back(i);\r\n        indexedOut[i] = i;\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteOverflowFlagEnumSource =
-    "flag<u8> TooManyFlags {\r\n    F0,\r\n    F1,\r\n    F2,\r\n    F3,\r\n    F4,\r\n    F5,\r\n    F6,\r\n    F7,\r\n    F8\r\n}\r\n";
-
-const StringView s_SuiteBadFloatSwitchSource =
-    "void BadSwitch(in f32 v) {\r\n    switch(v) {\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteDupCaseSwitchSource =
-    "void DupSwitch(in i32 v) {\r\n    switch(v) {\r\n    case 1:\r\n        break;\r\n    case 1:\r\n        break;\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
-
-const StringView s_SuitePartialCtorInitSource =
-    "class PartialInit {\r\n    public i32 x;\r\n    public PartialInit(in b8 cond) {\r\n        if(cond) {\r\n            this.x = 1;\r\n        }\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteCallNonFuncFieldSource =
-    "class NonCallableField {\r\n    public i32 value = 0;\r\n    public void run() {\r\n        this.value();\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteEarlyReturnCtorSource =
-    "class EarlyRetClass {\r\n    public i32 x;\r\n    public EarlyRetClass(in b8 skip) {\r\n        if(skip) {\r\n            return;\r\n        }\r\n        this.x = 5;\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteBadDependentBoundSource =
-    "interface IBound {\r\n    void step();\r\n}\r\nclass ReqBound<T : IBound> {\r\n    public T item;\r\n}\r\nclass UnboundedWrapper<U> {\r\n    public ReqBound<U> inner;\r\n}\r\n";
-
-const StringView s_SuiteBadInInterfaceMutCallSource =
-    "interface IMutator {\r\n    void mutate();\r\n}\r\nvoid CallInInterface(in IMutator m) {\r\n    m.mutate();\r\n}\r\n";
-
-const StringView s_SuiteBadParallelContainerLambdaSource =
-    "void BadParLambda() {\r\n    Vector<i32> items;\r\n    auto pushFn = lambda[mut items](in i32 v) -> void {\r\n        items.push_back(v);\r\n    };\r\n    parallel_for(u32 i = 0u; i < 4u; ++i) {\r\n        pushFn(cast<i32>(i));\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteScalarLimitsValidSource =
-    "type ShapeId = u32;\r\nconst ShapeId kInvalidShape = ShapeId.max;\r\nf32 LowestFloat() { return f32.min; }\r\n";
-
-const StringView s_SuiteSingleArgExpectedAndNumericBuiltinsSource =
-    "Expected<i64> ParseTrimmedInt(in StringView text) {\r\n    const StringView trimmed = TrimView(text);\r\n    if(trimmed.empty()) {\r\n        return MakeUnexpected(Failure());\r\n    }\r\n    StringView number = trimmed;\r\n    if(trimmed.front() == '+') {\r\n        number = trimmed.substr(1u);\r\n    }\r\n    const Expected<i64> parsed = ParseI64(number);\r\n    if(!parsed.has_value()) {\r\n        return MakeUnexpected(parsed.error());\r\n    }\r\n    return parsed.value();\r\n}\r\n";
-
-const StringView s_SuiteUtf8DecodeBuiltinsValidSource =
-    "b8 ValidateUtf8(in StringView text, mut u32 outLastScalar) {\r\n    outLastScalar = 0u;\r\n    usize offset = 0u;\r\n    while(offset < text.size()) {\r\n        u32 codePoint = 0u;\r\n        usize byteCount = 0u;\r\n        if(!TryDecodeUtf8Scalar(text.substr(offset), codePoint, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!TryDecodeUtf8CodePoint(text.substr(offset), outLastScalar, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!IsUtf8ScalarBoundary(text, offset)) {\r\n            return false;\r\n        }\r\n        offset += byteCount;\r\n    }\r\n    return IsUtf8ScalarBoundary(text, offset);\r\n}\r\n";
-
-const StringView s_SuiteBadUtf8DecodeConstOutSource =
-    "b8 BadUtf8(in StringView text) {\r\n    const u32 codePoint = 0u;\r\n    usize byteCount = 0u;\r\n    return TryDecodeUtf8Scalar(text, codePoint, byteCount);\r\n}\r\n";
-
-const StringView s_SuiteBadTempMemberViewVarSource =
-    "class TempOwner { public CompactString label = CompactString(\"hi\"); }\r\nTempOwner MakeOwner() { return TempOwner(); }\r\nusize BadTempMemberView() {\r\n    auto view = TrimLeftView(MakeOwner().label.view());\r\n    return view.size();\r\n}\r\n";
-
-const StringView s_SuiteBadReturnLocalViewAliasSource =
-    "StringView BadReturnAlias() {\r\n    CompactString local = CompactString(\"  scoped  \");\r\n    StringView trimmed = TrimView(local);\r\n    return trimmed.substr(1u);\r\n}\r\n";
-
-const StringView s_SuiteBadShorterBlockViewAssignSource =
-    "usize BadOuterAssign(in StringView fallback) {\r\n    StringView outer = fallback;\r\n    {\r\n        String inner = \"block\";\r\n        outer = TrimView(inner);\r\n    }\r\n    return outer.size();\r\n}\r\n";
-
-const StringView s_SuiteSingleLetterMacroSuffixSource =
-    "/*\r\n#include <nonexistent_cpp_header.h>\r\n#define UNCLOSED_MACRO(a, b\r\n*/\r\n#define f 999 /* trailing block comment on define */\r\n#define u 888\r\n#define x 777\r\ni32 ComputeLiteralWithMacros() {\r\n    f32 scale = 1.0f;\r\n    u32 mask = 0x10u + 10u;\r\n    return cast<i32>(scale) + cast<i32>(mask);\r\n}\r\n";
-
-const StringView s_SuiteCyclicInterfaceSource =
-    "interface IAlpha : IBeta {\r\n    void step();\r\n}\r\ninterface IBeta : IAlpha {\r\n    void tick();\r\n}\r\n";
-
-const StringView s_SuiteMutateInReturnValueSource =
-    "in i32 GetConstRef(in i32 x) {\r\n    return x;\r\n}\r\nvoid BadMutateConstRef(in i32 a) {\r\n    GetConstRef(a) = 5;\r\n}\r\n";
-
-const StringView s_SuiteByValueInterfaceTemplateArgSource =
-    "interface IJob {\r\n    void tick();\r\n}\r\nvoid BadIfaceVec() {\r\n    Vector<IJob> jobs;\r\n}\r\n";
-
-const StringView s_SuiteWrongParameterizedBoundSource =
-    "interface IStream<T> {\r\n    T read()const;\r\n}\r\nclass IntStream : IStream<i32> {\r\n    public i32 read()const override { return 0; }\r\n}\r\nf32 ConsumeFloat<S : IStream<f32>>(in S s) {\r\n    return s.read();\r\n}\r\nf32 BadCall(in IntStream is) {\r\n    return ConsumeFloat<IntStream>(is);\r\n}\r\n";
-
-const StringView s_SuiteDoubleRefAliasSource =
-    "interface IFoo {\r\n    void tick();\r\n}\r\ntype FooRef = in IFoo;\r\nvoid BadDoubleRef(in FooRef f) {\r\n    mut FooRef local = f;\r\n}\r\n";
-
-const StringView s_SuiteEscapingMutLambdaSource =
-    "Func<i32()> BadReturnMutLambda() {\r\n    i32 counter = 0;\r\n    return lambda[mut counter]() -> i32 {\r\n        counter += 1;\r\n        return counter;\r\n    };\r\n}\r\n";
-
-const StringView s_SuiteTopoLayoutAccessSource =
-    "#define VER_GE(maj, min) (((maj) * 10 + (min)) >= 21)\r\n#if VER_GE(2, 1)\r\ntype AliasB = AliasA;\r\ntype AliasA = i32;\r\n#else\r\ntype AliasB = i64;\r\n#endif\r\n\r\ninterface IDerivedNode : IBaseNode {\r\n    i32 derivedId()const;\r\n}\r\ninterface IBaseNode {\r\n    i32 baseId()const;\r\n}\r\n\r\nclass ConcreteNode : IDerivedNode {\r\n    private i32 secret = 42;\r\n    public i32 baseId()const override { return this.secret; }\r\n    public i32 derivedId()const override { return this.secret + 1; }\r\n}\r\n\r\nclass GrandOuter {\r\n    public u8 tag = 1;\r\n    public MidOuter mid = MidOuter();\r\n}\r\nclass MidOuter {\r\n    public u8 flag = 2;\r\n    public LeafInner leaf = LeafInner();\r\n}\r\nclass LeafInner {\r\n    public u64 payload = 99;\r\n}\r\n";
-
-const StringView s_SuiteMutRebindConstSource =
-    "interface INode {\r\n    void step();\r\n}\r\nclass NodeImpl : INode {\r\n    public void step()override {}\r\n}\r\nvoid BadRebind(mut NodeImpl a, in NodeImpl b) {\r\n    mut INode ref = a;\r\n    ref = b;\r\n}\r\n";
-
-const StringView s_SuiteNamedEnumSpecSource =
-    "enum<u8> Mode {\r\n    Idle,\r\n    Active,\r\n    kCount,\r\n}\r\n\r\nclass Box<T> {\r\n    public T item = T();\r\n    public u8 tag = 0;\r\n}\r\n\r\nclass Wrapper {\r\n    public Box<Payload> boxed = Box<Payload>();\r\n}\r\n\r\nclass Payload {\r\n    public i32 count = 0;\r\n    public Mode mode = Mode::Idle;\r\n}\r\n";
-
-const StringView s_SuiteMutLambdaSuppressMoveSource =
-    "u32 ConsumeIds(in Vector<u32> ids) {\r\n    return cast<u32>(ids.size());\r\n}\r\n\r\nu32 TestMutLambdaCaptureSuppressesMove() {\r\n    Vector<u32> captured;\r\n    auto mutator = lambda[mut captured]() -> void {\r\n        captured.push_back(1u);\r\n    };\r\n    return ConsumeIds(captured);\r\n}\r\n";
-
-const StringView s_SuiteBadOolTemplateParamsSource =
-    "class Pair<T, U> {\r\n    public T a;\r\n    public U b;\r\n    public void reset(in T x, in U y);\r\n}\r\nvoid Pair<X, Y>::reset(in X x, in Y y) {\r\n    this.a = x;\r\n    this.b = y;\r\n}\r\n";
-
-const StringView s_SuiteDeducedBoundViolationSource =
-    "interface ISource {\r\n    i32 read()const;\r\n}\r\nclass Unrelated {\r\n    public i32 x = 0;\r\n}\r\ni32 ReadFrom<T : ISource>(in T src) {\r\n    return src.read();\r\n}\r\nvoid BadCall(in Unrelated u) {\r\n    ReadFrom(u);\r\n}\r\n";
-
-const StringView s_SuiteMutateInRefInCtorSource =
-    "interface ISource {\r\n    void write(in i32 v);\r\n}\r\nclass BadHolder {\r\n    public in ISource roRef;\r\n    public BadHolder(in ISource initRef) {\r\n        this.roRef = initRef;\r\n        this.roRef.write(1);\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteProhibitedBoolSource =
-    "class BadFlagHolder {\r\n    public bool enabled = false;\r\n}\r\n";
-
-const StringView s_SuiteValidEdgeCasesSource =
-    "const usize kBaseCount = 2u;\r\nconst u32 kSepDec = 1'000'000u;\r\nconst u32 kSepHex = 0xFF'00u;\r\nconst u32 kSepBin = 0b1010'0101u;\r\nconst f32 kSepFloat = 3.141'592f;\r\nflag<u32> RenderFlags {\r\n    None = 0u,\r\n    Opaque,\r\n    Shadow,\r\n    Both = Opaque | Shadow,\r\n}\r\nu32 EvalFlags(in RenderFlags f) {\r\n    Array<u32, (kBaseCount + 2u)> lut = Array<u32, (kBaseCount + 2u)>();\r\n    RenderFlags combined = f | RenderFlags::Opaque;\r\n    combined |= RenderFlags::Shadow;\r\n    return cast<u32>(combined) + kSepDec + kSepHex + kSepBin + cast<u32>(lut.size());\r\n}\r\n";
-
-const StringView s_SuiteBadDupConstCaseSource =
-    "i32 BadSwitch(in i32 v) {\r\n    switch(v) {\r\n    case 3:\r\n        return 1;\r\n    case 1 + 2:\r\n        return 2;\r\n    default:\r\n        return 0;\r\n    }\r\n}\r\n";
-
-const StringView s_SuiteValidModernFeaturesSource =
-    "#define THRESHOLD 1'000\r\n#if THRESHOLD == 1'000\r\nconst f32 kHexFloat = 0x1.5p-4f;\r\nconst f32 kTrailingDot = 1.f;\r\n#endif\r\nenum<u8> BlendStep {\r\n    StepTowards,\r\n    HoldValue,\r\n}\r\ninterface IComparable<T> {\r\n    b8 equals(in T other)const;\r\n}\r\nclass Item : IComparable<Item> {\r\n    public i32 id = 0;\r\n    public b8 equals(in Item other)const override {\r\n        return this.id == other.id;\r\n    }\r\n}\r\nb8 CheckFirst<T : IComparable<T>>(in Span<T> items, in T target) {\r\n    if(items.empty())\r\n        return false;\r\n    return items[0u].equals(target);\r\n}\r\nb8 UseDeducedSpan(in Span<Item> items, in Item target) {\r\n    return CheckFirst(items, target) && (kHexFloat < kTrailingDot);\r\n}\r\n";
-
-const StringView s_SuiteDeducedInstantiationAndSimdHashSource =
-    "class Box<T> {\r\n    public T value;\r\n    public Box(in T v) {\r\n        this.value = v;\r\n    }\r\n}\r\nBox<T> WrapInBox<T>(in T v) {\r\n    return Box<T>(v);\r\n}\r\n[reflect]\r\nclass NameTable {\r\n    public Vector<Name> names;\r\n    public HashMap<Name, u32> lookup;\r\n}\r\nusize HashSimdAndWrap(in VectorSingle a, in VectorSingle b) {\r\n    auto wrapped = WrapInBox(42u);\r\n    f32x4 sum(a + b);\r\n    return HashCombineValue(usize(wrapped.value), sum);\r\n}\r\n";
-
-const StringView s_SuiteMotherArenaHierarchyAndGenericSpecSource =
-    "[arena]\r\nclass RootOwner {\r\n    public MidChild mid = MidChild();\r\n    public Holder<u32> podHolder = Holder<u32>();\r\n    public Holder<String> strHolder = Holder<String>();\r\n}\r\nclass MidChild {\r\n    public LeafChild leaf = LeafChild();\r\n}\r\nclass LeafChild {\r\n    public String label = \"seed\";\r\n}\r\nclass Holder<T> {\r\n    public T value = T();\r\n}\r\nclass MoveOnlyChild {\r\n    public String label = \"owned\";\r\n    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n}\r\n";
-
-const StringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
-    "enum<u8> Format {\r\n    Custom8 = 0,\r\n}\r\nclass Color {\r\n    public f32 luma = 1.0f;\r\n}\r\nf32 Viewport(in Color c) {\r\n    return c.luma;\r\n}\r\n[serialize]\r\nclass PackedUnalignedMat {\r\n    public u8 tag = 1u;\r\n    public f32x4x4u world = f32x4x4u();\r\n}\r\n[serialize]\r\nclass AlignedBoundsPacket {\r\n    public u8 tag = 1u;\r\n    public BoundingBox bounds = BoundingBox();\r\n}\r\nclass CustomInputHandler : IInputEventHandler {\r\n    public b8 keyboardCharInput(in u32 codePoint, in i32 mods)override {\r\n        return codePoint != 0u || mods != 0;\r\n    }\r\n}\r\nb8 InspectExports(in IFilesystem fs, in Path entryPath, in Span<u8> rawBytes, in f32x4x4u srcMat, mut f32x4x4u dstMat) {\r\n    Color localColor;\r\n    Format localFmt = Format::Custom8;\r\n    in IFilesystem localFs = fs;\r\n    DirectoryEntry entry = DirectoryEntry(entryPath);\r\n    ResourceStates mask = (ResourceStates::ShaderResource | ResourceStates::CopySource) ^ ResourceStates::CopySource;\r\n    MatrixSingle reg = MatrixSingle(srcMat);\r\n    dstMat = f32x4x4u(reg);\r\n    MatrixDecomposition decomp = MatrixDecomposition();\r\n    Sha1Digest digest = ComputeSha1(rawBytes);\r\n    usize alignedBytes = PersistentArenaStructureAlignedSize(64u);\r\n    DescriptorWriteItem emptyWrite = DescriptorWriteItem::None();\r\n    f32x3x4 joint = MatrixIdentity<f32x3x4>();\r\n    joint._14 = 2.0f;\r\n    MatrixSingle ident = MatrixIdentity();\r\n    f32x4x4 identStore = f32x4x4(ident);\r\n    return joint._14 == 2.0f && identStore._11 == 1.0f && localFs.mounted() && CanRepresentU64<u32>(cast<u32>(localFmt)) && Viewport(localColor) > 0.0f && mask == ResourceStates::ShaderResource && digest.bytes[0u] <= 255u && Sha1Digest::s_HexTextLength == 40u && BufferRange::s_AllBytes > 0u && alignedBytes >= 64u && emptyWrite.slot == 0u && !entry.path().empty() && IsFinite(decomp.scale.xyz);\r\n}\r\n";
-
-const StringView s_SuiteHandleDerefRhiAndAssetExportsSource =
-    "b8 AcceptMutBuffer(mut Buffer buf) {\r\n    return buf.getDeviceGeneration() != 0u;\r\n}\r\nb8 AcceptMutAsset(mut IAsset asset, mut Framebuffer fb) {\r\n    return fb.getDescription().colorAttachments.empty() || !asset.name().empty();\r\n}\r\nb8 ExerciseHandleRhiAndAssetExports(\r\n    mut GraphicsRuntime rt,\r\n    mut CommandList cmd,\r\n    mut BufferHandle buf,\r\n    mut TextureHandle tex,\r\n    mut UniquePtr<IAsset> assetPtr,\r\n    mut RefCountPtr<IAsset> rcAsset,\r\n    in Span<u8> indexBytes,\r\n    mut CookEntryRegistry entryRegistry,\r\n    in Name vp,\r\n    in AssetBunchExpandContext bunchCtx\r\n) {\r\n    mut Device dev = rt.getDevice();\r\n    b8 bufOk = buf.valid() && AcceptMutBuffer(buf.deref());\r\n    DescriptorWriteItem srv = DescriptorWriteItem::TextureSrv(0u, tex.deref());\r\n    srv.setDimension(TextureDimension::Texture2D);\r\n    cmd.open();\r\n    if(IsValidFramebufferPtr(rt.getFramebuffer(0u))){\r\n        cmd.setResourceStatesForFramebuffer(DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n    }\r\n    cmd.clearState();\r\n    cmd.close();\r\n    auto vpRes = BuildVirtualPathName(vp, \"default\", vp);\r\n    auto cmdStreamRes = ValidateGpuCommandIrStream(indexBytes);\r\n    auto bunchRes = ExpandAssetBunchForAssetCook(bunchCtx);\r\n    b8 assetOk = assetPtr.valid() && rcAsset.valid() && AcceptMutAsset(assetPtr.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u))) && AcceptMutAsset(rcAsset.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n    return dev.getDeviceGeneration() != 0u && bufOk && srv.slot == 0u && vpRes.hasValue() && cmdStreamRes.valid() && bunchRes.hasValue() && entryRegistry.has(vp) && entryRegistry.entryCount() == 0u && assetOk;\r\n}\r\n";
-
-const StringView s_SuiteCrossNamespaceImportSource =
-    "#include \"foreign_bridge.adhd\"\r\n[reflect]\r\nclass LocalMirror {\r\n    public ForeignMode mode = ForeignMode::Beta;\r\n    public ForeignItem item;\r\n    public FixedVector<u32, kForeignCap> caps;\r\n    public HashMap<ForeignMode, ForeignItem> modeMap;\r\n    public ForeignMode sentinel = ForeignMode::kCount;\r\n    public AssetRef<ForeignAsset> asset;\r\n}\r\nu32 UseForeign(in u32 x) {\r\n    u32 kForeignConst = 100u;\r\n    ForeignMode m = ForeignMode::Alpha;\r\n    ForeignItem it = ForeignItem();\r\n    if(ForeignAsset::s_AssetTypeName.empty())\r\n        return kForeignConst;\r\n    return ForeignFn(x) + kForeignConst + kForeignOther + kSameBridgeConst;\r\n}\r\n";
-
-const StringView s_SuiteNestedTemplateAndDocumentVisitorSource =
-    "[arena, asset(\"mock_nested\")]\r\nclass MockNestedAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nb8 ExerciseNestedTemplatesAndVisitors(\r\n    mut AssetDocumentMetadataParseContext docCtx,\r\n    in Path nwbPath,\r\n    mut GpuDescriptorRetirementGuard guard,\r\n    in AssetManager assetMgr,\r\n    in Name vp\r\n) {\r\n    if(!docCtx.doc.parse(\"asset = { items = [1, 2], ref = \\\"mock/a\\\" };\")) {\r\n        for(in MetascriptParseError err : docCtx.doc.errors()) {\r\n            if(err.line > 0u)\r\n                return false;\r\n        }\r\n    }\r\n    if(!docCtx.doc.hasVariable(\"asset\"))\r\n        return false;\r\n    const b8 visited = docCtx.doc.visitVariable(\"asset\", lambda[in nwbPath](in MetascriptValue assetVal) -> b8 {\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\"))\r\n            return false;\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\", lambda[](in StringView key) -> b8 { return key == \"items\" || key == \"ref\"; }))\r\n            return false;\r\n        if(!assetVal.forEachMapEntry(lambda[](in StringView k, in MetascriptValue v) -> b8 { return !k.empty() && !v.isNull(); }))\r\n            return false;\r\n        assetVal.visitField(\"items\", lambda[](in MetascriptValue listVal) -> void {\r\n            for(in MetascriptValue item : listVal.listView()) {\r\n                if(!item.isNumeric())\r\n                    return;\r\n            }\r\n        });\r\n        Expected<AssetRef<MockNestedAsset>> refRes = ReadMetadataAssetRefField<MockNestedAsset>(nwbPath, assetVal, \"test\", \"ref\", false);\r\n        if(!refRes.hasValue())\r\n            return false;\r\n        AssetRef<MockNestedAsset> refVal = refRes.value();\r\n        refVal.reset();\r\n        return !refVal.valid();\r\n    });\r\n    guard.release();\r\n    Expected<UniquePtr<MockNestedAsset>> loaded = LoadTypedAssetSync<MockNestedAsset>(assetMgr, vp, \"test\");\r\n    return visited && loaded.hasValue() && loaded.value().valid();\r\n}\r\n";
 
 CompilerTypeArg MakeTypeArgument(in StringView text){
     CompilerTypeArg result;
@@ -359,6 +333,32 @@ void VerifyAdhdCompiler_ReordersTemplateInstantiationFieldsAndRejectsFreeOperato
     ExpectCompileFails(arena, s_SuiteUnimplementedMethodSource, "impl/render/incomplete.adhd");
 }
 
+void VerifyAdhdCompiler_SystemUpdateUnwindRespectsSdkContract(){
+    AdhdTestArena arena = AdhdTestArena();
+    CompileResult result = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[arena, system(\"unwind_sys\")] class UnwindSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/unwind_system.adhd", arena.arena, result));
+    const StringView header = GeneratedHeaderView(result);
+    EXPECT_NE(header.find("update(::NWB::Core::ECS::World& world, const f32 delta) override"), usize.max);
+    EXPECT_EQ(header.find("update(::NWB::Core::ECS::World& world, const f32 delta)noexcept override"), usize.max);
+    {
+        const ScopedTestTrace trace("bad_sys");
+        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_sys\")] class BadSystem { [cpp_unwind] public void prepare(mut World world)override{} }", "impl/ecs_sample/bad_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+    }
+    {
+        const ScopedTestTrace trace("bad_implicit_sys");
+        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_implicit_sys\")] class BadImplicitSystem { [cpp_unwind] public void prepare(mut World world){} }", "impl/ecs_sample/bad_implicit_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+    }
+    {
+        const ScopedTestTrace trace("bad_param_sys");
+        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_param_sys\")] class BadParamSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in u32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/bad_unwind_param_system.adhd", "method marked 'override' does not match any method in an implemented interface");
+    }
+    {
+        const ScopedTestTrace trace("overload_sys");
+        CompileResult helperResult = CompileResult(arena.arena);
+        ASSERT_TRUE(Compile("[arena, system(\"overload_sys\")] class OverloadHelperSystem { [cpp_unwind] public void helper(in u32 count){} public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/overload_prepare_system.adhd", arena.arena, helperResult));
+    }
+}
+
 void VerifyAdhdCompiler_EnforcesMutCallSiteAndParallelConcurrencySafety(){
     AdhdTestArena arena = AdhdTestArena();
     ExpectCompileFails(arena, s_SuiteMutLiteralCallSource, "impl/test_mut.adhd");
@@ -438,6 +438,17 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(assetHdr.find("const Vector<u8, ::ArenaBase>& bytes()const noexcept"), usize.max);
     EXPECT_NE(assetHdr.find("NWB_DEFINE_ASSET_CODEC(SampleBlobAssetCodec, SampleBlob);"), usize.max);
     EXPECT_NE(assetCpp.find("__adhd_asset_codec_registrar_SampleBlob(&::NWB::Core::Assets::CreateAssetCodec<SampleBlobAssetCodec>);"), usize.max);
+
+    CompileResult cookUnwindRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[arena, asset(\"unwind_blob\")]\r\nclass UnwindBlob {\r\n    private Vector<u8> m_bytes;\r\n    [cpp_unwind] public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"UnwindBlob::loadBinary\") && !binary.empty(); }\r\n}\r\nconst StringView s_UnwindBlobDiag = \"unwind blob\";\r\nclass UnwindEntry {\r\n    public Name virtualPath = s_NameNone;\r\n}\r\nExpected<UnwindEntry> ReadUnwindEntry(in Name path, in Path file, in MetascriptValue value) {\r\n    UnwindEntry entry;\r\n    entry.virtualPath = path;\r\n    return entry;\r\n}\r\n[cpp_unwind, asset_writer]\r\nb8 WriteUnwindBlob(in UnwindBlob asset, mut Vector<u8> outBinary) {\r\n    outBinary.reserve(4u);\r\n    return true;\r\n}\r\n[cpp_unwind, cook_entry(\"unwind_blob\", s_UnwindBlobDiag, ReadUnwindEntry, document_and_value, quiet)]\r\nExpected<UnwindBlob> BuildUnwindBlob(in UnwindEntry entry) {\r\n    UnwindBlob asset(entry.virtualPath);\r\n    return asset;\r\n}\r\n", "impl/assets_unwind/cook.adhd", arena.arena, cookUnwindRes));
+    const StringView cookUnwindHdr = GeneratedHeaderView(cookUnwindRes);
+    const StringView cookUnwindCpp = GeneratedSourceView(cookUnwindRes);
+    EXPECT_NE(cookUnwindHdr.find("b8 WriteUnwindBlob("), usize.max);
+    EXPECT_EQ(cookUnwindHdr.find("WriteUnwindBlob(const UnwindBlob& asset, Vector<u8, __AdhdArena0>& outBinary)noexcept"), usize.max);
+    EXPECT_NE(cookUnwindHdr.find("Expected<UnwindBlob> BuildUnwindBlob("), usize.max);
+    EXPECT_EQ(cookUnwindHdr.find("BuildUnwindBlob(const UnwindEntry& entry)noexcept"), usize.max);
+    EXPECT_NE(cookUnwindCpp.find("UnwindBlobAssetCodec::serialize("), usize.max);
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind, cook_setup] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "'[cpp_unwind]' requires an ordinary function or method without an imposed C++ contract");
 
     CompileResult systemRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile("[arena, component(\"pos\")]\r\nclass PosComp {\r\n    public i32 x = 0;\r\n}\r\n[arena, system(\"sample_sys\")]\r\nclass SampleSystem {\r\n    public u32 ticks = 0u;\r\n    public SampleSystem() {\r\n        this.writeAccess<PosComp>();\r\n    }\r\n    public void prepare(mut World world) {\r\n        ++this.ticks;\r\n    }\r\n    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta) {\r\n        return Expected<void, CpuTaskAdmissionError>();\r\n    }\r\n    public Name currentType()const {\r\n        return SampleSystem::SystemTypeName();\r\n    }\r\n}\r\n", "impl/ecs_sample/system.adhd", arena.arena, systemRes));
@@ -1191,10 +1202,6 @@ void VerifyAdhdCompiler_CompilesModularClassEdgeCases(){
     RunModularClassEdgeCases();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Optional<in T> FindAstDeclaration<T>(in AstPointerList<T> declarations, in StringView name){
     for(usize index = 0u; index < declarations.size(); ++index){
         const auto entry = BorrowAstNode(declarations, index);
@@ -1357,6 +1364,8 @@ void RunCoreCppHeaderImportVerification(){
     }
 
     CompilerCppHeaderImportOptions importOpts;
+    HeapStorageVector<GlobalString> importDefines(arena.arena);
+    ConfigureNativeImport(importOpts, importDefines, arena.arena);
     importOpts.headers = headers;
 
     CompilerTranslationUnit unit(arena.arena);
@@ -1377,7 +1386,7 @@ void RunCoreCppHeaderImportVerification(){
     ASSERT_TRUE(document.has_value());
     EXPECT_TRUE(document.value().isExtern);
     EXPECT_EQ(document.value().cppExportName, "::NWB::Core::Metascript::Document");
-    EXPECT_EQ(document.value().totalSize, 264u);
+    EXPECT_EQ(document.value().totalSize, NativeDocumentSize());
     EXPECT_EQ(document.value().totalAlign, 8u);
     const auto docAlias = FindAstDeclaration(unit.typeAliases, "MetascriptDocument");
     ASSERT_TRUE(docAlias.has_value());
@@ -1400,7 +1409,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_TRUE(descHeap.value().isExtern);
     EXPECT_FALSE(descHeap.value().isAbstract);
     EXPECT_FALSE(descHeap.value().isCopyConstructible);
-    EXPECT_EQ(descHeap.value().totalSize, 1616u);
+    EXPECT_EQ(descHeap.value().totalSize, NativeDescriptorHeapSize());
     EXPECT_EQ(descHeap.value().totalAlign, 8u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuDescriptorHeapPendingRecordingLease").has_value());
 
@@ -1408,7 +1417,7 @@ void RunCoreCppHeaderImportVerification(){
     ASSERT_TRUE(taskGraph.has_value());
     EXPECT_TRUE(taskGraph.value().isExtern);
     EXPECT_FALSE(taskGraph.value().isCopyConstructible);
-    EXPECT_EQ(taskGraph.value().totalSize, 3968u);
+    EXPECT_EQ(taskGraph.value().totalSize, NativeTaskGraphSize());
     EXPECT_EQ(taskGraph.value().totalAlign, 128u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuTaskGraphPayloadLifetimeScope").has_value());
     b8 foundAddTask = false;
@@ -1428,7 +1437,7 @@ void RunCoreCppHeaderImportVerification(){
     const auto runtime = FindAstDeclaration(unit.classes, "GraphicsRuntime");
     ASSERT_TRUE(runtime.has_value());
     EXPECT_TRUE(runtime.value().isExtern);
-    EXPECT_EQ(runtime.value().totalSize, 1560u);
+    EXPECT_EQ(runtime.value().totalSize, NativeGraphicsRuntimeSize());
     EXPECT_EQ(runtime.value().totalAlign, 8u);
     usize runtimeCtorCount = 0u;
     for(usize methodIndex = 0u; methodIndex < runtime.value().methods.size(); ++methodIndex){
@@ -1516,45 +1525,120 @@ void RunCoreCppHeaderImportVerification(){
     );
 }
 
+void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder(){
+    AdhdTestArena arena;
+    const StringView kParallelSource =
+        "void ParWorker(in Vector<u32> items, in u32 index){\r\n    if(items.size() > index){}\r\n}\r\n[cpp_unwind]\r\nvoid RunParallel(in u32 count, mut ParallelVector<u32> outItems){\r\n    Vector<u32> preLocal;\r\n    preLocal.resize(count);\r\n    parallel TaskA{\r\n        preLocal.size();\r\n    }\r\n    Vector<u32> midLocal;\r\n    midLocal.resize(count);\r\n    Vector<u32> callLocal;\r\n    callLocal.resize(count);\r\n    parallel TaskB : TaskA{\r\n        midLocal.size();\r\n    }\r\n    parallel_for(u32 i = 0u; i < count; ++i){\r\n        outItems.push_back(i);\r\n    }\r\n    parallel ParWorker(callLocal, count);\r\n    wait(TaskA, TaskB);\r\n}\r\n[cpp_unwind]\r\nvoid RunScalarParallel(in u32 count){\r\n    parallel ScalarTask{\r\n        if(count == 0u){}\r\n    }\r\n    wait(ScalarTask);\r\n}\r\n";
+    CompileResult res(arena.arena);
+    CompilerOptions opts;
+    opts.source = kParallelSource;
+    opts.virtualFilePath = "impl/edge_cases/parallel_unwind.adhd";
+    ASSERT_TRUE(CompileOptionsResult(opts, arena.arena, res));
+    const StringView hdr = GeneratedHeaderView(res);
+    EXPECT_EQ(hdr.find("__adhd_scope_join"), usize.max);
+    EXPECT_EQ(hdr.find("(void)__adhd_task_scope"), usize.max);
+    EXPECT_EQ(hdr.find("CpuTaskHandle{}"), usize.max);
+    EXPECT_NE(hdr.find("submitChecked("), usize.max);
+    EXPECT_NE(hdr.find("submitDetachedChecked("), usize.max);
+    EXPECT_NE(hdr.find("parallelForChecked("), usize.max);
+    const usize scratchPos = hdr.find("__adhd_scratch_storage");
+    const usize prePos = hdr.find("preLocal(");
+    const usize scopePos = hdr.find("CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler)");
+    const usize midPos = hdr.find("midLocal(");
+    const usize guardPos = hdr.find("CpuTaskScope::JoinGuard __adhd_task_guard_");
+    ASSERT_NE(scratchPos, usize.max);
+    ASSERT_NE(prePos, usize.max);
+    ASSERT_NE(scopePos, usize.max);
+    ASSERT_NE(midPos, usize.max);
+    ASSERT_NE(guardPos, usize.max);
+    EXPECT_LT(scratchPos, scopePos);
+    EXPECT_LT(prePos, scopePos);
+    EXPECT_LT(scopePos, midPos);
+    EXPECT_LT(midPos, guardPos);
+    const StringView cpp = GeneratedSourceView(res);
+    EXPECT_NE(cpp.find("submitChecked("), usize.max);
+    EXPECT_NE(cpp.find("CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler)"), usize.max);
+}
 
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
+
 NWB_ADHD_GTEST(AdhdPreprocessor, BorrowedExpansionPreservesAliasingAndFailures, VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures)
+
 NWB_ADHD_GTEST(AdhdCompiler, SubstitutedConstantTextSurvivesFurtherAllocations, VerifyAdhdCompiler_SubstitutedConstantTextSurvivesFurtherAllocations)
+
 NWB_ADHD_GTEST(AdhdCompiler, CustomNamespaceMayBorrowPreviousOutput, VerifyAdhdCompiler_CustomNamespaceMayBorrowPreviousOutput)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnumSnakeNamesPreserveAcronymsAndDigits, VerifyAdhdCompiler_EnumSnakeNamesPreserveAcronymsAndDigits)
+
 NWB_ADHD_GTEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize, VerifyAdhdCompiler_ReordersClassFieldsByDescendingAlignmentAndSize)
+
 NWB_ADHD_GTEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder, VerifyAdhdCompiler_SerializeClassPacksTightlyInSourceOrder)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses, VerifyAdhdCompiler_EnforcesInterfaceOverrideAndFinalClasses)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions, VerifyAdhdCompiler_EnforcesMandatoryInitializationAndProhibitions)
+
 NWB_ADHD_GTEST(AdhdCompiler, ReordersTemplateInstantiationFieldsAndRejectsFreeOperatorsOrMissingMethodBodies, VerifyAdhdCompiler_ReordersTemplateInstantiationFieldsAndRejectsFreeOperatorsOrMissingMethodBodies)
+
+NWB_ADHD_GTEST(AdhdCompiler, SystemUpdateUnwindRespectsSdkContract, VerifyAdhdCompiler_SystemUpdateUnwindRespectsSdkContract)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety, VerifyAdhdCompiler_EnforcesMutCallSiteAndParallelConcurrencySafety)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttributeConflicts, VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttributeConflicts)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors, VerifyAdhdCompiler_RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndParallelLambdaMutation, VerifyAdhdCompiler_RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndParallelLambdaMutation)
+
 NWB_ADHD_GTEST(AdhdCompiler, LiteralOnlyUnitsAvoidEngineDependenciesAndComplexUnitsKeepThem, VerifyAdhdCompiler_LiteralOnlyUnitsAvoidEngineDependenciesAndComplexUnitsKeepThem)
+
 NWB_ADHD_GTEST(AdhdCompiler, TerminateInvariantBuiltinLowersAndRejectsArguments, VerifyAdhdCompiler_TerminateInvariantBuiltinLowersAndRejectsArguments)
+
 NWB_ADHD_GTEST(AdhdCompiler, PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAndRejectsCyclesAndDuplicates, VerifyAdhdCompiler_PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAndRejectsCyclesAndDuplicates)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsGlobalConstMutationMissingReturnsParallelIndexMutationAndNonEnumScopeAccess, VerifyAdhdCompiler_RejectsGlobalConstMutationMissingReturnsParallelIndexMutationAndNonEnumScopeAccess)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsConstReferenceReturnViolationsAndInvalidContainerTemplateArity, VerifyAdhdCompiler_RejectsConstReferenceReturnViolationsAndInvalidContainerTemplateArity)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsVoidVariablesByValueInterfaceContainersAndInvalidParallelWaits, VerifyAdhdCompiler_RejectsVoidVariablesByValueInterfaceContainersAndInvalidParallelWaits)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsCyclicTypeAliasesAndRecursiveByValueClassMembers, VerifyAdhdCompiler_RejectsCyclicTypeAliasesAndRecursiveByValueClassMembers)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMismatchedParameterizedInterfaceBoundsDoubleRefAliasesAndEscapingMutLambdas, VerifyAdhdCompiler_RejectsMismatchedParameterizedInterfaceBoundsDoubleRefAliasesAndEscapingMutLambdas)
+
 NWB_ADHD_GTEST(AdhdCompiler, TopologicallyOrdersOutOfOrderDeclarationsAndRejectsAccessViolations, VerifyAdhdCompiler_TopologicallyOrdersOutOfOrderDeclarationsAndRejectsAccessViolations)
+
 NWB_ADHD_GTEST(AdhdCompiler, ExcludesKCountFromEnumReflectionOrdersDeferredTemplateSpecsAndRejectsInvalidTemplates, VerifyAdhdCompiler_ExcludesKCountFromEnumReflectionOrdersDeferredTemplateSpecsAndRejectsInvalidTemplates)
+
 NWB_ADHD_GTEST(AdhdCompiler, SuppressesLastUseMoveForMutCapturedLocalsAndRejectsMismatchedOolTemplateParams, VerifyAdhdCompiler_SuppressesLastUseMoveForMutCapturedLocalsAndRejectsMismatchedOolTemplateParams)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool, VerifyAdhdCompiler_RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool)
+
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind, VerifyAdhdCompiler_ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind)
+
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules, VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules)
+
 NWB_ADHD_GTEST(AdhdCompiler, RejectsRetiredNativeBlocks, VerifyAdhdCompiler_RejectsRetiredNativeBlocks)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses, VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses)
+
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder, VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder)
+
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesHandleDerefRhiAndAssetExports, VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports)
+
 NWB_ADHD_GTEST(AdhdCompiler, QualifiesCrossNamespaceImportsRespectingShadowing, VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing)
+
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors, VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors)
+
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesUnresolvedParallelMutSafety)
+
 NWB_ADHD_GTEST(AdhdCompiler, ImportsCoreCppHeadersWithLibclang, VerifyAdhdCompiler_ImportsCoreCppHeadersWithLibclang)
+
 NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases)
+
 NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_CompilesModularClassEdgeCases)
+
+NWB_ADHD_GTEST(AdhdCompiler, ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder, VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

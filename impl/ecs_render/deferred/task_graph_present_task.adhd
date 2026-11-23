@@ -10,16 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ShouldAcceptDeferredOutputLayer(in b8 hasContributor, in u64 frameGeneration, in b8 tokenValid){
-    return hasContributor && frameGeneration != 0u && tokenValid;
-}
-
-[cpp_unwind]
-void AcceptDeferredOutputLayer(in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, in u64 generation, in QueueSubmissionToken token){
-    if(ShouldAcceptDeferredOutputLayer(contributor.has_value(), generation, token.valid()))
-        contributor.value().acceptTaskGraphOutputLayer(generation, token);
-}
-
 class DeferredPresentGraphTask{
     private mut RendererDeferredSystem m_deferredSystem;
     private mut GraphicsRuntime m_graphics;
@@ -94,6 +84,20 @@ class DeferredPresentGraphTask{
     public void accepted(in QueueSubmissionToken token){
         AcceptDeferredOutputLayer(this.m_contributor, this.m_outputLayer.frameGeneration, token);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldAcceptDeferredOutputLayer(in b8 hasContributor, in u64 frameGeneration, in b8 tokenValid){
+    return hasContributor && frameGeneration != 0u && tokenValid;
+}
+
+[cpp_unwind]
+void AcceptDeferredOutputLayer(in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, in u64 generation, in QueueSubmissionToken token){
+    if(ShouldAcceptDeferredOutputLayer(contributor.has_value(), generation, token.valid()))
+        contributor.value().acceptTaskGraphOutputLayer(generation, token);
 }
 
 

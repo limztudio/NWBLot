@@ -9,36 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidOpticalUploadRecordState(
-    in b8 hasDestination,
-    in b8 hasUpload,
-    in b8 hasBytes,
-    in usize blobByteSize,
-    in usize uploadByteSize,
-    in b8 reservationValid,
-    in b8 commandIrCapture,
-    in b8 matchesQueue
-){
-    return
-        hasDestination
-        && hasUpload
-        && hasBytes
-        && blobByteSize != 0u
-        && blobByteSize == uploadByteSize
-        && reservationValid
-        && !commandIrCapture
-        && matchesQueue
-    ;
-}
-
-void LogInvalidAcceptedOpticalUploadProvenance(){
-    error("Ray optical scene: accepted upload has invalid residency provenance");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [move_only]
 class OpticalUploadTask{
     private BufferHandle destination;
@@ -99,6 +69,32 @@ class OpticalUploadTask{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 ValidOpticalUploadRecordState(
+    in b8 hasDestination,
+    in b8 hasUpload,
+    in b8 hasBytes,
+    in usize blobByteSize,
+    in usize uploadByteSize,
+    in b8 reservationValid,
+    in b8 commandIrCapture,
+    in b8 matchesQueue
+){
+    return
+        hasDestination
+        && hasUpload
+        && hasBytes
+        && blobByteSize != 0u
+        && blobByteSize == uploadByteSize
+        && reservationValid
+        && !commandIrCapture
+        && matchesQueue
+    ;
+}
+
+void LogInvalidAcceptedOpticalUploadProvenance(){
+    error("Ray optical scene: accepted upload has invalid residency provenance");
+}
 
 Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(in RayTracingOpticalSceneSnapshot resources, in borrow GpuTaskId priorReadersDrained, mut GpuTaskGraph graph){
     if(!resources.valid())

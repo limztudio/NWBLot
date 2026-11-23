@@ -24,6 +24,7 @@ usize ComputeReportedMeshTriangleCount(in usize indexCount){
     return indexCount / cast<usize>(s_MeshletTriangleIndexCount);
 }
 
+[cpp_unwind]
 String FormatFbxWriteCompletionReport(
     in StringView outputText,
     in usize positionCount,

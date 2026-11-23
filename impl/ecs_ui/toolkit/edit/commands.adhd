@@ -35,7 +35,7 @@ void FinalizeAppliedEditCommand(
     }
 }
 
-b8 EraseEditWord(mut EditModel model, in b8 forward){
+[cpp_unwind] b8 EraseEditWord(mut EditModel model, in b8 forward){
     if(model.hasSelection())
         return model.replaceSelection("");
     const usize caret = model.caret();
@@ -50,7 +50,7 @@ b8 EraseEditWord(mut EditModel model, in b8 forward){
     return model.eraseSurrounding(beforeBytes, afterBytes);
 }
 
-EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request, in b8 readOnly){
+[cpp_unwind] EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request, in b8 readOnly){
     EditCommandResult result;
     if(!IsAdmittedEditCommand(request.command))
         return result;
@@ -95,7 +95,7 @@ EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest re
     return result;
 }
 
-EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request){
+[cpp_unwind] EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request){
     return ApplyEditCommand(model, request, false);
 }
 

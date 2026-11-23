@@ -363,10 +363,13 @@ b8 MaterialPipelineBuilder::buildCompute(){
         return false;
     if(!this.loadPassPixelShader())
         return false;
-    if(!CreateHeapComputePipeline(inputs.device, inputs.resources.computeShader, inputs.materialState.m_computeBindingLayout, false, inputs.resources.computePipeline)){
+    const Expected<ComputePipelineHandle> computePipeline = CreateHeapComputePipeline(inputs.device, inputs.resources.computeShader, inputs.materialState.m_computeBindingLayout, false);
+    if(!computePipeline.has_value()){
+        inputs.resources.computePipeline.reset();
         error("RendererSystem: failed to create compute pipeline for material '{}'", inputs.materialKey.resolvedText());
         return false;
     }
+    inputs.resources.computePipeline = computePipeline.value();
 
     GraphicsPipelineDesc emulationDesc;
     emulationDesc.setInputLayout(inputs.materialState.m_emulationInputLayout);

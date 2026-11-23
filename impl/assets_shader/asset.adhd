@@ -8,6 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type ShaderAssetCodec<T> = FamilyMemberAssetCodec<IShader, T, ShaderAssetPolicy>;
+type PixelShaderAssetCodec = ShaderAssetCodec<PixelShader>;
+type ComputeShaderAssetCodec = ShaderAssetCodec<ComputeShader>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [asset("shader")]
 interface IShader{
     StringView entryPoint()const;
@@ -24,36 +32,6 @@ class ShaderEntryPointRange{
     }
 }
 
-b8 LoadShaderBinaryForStage(in IShader shaderAsset, in Span<u8> binary, in ShaderType shaderType, mut ShaderEntryPointRange outEntryPoint, mut Vector<u8> outBytecode){
-    if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
-        return false;
-
-    const Expected<AssetPayloadView, AssetPayloadDecodeFailure> payload = DecodeAssetPayload(binary);
-    if(!payload.has_value()){
-        ReportShaderAssetPayloadDecodeFailure(payload.error());
-        return false;
-    }
-
-    const Expected<StringView, SpirvEntryPointLookupResult> lookupResult = ResolveSpirvEntryPointName(
-        payload.value().bytecode,
-        payload.value().entryPoint,
-        ShaderType::ToMask(shaderType)
-    );
-    if(!lookupResult.has_value()){
-        error("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed", payload.value().entryPoint, shaderAsset.assetType().resolvedText());
-        return false;
-    }
-
-    const Expected<usize> entryPointOffset = FindBinaryTextOffset(payload.value().bytecode, lookupResult.value());
-    if(!entryPointOffset.has_value())
-        return false;
-    const usize entryPointLength = lookupResult.value().size();
-    AssignTriviallyCopyableVector(outBytecode, payload.value().bytecode);
-    outEntryPoint.offset = entryPointOffset.value();
-    outEntryPoint.length = entryPointLength;
-    return true;
-}
-
 [arena, asset("vertex_shader")]
 class VertexShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
@@ -61,7 +39,13 @@ class VertexShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("hull_shader")]
@@ -71,7 +55,13 @@ class HullShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("domain_shader")]
@@ -81,7 +71,13 @@ class DomainShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("geometry_shader")]
@@ -91,7 +87,13 @@ class GeometryShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("pixel_shader")]
@@ -101,7 +103,13 @@ class PixelShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("compute_shader")]
@@ -111,7 +119,13 @@ class ComputeShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("amplification_shader")]
@@ -121,7 +135,13 @@ class AmplificationShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("mesh_shader")]
@@ -131,7 +151,13 @@ class MeshShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("ray_generation_shader")]
@@ -141,7 +167,13 @@ class RayGenerationShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("any_hit_shader")]
@@ -151,7 +183,13 @@ class AnyHitShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("closest_hit_shader")]
@@ -161,7 +199,13 @@ class ClosestHitShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("miss_shader")]
@@ -171,7 +215,13 @@ class MissShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("intersection_shader")]
@@ -181,7 +231,13 @@ class IntersectionShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 [arena, asset("callable_shader")]
@@ -191,7 +247,13 @@ class CallableShader : IShader{
 
     public StringView entryPoint()const override{ return this.m_entryPoint.view(Span<u8>(this.m_bytecode)); }
     public in Vector<u8> bytecode()const override{ return this.m_bytecode; }
-    public b8 loadBinary(in Span<u8> binary)override{ return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPoint, this.m_bytecode); }
+    public b8 loadBinary(in Span<u8> binary)override{
+        const Expected<ShaderEntryPointRange> entryPoint = LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_bytecode);
+        if(!entryPoint.has_value())
+            return false;
+        this.m_entryPoint = entryPoint.value();
+        return true;
+    }
 }
 
 
@@ -206,9 +268,40 @@ class ShaderAssetPolicy{
     }
 }
 
-type ShaderAssetCodec<T> = FamilyMemberAssetCodec<IShader, T, ShaderAssetPolicy>;
-type PixelShaderAssetCodec = ShaderAssetCodec<PixelShader>;
-type ComputeShaderAssetCodec = ShaderAssetCodec<ComputeShader>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ShaderEntryPointRange> LoadShaderBinaryForStage(in IShader shaderAsset, in Span<u8> binary, in ShaderType shaderType, mut Vector<u8> outBytecode){
+    if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
+        return MakeUnexpected(Failure());
+
+    const Expected<AssetPayloadView, AssetPayloadDecodeFailure> payload = DecodeAssetPayload(binary);
+    if(!payload.has_value()){
+        ReportShaderAssetPayloadDecodeFailure(payload.error());
+        return MakeUnexpected(Failure());
+    }
+
+    const Expected<StringView, SpirvEntryPointLookupResult> lookupResult = ResolveSpirvEntryPointName(
+        payload.value().bytecode,
+        payload.value().entryPoint,
+        ShaderType::ToMask(shaderType)
+    );
+    if(!lookupResult.has_value()){
+        error("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed", payload.value().entryPoint, shaderAsset.assetType().resolvedText());
+        return MakeUnexpected(Failure());
+    }
+
+    const Expected<usize> entryPointOffset = FindBinaryTextOffset(payload.value().bytecode, lookupResult.value());
+    if(!entryPointOffset.has_value())
+        return MakeUnexpected(Failure());
+    const usize entryPointLength = lookupResult.value().size();
+    AssignTriviallyCopyableVector(outBytecode, payload.value().bytecode);
+    ShaderEntryPointRange entryPoint;
+    entryPoint.offset = entryPointOffset.value();
+    entryPoint.length = entryPointLength;
+    return entryPoint;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

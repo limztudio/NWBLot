@@ -34,6 +34,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE")]
+extern const u32 s_TestLayoutAvboitPushParamsRefractionCapture;
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_REFRACTION_DISABLED")]
+extern const f32 s_TestLayoutAvboitRefractionDisabled;
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENTS_PER_TEXEL")]
+extern const u64 s_TestLayoutLightSpaceEventsPerTexel;
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENT_BYTES")]
+extern const u64 s_TestLayoutLightSpaceEventBytes;
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_MESHLETS_PER_DRAW")]
+extern const u32 s_TestLayoutLightSpaceMeshletsPerDraw;
+
 type RuntimeMeshDirtyFlagMask = RuntimeMeshDirtyFlag;
 type RenderPathEnum = RenderPath;
 type MeshShaderAssetRef = AssetRef<MeshShader>;
@@ -47,33 +58,267 @@ const Name s_LightCaseScratch = s_EcsGraphicsNameTestsEcsGraphicsScratch;
 const usize s_InstanceGpuBytes = size_of<InstanceGpuData>();
 const usize s_ReceiverGpuBytes = size_of<CsgReceiverRangeGpuData>();
 const usize s_CutterGpuBytes = size_of<CsgCutterGpuData>();
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE")]
-extern const u32 s_TestLayoutAvboitPushParamsRefractionCapture;
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_REFRACTION_DISABLED")]
-extern const f32 s_TestLayoutAvboitRefractionDisabled;
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENTS_PER_TEXEL")]
-extern const u64 s_TestLayoutLightSpaceEventsPerTexel;
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENT_BYTES")]
-extern const u64 s_TestLayoutLightSpaceEventBytes;
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_MESHLETS_PER_DRAW")]
-extern const u32 s_TestLayoutLightSpaceMeshletsPerDraw;
 type ShadowSlotLightRequestArray = Array<LightSpaceLightRequest, s_ShaderSceneShadowSlotCount>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SkeletonPoseScratch{ public Vector<SkeletonJointMatrix> resolvedJoints; }
+
+class PhysicalQueueRuntimeSnapshots{
+    public GpuTaskGraphPhysicalQueueCompileStatistics compile;
+    public GpuTaskGraphPhysicalQueueRecordingStatistics recording;
+    public GpuTaskGraphPhysicalQueueSubmissionStatistics submission;
+    public PhysicalQueueRuntimeSnapshots(){}
+}
+
+class ResolvedMeshRef{
+    public Expected<AssetRef<Mesh>> ref;
+    public ResolvedMeshRef(in Expected<AssetRef<Mesh>> value){ this.ref = value; }
+    public b8 present()const{ return this.ref.has_value(); }
+    public b8 valid()const{ return this.ref.has_value() && this.ref.value().valid(); }
+}
+
+[ordered]
+class MeshResolutionContext{
+    public EcsTestWorld testWorld;
+    public mut MeshSystem meshSystem;
+    public MeshResolutionContext(){
+        this.testWorld = EcsTestWorld();
+        this.meshSystem = this.testWorld.world.addSystem<MeshSystem>(this.testWorld.world);
+    }
+    public EntityID addMeshEntity(in Name path){
+        auto entity = this.testWorld.world.createEntity();
+        entity.addComponent<MeshComponent>().mesh.virtualPath = path;
+        return entity.id();
+    }
+    public EntityID addEmptyEntity(){ return this.testWorld.world.createEntity().id(); }
+    public ResolvedMeshRef resolveMesh(in EntityID entity){ return ResolvedMeshRef(this.meshSystem.resolveMesh(entity)); }
+}
+
+class MaterialPipelineCacheContext{
+    public CsgShapeRegistry registry;
+    public HashMap<MaterialPipelineKey, u32> pipelines;
+    public Optional<String> lastInclude;
+    public MaterialPipelineCacheContext(){}
+    public b8 insert(in MaterialPipelineKey key, in u32 value){ return this.pipelines.try_emplace(key, value).second; }
+    public Optional<u32> find(in MaterialPipelineKey key)const{
+        const auto found = this.pipelines.find(key);
+        if(found == this.pipelines.end())
+            return Optional<u32>();
+        return found.value();
+    }
+    public Optional<StringView> findShaderModuleIncludeView(in Name variant){
+        const auto includeResult = this.registry.findShaderModuleInclude(variant);
+        if(!includeResult.has_value())
+            return Optional<StringView>();
+        this.lastInclude = includeResult.value();
+        return Optional<StringView>(StringView(this.lastInclude.value()));
+    }
+}
+
+class SkinningValidationContext{
+    public MeshSkinningRuntimeInstance instance;
+    public SkeletonJointPaletteComponent joints;
+    public Vector<SkeletonJointMatrix> jointMatrices;
+    public SkinningValidationContext(){
+        this.instance = MakeTriangleInstance();
+        AssignSingleJointSkin(0u, this.instance);
+        this.instance.handle.value = 517u;
+        this.joints.joints.push_back(MakeIdentitySkeletonJointMatrix());
+        this.jointMatrices.reserve(this.joints.joints.size());
+    }
+    public b8 buildOutsidePalette(){
+        MeshSkinningRuntimeInstance outside = this.instance;
+        outside.skin[0u] = MakeSingleJointSkin(1u);
+        outside.skeletonJointCount = 2u;
+        outside.inverseBindMatrices.clear();
+        this.joints.joints.resize(1u, MakeIdentitySkeletonJointMatrix());
+        return BuildMeshSkinningJointPalette(outside, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+    }
+    public b8 buildNonAffineJoint(){
+        MeshSkinningRuntimeInstance invalid = this.instance;
+        this.joints.joints[0u] = f32x3x4(MatrixSingle(VectorSingle(0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)));
+        return BuildMeshSkinningJointPalette(invalid, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+    }
+    public b8 buildScaledDualQuaternionJoint(){
+        MeshSkinningRuntimeInstance scaled = this.instance;
+        scaled.inverseBindMatrices.clear();
+        this.joints.skinningMode = SkeletonSkinningMode::DualQuaternion;
+        this.joints.joints[0u] = f32x3x4(MakeNonUniformScaleJointMatrix());
+        return BuildMeshSkinningJointPalette(scaled, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+    }
+}
+
+[ordered]
+class FrameGraphPacketStatsTestContext{
+    public HeapStorage testArena;
+    public FrameGraphNodeDescs nodes;
+    public FrameGraphEdgeDescs edges;
+    public FrameGraphPendingNameEdges pendingNameEdges;
+    public FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics;
+    public FrameGraphPacketSubmissionStatisticsRecords packetStatistics;
+    public ScratchStorage scratchArena = ScratchStorage(s_EcsCaseTestsEcsGraphicsFrameGraphBuilderScratch);
+    public FrameGraphBuilder builder;
+    public FrameGraphPacketStatsTestContext(){
+        this.testArena = HeapStorage();
+        this.nodes = FrameGraphNodeDescs(this.testArena);
+        this.edges = FrameGraphEdgeDescs(this.testArena);
+        this.pendingNameEdges = FrameGraphPendingNameEdges(this.testArena);
+        this.physicalQueueStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(this.testArena);
+        this.packetStatistics = FrameGraphPacketSubmissionStatisticsRecords(this.testArena);
+        this.builder = FrameGraphBuilder(this.scratchArena, this.nodes, this.edges, this.pendingNameEdges, this.physicalQueueStatistics, this.packetStatistics, 41u);
+    }
+    public FrameGraphNodeHandle addOwnerPass(in Name name, in StringView label, in FrameGraphRuntimeStatistics statistics){
+        FrameGraphPassMetadata metadata;
+        metadata.runtimeStatistics = statistics;
+        return this.builder.addPass(name, label, metadata);
+    }
+}
+
+[ordered]
+class ResetRuntimeStatisticsContext{
+    public HeapStorage testArena;
+    public GpuTaskGraph graph;
+    public GpuCompiledGraph compiledGraph;
+    public GpuRecordedGraph recordedGraph;
+    public GpuGraphSubmissionTransaction transaction;
+    public GpuTaskGraphAnalysis analysis;
+    public GpuTaskGraphQueueAssignments assignments;
+    public ScratchStorage scratchArena = ScratchStorage(s_EcsCaseTestsEcsGraphicsResetRuntimeStatisticsScratch);
+    public ResetRuntimeStatisticsContext(){
+        this.testArena = HeapStorage();
+        this.graph = GpuTaskGraph(this.testArena);
+        this.compiledGraph = GpuCompiledGraph(this.testArena);
+        this.recordedGraph = GpuRecordedGraph(this.testArena);
+        this.transaction = GpuGraphSubmissionTransaction(this.testArena);
+        this.analysis = GpuTaskGraphAnalysis(this.testArena);
+        this.assignments = GpuTaskGraphQueueAssignments(this.testArena);
+    }
+    public b8 compileSingleGraphicsQueue(in GpuTaskGraphDeclarationReadView declarations, in b8 allowMetadataOnly){
+        GpuPhysicalQueueInfo queue;
+        queue.id.index = 0u;
+        queue.id.deviceGeneration = 1u;
+        queue.familyIndex = 0u;
+        queue.queueIndex = 0u;
+        queue.queueClass = CommandQueue::Graphics;
+        queue.capabilities = cast<GpuQueueCapability>(cast<u8>(GpuQueueCapability::Graphics) | cast<u8>(GpuQueueCapability::Compute) | cast<u8>(GpuQueueCapability::Transfer));
+        GpuPhysicalQueueTopology topology;
+        topology.setQueues(SpanOf<GpuPhysicalQueueInfo>(queue));
+        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
+        GpuTaskGraphCompileOptions options;
+        options.allowMetadataOnlyTasks = allowMetadataOnly;
+        return compiler.compile(declarations, topology, options, this.scratchArena, this.analysis, this.assignments, this.compiledGraph);
+    }
+    public GpuTaskGraphRuntimeStatistics collect(in GpuCompiledGraphReadView plan){
+        return CollectGpuTaskGraphRuntimeStatistics(this.compiledGraph, plan, this.recordedGraph, this.transaction);
+    }
+}
+
+class MaterialConstantRangeTestContext{
+    public Vector<u8> uploadBytes;
+    public HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange> ranges;
+    public MaterialConstantRangeTestContext(){ this.ranges.reserve(3u); }
+    public Expected<MaterialTypedByteRange> findOrAppend(in Name material, in u64 hash, in Span<u8> bytes){
+        return FindOrAppendMaterialConstantTypedByteRange(material, hash, bytes, this.uploadBytes, this.ranges);
+    }
+    public usize uploadSize()const{ return this.uploadBytes.size(); }
+    public usize rangeCount()const{ return this.ranges.size(); }
+    public void verifyStoredRanges(in Name material, in Name other, in Span<u8> constants)const{
+        for(auto entry = this.ranges.begin(); entry != this.ranges.end(); ++entry){
+            const MaterialTypedByteRangeKey key = entry.key();
+            const MaterialTypedByteRange range = entry.value();
+            EXPECT_TRUE(key.materialName == material || key.materialName == other);
+            ASSERT_EQ(range.byteCount, constants.size());
+            ASSERT_LE(cast<usize>(range.byteOffset) + range.byteCount, this.uploadBytes.size());
+            for(usize i = 0u; i < constants.size(); ++i)
+                EXPECT_EQ(this.uploadBytes[range.byteOffset + i], constants[i]);
+        }
+    }
+}
+
+class MaterialContentTestStorage{
+    public Vector<u8> uploadBytes;
+    public MaterialTypedByteContentRangeMap ranges;
+    public MaterialContentTestStorage(){}
+}
+
+[ordered]
+class MaterialTypedByteRangeTestContext{
+    public ScratchStorage scratchArena = ScratchStorage(s_LightCaseScratch);
+    public TestValueSlot<MaterialContentTestStorage> storage;
+    public mut MaterialContentTestStorage data;
+    public MaterialTypedByteRangeTestContext(){ this.data = this.storage.constructIn(this.scratchArena); }
+    public void reserveStorage(in usize byteCapacity, in usize rangeCapacity){
+        this.data.uploadBytes.reserve(byteCapacity);
+        this.data.ranges.reserve(rangeCapacity);
+    }
+    public Expected<MaterialTypedByteRange> findOrAppend(in Span<u8> bytes){ return this.data.ranges.findOrAppend(bytes, this.data.uploadBytes); }
+    public Expected<MaterialTypedByteRange> appendSelfAliasedUploadBytes(){
+        const Span<u8> bytes = Span<u8>(this.data.uploadBytes);
+        return this.data.ranges.findOrAppend(bytes, this.data.uploadBytes);
+    }
+    public ArenaMemoryStats memoryStats()const{ return this.scratchArena.memoryStats(); }
+    public usize uploadSize()const{ return this.data.uploadBytes.size(); }
+    public usize uploadCapacity()const{ return this.data.uploadBytes.capacity(); }
+    public usize rangeCount()const{ return this.data.ranges.size(); }
+    public b8 emplaceOwnedKey(in u64 hash, in Span<u8> bytes, in u32 offset, in u32 count){
+        MaterialTypedByteRange range;
+        range.byteOffset = offset;
+        range.byteCount = count;
+        return this.data.ranges.insert(MaterialTypedByteContentLookup(hash, bytes), range);
+    }
+    public Optional<MaterialTypedByteRange> findByLookup(in u64 hash, in Span<u8> bytes)const{
+        return this.data.ranges.find(MaterialTypedByteContentLookup(hash, bytes));
+    }
+    public void fillUploadPattern(in usize expectedSize, mut Array<u8, 32> expected){
+        this.data.uploadBytes.reserve(expectedSize);
+        this.data.uploadBytes.resize(this.data.uploadBytes.capacity());
+        for(usize i = 0u; i < this.data.uploadBytes.size(); ++i){
+            this.data.uploadBytes[i] = cast<u8>((i * 31u) & 255u);
+            if(i < expected.size())
+                expected[i] = this.data.uploadBytes[i];
+        }
+    }
+    public b8 rangeMatchesUpload(in MaterialTypedByteRange range, in Span<u8> expected)const{
+        if(cast<usize>(range.byteOffset) + expected.size() > this.data.uploadBytes.size())
+            return false;
+        for(usize i = 0u; i < expected.size(); ++i){
+            if(this.data.uploadBytes[range.byteOffset + i] != expected[i])
+                return false;
+        }
+        return true;
+    }
+    public void invertUploadPrefix(in usize count){
+        for(usize i = 0u; i < count && i < this.data.uploadBytes.size(); ++i)
+            this.data.uploadBytes[i] ^= 255u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 MatrixSingle MakeTranslationJointMatrix(in f32 x, in f32 y, in f32 z){
     return MatrixSingle(VectorSingle(1.0f, 0.0f, 0.0f, x), VectorSingle(0.0f, 1.0f, 0.0f, y),
         VectorSingle(0.0f, 0.0f, 1.0f, z), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
 }
+
 MatrixSingle MakeNonUniformScaleJointMatrix(){ return MatrixScaling(2.0f, 1.0f, 1.0f); }
+
 SkinInfluence4 MakeSingleJointSkin(in u16 joint){
     SkinInfluence4 skin;
     skin.joint[0u] = joint;
     skin.weight.x = 1.0f;
     return skin;
 }
+
 void AssignSingleJointSkin(in u16 joint, mut MeshSkinningRuntimeInstance instance){
     instance.skin.assign(instance.restPositions.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, cast<u32>(joint) + 1u);
 }
+
 void AppendRuntimeVertex(in VectorSingle position, in f32 u, mut MeshSkinningRuntimeInstance instance){
     instance.restPositions.push_back(f32x3u(position));
     instance.restNormals.push_back(MakeHalf4U(0.0f, 0.0f, 1.0f, 0.0f));
@@ -81,6 +326,7 @@ void AppendRuntimeVertex(in VectorSingle position, in f32 u, mut MeshSkinningRun
     instance.uv0.push_back(f32x2u(u, 0.0f));
     instance.colors.push_back(MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
 }
+
 MeshSkinningRuntimeInstance MakeTriangleInstance(){
     MeshSkinningRuntimeInstance instance;
     instance.entity = EntityID(1u, 0u);
@@ -116,6 +362,7 @@ MeshSkinningRuntimeInstance MakeTriangleInstance(){
     instance.meshletAttributeRefCount = cast<u32>(attributes.size());
     return instance;
 }
+
 SkeletonPoseComponent MakeTwoJointSkeletonPose(in MatrixSingle rootJoint, in MatrixSingle childJoint){
     SkeletonPoseComponent pose;
     pose.parentJoints.push_back(s_SkeletonInvalidJointIndex);
@@ -124,15 +371,9 @@ SkeletonPoseComponent MakeTwoJointSkeletonPose(in MatrixSingle rootJoint, in Mat
     pose.localJoints.push_back(f32x3x4(childJoint));
     return pose;
 }
-class SkeletonPoseScratch{ public Vector<SkeletonJointMatrix> resolvedJoints; }
+
 b8 BuildStoredJointPaletteFromSkeletonPose(in SkeletonPoseComponent pose, mut SkeletonPoseScratch scratch){
     return TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, scratch.resolvedJoints).has_value();
-}
-class PhysicalQueueRuntimeSnapshots{
-    public GpuTaskGraphPhysicalQueueCompileStatistics compile;
-    public GpuTaskGraphPhysicalQueueRecordingStatistics recording;
-    public GpuTaskGraphPhysicalQueueSubmissionStatistics submission;
-    public PhysicalQueueRuntimeSnapshots(){}
 }
 
 PhysicalQueueRuntimeSnapshots MakeValidPhysicalQueueRuntimeSnapshots(){
@@ -253,165 +494,33 @@ GpuTaskGraphPacketSubmissionStatistics MakeValidPacketSubmissionStatistics(){
 LightSpaceCaptureIdentity MakeCaptureIdentity(in u64 scene, in u64 light, in u64 view, in b8 trusted){
     return LightSpaceCaptureIdentity(scene, light, view, trusted);
 }
+
 LightSpaceLightRequest MakeLightRequest(in u32 lightIndex, in u32 shadowSlot, in LightType type, in b8 castsShadows){
     return LightSpaceLightRequest(lightIndex, shadowSlot, type, castsShadows);
 }
+
 LightSpaceLightRequest MakeLightRequest(in u32 lightIndex, in u32 shadowSlot, in LightType type){ return MakeLightRequest(lightIndex, shadowSlot, type, true); }
+
 LightSpaceLightRequest MakeLightRequest(in u32 lightIndex, in u32 shadowSlot){ return MakeLightRequest(lightIndex, shadowSlot, LightType::Directional, true); }
+
 LightSpaceShadowStorageCapacity MakeStorageCapacity(in LightSpacePlan plan){
     return LightSpaceShadowStorageCapacity(plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize, plan.textureResolution, plan.viewCount);
 }
+
 b8 HasRefractionFramebuffer(in AvboitFrameTargets targets){ return targets.refractionFramebuffer.valid(); }
-
-class ResolvedMeshRef{
-    public Expected<AssetRef<Mesh>> ref;
-    public ResolvedMeshRef(in Expected<AssetRef<Mesh>> value){ this.ref = value; }
-    public b8 present()const{ return this.ref.has_value(); }
-    public b8 valid()const{ return this.ref.has_value() && this.ref.value().valid(); }
-}
-[ordered]
-class MeshResolutionContext{
-    public EcsTestWorld testWorld;
-    public mut MeshSystem meshSystem;
-    public MeshResolutionContext(){
-        this.testWorld = EcsTestWorld();
-        this.meshSystem = this.testWorld.world.addSystem<MeshSystem>(this.testWorld.world);
-    }
-    public EntityID addMeshEntity(in Name path){
-        auto entity = this.testWorld.world.createEntity();
-        entity.addComponent<MeshComponent>().mesh.virtualPath = path;
-        return entity.id();
-    }
-    public EntityID addEmptyEntity(){ return this.testWorld.world.createEntity().id(); }
-    public ResolvedMeshRef resolveMesh(in EntityID entity){ return ResolvedMeshRef(this.meshSystem.resolveMesh(entity)); }
-}
-
-class MaterialPipelineCacheContext{
-    public CsgShapeRegistry registry;
-    public HashMap<MaterialPipelineKey, u32> pipelines;
-    public Optional<String> lastInclude;
-    public MaterialPipelineCacheContext(){}
-    public b8 insert(in MaterialPipelineKey key, in u32 value){ return this.pipelines.try_emplace(key, value).second; }
-    public Optional<u32> find(in MaterialPipelineKey key)const{
-        const auto found = this.pipelines.find(key);
-        if(found == this.pipelines.end())
-            return Optional<u32>();
-        return found.value();
-    }
-    public Optional<StringView> findShaderModuleIncludeView(in Name variant){
-        const auto includeResult = this.registry.findShaderModuleInclude(variant);
-        if(!includeResult.has_value())
-            return Optional<StringView>();
-        this.lastInclude = includeResult.value();
-        return Optional<StringView>(StringView(this.lastInclude.value()));
-    }
-}
-
-class SkinningValidationContext{
-    public MeshSkinningRuntimeInstance instance;
-    public SkeletonJointPaletteComponent joints;
-    public Vector<SkeletonJointMatrix> jointMatrices;
-    public SkinningValidationContext(){
-        this.instance = MakeTriangleInstance();
-        AssignSingleJointSkin(0u, this.instance);
-        this.instance.handle.value = 517u;
-        this.joints.joints.push_back(MakeIdentitySkeletonJointMatrix());
-        this.jointMatrices.reserve(this.joints.joints.size());
-    }
-    public b8 buildOutsidePalette(){
-        MeshSkinningRuntimeInstance outside = this.instance;
-        outside.skin[0u] = MakeSingleJointSkin(1u);
-        outside.skeletonJointCount = 2u;
-        outside.inverseBindMatrices.clear();
-        this.joints.joints.resize(1u, MakeIdentitySkeletonJointMatrix());
-        return BuildMeshSkinningJointPalette(outside, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
-    }
-    public b8 buildNonAffineJoint(){
-        MeshSkinningRuntimeInstance invalid = this.instance;
-        this.joints.joints[0u] = f32x3x4(MatrixSingle(VectorSingle(0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)));
-        return BuildMeshSkinningJointPalette(invalid, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
-    }
-    public b8 buildScaledDualQuaternionJoint(){
-        MeshSkinningRuntimeInstance scaled = this.instance;
-        scaled.inverseBindMatrices.clear();
-        this.joints.skinningMode = SkeletonSkinningMode::DualQuaternion;
-        this.joints.joints[0u] = f32x3x4(MakeNonUniformScaleJointMatrix());
-        return BuildMeshSkinningJointPalette(scaled, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
-    }
-}
-
-[ordered]
-class FrameGraphPacketStatsTestContext{
-    public HeapStorage testArena;
-    public FrameGraphNodeDescs nodes;
-    public FrameGraphEdgeDescs edges;
-    public FrameGraphPendingNameEdges pendingNameEdges;
-    public FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics;
-    public FrameGraphPacketSubmissionStatisticsRecords packetStatistics;
-    public ScratchStorage scratchArena = ScratchStorage(s_EcsCaseTestsEcsGraphicsFrameGraphBuilderScratch);
-    public FrameGraphBuilder builder;
-    public FrameGraphPacketStatsTestContext(){
-        this.testArena = HeapStorage();
-        this.nodes = FrameGraphNodeDescs(this.testArena);
-        this.edges = FrameGraphEdgeDescs(this.testArena);
-        this.pendingNameEdges = FrameGraphPendingNameEdges(this.testArena);
-        this.physicalQueueStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(this.testArena);
-        this.packetStatistics = FrameGraphPacketSubmissionStatisticsRecords(this.testArena);
-        this.builder = FrameGraphBuilder(this.scratchArena, this.nodes, this.edges, this.pendingNameEdges, this.physicalQueueStatistics, this.packetStatistics, 41u);
-    }
-    public FrameGraphNodeHandle addOwnerPass(in Name name, in StringView label, in FrameGraphRuntimeStatistics statistics){
-        FrameGraphPassMetadata metadata;
-        metadata.runtimeStatistics = statistics;
-        return this.builder.addPass(name, label, metadata);
-    }
-}
-
-[ordered]
-class ResetRuntimeStatisticsContext{
-    public HeapStorage testArena;
-    public GpuTaskGraph graph;
-    public GpuCompiledGraph compiledGraph;
-    public GpuRecordedGraph recordedGraph;
-    public GpuGraphSubmissionTransaction transaction;
-    public GpuTaskGraphAnalysis analysis;
-    public GpuTaskGraphQueueAssignments assignments;
-    public ScratchStorage scratchArena = ScratchStorage(s_EcsCaseTestsEcsGraphicsResetRuntimeStatisticsScratch);
-    public ResetRuntimeStatisticsContext(){
-        this.testArena = HeapStorage();
-        this.graph = GpuTaskGraph(this.testArena);
-        this.compiledGraph = GpuCompiledGraph(this.testArena);
-        this.recordedGraph = GpuRecordedGraph(this.testArena);
-        this.transaction = GpuGraphSubmissionTransaction(this.testArena);
-        this.analysis = GpuTaskGraphAnalysis(this.testArena);
-        this.assignments = GpuTaskGraphQueueAssignments(this.testArena);
-    }
-    public b8 compileSingleGraphicsQueue(in GpuTaskGraphDeclarationReadView declarations){
-        GpuPhysicalQueueInfo queue;
-        queue.id.index = 0u;
-        queue.id.deviceGeneration = 1u;
-        queue.familyIndex = 0u;
-        queue.queueIndex = 0u;
-        queue.queueClass = CommandQueue::Graphics;
-        queue.capabilities = cast<GpuQueueCapability>(cast<u8>(GpuQueueCapability::Graphics) | cast<u8>(GpuQueueCapability::Compute) | cast<u8>(GpuQueueCapability::Transfer));
-        GpuPhysicalQueueTopology topology;
-        topology.setQueues(SpanOf<GpuPhysicalQueueInfo>(queue));
-        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
-        return compiler.compile(declarations, topology, GpuTaskGraphCompileOptions(), this.scratchArena, this.analysis, this.assignments, this.compiledGraph);
-    }
-    public GpuTaskGraphRuntimeStatistics collect(in GpuCompiledGraphReadView plan){
-        return CollectGpuTaskGraphRuntimeStatistics(this.compiledGraph, plan, this.recordedGraph, this.transaction);
-    }
-}
 
 Expected<Span<u8>> FindMutableCacheWithInstance(in MaterialInstanceMutableCache cache, in EntityID entity, in MaterialSurfaceInfo surface, in borrow MaterialInstanceComponent instance){
     return cache.find(entity, surface, Optional<in MaterialInstanceComponent>(instance));
 }
+
 Expected<Span<u8>> FindMutableCacheWithoutInstance(in MaterialInstanceMutableCache cache, in EntityID entity, in MaterialSurfaceInfo surface){
     return cache.find(entity, surface, Optional<in MaterialInstanceComponent>());
 }
+
 Expected<Span<u8>> PrepareMutableCacheWithInstance(mut MaterialInstanceMutableCache cache, mut EcsTestWorld context, in EntityID entity, in MaterialSurfaceInfo surface, in borrow MaterialInstanceComponent instance){
     return cache.prepare(context.world, entity, surface, Optional<in MaterialInstanceComponent>(instance));
 }
+
 b8 ApplyMaterialInstanceOverridesToPrefix(
     in MaterialInstanceOverrideApplier applier,
     in u32 entity,
@@ -425,90 +534,6 @@ b8 ApplyMaterialInstanceOverridesToPrefix(
 ){
     return applier.apply(entity, material, interfaceName, SpanOf<MaterialTypedLayoutBlock>(block), SpanOf<MaterialTypedLayoutField>(field), instance, bytes.first(count));
 }
-
-class MaterialConstantRangeTestContext{
-    public Vector<u8> uploadBytes;
-    public HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange> ranges;
-    public MaterialConstantRangeTestContext(){ this.ranges.reserve(3u); }
-    public Expected<MaterialTypedByteRange> findOrAppend(in Name material, in u64 hash, in Span<u8> bytes){
-        return FindOrAppendMaterialConstantTypedByteRange(material, hash, bytes, this.uploadBytes, this.ranges);
-    }
-    public usize uploadSize()const{ return this.uploadBytes.size(); }
-    public usize rangeCount()const{ return this.ranges.size(); }
-    public void verifyStoredRanges(in Name material, in Name other, in Span<u8> constants)const{
-        for(auto entry = this.ranges.begin(); entry != this.ranges.end(); ++entry){
-            const MaterialTypedByteRangeKey key = entry.key();
-            const MaterialTypedByteRange range = entry.value();
-            EXPECT_TRUE(key.materialName == material || key.materialName == other);
-            ASSERT_EQ(range.byteCount, constants.size());
-            ASSERT_LE(cast<usize>(range.byteOffset) + range.byteCount, this.uploadBytes.size());
-            for(usize i = 0u; i < constants.size(); ++i)
-                EXPECT_EQ(this.uploadBytes[range.byteOffset + i], constants[i]);
-        }
-    }
-}
-
-class MaterialContentTestStorage{
-    public Vector<u8> uploadBytes;
-    public MaterialTypedByteContentRangeMap ranges;
-    public MaterialContentTestStorage(){}
-}
-
-[ordered]
-class MaterialTypedByteRangeTestContext{
-    public ScratchStorage scratchArena = ScratchStorage(s_LightCaseScratch);
-    public TestValueSlot<MaterialContentTestStorage> storage;
-    public mut MaterialContentTestStorage data;
-    public MaterialTypedByteRangeTestContext(){ this.data = this.storage.constructIn(this.scratchArena); }
-    public void reserveStorage(in usize byteCapacity, in usize rangeCapacity){
-        this.data.uploadBytes.reserve(byteCapacity);
-        this.data.ranges.reserve(rangeCapacity);
-    }
-    public Expected<MaterialTypedByteRange> findOrAppend(in Span<u8> bytes){ return this.data.ranges.findOrAppend(bytes, this.data.uploadBytes); }
-    public Expected<MaterialTypedByteRange> appendSelfAliasedUploadBytes(){
-        const Span<u8> bytes = Span<u8>(this.data.uploadBytes);
-        return this.data.ranges.findOrAppend(bytes, this.data.uploadBytes);
-    }
-    public ArenaMemoryStats memoryStats()const{ return this.scratchArena.memoryStats(); }
-    public usize uploadSize()const{ return this.data.uploadBytes.size(); }
-    public usize uploadCapacity()const{ return this.data.uploadBytes.capacity(); }
-    public usize rangeCount()const{ return this.data.ranges.size(); }
-    public b8 emplaceOwnedKey(in u64 hash, in Span<u8> bytes, in u32 offset, in u32 count){
-        MaterialTypedByteRange range;
-        range.byteOffset = offset;
-        range.byteCount = count;
-        return this.data.ranges.insert(MaterialTypedByteContentLookup(hash, bytes), range);
-    }
-    public Optional<MaterialTypedByteRange> findByLookup(in u64 hash, in Span<u8> bytes)const{
-        return this.data.ranges.find(MaterialTypedByteContentLookup(hash, bytes));
-    }
-    public void fillUploadPattern(in usize expectedSize, mut Array<u8, 32> expected){
-        this.data.uploadBytes.reserve(expectedSize);
-        this.data.uploadBytes.resize(this.data.uploadBytes.capacity());
-        for(usize i = 0u; i < this.data.uploadBytes.size(); ++i){
-            this.data.uploadBytes[i] = cast<u8>((i * 31u) & 255u);
-            if(i < expected.size())
-                expected[i] = this.data.uploadBytes[i];
-        }
-    }
-    public b8 rangeMatchesUpload(in MaterialTypedByteRange range, in Span<u8> expected)const{
-        if(cast<usize>(range.byteOffset) + expected.size() > this.data.uploadBytes.size())
-            return false;
-        for(usize i = 0u; i < expected.size(); ++i){
-            if(this.data.uploadBytes[range.byteOffset + i] != expected[i])
-                return false;
-        }
-        return true;
-    }
-    public void invertUploadPrefix(in usize count){
-        for(usize i = 0u; i < count && i < this.data.uploadBytes.size(); ++i)
-            this.data.uploadBytes[i] ^= 255u;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyEcsGraphics_RuntimeMeshBufferByteCountRejectsOverflow(){
     const usize maxValue = usize.max;
@@ -839,7 +864,7 @@ void VerifyEcsGraphics_FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatching
     ResetRuntimeStatisticsContext context = ResetRuntimeStatisticsContext();
     const GpuTaskGraphDeclarationReadView declarationAccess = GpuTaskGraphDeclarationReadView(context.graph);
     ASSERT_TRUE(declarationAccess.valid());
-    ASSERT_TRUE(context.compileSingleGraphicsQueue(declarationAccess));
+    ASSERT_TRUE(context.compileSingleGraphicsQueue(declarationAccess, false));
 
     const GpuCompiledGraphReadView planAccess = GpuCompiledGraphReadView(context.compiledGraph);
     ASSERT_TRUE(planAccess.validFor(declarationAccess));
@@ -847,6 +872,38 @@ void VerifyEcsGraphics_FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatching
     ASSERT_FALSE(resetStatistics.valid());
     const FrameGraphRuntimeStatistics telemetry = BuildFrameGraphRuntimeStatistics(resetStatistics, 41u, 41u);
     EXPECT_FALSE(telemetry.present);
+}
+
+void VerifyEcsGraphics_PacketInspectionDistinguishesMissingPacketQueueAndWorker(){
+    ResetRuntimeStatisticsContext context = ResetRuntimeStatisticsContext();
+    GpuTaskDesc task;
+    task.setIdentity(Name(s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("Packet Inspection");
+    GpuTaskCommandRequirements commands;
+    commands.requiredCapabilities = GpuQueueCapability::Graphics;
+    ASSERT_TRUE(context.graph.addTask(task, commands).has_value());
+    const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(context.graph);
+    ASSERT_TRUE(declarations.valid());
+    ASSERT_TRUE(context.compileSingleGraphicsQueue(declarations, true));
+    const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(context.compiledGraph);
+    ASSERT_TRUE(plan.validFor(declarations));
+    ASSERT_EQ(plan.packetCount(), 1u);
+
+    GpuPhysicalQueueId queue;
+    queue.index = 0u;
+    queue.deviceGeneration = 1u;
+    EXPECT_FALSE(InspectCompiledPacketForQueue(plan, context.recordedGraph, 1u, queue).has_value());
+    GpuPhysicalQueueId otherQueue = queue;
+    otherQueue.index = 1u;
+    const Expected<CompiledPacketQueueInspection> other = InspectCompiledPacketForQueue(plan, context.recordedGraph, 0u, otherQueue);
+    ASSERT_TRUE(other.has_value());
+    EXPECT_FALSE(other.value().matchesQueue);
+    EXPECT_FALSE(other.value().hasRecordedWorker);
+    const Expected<CompiledPacketQueueInspection> matching = InspectCompiledPacketForQueue(plan, context.recordedGraph, 0u, queue);
+    ASSERT_TRUE(matching.has_value());
+    EXPECT_TRUE(matching.value().matchesQueue);
+    EXPECT_FALSE(matching.value().hasRecordedWorker);
+    EXPECT_EQ(matching.value().workerDomain, 0u);
+    EXPECT_EQ(matching.value().workerIndex, 0u);
 }
 
 void VerifyLightSpaceCaptureHistory_RequiresRecordedAcceptedCaptureAndAlternatesOneReuse(){
@@ -1677,65 +1734,117 @@ void VerifyEcsGraphics_MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutatio
 }
 
 NWB_ADHD_GTEST(EcsGraphics, RuntimeMeshBufferByteCountRejectsOverflow, VerifyEcsGraphics_RuntimeMeshBufferByteCountRejectsOverflow)
+
 NWB_ADHD_GTEST(EcsGraphics, AvboitUploadCountsRejectEachOverflowBoundary, VerifyEcsGraphics_AvboitUploadCountsRejectEachOverflowBoundary)
+
 NWB_ADHD_GTEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes, VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes)
+
 NWB_ADHD_GTEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending, VerifyEcsGraphics_MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
+
 NWB_ADHD_GTEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision, VerifyEcsGraphics_MeshSkinningSubmissionCommitPreservesNewerEditRevision)
+
 NWB_ADHD_GTEST(EcsGraphics, MissingMeshDoesNotReplacePreviousResolution, VerifyEcsGraphics_MissingMeshDoesNotReplacePreviousResolution)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialDrawCountRejectsAnOverflowingAddition, VerifyEcsGraphics_MaterialDrawCountRejectsAnOverflowingAddition)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialTypedReserveFallsBackWhenMultiplicationWouldOverflow, VerifyEcsGraphics_MaterialTypedReserveFallsBackWhenMultiplicationWouldOverflow)
+
 NWB_ADHD_GTEST(EcsGraphics, SharedMaterialMeshShaderDistinguishesMissingAndEmptyNames, VerifyEcsGraphics_SharedMaterialMeshShaderDistinguishesMissingAndEmptyNames)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineReadinessRejectsUnknownPathsAndMissingHandles, VerifyEcsGraphics_MaterialPipelineReadinessRejectsUnknownPathsAndMissingHandles)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineKeyDistinguishesFramebufferFormatsAndSamples, VerifyEcsGraphics_MaterialPipelineKeyDistinguishesFramebufferFormatsAndSamples)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude, VerifyEcsGraphics_MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude)
+
 NWB_ADHD_GTEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation, VerifyEcsGraphics_NonUniformScaleCannotBecomeRigidJointRotation)
+
 NWB_ADHD_GTEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected, VerifyEcsGraphics_InvalidSkeletonParentsAndJointCountsAreRejected)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 registration GoogleTestFinalCase(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette, VerifyEcsGraphics_MeshSkinningPayloadValidatesSkeletonAndPalette);
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots, VerifyEcsGraphics_FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner, VerifyEcsGraphics_FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner)
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics, VerifyEcsGraphics_FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics)
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot, VerifyEcsGraphics_FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot)
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphRuntimeStatisticsRejectsInconsistentInheritedWaitElisions, VerifyEcsGraphics_FrameGraphRuntimeStatisticsRejectsInconsistentInheritedWaitElisions)
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame, VerifyEcsGraphics_FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame)
+
+NWB_ADHD_GTEST(EcsGraphics, PacketInspectionDistinguishesMissingPacketQueueAndWorker, VerifyEcsGraphics_PacketInspectionDistinguishesMissingPacketQueueAndWorker)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, RequiresRecordedAcceptedCaptureAndAlternatesOneReuse, VerifyLightSpaceCaptureHistory_RequiresRecordedAcceptedCaptureAndAlternatesOneReuse)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, UntrustedSceneNeverReusesAcceptedCaptures, VerifyLightSpaceCaptureHistory_UntrustedSceneNeverReusesAcceptedCaptures)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, EachIdentityDomainAndTrustChangeForcesRefresh, VerifyLightSpaceCaptureHistory_EachIdentityDomainAndTrustChangeForcesRefresh)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, RejectedRefreshCannotResurrectPreviousInPlaceContents, VerifyLightSpaceCaptureHistory_RejectedRefreshCannotResurrectPreviousInPlaceContents)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, RejectedReuseAndSkippedFramesCannotExtendCaptureAge, VerifyLightSpaceCaptureHistory_RejectedReuseAndSkippedFramesCannotExtendCaptureAge)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, InvalidatedResourcesRejectPendingTicketsAndRequireRefresh, VerifyLightSpaceCaptureHistory_InvalidatedResourcesRejectPendingTicketsAndRequireRefresh)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, TwoAcceptedReusesRequireARefreshBeforeTheThird, VerifyLightSpaceCaptureHistory_TwoAcceptedReusesRequireARefreshBeforeTheThird)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, TwoFrameReuseRetainsIdentityInvalidationAndRejectsUnsubmittedEdits, VerifyLightSpaceCaptureHistory_TwoFrameReuseRetainsIdentityInvalidationAndRejectsUnsubmittedEdits)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, TwoFrameReuseCannotExtendAgeThroughRejectedSkippedOrInvalidatedFrames, VerifyLightSpaceCaptureHistory_TwoFrameReuseCannotExtendAgeThroughRejectedSkippedOrInvalidatedFrames)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, RetryingATwoFrameReuseDoesNotConsumeAnAdditionalAcceptedFrame, VerifyLightSpaceCaptureHistory_RetryingATwoFrameReuseDoesNotConsumeAnAdditionalAcceptedFrame)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, RejectsUnknownCaptureCadence, VerifyLightSpaceCaptureHistory_RejectsUnknownCaptureCadence)
+
 NWB_ADHD_GTEST(LightSpaceCaptureHistory, SameFrameGraphRetryAcceptsOnlyItsLatestRecordedCandidate, VerifyLightSpaceCaptureHistory_SameFrameGraphRetryAcceptsOnlyItsLatestRecordedCandidate)
+
 NWB_ADHD_GTEST(LightSpacePlan, RejectsUnknownCoverage, VerifyLightSpacePlan_RejectsUnknownCoverage)
+
 NWB_ADHD_GTEST(LightSpacePlan, RejectsUnknownBlockerPolicy, VerifyLightSpacePlan_RejectsUnknownBlockerPolicy)
+
 NWB_ADHD_GTEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces, VerifyLightSpacePlan_ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces)
+
 NWB_ADHD_GTEST(LightSpacePlan, BudgetBoundaryAdmitsWholeLightsAndLeavesOthersForTracing, VerifyLightSpacePlan_BudgetBoundaryAdmitsWholeLightsAndLeavesOthersForTracing)
+
 NWB_ADHD_GTEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEligibleLights, VerifyLightSpacePlan_SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEligibleLights)
+
 NWB_ADHD_GTEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan, VerifyLightSpacePlan_RejectsInvalidIdentityWithoutPublishingPartialPlan)
+
 NWB_ADHD_GTEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights, VerifyLightSpacePlan_RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights)
+
 NWB_ADHD_GTEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace, VerifyLightSpacePlan_BoundsExternalSettingsAndShaderAddressSpace)
+
 NWB_ADHD_GTEST(LightSpacePlan, ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange, VerifyLightSpacePlan_ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, GraphRequiresEachResourceAndValidTaskGeneration, VerifyLightSpaceShadowStorage_GraphRequiresEachResourceAndValidTaskGeneration)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, PipelineSelectionRespectsCsgRangeBoundaries, VerifyLightSpaceShadowStorage_PipelineSelectionRespectsCsgRangeBoundaries)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, ReservesWholeCasterAndRoundedMeshletGroupDraws, VerifyLightSpaceShadowStorage_ReservesWholeCasterAndRoundedMeshletGroupDraws)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, RejectsInvalidAndOverflowingDrawSpansWithoutWrapping, VerifyLightSpaceShadowStorage_RejectsInvalidAndOverflowingDrawSpansWithoutWrapping)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, AcceptsExactGenerationAndRejectsEachInsufficientResource, VerifyLightSpaceShadowStorage_AcceptsExactGenerationAndRejectsEachInsufficientResource)
+
 NWB_ADHD_GTEST(LightSpaceShadowStorage, CanSelectSmallerCurrentPlanWithoutAllocatingAndDeclinesGrowth, VerifyLightSpaceShadowStorage_CanSelectSmallerCurrentPlanWithoutAllocatingAndDeclinesGrowth)
+
 NWB_ADHD_GTEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes, VerifyLightingContentStamp_OnlyTheSelectedLightPrefixContributes)
+
 NWB_ADHD_GTEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity, VerifyLightingContentStamp_ReversingSelectedLightsChangesSemanticIdentity)
+
 NWB_ADHD_GTEST(MaterialInstanceMutableCacheTests, RevisionChangesAndClearInvalidatePreparedBytes, VerifyMaterialInstanceMutableCacheTests_RevisionChangesAndClearInvalidatePreparedBytes)
+
 NWB_ADHD_GTEST(MaterialInstanceOverrideApplierTests, RejectsTruncatedStorageWithoutWritingAndAcceptsExactFit, VerifyMaterialInstanceOverrideApplierTests_RejectsTruncatedStorageWithoutWritingAndAcceptsExactFit)
+
 NWB_ADHD_GTEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout, VerifyEcsGraphics_ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations, VerifyEcsGraphics_MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes, VerifyEcsGraphics_MaterialTypedByteRangeHashCollisionRetainsOwnedBytes)
+
 NWB_ADHD_GTEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation, VerifyEcsGraphics_MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation)
 
 

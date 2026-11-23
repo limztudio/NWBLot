@@ -566,7 +566,7 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
         emitScratchArenaPrologue(out, indent, method.name);
     }
     if(method.usesTaskScope)
-        ParallelStatementEmitter(*this).emitTaskScopePrologue(out, indent);
+        ParallelStatementEmitter(*this).emitTaskSchedulerPrologue(out, indent);
 
     const b8 prevUnwind = m_allowsCppUnwind;
     m_allowsCppUnwind = method.allowsCppUnwind || !method.exceptionProbes.empty();
@@ -574,9 +574,13 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_emittingScalarSimd = true;
     const TypeRef* prevCallerReturnType = m_activeCallerArenaReturnType;
     const u32 prevParallelWorkerDepth = m_parallelWorkerDepth;
+    const b8 prevHasActiveTaskScope = m_hasActiveTaskScope;
+    const u32 prevTaskGuardCounter = m_taskGuardCounter;
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeCallerArenaReturnType = (!method.isConstructor && !method.isDestructor && hasResultArena) ? method.returnType : nullptr;
     m_parallelWorkerDepth = 0u;
+    m_hasActiveTaskScope = false;
+    m_taskGuardCounter = 0u;
     m_activeSwitchBreakLabelLine = 0u;
     m_activeLocalVarDecls.clear();
     m_remainingBlockStatements = {};
@@ -584,6 +588,8 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_activeLocalVarDecls.clear();
     m_remainingBlockStatements = {};
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+    m_taskGuardCounter = prevTaskGuardCounter;
+    m_hasActiveTaskScope = prevHasActiveTaskScope;
     m_parallelWorkerDepth = prevParallelWorkerDepth;
     m_activeCallerArenaReturnType = prevCallerReturnType;
     m_emittingScalarSimd = prevScalarSimd;

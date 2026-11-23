@@ -149,6 +149,18 @@ inline constexpr b8 IsConstructible_V = std::is_constructible_v<T, Args...>;
 template<class T>
 inline constexpr b8 IsCopyConstructible_V = std::is_copy_constructible_v<T>;
 
+template<class T>
+inline constexpr b8 IsTriviallyDestructible_V = std::is_trivially_destructible_v<T>;
+
+template<class T>
+inline constexpr b8 IsTriviallyMoveConstructible_V = std::is_trivially_move_constructible_v<T>;
+
+template<class T>
+inline constexpr b8 IsNothrowDefaultConstructible_V = std::is_nothrow_default_constructible_v<T>;
+
+template<class T>
+inline constexpr b8 IsNothrowCopyConstructible_V = std::is_nothrow_copy_constructible_v<T>;
+
 template<class T, class... Args>
 inline constexpr b8 IsNothrowConstructible_V = std::is_nothrow_constructible_v<T, Args...>;
 
@@ -218,6 +230,8 @@ using IntegralConstant = std::integral_constant<T, Val>;
 
 template<size_t... Is>
 using IndexSequence = std::index_sequence<Is...>;
+template<size_t N>
+using MakeIndexSequence = std::make_index_sequence<N>;
 template<typename... Ts>
 using IndexSequenceFor = std::index_sequence_for<Ts...>;
 

@@ -14,18 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsSharedComputeEmulationRasterPhase(in usize phaseIndex, in usize phasesPerDraw){
-    return phaseIndex % phasesPerDraw != 0u;
-}
-
-usize ResolveSharedComputeEmulationDrawIndex(in usize phaseIndex, in usize phasesPerDraw){
-    return phaseIndex / phasesPerDraw;
-}
-
-b8 IsFinalSharedComputeEmulationPhase(in usize phaseIndex, in usize phaseCount){
-    return phaseIndex + 1u == phaseCount;
-}
-
 class OpaqueSharedComputeEmulationChainInputs{
     public in DeferredFrameTargets targets;
     public in DeferredGraphResourceImportResult resources;
@@ -158,6 +146,22 @@ class OpaqueSharedComputeEmulationChainBuilder : NoCopy{
         }
         return OpaqueSharedComputeEmulationChainResult(dependency, phaseCount);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsSharedComputeEmulationRasterPhase(in usize phaseIndex, in usize phasesPerDraw){
+    return phaseIndex % phasesPerDraw != 0u;
+}
+
+usize ResolveSharedComputeEmulationDrawIndex(in usize phaseIndex, in usize phasesPerDraw){
+    return phaseIndex / phasesPerDraw;
+}
+
+b8 IsFinalSharedComputeEmulationPhase(in usize phaseIndex, in usize phaseCount){
+    return phaseIndex + 1u == phaseCount;
 }
 
 

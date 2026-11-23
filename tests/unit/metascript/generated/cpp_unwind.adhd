@@ -2,6 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelUnwindTracker"), cpp_flags(self_defaulted, no_copy, no_assign)]
+extern class ParallelUnwindTracker{
+    void completeWork(in u32 seed)const;
+    u32 runs()const;
+    u32 valueSum()const;
+    b8 finished()const;
+    b8 postObservedFinished()const;
+    b8 preObservedFinished()const;
+    u32 postOrder()const;
+    u32 preOrder()const;
+};
+
+[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelLifetimeProbe"), cpp_flags(no_copy, no_assign)]
+extern class ParallelLifetimeProbe;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface IUnwindCallback{
     [cpp_unwind]
     u32 record(mut Func<u32()> callback)const;
@@ -10,6 +29,8 @@ interface IUnwindCallback{
 class CppUnwindCallback : IUnwindCallback{
     [cpp_unwind]
     public u32 record(mut Func<u32()> callback)const override;
+    [cpp_unwind]
+    public void runParallelUnwind(in ParallelUnwindTracker tracker, mut Func<void()> callback)const;
     public b8 ready()const{
         return true;
     }
@@ -23,6 +44,23 @@ u32 CppUnwindCallback::record(mut Func<u32()> callback)const{
         return inner();
     };
     return outer();
+}
+
+void CppUnwindCallback::runParallelUnwind(in ParallelUnwindTracker tracker, mut Func<void()> callback)const{
+    Vector<u32> preScratch;
+    preScratch.push_back(7u);
+    ParallelLifetimeProbe preProbe(tracker, false);
+    parallel TaskA {
+        tracker.completeWork(preScratch[0u]);
+    }
+    ParallelLifetimeProbe postProbe(tracker, true);
+    Vector<u32> postScratch;
+    postScratch.push_back(11u);
+    callback();
+    parallel TaskB : TaskA {
+        tracker.completeWork(postScratch[0u]);
+    }
+    wait(TaskA, TaskB);
 }
 
 

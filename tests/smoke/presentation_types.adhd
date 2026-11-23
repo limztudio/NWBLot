@@ -60,6 +60,13 @@ const f64 s_PresentationPacingMsPerSecond = 1000.0;
 const Name s_PresentationTimingNamePrepareResourcesFailed = "graphics.prepare_resources_failed";
 const Name s_PresentationTimingNameFramePreamble = "graphics.frame_preamble";
 
+enum<u8> PresentationFpsStatus{
+    Waiting,
+    Interval,
+    Complete,
+    Invalid
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -84,13 +91,6 @@ class PresentationPacingSummary{
     public u64 stallsOver50Ms = 0u;
 }
 
-enum<u8> PresentationFpsStatus{
-    Waiting,
-    Interval,
-    Complete,
-    Invalid
-}
-
 class PresentationFpsSample{
     public u64 firstPresentationCount = 0u;
     public u64 lastPresentationCount = 0u;
@@ -107,7 +107,6 @@ class PresentationFpsSample{
     }
 }
 
-
 class GpuPassTimingScopeAccum{
     public f64 sumSeconds = 0.0;
     public f64 minSeconds = 0.0;
@@ -116,28 +115,11 @@ class GpuPassTimingScopeAccum{
     public u32 frames = 0u;
 }
 
-
 class RendererGatherBenchmarkSceneCounts{
     public u32 renderers = 0u;
     public u32 runtimeRenderers = 0u;
     public u32 runtimeOwners = 0u;
     public u32 transparentRenderers = 0u;
-}
-
-void SortPresentationSamples(mut Array<f64, 4096u> values, in usize count){
-    usize gap = count / 2u;
-    while(gap > 0u){
-        for(usize i = gap; i < count; ++i){
-            const f64 current = values[i];
-            usize j = i;
-            while(j >= gap && values[j - gap] > current){
-                values[j] = values[j - gap];
-                j -= gap;
-            }
-            values[j] = current;
-        }
-        gap /= 2u;
-    }
 }
 
 class PresentationPacingRing{
@@ -390,6 +372,26 @@ class FpsProbe{
         this.m_intervalFrames = 0u;
         this.m_minFrameSeconds = 0.0;
         this.m_maxFrameSeconds = 0.0;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void SortPresentationSamples(mut Array<f64, 4096u> values, in usize count){
+    usize gap = count / 2u;
+    while(gap > 0u){
+        for(usize i = gap; i < count; ++i){
+            const f64 current = values[i];
+            usize j = i;
+            while(j >= gap && values[j - gap] > current){
+                values[j] = values[j - gap];
+                j -= gap;
+            }
+            values[j] = current;
+        }
+        gap /= 2u;
     }
 }
 

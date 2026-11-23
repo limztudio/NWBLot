@@ -70,7 +70,7 @@ class EditCompositionRules{
         return true;
     }
 
-    public b8 update(
+    [cpp_unwind] public b8 update(
         in b8 compositionActive,
         in StringView value,
         in usize anchor,
@@ -90,7 +90,11 @@ class EditCompositionRules{
         String candidate;
         if(!value.empty())
             candidate.assign(value);
-        inOutPreedit.assign(candidate);
+        inOutPreedit.reserve(candidate.size());
+        if(candidate.empty())
+            inOutPreedit.clear();
+        else
+            inOutPreedit.assign(candidate);
         outPreeditAnchor = anchor;
         outPreeditCaret = caret;
         ++inOutCompositionGeneration;

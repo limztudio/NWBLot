@@ -80,6 +80,11 @@ enum<u8> TexConvAlphaMode{
     kCount
 }
 
+class TexConvAlphaOption{
+    public AlphaSourceMode mode = AlphaSourceMode::Original;
+    public f32 constantValue = 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -226,27 +231,24 @@ Expected<VectorSingle> TryPrepareTexConvLinearPixel(
     return VectorSingle(linearRgb, alpha.value());
 }
 
-b8 TryParseTexConvAlphaOption(
-    in StringView alphaText,
-    mut AlphaSourceMode outMode,
-    mut f32 outConstant
-){
+Expected<TexConvAlphaOption> TryParseTexConvAlphaOption(in StringView alphaText){
     if(alphaText.empty()){
         error("tex_conv: --alpha expects an image path, white, or black.");
-        return false;
+        return MakeUnexpected(Failure());
     }
+    TexConvAlphaOption option = TexConvAlphaOption();
     if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
-        outMode = AlphaSourceMode::Constant;
-        outConstant = s_AlphaWhiteConstant;
-        return true;
+        option.mode = AlphaSourceMode::Constant;
+        option.constantValue = s_AlphaWhiteConstant;
+        return option;
     }
     if(EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword)){
-        outMode = AlphaSourceMode::Constant;
-        outConstant = s_AlphaBlackConstant;
-        return true;
+        option.mode = AlphaSourceMode::Constant;
+        option.constantValue = s_AlphaBlackConstant;
+        return option;
     }
-    outMode = AlphaSourceMode::Image;
-    return true;
+    option.mode = AlphaSourceMode::Image;
+    return option;
 }
 
 

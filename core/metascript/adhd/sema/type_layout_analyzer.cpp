@@ -194,6 +194,67 @@ b8 TypeLayoutAnalyzer::isClassMoveAssignable(const ClassDecl& decl, const Span<c
     return supportsClassOperation(decl, fields, nullptr, false, true, nullptr);
 }
 
+b8 TypeLayoutAnalyzer::isClassNothrowDefaultConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
+    if(depth >= 8u)
+        return false;
+    if(decl.concreteBase){
+        const ClassDecl& base = *decl.concreteBase;
+        b8 baseHasUserCtor = false;
+        b8 baseZeroCtorUnwinds = false;
+        for(const MethodDecl* method : base.methods){
+            if(method && method->isConstructor){
+                baseHasUserCtor = true;
+                if(method->minArgCount == 0u && method->allowsCppUnwind)
+                    baseZeroCtorUnwinds = true;
+            }
+        }
+        if(baseZeroCtorUnwinds)
+            return false;
+        if(!baseHasUserCtor && !base.isExtern && !isClassNothrowDefaultConstructible(base, base.fields, depth + 1u))
+            return false;
+    }
+    for(const FieldDecl* field : fields){
+        if(!field || field->isStatic || !field->type)
+            continue;
+        if(m_symbols.resolveRefMode(field->type) != ParamPassingMode::None)
+            continue;
+        const TypeRef* checkType = m_symbols.unwrapTypeAlias(field->type);
+        while(checkType && !m_symbols.hasTypeSymbol(checkType->name) && IsFixedArrayContainerType(checkType->name)){
+            if(checkType->templateArgs.empty() || !checkType->templateArgs[0].type){
+                checkType = nullptr;
+                break;
+            }
+            checkType = m_symbols.unwrapTypeAlias(checkType->templateArgs[0].type);
+        }
+        if(!checkType)
+            continue;
+        const MStringView baseFieldType = m_symbols.resolveBaseTypeName(checkType->name);
+        if(const ClassDecl* fieldCls = m_symbols.findClass(baseFieldType)){
+            b8 fieldHasUserCtor = false;
+            for(const MethodDecl* method : fieldCls->methods){
+                if(!method || !method->isConstructor)
+                    continue;
+                fieldHasUserCtor = true;
+                if(field->hasCtorInit){
+                    const usize argCount = field->ctorArgs.size();
+                    if(argCount >= method->minArgCount && argCount <= method->params.size() && method->allowsCppUnwind)
+                        return false;
+                }
+                else if(field->defaultExpr){
+                    if(method->allowsCppUnwind)
+                        return false;
+                }
+                else if(method->minArgCount == 0u && method->allowsCppUnwind){
+                    return false;
+                }
+            }
+            if(!fieldHasUserCtor && !fieldCls->isExtern && !isClassNothrowDefaultConstructible(*fieldCls, fieldCls->fields, depth + 1u))
+                return false;
+        }
+    }
+    return true;
+}
+
 b8 TypeLayoutAnalyzer::containsSimdRegisterType(const TypeRef& type, const u32 depth)const noexcept{
     if(depth >= 8u || type.isFuncType)
         return false;

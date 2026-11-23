@@ -14,6 +14,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class OctEncodingBoundary{
+    public f32x3u m_axis;
+    public u32 m_packed;
+
+    public OctEncodingBoundary(in f32 x, in f32 y, in f32 z, in u32 packed){
+        this.m_axis = f32x3u(x, y, z);
+        this.m_packed = packed;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CheckCanonicalNativePath(in PlatformStringView text, in StringView expected, mut ScratchStorage scratch){
     String reference;
     ConvertGraphicsNativeText(text, reference);
@@ -39,16 +53,6 @@ void VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries(){
         const Array<u32, 1u> units(0xffu);
         const NativeUnits highByte = NativeUnits(Span<u32>(units));
         CheckCanonicalNativePath(highByte.view(), StringView("\xff", 1u), scratch);
-    }
-}
-
-class OctEncodingBoundary{
-    public f32x3u m_axis;
-    public u32 m_packed;
-
-    public OctEncodingBoundary(in f32 x, in f32 y, in f32 z, in u32 packed){
-        this.m_axis = f32x3u(x, y, z);
-        this.m_packed = packed;
     }
 }
 
@@ -249,9 +253,9 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
     ASSERT_TRUE(WriteGraphicsFixtureText(upperPath, "upper native input"));
     ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "lower native input"));
 
-    b8 casePreserved = false;
-    ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratch, casePreserved));
-    if(!casePreserved){
+    const Expected<b8, ErrorCode> casePreserved = ReadTextFileMatches(upperPath, "upper native input", scratch);
+    ASSERT_TRUE(casePreserved.has_value());
+    if(!casePreserved.value()){
         SkipTest("The test filesystem does not preserve distinct native path case");
         return;
     }
@@ -301,7 +305,7 @@ void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPath
     for(u32 index = 0u; index < 1024u; ++index){
         CompactString candidate("b/second_");
         AppendUnsignedDecimal(candidate, cast<usize>(index));
-        candidate.append(".asset.nwb");
+        ASSERT_TRUE(candidate.append(".asset.nwb"));
         if(HashDiscoveredPath(candidate.view()) % seen.bucket_count() == bucket){
             second.assign(candidate.view());
             break;
@@ -1004,48 +1008,82 @@ void VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndRe
     EXPECT_EQ(logger.errorCount(), 2u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries, VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries)
+
 NWB_ADHD_GTEST(AssetsGraphics, MeshletOct16DecodePreservesQuantizationAndFoldBits, VerifyAssetsGraphics_MeshletOct16DecodePreservesQuantizationAndFoldBits)
+
 NWB_ADHD_GTEST(AssetsGraphics, MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries, VerifyAssetsGraphics_MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries)
+
 NWB_ADHD_GTEST(AssetsGraphics, MeshletPositionAndSkinDeltasRejectU32WraparoundAtEveryWidth, VerifyAssetsGraphics_MeshletPositionAndSkinDeltasRejectU32WraparoundAtEveryWidth)
+
 NWB_ADHD_GTEST(AssetsGraphics, MeshletAttributeDeltasRejectU32WraparoundInEveryChannelAndWidth, VerifyAssetsGraphics_MeshletAttributeDeltasRejectU32WraparoundInEveryChannelAndWidth)
+
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths, VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths)
+
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmission, VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAdmission)
+
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoot, VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarlierRoot)
+
 NWB_ADHD_GTEST(AssetPaths, CanonicalNativeTextMatchesConversionAtBoundaries, VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries)
+
 NWB_ADHD_GTEST(MetadataDiscoveryAdmission, PathsInSameHashBucketKeepDistinctOwnedPaths, VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPaths)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject, VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadOnce, VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePayloadOnce)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena, VerifyMetadataExtensionOwnership_MapMoveAndReplacementUseEachOriginalObjectArena)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner, VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedMembers, VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstructedMembers)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions, VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue, VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredValue)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner, VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwner)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorrow, VerifyMetadataExtensionOwnership_ExtensionsRetireBeforeTheEntryRegistryTheyBorrow)
+
 NWB_ADHD_GTEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtensionPayload, VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExtensionPayload)
+
 NWB_ADHD_GTEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets, VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets)
+
 NWB_ADHD_GTEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket, VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket)
+
 NWB_ADHD_GTEST(MetadataRegistryPublication, MetadataRegistrationKeepsCallerTextAlive, VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive)
+
 NWB_ADHD_GTEST(MetadataRegistryPublication, ConcurrentMetadataRegistrationsKeepDistinctTokens, VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistinctTokens)
+
 NWB_ADHD_GTEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover, VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover)
+
 NWB_ADHD_GTEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects, VerifyModelCookMetadata_SharedAssetPathCannotSelectAmongLocalSkeletonObjects)
+
 NWB_ADHD_GTEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors, VerifyModelCookMetadata_UnknownObjectReferencesRemainValidatorErrors)
+
 NWB_ADHD_GTEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors, VerifyModelCookMetadata_CanonicalDuplicateObjectNamesRemainValidatorErrors)
+
 NWB_ADHD_GTEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections, VerifyModelCookMetadata_HandlesStaticOnlyAndMissingSkeletonCollections)
+
 NWB_ADHD_GTEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyReferenceRecovers, VerifyModelCookMetadata_RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyReferenceRecovers)
+
 NWB_ADHD_GTEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThreeRowsRecover, VerifyModelCookMetadata_FourRowTransformFailsWithoutReplacingPreviousValueAndThreeRowsRecover)
+
 NWB_ADHD_GTEST(ModelPayload, RejectsDuplicateNamesWithinAndAcrossObjectKinds, VerifyModelPayload_RejectsDuplicateNamesWithinAndAcrossObjectKinds)
+
 NWB_ADHD_GTEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels, VerifyModelPayload_RejectsMissingNamesRequiredReferencesAndEmptyModels)
+
 NWB_ADHD_GTEST(ModelPayload, RejectsMissingOrWrongKindParents, VerifyModelPayload_RejectsMissingOrWrongKindParents)
+
 NWB_ADHD_GTEST(ModelPayload, RevalidatesReplacedObjectsAndRecoversAfterRejection, VerifyModelPayload_RevalidatesReplacedObjectsAndRecoversAfterRejection)
+
 NWB_ADHD_GTEST(ModelPayload, SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton, VerifyModelPayload_SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton)
+
 NWB_ADHD_GTEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection, VerifyModelPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection)
+
 NWB_ADHD_GTEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPayload, VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPayload)
+
 void VerifyAssetsGraphics_MeshletScoreRetainsOrderingAtFloatPrecisionBoundary(){
     const f32 farther = EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777216.0f, 0.0f, 0.0f, false);
     const f32 nearer = EvaluateMeshletCandidateScore(1u, 1u, 0.25f, 16777215.0f, 0.0f, 0.0f, false);
@@ -1053,6 +1091,7 @@ void VerifyAssetsGraphics_MeshletScoreRetainsOrderingAtFloatPrecisionBoundary(){
 }
 
 NWB_ADHD_GTEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload, VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload)
+
 NWB_ADHD_GTEST(AssetsGraphics, MeshletScoreRetainsOrderingAtFloatPrecisionBoundary, VerifyAssetsGraphics_MeshletScoreRetainsOrderingAtFloatPrecisionBoundary)
 
 

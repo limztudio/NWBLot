@@ -42,6 +42,7 @@ using DefaultAString = DefaultBasicString<char, ArenaT, DefaultArena>;
 template<typename T>
 using BasicInteropString = std::basic_string<T>;
 using AInteropString = BasicInteropString<char>;
+using AInteropOutputStringStream = std::ostringstream;
 
 template<typename T, typename ArenaT>
 using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;

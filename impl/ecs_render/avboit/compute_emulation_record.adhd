@@ -19,6 +19,10 @@ enum<u8> AvboitTargetFramebufferKind{
     Accumulation = 1
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class AvboitComputeEmulationRecordTrait{
     public GpuTimingScopeDefinition timingScope;
     public MaterialPipelinePass pipelinePass;
@@ -34,37 +38,6 @@ class AvboitComputeEmulationRecordTrait{
         this.framebufferKind = inFramebufferKind;
     }
 }
-
-FramebufferHandle SelectAvboitTargetFramebuffer(in AvboitFrameTargets targets, in AvboitTargetFramebufferKind kind){
-    if(kind == AvboitTargetFramebufferKind::Accumulation)
-        return targets.accumulationFramebuffer;
-    return targets.lowFramebuffer;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AvboitComputeEmulationRecordTrait GetAvboitComputeEmulationRecordTrait(in MaterialPipelinePass pass){
-    if(pass == MaterialPipelinePass::AvboitAccumulate)
-        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitAccumulate, pass, AvboitTargetFramebufferKind::Accumulation);
-    if(pass == MaterialPipelinePass::AvboitExtinction)
-        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitExtinction, pass, AvboitTargetFramebufferKind::Low);
-    assert(pass == MaterialPipelinePass::AvboitOccupancy);
-    return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitOccupancy, pass, AvboitTargetFramebufferKind::Low);
-}
-
-b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){
-    return hasFramebufferMember && regularCaptured != csgCaptured;
-}
-
-b8 HasValidAvboitSharedComputeEmulationRecordInputs(in b8 hasFramebuffer, in b8 planCaptured, in usize drawIndex, in usize drawCount){
-    return hasFramebuffer && planCaptured && drawIndex < drawCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [modular]
 class AvboitComputeEmulationTaskPayload{
@@ -111,7 +84,6 @@ class AvboitComputeEmulationTaskPayload{
     }
 }
 
-
 [modular]
 class AvboitSharedComputeEmulationTaskPayload{
     public mut GraphicsRuntime graphics;
@@ -157,7 +129,6 @@ class AvboitSharedComputeEmulationTaskPayload{
     }
 }
 
-
 [modular]
 class AvboitRasterPassTaskPayload{
     public mut RendererAvboitSystem avboitSystem;
@@ -197,6 +168,33 @@ class AvboitRasterPassTaskPayload{
         if(this.computeEmulationTiming.has_value())
             DiscardGpuTimingMeasure(this.computeEmulationTiming.value());
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+FramebufferHandle SelectAvboitTargetFramebuffer(in AvboitFrameTargets targets, in AvboitTargetFramebufferKind kind){
+    if(kind == AvboitTargetFramebufferKind::Accumulation)
+        return targets.accumulationFramebuffer;
+    return targets.lowFramebuffer;
+}
+
+AvboitComputeEmulationRecordTrait GetAvboitComputeEmulationRecordTrait(in MaterialPipelinePass pass){
+    if(pass == MaterialPipelinePass::AvboitAccumulate)
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitAccumulate, pass, AvboitTargetFramebufferKind::Accumulation);
+    if(pass == MaterialPipelinePass::AvboitExtinction)
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitExtinction, pass, AvboitTargetFramebufferKind::Low);
+    assert(pass == MaterialPipelinePass::AvboitOccupancy);
+    return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitOccupancy, pass, AvboitTargetFramebufferKind::Low);
+}
+
+b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){
+    return hasFramebufferMember && regularCaptured != csgCaptured;
+}
+
+b8 HasValidAvboitSharedComputeEmulationRecordInputs(in b8 hasFramebuffer, in b8 planCaptured, in usize drawIndex, in usize drawCount){
+    return hasFramebuffer && planCaptured && drawIndex < drawCount;
 }
 
 

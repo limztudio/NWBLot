@@ -49,120 +49,6 @@ class RefractionCaptureValidationPolicy{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CanRecordRefractionCaptureCapTask(
-    in b8 hasPipeline,
-    in b8 csgBindingValid,
-    in b8 hasFramebuffer,
-    in b8 slotsDescriptorValid,
-    in b8 receiverIndicesEmpty
-){
-    return hasPipeline && csgBindingValid && hasFramebuffer && slotsDescriptorValid && !receiverIndicesEmpty;
-}
-
-usize ComputeRefractionCaptureCapUseCapacity(in usize commonUseCount, in usize csgUseCount){
-    return commonUseCount + csgUseCount + s_RefractionCaptureCapExtraUseCapacity;
-}
-
-StringView SelectRefractionCaptureDrawMarkerLabel(in b8 generate){
-    if(generate)
-        return s_RefractionCaptureGenerateLabel;
-    return s_RefractionCaptureRasterLabel;
-}
-
-usize ComputeRefractionCaptureDrawUseCapacity(in usize commonUseCount, in b8 csg, in usize csgUseCount){
-    usize total = commonUseCount + s_RefractionCaptureDrawExtraUseCapacity;
-    if(csg)
-        total += csgUseCount;
-    return total;
-}
-
-Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
-    CompactString text = CompactString("render.refraction.capture.draw_");
-    AppendUnsignedU64Text(text, cast<u64>(drawTaskIndex));
-    return ParseName(text.view());
-}
-
-Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView label){
-    return FindOrImportTexture(graph, texture, label);
-}
-
-Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureBuffer(mut GpuTaskGraph graph, in BufferHandle buffer, in StringView label){
-    return FindOrImportBuffer(graph, buffer, label);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_unwind]
-b8 AppendRefractionCaptureUpload(
-    mut GpuTaskGraph graph,
-    mut GpuTaskId dependency,
-    in Name identity,
-    in GpuGraphResourceId destination,
-    in Expected<GpuUploadBlobId> blob
-){
-    if(!destination.valid() || !blob.has_value())
-        return false;
-    GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureUploadLabel, dependency);
-    GpuUploadBufferTaskDesc upload;
-    upload.source = blob.value();
-    upload.destination = destination;
-    upload.finalState = ResourceStates::Common;
-    const auto produced = graph.addUploadBufferTask(desc, upload);
-    if(!produced.has_value()){
-        dependency = GpuTaskId();
-        return false;
-    }
-    dependency = produced.value();
-    return true;
-}
-
-[cpp_unwind]
-b8 AppendRefractionCaptureCsg(
-    mut GpuTaskGraph graph,
-    mut GpuTaskId dependency,
-    mut RendererCsgSystem csgSystem,
-    in DeferredFrameTargets targets,
-    in CsgFrameGpuDataView frame,
-    in CsgGraphResourceSnapshot csgResources,
-    in MeshFrameBindingSnapshot frameBindings,
-    mut Vector<GpuTaskResourceUse> uses
-){
-    uses.reserve(s_RefractionCaptureCsgUseCapacity);
-    const auto clip = csgSystem.prepareCsgClipContextSlotData(targets, frame, csgResources, frameBindings);
-    if(!clip.has_value())
-        return false;
-    const auto ranges = FindOrImportBuffer(graph, csgResources.receiverRanges, s_RefractionCaptureBufferLabel);
-    const auto cutters = FindOrImportBuffer(graph, csgResources.cutters, s_RefractionCaptureBufferLabel);
-    const auto slots = FindOrImportBuffer(graph, csgResources.clipContextSlots, s_RefractionCaptureBufferLabel);
-    const auto interval = FindOrImportBuffer(graph, csgResources.intervalSampleState, s_RefractionCaptureBufferLabel);
-    if(!interval.has_value() || !ranges.has_value()
-        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgRangesUpload, ranges.value(), graph.copyUploadElements<CsgReceiverRangeGpuData>(frame.receiverRanges))
-        || !cutters.has_value()
-        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgCuttersUpload, cutters.value(), graph.copyUploadElements<CsgCutterGpuData>(frame.cutters))
-        || !slots.has_value()
-        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgContextUpload, slots.value(), graph.copyUploadValue(clip.value())))
-        return false;
-    uses.push_back(ReadBufferUse(ranges.value(), BufferRange(0u, frame.receiverRanges.size() * size_of<CsgReceiverRangeGpuData>())));
-    uses.push_back(ReadBufferUse(cutters.value(), BufferRange(0u, frame.cutters.size() * size_of<CsgCutterGpuData>())));
-    uses.push_back(ReadUse(slots.value(), ResourceStates::ConstantBuffer));
-    uses.push_back(ReadUse(interval.value(), ResourceStates::ConstantBuffer));
-    auto appendIntervalRead = lambda[mut graph, mut uses](in TextureHandle texture) -> b8{
-        const auto resource = FindOrImportTexture(graph, texture, s_RefractionCaptureTextureLabel);
-        if(!resource.has_value())
-            return false;
-        uses.push_back(ReadTextureUse(resource.value(), s_AllSubresources, ResourceStates::UnorderedAccess));
-        return true;
-    };
-    return appendIntervalRead(targets.csgRemovedIntervalDepth) && appendIntervalRead(targets.csgRemovedIntervalCapNormal)
-        && appendIntervalRead(targets.csgRemovedIntervalData) && appendIntervalRead(targets.csgRemovedIntervalCount);
-}
-
 class RefractionCaptureCapTask{
     public mut RendererCsgSystem csgSystem;
     public in DeferredFrameTargets targets;
@@ -291,6 +177,116 @@ class RefractionCaptureAttachments{
         desc.setResourceUses(uses);
         return graph.addPayloadTask(desc, RefractionCaptureFinalizeTask());
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanRecordRefractionCaptureCapTask(
+    in b8 hasPipeline,
+    in b8 csgBindingValid,
+    in b8 hasFramebuffer,
+    in b8 slotsDescriptorValid,
+    in b8 receiverIndicesEmpty
+){
+    return hasPipeline && csgBindingValid && hasFramebuffer && slotsDescriptorValid && !receiverIndicesEmpty;
+}
+
+usize ComputeRefractionCaptureCapUseCapacity(in usize commonUseCount, in usize csgUseCount){
+    return commonUseCount + csgUseCount + s_RefractionCaptureCapExtraUseCapacity;
+}
+
+StringView SelectRefractionCaptureDrawMarkerLabel(in b8 generate){
+    if(generate)
+        return s_RefractionCaptureGenerateLabel;
+    return s_RefractionCaptureRasterLabel;
+}
+
+usize ComputeRefractionCaptureDrawUseCapacity(in usize commonUseCount, in b8 csg, in usize csgUseCount){
+    usize total = commonUseCount + s_RefractionCaptureDrawExtraUseCapacity;
+    if(csg)
+        total += csgUseCount;
+    return total;
+}
+
+Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
+    CompactString text = CompactString("render.refraction.capture.draw_");
+    AppendUnsignedU64Text(text, cast<u64>(drawTaskIndex));
+    return ParseName(text.view());
+}
+
+Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView label){
+    return FindOrImportTexture(graph, texture, label);
+}
+
+Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureBuffer(mut GpuTaskGraph graph, in BufferHandle buffer, in StringView label){
+    return FindOrImportBuffer(graph, buffer, label);
+}
+
+[cpp_unwind]
+b8 AppendRefractionCaptureUpload(
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency,
+    in Name identity,
+    in GpuGraphResourceId destination,
+    in Expected<GpuUploadBlobId> blob
+){
+    if(!destination.valid() || !blob.has_value())
+        return false;
+    GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureUploadLabel, dependency);
+    GpuUploadBufferTaskDesc upload;
+    upload.source = blob.value();
+    upload.destination = destination;
+    upload.finalState = ResourceStates::Common;
+    const auto produced = graph.addUploadBufferTask(desc, upload);
+    if(!produced.has_value()){
+        dependency = GpuTaskId();
+        return false;
+    }
+    dependency = produced.value();
+    return true;
+}
+
+[cpp_unwind]
+b8 AppendRefractionCaptureCsg(
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency,
+    mut RendererCsgSystem csgSystem,
+    in DeferredFrameTargets targets,
+    in CsgFrameGpuDataView frame,
+    in CsgGraphResourceSnapshot csgResources,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut Vector<GpuTaskResourceUse> uses
+){
+    uses.reserve(s_RefractionCaptureCsgUseCapacity);
+    const auto clip = csgSystem.prepareCsgClipContextSlotData(targets, frame, csgResources, frameBindings);
+    if(!clip.has_value())
+        return false;
+    const auto ranges = FindOrImportBuffer(graph, csgResources.receiverRanges, s_RefractionCaptureBufferLabel);
+    const auto cutters = FindOrImportBuffer(graph, csgResources.cutters, s_RefractionCaptureBufferLabel);
+    const auto slots = FindOrImportBuffer(graph, csgResources.clipContextSlots, s_RefractionCaptureBufferLabel);
+    const auto interval = FindOrImportBuffer(graph, csgResources.intervalSampleState, s_RefractionCaptureBufferLabel);
+    if(!interval.has_value() || !ranges.has_value()
+        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgRangesUpload, ranges.value(), graph.copyUploadElements<CsgReceiverRangeGpuData>(frame.receiverRanges))
+        || !cutters.has_value()
+        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgCuttersUpload, cutters.value(), graph.copyUploadElements<CsgCutterGpuData>(frame.cutters))
+        || !slots.has_value()
+        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureCsgContextUpload, slots.value(), graph.copyUploadValue(clip.value())))
+        return false;
+    uses.push_back(ReadBufferUse(ranges.value(), BufferRange(0u, frame.receiverRanges.size() * size_of<CsgReceiverRangeGpuData>())));
+    uses.push_back(ReadBufferUse(cutters.value(), BufferRange(0u, frame.cutters.size() * size_of<CsgCutterGpuData>())));
+    uses.push_back(ReadUse(slots.value(), ResourceStates::ConstantBuffer));
+    uses.push_back(ReadUse(interval.value(), ResourceStates::ConstantBuffer));
+    auto appendIntervalRead = lambda[mut graph, mut uses](in TextureHandle texture) -> b8{
+        const auto resource = FindOrImportTexture(graph, texture, s_RefractionCaptureTextureLabel);
+        if(!resource.has_value())
+            return false;
+        uses.push_back(ReadTextureUse(resource.value(), s_AllSubresources, ResourceStates::UnorderedAccess));
+        return true;
+    };
+    return appendIntervalRead(targets.csgRemovedIntervalDepth) && appendIntervalRead(targets.csgRemovedIntervalCapNormal)
+        && appendIntervalRead(targets.csgRemovedIntervalData) && appendIntervalRead(targets.csgRemovedIntervalCount);
 }
 
 [cpp_unwind]

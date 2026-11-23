@@ -12,6 +12,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_EDGE_COUNTER_SIZE")]
+extern const u32 s_ShaderSwEdgeCounterSize;
+
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT")]
+extern const u32 s_ShaderSwIndirectArgsWordCount;
+
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_STAGE_WAVELET")]
+extern const u32 s_ShaderResolveWavelet;
+
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE")]
+extern const u32 s_ShaderResolveUpsample;
+
+static_assert(s_ShaderResolveWavelet == 1u && s_ShaderResolveUpsample == 2u);
+static_assert(size_of<ShadowRqSoftPushConstants>() >= size_of<ShadowRqPushConstants>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_ShadowRayQueryShaderDebugName = "ECSRender_ShadowRayQuery";
 const Name s_ShadowRayQuerySoftShaderDebugName = "ECSRender_ShadowRayQuerySoft";
 const Name s_SoftShadowResolveShaderScope = "ECSRender_SoftShadowResolve";
@@ -41,21 +60,6 @@ b8 CanPrepareSoftCombinedResolvePipelines(in b8 softShadowReady, in b8 softTrans
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_EDGE_COUNTER_SIZE")]
-extern const u32 s_ShaderSwEdgeCounterSize;
-
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT")]
-extern const u32 s_ShaderSwIndirectArgsWordCount;
-
-[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_STAGE_WAVELET")]
-extern const u32 s_ShaderResolveWavelet;
-
-[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE")]
-extern const u32 s_ShaderResolveUpsample;
-
-static_assert(s_ShaderResolveWavelet == 1u && s_ShaderResolveUpsample == 2u);
-static_assert(size_of<ShadowRqSoftPushConstants>() >= size_of<ShadowRqPushConstants>());
-
 b8 EnsureShadowResolveStage(
     in BindingLayoutHandle layout,
     in Func<64u, AssetRef<ComputeShader>(in ShadowSubsystem)> selector,
@@ -66,8 +70,15 @@ b8 EnsureShadowResolveStage(
 ){
     if(stage.m_pipeline.valid())
         return true;
-    return shaders.loadShader<ComputeShader, ShadowSubsystem>(selector, variant, s_SoftShadowResolveShaderScope, stage.m_shader)
-        && CreateHeapComputePipeline(device, stage.m_shader, layout, false, stage.m_pipeline);
+    if(!shaders.loadShader<ComputeShader, ShadowSubsystem>(selector, variant, s_SoftShadowResolveShaderScope, stage.m_shader))
+        return false;
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, stage.m_shader, layout, false);
+    if(!pipeline.has_value()){
+        stage.m_pipeline.reset();
+        return false;
+    }
+    stage.m_pipeline = pipeline.value();
+    return true;
 }
 
 b8 EnsureResolveChannel(
@@ -99,10 +110,13 @@ b8 EnsureSwShadowPassPipeline(
 
     if(!shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(selector, s_ShaderArchiveDefaultVariant, debugLabel, shader))
         return false;
-    if(!CreateHeapComputePipeline(graphics.getDevice(), shader, bindingLayout, false, pipeline)){
+    const Expected<ComputePipelineHandle> createdPipeline = CreateHeapComputePipeline(graphics.getDevice(), shader, bindingLayout, false);
+    if(!createdPipeline.has_value()){
+        pipeline.reset();
         error("RendererSystem: failed to create software shadow compute pipeline");
         return false;
     }
+    pipeline = createdPipeline.value();
     return true;
 }
 
@@ -131,14 +145,19 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
         return false;
     }
 
-    if(
-        !this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowRayqueryCs; }, s_ShaderArchiveDefaultVariant, s_ShadowRayQueryShaderDebugName, this.m_shadow.m_shadowShader)
-        || !CreateHeapComputePipeline(device, this.m_shadow.m_shadowShader, this.m_shadow.m_shadowBindingLayout, true, this.m_shadow.m_shadowPipeline)
-    ){
+    if(!this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowRayqueryCs; }, s_ShaderArchiveDefaultVariant, s_ShadowRayQueryShaderDebugName, this.m_shadow.m_shadowShader)){
         error("RendererSystem: failed to create RayQuery shadow compute pipeline");
         this.m_shadow.m_shadowPipelineFailed = true;
         return false;
     }
+    const Expected<ComputePipelineHandle> shadowPipeline = CreateHeapComputePipeline(device, this.m_shadow.m_shadowShader, this.m_shadow.m_shadowBindingLayout, true);
+    if(!shadowPipeline.has_value()){
+        this.m_shadow.m_shadowPipeline.reset();
+        error("RendererSystem: failed to create RayQuery shadow compute pipeline");
+        this.m_shadow.m_shadowPipelineFailed = true;
+        return false;
+    }
+    this.m_shadow.m_shadowPipeline = shadowPipeline.value();
 
     info("RendererSystem: created RayQuery shadow compute pipeline");
     return true;
@@ -168,15 +187,20 @@ b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
         return false;
     }
 
-    if(
-        !this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowRayquerySoftCs; }, s_ShaderArchiveDefaultVariant,
-            s_ShadowRayQuerySoftShaderDebugName, this.m_softShadow.m_shadowSoftShader)
-        || !CreateHeapComputePipeline(device, this.m_softShadow.m_shadowSoftShader, this.m_shadow.m_shadowBindingLayout, true, this.m_softShadow.m_shadowSoftPipeline)
-    ){
+    if(!this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowRayquerySoftCs; }, s_ShaderArchiveDefaultVariant,
+        s_ShadowRayQuerySoftShaderDebugName, this.m_softShadow.m_shadowSoftShader)){
         error("RendererSystem: failed to create RayQuery soft shadow compute pipeline");
         this.m_softShadow.m_shadowSoftPipelineFailed = true;
         return false;
     }
+    const Expected<ComputePipelineHandle> softPipeline = CreateHeapComputePipeline(device, this.m_softShadow.m_shadowSoftShader, this.m_shadow.m_shadowBindingLayout, true);
+    if(!softPipeline.has_value()){
+        this.m_softShadow.m_shadowSoftPipeline.reset();
+        error("RendererSystem: failed to create RayQuery soft shadow compute pipeline");
+        this.m_softShadow.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+    this.m_softShadow.m_shadowSoftPipeline = softPipeline.value();
 
     info("RendererSystem: created RayQuery soft shadow compute pipeline");
     return true;
@@ -399,14 +423,18 @@ b8 ShadowPipelineSet::ensureSoftCombinedUpsamplePipeline(){
     if(resolve.m_combinedUpsampleFailed || !resolve.m_bindingLayout.valid())
         return false;
     mut Device device = this.m_graphics.getDevice();
-    if(
-        !this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowResolveCombinedCs; }, s_ShaderArchiveDefaultVariant,
-            s_CombinedShadowUpsampleShaderScope, resolve.m_combinedUpsample.m_shader)
-        || !CreateHeapComputePipeline(device, resolve.m_combinedUpsample.m_shader, resolve.m_bindingLayout, false, resolve.m_combinedUpsample.m_pipeline)
-    ){
+    if(!this.m_shaderSystem.loadShader<ComputeShader, ShadowSubsystem>(lambda[](in ShadowSubsystem s) -> AssetRef<ComputeShader>{ return s.shadowResolveCombinedCs; }, s_ShaderArchiveDefaultVariant,
+        s_CombinedShadowUpsampleShaderScope, resolve.m_combinedUpsample.m_shader)){
         resolve.m_combinedUpsampleFailed = true;
         return false;
     }
+    const Expected<ComputePipelineHandle> upsamplePipeline = CreateHeapComputePipeline(device, resolve.m_combinedUpsample.m_shader, resolve.m_bindingLayout, false);
+    if(!upsamplePipeline.has_value()){
+        resolve.m_combinedUpsample.m_pipeline.reset();
+        resolve.m_combinedUpsampleFailed = true;
+        return false;
+    }
+    resolve.m_combinedUpsample.m_pipeline = upsamplePipeline.value();
     return true;
 }
 

@@ -15,6 +15,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type MaterialGeometryHeapHandles = Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount>;
+type MaterialPassMeshBufferVisitor = Func<64u, void(in BufferHandle)>;
+type AvboitGeometryDrawSets = Span<MaterialPassDrawItemsView>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class MaterialPassDrawContext{
     public mut CommandList commandList;
     public ViewportState viewportState;
@@ -67,8 +75,6 @@ class MaterialPassDrawContext{
     }
 }
 
-type MaterialGeometryHeapHandles = Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount>;
-
 class MaterialPassMeshResourceSnapshot{
     public RuntimeMeshBuffers sourceBuffers;
     public MaterialGeometryHeapHandles geometryHeapHandles;
@@ -102,26 +108,6 @@ class MaterialPassPipelineResourceSnapshot{
     public b8 indexedGeometryOutput = false;
 }
 
-type MaterialPassMeshBufferVisitor = Func<64u, void(in BufferHandle)>;
-
-void ForEachMaterialPassMeshSourceBuffer(in MaterialPassMeshResourceSnapshot mesh, in MaterialPassMeshBufferVisitor handler){
-    handler(mesh.sourceBuffers.positionBuffer);
-    handler(mesh.sourceBuffers.normalBuffer);
-    handler(mesh.sourceBuffers.tangentBuffer);
-    handler(mesh.sourceBuffers.uv0Buffer);
-    handler(mesh.sourceBuffers.colorBuffer);
-    handler(mesh.sourceBuffers.meshletDescBuffer);
-    handler(mesh.sourceBuffers.meshletBoundsBuffer);
-    handler(mesh.sourceBuffers.meshletPositionRefDeltaBuffer);
-    handler(mesh.sourceBuffers.meshletAttributeRefDeltaBuffer);
-    handler(mesh.sourceBuffers.meshletLocalVertexRefBuffer);
-    handler(mesh.sourceBuffers.meshletPrimitiveIndexBuffer);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialPassDrawItem{
     public Name meshKey = s_NameNone;
     public MaterialPipelineKey pipelineKey;
@@ -152,10 +138,6 @@ class MaterialInstanceMutableCacheEntry{
     public u64 revision = 0u;
     public Vector<u8> mutableTypedBytes;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class MaterialPassDrawItems{
     public Vector<MaterialPassDrawItem> meshDrawItems;
@@ -210,8 +192,6 @@ class MaterialPassDrawItemsView{
         return this.meshDrawItems.empty() && this.indexedDrawItems.empty() && this.computeDrawItems.empty();
     }
 }
-
-type AvboitGeometryDrawSets = Span<MaterialPassDrawItemsView>;
 
 class MaterialPassDrawItemPartitions{
     public MaterialPassDrawItems regular;
@@ -272,6 +252,24 @@ class MaterialPassDrawItemPartitionsView{
     public b8 empty()const{
         return this.regular.empty() && this.csg.empty() && this.csgReceiverSurface.empty();
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ForEachMaterialPassMeshSourceBuffer(in MaterialPassMeshResourceSnapshot mesh, in MaterialPassMeshBufferVisitor handler){
+    handler(mesh.sourceBuffers.positionBuffer);
+    handler(mesh.sourceBuffers.normalBuffer);
+    handler(mesh.sourceBuffers.tangentBuffer);
+    handler(mesh.sourceBuffers.uv0Buffer);
+    handler(mesh.sourceBuffers.colorBuffer);
+    handler(mesh.sourceBuffers.meshletDescBuffer);
+    handler(mesh.sourceBuffers.meshletBoundsBuffer);
+    handler(mesh.sourceBuffers.meshletPositionRefDeltaBuffer);
+    handler(mesh.sourceBuffers.meshletAttributeRefDeltaBuffer);
+    handler(mesh.sourceBuffers.meshletLocalVertexRefBuffer);
+    handler(mesh.sourceBuffers.meshletPrimitiveIndexBuffer);
 }
 
 b8 MatchesRetainedGeneratedGeometryOutputs(

@@ -163,8 +163,10 @@ extern const u32 s_BuiltAssetMagic;
 extern const u16 s_BuiltAssetVersion;
 [cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::s_BuiltAssetFlagStandalone")]
 extern const u32 s_BuiltAssetFlagStandalone;
-[cpp_name("__FILE__")]
-extern const StringView s_GraphicsFixtureSource;
+[cpp_header("<tests/integration/assets_graphics/step2_unwind_probe.h>"), cpp_name("::NWB::Tests::AssetsGraphicsStep2Probe::VerifyFindOrBuildMaterialBindTypedLayoutOom")]
+extern b8 VerifyFindOrBuildMaterialBindTypedLayoutOom(in auto entryA, in Name nameA, in auto entryB, in Name nameB);
+[cpp_header("<tests/integration/assets_graphics/step2_unwind_probe.h>"), cpp_name("::NWB::Tests::AssetsGraphicsStep2Probe::VerifyTextureUploadFailureDecodeVsSubmitAndZeroByteGuard")]
+extern b8 VerifyTextureUploadFailureDecodeVsSubmitAndZeroByteGuard(in auto textureAsset);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

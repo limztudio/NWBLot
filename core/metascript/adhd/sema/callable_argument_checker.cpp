@@ -288,8 +288,8 @@ b8 CallableArgumentChecker::check(
         }
         if(retainsBorrow && expectedParamTypeRef){
             const TypeRef* actual = nullptr;
-            (void)m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actual);
-            if(actual && requiresRetainedClassTemporary(*expectedParamTypeRef, *actual)){
+            const MStringView actualBase = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actual);
+            if(!actualBase.empty() && actual && requiresRetainedClassTemporary(*expectedParamTypeRef, *actual)){
                 m_checker.reportError(errors, arg->span, "a retained reference cannot bind to a temporary created by an implicit class conversion");
                 ok = false;
             }

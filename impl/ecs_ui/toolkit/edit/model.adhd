@@ -13,25 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidEditTextMode(in EditTextMode mode){
-    return mode == EditTextMode::SingleLine || mode == EditTextMode::Multiline;
-}
-
-b8 CanEraseEditSurrounding(in usize beforeBytes, in usize afterBytes, in usize caret, in usize textSize){
-    return beforeBytes <= caret && afterBytes <= textSize - caret;
-}
-
-EditWordRange ResolveEditCompositionRange(in usize compositionAnchor, in usize compositionCaret){
-    EditWordRange range;
-    range.begin = Min(compositionAnchor, compositionCaret);
-    range.end = Max(compositionAnchor, compositionCaret);
-    return range;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class EditModel : NoCopy{
     private u64 m_instanceGeneration;
     private EditLimits m_limits;
@@ -54,21 +35,21 @@ class EditModel : NoCopy{
     private EditTextMode m_textMode;
     private b8 m_compositionActive = false;
 
-    public EditModel(){
+    [cpp_unwind] public EditModel(){
         this.m_instanceGeneration = AllocateServiceIdentity();
         this.m_limits = ClampEditLimits(EditLimits());
         this.m_textMode = EditTextMode::SingleLine;
         this.initializeModel();
     }
 
-    public EditModel(in EditLimits limits){
+    [cpp_unwind] public EditModel(in EditLimits limits){
         this.m_instanceGeneration = AllocateServiceIdentity();
         this.m_limits = ClampEditLimits(limits);
         this.m_textMode = EditTextMode::SingleLine;
         this.initializeModel();
     }
 
-    public EditModel(in EditLimits limits, in EditTextMode mode){
+    [cpp_unwind] public EditModel(in EditLimits limits, in EditTextMode mode){
         this.m_instanceGeneration = AllocateServiceIdentity();
         this.m_limits = ClampEditLimits(limits);
         this.m_textMode = mode;
@@ -152,7 +133,7 @@ class EditModel : NoCopy{
         return this.stamp() == expected;
     }
 
-    public b8 setText(in StringView value){
+    [cpp_unwind] public b8 setText(in StringView value){
         return ApplyEditModelSetText(
             value,
             this.m_limits.maxBytes,
@@ -229,21 +210,21 @@ class EditModel : NoCopy{
         return ResolveEditWordRangeAt(this.text(), this.m_boundaries, position);
     }
 
-    public b8 replaceSelection(in StringView value){
+    [cpp_unwind] public b8 replaceSelection(in StringView value){
         return this.replaceRange(this.selectionStart(), this.selectionEnd(), value);
     }
 
-    public b8 backspace(){
+    [cpp_unwind] public b8 backspace(){
         const EditWordRange range = ResolveEditBackspaceRange(this.m_boundaries, this.m_anchor, this.m_caret);
         return this.replaceRange(range.begin, range.end, "");
     }
 
-    public b8 eraseForward(){
+    [cpp_unwind] public b8 eraseForward(){
         const EditWordRange range = ResolveEditEraseForwardRange(this.m_boundaries, this.m_text.size(), this.m_anchor, this.m_caret);
         return this.replaceRange(range.begin, range.end, "");
     }
 
-    public b8 eraseSurrounding(in usize beforeBytes, in usize afterBytes){
+    [cpp_unwind] public b8 eraseSurrounding(in usize beforeBytes, in usize afterBytes){
         if(!CanEraseEditSurrounding(beforeBytes, afterBytes, this.m_caret, this.m_text.size()))
             return false;
         if(beforeBytes == 0u && afterBytes == 0u)
@@ -251,13 +232,15 @@ class EditModel : NoCopy{
         return this.replaceRange(this.m_caret - beforeBytes, this.m_caret + afterBytes, "");
     }
 
-    public b8 eraseAroundSelection(in usize beforeBytes, in usize afterBytes){
+    [cpp_unwind] public b8 eraseAroundSelection(in usize beforeBytes, in usize afterBytes){
+        EditHistoryRecord stagedRecord = this.createHistorySlot();
         return ApplyEditModelEraseAroundSelection(
             beforeBytes,
             afterBytes,
             this.m_textMode,
             this.m_limits.maxHistoryRecords,
             this.m_limits.maxHistoryBytes,
+            stagedRecord,
             this.m_text,
             this.m_boundaries,
             this.m_anchor,
@@ -277,7 +260,7 @@ class EditModel : NoCopy{
         );
     }
 
-    public b8 undo(){
+    [cpp_unwind] public b8 undo(){
         EditHistoryActions historyActions;
         return historyActions.undo(
             this.m_history,
@@ -299,7 +282,7 @@ class EditModel : NoCopy{
         );
     }
 
-    public b8 redo(){
+    [cpp_unwind] public b8 redo(){
         EditHistoryActions historyActions;
         return historyActions.redo(
             this.m_history,
@@ -344,7 +327,7 @@ class EditModel : NoCopy{
         );
     }
 
-    public b8 updateComposition(in StringView value, in usize anchor, in usize caret){
+    [cpp_unwind] public b8 updateComposition(in StringView value, in usize anchor, in usize caret){
         EditCompositionRules rules;
         return rules.update(
             this.m_compositionActive,
@@ -363,7 +346,7 @@ class EditModel : NoCopy{
         );
     }
 
-    public b8 commitComposition(in StringView value){
+    [cpp_unwind] public b8 commitComposition(in StringView value){
         if(!this.m_compositionActive)
             return false;
         const EditWordRange range = ResolveEditCompositionRange(this.m_compositionAnchor, this.m_compositionCaret);
@@ -395,13 +378,19 @@ class EditModel : NoCopy{
         );
     }
 
-    private void initializeModel(){
+    [owner_result] private EditHistoryRecord createHistorySlot()const{
+        EditHistoryRecord slot;
+        return slot;
+    }
+
+    [cpp_unwind] private void initializeModel(){
         if(!IsValidEditTextMode(this.m_textMode))
             TerminateInvariant();
         this.m_boundaries.push_back(0u);
     }
 
-    private b8 replaceRange(in usize begin, in usize end, in StringView replacement){
+    [cpp_unwind] private b8 replaceRange(in usize begin, in usize end, in StringView replacement){
+        EditHistoryRecord stagedRecord = this.createHistorySlot();
         return ApplyEditModelReplaceRange(
             begin,
             end,
@@ -410,6 +399,7 @@ class EditModel : NoCopy{
             this.m_textMode,
             this.m_limits.maxHistoryRecords,
             this.m_limits.maxHistoryBytes,
+            stagedRecord,
             this.m_text,
             this.m_boundaries,
             this.m_anchor,
@@ -428,6 +418,25 @@ class EditModel : NoCopy{
             this.m_revision
         );
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidEditTextMode(in EditTextMode mode){
+    return mode == EditTextMode::SingleLine || mode == EditTextMode::Multiline;
+}
+
+b8 CanEraseEditSurrounding(in usize beforeBytes, in usize afterBytes, in usize caret, in usize textSize){
+    return beforeBytes <= caret && afterBytes <= textSize - caret;
+}
+
+EditWordRange ResolveEditCompositionRange(in usize compositionAnchor, in usize compositionCaret){
+    EditWordRange range;
+    range.begin = Min(compositionAnchor, compositionCaret);
+    range.end = Max(compositionAnchor, compositionCaret);
+    return range;
 }
 
 

@@ -4,7 +4,18 @@
 
 #include <impl/assets_mesh/cook_types.adhd>
 #include <impl/assets_mesh/skin_asset.adhd>
-#include <impl/assets_mesh/skin_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SkinCookEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<Mesh> mesh;
+    public AssetRef<Skeleton> skeleton;
+    public Vector<SkinInfluence4> influences;
+    public Vector<SkeletonJointMatrix> inverseBindMatrices;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,33 +41,11 @@ b8 ValidateSkinCookInverseBindMatricesNonEmpty(in usize matrixCount, in StringVi
     return false;
 }
 
-b8 SerializeSkinBinaryPayload(
-    in NameHash meshNameHash,
-    in NameHash skeletonNameHash,
-    in Span<SkinInfluence4> influences,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    mut Vector<u8> outBinary
-){
-    SkinBinaryCodec codec;
-    return codec.serialize(meshNameHash, skeletonNameHash, influences, inverseBindMatrices, outBinary);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinCookEntry{
-    public Name virtualPath = s_NameNone;
-    public AssetRef<Mesh> mesh;
-    public AssetRef<Skeleton> skeleton;
-    public Vector<SkinInfluence4> influences;
-    public Vector<SkeletonJointMatrix> inverseBindMatrices;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
 b8 ParseSkinInfluenceMetadataEntry(
     in Path nwbFilePath,
     in MetascriptValue influenceValue,
@@ -165,6 +154,7 @@ b8 ParseSkinInfluenceMetadataEntry(
     return true;
 }
 
+[cpp_unwind]
 b8 ParseSkinInfluenceMetadataInto(
     in Path nwbFilePath,
     in MetascriptValue skinAsset,

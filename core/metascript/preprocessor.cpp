@@ -238,8 +238,8 @@ void Preprocessor::rebuildMacroFilter()noexcept{
     }
     usize minLen = Limit<usize>::s_Max;
     usize maxLen = 0u;
-    for(const auto& [name, macro] : m_macros){
-        (void)macro;
+    for(auto it = m_macros.begin(); it != m_macros.end(); ++it){
+        const MString& name = it.key();
         if(name.empty())
             continue;
         m_macroFilter.firstCharMask[static_cast<u8>(name[0])] = 1u;

@@ -6,6 +6,7 @@
 #include <impl/assets_physics/components.adhd>
 #include <impl/assets_physics/physics_component_binary_codec.adhd>
 #include <impl/assets_scene/cook.adhd>
+#include <impl/assets_scene/cook_component_metadata.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

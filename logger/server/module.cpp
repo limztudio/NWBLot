@@ -410,7 +410,7 @@ Frame::~Frame()noexcept{
 
     FrameDetail::ReleaseLogFont();
 
-    ScopedLock lock(FrameDetail::s_ListMutex);
+    NothrowScopedLock lock(FrameDetail::s_ListMutex);
     FrameDetail::s_Frame = nullptr;
     FrameDetail::s_ListHwnd = nullptr;
     FrameDetail::s_Store.reset();

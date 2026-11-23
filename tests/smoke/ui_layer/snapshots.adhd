@@ -34,6 +34,11 @@ const u32 s_SmokeMarker24BitMask = 0xffffffu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+interface ISmokeEnabledRows{
+    u64 rowCount()const;
+    b8 enabled(in u64 index)const;
+}
+
 class UiImageSnapshot{
     public Array<u64, 10u> values;
     public Array<Rect, 16u> rectangles;
@@ -114,11 +119,6 @@ class UiSearchComboRange{
     public u64 past = 0u;
 }
 
-
-interface ISmokeEnabledRows{
-    u64 rowCount()const;
-    b8 enabled(in u64 index)const;
-}
 
 class UiNumberedSmokeRows : ISmokeEnabledRows{
     private u64 m_generation = 1u;

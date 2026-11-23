@@ -7,12 +7,14 @@
 #include <impl/ecs_render/csg/transparent_interval_payloads.adhd>
 #include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
 #include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+#include <impl/ecs_render/avboit/avboit_upload_and_emulation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 const StringView s_AvboitAccumulationFinalizeLabel = "AVBOIT Accumulation Finalize";
+const usize s_AvboitEmulationResourceUseCapacity = s_AvboitEmulationBaseCount + s_AvboitEmulationPlanUseCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,10 +82,6 @@ GpuTaskTimingMetadata BuildAvboitComputeStageTimingMetadata(in AvboitFrameTarget
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/ecs_render/avboit/avboit_upload_and_emulation.adhd>
-
-const usize s_AvboitEmulationResourceUseCapacity = s_AvboitEmulationBaseCount + s_AvboitEmulationPlanUseCount;
 
 [cpp_unwind]
 b8 DeclareAvboitRasterRecordPhase(

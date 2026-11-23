@@ -15,6 +15,14 @@
 
 
 const StringView s_ScalingTargetText = "target";
+const StringView s_ProbeRegressionLabel = "Probe regression";
+const StringView s_ProbeGrowthLabel = "Probe growth";
+const Name s_QueueAliasOwnerName = "queue_alias_owner";
+const StringView s_QueueAliasOwnerLabel = "Queue alias owner";
+const StringView s_PacketIndex = "\"packet\": {\"index\":";
+const StringView s_RuntimePacketSubmissionCount3 = "runtime_packet_submission_count=3";
+const StringView s_RuntimePacketSubmissionCount2 = "runtime_packet_submission_count=2";
+const usize s_RuntimeStatisticsCountMutationCount = 38u;
 
 class ContributionFailure{}
 
@@ -151,15 +159,6 @@ class StatisticsFixture{
         this.packets = FrameGraphPacketSubmissionStatisticsRecords(arena);
     }
 }
-
-const StringView s_ProbeRegressionLabel = "Probe regression";
-const StringView s_ProbeGrowthLabel = "Probe growth";
-const Name s_QueueAliasOwnerName = "queue_alias_owner";
-const StringView s_QueueAliasOwnerLabel = "Queue alias owner";
-const StringView s_PacketIndex = "\"packet\": {\"index\":";
-const StringView s_RuntimePacketSubmissionCount3 = "runtime_packet_submission_count=3";
-const StringView s_RuntimePacketSubmissionCount2 = "runtime_packet_submission_count=2";
-const usize s_RuntimeStatisticsCountMutationCount = 38u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,6 +11,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_GROUP_SIZE")]
+extern const u32 s_ShaderLightSpaceViewGroupSize;
+
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_CULL_GROUP_SIZE")]
+extern const u32 s_ShaderLightSpaceCullGroupSize;
+
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X")]
+extern const u32 s_ShaderLightSpaceCullMaxGroupsX;
+
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_SHADE_GROUP_SIZE")]
+extern const u32 s_ShaderLightSpaceShadeGroupSize;
+
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X")]
+extern const u32 s_ShaderLightSpaceShadeMaxGroupsX;
+
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_GROUP_SIZE")]
+extern const u32 s_ShaderLightSpaceGroupSize;
+
+static_assert(size_of<DrawIndexedIndirectArguments>() == s_ShaderLightSpaceDrawArgumentBytes);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ResolveLightSpaceCullDispatchGroups(in u32 drawCount, in u32 cullGroupSize, in u32 maxGroupsX, mut u32 outGroupsX, mut u32 outGroupsZ){
     const u32 groups = DivideUp(drawCount, cullGroupSize);
     outGroupsX = Min(groups, maxGroupsX);
@@ -56,27 +80,6 @@ void PopulateLightSpaceResolvePush(in u32 frameIndex, in u32 sampleCount, in u32
     outPush.sampleCount = sampleCount;
     outPush.outputSlot = outputSlot;
 }
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_GROUP_SIZE")]
-extern const u32 s_ShaderLightSpaceViewGroupSize;
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_CULL_GROUP_SIZE")]
-extern const u32 s_ShaderLightSpaceCullGroupSize;
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X")]
-extern const u32 s_ShaderLightSpaceCullMaxGroupsX;
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_SHADE_GROUP_SIZE")]
-extern const u32 s_ShaderLightSpaceShadeGroupSize;
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X")]
-extern const u32 s_ShaderLightSpaceShadeMaxGroupsX;
-
-[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_GROUP_SIZE")]
-extern const u32 s_ShaderLightSpaceGroupSize;
-
-
-static_assert(size_of<DrawIndexedIndirectArguments>() == s_ShaderLightSpaceDrawArgumentBytes);
 
 b8 LightSpaceShadowRecorder::views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const{
     if(!snapshot.ready || !snapshot.viewPipeline.valid() || !snapshot.drawArguments.valid() || snapshot.plan.viewCount == 0u)

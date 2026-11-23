@@ -23,6 +23,16 @@ const StringView s_StaleRelativeOutput = "stale/output";
 [cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch")]
 extern Expected<ExpandedAssetMetadataVector> ExpandFixtureAssetBunch(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut ScratchStorage storage);
 
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Core::Metascript::Document::Declaration")]
+extern class TestMetaDeclaration{
+    String type;
+    String variable;
+};
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Declaration")]
+extern Optional<in TestMetaDeclaration> FindTestDeclaration(in borrow MetascriptDocument document, in StringView name);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::FirstDeclaration")]
+extern Optional<in TestMetaDeclaration> FirstTestDeclaration(in borrow MetascriptDocument document);
+
 [ordered]
 class BunchFixture{
     public HeapStorage metadataArena(s_AssetCaseTestsAssetBunchMetadata);
@@ -43,16 +53,6 @@ in MetascriptValue GetMetaVariable(in borrow MetascriptDocument document, in Str
     const Optional<in MetascriptValue> found = document.borrowVariable(name);
     return found.value();
 }
-
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Core::Metascript::Document::Declaration")]
-extern class TestMetaDeclaration{
-    String type;
-    String variable;
-};
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Declaration")]
-extern Optional<in TestMetaDeclaration> FindTestDeclaration(in borrow MetascriptDocument document, in StringView name);
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::FirstDeclaration")]
-extern Optional<in TestMetaDeclaration> FirstTestDeclaration(in borrow MetascriptDocument document);
 
 b8 HasMetaDeclaration(in MetascriptDocument document, in StringView name){ return document.declarationType(name).has_value(); }
 String GetMetaDeclarationVariable(in MetascriptDocument document, in StringView name){

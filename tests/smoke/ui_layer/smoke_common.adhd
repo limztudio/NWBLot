@@ -40,6 +40,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const i32 s_SmokeKeyTab = cast<i32>(Key::Tab);
+const i32 s_SmokeKeyQ = cast<i32>(Key::Q);
+const i32 s_SmokeKeyW = cast<i32>(Key::W);
+const i32 s_SmokeKeyR = cast<i32>(Key::R);
+const i32 s_SmokeKeyT = cast<i32>(Key::T);
+const i32 s_SmokeKeyF4 = cast<i32>(Key::F4);
+const i32 s_SmokeKeyF5 = cast<i32>(Key::F5);
+const i32 s_SmokeKeyF6 = cast<i32>(Key::F6);
+const i32 s_SmokeKeyF7 = cast<i32>(Key::F7);
+const i32 s_SmokeKeyF8 = cast<i32>(Key::F8);
+const i32 s_SmokeKeyF9 = cast<i32>(Key::F9);
+const i32 s_SmokeKeyF10 = cast<i32>(Key::F10);
+const i32 s_SmokeKeyF11 = cast<i32>(Key::F11);
+const i32 s_SmokeKeyF12 = cast<i32>(Key::F12);
+const i32 s_SmokeActionPress = s_InputActionPress;
+type ClipboardAdmissionEnum = ClipboardAdmission;
+type ClipboardPollResultEnum = ClipboardPollResult;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface IUiSmokeScene{
     b8 paint(mut UiPaintContext context);
 }
@@ -47,16 +69,6 @@ interface IUiSmokeScene{
 interface IUiSmokeInputScene : IUiSmokeScene{
     b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
 }
-
-
-StringView FormatSmokeRowLabel(in u64 rowKey, mut CompactString label){
-    if(rowKey == 0u)
-        return "";
-    label.assign("Row ");
-    AppendUnsignedU64Text(label, rowKey);
-    return label.view();
-}
-
 
 class UiNumberedSmokeSource : IListDataSource, NoCopy{
     private UiNumberedSmokeRows m_storage;
@@ -88,7 +100,6 @@ class UiNumberedSmokeSource : IListDataSource, NoCopy{
     public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
 
-
 class UiNestedPopupSmokeSourceView : IListDataSource, NoCopy{
     private mut UiNestedPopupSmokeSourceState m_state;
 
@@ -113,7 +124,6 @@ class UiNestedPopupSmokeSourceView : IListDataSource, NoCopy{
     public b8 enabled(in u64 index)const override{ return this.m_state.viewEnabled(index); }
 }
 
-
 class UiNestedPopupSmokeSource : ISearchableListDataSource, NoCopy{
     private UiNestedPopupSmokeSourceState m_storage;
     private mut UiNestedPopupSmokeSourceState m_state;
@@ -136,7 +146,6 @@ class UiNestedPopupSmokeSource : ISearchableListDataSource, NoCopy{
     public void beginFrame(){ this.m_state.beginFrame(); }
     public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
-
 
 class UiPopupToolsSmokeSource : IListDataSource, NoCopy{
     private UiPopupToolsSmokeSourceState m_storage;
@@ -161,7 +170,6 @@ class UiPopupToolsSmokeSource : IListDataSource, NoCopy{
     public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
 
-
 class UiRadioGroupSmokeSource : IListDataSource, NoCopy{
     private UiRadioGroupSmokeSourceState m_storage;
     private mut UiRadioGroupSmokeSourceState m_state;
@@ -181,7 +189,8 @@ class UiRadioGroupSmokeSource : IListDataSource, NoCopy{
     public Expected<u64> findEnabled(in u64 start, in b8 reverseValue)const override{ this.invalidateText(); return this.m_state.findEnabled(start, reverseValue); }
     public StringView text(in u64 index)const override{ this.invalidateText();
         const StringView label = this.m_state.readText(index);
-        this.m_label.assign(label);
+        if(!this.m_label.assign(label))
+            return "";
         return this.m_label.view();
     }
     public b8 enabled(in u64 index)const override{ this.invalidateText(); return this.m_state.enabled(index); }
@@ -192,9 +201,11 @@ class UiRadioGroupSmokeSource : IListDataSource, NoCopy{
     public b8 reversed()const{ return this.m_state.reversed(); }
     public u64 removedKey()const{ return this.m_state.removedKey(); }
     public u32 labelReads()const{ return this.m_state.labelReads(); }
-    private void invalidateText()const{ this.m_label.assign("????????????????????????????????"); }
+    private void invalidateText()const{
+        const b8 assigned = this.m_label.assign("????????????????????????????????");
+        [essential] assert(assigned, "UI smoke label invalidation must fit");
+    }
 }
-
 
 class UiSearchComboSmokeSourceView : IListDataSource, NoCopy{
     private mut UiSearchComboSmokeSourceState m_state;
@@ -221,7 +232,6 @@ class UiSearchComboSmokeSourceView : IListDataSource, NoCopy{
 
     public b8 enabled(in u64 index)const override{ return this.m_state.viewEnabled(index); }
 }
-
 
 class UiSearchComboSmokeSource : ISearchableListDataSource, NoCopy{
     private UiSearchComboSmokeSourceState m_storage;
@@ -253,24 +263,38 @@ class UiSearchComboSmokeSource : ISearchableListDataSource, NoCopy{
     public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
 
+[arena]
+class UiSmokeImageAssetLoader{
+    private ActiveSceneSubsystems m_subsystems = ActiveSceneSubsystems();
+    private SharedPool m_pool = SharedPool();
 
-const i32 s_SmokeKeyTab = cast<i32>(Key::Tab);
-const i32 s_SmokeKeyQ = cast<i32>(Key::Q);
-const i32 s_SmokeKeyW = cast<i32>(Key::W);
-const i32 s_SmokeKeyR = cast<i32>(Key::R);
-const i32 s_SmokeKeyT = cast<i32>(Key::T);
-const i32 s_SmokeKeyF4 = cast<i32>(Key::F4);
-const i32 s_SmokeKeyF5 = cast<i32>(Key::F5);
-const i32 s_SmokeKeyF6 = cast<i32>(Key::F6);
-const i32 s_SmokeKeyF7 = cast<i32>(Key::F7);
-const i32 s_SmokeKeyF8 = cast<i32>(Key::F8);
-const i32 s_SmokeKeyF9 = cast<i32>(Key::F9);
-const i32 s_SmokeKeyF10 = cast<i32>(Key::F10);
-const i32 s_SmokeKeyF11 = cast<i32>(Key::F11);
-const i32 s_SmokeKeyF12 = cast<i32>(Key::F12);
-const i32 s_SmokeActionPress = s_InputActionPress;
+    public void load(in AssetManager assets, in Name alternate, mut SharedImageSource outDefault, mut SharedImageSource outAlternate){
+        if(!this.m_subsystems.loadProjectStartScene(assets))
+            return;
+        const auto uiSubsystem = this.m_subsystems.findSubsystem<UiSubsystem>();
+        if(uiSubsystem.has_value()){
+            const auto basic = LoadSmokeSkinImageSource(this.m_pool, assets, uiSubsystem.value().basicSkin);
+            if(basic.has_value())
+                outDefault = basic.value();
+        }
+        const auto other = LoadSmokeSkinImageSource(this.m_pool, assets, this.m_subsystems.findSceneAsset<UiSkin>(alternate));
+        if(other.has_value())
+            outAlternate = other.value();
+    }
+}
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView FormatSmokeRowLabel(in u64 rowKey, mut CompactString label){
+    if(rowKey == 0u)
+        return "";
+    if(!label.assign("Row "))
+        return "";
+    AppendUnsignedU64Text(label, rowKey);
+    return label.view();
+}
 
 b8 SmokePopupMatchesParentGeneration(in InputRouter input, in PopupToken popup, in u64 parentGeneration){
     const auto scope = input.popupScope(popup);
@@ -327,26 +351,6 @@ Expected<SharedImageSource> LoadSmokeSkinImageSource(in SharedPool pool, in Asse
     return LoadImageSource(pool, assets, skin.value().deref().texture());
 }
 
-[arena]
-class UiSmokeImageAssetLoader{
-    private ActiveSceneSubsystems m_subsystems = ActiveSceneSubsystems();
-    private SharedPool m_pool = SharedPool();
-
-    public void load(in AssetManager assets, in Name alternate, mut SharedImageSource outDefault, mut SharedImageSource outAlternate){
-        if(!this.m_subsystems.loadProjectStartScene(assets))
-            return;
-        const auto uiSubsystem = this.m_subsystems.findSubsystem<UiSubsystem>();
-        if(uiSubsystem.has_value()){
-            const auto basic = LoadSmokeSkinImageSource(this.m_pool, assets, uiSubsystem.value().basicSkin);
-            if(basic.has_value())
-                outDefault = basic.value();
-        }
-        const auto other = LoadSmokeSkinImageSource(this.m_pool, assets, this.m_subsystems.findSceneAsset<UiSkin>(alternate));
-        if(other.has_value())
-            outAlternate = other.value();
-    }
-}
-
 SharedImageSource CloneSmokeImageSourcePayload(in SharedImageSource identity, in SharedImageSource source){
     if(!identity.valid() || !source.valid())
         return SharedImageSource();
@@ -359,10 +363,6 @@ SharedImageSource CloneSmokeImageSourcePayload(in SharedImageSource identity, in
         return SharedImageSource();
     return result.value();
 }
-
-
-type ClipboardAdmissionEnum = ClipboardAdmission;
-type ClipboardPollResultEnum = ClipboardPollResult;
 
 Point MakeSmokePoint(in f32 x, in f32 y){
     Point point();

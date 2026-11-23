@@ -11,17 +11,6 @@
 
 
 const usize s_DenseReachabilityTaskMetadataBytes = size_of<u32>() + 2u * size_of<usize>();
-
-usize ScratchEmptyVectorBookkeepingBytes(){
-    ScratchStorage storage(s_TaskGpuScratch);
-    const ScratchStorageVector<u64> emptyVector(storage);
-    return storage.memoryStats().usedBytes;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_GpuRoutingCrossFamilyBufferLabel = "Cross Family Same Class Buffer";
 const StringView s_GpuRoutingCrossFamilyProducerLabel = "Cross Family Same Class Producer";
 const StringView s_GpuRoutingCrossFamilyConsumerLabel = "Cross Family Same Class Consumer";
@@ -55,6 +44,16 @@ class GpuRoutingStorageCase{
         this.shape = shape;
     }
 }
+
+usize ScratchEmptyVectorBookkeepingBytes(){
+    ScratchStorage storage(s_TaskGpuScratch);
+    const ScratchStorageVector<u64> emptyVector(storage);
+    return storage.memoryStats().usedBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void GpuRoutingPushTaskDependency(mut Vector<GpuTaskId> dependencies, in u64 generation, in usize index){
     GpuTaskId dep = GpuTaskId();

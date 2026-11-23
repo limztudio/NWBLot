@@ -241,7 +241,7 @@ Expected<Span<u8>> FindFontAtlasSourcePositioningTableBytes(
     return Span<u8>();
 }
 
-b8 ValidateFontAtlasSourceHeaderAndMetrics(
+Expected<FontSfntDirectory> ValidateFontAtlasSourceHeaderAndMetrics(
     in Name payloadFontName,
     in Name fontVirtualPath,
     in u32 payloadFaceIndex,
@@ -249,8 +249,7 @@ b8 ValidateFontAtlasSourceHeaderAndMetrics(
     in Span<u8> sourceBytes,
     in Span<u8> payloadFontSha256Bytes,
     in u32 payloadUnitsPerEm,
-    in u32 payloadSourceGlyphCount,
-    mut FontSfntDirectory outDirectory
+    in u32 payloadSourceGlyphCount
 ){
     if(
         payloadFontName != fontVirtualPath
@@ -259,16 +258,12 @@ b8 ValidateFontAtlasSourceHeaderAndMetrics(
         || sourceBytes.size() < s_FontSfntHeaderBytes
     ){
         error("FontAtlas source match failed: font identity, source hash, or face index differs");
-        return false;
+        return MakeUnexpected(Failure());
     }
     const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(sourceBytes);
     if(!sfntMetrics.has_value() || sfntMetrics.value().unitsPerEm != payloadUnitsPerEm || sfntMetrics.value().sourceGlyphCount != payloadSourceGlyphCount)
-        return false;
-    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(sourceBytes);
-    if(!directory.has_value())
-        return false;
-    outDirectory = directory.value();
-    return true;
+        return MakeUnexpected(Failure());
+    return ReadFontSfntDirectory(sourceBytes);
 }
 
 

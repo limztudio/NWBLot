@@ -9,11 +9,11 @@
 #include <core/metascript/literal_decoder.h>
 
 #include <global/atomic.h>
+#include <global/environment.h>
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
 
 #if !defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <cstdlib>
 #include <unistd.h>
 #endif
 
@@ -476,7 +476,7 @@ private:
     };
 
     static inline constexpr u32 s_BinaryCacheMagic = 0x4E574250u;
-    static inline constexpr u32 s_BinaryCacheVersion = 1u;
+    static inline constexpr u32 s_BinaryCacheVersion = 2u;
 
     [[nodiscard]] static u64 ComputeBinaryCacheSchemaSignature()noexcept{
         u64 sig = s_Fnv64OffsetBasis;
@@ -495,6 +495,9 @@ private:
         mix(sizeof(BuiltinVisitorRuleInfo));
         mix(sizeof(BuiltinFunctionInfo));
         mix(sizeof(BuiltinGlobalConstantInfo));
+        mix(sizeof(ClassDecl));
+        mix(sizeof(MethodDecl));
+        mix(sizeof(ParamDecl));
         mix(sizeof(TypeRef));
         mix(sizeof(TemplateParamDecl));
         mix(sizeof(usize));
@@ -548,8 +551,8 @@ private:
         }
         return ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
 #else
-        const char* envTmp = std::getenv("TMPDIR");
-        const MStringView dirText = (envTmp && envTmp[0] != '\0') ? MStringView(envTmp) : MStringView("/tmp");
+        const auto envTmp = ReadEnvironmentVariable(arena, "TMPDIR");
+        const MStringView dirText = (envTmp && *envTmp && !(*envTmp)->empty()) ? MStringView((*envTmp)->data(), (*envTmp)->size()) : MStringView("/tmp");
         ::Path<MetaArena> dir(arena, dirText);
         return dir / ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
 #endif
@@ -748,6 +751,9 @@ public:
         , m_simdFieldTypes(m_arena)
         , m_exactRuleByKey(m_arena)
         , m_visitorRuleByKey(m_arena)
+        , m_polymorphicDecls(m_arena)
+        , m_polymorphicMethods(m_arena)
+        , m_polymorphicDeclByName(m_arena)
     {
         load();
     }
@@ -821,6 +827,13 @@ public:
 
     [[nodiscard]] b8 hasSimdRegisterField(const MStringView typeName)const noexcept{
         return m_simdFieldTypes.find(typeName) != m_simdFieldTypes.end();
+    }
+
+    [[nodiscard]] const ClassDecl* findPolymorphicInterface(const MStringView name)const noexcept{
+        const auto it = m_polymorphicDeclByName.find(name);
+        if(it == m_polymorphicDeclByName.end())
+            return nullptr;
+        return m_polymorphicDecls[it->second].get();
     }
 
 
@@ -1238,6 +1251,16 @@ private:
             m_objectTypes.push_back(obj);
             insertUniqueIndex(m_objectTypeByName, obj.adhdName, objIdx);
 
+            ClassDecl* polyDecl = nullptr;
+            if(cls->isPolymorphicBase){
+                m_polymorphicDecls.push_back(MakeGlobalUnique<ClassDecl>(m_arena, m_arena));
+                polyDecl = m_polymorphicDecls.back().get();
+                polyDecl->name = obj.adhdName;
+                polyDecl->isExtern = true;
+                polyDecl->isPolymorphicBase = true;
+                insertUniqueIndex(m_polymorphicDeclByName, obj.adhdName, m_polymorphicDecls.size() - 1u);
+            }
+
             for(const FieldDecl* field : cls->fields){
                 if(!field || !field->type || field->name.empty())
                     continue;
@@ -1295,6 +1318,26 @@ private:
                     const usize sigIdx = m_receiverSignatures.size();
                     m_receiverSignatures.push_back(sig);
                     insertUniquePairIndex(m_receiverSigByKey, obj.adhdName, rm.methodName, sigIdx);
+                }
+
+                if(polyDecl){
+                    m_polymorphicMethods.push_back(MakeGlobalUnique<MethodDecl>(m_arena, m_arena));
+                    MethodDecl* const mCopy = m_polymorphicMethods.back().get();
+                    mCopy->name = rm.methodName;
+                    mCopy->isConst = method->isConst;
+                    mCopy->isVariadic = method->isVariadic;
+                    mCopy->allowsCppUnwind = method->allowsCppUnwind;
+                    mCopy->returnType = cloneTypeRef(method->returnType);
+                    mCopy->params.reserve(method->params.size());
+                    for(const ParamDecl& p : method->params){
+                        ParamDecl pCopy{};
+                        pCopy.mode = p.mode;
+                        pCopy.name = ownString(p.name);
+                        pCopy.type = cloneTypeRef(p.type);
+                        pCopy.cppConstReference = p.cppConstReference;
+                        mCopy->params.push_back(Move(pCopy));
+                    }
+                    polyDecl->methods.push_back(mCopy);
                 }
             }
         }
@@ -1497,6 +1540,9 @@ private:
         m_simdFieldTypes.clear();
         m_exactRuleByKey.clear();
         m_visitorRuleByKey.clear();
+        m_polymorphicDecls.clear();
+        m_polymorphicMethods.clear();
+        m_polymorphicDeclByName.clear();
     }
 
     void rebuildLookupIndices(){
@@ -1524,6 +1570,8 @@ private:
             insertUniqueIndex(m_globalConstantByName, m_globalConstants[i].adhdName, i);
             IndexScopedSymbolKey(m_scopedConstantByKey, m_globalConstants[i].cppExportName, i, false);
         }
+        for(usize i = 0u; i < m_polymorphicDecls.size(); ++i)
+            insertUniqueIndex(m_polymorphicDeclByName, m_polymorphicDecls[i]->name, i);
     }
 
     [[nodiscard]] b8 tryLoadBinaryCache(MetaArena& scratchArena){
@@ -1573,6 +1621,12 @@ private:
             return false;
         }
 
+        const auto resolveTypePtr = [&](const i32 idx)noexcept -> TypeRef*{
+            if(idx < 0 || static_cast<usize>(idx) >= m_ownedTypeRefs.size())
+                return nullptr;
+            return m_ownedTypeRefs[static_cast<usize>(idx)].get();
+        };
+
         const auto readTypeRefAndPopulate = [&]() -> b8{
             u32 typeRefCount = 0u;
             if(!reader.readValue(typeRefCount) || typeRefCount > 65536u)
@@ -1580,12 +1634,6 @@ private:
             m_ownedTypeRefs.reserve(typeRefCount);
             for(u32 i = 0u; i < typeRefCount; ++i)
                 m_ownedTypeRefs.push_back(MakeGlobalUnique<TypeRef>(m_arena, m_arena));
-
-            const auto resolveTypePtr = [&](const i32 idx)noexcept -> TypeRef*{
-                if(idx < 0 || static_cast<u32>(idx) >= typeRefCount)
-                    return nullptr;
-                return m_ownedTypeRefs[static_cast<u32>(idx)].get();
-            };
 
             for(u32 i = 0u; i < typeRefCount; ++i){
                 TypeRef& tr = *m_ownedTypeRefs[i];
@@ -1945,6 +1993,78 @@ private:
             m_globalConstants.push_back(gc);
         }
 
+        u32 polyMethodCount = 0u;
+        if(!reader.readValue(polyMethodCount) || polyMethodCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_polymorphicMethods.reserve(polyMethodCount);
+        for(u32 i = 0u; i < polyMethodCount; ++i){
+            m_polymorphicMethods.push_back(MakeGlobalUnique<MethodDecl>(m_arena, m_arena));
+            MethodDecl* const method = m_polymorphicMethods.back().get();
+            i32 returnTypeIdx = -1;
+            u32 paramCount = 0u;
+            if(!reader.readStringRef(m_sourceText, method->name)
+                || !reader.readBool(method->isConst)
+                || !reader.readBool(method->isVariadic)
+                || !reader.readBool(method->allowsCppUnwind)
+                || !reader.readValue(returnTypeIdx)
+                || !reader.readValue(paramCount)
+                || paramCount > 1024u
+            ){
+                resetRegistryState();
+                return false;
+            }
+            method->returnType = resolveTypePtr(returnTypeIdx);
+            method->params.reserve(paramCount);
+            for(u32 pi = 0u; pi < paramCount; ++pi){
+                ParamDecl param{};
+                u8 modeByte = 0u;
+                i32 paramTypeIdx = -1;
+                if(!reader.readValue(modeByte)
+                    || !reader.readStringRef(m_sourceText, param.name)
+                    || !reader.readValue(paramTypeIdx)
+                    || !reader.readBool(param.cppConstReference)
+                ){
+                    resetRegistryState();
+                    return false;
+                }
+                param.mode = static_cast<ParamPassingMode::Enum>(modeByte);
+                param.type = resolveTypePtr(paramTypeIdx);
+                method->params.push_back(Move(param));
+            }
+        }
+
+        u32 polyDeclCount = 0u;
+        if(!reader.readValue(polyDeclCount) || polyDeclCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_polymorphicDecls.reserve(polyDeclCount);
+        for(u32 i = 0u; i < polyDeclCount; ++i){
+            m_polymorphicDecls.push_back(MakeGlobalUnique<ClassDecl>(m_arena, m_arena));
+            ClassDecl* const cls = m_polymorphicDecls.back().get();
+            u32 methodCount = 0u;
+            if(!reader.readStringRef(m_sourceText, cls->name)
+                || !reader.readBool(cls->isExtern)
+                || !reader.readBool(cls->isPolymorphicBase)
+                || !reader.readValue(methodCount)
+                || methodCount > 65536u
+            ){
+                resetRegistryState();
+                return false;
+            }
+            cls->methods.reserve(methodCount);
+            for(u32 mi = 0u; mi < methodCount; ++mi){
+                u32 methodIdx = 0u;
+                if(!reader.readValue(methodIdx) || methodIdx >= m_polymorphicMethods.size()){
+                    resetRegistryState();
+                    return false;
+                }
+                cls->methods.push_back(m_polymorphicMethods[methodIdx].get());
+            }
+        }
+
         if(!reader.atEnd()){
             resetRegistryState();
             return false;
@@ -1962,29 +2082,32 @@ private:
 
         MVector<const TypeRef*> flatTypeRefs(scratchArena);
         HashMap<const TypeRef*, i32, MetaArena> typeRefIndices(scratchArena);
-        const auto registerTypeRef = [&](const auto& self, const TypeRef* const tr) -> i32{
-            if(!tr)
-                return -1;
-            const auto it = typeRefIndices.find(tr);
-            if(it != typeRefIndices.end())
-                return it->second;
+        const auto registerTypeRef = [&](const auto& self, const TypeRef* const tr) -> void{
+            if(!tr || typeRefIndices.find(tr) != typeRefIndices.end())
+                return;
             const i32 idx = static_cast<i32>(flatTypeRefs.size());
             flatTypeRefs.push_back(tr);
             typeRefIndices.emplace(tr, idx);
             for(const TypeArg& arg : tr->templateArgs)
-                (void)self(self, arg.type);
-            (void)self(self, tr->funcReturnType);
+                self(self, arg.type);
+            self(self, tr->funcReturnType);
             for(const FuncParamType& fp : tr->funcParams)
-                (void)self(self, fp.type);
-            return idx;
+                self(self, fp.type);
         };
 
         for(const auto& tpListPtr : m_ownedTemplateParamLists){
             for(const TemplateParamDecl& tp : *tpListPtr){
-                (void)registerTypeRef(registerTypeRef, tp.constValueType);
+                registerTypeRef(registerTypeRef, tp.constValueType);
                 for(const TypeRef* const bound : tp.interfaceBounds)
-                    (void)registerTypeRef(registerTypeRef, bound);
+                    registerTypeRef(registerTypeRef, bound);
             }
+        }
+        for(const auto& methodPtr : m_polymorphicMethods){
+            if(!methodPtr)
+                continue;
+            registerTypeRef(registerTypeRef, methodPtr->returnType);
+            for(const ParamDecl& p : methodPtr->params)
+                registerTypeRef(registerTypeRef, p.type);
         }
 
         HashMap<const TemplateParamDecl*, i32, MetaArena> tplListByFirstPtr(scratchArena);
@@ -2174,6 +2297,47 @@ private:
             writer.writeString(gc.requiredHeader);
         }
 
+        HashMap<const MethodDecl*, u32, MetaArena> polyMethodToIndex(scratchArena);
+        writer.writeValue(static_cast<u32>(m_polymorphicMethods.size()));
+        for(usize mi = 0u; mi < m_polymorphicMethods.size(); ++mi){
+            const MethodDecl* const method = m_polymorphicMethods[mi].get();
+            if(method)
+                polyMethodToIndex.emplace(method, static_cast<u32>(mi));
+            writer.writeString(method ? method->name : MStringView{});
+            writer.writeBool(method ? method->isConst : false);
+            writer.writeBool(method ? method->isVariadic : false);
+            writer.writeBool(method ? method->allowsCppUnwind : false);
+            const i32 retTypeIdx = (method && method->returnType) ? typeRefIndices.find(method->returnType)->second : -1;
+            writer.writeValue(retTypeIdx);
+            const u32 paramCount = method ? static_cast<u32>(method->params.size()) : 0u;
+            writer.writeValue(paramCount);
+            if(method){
+                for(const ParamDecl& param : method->params){
+                    writer.writeValue(static_cast<u8>(param.mode));
+                    writer.writeString(param.name);
+                    const i32 pTypeIdx = param.type ? typeRefIndices.find(param.type)->second : -1;
+                    writer.writeValue(pTypeIdx);
+                    writer.writeBool(param.cppConstReference);
+                }
+            }
+        }
+
+        writer.writeValue(static_cast<u32>(m_polymorphicDecls.size()));
+        for(const auto& clsPtr : m_polymorphicDecls){
+            const ClassDecl* const cls = clsPtr.get();
+            writer.writeString(cls ? cls->name : MStringView{});
+            writer.writeBool(cls ? cls->isExtern : false);
+            writer.writeBool(cls ? cls->isPolymorphicBase : false);
+            const u32 methodCount = cls ? static_cast<u32>(cls->methods.size()) : 0u;
+            writer.writeValue(methodCount);
+            if(cls){
+                for(const MethodDecl* const m : cls->methods){
+                    const auto it = polyMethodToIndex.find(m);
+                    writer.writeValue(it != polyMethodToIndex.end() ? it->second : 0u);
+                }
+            }
+        }
+
         PreludeBinaryWriter headerWriter(scratchArena);
         headerWriter.writeValue(s_BinaryCacheMagic);
         headerWriter.writeValue(s_BinaryCacheVersion);
@@ -2212,11 +2376,14 @@ private:
         const MString tmpName = StringFormat(scratchArena, "{}.tmp.{}.{}.{}", PathToGenericString<MChar>(scratchArena, cachePath), pid, tid, seq);
         const ::Path<MetaArena> tmpPath(scratchArena, MStringView(tmpName.data(), tmpName.size()));
         if(!WriteBinaryFile(tmpPath, fullImage)){
-            (void)RemoveFile(tmpPath);
+            if(const auto removed = RemoveFile(tmpPath); !removed || !*removed)
+                return;
             return;
         }
-        if(!RenamePath(tmpPath, cachePath))
-            (void)RemoveFile(tmpPath);
+        if(!RenamePath(tmpPath, cachePath)){
+            if(const auto removed = RemoveFile(tmpPath); !removed || !*removed)
+                return;
+        }
     }
 
     void load(){
@@ -2305,6 +2472,9 @@ private:
     MStringMap<u8> m_simdFieldTypes;
     MStringMap<BuiltinFunctionArgRule::Enum> m_exactRuleByKey;
     MStringMap<BuiltinFunctionArgRule::Enum> m_visitorRuleByKey;
+    MVector<GlobalUniquePtr<ClassDecl>> m_polymorphicDecls;
+    MVector<GlobalUniquePtr<MethodDecl>> m_polymorphicMethods;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_polymorphicDeclByName;
 };
 
 [[nodiscard]] inline const CoreExternRegistry& GetCoreExternRegistry()noexcept{
@@ -2454,6 +2624,10 @@ const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(const MStringView rec
 
 const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(const MStringView receiverTypeName, const MStringView methodName)noexcept{
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findReceiverSignature(receiverTypeName, methodName);
+}
+
+const ClassDecl* FindBuiltinPolymorphicInterfaceDecl(const MStringView adhdName)noexcept{
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().findPolymorphicInterface(adhdName);
 }
 
 const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, const MStringView fieldName)noexcept{

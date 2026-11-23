@@ -12,8 +12,17 @@
 const StringView s_DoesNotTargetADeclaredAsset = "does not target a declared asset";
 const StringView s_BunchOwnershipMetadata = "\nmetadata local = { \"label\": \"a separately owned metadata string\", \"items\": [1, 2, 3] };\nprobe first;\nprobe second;\nfirst.local = local;\nfirst.target = second;\nsecond.items = [local, { \"target\": first }];\nasset_bunch bunch = [second, first];\n";
 const StringView s_ModifiedSamplerCacheMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 3.5;\n";
-
 const Array<usize, 2u> s_BunchUnusedDeclarationCounts(0u, 32u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BunchCallerFailure{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 CanExpandFixtureBunch(mut BunchFixture fixture){
     return ExpandFixtureAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena).has_value();
@@ -226,8 +235,6 @@ void VerifyAssetBunchOwnership_ValuesOutliveTheirSourceDocumentWhileItsArenaRema
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
-
-class BunchCallerFailure{}
 
 [cpp_unwind]
 void VerifyAssetBunchOwnership_CallerUnwindDestroysEveryPublishedResolvedValue(){
@@ -600,26 +607,38 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues, VerifyAssetBunchOwnership_ClearReplacementAndDestructionReleaseAllResolvedValues)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies, VerifyAssetBunchOwnership_OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerDies)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch, VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAndReuseCallerScratch)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive, VerifyAssetBunchOwnership_ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAlive)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, CallerUnwindDestroysEveryPublishedResolvedValue, VerifyAssetBunchOwnership_CallerUnwindDestroysEveryPublishedResolvedValue)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput, VerifyAssetBunchOwnership_FailedLaterLocalCycleReleasesTheUnpublishedValueAndPriorOutput)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, MissingLaterReferenceReleasesPartialNestedCollections, VerifyAssetBunchOwnership_MissingLaterReferenceReleasesPartialNestedCollections)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors, VerifyAssetBunchOwnership_RegisteredExpanderDistinguishesUnsupportedDocumentsFromExpansionErrors)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime, VerifyAssetBunchOwnership_RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime)
+
 NWB_ADHD_GTEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContract, VerifyAssetBunchOwnership_NullValueReachesTheTypeParserAndKeepsItsRejectionContract)
+
 NWB_ADHD_GTEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder, VerifyAssetBunchLookup_ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder)
+
 NWB_ADHD_GTEST(AssetBunchLookup, CanonicalDuplicateExportsAreRejectedBeforeNestedResolution, VerifyAssetBunchLookup_CanonicalDuplicateExportsAreRejectedBeforeNestedResolution)
+
 NWB_ADHD_GTEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdentity, VerifyAssetBunchLookup_LocalCycleDetectionKeepsCanonicalVariableIdentity)
+
 NWB_ADHD_GTEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup, VerifyAssetBunchLookup_BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup)
+
 NWB_ADHD_GTEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems, VerifyAssetBunchLookup_ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
+
 NWB_ADHD_GTEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder, VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder)
+
 NWB_ADHD_GTEST(AssetsGraphics, AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcrossProjects, VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcrossProjects)
 
 

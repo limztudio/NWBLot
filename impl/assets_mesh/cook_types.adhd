@@ -88,6 +88,7 @@ SourceIndexStreamFailure ValidateSourceIndexStreamValues(in Span<u32> indices, i
     return SourceIndexStreamFailure::None;
 }
 
+[cpp_unwind]
 void CopySourceMeshStreamsToCookStreams(
     in Span<f32x3u> sourcePositions,
     in Span<f32x3u> sourceNormals,
@@ -130,10 +131,12 @@ void CopySourceMeshStreamsToCookStreams(
         outVertexRefs.push_back(ref);
 }
 
+[cpp_unwind]
 String FormatMeshMetadataIndexedLabel(in StringView baseLabel, in usize index){
     return StringFormat("{}[{}]", baseLabel, index);
 }
 
+[cpp_unwind]
 String FormatMeshVertexRefComponentLabel(in usize vertexRefIndex, in StringView componentName){
     return StringFormat("{}[{}].{}", s_MeshVertexRefsFieldNameView, vertexRefIndex, componentName);
 }

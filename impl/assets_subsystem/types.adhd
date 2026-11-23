@@ -7,6 +7,9 @@ const StringView s_SubsystemSubsystemsFieldName = "subsystems";
 
 const u32 s_SubsystemMagic = 0x53554231u;
 const u32 s_SubsystemVersion = 1u;
+const usize s_SubsystemHeaderBinaryBytes = 96u;
+const usize s_SubsystemNameHashBinaryBytes = 64u;
+const usize s_SubsystemFieldCountBinaryBytes = 8u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,10 +142,6 @@ b8 UnpackSubsystemRefHashes<TAsset>(in Span<NameHash> subsystemHashes, mut Vecto
     DeduplicateSubsystemRefs(outSubsystems);
     return true;
 }
-
-const usize s_SubsystemHeaderBinaryBytes = 96u;
-const usize s_SubsystemNameHashBinaryBytes = 64u;
-const usize s_SubsystemFieldCountBinaryBytes = 8u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

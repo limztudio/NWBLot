@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
-
 #include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
 #include <impl/ecs_render/material/material_system.adhd>
 #include <impl/ecs_render/mesh/mesh_system.adhd>
@@ -44,61 +43,6 @@ class ObjectGeometryDecodeIdentity{
     }
 }
 
-u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize instanceByteStride){
-    return cast<u64>(instanceIndex) * cast<u64>(instanceByteStride);
-}
-
-Expected<Name> FormatObjectGeometryDecodeIdentity(in usize entryIndex){
-    CompactString text = CompactString("render.object_geometry.decode_");
-    AppendUnsignedU64Text(text, cast<u64>(entryIndex));
-    return ParseName(text.view());
-}
-
-Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
-    CompactString text = CompactString("render.object_geometry.ready_");
-    AppendUnsignedU64Text(text, cast<u64>(phaseIndex));
-    return ParseName(text.view());
-}
-
-ObjectGeometryDecodeIdentity MakeDecodeIdentity(in MaterialPassDrawItem item){
-    in MaterialPassMeshResourceSnapshot mesh = item.mesh();
-    in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
-    ObjectGeometryDecodeIdentity identity;
-    identity.meshKey = item.meshKey;
-    identity.sourceRevision = cache.sourceRevision;
-    identity.meshletCount = mesh.meshletCount;
-    identity.indexByteOffset = cache.indexByteOffset;
-    identity.indexCount = cache.indexCount;
-    identity.runtimeMesh = mesh.runtimeMesh;
-    identity.requiresDecode = cache.requiresDecode;
-    identity.initialized = cache.initialized;
-    return identity;
-}
-
-b8 SameDecode(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
-    in MaterialPassMeshResourceSnapshot leftMesh = left.mesh();
-    in MaterialPassMeshResourceSnapshot rightMesh = right.mesh();
-    in ObjectGeometryCacheSnapshot leftCache = leftMesh.objectGeometryCache;
-    in ObjectGeometryCacheSnapshot rightCache = rightMesh.objectGeometryCache;
-    if(
-        !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
-        || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
-        || leftCache.decoderPipeline != rightCache.decoderPipeline
-    )
-        return false;
-    if(!leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers))
-        return false;
-    for(usize index = 0u; index < LengthOf(leftMesh.geometryHeapHandles); ++index){
-        if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ObjectGeometryDecodeGraphTask{
     public mut RendererMaterialSystem materialSystem;
     public mut RendererMeshSystem meshSystem;
@@ -137,10 +81,6 @@ class ObjectGeometryDecodeGraphTask{
             return;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class ObjectGeometryGraphEntry{
     public MaterialPassDrawItem draw;
@@ -299,6 +239,61 @@ class ObjectGeometryCacheGraph : NoCopy{
         dependency = result.value();
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize instanceByteStride){
+    return cast<u64>(instanceIndex) * cast<u64>(instanceByteStride);
+}
+
+Expected<Name> FormatObjectGeometryDecodeIdentity(in usize entryIndex){
+    CompactString text = CompactString("render.object_geometry.decode_");
+    AppendUnsignedU64Text(text, cast<u64>(entryIndex));
+    return ParseName(text.view());
+}
+
+Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
+    CompactString text = CompactString("render.object_geometry.ready_");
+    AppendUnsignedU64Text(text, cast<u64>(phaseIndex));
+    return ParseName(text.view());
+}
+
+ObjectGeometryDecodeIdentity MakeDecodeIdentity(in MaterialPassDrawItem item){
+    in MaterialPassMeshResourceSnapshot mesh = item.mesh();
+    in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
+    ObjectGeometryDecodeIdentity identity;
+    identity.meshKey = item.meshKey;
+    identity.sourceRevision = cache.sourceRevision;
+    identity.meshletCount = mesh.meshletCount;
+    identity.indexByteOffset = cache.indexByteOffset;
+    identity.indexCount = cache.indexCount;
+    identity.runtimeMesh = mesh.runtimeMesh;
+    identity.requiresDecode = cache.requiresDecode;
+    identity.initialized = cache.initialized;
+    return identity;
+}
+
+b8 SameDecode(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
+    in MaterialPassMeshResourceSnapshot leftMesh = left.mesh();
+    in MaterialPassMeshResourceSnapshot rightMesh = right.mesh();
+    in ObjectGeometryCacheSnapshot leftCache = leftMesh.objectGeometryCache;
+    in ObjectGeometryCacheSnapshot rightCache = rightMesh.objectGeometryCache;
+    if(
+        !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
+        || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
+        || leftCache.decoderPipeline != rightCache.decoderPipeline
+    )
+        return false;
+    if(!leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers))
+        return false;
+    for(usize index = 0u; index < LengthOf(leftMesh.geometryHeapHandles); ++index){
+        if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
+            return false;
+    }
+    return true;
 }
 
 

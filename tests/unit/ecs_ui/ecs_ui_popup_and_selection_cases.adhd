@@ -16,6 +16,18 @@ const StringView s_EcsUiPopupKey = "popup";
 const StringView s_EcsUiEditKey = "edit";
 const StringView s_EcsUiChildKey = "child";
 
+enum<u8> DeletionMutation{
+    SelectionRoundTrip,
+    TextUndoRoundTrip,
+    ExternalReset
+}
+
+enum<u8> EpochMutation{
+    SelectionRoundTrip,
+    SameSelection,
+    CompositionRoundTrip
+}
+
 [ordered]
 class UiPopupInputTests{
     public HeapStorage storage = HeapStorage(s_EcsUiPopupInput);
@@ -59,18 +71,6 @@ class UiPopupInputTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> DeletionMutation{
-    SelectionRoundTrip,
-    TextUndoRoundTrip,
-    ExternalReset
-}
-
-enum<u8> EpochMutation{
-    SelectionRoundTrip,
-    SameSelection,
-    CompositionRoundTrip
-}
-
 UiTextEditOwner SelectionDeletionTestOwner(in UiSelectionDeletionTests self){
     return MakeSelectionDeletionOwner(self.m_model.instanceGeneration());
 }
@@ -108,9 +108,11 @@ PopupToken MakeEcsUiPopupToken(in WidgetState owner, in u64 instanceGen, in u64 
 b8 DeclareEcsUiPopupEdit(mut UiPopupInputTests self, in StringView key, in Rect bounds, mut EditModel model, mut WidgetState outWidget, mut EditBoxResult outResult){
     outWidget = WidgetState();
     outResult = EditBoxResult();
-    if(!DeclareEcsUiWidget(self.m_context, key, WidgetKind::EditBox, outWidget)){
+    const auto declaredWidget = self.m_context.declare(key, WidgetKind::EditBox);
+    if(!declaredWidget.has_value()){
         return false;
     }
+    outWidget = declaredWidget.value();
     const EditBoxOptions options = EditBoxOptions();
     outResult = self.m_host.edit(outWidget, options, model);
     EditBoxView view = EditBoxView();
@@ -168,10 +170,11 @@ b8 PrepareEcsUiPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupBaseFrame(self)){
         return false;
     }
-    WidgetState owner = WidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, owner)){
+    const auto ownerResult = self.m_context.declare(s_EcsUiPopupKey, WidgetKind::Popup);
+    if(!ownerResult.has_value()){
         return false;
     }
+    const WidgetState owner = ownerResult.value();
     self.m_token = MakeEcsUiPopupToken(owner, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
     self.m_context.input().fencePopup(self.m_token);
     if(self.m_context.input().consumePopupDismissal(self.m_token)){
@@ -208,16 +211,19 @@ b8 PrepareEcsUiDeferredPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupPreparedFrame(self)){
         return false;
     }
-    WidgetState popup = WidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, popup)){
+    const auto popupResult = self.m_context.declare(s_EcsUiPopupKey, WidgetKind::Popup);
+    if(!popupResult.has_value()){
         return false;
     }
+    const WidgetState popup = popupResult.value();
     self.m_token = MakeEcsUiPopupToken(popup, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
     self.m_context.input().fencePopup(self.m_token);
     if(self.m_popupState.isOpen()){
-        if(!DeclareEcsUiPartWidget(self.m_context, popup, s_EcsUiEditKey, WidgetKind::EditBox, self.m_popupWidget)){
+        const auto declaredPopupEdit = self.m_context.declarePart(popup, s_EcsUiEditKey, WidgetKind::EditBox);
+        if(!declaredPopupEdit.has_value()){
             return false;
         }
+        self.m_popupWidget = declaredPopupEdit.value();
         const EditBoxOptions options = EditBoxOptions();
         self.m_popupResult = self.m_host.editInPopup(self.m_popupWidget, options, self.m_token, self.m_popupModel);
         if(!self.m_popupResult.valid || self.m_context.popupToken().valid()){
@@ -264,10 +270,11 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupBaseFrame(self)){
         return false;
     }
-    WidgetState parent = WidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, parent)){
+    const auto parentResult = self.m_context.declare(s_EcsUiPopupKey, WidgetKind::Popup);
+    if(!parentResult.has_value()){
         return false;
     }
+    const WidgetState parent = parentResult.value();
     self.m_token = MakeEcsUiPopupToken(parent, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
     self.m_context.input().fencePopup(self.m_token);
     if(self.m_context.input().consumePopupDismissal(self.m_token)){
@@ -294,10 +301,11 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
         if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
             return false;
         }
-        WidgetState child = WidgetState();
-        if(!DeclareEcsUiWidget(self.m_context, s_EcsUiChildKey, WidgetKind::Popup, child)){
+        const auto childResult = self.m_context.declare(s_EcsUiChildKey, WidgetKind::Popup);
+        if(!childResult.has_value()){
             return false;
         }
+        const WidgetState child = childResult.value();
         self.m_childToken = MakeEcsUiPopupToken(child, self.m_childState.instanceGeneration(), self.m_childState.openGeneration());
         self.m_context.input().fencePopup(self.m_childToken);
         if(self.m_context.input().consumePopupDismissal(self.m_childToken)){

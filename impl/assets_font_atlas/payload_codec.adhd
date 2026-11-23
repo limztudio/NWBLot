@@ -68,17 +68,19 @@ Sha256Digest ComputePositioningTableSha256(in Span<u8> tableBytes){
     return ComputeSha256(tableBytes);
 }
 
-b8 ReadFontAtlasSha256Digest(in Span<u8> bytes, mut usize cursor, mut Sha256Digest outDigest){
+Expected<Sha256Digest> ReadFontAtlasSha256Digest(in Span<u8> bytes, mut usize cursor){
     const usize digestBytes = cast<usize>(s_Sha256DigestByteCount);
     if(!CanReadBytes(bytes, cursor, digestBytes))
-        return false;
+        return MakeUnexpected(Failure());
+    Sha256Digest digest;
     for(usize index = 0u; index < digestBytes; ++index){
-        outDigest.bytes[index] = bytes[cursor];
+        digest.bytes[index] = bytes[cursor];
         ++cursor;
     }
-    return true;
+    return digest;
 }
 
+[cpp_unwind]
 b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         in FontAtlasGroup group = payload.groups[groupIndex];
@@ -95,6 +97,7 @@ b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     return true;
 }
 
+[cpp_unwind]
 b8 ValidateFontAtlasPayloadWithOptions(in FontAtlasPayload payload, in b8 verifyPixelDigests){
     if(!ValidateFontAtlasIdentityAndFace(payload.font.valid(), IsFontAtlasDigestNonZero(payload.fontSha256.bytes), payload.faceIndex))
         return false;
@@ -156,13 +159,13 @@ b8 ValidateFontAtlasPayloadWithOptions(in FontAtlasPayload payload, in b8 verify
     return true;
 }
 
+[cpp_unwind]
 b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
     return ValidateFontAtlasPayloadWithOptions(payload, true);
 }
 
 b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
-    FontSfntDirectory directory = FontSfntDirectory();
-    if(!ValidateFontAtlasSourceHeaderAndMetrics(
+    const Expected<FontSfntDirectory> directoryResult = ValidateFontAtlasSourceHeaderAndMetrics(
         payload.font.name(),
         font.virtualPath(),
         payload.faceIndex,
@@ -170,10 +173,11 @@ b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
         font.fontBytes(),
         payload.fontSha256.bytes,
         payload.unitsPerEm,
-        payload.sourceGlyphCount,
-        directory
-    ))
+        payload.sourceGlyphCount
+    );
+    if(!directoryResult.has_value())
         return false;
+    const FontSfntDirectory directory = directoryResult.value();
     usize matched = 0u;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
         const Expected<FontSfntTable> sourceTable = directory.table(cast<usize>(index));
@@ -197,6 +201,7 @@ b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
     return ValidateFontAtlasMatchedPositioningTableCount(matched, payload.positioningTables.size());
 }
 
+[cpp_unwind]
 Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Span<u8> fontBytes, in u32 faceIndex, in u32 sourceGlyphCount){
     if(faceIndex != 0u)
         return MakeUnexpected(Failure());
@@ -226,17 +231,20 @@ Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Sp
     return tables;
 }
 
+[cpp_unwind]
 b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPayload){
     usize cursor = 0u;
-    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords;
-    if(!TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor, identityQwords))
+    const Expected<Array<u64, s_FontAtlasIdentityLaneCount>> identityQwords = TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor);
+    if(!identityQwords.has_value())
         return false;
     NameHash identity = NameHash();
     for(usize lane = 0u; lane < cast<usize>(s_NameHashLaneCount); ++lane)
-        identity.qwords[lane] = identityQwords[lane];
+        identity.qwords[lane] = identityQwords.value()[lane];
     outPayload.font.virtualPath = Name(identity);
-    if(!ReadFontAtlasSha256Digest(bytes, cursor, outPayload.fontSha256))
+    const Expected<Sha256Digest> fontDigest = ReadFontAtlasSha256Digest(bytes, cursor);
+    if(!fontDigest.has_value())
         return false;
+    outPayload.fontSha256 = fontDigest.value();
     const Expected<FontAtlasBinaryDecodedHeader> headerResult = TryReadFontAtlasBinaryHeaderTail(bytes, cursor);
     if(!headerResult.has_value())
         return false;
@@ -259,11 +267,17 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
     for(u32 index = 0u; index < header.groupCount; ++index){
         outPayload.groups.emplace_back();
         mut FontAtlasGroup group = outPayload.groups.back();
-        u32 byteCount = 0u;
-        if(!TryReadFontAtlasGroupHeader(bytes, cursor, group.width, group.height, group.channelCount, byteCount))
+        const Expected<FontAtlasBinaryGroupHeader> groupHeader = TryReadFontAtlasGroupHeader(bytes, cursor);
+        if(!groupHeader.has_value())
             return false;
-        if(!ReadFontAtlasSha256Digest(bytes, cursor, group.sha256))
+        group.width = groupHeader.value().width;
+        group.height = groupHeader.value().height;
+        group.channelCount = groupHeader.value().channelCount;
+        const u32 byteCount = groupHeader.value().byteCount;
+        const Expected<Sha256Digest> groupDigest = ReadFontAtlasSha256Digest(bytes, cursor);
+        if(!groupDigest.has_value())
             return false;
+        group.sha256 = groupDigest.value();
         if(!ValidateFontAtlasBinaryGroupChunk(group.width, group.height, group.channelCount, byteCount, pixelBytes, cursor, bytes.size()))
             return false;
         if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, group.pixels))
@@ -276,11 +290,15 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
     for(u32 index = 0u; index < header.tableCount; ++index){
         outPayload.positioningTables.emplace_back();
         mut FontAtlasPositioningTable table = outPayload.positioningTables.back();
-        u32 byteCount = 0u;
-        if(!TryReadFontAtlasTableHeader(bytes, cursor, table.tag, byteCount))
+        const Expected<FontAtlasBinaryTableHeader> tableHeader = TryReadFontAtlasTableHeader(bytes, cursor);
+        if(!tableHeader.has_value())
             return false;
-        if(!ReadFontAtlasSha256Digest(bytes, cursor, table.sha256))
+        table.tag = tableHeader.value().tag;
+        const u32 byteCount = tableHeader.value().byteCount;
+        const Expected<Sha256Digest> tableDigest = ReadFontAtlasSha256Digest(bytes, cursor);
+        if(!tableDigest.has_value())
             return false;
+        table.sha256 = tableDigest.value();
         if(!ValidateFontAtlasBinaryTableChunk(byteCount, tableBytes, cursor, bytes.size()))
             return false;
         if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, table.bytes))
@@ -290,6 +308,7 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
     return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload);
 }
 
+[cpp_unwind]
 b8 SerializeFontAtlasPayloadValidatedInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
     for(in FontAtlasGroup group : payload.groups)
@@ -329,12 +348,14 @@ b8 SerializeFontAtlasPayloadValidatedInto(in FontAtlasPayload payload, mut Vecto
     return true;
 }
 
+[cpp_unwind]
 b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     if(!ValidateFontAtlasPayload(payload))
         return false;
     return SerializeFontAtlasPayloadValidatedInto(payload, outBinary);
 }
 
+[cpp_unwind]
 Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
     Vector<u8> binary = Vector<u8>();
     if(!SerializeFontAtlasPayloadInto(payload, binary))
@@ -342,6 +363,7 @@ Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
     return binary;
 }
 
+[cpp_unwind]
 Expected<FontAtlasPayload> DeserializeFontAtlasPayload(in Span<u8> binary){
     FontAtlasPayload payload = FontAtlasPayload();
     if(!DeserializeFontAtlasBinaryInto(binary, payload)){

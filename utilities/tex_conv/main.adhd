@@ -53,8 +53,11 @@ i32 RunConsole(in ConsoleArguments arguments){
 
     TexConvAlphaSource alpha;
     if(IsTexConvAlphaOptionPresent(cast<i32>(alphaOption.count()))){
-        if(!TryParseTexConvAlphaOption(alphaText, alpha.mode, alpha.constant))
+        const Expected<TexConvAlphaOption> parsedAlpha = TryParseTexConvAlphaOption(alphaText);
+        if(!parsedAlpha.has_value())
             return s_TexConvExitFailure;
+        alpha.mode = parsedAlpha.value().mode;
+        alpha.constant = parsedAlpha.value().constantValue;
         if(alpha.mode == AlphaSourceMode::Image)
             alpha.path = Path(alphaText);
     }

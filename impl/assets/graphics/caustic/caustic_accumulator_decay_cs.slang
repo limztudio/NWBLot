@@ -28,13 +28,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(texel.x >= g_NwbCausticAccumulatorDecayPushConstants.width || texel.y >= g_NwbCausticAccumulatorDecayPushConstants.height)
         return;
 
-    const half decayFactor = half(g_NwbCausticAccumulatorDecayPushConstants.decayFactor);
+    const float decayFactor = g_NwbCausticAccumulatorDecayPushConstants.decayFactor;
 
     [unroll] for(uint layer = 0u; layer < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++layer){
         const uint3 coord = uint3(texel, layer);
         const uint value = nwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord];
-        if(value != 0u)
-            nwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (uint)((float)value * float(decayFactor));
+        if(value != 0u){
+            const uint decayed = (uint)round(max((float)value * decayFactor, 0.0));
+            nwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (decayFactor < 1.0) ? min(value - 1u, decayed) : decayed;
+        }
     }
 }
 

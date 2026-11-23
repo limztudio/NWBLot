@@ -23,6 +23,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SceneBinaryRecord{
+    public Name path = s_NameNone;
+    public Vector<u8> binary;
+}
+
+class MapAssetBinarySource : IAssetBinarySource{
+    private Vector<SceneBinaryRecord> m_entries;
+
+    public void setBinary(in Name path, in Span<u8> bytes){
+        for(mut SceneBinaryRecord entry : this.m_entries){
+            if(entry.path == path){
+                AssignTriviallyCopyableVector(entry.binary, bytes);
+                return;
+            }
+        }
+        AppendArenaElement<SceneBinaryRecord>(this.m_entries);
+        this.m_entries.back().path = path;
+        AssignTriviallyCopyableVector(this.m_entries.back().binary, bytes);
+    }
+
+    public b8 readAssetBinary(in Name path, mut AssetByteBuffer bytes)const override{
+        bytes.clear();
+        for(in SceneBinaryRecord entry : this.m_entries){
+            if(entry.path == path){
+                AssignTriviallyCopyableVector(bytes, entry.binary);
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 RegisterTestCodec<Codec>(mut AssetRegistry registry){
     return registry.registerCodec(MakeUnique<Codec>());
 }
@@ -85,46 +121,6 @@ Vector<u8> MakeSubsystemBinary(in ISubsystem subsystem){
     return binary;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SceneBinaryRecord{
-    public Name path = s_NameNone;
-    public Vector<u8> binary;
-}
-
-class MapAssetBinarySource : IAssetBinarySource{
-    private Vector<SceneBinaryRecord> m_entries;
-
-    public void setBinary(in Name path, in Span<u8> bytes){
-        for(mut SceneBinaryRecord entry : this.m_entries){
-            if(entry.path == path){
-                AssignTriviallyCopyableVector(entry.binary, bytes);
-                return;
-            }
-        }
-        AppendArenaElement<SceneBinaryRecord>(this.m_entries);
-        this.m_entries.back().path = path;
-        AssignTriviallyCopyableVector(this.m_entries.back().binary, bytes);
-    }
-
-    public b8 readAssetBinary(in Name path, mut AssetByteBuffer bytes)const override{
-        bytes.clear();
-        for(in SceneBinaryRecord entry : this.m_entries){
-            if(entry.path == path){
-                AssignTriviallyCopyableVector(bytes, entry.binary);
-                return true;
-            }
-        }
-        return false;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Vector<u8> BuildTestProjectBinary(in Name startScene){
     ProjectHeaderBinary header;
     header.startSceneHash = startScene.hash();
@@ -163,10 +159,6 @@ Vector<u8> BuildTestEntityBinary(in Span<ComponentRef> components){
         AppendPOD(binary, ref.name().hash());
     return binary;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover(){
     EcsTestWorld testWorld = EcsTestWorld();
@@ -280,6 +272,44 @@ void VerifySceneSubsystemAssets_RejectsMissingSharedOpticalGroupAndDuplicateEnti
     invalidRendererPayload.opticalBoundaryMode = cast<u8>(OpticalBoundaryMode::ClosedPriority);
     ComponentAssetCodec componentCodec = ComponentAssetCodec();
     EXPECT_FALSE(componentCodec.deserialize(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer, MakeComponentBinary(RendererComponentAsset::AssetTypeName(), invalidRendererPayload), arena).has_value());
+
+    RendererComponentAsset retainedRenderer(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedRenderer.component.material.virtualPath = s_SceneCaseProjectMaterialsMatSkinnedUv;
+    retainedRenderer.component.visible = false;
+    EXPECT_FALSE(retainedRenderer.loadBinary(MakeComponentBinary(RendererComponentAsset::AssetTypeName(), invalidRendererPayload)));
+    EXPECT_EQ(retainedRenderer.component.material.name(), s_SceneCaseProjectMaterialsMatSkinnedUv);
+    EXPECT_FALSE(retainedRenderer.component.visible);
+
+    CameraComponentAsset retainedCamera(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedCamera.component.setNearPlane(0.25f);
+    CameraComponentPayloadBinary invalidCamera;
+    EXPECT_FALSE(retainedCamera.loadBinary(MakeComponentBinary(CameraComponentAsset::AssetTypeName(), invalidCamera)));
+    EXPECT_FLOAT_EQ(retainedCamera.component.nearPlane(), 0.25f);
+
+    TransformComponentAsset retainedTransform(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedTransform.component.position = f32x4(2.0f, 3.0f, 4.0f, 0.0f);
+    TransformComponentPayloadBinary invalidTransform;
+    invalidTransform.rotation = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    EXPECT_FALSE(retainedTransform.loadBinary(MakeComponentBinary(TransformComponentAsset::AssetTypeName(), invalidTransform)));
+    EXPECT_FLOAT_EQ(retainedTransform.component.position.x, 2.0f);
+
+    LightComponentAsset retainedLight(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedLight.component.range = 42.0f;
+    LightComponentPayloadBinary invalidLight;
+    invalidLight.range = -1.0f;
+    EXPECT_FALSE(retainedLight.loadBinary(MakeComponentBinary(LightComponentAsset::AssetTypeName(), invalidLight)));
+    EXPECT_FLOAT_EQ(retainedLight.component.range, 42.0f);
+
+    ModelComponentAsset retainedModel(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedModel.component.model.virtualPath = s_SceneCaseCesiumManModel;
+    SingleAssetRefComponentPayloadBinary invalidReference;
+    EXPECT_FALSE(retainedModel.loadBinary(MakeComponentBinary(ModelComponentAsset::AssetTypeName(), invalidReference)));
+    EXPECT_EQ(retainedModel.component.model.name(), s_SceneCaseCesiumManModel);
+
+    MeshComponentAsset retainedMesh(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer);
+    retainedMesh.component.mesh.virtualPath = s_SceneCaseCesiumManModel;
+    EXPECT_FALSE(retainedMesh.loadBinary(MakeComponentBinary(MeshComponentAsset::AssetTypeName(), invalidReference)));
+    EXPECT_EQ(retainedMesh.component.mesh.name(), s_SceneCaseCesiumManModel);
 
     TransformComponentPayloadBinary transformPayload = TransformComponentPayloadBinary();
     transformPayload.position = f32x4(1.0f, 2.0f, 3.0f, 0.0f);
@@ -419,6 +449,11 @@ void VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsys
     EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "start_scene must not be empty"));
 
+    ProjectAsset retained(s_DefaultProjectVirtualPath);
+    retained.setStartScene(SceneRef(s_SceneCaseProjectScenesMain));
+    EXPECT_FALSE(retained.loadBinary(invalidProjectBinary));
+    EXPECT_EQ(retained.startScene().name(), s_SceneCaseProjectScenesMain);
+
     DeclaredAssetCodec<SceneAsset> sceneCodec = DeclaredAssetCodec<SceneAsset>();
     Vector<SubsystemRef> emptySubsystems = Vector<SubsystemRef>();
     HashMap<Name, SceneAssetRef> sceneAssets = HashMap<Name, SceneAssetRef>();
@@ -426,6 +461,27 @@ void VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsys
     const Vector<u8> emptySceneBinary = BuildTestSceneBinary(emptySubsystems, sceneAssets, emptyEntities);
     EXPECT_FALSE(sceneCodec.deserialize(s_SceneFixtureNameProjectScenesEmpty, emptySceneBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "scene must declare at least one subsystem"));
+
+    Vector<SubsystemRef> retainedSubsystems;
+    retainedSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    SceneAsset retainedScene(s_SceneFixtureNameProjectScenesEmpty);
+    retainedScene.setContents(retainedSubsystems, sceneAssets, emptyEntities);
+    SceneHeaderBinary duplicateHeader;
+    duplicateHeader.subsystemCount = 1u;
+    duplicateHeader.assetCount = 2u;
+    SceneAssetEntryBinary duplicateEntry;
+    duplicateEntry.nicknameHash = s_SceneCaseCesiumManModel.hash();
+    duplicateEntry.assetHash = s_SceneCaseProjectMaterialsMatSkinnedUv.hash();
+    Vector<u8> duplicateBinary;
+    AppendPOD(duplicateBinary, duplicateHeader);
+    AppendPOD(duplicateBinary, s_SceneAssetNameEngineSubsystemsRenderer.hash());
+    AppendPOD(duplicateBinary, duplicateEntry);
+    AppendPOD(duplicateBinary, duplicateEntry);
+    EXPECT_FALSE(retainedScene.loadBinary(duplicateBinary));
+    ASSERT_EQ(retainedScene.subsystems().size(), 1u);
+    EXPECT_EQ(retainedScene.subsystems()[0u].name(), s_SceneAssetNameEngineSubsystemsRenderer);
+    EXPECT_TRUE(retainedScene.assets().empty());
+    EXPECT_TRUE(SawCapturedError(logger, "duplicate asset nickname"));
 }
 
 void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure(){
@@ -516,22 +572,30 @@ void VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission(){
     EXPECT_TRUE(TryComputeCameraTanHalfVerticalFov(fov).has_value());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover, VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover)
+
 NWB_ADHD_GTEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding, VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding)
+
 NWB_ADHD_GTEST(SceneCameraSelection, FallbackPreservesSparseViewOrderAfterRemoval, VerifySceneCameraSelection_FallbackPreservesSparseViewOrderAfterRemoval)
+
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsInvalidLightFlagsAndTrailingComponentBytes, VerifySceneSubsystemAssets_RejectsInvalidLightFlagsAndTrailingComponentBytes)
+
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsMissingSharedOpticalGroupAndDuplicateEntityComponentTypes, VerifySceneSubsystemAssets_RejectsMissingSharedOpticalGroupAndDuplicateEntityComponentTypes)
+
 NWB_ADHD_GTEST(FlyCameraMotion, PointerCaptureAndNonfiniteInputResetTheAnchor, VerifyFlyCameraMotion_PointerCaptureAndNonfiniteInputResetTheAnchor)
+
 NWB_ADHD_GTEST(FlyCameraMotion, CapturedKeyboardAndNonfiniteDeltaDoNotMove, VerifyFlyCameraMotion_CapturedKeyboardAndNonfiniteDeltaDoNotMove)
+
 NWB_ADHD_GTEST(FlyCameraInput, CompletedDragSurvivesCaptureLossButActiveDragDoesNot, VerifyFlyCameraInput_CompletedDragSurvivesCaptureLossButActiveDragDoesNot)
+
 NWB_ADHD_GTEST(FlyCameraInput, InvalidKeyIndicesAndClearPreserveInputBounds, VerifyFlyCameraInput_InvalidKeyIndicesAndClearPreserveInputBounds)
+
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic, VerifySceneSubsystemAssets_RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic)
+
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems, VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
+
 NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure, VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure)
+
 NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission)
 
 

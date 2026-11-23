@@ -4,29 +4,15 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd>
-
 type UiTextureImageBuilderTests = WidgetFixture;
 type TextureImageLayoutFixture = PaintImageFixture;
-
-static_assert(!is_cpp_constructible<TooltipState, in TooltipState>());
-static_assert(!is_cpp_constructible<TooltipState, TooltipState>());
-
-ImageOptions MakeUiTextureFixedOptions(){ return MakeFixedImageFixtureOptions(96.0f, 40.0f); }
-ImageOptions MakeUiTextureFixedOptions(in f32 width, in f32 height){ return MakeFixedImageFixtureOptions(width, height); }
-b8 UiTextureImageMatchesGeneration(in SharedImageSource source, in u64 generation){ return cast<b8>(source) && source.deref().generation() == generation; }
-u64 UiTextureImageGeneration(in SharedImageSource source){ return source.deref().generation(); }
-u32 UiTextureImageWidth(in SharedImageSource source){ return source.deref().texture().width(); }
-u8 UiTextureImageFirstByte(in SharedImageSource source){ return source.deref().texture().payloadBytes()[0u]; }
-Expected<ImageMetrics> UiMeasureTextureImage(in ImageOptions options, in SharedImageSource source){ return MeasureImage(options, source.deref()); }
-
-
 const u32 s_UiTextureQuietNaNF32Bits = 0x7fc00000u;
 const u32 s_UiTexturePosInfF32Bits = 0x7f800000u;
 const u32 s_UiTextureNegInfF32Bits = 0xff800000u;
@@ -39,6 +25,9 @@ const AStringView s_UiTextureVersionedImagePath = "tests/ui/versioned_builder_im
 const AStringView s_UiTextureCapacityImagePath = "tests/ui/capacity_image";
 const AStringView s_UiTextureLayoutVersionImagePath = "tests/ui/layout_version";
 const u64 s_UiTooltipDeclaration = 17u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiTextureImagePaintSample{
@@ -55,6 +44,27 @@ class UiTooltipTestBinding{
     public PopupToken popup = PopupToken();
 }
 
+static_assert(!is_cpp_constructible<TooltipState, in TooltipState>());
+static_assert(!is_cpp_constructible<TooltipState, TooltipState>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ImageOptions MakeUiTextureFixedOptions(){ return MakeFixedImageFixtureOptions(96.0f, 40.0f); }
+
+ImageOptions MakeUiTextureFixedOptions(in f32 width, in f32 height){ return MakeFixedImageFixtureOptions(width, height); }
+
+b8 UiTextureImageMatchesGeneration(in SharedImageSource source, in u64 generation){ return cast<b8>(source) && source.deref().generation() == generation; }
+
+u64 UiTextureImageGeneration(in SharedImageSource source){ return source.deref().generation(); }
+
+u32 UiTextureImageWidth(in SharedImageSource source){ return source.deref().texture().width(); }
+
+u8 UiTextureImageFirstByte(in SharedImageSource source){ return source.deref().texture().payloadBytes()[0u]; }
+
+Expected<ImageMetrics> UiMeasureTextureImage(in ImageOptions options, in SharedImageSource source){ return MeasureImage(options, source.deref()); }
+
 UiTooltipTestBinding MakeUiTooltipTestBinding(in WidgetId inAnchor, in u64 inDeclaration, in PopupToken inPopup){
     UiTooltipTestBinding binding = UiTooltipTestBinding();
     binding.anchor = inAnchor;
@@ -62,7 +72,6 @@ UiTooltipTestBinding MakeUiTooltipTestBinding(in WidgetId inAnchor, in u64 inDec
     binding.popup = inPopup;
     return binding;
 }
-
 
 Expected<UiTextureImagePaintSample> SampleUiTextureImage(in DrawSnapshot snapshot, in u64 generation){
     UiTextureImagePaintSample candidate = UiTextureImagePaintSample();
@@ -136,10 +145,6 @@ PopupToken MakeUiTooltipPopup(){
     token.openGeneration = 7u;
     return token;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease(mut UiTextureImageBuilderTests self){
     auto sourceResult = MakeSeededImage(s_UiTextureCopiedImagePath, 37u, 20u, 12u, self.pool);
@@ -489,10 +494,6 @@ void VerifyUiTextureImageBuilderTests_FullyClippedImageAtFullBindingCapacityCons
     EXPECT_FALSE(self.m_context.failed());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextureImageLayoutFixture_SameIdentityVersionsMeasureTheirOwnImmutableDimensions(mut TextureImageLayoutFixture self){
     auto firstResult = self.makeImage(s_UiTextureLayoutVersionImagePath, 37u, 20u, 12u);
     ASSERT_TRUE(firstResult.has_value());
@@ -588,10 +589,6 @@ void VerifyTextureImageLayoutFixture_InvalidTintRejectsMeasurement(mut TextureIm
         EXPECT_FALSE(UiMeasureTextureImage(options, image).has_value());
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiTooltipBehaviorTests_NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown(){
     TooltipState state = TooltipState();
@@ -993,48 +990,78 @@ void VerifyUiTooltipBehaviorTests_ExplicitResetRetiresVisibleStateAndAllAccumula
     EXPECT_TRUE(state.visible());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease, VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease, VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding, VerifyUiTextureImageBuilderTests_SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack, VerifyUiTextureImageBuilderTests_ExternalClipTrimsFullImageUvsAndRestoresThePaintStack)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads, VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput, VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFrame, VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints, VerifyUiTextureImageBuilderTests_EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAnnotation, VerifyUiTextureImageBuilderTests_AncestorClosureSuppressesEndedChildImageAndAnnotation)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint, VerifyUiTextureImageBuilderTests_VisibleImageAtFullBindingCapacityRejectsDeferredPaint)
+
 NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot, VerifyUiTextureImageBuilderTests_FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot)
 
 NWB_ADHD_GTEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions, VerifyTextureImageLayoutFixture_SameIdentityVersionsMeasureTheirOwnImmutableDimensions)
+
 NWB_ADHD_GTEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid, VerifyTextureImageLayoutFixture_ZeroFixedExtentAndEmptyPlacementRemainValid)
+
 NWB_ADHD_GTEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement, VerifyTextureImageLayoutFixture_InvalidSizePoliciesAndValuesRejectMeasurement)
+
 NWB_ADHD_GTEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement, VerifyTextureImageLayoutFixture_InvalidTintRejectsMeasurement)
 
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown, VerifyUiTooltipBehaviorTests_NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ContiguousHoverAppearsAtTheExactDelayBoundary, VerifyUiTooltipBehaviorTests_ContiguousHoverAppearsAtTheExactDelayBoundary)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame, VerifyUiTooltipBehaviorTests_ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, UnchangedHoverActivityPreservesAccumulatedDelay, VerifyUiTooltipBehaviorTests_UnchangedHoverActivityPreservesAccumulatedDelay)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ZeroDelayAppearsOnTheFirstEnabledAcceptedHover, VerifyUiTooltipBehaviorTests_ZeroDelayAppearsOnTheFirstEnabledAcceptedHover)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges, VerifyUiTooltipBehaviorTests_ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, LeavingAVisibleAnchorRequiresACompleteNewHoverDelay, VerifyUiTooltipBehaviorTests_LeavingAVisibleAnchorRequiresACompleteNewHoverDelay)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime, VerifyUiTooltipBehaviorTests_LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, DisablingAndReenablingDoesNotCarryOldHoverTime, VerifyUiTooltipBehaviorTests_DisablingAndReenablingDoesNotCarryOldHoverTime)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ReplacingTheAnchorRetiresAVisibleTooltip, VerifyUiTooltipBehaviorTests_ReplacingTheAnchorRetiresAVisibleTooltip)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey, VerifyUiTooltipBehaviorTests_RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, EveryPopupLifetimeFieldParticipatesInTheHoverBinding, VerifyUiTooltipBehaviorTests_EveryPopupLifetimeFieldParticipatesInTheHoverBinding)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate, VerifyUiTooltipBehaviorTests_FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions, VerifyUiTooltipBehaviorTests_ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangingWidthGapOrSideAlsoStartsANewHoverLifetime, VerifyUiTooltipBehaviorTests_ChangingWidthGapOrSideAlsoStartsANewHoverLifetime)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow, VerifyUiTooltipBehaviorTests_FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay, VerifyUiTooltipBehaviorTests_InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation, VerifyUiTooltipBehaviorTests_InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState, VerifyUiTooltipBehaviorTests_InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidUpdatesCannotHideAnAlreadyVisibleTooltip, VerifyUiTooltipBehaviorTests_InvalidUpdatesCannotHideAnAlreadyVisibleTooltip)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance, VerifyUiTooltipBehaviorTests_ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance)
+
 NWB_ADHD_GTEST(UiTooltipBehaviorTests, ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime, VerifyUiTooltipBehaviorTests_ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime)
 
 

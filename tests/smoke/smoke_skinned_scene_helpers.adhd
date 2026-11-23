@@ -17,6 +17,20 @@
 
 type SmokeModelRef = AssetRef<Model>;
 type ModelObjectKindEnum = ModelObjectKind;
+type SkeletonJointMatrixVector = Vector<f32x3x4>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SmokeTintedModelEntityResult{
+    public EntityID entity = s_InvalidEntityId;
+    public b8 tintApplied = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 mut MeshSkinningSystem SmokeMeshSkinningSystemRef(mut World world){
     const Optional<mut MeshSkinningSystem> system = world.borrowSystem<MeshSkinningSystem>();
@@ -27,15 +41,9 @@ b8 HasSmokeMeshSkinningSystem(mut World world){
     return world.borrowSystem<MeshSkinningSystem>().has_value();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 StringView DefaultSmokeSkinnedLabel(){
     return "SmokeSkinnedScene";
 }
-
-type SkeletonJointMatrixVector = Vector<f32x3x4>;
 
 b8 SetSmokeSkeletonLocalJoints(in EntityID entity, in Span<f32x3x4> joints, mut World world){
     if(!world.hasComponent<SkeletonPoseComponent>(entity))
@@ -48,11 +56,6 @@ b8 SetSmokeSkeletonLocalJoints(in EntityID entity, in Span<f32x3x4> joints, mut 
     for(usize index = 0u; index < joints.size(); ++index)
         pose.localJoints[index] = joints[index];
     return true;
-}
-
-class SmokeTintedModelEntityResult{
-    public EntityID entity = s_InvalidEntityId;
-    public b8 tintApplied = false;
 }
 
 void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext context, in SmokeRenderQualitySettings baseSettings){
@@ -195,10 +198,6 @@ void AnimateSkinningBenchmarkPoses(mut World world, in Span<EntityID> entities, 
         }
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateSmokeSkinnedRenderWorld(in StringView projectName, in SmokeRenderQualitySettings baseSettings, mut ProjectRuntimeContext context){

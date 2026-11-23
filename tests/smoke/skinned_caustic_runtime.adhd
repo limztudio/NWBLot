@@ -20,35 +20,10 @@ const f32 s_SkinnedCausticDefaultDirectionalLightYaw = 0.65f;
 const f32 s_SkinnedCausticDefaultDirectionalLightIntensity = 2.0f;
 const f32 s_SkinnedCausticPoseAnimationAngle = 0.10f;
 const f32 s_SkinnedCausticMaxAnimationDelta = 1.0f / 15.0f;
-
 const SmokeModelRef s_SkinnedCausticPrismModel = "project/characters/skinned_caustic_prism/model";
 const SmokeMaterialRef s_SkinnedCausticGlassMaterial = "project/smoke/transparent_multi/materials/shared";
 const SmokeMaterialRef s_SkinnedCausticGroundMaterial = "project/smoke/transparent_multi/materials/ground";
 const SmokeMeshRef s_SkinnedCausticGroundMesh = "project/meshes/shadow_plane";
-
-StringView SkinnedCausticProjectName(){
-    return "SkinnedCausticSmokeProject";
-}
-
-Expected<NotNullUniquePtr<World>> CreateSkinnedCausticWorld(mut ProjectRuntimeContext context){
-    auto created = CreateSmokeSkinnedRenderWorld(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
-    if(!created.has_value())
-        return MakeUnexpected(Failure());
-    mut NotNullUniquePtr<World> world = created.value();
-    if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment))
-        SmokeRendererSystemRef(SmokeWorldRef(world)).setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment));
-    return TakeSmokeWorld(world);
-}
-
-MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f32 jointIndex, in f32 timeSeconds){
-    const f32 angle = Sin(timeSeconds * s_SkinnedCausticPoseAnimationSpeed + jointIndex * 0.7f) * s_SkinnedCausticPoseAnimationAngle;
-    const VectorSingle rotationAngles = VectorSingle(0.4f, 1.0f, 0.25f, 0.0f) * angle;
-    const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
-    const MatrixSingle animated = Mul(bindJoint, rotation);
-    if(!MatrixIsInvertibleAffine(animated, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return bindJoint;
-    return animated;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -218,6 +193,30 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView SkinnedCausticProjectName(){
+    return "SkinnedCausticSmokeProject";
+}
+
+Expected<NotNullUniquePtr<World>> CreateSkinnedCausticWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeSkinnedRenderWorld(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+    if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment))
+        SmokeRendererSystemRef(SmokeWorldRef(world)).setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment));
+    return TakeSmokeWorld(world);
+}
+
+MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f32 jointIndex, in f32 timeSeconds){
+    const f32 angle = Sin(timeSeconds * s_SkinnedCausticPoseAnimationSpeed + jointIndex * 0.7f) * s_SkinnedCausticPoseAnimationAngle;
+    const VectorSingle rotationAngles = VectorSingle(0.4f, 1.0f, 0.25f, 0.0f) * angle;
+    const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
+    const MatrixSingle animated = Mul(bindJoint, rotation);
+    if(!MatrixIsInvertibleAffine(animated, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return bindJoint;
+    return animated;
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

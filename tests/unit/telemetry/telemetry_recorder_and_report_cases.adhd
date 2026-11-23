@@ -13,6 +13,15 @@
 #include <tests/common/floating_point_environment_guard.adhd>
 #include <tests/unit/telemetry/scope_access.adhd>
 
+
+const u32 s_ConcurrentEventsPerThread = 64u;
+const StringView s_RendererFrame = "renderer/frame";
+const StringView s_RendererFrameText = "Renderer Frame";
+const StringView s_GBuffer = "gbuffer";
+const StringView s_RuntimeStatisticsNone = "runtime_statistics=\"none\"";
+const StringView s_RuntimeStatisticsNullJson = "\"runtimeStatistics\": null";
+const StringView s_ResourceWithNullStatisticsJson = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
+
 class GenericScopeRecord{ public Name name; public u32 generation = 1u; }
 class ThrowingScopeRecord{ public ThrowingScopeName name; }
 class PayloadBuildFailure{}
@@ -24,13 +33,6 @@ static_assert(is_nothrow_call<in GenericScopeReferences, usize>(TestScopeNameAt)
 static_assert(!is_nothrow_call<in ThrowingScopeReferences, usize>(TestScopeNameAt));
 static_assert(s_ExplicitScopeConversionIsNothrow);
 static_assert(!s_ImplicitScopeConversionIsNothrow);
-
-const StringView s_RendererFrame = "renderer/frame";
-const StringView s_RendererFrameText = "Renderer Frame";
-const StringView s_GBuffer = "gbuffer";
-const StringView s_RuntimeStatisticsNone = "runtime_statistics=\"none\"";
-const StringView s_RuntimeStatisticsNullJson = "\"runtimeStatistics\": null";
-const StringView s_ResourceWithNullStatisticsJson = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -644,7 +646,6 @@ void VerifyTelemetry_EventCodecRejectsInvalidInput(){
         invalidKindHeader.payloadBytes = 0u;
         EXPECT_FALSE(EncodeTelemetryData(invalidKindHeader, TestArrayData<u8>(), 0u, encoded));
 
-        const u8 payload = 5u;
         EventHeader validHeader;
         validHeader.kind = EventKind::PerfFrame;
         validHeader.payloadBytes = size_of<u8>();
@@ -933,14 +934,12 @@ void VerifyTelemetry_RecorderAcceptsConcurrentRecords(){
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
 
     const u32 s_ThreadCount = 4u;
-    const u32 s_EventsPerThread = 64u;
     {
         const u32 kThreads = 4u;
-        const u32 kEventsPerThread = 64u;
         Array<Optional<JoiningThread>, 4u> threads;
         for(u32 threadIndex = 0u; threadIndex < kThreads; ++threadIndex){
-            threads[threadIndex].emplace(lambda[mut recorder, in threadIndex, in kEventsPerThread]() -> void{
-                for(u32 eventIndex = 0u; eventIndex < kEventsPerThread; ++eventIndex){
+            threads[threadIndex].emplace(lambda[mut recorder, in threadIndex]() -> void{
+                for(u32 eventIndex = 0u; eventIndex < s_ConcurrentEventsPerThread; ++eventIndex){
                     if(!RecordPlatformText(recorder, LogType::Info, PlatformTextLiteral("concurrent telemetry record"), eventIndex, threadIndex))
                         return;
                 }
@@ -950,7 +949,7 @@ void VerifyTelemetry_RecorderAcceptsConcurrentRecords(){
             thread.value().join();
     }
 
-    EXPECT_EQ(recorder.eventCount(), s_ThreadCount * s_EventsPerThread);
+    EXPECT_EQ(recorder.eventCount(), s_ThreadCount * s_ConcurrentEventsPerThread);
 }
 
 void VerifyTelemetry_RecorderDisableReleasesClearedAndEmptyPayloadStorage(){

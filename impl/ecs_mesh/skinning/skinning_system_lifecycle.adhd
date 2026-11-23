@@ -10,6 +10,80 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND")]
+extern const usize s_ShaderSkinnedMeshSkinningModeLinearBlend;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION")]
+extern const usize s_ShaderSkinnedMeshSkinningModeDualQuaternion;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE")]
+extern const usize s_ShaderSkinnedMeshPushConstantByteSize;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_MESHLET_COUNT")]
+extern const usize s_ShaderSkinnedMeshPushMeshletCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_SKIN_COUNT")]
+extern const usize s_ShaderSkinnedMeshPushSkinCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_JOINT_COUNT")]
+extern const usize s_ShaderSkinnedMeshPushJointCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_SKINNING_MODE")]
+extern const usize s_ShaderSkinnedMeshPushSkinningMode;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT")]
+extern const usize s_ShaderSkinnedMeshPushBindlessResourcesSlot;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE")]
+extern const usize s_ShaderSkinnedMeshBoundsPushConstantByteSize;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT")]
+extern const usize s_ShaderSkinnedMeshBoundsPushMeshletCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT")]
+extern const usize s_ShaderSkinnedMeshBoundsPushBindlessResourcesSlot;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE")]
+extern const usize s_ShaderSkinnedMeshRepackPushConstantByteSize;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT")]
+extern const usize s_ShaderSkinnedMeshRepackPushMeshletCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT")]
+extern const usize s_ShaderSkinnedMeshRepackPushBindlessResourcesSlot;
+
+static_assert(SkeletonSkinningMode::LinearBlend == s_ShaderSkinnedMeshSkinningModeLinearBlend && SkeletonSkinningMode::DualQuaternion == s_ShaderSkinnedMeshSkinningModeDualQuaternion, "Skeleton skinning mode values must match the shader ABI");
+static_assert(s_RuntimeRequiredStorageDescriptorCount == cast<usize>(RuntimeStorageDescriptorSlot::SkinInfluences), "Runtime required storage descriptor count must match slot enum");
+static_assert(s_RuntimeStorageDescriptorCount == cast<usize>(RuntimeStorageDescriptorSlot::kCount), "Runtime storage descriptor count must match slot enum");
+static_assert(size_of<MeshSkinningBindlessResourceSlots>() == size_of<u32>() * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
+static_assert(size_of<MeshSkinningGraphDispatchPlan>() == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
+
+static_assert(size_of<MeshSkinningPushConstants>() == s_ShaderSkinnedMeshPushConstantByteSize, "MeshSkinning push constants layout must match the shader ABI");
+static_assert(offset_of<MeshSkinningPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshPushMeshletCount, "MeshSkinning meshlet-count push offset drifted");
+static_assert(offset_of<MeshSkinningPushConstants>(skinCount) == size_of<u32>() * s_ShaderSkinnedMeshPushSkinCount, "MeshSkinning skin-count push offset drifted");
+static_assert(offset_of<MeshSkinningPushConstants>(jointCount) == size_of<u32>() * s_ShaderSkinnedMeshPushJointCount, "MeshSkinning joint-count push offset drifted");
+static_assert(offset_of<MeshSkinningPushConstants>(skinningMode) == size_of<u32>() * s_ShaderSkinnedMeshPushSkinningMode, "MeshSkinning skinning-mode push offset drifted");
+static_assert(offset_of<MeshSkinningPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshPushBindlessResourcesSlot, "MeshSkinning bindless-resource slot push offset drifted");
+
+static_assert(size_of<MeshletBoundsPushConstants>() == s_ShaderSkinnedMeshBoundsPushConstantByteSize, "MeshSkinning bounds push constants layout must match the shader ABI");
+static_assert(offset_of<MeshletBoundsPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshBoundsPushMeshletCount, "MeshSkinning bounds meshlet-count push offset drifted");
+static_assert(offset_of<MeshletBoundsPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshBoundsPushBindlessResourcesSlot, "MeshSkinning bounds bindless-resource slot push offset drifted");
+
+static_assert(size_of<MeshletBoundsPushConstants>() == s_ShaderSkinnedMeshRepackPushConstantByteSize, "MeshSkinning repack push constants layout must match the shader ABI");
+static_assert(offset_of<MeshletBoundsPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshRepackPushMeshletCount, "MeshSkinning repack meshlet-count push offset drifted");
+static_assert(offset_of<MeshletBoundsPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshRepackPushBindlessResourcesSlot, "MeshSkinning repack bindless-resource slot push offset drifted");
+
+enum<u8> SkinningShaderPass{
+    Deformation,
+    MeshletBounds,
+    LocalBounds,
+    RepackNormals
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 AreMeshSkinningRuntimePipelinesReady(
     in b8 skinningReady,
     in b8 boundsReady,
@@ -95,80 +169,6 @@ b8 EnsureLoadedComputePipeline(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND")]
-extern const usize s_ShaderSkinnedMeshSkinningModeLinearBlend;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION")]
-extern const usize s_ShaderSkinnedMeshSkinningModeDualQuaternion;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE")]
-extern const usize s_ShaderSkinnedMeshPushConstantByteSize;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_MESHLET_COUNT")]
-extern const usize s_ShaderSkinnedMeshPushMeshletCount;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_SKIN_COUNT")]
-extern const usize s_ShaderSkinnedMeshPushSkinCount;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_JOINT_COUNT")]
-extern const usize s_ShaderSkinnedMeshPushJointCount;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_SKINNING_MODE")]
-extern const usize s_ShaderSkinnedMeshPushSkinningMode;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT")]
-extern const usize s_ShaderSkinnedMeshPushBindlessResourcesSlot;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE")]
-extern const usize s_ShaderSkinnedMeshBoundsPushConstantByteSize;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT")]
-extern const usize s_ShaderSkinnedMeshBoundsPushMeshletCount;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT")]
-extern const usize s_ShaderSkinnedMeshBoundsPushBindlessResourcesSlot;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE")]
-extern const usize s_ShaderSkinnedMeshRepackPushConstantByteSize;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT")]
-extern const usize s_ShaderSkinnedMeshRepackPushMeshletCount;
-
-[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT")]
-extern const usize s_ShaderSkinnedMeshRepackPushBindlessResourcesSlot;
-
-static_assert(SkeletonSkinningMode::LinearBlend == s_ShaderSkinnedMeshSkinningModeLinearBlend && SkeletonSkinningMode::DualQuaternion == s_ShaderSkinnedMeshSkinningModeDualQuaternion, "Skeleton skinning mode values must match the shader ABI");
-static_assert(s_RuntimeRequiredStorageDescriptorCount == cast<usize>(RuntimeStorageDescriptorSlot::SkinInfluences), "Runtime required storage descriptor count must match slot enum");
-static_assert(s_RuntimeStorageDescriptorCount == cast<usize>(RuntimeStorageDescriptorSlot::kCount), "Runtime storage descriptor count must match slot enum");
-static_assert(size_of<MeshSkinningBindlessResourceSlots>() == size_of<u32>() * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
-static_assert(size_of<MeshSkinningGraphDispatchPlan>() == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
-
-static_assert(size_of<MeshSkinningPushConstants>() == s_ShaderSkinnedMeshPushConstantByteSize, "MeshSkinning push constants layout must match the shader ABI");
-static_assert(offset_of<MeshSkinningPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshPushMeshletCount, "MeshSkinning meshlet-count push offset drifted");
-static_assert(offset_of<MeshSkinningPushConstants>(skinCount) == size_of<u32>() * s_ShaderSkinnedMeshPushSkinCount, "MeshSkinning skin-count push offset drifted");
-static_assert(offset_of<MeshSkinningPushConstants>(jointCount) == size_of<u32>() * s_ShaderSkinnedMeshPushJointCount, "MeshSkinning joint-count push offset drifted");
-static_assert(offset_of<MeshSkinningPushConstants>(skinningMode) == size_of<u32>() * s_ShaderSkinnedMeshPushSkinningMode, "MeshSkinning skinning-mode push offset drifted");
-static_assert(offset_of<MeshSkinningPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshPushBindlessResourcesSlot, "MeshSkinning bindless-resource slot push offset drifted");
-
-static_assert(size_of<MeshletBoundsPushConstants>() == s_ShaderSkinnedMeshBoundsPushConstantByteSize, "MeshSkinning bounds push constants layout must match the shader ABI");
-static_assert(offset_of<MeshletBoundsPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshBoundsPushMeshletCount, "MeshSkinning bounds meshlet-count push offset drifted");
-static_assert(offset_of<MeshletBoundsPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshBoundsPushBindlessResourcesSlot, "MeshSkinning bounds bindless-resource slot push offset drifted");
-
-static_assert(size_of<MeshletBoundsPushConstants>() == s_ShaderSkinnedMeshRepackPushConstantByteSize, "MeshSkinning repack push constants layout must match the shader ABI");
-static_assert(offset_of<MeshletBoundsPushConstants>(meshletCount) == size_of<u32>() * s_ShaderSkinnedMeshRepackPushMeshletCount, "MeshSkinning repack meshlet-count push offset drifted");
-static_assert(offset_of<MeshletBoundsPushConstants>(bindlessResourceSlots) == size_of<u32>() * s_ShaderSkinnedMeshRepackPushBindlessResourcesSlot, "MeshSkinning repack bindless-resource slot push offset drifted");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> SkinningShaderPass{
-    Deformation,
-    MeshletBounds,
-    LocalBounds,
-    RepackNormals
-}
 
 AssetRef<ComputeShader> ResolveSkinningPassShader(in SkinningSubsystem subsystem, in SkinningShaderPass pass){
     switch(pass){

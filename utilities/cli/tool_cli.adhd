@@ -8,9 +8,6 @@ extern class ConsoleArguments{
     StringView text(in i32 index)const;
 };
 
-[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::TryConsoleCommand")]
-extern Expected<i32> TryConsoleCommand(in ConsoleArguments arguments, in Func<64u, i32(in ConsoleArguments)> command);
-
 [cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ConsoleWrite")]
 extern void ConsoleWrite(in StringView text);
 

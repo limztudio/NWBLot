@@ -8,18 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HasReadyRuntimeMeshletBoundsState(
-    in b8 runtimeMesh,
-    in u64 runtimeGeometryContentRevision,
-    in u32 meshletCount,
-    in b8 hasMeshletDescBuffer,
-    in b8 hasRuntimeMeshletBoundsBuffer,
-    in b8 descriptorStorageReady,
-    in b8 boundsStorageReady
-){
-    return runtimeMesh && runtimeGeometryContentRevision != 0u && meshletCount != 0u && hasMeshletDescBuffer && hasRuntimeMeshletBoundsBuffer && descriptorStorageReady && boundsStorageReady;
-}
-
 class MeshRayTracingSnapshotPolicy{
     private b8 boundsReady(in MeshResources mesh)const{
         const GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[s_MeshBindingMeshletDesc];
@@ -128,6 +116,22 @@ class MeshRayTracingSnapshotPolicy{
             && mesh.csgLocalBounds.maxBounds == snapshot.csgLocalBounds.maxBounds
         ;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasReadyRuntimeMeshletBoundsState(
+    in b8 runtimeMesh,
+    in u64 runtimeGeometryContentRevision,
+    in u32 meshletCount,
+    in b8 hasMeshletDescBuffer,
+    in b8 hasRuntimeMeshletBoundsBuffer,
+    in b8 descriptorStorageReady,
+    in b8 boundsStorageReady
+){
+    return runtimeMesh && runtimeGeometryContentRevision != 0u && meshletCount != 0u && hasMeshletDescBuffer && hasRuntimeMeshletBoundsBuffer && descriptorStorageReady && boundsStorageReady;
 }
 
 

@@ -86,14 +86,17 @@ namespace __hidden_adhd_switch_statement_emitter{
 void SwitchStatementEmitter::emitIfChainStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     const usize prevLocalDeclCount = m_emitter.m_activeLocalVarDecls.size();
     const Span<const Stmt* const> prevRemaining = m_emitter.m_remainingBlockStatements;
+    ParallelStatementEmitter::BlockTaskScopeTracker taskScopeTracker(m_emitter, statements);
     for(usize i = 0u; i < statements.size(); ++i){
         const Stmt* child = statements[i];
         if(!child)
             continue;
+        taskScopeTracker.beforeStatement(out, i, indent);
         const b8 isTrailingBreak = (child->kind == StmtKind::Break) && (i + 1u == statements.size());
         if(isTrailingBreak)
             continue;
-        m_emitter.m_remainingBlockStatements = Span<const Stmt* const>(statements.data() + (i + 1u), statements.size() - (i + 1u));
+        const Span<const Stmt* const> remaining(statements.data() + (i + 1u), statements.size() - (i + 1u));
+        m_emitter.m_remainingBlockStatements = remaining;
         if(child->kind == StmtKind::Block){
             m_emitter.emitIndent(out, indent);
             out.append("{\r\n");
@@ -133,6 +136,7 @@ void SwitchStatementEmitter::emitIfChainStatements(MString& out, const Span<cons
             m_emitter.emitStmt(out, *child, indent);
             if(child->kind == StmtKind::VarDecl && !child->name.empty())
                 m_emitter.m_activeLocalVarDecls.push_back(child);
+            taskScopeTracker.afterStatement(out, *child, remaining, indent);
         }
     }
     m_emitter.m_remainingBlockStatements = prevRemaining;

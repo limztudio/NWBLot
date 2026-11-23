@@ -3,6 +3,101 @@
 
 
 type Values<T> = Vector<T>;
+const StringView s_MetascriptValueItemsField = "items";
+const usize s_MetascriptValueInitialCount = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GlobalExportEdgeHolder{
+    private Path m_root = "alpha";
+    private Path m_sub("beta");
+    private MemoryOrder m_order;
+    private AtomicFlag m_flag;
+
+    public b8 verifyEdgeCases(){
+        if(this.m_order != MemoryOrder::relaxed){
+            return false;
+        }
+        this.m_order = MemoryOrder::seq_cst;
+        const b8 firstSet = this.m_flag.testAndSet(this.m_order);
+        const b8 secondSet = this.m_flag.test(MemoryOrder::acquire);
+        if(firstSet || !secondSet){
+            return false;
+        }
+
+        Path leaf = "item.bin";
+        Path combined = this.m_root / this.m_sub / leaf;
+        const String stemOwned = PathToString(combined.stem());
+        const Name probeName = Name("probe");
+        const String probeOwned = String("probe");
+        if(probeOwned != String("probe")){
+            return false;
+        }
+        if(probeName != Name("probe")){
+            return false;
+        }
+        String formatted = StringFormat("{0}|{1}|{2}", String("hdr"), stemOwned, probeOwned);
+        if(StringView(formatted) != "hdr|item|probe"){
+            return false;
+        }
+
+        if(!AddOverflows<u64>(u64.max, 1u) || AddOverflows<u64>(u64.max - 1u, 1u)){
+            return false;
+        }
+
+        const Sha256Digest emptyDigest = ComputeSha256(StringView(""));
+        const Expected<Sha256Digest> parsedDigest = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        if(!parsedDigest.has_value() || emptyDigest != parsedDigest.value() || emptyDigest.bytes[0u] != 0xe3u){
+            return false;
+        }
+
+        const Expected<Vector<usize>> boundaries = BuildGraphemeBoundaries("a\xf0\x9f\x91\x8b\xf0\x9f\x8f\xbbz");
+        if(!boundaries.has_value() || boundaries.value().size() != 4u || boundaries.value()[2u] != 9u){
+            return false;
+        }
+        return true;
+    }
+}
+
+class ArenaGenericSlot<T>{
+    public T item = T();
+}
+
+class ArenaEdgeLeaf{
+    public String payload = "";
+    public ArenaGenericSlot<String> slot = ArenaGenericSlot<String>();
+}
+
+class ArenaEdgeBranch{
+    public ArenaEdgeLeaf leaf = ArenaEdgeLeaf();
+    public Vector<String> tags;
+    public HashMap<Name, String> hints;
+}
+
+class ArenaEdgeParameterizedMember{
+    public String label;
+    public ArenaEdgeParameterizedMember(in StringView tag){
+        this.label = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ctor", tag);
+    }
+}
+
+[arena]
+class ArenaEdgeRoot{
+    public ArenaEdgeParameterizedMember constructedMember;
+    public ArenaEdgeBranch primary = ArenaEdgeBranch();
+    public Vector<ArenaEdgeBranch> history;
+    public HashMap<Name, String> registry;
+    public ArenaGenericSlot<u32> counter = ArenaGenericSlot<u32>();
+
+    public ArenaEdgeRoot(){
+        this.constructedMember = ArenaEdgeParameterizedMember("root_init");
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 usize AliasContainerStorage(){
@@ -11,7 +106,6 @@ usize AliasContainerStorage(){
     values[2u] = 11;
     return values.size() + cast<usize>(values[0u]) + cast<usize>(values[2u]);
 }
-
 
 usize FindCompact(in CompactString value){
     return value.find("needle");
@@ -25,16 +119,13 @@ u8 LastCompact(in CompactString value){
     return value.back();
 }
 
-
 f32 LerpWithCounter(mut i32 counter){
     return Lerp(counter++, 11.0f, 0.5f);
 }
 
-
 T LerpMoveOnly<T>(mut T value){
     return Lerp(value, T(), T());
 }
-
 
 i32 Max(in i32 a, in i32 b){
     return a - b;
@@ -43,7 +134,6 @@ i32 Max(in i32 a, in i32 b){
 i32 CallShadowedMax(in i32 a, in i32 b){
     return Max(a, b);
 }
-
 
 VectorSingle Max(in VectorSingle a, in VectorSingle b){
     return a - b;
@@ -56,7 +146,6 @@ f32 CallShadowedVectorMax(){
     return result.x;
 }
 
-
 f32 CallBuiltinVectorMin(){
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
     VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
@@ -64,12 +153,10 @@ f32 CallBuiltinVectorMin(){
     return result.x;
 }
 
-
 i32 CallShadowedLocalMin(){
     auto Min = lambda() -> i32 { return 17; };
     return Min();
 }
-
 
 f32 CallNestedShadowedVector(){
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
@@ -78,7 +165,6 @@ f32 CallNestedShadowedVector(){
     VectorSingle result = Min(Max(a, b), c);
     return result.x;
 }
-
 
 MatrixSingle Mul(in MatrixSingle a, in MatrixSingle b){
     return a + b;
@@ -91,7 +177,6 @@ f32 CallShadowedMatrixMul(){
     return result[0].x;
 }
 
-
 f32 CallShadowedLocalDot(){
     auto Dot = lambda(in VectorSingle a, in VectorSingle b) -> f32 { return a.x - b.x; };
     VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
@@ -99,28 +184,23 @@ f32 CallShadowedLocalDot(){
     return Dot(a, b);
 }
 
-
 i32 CallShadowedEntityConstant(in i32 s_InvalidEntityId){
     return s_InvalidEntityId;
 }
-
 
 EntityID ReadBuiltinEntityConstant(){
     return s_InvalidEntityId;
 }
 
-
 T LerpTemporary<T>(){
     return Lerp(T(), T(), T());
 }
-
 
 usize TrimLocalCompact(){
     CompactString text = CompactString("  payload  ");
     StringView view = TrimView(text);
     return view.size();
 }
-
 
 String StepAndMakeLongString(mut i32 recvCounter){
     ++recvCounter;
@@ -234,19 +314,31 @@ VectorDouble DoubleNegateZeroDouble(){ return -(-VectorDouble(0.0)); }
 VectorDouble TripleNegateZeroDouble(){ return -(-(-VectorDouble(0.0))); }
 
 VectorSingle SubZeroRightSingle(in VectorSingle value){ return value - VectorSingle(0.0f); }
+
 VectorSingle SubZeroLeftSingle(in VectorSingle value){ return VectorSingle(0.0f) - value; }
+
 VectorSingle MulZeroRightSingle(in VectorSingle value){ return value * VectorSingle(0.0f); }
+
 VectorSingle MulZeroLeftSingle(in VectorSingle value){ return VectorSingle(0.0f) * value; }
+
 VectorSingle ZeroDivideSingle(in VectorSingle value){ return VectorSingle(0.0f) / value; }
+
 VectorSingle NestedZeroSubSingle(in VectorSingle a, in VectorSingle b){ return (VectorSingle(0.0f) - a) + (b - VectorSingle(0.0f)); }
+
 VectorSingle NegateZeroSubSingle(in VectorSingle value){ return -(VectorSingle(0.0f) - value); }
 
 VectorDouble SubZeroRightDouble(in VectorDouble value){ return value - VectorDouble(0.0); }
+
 VectorDouble SubZeroLeftDouble(in VectorDouble value){ return VectorDouble(0.0) - value; }
+
 VectorDouble MulZeroRightDouble(in VectorDouble value){ return value * VectorDouble(0.0); }
+
 VectorDouble MulZeroLeftDouble(in VectorDouble value){ return VectorDouble(0.0) * value; }
+
 VectorDouble ZeroDivideDouble(in VectorDouble value){ return VectorDouble(0.0) / value; }
+
 VectorDouble NestedZeroSubDouble(in VectorDouble a, in VectorDouble b){ return (VectorDouble(0.0) - a) + (b - VectorDouble(0.0)); }
+
 VectorDouble NegateZeroSubDouble(in VectorDouble value){ return -(VectorDouble(0.0) - value); }
 
 VectorSingle AddZeroRightSingle(in VectorSingle value){ return value + VectorSingle(0.0f); }
@@ -281,102 +373,13 @@ b8 FiniteLane3Double(in VectorDouble value){
     return IsFinite(value.xyz);
 }
 
-const StringView s_MetascriptValueItemsField = "items";
-const usize s_MetascriptValueInitialCount = 8u;
-
 b8 AnyLaneGreater2Single(in VectorSingle lhs, in VectorSingle rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y;
-}
-
-class GlobalExportEdgeHolder{
-    private Path m_root = "alpha";
-    private Path m_sub("beta");
-    private MemoryOrder m_order;
-    private AtomicFlag m_flag;
-
-    public b8 verifyEdgeCases(){
-        if(this.m_order != MemoryOrder::relaxed){
-            return false;
-        }
-        this.m_order = MemoryOrder::seq_cst;
-        const b8 firstSet = this.m_flag.testAndSet(this.m_order);
-        const b8 secondSet = this.m_flag.test(MemoryOrder::acquire);
-        if(firstSet || !secondSet){
-            return false;
-        }
-
-        Path leaf = "item.bin";
-        Path combined = this.m_root / this.m_sub / leaf;
-        const String stemOwned = PathToString(combined.stem());
-        const Name probeName = Name("probe");
-        const String probeOwned = String("probe");
-        if(probeOwned != String("probe")){
-            return false;
-        }
-        if(probeName != Name("probe")){
-            return false;
-        }
-        String formatted = StringFormat("{0}|{1}|{2}", String("hdr"), stemOwned, probeOwned);
-        if(StringView(formatted) != "hdr|item|probe"){
-            return false;
-        }
-
-        if(!AddOverflows<u64>(u64.max, 1u) || AddOverflows<u64>(u64.max - 1u, 1u)){
-            return false;
-        }
-
-        const Sha256Digest emptyDigest = ComputeSha256(StringView(""));
-        const Expected<Sha256Digest> parsedDigest = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-        if(!parsedDigest.has_value() || emptyDigest != parsedDigest.value() || emptyDigest.bytes[0u] != 0xe3u){
-            return false;
-        }
-
-        const Expected<Vector<usize>> boundaries = BuildGraphemeBoundaries("a\xf0\x9f\x91\x8b\xf0\x9f\x8f\xbbz");
-        if(!boundaries.has_value() || boundaries.value().size() != 4u || boundaries.value()[2u] != 9u){
-            return false;
-        }
-        return true;
-    }
 }
 
 b8 ExerciseGlobalExportEdgeCases(){
     GlobalExportEdgeHolder holder = GlobalExportEdgeHolder();
     return holder.verifyEdgeCases();
-}
-
-class ArenaGenericSlot<T>{
-    public T item = T();
-}
-
-class ArenaEdgeLeaf{
-    public String payload = "";
-    public ArenaGenericSlot<String> slot = ArenaGenericSlot<String>();
-}
-
-class ArenaEdgeBranch{
-    public ArenaEdgeLeaf leaf = ArenaEdgeLeaf();
-    public Vector<String> tags;
-    public HashMap<Name, String> hints;
-}
-
-class ArenaEdgeParameterizedMember{
-    public String label;
-    public ArenaEdgeParameterizedMember(in StringView tag){
-        this.label = StringFormat("{0}_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ctor", tag);
-    }
-}
-
-[arena]
-class ArenaEdgeRoot{
-    public ArenaEdgeParameterizedMember constructedMember;
-    public ArenaEdgeBranch primary = ArenaEdgeBranch();
-    public Vector<ArenaEdgeBranch> history;
-    public HashMap<Name, String> registry;
-    public ArenaGenericSlot<u32> counter = ArenaGenericSlot<u32>();
-
-    public ArenaEdgeRoot(){
-        this.constructedMember = ArenaEdgeParameterizedMember("root_init");
-    }
 }
 
 void RecordTransientHintIntoMap(mut HashMap<Name, String> targetMap, in Name key, in StringView prefix){

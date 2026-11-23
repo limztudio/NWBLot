@@ -38,7 +38,7 @@ usize ResolveColorSlotIndex(in Array<usize, s_GraphColorCount> colorStarts, in u
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut Vector<CandidatePair> bucket){
+void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut Vector<u64> bucket){
     const u32 proxyKey = worldRef.m_broadPhase.moveArray[moveIdx];
     if(proxyKey == s_NullIndex)
         return;
@@ -52,28 +52,32 @@ void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut V
     in Shape shapeA = worldRef.m_shapes[shapeIdA];
     const Aabb3D queryBox = worldRef.m_broadPhase.trees[treeType].fatAabb(proxyId);
 
-    u32 queryMask = worldRef.broadPhaseQueryMask(shapeA.filter);
+    const u32 queryMask = worldRef.broadPhaseQueryMask(shapeA.filter);
     if(queryMask == 0u)
         return;
 
+    const b8 sensorA = shapeA.isSensor();
     in PhysicsWorld worldAlias = worldRef;
     for(usize t = 0u; t < s_TreeCount; ++t){
         if(treeType == s_TreeStatic && t == s_TreeStatic)
             continue;
+        if(worldRef.m_broadPhase.trees[t].root() == s_NullIndex)
+            continue;
         const b8 nonDynamicPair = (treeType != s_TreeDynamic && t != s_TreeDynamic);
         u8 reqNodeFlags = 0u;
-        if(nonDynamicPair && !shapeA.isSensor())
+        if(nonDynamicPair && !sensorA)
             reqNodeFlags = s_TreeNodeHasSensor;
         const b8 sameTree = (t == treeType);
         worldRef.m_broadPhase.trees[t].queryAabbFiltered(
             queryBox,
             queryMask,
             reqNodeFlags,
-            lambda[in worldAlias, in sameTree, in t, in shapeIdA, in shapeA, in nonDynamicPair, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+            lambda[in worldAlias, in sameTree, in t, in shapeIdA, in shapeA, in sensorA, in nonDynamicPair, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
                 if(shapeIdB == shapeIdA || shapeIdB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdB].alive())
                     return true;
                 in Shape shapeB = worldAlias.m_shapes[shapeIdB];
-                if(nonDynamicPair && !shapeA.isSensor() && !shapeB.isSensor())
+                const b8 sensorB = shapeB.isSensor();
+                if(nonDynamicPair && !sensorA && !sensorB)
                     return true;
                 if(shapeA.bodyId == shapeB.bodyId)
                     return true;
@@ -89,16 +93,9 @@ void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut V
                 const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
                 if(worldAlias.m_pairContactMap.find(pairKey) != worldAlias.m_pairContactMap.end())
                     return true;
-                CandidatePair pair;
-                if(shapeIdA < shapeIdB){
-                    pair.shapeIdA = shapeIdA;
-                    pair.shapeIdB = shapeIdB;
-                }
-                else{
-                    pair.shapeIdA = shapeIdB;
-                    pair.shapeIdB = shapeIdA;
-                }
-                bucket.push_back(pair);
+                if(!sensorA && !sensorB && worldAlias.areBodiesConnectedNonColliding(shapeA.bodyId, shapeB.bodyId))
+                    return true;
+                bucket.push_back(pairKey);
                 return true;
             }
         );
@@ -122,7 +119,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
             world.m_broadPhase.workerBuckets[i].clear();
 
         in PhysicsWorld worldRef = world;
-        mut Vector<Vector<CandidatePair>> bucketsMut = world.m_broadPhase.workerBuckets;
+        mut Vector<Vector<u64>> bucketsMut = world.m_broadPhase.workerBuckets;
         const auto res = cpuScheduler.parallelFor(
             0u,
             usedBucketCount,
@@ -130,7 +127,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
             lambda[in worldRef, in moveCount, in grain, mut bucketsMut](in usize chunkIdx) -> void{
                 const usize startIdx = chunkIdx * grain;
                 const usize endIdx = Min(startIdx + grain, moveCount);
-                mut Vector<CandidatePair> bucket = bucketsMut[chunkIdx];
+                mut Vector<u64> bucket = bucketsMut[chunkIdx];
                 for(usize moveIdx = startIdx; moveIdx < endIdx; ++moveIdx)
                     QueryBroadPhaseMovedProxy(worldRef, moveIdx, bucket);
             },
@@ -144,7 +141,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
         if(world.m_broadPhase.workerBuckets.size() < 1u)
             world.m_broadPhase.workerBuckets.resize(1u);
         world.m_broadPhase.workerBuckets[0u].clear();
-        mut Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[0u];
+        mut Vector<u64> bucket = world.m_broadPhase.workerBuckets[0u];
         in PhysicsWorld worldRef = world;
         for(usize moveIdx = 0u; moveIdx < moveCount; ++moveIdx)
             QueryBroadPhaseMovedProxy(worldRef, moveIdx, bucket);
@@ -155,39 +152,34 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
     for(usize i = 0u; i < usedBucketCount; ++i)
         totalCandidates += world.m_broadPhase.workerBuckets[i].size();
 
-    mut Vector<u64> candidateKeys = world.m_cpuScratch.candidateKeys;
-    candidateKeys.clear();
-    candidateKeys.reserve(totalCandidates);
-    for(usize i = 0u; i < usedBucketCount; ++i){
-        in Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[i];
-        for(usize j = 0u; j < bucket.size(); ++j){
-            const CandidatePair cp = bucket[j];
-            candidateKeys.push_back((cast<u64>(cp.shapeIdA) << 32u) | cast<u64>(cp.shapeIdB));
+    if(totalCandidates > 0u){
+        mut Vector<u64> candidateKeys = world.m_cpuScratch.candidateKeys;
+        candidateKeys.clear();
+        candidateKeys.reserve(totalCandidates);
+        for(usize i = 0u; i < usedBucketCount; ++i){
+            in Vector<u64> bucket = world.m_broadPhase.workerBuckets[i];
+            for(usize j = 0u; j < bucket.size(); ++j)
+                candidateKeys.push_back(bucket[j]);
         }
-    }
 
-    if(!candidateKeys.empty()){
-        SortSequence<u64>(candidateKeys, lambda[](in u64 lhs, in u64 rhs) -> b8{
-            return lhs < rhs;
-        });
-        world.m_broadPhase.discoveredPairs.reserve(candidateKeys.size());
-        u64 prevKey = u64.max;
-        for(usize i = 0u; i < candidateKeys.size(); ++i){
-            const u64 key = candidateKeys[i];
-            if(key == prevKey)
-                continue;
-            prevKey = key;
-            CandidatePair pair;
-            pair.shapeIdA = cast<u32>(key >> 32u);
-            pair.shapeIdB = cast<u32>(key & 0xffffffffu);
-            world.m_broadPhase.discoveredPairs.push_back(pair);
+        if(!candidateKeys.empty()){
+            if(candidateKeys.size() > 1u){
+                SortSequence<u64>(candidateKeys, lambda[](in u64 lhs, in u64 rhs) -> b8{
+                    return lhs < rhs;
+                });
+            }
+            u64 prevKey = u64.max;
+            for(usize i = 0u; i < candidateKeys.size(); ++i){
+                const u64 key = candidateKeys[i];
+                if(key == prevKey)
+                    continue;
+                prevKey = key;
+                ++outPairCount;
+                const u32 orderedA = cast<u32>(key >> 32u);
+                const u32 orderedB = cast<u32>(key & 0xffffffffu);
+                world.createContactFromValidatedPair(orderedA, orderedB, key);
+            }
         }
-    }
-
-    outPairCount = cast<u32>(world.m_broadPhase.discoveredPairs.size());
-    for(usize i = 0u; i < world.m_broadPhase.discoveredPairs.size(); ++i){
-        const CandidatePair cp = world.m_broadPhase.discoveredPairs[i];
-        world.createContactInternal(cp.shapeIdA, cp.shapeIdB);
     }
 
     world.m_broadPhase.clearMoves();
@@ -204,27 +196,77 @@ VectorSingle ComputePredictedBodyDisplacement(in Body b, in Vector<SolverSet> se
     return ApplyLinearLocks(disp, b.flags);
 }
 
+void ApplyBodyEnlargeFlags(
+    mut Body body,
+    mut BodySim sim,
+    mut BodyState state,
+    in b8 isFast,
+    in u32 fastBit,
+    in u32 speedCapBit,
+    in u32 toiBit
+){
+    u32 bFlags = body.flags & ~(toiBit | speedCapBit | fastBit);
+    u32 sFlags = sim.flags & ~(toiBit | speedCapBit | fastBit);
+    u32 stFlags = state.flags() & ~(toiBit | speedCapBit | fastBit);
+    if(isFast){
+        bFlags |= fastBit;
+        sFlags |= fastBit;
+        stFlags |= fastBit;
+    }
+    body.flags = bFlags;
+    sim.flags = sFlags;
+    state.setFlags(stFlags);
+}
+
+void UpdateEnlargedBodyShapes(
+    mut PhysicsWorld world,
+    mut Body body,
+    in b8 enlarge,
+    in VectorSingle disp
+){
+    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
+    if(enlarge)
+        body.flags |= hasEnlargedBit;
+    else
+        body.flags &= ~hasEnlargedBit;
+
+    u32 shapeIdx = body.headShapeId;
+    while(shapeIdx != s_NullIndex){
+        mut Shape shape = world.m_shapes[shapeIdx];
+        shape.setFlag(ShapeFlags::EnlargeAabb, enlarge);
+        if(enlarge && shape.proxyKey != s_NullIndex){
+            const Aabb3D endAabb(VectorSingle(shape.aabb.lowerBound) + disp, VectorSingle(shape.aabb.upperBound) + disp);
+            const Aabb3D sweptAabb = AabbUnion(shape.aabb, endAabb);
+            if(world.m_broadPhase.needsMove(shape.proxyKey, sweptAabb, true))
+                world.m_broadPhase.moveProxyUnchecked(shape.proxyKey, sweptAabb, disp);
+        }
+        shapeIdx = shape.nextShapeId;
+    }
+}
+
 void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
     mut SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    const usize awakeCount = awakeSet.sims.size();
+    if(awakeCount == 0u)
+        return;
+
     const u32 fastBit = cast<u32>(BodyFlags::IsFast);
     const u32 speedCapBit = cast<u32>(BodyFlags::IsSpeedCapped);
     const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
     const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
+    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
     const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+    const b8 canEnlarge = dt > 0.0f && world.m_def.enableContinuous;
 
-    for(usize i = 0u; i < awakeSet.sims.size(); ++i){
+    for(usize i = 0u; i < awakeCount; ++i){
         mut BodySim sim = awakeSet.sims[i];
         mut BodyState state = awakeSet.states[i];
         mut Body body = world.m_bodies[sim.bodyId];
 
-        body.flags &= ~(toiBit | speedCapBit);
-        sim.flags &= ~(toiBit | speedCapBit);
-        state.setFlags(state.flags() & ~(toiBit | speedCapBit));
-
         b8 isFast = false;
         b8 enlarge = false;
         VectorSingle disp(0.0f);
-        if(body.type != BodyType::Static && dt > 0.0f && world.m_def.enableContinuous){
+        if(canEnlarge && body.type != BodyType::Static){
             disp = VectorSingle(state.linearVelocity) * dt;
             if(body.type == BodyType::Dynamic)
                 disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
@@ -243,30 +285,412 @@ void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
             }
         }
 
-        if(isFast){
-            body.flags |= fastBit;
-            sim.flags |= fastBit;
-            state.setFlags(state.flags() | fastBit);
-        }
-        else{
-            body.flags &= ~fastBit;
-            sim.flags &= ~fastBit;
-            state.setFlags(state.flags() & ~fastBit);
-        }
+        const b8 hadEnlarged = (body.flags & hasEnlargedBit) != 0u;
+        ApplyBodyEnlargeFlags(body, sim, state, isFast, fastBit, speedCapBit, toiBit);
 
-        u32 shapeIdx = body.headShapeId;
-        while(shapeIdx != s_NullIndex){
-            mut Shape shape = world.m_shapes[shapeIdx];
-            shape.setFlag(ShapeFlags::EnlargeAabb, enlarge);
-            if(enlarge && shape.proxyKey != s_NullIndex){
-                const Aabb3D endAabb(VectorSingle(shape.aabb.lowerBound) + disp, VectorSingle(shape.aabb.upperBound) + disp);
-                const Aabb3D sweptAabb = AabbUnion(shape.aabb, endAabb);
-                if(world.m_broadPhase.needsMove(shape.proxyKey, sweptAabb, true))
-                    world.m_broadPhase.moveProxy(shape.proxyKey, sweptAabb, disp);
+        if(enlarge || hadEnlarged)
+            UpdateEnlargedBodyShapes(world, body, enlarge, disp);
+    }
+}
+
+void EnlargeFastAndBulletBroadphaseBoundsWithScheduler(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
+    mut SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    const usize awakeCount = awakeSet.sims.size();
+    if(awakeCount == 0u)
+        return;
+
+    if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
+        const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+        const b8 canEnlarge = dt > 0.0f && world.m_def.enableContinuous;
+
+        mut Vector<f32x4> disps = world.m_cpuScratch.parEnlargeDisps;
+        mut Vector<u8> actions = world.m_cpuScratch.parEnlargeFlags;
+        disps.resize(awakeCount);
+        actions.resize(awakeCount);
+
+        mut Vector<Body> bodiesMut = world.m_bodies;
+        mut Vector<BodySim> simsMut = awakeSet.sims;
+        mut Vector<BodyState> statesMut = awakeSet.states;
+        const usize grain = ComputePhysicsGrain(cpuScheduler, awakeCount, cast<usize>(64u));
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            awakeCount,
+            grain,
+            lambda[mut bodiesMut, mut simsMut, mut statesMut, mut disps, mut actions, in gravity, in dt, in canEnlarge](in usize i) -> void{
+                const u32 fastBit = cast<u32>(BodyFlags::IsFast);
+                const u32 speedCapBit = cast<u32>(BodyFlags::IsSpeedCapped);
+                const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
+                const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
+                const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
+                mut BodySim sim = simsMut[i];
+                mut BodyState state = statesMut[i];
+                mut Body body = bodiesMut[sim.bodyId];
+
+                b8 isFast = false;
+                b8 enlarge = false;
+                VectorSingle disp(0.0f);
+                if(canEnlarge && body.type != BodyType::Static){
+                    disp = VectorSingle(state.linearVelocity) * dt;
+                    if(body.type == BodyType::Dynamic)
+                        disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
+                    disp = ApplyLinearLocks(disp, body.flags);
+                    const f32 dispLenSq = Vector3LengthSq(VectorSingle(disp, 0.0f)).x;
+                    const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
+                    isFast = dispLenSq > fastThresh * fastThresh;
+                    const b8 isBullet = (body.type == BodyType::Dynamic) && ((body.flags & bulletBit) != 0u);
+                    if(isBullet || isFast){
+                        f32 maxDist = s_MaxSweptSpeculativeDistance;
+                        if(isBullet)
+                            maxDist = s_MaxBulletSweepDistance;
+                        if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
+                            disp = disp * (maxDist / Sqrt(dispLenSq));
+                        enlarge = true;
+                    }
+                }
+
+                const b8 hadEnlarged = (body.flags & hasEnlargedBit) != 0u;
+                ApplyBodyEnlargeFlags(body, sim, state, isFast, fastBit, speedCapBit, toiBit);
+
+                u8 act = 0u;
+                if(enlarge){
+                    act = 2u;
+                    disps[i] = f32x4(disp, 0.0f);
+                }
+                else if(hadEnlarged){
+                    act = 1u;
+                }
+                actions[i] = act;
+            },
+            CpuTaskOptions()
+        );
+        if(res.has_value()){
+            for(usize i = 0u; i < awakeCount; ++i){
+                const u8 act = actions[i];
+                if(act == 0u)
+                    continue;
+                mut Body body = world.m_bodies[awakeSet.sims[i].bodyId];
+                UpdateEnlargedBodyShapes(world, body, act == 2u, VectorSingle(disps[i], 0.0f));
             }
-            shapeIdx = shape.nextShapeId;
+            return;
         }
     }
+
+    EnlargeFastAndBulletBroadphaseBounds(world, dt);
+}
+
+b8 TryAnalyticalSweptSpheres(
+    in VectorSingle wA0,
+    in VectorSingle vA,
+    in f32 rA,
+    in VectorSingle wB0,
+    in VectorSingle vB,
+    in f32 rB,
+    in f32 tMax,
+    in f32 targetPadding,
+    in f32 tolerance,
+    mut f32 outFrac,
+    mut VectorSingle outNormal,
+    mut VectorSingle outPoint,
+    mut b8 outInitialOverlap
+){
+    outInitialOverlap = false;
+    const f32 totalR = rA + rB;
+    const f32 targetDist = Max(totalR + targetPadding, 0.0f);
+    const f32 stopThresh = targetDist + tolerance;
+    const VectorSingle m = VectorSingle(wA0 - wB0, 0.0f);
+    const f32 distSq0 = Vector3LengthSq(m).x;
+    const VectorSingle fallbackN = SafeNormalizeVec3(-m, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    if(distSq0 <= stopThresh * stopThresh){
+        const f32 dist0 = Sqrt(distSq0);
+        if(dist0 < totalR - tolerance || (totalR <= tolerance && dist0 <= tolerance))
+            outInitialOverlap = true;
+        outFrac = 0.0f;
+        outNormal = fallbackN;
+        const VectorSingle pA = wA0 + outNormal * rA;
+        const VectorSingle pB = wB0 - outNormal * rB;
+        outPoint = (pA + pB) * 0.5f;
+        return true;
+    }
+
+    const VectorSingle d = VectorSingle(vA - vB, 0.0f);
+    const f32 a = Vector3LengthSq(d).x;
+    if(a <= 1.0e-12f)
+        return false;
+    const f32 b = Vector3Dot(m, d).x;
+    if(b >= 0.0f)
+        return false;
+    const f32 c = distSq0 - targetDist * targetDist;
+    const f32 discr = b * b - a * c;
+    f32 t = 0.0f;
+    if(discr >= 0.0f){
+        t = (-b - Sqrt(discr)) / a;
+    }
+    else{
+        const f32 cStop = distSq0 - stopThresh * stopThresh;
+        const f32 discrStop = b * b - a * cStop;
+        if(discrStop < 0.0f)
+            return false;
+        t = (-b - Sqrt(discrStop)) / a;
+    }
+    if(t < 0.0f || t > tMax)
+        return false;
+
+    const VectorSingle cAt = wA0 + VectorSingle(vA, 0.0f) * t;
+    const VectorSingle cBt = wB0 + VectorSingle(vB, 0.0f) * t;
+    outNormal = SafeNormalizeVec3(cBt - cAt, fallbackN);
+    const VectorSingle pA = cAt + outNormal * rA;
+    const VectorSingle pB = cBt - outNormal * rB;
+    outFrac = t;
+    outPoint = (pA + pB) * 0.5f;
+    return true;
+}
+
+b8 TryAnalyticalSweptSphereBox(
+    in VectorSingle wA0,
+    in VectorSingle vA,
+    in f32 rA,
+    in HullShape hullB,
+    in Transform3D xfB0,
+    in VectorSingle vB,
+    in f32 tMax,
+    in f32 targetPadding,
+    in f32 tolerance,
+    mut f32 outFrac,
+    mut VectorSingle outNormal,
+    mut VectorSingle outPoint,
+    mut b8 outInitialOverlap
+){
+    outInitialOverlap = false;
+    const VectorSingle localCB = hullB.centroid();
+    VectorSingle boxCenter0 = VectorSingle(xfB0.position);
+    if(localCB.x != 0.0f || localCB.y != 0.0f || localCB.z != 0.0f)
+        boxCenter0 = TransformPoint(xfB0, localCB);
+    VectorSingle qBox = VectorSingle(xfB0.rotation);
+    if(hullB.boxRotation.x != 0.0f || hullB.boxRotation.y != 0.0f || hullB.boxRotation.z != 0.0f || hullB.boxRotation.w != 1.0f)
+        qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hullB.boxRotation)));
+
+    const VectorSingle p0 = Vector3InverseRotate(VectorSingle(wA0 - boxCenter0, 0.0f), qBox);
+    const VectorSingle dLocal = Vector3InverseRotate(VectorSingle(vA - vB, 0.0f), qBox);
+    const VectorSingle boxExt = hullB.halfExtents();
+    const f32 hx = boxExt.x;
+    const f32 hy = boxExt.y;
+    const f32 hz = boxExt.z;
+    const f32 rB = hullB.centroidRadius.w;
+    const f32 totalR = rA + rB;
+    const f32 targetDist = Max(totalR + targetPadding, 0.0f);
+    const f32 stopThresh = targetDist + tolerance;
+
+    const f32 bx = hx + stopThresh;
+    const f32 by = hy + stopThresh;
+    const f32 bz = hz + stopThresh;
+    f32 tMin = 0.0f;
+    f32 tMaxSlab = tMax;
+
+    if(Abs(dLocal.x) <= 1.0e-12f){
+        if(Abs(p0.x) > bx)
+            return false;
+    }
+    else{
+        const f32 invDx = 1.0f / dLocal.x;
+        f32 t0 = (-bx - p0.x) * invDx;
+        f32 t1 = (bx - p0.x) * invDx;
+        if(t0 > t1){
+            const f32 tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+        tMin = Max(tMin, t0);
+        tMaxSlab = Min(tMaxSlab, t1);
+        if(tMin > tMaxSlab)
+            return false;
+    }
+
+    if(Abs(dLocal.y) <= 1.0e-12f){
+        if(Abs(p0.y) > by)
+            return false;
+    }
+    else{
+        const f32 invDy = 1.0f / dLocal.y;
+        f32 t0 = (-by - p0.y) * invDy;
+        f32 t1 = (by - p0.y) * invDy;
+        if(t0 > t1){
+            const f32 tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+        tMin = Max(tMin, t0);
+        tMaxSlab = Min(tMaxSlab, t1);
+        if(tMin > tMaxSlab)
+            return false;
+    }
+
+    if(Abs(dLocal.z) <= 1.0e-12f){
+        if(Abs(p0.z) > bz)
+            return false;
+    }
+    else{
+        const f32 invDz = 1.0f / dLocal.z;
+        f32 t0 = (-bz - p0.z) * invDz;
+        f32 t1 = (bz - p0.z) * invDz;
+        if(t0 > t1){
+            const f32 tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+        tMin = Max(tMin, t0);
+        tMaxSlab = Min(tMaxSlab, t1);
+        if(tMin > tMaxSlab)
+            return false;
+    }
+
+    f32 t = tMin;
+    for(u32 iter = 0u; iter < 16u; ++iter){
+        const VectorSingle pos = p0 + dLocal * t;
+        const VectorSingle clamped(
+            Clamp(pos.x, -hx, hx),
+            Clamp(pos.y, -hy, hy),
+            Clamp(pos.z, -hz, hz),
+            0.0f
+        );
+        const VectorSingle toSphere = VectorSingle(pos - clamped, 0.0f);
+        const f32 distSq = Vector3LengthSq(toSphere).x;
+        if(distSq <= stopThresh * stopThresh){
+            const f32 dist = Sqrt(distSq);
+            if(t == 0.0f && (dist < totalR - tolerance || (totalR <= tolerance && dist <= tolerance)))
+                outInitialOverlap = true;
+            VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+            if(distSq > 1.0e-12f){
+                localN = toSphere * (-1.0f / dist);
+            }
+            else{
+                const f32 penX = hx - Abs(pos.x);
+                const f32 penY = hy - Abs(pos.y);
+                const f32 penZ = hz - Abs(pos.z);
+                if(penX <= penY && penX <= penZ){
+                    if(pos.x >= 0.0f)
+                        localN = VectorSingle(-1.0f, 0.0f, 0.0f, 0.0f);
+                    else
+                        localN = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+                }
+                else if(penY <= penZ){
+                    if(pos.y >= 0.0f)
+                        localN = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+                    else
+                        localN = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+                }
+                else{
+                    if(pos.z >= 0.0f)
+                        localN = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+                    else
+                        localN = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+                }
+            }
+            outNormal = SafeNormalizeVec3(Vector3Rotate(localN, qBox), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle wA = wA0 + VectorSingle(vA, 0.0f) * t + outNormal * rA;
+            const VectorSingle wBox = boxCenter0 + VectorSingle(vB, 0.0f) * t + Vector3Rotate(clamped, qBox) - outNormal * rB;
+            outPoint = (wA + wBox) * 0.5f;
+            outFrac = t;
+            return true;
+        }
+
+        const f32 dist = Sqrt(distSq);
+        const f32 invDist = 1.0f / dist;
+        const VectorSingle dirToB = toSphere * (-invDist);
+        const f32 approach = Vector3Dot(dirToB, dLocal).x;
+        if(approach <= 1.0e-6f)
+            return false;
+
+        f32 step = (dist - targetDist) / approach;
+        if(step < 1.0e-6f)
+            step = 1.0e-6f;
+        t += step;
+        if(t > tMax){
+            if(tMax <= tMaxSlab + 1.0e-6f){
+                const VectorSingle endPos = p0 + dLocal * tMax;
+                const VectorSingle endClamped(
+                    Clamp(endPos.x, -hx, hx),
+                    Clamp(endPos.y, -hy, hy),
+                    Clamp(endPos.z, -hz, hz),
+                    0.0f
+                );
+                const VectorSingle endToS = VectorSingle(endPos - endClamped, 0.0f);
+                const f32 endDistSq = Vector3LengthSq(endToS).x;
+                if(endDistSq <= stopThresh * stopThresh){
+                    outNormal = SafeNormalizeVec3(Vector3Rotate(SafeNormalizeVec3(-endToS, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), qBox), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle wA = wA0 + VectorSingle(vA, 0.0f) * tMax + outNormal * rA;
+                    const VectorSingle wBox = boxCenter0 + VectorSingle(vB, 0.0f) * tMax + Vector3Rotate(endClamped, qBox) - outNormal * rB;
+                    outPoint = (wA + wBox) * 0.5f;
+                    outFrac = tMax;
+                    return true;
+                }
+            }
+            return false;
+        }
+        if(t > tMaxSlab)
+            return false;
+    }
+    return false;
+}
+
+b8 TryAnalyticalShapeCastFraction(
+    in Shape sA,
+    in Transform3D xfA,
+    in VectorSingle dispA,
+    in Shape sB,
+    in Transform3D xfB,
+    in VectorSingle dispB,
+    in Vector<HullShape> hullShapes,
+    in f32 maxFraction,
+    mut f32 outFrac
+){
+    f32 unusedFrac = 0.0f;
+    VectorSingle unusedN(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle unusedPt(0.0f);
+    b8 unusedOverlap = false;
+    const f32 tol = 0.25f * s_LinearSlop;
+
+    if(sA.type == ShapeType::Sphere && sB.type == ShapeType::Sphere){
+        const SphereShape spA = sA.sphereShape();
+        const SphereShape spB = sB.sphereShape();
+        const VectorSingle wA0 = TransformPoint(xfA, VectorSingle(spA.centerRadius, 0.0f));
+        const VectorSingle wB0 = TransformPoint(xfB, VectorSingle(spB.centerRadius, 0.0f));
+        if(TryAnalyticalSweptSpheres(wA0, dispA, spA.centerRadius.w, wB0, dispB, spB.centerRadius.w, maxFraction, 0.0f, tol, unusedFrac, unusedN, unusedPt, unusedOverlap)){
+            outFrac = unusedFrac;
+            return true;
+        }
+        outFrac = maxFraction;
+        return false;
+    }
+
+    if(sA.type == ShapeType::Sphere && sB.type == ShapeType::Hull && sB.geometryIndex < hullShapes.size()){
+        in HullShape hB = hullShapes[sB.geometryIndex];
+        if(hB.isBox()){
+            const SphereShape spA = sA.sphereShape();
+            const VectorSingle wA0 = TransformPoint(xfA, VectorSingle(spA.centerRadius, 0.0f));
+            if(TryAnalyticalSweptSphereBox(wA0, dispA, spA.centerRadius.w, hB, xfB, dispB, maxFraction, 0.0f, tol, unusedFrac, unusedN, unusedPt, unusedOverlap)){
+                outFrac = unusedFrac;
+                return true;
+            }
+            outFrac = maxFraction;
+            return false;
+        }
+    }
+
+    if(sB.type == ShapeType::Sphere && sA.type == ShapeType::Hull && sA.geometryIndex < hullShapes.size()){
+        in HullShape hA = hullShapes[sA.geometryIndex];
+        if(hA.isBox()){
+            const SphereShape spB = sB.sphereShape();
+            const VectorSingle wB0 = TransformPoint(xfB, VectorSingle(spB.centerRadius, 0.0f));
+            if(TryAnalyticalSweptSphereBox(wB0, dispB, spB.centerRadius.w, hA, xfA, dispA, maxFraction, 0.0f, tol, unusedFrac, unusedN, unusedPt, unusedOverlap)){
+                outFrac = unusedFrac;
+                return true;
+            }
+            outFrac = maxFraction;
+            return false;
+        }
+    }
+
+    return false;
 }
 
 Manifold SweepContactPairAfterMiss(
@@ -306,48 +730,60 @@ Manifold SweepContactPairAfterMiss(
             return initialManifold;
     }
 
-    Array<f32x3u, 2u> inlinePtsA;
-    Array<f32x3u, 2u> inlinePtsB;
-    LocalRayHit castHit;
-    if(sB.type == ShapeType::Mesh){
-        if(sB.geometryIndex >= meshShapes.size())
+    f32 hitFrac = 0.0f;
+    b8 hitFound = false;
+    const b8 analyticalCandidate =
+        (sA.type == ShapeType::Sphere && (sB.type == ShapeType::Sphere || (sB.type == ShapeType::Hull && sB.geometryIndex < hullShapes.size() && hullShapes[sB.geometryIndex].isBox())))
+        || (sB.type == ShapeType::Sphere && sA.type == ShapeType::Hull && sA.geometryIndex < hullShapes.size() && hullShapes[sA.geometryIndex].isBox());
+    if(analyticalCandidate){
+        hitFound = TryAnalyticalShapeCastFraction(sA, xfA, sweptDispA, sB, xfB, sweptDispB, hullShapes, 1.0f, hitFrac);
+        if(!hitFound)
             return initialManifold;
-        castHit = ShapeCastMeshView(
-            MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
-            xfA,
-            VectorSingle(sweptDispA - sweptDispB, 0.0f),
-            meshShapes[sB.geometryIndex],
-            xfB,
-            1.0f
-        );
-    }
-    else if(sA.type == ShapeType::Mesh){
-        if(sA.geometryIndex >= meshShapes.size())
-            return initialManifold;
-        castHit = ShapeCastMeshView(
-            MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
-            xfB,
-            VectorSingle(sweptDispB - sweptDispA, 0.0f),
-            meshShapes[sA.geometryIndex],
-            xfA,
-            1.0f
-        );
     }
     else{
-        castHit = ShapeCastProxyViews(
-            MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
-            xfA,
-            sweptDispA,
-            MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
-            xfB,
-            sweptDispB,
-            1.0f
-        );
+        Array<f32x3u, 2u> inlinePtsA;
+        Array<f32x3u, 2u> inlinePtsB;
+        LocalRayHit castHit;
+        if(sB.type == ShapeType::Mesh){
+            if(sB.geometryIndex >= meshShapes.size())
+                return initialManifold;
+            castHit = ShapeCastMeshView(
+                MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
+                xfA,
+                VectorSingle(sweptDispA - sweptDispB, 0.0f),
+                meshShapes[sB.geometryIndex],
+                xfB,
+                1.0f
+            );
+        }
+        else if(sA.type == ShapeType::Mesh){
+            if(sA.geometryIndex >= meshShapes.size())
+                return initialManifold;
+            castHit = ShapeCastMeshView(
+                MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
+                xfB,
+                VectorSingle(sweptDispB - sweptDispA, 0.0f),
+                meshShapes[sA.geometryIndex],
+                xfA,
+                1.0f
+            );
+        }
+        else{
+            castHit = ShapeCastProxyViews(
+                MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
+                xfA,
+                sweptDispA,
+                MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
+                xfB,
+                sweptDispB,
+                1.0f
+            );
+        }
+        if(!castHit.hit())
+            return initialManifold;
+        hitFrac = castHit.fraction();
     }
-    if(!castHit.hit())
-        return initialManifold;
 
-    const f32 hitFrac = castHit.fraction();
     const Transform3D xfHitA(VectorSingle(xfA.position) + VectorSingle(sweptDispA, 0.0f) * hitFrac, VectorSingle(xfA.rotation));
     const Transform3D xfHitB(VectorSingle(xfB.position) + VectorSingle(sweptDispB, 0.0f) * hitFrac, VectorSingle(xfB.rotation));
     Manifold hitM = CollideShapePair(sA, xfHitA, sB, xfHitB, s_SpeculativeDistance, hullShapes, meshShapes);
@@ -646,18 +1082,14 @@ void CollectActiveAwakeJointIds(
     }
 }
 
-void CollideSingleContactNoPreSolve(
+u8 CollideSingleContactNoPreSolveTx(
+    mut Contact c,
     in PhysicsWorld worldRef,
-    mut Vector<Contact> contactsMut,
     in VectorSingle gravity,
     in f32 dt,
     in b8 enableContinuous,
-    in b8 enableWarmStarting,
-    in usize idx,
-    in u32 cId,
-    mut Vector<u8> contactTransitionFlags
+    in b8 enableWarmStarting
 ){
-    mut Contact c = contactsMut[cId];
     in Shape sA = worldRef.m_shapes[c.shapeIdA];
     in Shape sB = worldRef.m_shapes[c.shapeIdB];
     in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
@@ -668,18 +1100,14 @@ void CollideSingleContactNoPreSolve(
     const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
 
     Manifold newM = CollideContactPairWithLazySweep(sA, xfA, bA, sB, xfB, bB, worldRef.m_solverSets, gravity, dt, isSensor, enableContinuous, isBulletPair, worldRef.m_hullShapes, worldRef.m_meshShapes);
-    MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
-    c.manifold = newM;
-    if(!isSensor){
-        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
-        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
-        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
-        c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
+    const u32 ptCount = newM.pointCount();
+    if(ptCount > 0u || c.manifold.pointCount() > 0u){
+        MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
+        c.manifold = newM;
     }
 
     const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
     b8 isTouching = false;
-    const u32 ptCount = newM.pointCount();
     if(ptCount > 0u){
         f32 minSep = newM.points[0u].separation();
         for(u32 p = 1u; p < ptCount; ++p){
@@ -715,7 +1143,100 @@ void CollideSingleContactNoPreSolve(
         if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
             txFlags |= 2u;
     }
-    contactTransitionFlags[idx] = txFlags;
+    return txFlags;
+}
+
+void ProcessSingleContactTransition(mut PhysicsWorld world, mut b8 outAnyBodyWoke, in u32 cId, in u8 txFlags){
+    in Contact c = world.m_contacts[cId];
+    const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
+    const b8 isTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+    if(!isSensor && (txFlags & 1u) != 0u){
+        if(c.manifold.pointCount() > 0u){
+            const u32 bodyIdA = c.edges[0u].bodyId;
+            const u32 bodyIdB = c.edges[1u].bodyId;
+            const b8 awakeA = IsBodyAwakeForWaking(world, bodyIdA);
+            const b8 awakeB = IsBodyAwakeForWaking(world, bodyIdB);
+            if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u){
+                WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
+                outAnyBodyWoke = true;
+            }
+            else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u){
+                WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
+                outAnyBodyWoke = true;
+            }
+            const b8 hasAwakeDynamic =
+                (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
+                || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
+            ;
+            if(hasAwakeDynamic && c.islandId == s_NullIndex && isTouching){
+                LinkContactToIslandWithGraph(
+                    world.m_graph,
+                    world.m_bodies,
+                    world.m_islands,
+                    world.m_freeIslandIds,
+                    world.m_solverSets,
+                    world.m_freeSolverSetIds,
+                    world.m_contacts,
+                    world.m_joints,
+                    cId
+                );
+            }
+            if(hasAwakeDynamic && c.colorIndex == s_NullIndex)
+                AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
+        }
+        else{
+            if(c.colorIndex != s_NullIndex)
+                RemoveContactFromGraph(world.m_graph, world.m_bodies, world.m_contacts, cId);
+            if(c.islandId != s_NullIndex)
+                UnlinkContactFromIsland(world.m_islands, world.m_contacts, cId);
+        }
+    }
+    if((txFlags & 2u) != 0u){
+        if(isSensor){
+            EmitSensorTouchEvents(world, world.m_contacts[cId], isTouching);
+        }
+        else if(isTouching){
+            ContactBeginTouchEvent ev;
+            ev.shapeIdA = world.makeShapeId(c.shapeIdA);
+            ev.shapeIdB = world.makeShapeId(c.shapeIdB);
+            world.m_contactBeginEvents.push_back(ev);
+        }
+        else{
+            ContactEndTouchEvent ev;
+            ev.shapeIdA = world.makeShapeId(c.shapeIdA);
+            ev.shapeIdB = world.makeShapeId(c.shapeIdB);
+            world.m_contactEndEvents.push_back(ev);
+        }
+    }
+}
+
+void RelinkAwokenActiveContact(mut PhysicsWorld world, in u32 cId){
+    mut Contact c = world.m_contacts[cId];
+    if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+        return;
+    const u32 bIdA = c.edges[0u].bodyId;
+    const u32 bIdB = c.edges[1u].bodyId;
+    const b8 hasAwakeDynamic =
+        (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
+        || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
+    ;
+    if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
+        if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
+            LinkContactToIslandWithGraph(
+                world.m_graph,
+                world.m_bodies,
+                world.m_islands,
+                world.m_freeIslandIds,
+                world.m_solverSets,
+                world.m_freeSolverSetIds,
+                world.m_contacts,
+                world.m_joints,
+                cId
+            );
+        }
+        if(c.colorIndex == s_NullIndex)
+            AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
+    }
 }
 
 void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
@@ -727,10 +1248,88 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
     const usize contactCount = world.m_contacts.size();
     if(awakeSims.empty() || contactCount == 0u)
         return;
-    activeContactIds.reserve(awakeSims.size() * 4u);
 
+    const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+    const b8 enableContinuous = world.m_def.enableContinuous;
+    const b8 hasCustomFilter = world.m_customFilterCallback.has_value();
+    const b8 hasPreSolve = world.m_preSolveCallback.has_value();
+
+    if(
+        cpuScheduler.isParallelEnabled()
+        && !hasCustomFilter
+        && !hasPreSolve
+        && contactCount >= 128u
+        && contactCount <= awakeSims.size() * 16u
+    ){
+        mut Vector<u8> collectFlags = world.m_cpuScratch.parContactCollectFlags;
+        collectFlags.resize(contactCount);
+        in PhysicsWorld worldRef = world;
+        mut Vector<Contact> contactsMut = world.m_contacts;
+        const b8 enableWarmStarting = world.m_enableWarmStarting;
+        const usize grain = ComputePhysicsGrain(cpuScheduler, contactCount, cast<usize>(32u));
+        const auto fusedRes = cpuScheduler.parallelFor(
+            0u,
+            contactCount,
+            grain,
+            lambda[in worldRef, mut contactsMut, mut collectFlags, in gravity, in dt, in enableContinuous, in enableWarmStarting](in usize ci) -> void{
+                u8 status = 0u;
+                in Contact cRead = worldRef.m_contacts[ci];
+                if((cRead.flags & cast<u32>(ContactFlags::Alive)) != 0u){
+                    const u32 bodyIdA = cRead.edges[0u].bodyId;
+                    const u32 bodyIdB = cRead.edges[1u].bodyId;
+                    in Body bA = worldRef.m_bodies[bodyIdA];
+                    in Body bB = worldRef.m_bodies[bodyIdB];
+                    if((bA.alive && bA.setIndex == s_AwakeSetIndex) || (bB.alive && bB.setIndex == s_AwakeSetIndex)){
+                        status = 8u;
+                        if(bA.alive && bB.alive){
+                            in Shape sA = worldRef.m_shapes[cRead.shapeIdA];
+                            in Shape sB = worldRef.m_shapes[cRead.shapeIdB];
+                            if(
+                                sA.proxyKey != s_NullIndex
+                                && sB.proxyKey != s_NullIndex
+                                && AabbOverlaps(worldRef.m_broadPhase.fatAabb(sA.proxyKey), worldRef.m_broadPhase.fatAabb(sB.proxyKey))
+                                && ShouldCollideFilters(sA.filter, sB.filter)
+                            ){
+                                const u8 txFlags = CollideSingleContactNoPreSolveTx(contactsMut[ci], worldRef, gravity, dt, enableContinuous, enableWarmStarting);
+                                status = cast<u8>(4u | txFlags);
+                            }
+                        }
+                    }
+                }
+                collectFlags[ci] = status;
+            },
+            CpuTaskOptions()
+        );
+        if(fusedRes.has_value()){
+            mut Vector<u32> txContactIds = world.m_cpuScratch.parContactTxIds;
+            txContactIds.clear();
+            for(usize ci = 0u; ci < contactCount; ++ci){
+                const u8 status = collectFlags[ci];
+                if((status & 8u) != 0u)
+                    pruneContactIds.push_back(cast<u32>(ci));
+                else if((status & 3u) != 0u)
+                    txContactIds.push_back(cast<u32>(ci));
+            }
+            for(usize i = 0u; i < pruneContactIds.size(); ++i)
+                world.destroyContactInternal(pruneContactIds[i]);
+            b8 anyBodyWoke = false;
+            for(usize ti = 0u; ti < txContactIds.size(); ++ti){
+                const u32 cId = txContactIds[ti];
+                ProcessSingleContactTransition(world, anyBodyWoke, cId, collectFlags[cId] & 3u);
+            }
+            if(anyBodyWoke){
+                for(usize ci = 0u; ci < contactCount; ++ci){
+                    if((collectFlags[ci] & 4u) != 0u)
+                        RelinkAwokenActiveContact(world, cast<u32>(ci));
+                }
+            }
+            return;
+        }
+    }
+
+    activeContactIds.reserve(awakeSims.size() * 4u);
     b8 collectDone = false;
-    if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && contactCount >= 128u && contactCount <= awakeSims.size() * 16u){
+    if(cpuScheduler.isParallelEnabled() && !hasCustomFilter && contactCount >= 128u && contactCount <= awakeSims.size() * 16u){
         mut Vector<u8> collectFlags = world.m_cpuScratch.parContactCollectFlags;
         collectFlags.resize(contactCount);
         in PhysicsWorld worldRef = world;
@@ -816,7 +1415,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                     pruneContactIds.push_back(cId);
                     continue;
                 }
-                if(world.m_customFilterCallback.has_value()){
+                if(hasCustomFilter){
                     u32 ordA = c.shapeIdA;
                     u32 ordB = c.shapeIdB;
                     if(ordB < ordA){
@@ -840,10 +1439,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
     if(count == 0u)
         return;
 
-    const VectorSingle gravity = VectorSingle(world.m_def.gravity);
-    const b8 enableContinuous = world.m_def.enableContinuous;
-
-    if(!world.m_preSolveCallback.has_value()){
+    if(!hasPreSolve){
         mut Vector<u8> contactTransitionFlags = world.m_cpuScratch.contactTransitionFlags;
         contactTransitionFlags.clear();
         contactTransitionFlags.resize(count, 0u);
@@ -860,7 +1456,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                 count,
                 grain,
                 lambda[in worldRef, mut contactsMut, in activeContactSpan, in gravity, in dt, in enableContinuous, in enableWarmStarting, mut contactTransitionFlags](in usize idx) -> void{
-                    CollideSingleContactNoPreSolve(worldRef, contactsMut, gravity, dt, enableContinuous, enableWarmStarting, idx, activeContactSpan[idx], contactTransitionFlags);
+                    contactTransitionFlags[idx] = CollideSingleContactNoPreSolveTx(contactsMut[activeContactSpan[idx]], worldRef, gravity, dt, enableContinuous, enableWarmStarting);
                 },
                 CpuTaskOptions()
             );
@@ -869,7 +1465,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
         }
         if(!narrowDone){
             for(usize idx = 0u; idx < count; ++idx)
-                CollideSingleContactNoPreSolve(world, world.m_contacts, gravity, dt, enableContinuous, enableWarmStarting, idx, activeContactIds[idx], contactTransitionFlags);
+                contactTransitionFlags[idx] = CollideSingleContactNoPreSolveTx(world.m_contacts[activeContactIds[idx]], world, gravity, dt, enableContinuous, enableWarmStarting);
         }
 
         b8 anyBodyWoke = false;
@@ -877,99 +1473,11 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             const u8 txFlags = contactTransitionFlags[idx];
             if(txFlags == 0u)
                 continue;
-            const u32 cId = activeContactIds[idx];
-            in Contact c = world.m_contacts[cId];
-            const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-            const b8 isTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
-            if(!isSensor && (txFlags & 1u) != 0u){
-                if(c.manifold.pointCount() > 0u){
-                    const u32 bodyIdA = c.edges[0u].bodyId;
-                    const u32 bodyIdB = c.edges[1u].bodyId;
-                    const b8 awakeA = IsBodyAwakeForWaking(world, bodyIdA);
-                    const b8 awakeB = IsBodyAwakeForWaking(world, bodyIdB);
-                    if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u){
-                        WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
-                        anyBodyWoke = true;
-                    }
-                    else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u){
-                        WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
-                        anyBodyWoke = true;
-                    }
-                    const b8 hasAwakeDynamic =
-                        (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
-                        || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
-                    ;
-                    if(hasAwakeDynamic && c.islandId == s_NullIndex && isTouching){
-                        LinkContactToIslandWithGraph(
-                            world.m_graph,
-                            world.m_bodies,
-                            world.m_islands,
-                            world.m_freeIslandIds,
-                            world.m_solverSets,
-                            world.m_freeSolverSetIds,
-                            world.m_contacts,
-                            world.m_joints,
-                            cId
-                        );
-                    }
-                    if(hasAwakeDynamic && c.colorIndex == s_NullIndex)
-                        AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
-                }
-                else{
-                    if(c.colorIndex != s_NullIndex)
-                        RemoveContactFromGraph(world.m_graph, world.m_bodies, world.m_contacts, cId);
-                    if(c.islandId != s_NullIndex)
-                        UnlinkContactFromIsland(world.m_islands, world.m_contacts, cId);
-                }
-            }
-            if((txFlags & 2u) != 0u){
-                if(isSensor){
-                    EmitSensorTouchEvents(world, world.m_contacts[cId], isTouching);
-                }
-                else if(isTouching){
-                    ContactBeginTouchEvent ev;
-                    ev.shapeIdA = world.makeShapeId(c.shapeIdA);
-                    ev.shapeIdB = world.makeShapeId(c.shapeIdB);
-                    world.m_contactBeginEvents.push_back(ev);
-                }
-                else{
-                    ContactEndTouchEvent ev;
-                    ev.shapeIdA = world.makeShapeId(c.shapeIdA);
-                    ev.shapeIdB = world.makeShapeId(c.shapeIdB);
-                    world.m_contactEndEvents.push_back(ev);
-                }
-            }
+            ProcessSingleContactTransition(world, anyBodyWoke, activeContactIds[idx], txFlags);
         }
         if(anyBodyWoke){
-            for(usize idx = 0u; idx < count; ++idx){
-                const u32 cId = activeContactIds[idx];
-                mut Contact c = world.m_contacts[cId];
-                if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
-                    continue;
-                const u32 bIdA = c.edges[0u].bodyId;
-                const u32 bIdB = c.edges[1u].bodyId;
-                const b8 hasAwakeDynamic =
-                    (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
-                    || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
-                ;
-                if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
-                    if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
-                        LinkContactToIslandWithGraph(
-                            world.m_graph,
-                            world.m_bodies,
-                            world.m_islands,
-                            world.m_freeIslandIds,
-                            world.m_solverSets,
-                            world.m_freeSolverSetIds,
-                            world.m_contacts,
-                            world.m_joints,
-                            cId
-                        );
-                    }
-                    if(c.colorIndex == s_NullIndex)
-                        AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
-                }
-            }
+            for(usize idx = 0u; idx < count; ++idx)
+                RelinkAwokenActiveContact(world, activeContactIds[idx]);
         }
         return;
     }
@@ -1076,7 +1584,9 @@ void IntegrateBodyVelocitiesRange(
     VectorSingle w = VectorSingle(state.angularVelocity);
 
     v = v + sim.force() * (h * invMass) + gravity * (h * sim.gravityScale);
-    v = v * (1.0f / (1.0f + h * sim.linearDamping()));
+    const f32 linDamp = sim.linearDamping();
+    if(linDamp > 0.0f)
+        v = v * (1.0f / (1.0f + h * linDamp));
 
     const VectorSingle torque = sim.torque();
     if(torque.x != 0.0f || torque.y != 0.0f || torque.z != 0.0f)
@@ -1094,7 +1604,9 @@ void IntegrateBodyVelocitiesRange(
         if(IsFiniteVec3(deltaW))
             w = Vector3Rotate(wLocal + deltaW, q);
     }
-    w = w * (1.0f / (1.0f + h * sim.angularDamping()));
+    const f32 angDamp = sim.angularDamping();
+    if(angDamp > 0.0f)
+        w = w * (1.0f / (1.0f + h * angDamp));
 
     if((stateFlags & 0x07u) != 0u)
         v = ApplyLinearLocks(v, stateFlags);
@@ -1148,7 +1660,10 @@ void FinalizeAwakeBodyAt(mut PhysicsWorld world, in f32 dt, in usize idx){
 
     const VectorSingle newCenter = prevCenter + deltaP;
     const VectorSingle newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, VectorSingle(sim.transform.rotation)));
-    const VectorSingle newPos = newCenter - Vector3Rotate(VectorSingle(sim.localCenterMinExtent, 0.0f), newRot);
+    VectorSingle newPos = newCenter;
+    const VectorSingle localCenter = VectorSingle(sim.localCenterMinExtent, 0.0f);
+    if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
+        newPos = newCenter - Vector3Rotate(localCenter, newRot);
 
     sim.centerInvMass = f32x4(newCenter, sim.centerInvMass.w);
     sim.transform = Transform3D(newPos, newRot);
@@ -1250,12 +1765,28 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     in Sweep3D sweepARef = sweepA;
     in PhysicsWorld worldAlias = worldRef;
 
+    u32 singleShapeIdxA = s_NullIndex;
+    Array<f32x3u, 2u> singleInlinePtsA;
+    ShapeProxyView singleProxyA;
+    if(bodyInit.shapeCount == 1u){
+        const u32 onlyShapeIdx = bodyInit.headShapeId;
+        if(onlyShapeIdx != s_NullIndex){
+            in Shape sOnly = worldRef.m_shapes[onlyShapeIdx];
+            if(sOnly.alive() && !sOnly.isSensor() && sOnly.type != ShapeType::Mesh){
+                singleShapeIdxA = onlyShapeIdx;
+                singleProxyA = MakeShapeProxyViewFromShape(sOnly, worldRef.m_hullShapes, worldRef.m_meshShapes, singleInlinePtsA);
+            }
+        }
+    }
+
     for(usize t = 0u; t < s_TreeCount; ++t){
+        if(worldRef.m_broadPhase.trees[t].root() == s_NullIndex)
+            continue;
         worldRef.m_broadPhase.trees[t].queryAabbFiltered(
             queryBox,
             bodyQueryMask,
             s_TreeNodeHasNonSensor,
-            lambda[in worldAlias, in bodyIdA, in bodyInit, in sweepARef, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction](in u32 proxyId, in u32 shapeIdxB) -> b8{
+            lambda[in worldAlias, in bodyIdA, in bodyInit, in sweepARef, in singleShapeIdxA, in singleProxyA, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction](in u32 proxyId, in u32 shapeIdxB) -> b8{
                 if(shapeIdxB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdxB].alive())
                     return true;
                 in Shape sB = worldAlias.m_shapes[shapeIdxB];
@@ -1284,6 +1815,19 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                 }
                 sweepB.localCenter = f32x4(simB.localCenter(), 0.0f);
 
+                const b8 sweepBNonRotating =
+                    sweepB.q0.x == sweepB.q1.x
+                    && sweepB.q0.y == sweepB.q1.y
+                    && sweepB.q0.z == sweepB.q1.z
+                    && sweepB.q0.w == sweepB.q1.w
+                ;
+                const b8 sweepANonRotating =
+                    sweepARef.q0.x == sweepARef.q1.x
+                    && sweepARef.q0.y == sweepARef.q1.y
+                    && sweepARef.q0.z == sweepARef.q1.z
+                    && sweepARef.q0.w == sweepARef.q1.w
+                ;
+
                 u32 shapeIdxA = bodyInit.headShapeId;
                 while(shapeIdxA != s_NullIndex){
                     in Shape sA = worldAlias.m_shapes[shapeIdxA];
@@ -1299,34 +1843,93 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                             customAllow = worldAlias.m_customFilterCallback.value()(worldAlias.makeShapeId(ordA), worldAlias.makeShapeId(ordB));
                         }
                         if(customAllow){
-                            Array<f32x3u, 2u> inlinePtsA;
-                            const ShapeProxyView proxyA = MakeShapeProxyViewFromShape(sA, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsA);
                             b8 candidateHit = false;
                             f32 candidateFrac = 1.0f;
                             VectorSingle candidateN(0.0f, 1.0f, 0.0f, 0.0f);
                             VectorSingle candidatePt(0.0f);
-                            if(sB.type == ShapeType::Mesh){
-                                if(sB.geometryIndex < worldAlias.m_meshShapes.size()){
-                                    const TimeOfImpactOutput toi = ComputeMeshTimeOfImpactViews(proxyA, sweepARef, worldAlias.m_meshShapes[sB.geometryIndex], sweepB, bestT);
-                                    const f32 hitFrac = toi.fraction();
-                                    if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
-                                        candidateHit = true;
-                                        candidateFrac = hitFrac;
-                                        candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                                        candidatePt = toi.point();
+
+                            b8 usedAnalytical = false;
+                            if(sA.type == ShapeType::Sphere){
+                                const SphereShape spA = sA.sphereShape();
+                                const VectorSingle localOffA = VectorSingle(spA.centerRadius, 0.0f) - VectorSingle(sweepARef.localCenter, 0.0f);
+                                const b8 linearA = sweepANonRotating || (localOffA.x == 0.0f && localOffA.y == 0.0f && localOffA.z == 0.0f);
+                                if(linearA){
+                                    const VectorSingle wA0 = VectorSingle(sweepARef.c0) + Vector3Rotate(localOffA, VectorSingle(sweepARef.q0));
+                                    const VectorSingle vA = VectorSingle(sweepARef.c1) - VectorSingle(sweepARef.c0);
+                                    const f32 toiPad = 0.25f * s_LinearSlop;
+                                    const f32 toiTol = 0.5f * s_LinearSlop;
+                                    if(sB.type == ShapeType::Sphere){
+                                        const SphereShape spB = sB.sphereShape();
+                                        const VectorSingle localOffB = VectorSingle(spB.centerRadius, 0.0f) - VectorSingle(sweepB.localCenter, 0.0f);
+                                        if(sweepBNonRotating || (localOffB.x == 0.0f && localOffB.y == 0.0f && localOffB.z == 0.0f)){
+                                            usedAnalytical = true;
+                                            const VectorSingle wB0 = VectorSingle(sweepB.c0) + Vector3Rotate(localOffB, VectorSingle(sweepB.q0));
+                                            const VectorSingle vB = VectorSingle(sweepB.c1) - VectorSingle(sweepB.c0);
+                                            f32 aFrac = 1.0f;
+                                            VectorSingle aN(0.0f, 1.0f, 0.0f, 0.0f);
+                                            VectorSingle aPt(0.0f);
+                                            b8 aOverlap = false;
+                                            if(TryAnalyticalSweptSpheres(wA0, vA, spA.centerRadius.w, wB0, vB, spB.centerRadius.w, bestT, toiPad, toiTol, aFrac, aN, aPt, aOverlap)){
+                                                if(!aOverlap && aFrac > 1.0e-5f && aFrac < bestT){
+                                                    candidateHit = true;
+                                                    candidateFrac = aFrac;
+                                                    candidateN = aN;
+                                                    candidatePt = aPt;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else if(sweepBNonRotating && sB.type == ShapeType::Hull && sB.geometryIndex < worldAlias.m_hullShapes.size()){
+                                        in HullShape hullB = worldAlias.m_hullShapes[sB.geometryIndex];
+                                        if(hullB.isBox()){
+                                            usedAnalytical = true;
+                                            const Transform3D xfB0(VectorSingle(sweepB.c0) - Vector3Rotate(VectorSingle(sweepB.localCenter, 0.0f), VectorSingle(sweepB.q0)), VectorSingle(sweepB.q0));
+                                            const VectorSingle vB = VectorSingle(sweepB.c1) - VectorSingle(sweepB.c0);
+                                            f32 aFrac = 1.0f;
+                                            VectorSingle aN(0.0f, 1.0f, 0.0f, 0.0f);
+                                            VectorSingle aPt(0.0f);
+                                            b8 aOverlap = false;
+                                            if(TryAnalyticalSweptSphereBox(wA0, vA, spA.centerRadius.w, hullB, xfB0, vB, bestT, toiPad, toiTol, aFrac, aN, aPt, aOverlap)){
+                                                if(!aOverlap && aFrac > 1.0e-5f && aFrac < bestT){
+                                                    candidateHit = true;
+                                                    candidateFrac = aFrac;
+                                                    candidateN = aN;
+                                                    candidatePt = aPt;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            else{
-                                Array<f32x3u, 2u> inlinePtsB;
-                                const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsB);
-                                const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(proxyA, sweepARef, proxyB, sweepB, bestT);
-                                const f32 toiFrac = toi.fraction();
-                                if(toi.hit() && !toi.initialOverlap() && toiFrac > 1.0e-5f && toiFrac < bestT){
-                                    candidateHit = true;
-                                    candidateFrac = toiFrac;
-                                    candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                                    candidatePt = toi.point();
+
+                            if(!usedAnalytical){
+                                Array<f32x3u, 2u> inlinePtsA;
+                                ShapeProxyView proxyA = singleProxyA;
+                                if(shapeIdxA != singleShapeIdxA)
+                                    proxyA = MakeShapeProxyViewFromShape(sA, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsA);
+                                if(sB.type == ShapeType::Mesh){
+                                    if(sB.geometryIndex < worldAlias.m_meshShapes.size()){
+                                        const TimeOfImpactOutput toi = ComputeMeshTimeOfImpactViews(proxyA, sweepARef, worldAlias.m_meshShapes[sB.geometryIndex], sweepB, bestT);
+                                        const f32 hitFrac = toi.fraction();
+                                        if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                            candidateHit = true;
+                                            candidateFrac = hitFrac;
+                                            candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                            candidatePt = toi.point();
+                                        }
+                                    }
+                                }
+                                else{
+                                    Array<f32x3u, 2u> inlinePtsB;
+                                    const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsB);
+                                    const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(proxyA, sweepARef, proxyB, sweepB, bestT);
+                                    const f32 toiFrac = toi.fraction();
+                                    if(toi.hit() && !toi.initialOverlap() && toiFrac > 1.0e-5f && toiFrac < bestT){
+                                        candidateHit = true;
+                                        candidateFrac = toiFrac;
+                                        candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                        candidatePt = toi.point();
+                                    }
                                 }
                             }
                             f32 candidateRest = -1.0f;
@@ -1591,7 +2194,8 @@ void ApplyBulletContinuousToiResult(mut PhysicsWorld world, in BulletToiQueryRes
 }
 
 void ResolveSortedBulletToiResults(mut PhysicsWorld world, in Span<BulletToiQueryResult> results){
-    Vector<usize> hitIndices;
+    mut Vector<usize> hitIndices = world.m_cpuScratch.bulletHitIndices;
+    hitIndices.clear();
     hitIndices.reserve(results.size());
     for(usize i = 0u; i < results.size(); ++i){
         if(results[i].found)
@@ -1632,8 +2236,10 @@ b8 HasMovedFastOrBulletBody(in PhysicsWorld world){
     in Vector<BodySim> awakeSims = world.m_solverSets[s_AwakeSetIndex].sims;
     for(usize idx = 0u; idx < awakeSims.size(); ++idx){
         in BodySim sim = awakeSims[idx];
+        if((sim.flags & fastOrBulletMask) == 0u)
+            continue;
         in Body body = world.m_bodies[sim.bodyId];
-        if(!body.alive || body.type == BodyType::Static || (body.flags & fastOrBulletMask) == 0u)
+        if(!body.alive || body.type == BodyType::Static)
             continue;
         const VectorSingle disp = sim.center() - sim.center0();
         if(Vector3LengthSq(VectorSingle(disp, 0.0f)).x > s_LinearSlop * s_LinearSlop)
@@ -1833,42 +2439,43 @@ void SolveBulletContinuousCpuWithScheduler(mut PhysicsWorld world, in f32 dt, mu
     if(!world.m_def.enableContinuous || dt <= 0.0f)
         return;
 
-    const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
-    const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    mut Vector<u32> bulletBodyIndices = world.m_cpuScratch.parBulletBodyIndices;
-    bulletBodyIndices.clear();
-    for(usize idx = 0u; idx < awakeCount; ++idx){
-        const u32 bodyIdA = world.m_solverSets[s_AwakeSetIndex].sims[idx].bodyId;
-        in Body bodyInit = world.m_bodies[bodyIdA];
-        if(bodyInit.alive && bodyInit.type == BodyType::Dynamic && (bodyInit.flags & bulletBit) != 0u)
-            bulletBodyIndices.push_back(cast<u32>(idx));
-    }
+    if(world.m_bulletBodyCount > 0u){
+        const u32 dynBulletMask = cast<u32>(BodyFlags::Dynamic) | cast<u32>(BodyFlags::IsBullet);
+        in Vector<BodySim> awakeSims = world.m_solverSets[s_AwakeSetIndex].sims;
+        const usize awakeCount = awakeSims.size();
+        mut Vector<u32> bulletBodyIndices = world.m_cpuScratch.parBulletBodyIndices;
+        bulletBodyIndices.clear();
+        for(usize idx = 0u; idx < awakeCount; ++idx){
+            if((awakeSims[idx].flags & dynBulletMask) == dynBulletMask)
+                bulletBodyIndices.push_back(cast<u32>(idx));
+        }
 
-    const usize bulletCount = bulletBodyIndices.size();
-    if(bulletCount > 0u){
-        mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
-        results.resize(bulletCount);
-        b8 parOk = false;
-        if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && !world.m_preSolveCallback.has_value() && bulletCount >= 8u){
-            in PhysicsWorld worldRef = world;
-            const Span<u32> bulletIdxSpan = Span<u32>(bulletBodyIndices);
-            const usize grain = ComputePhysicsGrain(cpuScheduler, bulletCount, cast<usize>(2u));
-            const auto res = cpuScheduler.parallelFor(
-                0u,
-                bulletCount,
-                grain,
-                lambda[in worldRef, in bulletIdxSpan, mut results](in usize bi) -> void{
-                    QueryBulletContinuousCandidate(worldRef, cast<usize>(bulletIdxSpan[bi]), results[bi]);
-                },
-                CpuTaskOptions()
-            );
-            parOk = res.has_value();
+        const usize bulletCount = bulletBodyIndices.size();
+        if(bulletCount > 0u){
+            mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
+            results.resize(bulletCount);
+            b8 parOk = false;
+            if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && !world.m_preSolveCallback.has_value() && bulletCount >= 8u){
+                in PhysicsWorld worldRef = world;
+                const Span<u32> bulletIdxSpan = Span<u32>(bulletBodyIndices);
+                const usize grain = ComputePhysicsGrain(cpuScheduler, bulletCount, cast<usize>(2u));
+                const auto res = cpuScheduler.parallelFor(
+                    0u,
+                    bulletCount,
+                    grain,
+                    lambda[in worldRef, in bulletIdxSpan, mut results](in usize bi) -> void{
+                        QueryBulletContinuousCandidate(worldRef, cast<usize>(bulletIdxSpan[bi]), results[bi]);
+                    },
+                    CpuTaskOptions()
+                );
+                parOk = res.has_value();
+            }
+            if(!parOk){
+                for(usize bi = 0u; bi < bulletCount; ++bi)
+                    QueryBulletContinuousCandidate(world, cast<usize>(bulletBodyIndices[bi]), results[bi]);
+            }
+            ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
         }
-        if(!parOk){
-            for(usize bi = 0u; bi < bulletCount; ++bi)
-                QueryBulletContinuousCandidate(world, cast<usize>(bulletBodyIndices[bi]), results[bi]);
-        }
-        ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
     }
     EmitContinuousSensorPassThroughEvents(world);
 }
@@ -1877,22 +2484,23 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
     if(!world.m_def.enableContinuous || dt <= 0.0f)
         return;
 
-    const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
-    const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
-    results.clear();
-    BulletToiQueryResult res;
-    for(usize idx = 0u; idx < awakeCount; ++idx){
-        const u32 bodyIdA = world.m_solverSets[s_AwakeSetIndex].sims[idx].bodyId;
-        in Body bodyInit = world.m_bodies[bodyIdA];
-        if(!bodyInit.alive || bodyInit.type != BodyType::Dynamic || (bodyInit.flags & bulletBit) == 0u)
-            continue;
-        QueryBulletContinuousCandidate(world, idx, res);
-        if(res.found)
-            results.push_back(res);
+    if(world.m_bulletBodyCount > 0u){
+        const u32 dynBulletMask = cast<u32>(BodyFlags::Dynamic) | cast<u32>(BodyFlags::IsBullet);
+        in Vector<BodySim> awakeSims = world.m_solverSets[s_AwakeSetIndex].sims;
+        const usize awakeCount = awakeSims.size();
+        mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
+        results.clear();
+        BulletToiQueryResult res;
+        for(usize idx = 0u; idx < awakeCount; ++idx){
+            if((awakeSims[idx].flags & dynBulletMask) != dynBulletMask)
+                continue;
+            QueryBulletContinuousCandidate(world, idx, res);
+            if(res.found)
+                results.push_back(res);
+        }
+        if(!results.empty())
+            ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
     }
-    if(!results.empty())
-        ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
     EmitContinuousSensorPassThroughEvents(world);
 }
 
@@ -1900,13 +2508,17 @@ u8 EvaluateAwakeBodyFinalize(
     in PhysicsWorld worldRef,
     in f32 dt,
     in usize idx,
+    in b8 writeMoveEventsDirectly,
+    in usize moveEventBase,
     mut Vector<Shape> shapesMut,
+    mut Vector<Body> bodiesMut,
+    mut Vector<BodyMoveEvent> moveEventsMut,
     mut u8 outKeepEnlarged
 ){
     outKeepEnlarged = 0u;
     in BodySim sim = worldRef.m_solverSets[s_AwakeSetIndex].sims[idx];
     in BodyState state = worldRef.m_solverSets[s_AwakeSetIndex].states[idx];
-    in Body body = worldRef.m_bodies[sim.bodyId];
+    mut Body body = bodiesMut[sim.bodyId];
     const VectorSingle disp = sim.center() - sim.center0();
     const b8 moved = Vector3LengthSq(VectorSingle(disp, 0.0f)).x > 0.0f
         || Vector4LengthSq(VectorSingle(sim.transform.rotation) - VectorSingle(sim.rotation0)).x > 0.0f;
@@ -1936,6 +2548,8 @@ u8 EvaluateAwakeBodyFinalize(
     if(keepEnlarged)
         outKeepEnlarged = 1u;
 
+    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
+    b8 anyEnlargedLeft = false;
     b8 needsProxyUpdate = false;
     u32 shapeIdx = body.headShapeId;
     while(shapeIdx != s_NullIndex){
@@ -1943,15 +2557,34 @@ u8 EvaluateAwakeBodyFinalize(
         if(moved || shape.enlargeAabb()){
             shape.aabb = ComputeShapeWorldAabb(shape, sim.transform, worldRef.m_hullShapes, worldRef.m_meshShapes);
             shape.setFlag(ShapeFlags::EnlargeAabb, keepEnlarged);
+            if(keepEnlarged)
+                anyEnlargedLeft = true;
             if(shape.proxyKey != s_NullIndex && worldRef.m_broadPhase.needsMove(shape.proxyKey, shape.aabb, keepEnlarged))
                 needsProxyUpdate = true;
         }
+        else if(shape.enlargeAabb()){
+            anyEnlargedLeft = true;
+        }
         shapeIdx = shape.nextShapeId;
     }
+    if(anyEnlargedLeft)
+        body.flags |= hasEnlargedBit;
+    else
+        body.flags &= ~hasEnlargedBit;
 
     u8 flags = 0u;
-    if(body.type == BodyType::Dynamic || (body.type == BodyType::Kinematic && moved))
+    if(writeMoveEventsDirectly){
+        const usize evSlot = moveEventBase + idx;
+        mut BodyMoveEvent ev = moveEventsMut[evSlot];
+        ev.positionFlags = PackVec3U32(VectorSingle(sim.transform.position), 0u);
+        ev.rotation = sim.transform.rotation;
+        ev.bodyId = worldRef.makeBodyId(sim.bodyId);
+        ev.userData = body.userData;
+        body.bodyMoveIndex = cast<u32>(evSlot);
+    }
+    else if(body.type == BodyType::Dynamic || (body.type == BodyType::Kinematic && moved)){
         flags |= 1u;
+    }
     if(needsProxyUpdate)
         flags |= 2u;
     return flags;
@@ -1960,11 +2593,13 @@ u8 EvaluateAwakeBodyFinalize(
 void CommitMovedBodiesBroadphaseAndEvents(
     mut PhysicsWorld world,
     in Span<u8> finalizeFlags,
-    in Span<u8> keepEnlargedFlags
+    in Span<u8> keepEnlargedFlags,
+    in b8 moveEventsWritten
 ){
     in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
     const usize awakeCount = awakeSet.sims.size();
-    world.m_bodyMoveEvents.reserve(awakeCount);
+    if(!moveEventsWritten)
+        world.m_bodyMoveEvents.reserve(awakeCount);
     for(usize idx = 0u; idx < awakeCount; ++idx){
         const u8 flags = finalizeFlags[idx];
         if(flags == 0u)
@@ -1974,12 +2609,22 @@ void CommitMovedBodiesBroadphaseAndEvents(
         if((flags & 2u) != 0u){
             const VectorSingle disp = sim.center() - sim.center0();
             const b8 keepEnlarged = keepEnlargedFlags[idx] != 0u;
-            u32 shapeIdx = body.headShapeId;
-            while(shapeIdx != s_NullIndex){
-                in Shape shape = world.m_shapes[shapeIdx];
-                if(shape.proxyKey != s_NullIndex && world.m_broadPhase.needsMove(shape.proxyKey, shape.aabb, keepEnlarged))
-                    world.m_broadPhase.moveProxy(shape.proxyKey, shape.aabb, disp);
-                shapeIdx = shape.nextShapeId;
+            if(body.shapeCount == 1u){
+                const u32 shapeIdx = body.headShapeId;
+                if(shapeIdx != s_NullIndex){
+                    in Shape shape = world.m_shapes[shapeIdx];
+                    if(shape.proxyKey != s_NullIndex)
+                        world.m_broadPhase.moveProxyUnchecked(shape.proxyKey, shape.aabb, disp);
+                }
+            }
+            else{
+                u32 shapeIdx = body.headShapeId;
+                while(shapeIdx != s_NullIndex){
+                    in Shape shape = world.m_shapes[shapeIdx];
+                    if(shape.proxyKey != s_NullIndex && world.m_broadPhase.needsMove(shape.proxyKey, shape.aabb, keepEnlarged))
+                        world.m_broadPhase.moveProxyUnchecked(shape.proxyKey, shape.aabb, disp);
+                    shapeIdx = shape.nextShapeId;
+                }
             }
         }
         if((flags & 1u) != 0u){
@@ -2004,38 +2649,46 @@ void FinalizeMovedBodiesBroadphaseAndEventsWithScheduler(mut PhysicsWorld world,
     finalizeFlags.resize(awakeCount);
     keepEnlargedFlags.resize(awakeCount);
 
+    const b8 directEvents = world.m_cpuScratch.parAllAwakeDynamic;
+    const usize moveEventBase = world.m_bodyMoveEvents.size();
+    if(directEvents)
+        world.m_bodyMoveEvents.resize(moveEventBase + awakeCount);
+
     if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
         in PhysicsWorld worldRef = world;
         mut Vector<Shape> shapesMut = world.m_shapes;
+        mut Vector<Body> bodiesMut = world.m_bodies;
+        mut Vector<BodyMoveEvent> moveEventsMut = world.m_bodyMoveEvents;
         const usize grain = ComputePhysicsGrain(cpuScheduler, awakeCount, cast<usize>(32u));
         const auto res = cpuScheduler.parallelFor(
             0u,
             awakeCount,
             grain,
-            lambda[in worldRef, in dt, mut shapesMut, mut finalizeFlags, mut keepEnlargedFlags](in usize idx) -> void{
+            lambda[in worldRef, in dt, in directEvents, in moveEventBase, mut shapesMut, mut bodiesMut, mut moveEventsMut, mut finalizeFlags, mut keepEnlargedFlags](in usize idx) -> void{
                 u8 keepEnlarged = 0u;
-                finalizeFlags[idx] = EvaluateAwakeBodyFinalize(worldRef, dt, idx, shapesMut, keepEnlarged);
+                finalizeFlags[idx] = EvaluateAwakeBodyFinalize(worldRef, dt, idx, directEvents, moveEventBase, shapesMut, bodiesMut, moveEventsMut, keepEnlarged);
                 keepEnlargedFlags[idx] = keepEnlarged;
             },
             CpuTaskOptions()
         );
         if(res.has_value()){
-            CommitMovedBodiesBroadphaseAndEvents(world, Span<u8>(finalizeFlags), Span<u8>(keepEnlargedFlags));
+            CommitMovedBodiesBroadphaseAndEvents(world, Span<u8>(finalizeFlags), Span<u8>(keepEnlargedFlags), directEvents);
             return;
         }
     }
 
     for(usize idx = 0u; idx < awakeCount; ++idx){
         u8 keepEnlarged = 0u;
-        finalizeFlags[idx] = EvaluateAwakeBodyFinalize(world, dt, idx, world.m_shapes, keepEnlarged);
+        finalizeFlags[idx] = EvaluateAwakeBodyFinalize(world, dt, idx, directEvents, moveEventBase, world.m_shapes, world.m_bodies, world.m_bodyMoveEvents, keepEnlarged);
         keepEnlargedFlags[idx] = keepEnlarged;
     }
-    CommitMovedBodiesBroadphaseAndEvents(world, Span<u8>(finalizeFlags), Span<u8>(keepEnlargedFlags));
+    CommitMovedBodiesBroadphaseAndEvents(world, Span<u8>(finalizeFlags), Span<u8>(keepEnlargedFlags), directEvents);
 }
 
 void FinalizeMovedBodiesBroadphaseAndEvents(mut PhysicsWorld world){
     in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
     world.m_bodyMoveEvents.reserve(awakeSet.sims.size());
+    const u32 hasEnlargedBit = cast<u32>(BodyFlags::HasEnlargedShapeAabb);
     for(usize idx = 0u; idx < awakeSet.sims.size(); ++idx){
         in BodySim sim = awakeSet.sims[idx];
         mut Body body = world.m_bodies[sim.bodyId];
@@ -2054,6 +2707,7 @@ void FinalizeMovedBodiesBroadphaseAndEvents(mut PhysicsWorld world){
             }
             shapeIdx = shape.nextShapeId;
         }
+        body.flags &= ~hasEnlargedBit;
 
         if(body.type == BodyType::Dynamic || (body.type == BodyType::Kinematic && moved)){
             BodyMoveEvent ev;
@@ -2113,6 +2767,7 @@ void EvaluateSleepingIslands(mut PhysicsWorld world){
                     }
                     shapeIdx = shape.nextShapeId;
                 }
+                world.m_bodies[bId].flags &= ~cast<u32>(BodyFlags::HasEnlargedShapeAabb);
             }
         }
         SleepIslandWithGraph(
@@ -2135,6 +2790,9 @@ u32 CountSleepingBodies(in PhysicsWorld world){
 }
 
 void WakeJointConnectedIslands(mut PhysicsWorld world){
+    if(world.activeJointCount() == 0u || world.m_solverSets.size() <= 3u + world.m_freeSolverSetIds.size())
+        return;
+
     for(usize bi = 0u; bi < world.m_solverSets[s_AwakeSetIndex].sims.size(); ++bi){
         const u32 bodyId = world.m_solverSets[s_AwakeSetIndex].sims[bi].bodyId;
         if(!IsBodyAwakeForWaking(world, bodyId))
@@ -2252,6 +2910,91 @@ b8 PrepareColorContactConstraints(
                 enableContactSoftening,
                 world.m_enableWarmStarting,
                 outConstraints[c][idx]
+            );
+        }
+    }
+    return true;
+}
+
+b8 PrepareColorContactConstraintsWithCache(
+    in PhysicsWorld world,
+    in Array<Vector<u32>, s_GraphColorCount> colorContactIds,
+    in f32 h,
+    mut CpuTaskScheduler cpuScheduler,
+    mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints,
+    mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> outCaches
+){
+    const f32 contactHertz = world.m_def.contactHertz;
+    const f32 contactDampingRatio = world.m_def.contactDampingRatio;
+    const b8 enableContactSoftening = world.m_def.enableContactSoftening;
+    const Softness dynamicSoftness = MakeSoftness(contactHertz, contactDampingRatio, h);
+    const Softness staticSoftness = MakeSoftness(2.0f * contactHertz, contactDampingRatio, h);
+
+    in PhysicsWorld worldRef = world;
+    in Array<Vector<u32>, s_GraphColorCount> colorContactIdsRef = colorContactIds;
+
+    Array<usize, s_GraphColorCount> colorStarts;
+    usize totalContacts = 0u;
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        colorStarts[c] = totalContacts;
+        const usize cCount = colorContactIds[c].size();
+        outConstraints[c].resize(cCount);
+        outCaches[c].resize(cCount);
+        totalContacts += cCount;
+    }
+    if(totalContacts == 0u)
+        return true;
+
+    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuPrepareContactThreshold){
+        in Array<usize, s_GraphColorCount> colorStartsRef = colorStarts;
+        const usize grain = ComputePhysicsGrain(cpuScheduler, totalContacts, cast<usize>(32u));
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            totalContacts,
+            grain,
+            lambda[in worldRef, in colorContactIdsRef, in colorStartsRef, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints, mut outCaches](in usize flatIdx) -> void{
+                const usize c = ResolveColorSlotIndex(colorStartsRef, flatIdx);
+                const usize idx = flatIdx - colorStartsRef[c];
+                const u32 contactId = colorContactIdsRef[c][idx];
+                PrepareContactConstraintWithCache(
+                    worldRef.m_bodies,
+                    worldRef.m_solverSets,
+                    worldRef.m_contacts[contactId],
+                    dynamicSoftness,
+                    staticSoftness,
+                    contactHertz,
+                    contactDampingRatio,
+                    h,
+                    enableContactSoftening,
+                    worldRef.m_enableWarmStarting,
+                    outConstraints[c][idx],
+                    outCaches[c][idx]
+                );
+            },
+            CpuTaskOptions()
+        );
+        if(!res.has_value())
+            return false;
+        return true;
+    }
+
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        const usize cCount = colorContactIds[c].size();
+        for(usize idx = 0u; idx < cCount; ++idx){
+            const u32 contactId = colorContactIds[c][idx];
+            PrepareContactConstraintWithCache(
+                world.m_bodies,
+                world.m_solverSets,
+                world.m_contacts[contactId],
+                dynamicSoftness,
+                staticSoftness,
+                contactHertz,
+                contactDampingRatio,
+                h,
+                enableContactSoftening,
+                world.m_enableWarmStarting,
+                outConstraints[c][idx],
+                outCaches[c][idx]
             );
         }
     }
@@ -2534,28 +3277,31 @@ void StoreSolvedPartitionImpulsesAndEventsCpu(
     }
 
     world.m_cpuScratch.parImpulsesStored = false;
-    in Vector<u8> jointFlags = world.m_cpuScratch.parJointBreakFlags;
-    for(usize ji = 0u; ji < jointConstraints.size(); ++ji){
-        const u8 flag = jointFlags[ji];
-        if(flag == 1u)
-            continue;
-        if(flag == 0u)
-            StoreJointImpulsesAndCollectBroken(world, jointConstraints[ji], invH, outBrokenJointIds);
-        else
-            EmitJointBreakEventIfNeeded(world, jointConstraints[ji], invH, world.m_joints[jointConstraints[ji].jointId], outBrokenJointIds);
+    const usize usedBuckets = world.m_cpuScratch.parUsedBucketCount;
+    world.m_cpuScratch.parUsedBucketCount = 0u;
+    if(usedBuckets == 0u)
+        return;
+
+    if(world.m_breakableJointCount > 0u){
+        for(usize b = 0u; b < usedBuckets; ++b){
+            in Vector<u32> bJoints = world.m_cpuScratch.parBucketScratch[b].brokenJointSlotIndices;
+            for(usize k = 0u; k < bJoints.size(); ++k){
+                const u32 ji = bJoints[k];
+                in JointConstraint jc = jointConstraints[ji];
+                in Joint joint = world.m_joints[jc.jointId];
+                EmitJointBreakEventIfNeeded(world, jc, invH, joint, outBrokenJointIds);
+            }
+        }
     }
 
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        in Vector<ContactConstraint> cons = colorConstraints[c];
-        in Vector<u8> flags = world.m_cpuScratch.parContactHitFlags[c];
-        for(usize idx = 0u; idx < cons.size(); ++idx){
-            const u8 flag = flags[idx];
-            if(flag == 1u)
-                continue;
-            if(flag == 0u)
-                StoreContactConstraintImpulsesAndHitEvents(world, cons[idx]);
-            else
-                EmitContactHitEventIfNeeded(world, cons[idx], world.m_contacts[cons[idx].contactId]);
+    if(world.m_hitEventShapeCount > 0u){
+        for(usize b = 0u; b < usedBuckets; ++b){
+            in Vector<CpuContactSlotRef> hSlots = world.m_cpuScratch.parBucketScratch[b].hitSlots;
+            for(usize k = 0u; k < hSlots.size(); ++k){
+                const CpuContactSlotRef slot = hSlots[k];
+                in ContactConstraint cc = colorConstraints[slot.color][slot.index];
+                EmitContactHitEventIfNeeded(world, cc, world.m_contacts[cc.contactId]);
+            }
         }
     }
 }
@@ -2620,6 +3366,19 @@ void RecordWorldStepStats(
     world.m_lastStats.backendUsed = backend;
 }
 
+class PartitionContactRec{
+    public u32 contactId = s_NullIndex;
+    public u32 color = 0u;
+    public u32 dynAwakeIdx = s_NullIndex;
+    public u8 hasAwakeKin = 0u;
+}
+
+class PartitionJointRec{
+    public u32 jointId = s_NullIndex;
+    public u32 dynAwakeIdx = s_NullIndex;
+    public u8 hasAwakeKin = 0u;
+}
+
 class SolverComponentInfo{
     public u32 componentRoot = s_NullIndex;
     public u32 bodyCount = 0u;
@@ -2676,10 +3435,14 @@ class SolverWorkPartition{
     public u32 cpuOwnedBodyCount = 0u;
     public u32 gpuOwnedBodyCount = 0u;
     public b8 cpuCanSolveParallel = false;
+    public b8 hasSharedKinematic = false;
+    public b8 allAwakeDynamic = false;
 
     public Vector<u32> scratchActiveJointIds;
     public Vector<u32> scratchDsuParents;
     public Vector<u8> scratchDsuRanks;
+    public Vector<PartitionContactRec> scratchConRecs;
+    public Vector<PartitionJointRec> scratchJointRecs;
     public Vector<SolverComponentInfo> scratchComponents;
     public Vector<u32> scratchRootToComp;
     public Vector<u32> scratchAwakeCompIdx;
@@ -2705,7 +3468,14 @@ class SolverWorkPartition{
     public Vector<u32> scratchBinNexts;
     public Vector<u32> scratchBinBodies;
     public Vector<u32> scratchBinContacts;
+    public Vector<u32> scratchBinJoints;
     public Vector<u8> scratchBinOverflow;
+    public Vector<u32> scratchJointBinHeads;
+    public Vector<u32> scratchJointBinTails;
+    public Vector<u32> scratchJointBinBodies;
+    public Vector<u32> scratchJointBinContacts;
+    public Vector<u32> scratchJointBinJoints;
+    public Vector<u8> scratchJointBinOverflow;
     public Vector<u32> scratchStagedJointIds;
     public Vector<u32> scratchStagedJointIslands;
     public Vector<u32> scratchStagedCpuJointLocalIds;
@@ -2747,6 +3517,8 @@ class SolverWorkPartition{
         this.cpuOwnedBodyCount = 0u;
         this.gpuOwnedBodyCount = 0u;
         this.cpuCanSolveParallel = false;
+        this.hasSharedKinematic = false;
+        this.allAwakeDynamic = false;
     }
 }
 
@@ -2776,6 +3548,67 @@ u32 ResolveComponentGpuAffinityTier(in SolverComponentInfo comp){
     return 3u;
 }
 
+void PackComponentsIntoIslandBins(
+    in Vector<SolverComponentInfo> components,
+    in Vector<usize> sortedComps,
+    in u32 maxBodies,
+    in u32 maxContacts,
+    in u32 maxJoints,
+    in u32 baseIslandIdx,
+    mut Vector<u32> binHeads,
+    mut Vector<u32> binTails,
+    mut Vector<u32> binNexts,
+    mut Vector<u32> binBodies,
+    mut Vector<u32> binContacts,
+    mut Vector<u32> binJoints,
+    mut Vector<u8> binOverflow,
+    mut Vector<u32> compToIslandIdx
+){
+    binHeads.clear();
+    binTails.clear();
+    binBodies.clear();
+    binContacts.clear();
+    binJoints.clear();
+    binOverflow.clear();
+
+    for(usize ii = 0u; ii < sortedComps.size(); ++ii){
+        const u32 ci = cast<u32>(sortedComps[ii]);
+        in SolverComponentInfo cInfo = components[ci];
+        u32 targetBin = s_NullIndex;
+        if(!cInfo.hasOverflowContact){
+            for(usize bi = 0u; bi < binBodies.size(); ++bi){
+                if(binOverflow[bi] != 0u)
+                    continue;
+                if(binBodies[bi] + cInfo.bodyCount <= maxBodies && binContacts[bi] + cInfo.contactCount <= maxContacts && (maxJoints == 0u || binJoints[bi] + cInfo.jointCount <= maxJoints)){
+                    targetBin = cast<u32>(bi);
+                    break;
+                }
+            }
+        }
+        if(targetBin == s_NullIndex){
+            targetBin = cast<u32>(binHeads.size());
+            binHeads.push_back(ci);
+            binTails.push_back(ci);
+            binBodies.push_back(cInfo.bodyCount);
+            binContacts.push_back(cInfo.contactCount);
+            binJoints.push_back(cInfo.jointCount);
+            u8 ovFlag = 0u;
+            if(cInfo.hasOverflowContact)
+                ovFlag = 1u;
+            binOverflow.push_back(ovFlag);
+        }
+        else{
+            const u32 tailCi = binTails[targetBin];
+            binNexts[tailCi] = ci;
+            binTails[targetBin] = ci;
+            binBodies[targetBin] += cInfo.bodyCount;
+            binContacts[targetBin] += cInfo.contactCount;
+            binJoints[targetBin] += cInfo.jointCount;
+        }
+        compToIslandIdx[ci] = baseIslandIdx + targetBin;
+    }
+}
+
 void BuildSolverWorkPartition(
     in PhysicsWorld world,
     in f32 gpuWorkloadFraction,
@@ -2801,32 +3634,78 @@ void BuildSolverWorkPartition(
     dsuRanks.clear();
     dsuRanks.resize(awakeCount, 0u);
 
+    mut Vector<PartitionContactRec> conRecs = outPartition.scratchConRecs;
+    conRecs.clear();
     for(usize c = 0u; c < s_GraphColorCount; ++c){
         in Vector<u32> cIds = world.m_graph.colors[c].contactIds;
         for(usize idx = 0u; idx < cIds.size(); ++idx){
-            in Contact contact = world.m_contacts[cIds[idx]];
+            const u32 cId = cIds[idx];
+            in Contact contact = world.m_contacts[cId];
             in Body bA = world.m_bodies[contact.edges[0u].bodyId];
             in Body bB = world.m_bodies[contact.edges[1u].bodyId];
-            if(
-                bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex
-                && bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex
-            )
+            const b8 dynA = (bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex);
+            const b8 dynB = (bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex);
+            u32 dynAwakeIdx = s_NullIndex;
+            u8 hasAwakeKin = 0u;
+            if(dynA && dynB){
                 JoinDisjointSets(cast<isize>(bA.localIndex), cast<isize>(bB.localIndex), dsuParents, dsuRanks);
+                dynAwakeIdx = bA.localIndex;
+            }
+            else if(dynA){
+                dynAwakeIdx = bA.localIndex;
+                if(bB.type != BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                    hasAwakeKin = 1u;
+            }
+            else if(dynB){
+                dynAwakeIdx = bB.localIndex;
+                if(bA.type != BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
+                    hasAwakeKin = 1u;
+            }
+            PartitionContactRec rec;
+            rec.contactId = cId;
+            rec.color = cast<u32>(c);
+            rec.dynAwakeIdx = dynAwakeIdx;
+            rec.hasAwakeKin = hasAwakeKin;
+            conRecs.push_back(rec);
         }
     }
 
+    mut Vector<PartitionJointRec> jointRecs = outPartition.scratchJointRecs;
+    jointRecs.clear();
+    jointRecs.reserve(activeJointIds.size());
     for(usize ji = 0u; ji < activeJointIds.size(); ++ji){
-        in Joint joint = world.m_joints[activeJointIds[ji]];
+        const u32 jId = activeJointIds[ji];
+        in Joint joint = world.m_joints[jId];
         in Body bA = world.m_bodies[joint.edges[0u].bodyId];
         in Body bB = world.m_bodies[joint.edges[1u].bodyId];
-        if(
-            bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex
-            && bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex
-        )
+        const b8 dynA = (bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex);
+        const b8 dynB = (bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex);
+        u32 dynAwakeIdx = s_NullIndex;
+        u8 hasAwakeKin = 0u;
+        if(dynA && dynB){
             JoinDisjointSets(cast<isize>(bA.localIndex), cast<isize>(bB.localIndex), dsuParents, dsuRanks);
+            dynAwakeIdx = bA.localIndex;
+        }
+        else if(dynA){
+            dynAwakeIdx = bA.localIndex;
+            if(bB.type != BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                hasAwakeKin = 1u;
+        }
+        else if(dynB){
+            dynAwakeIdx = bB.localIndex;
+            if(bA.type != BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
+                hasAwakeKin = 1u;
+        }
+        PartitionJointRec jRec;
+        jRec.jointId = jId;
+        jRec.dynAwakeIdx = dynAwakeIdx;
+        jRec.hasAwakeKin = hasAwakeKin;
+        jointRecs.push_back(jRec);
     }
 
     in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    const u32 dynBit = cast<u32>(BodyFlags::Dynamic);
+    const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
     mut Vector<SolverComponentInfo> components = outPartition.scratchComponents;
     components.clear();
     mut Vector<u32> rootToComp = outPartition.scratchRootToComp;
@@ -2837,8 +3716,8 @@ void BuildSolverWorkPartition(
     awakeCompIdx.resize(awakeCount, s_NullIndex);
     u32 totalDynAwake = 0u;
     for(u32 i = 0u; i < awakeCount; ++i){
-        in Body body = world.m_bodies[awakeSet.sims[i].bodyId];
-        if(body.type != BodyType::Dynamic)
+        const u32 simFlags = awakeSet.sims[i].flags;
+        if((simFlags & dynBit) == 0u)
             continue;
         const u32 compRoot = cast<u32>(FindDisjointRoot(cast<isize>(i), dsuParents));
         u32 ci = rootToComp[compRoot];
@@ -2852,57 +3731,40 @@ void BuildSolverWorkPartition(
         awakeCompIdx[i] = ci;
         ++components[ci].bodyCount;
         ++totalDynAwake;
-        if((body.flags & cast<u32>(BodyFlags::IsBullet)) != 0u)
+        if((simFlags & bulletBit) != 0u)
             components[ci].hasBullet = true;
     }
 
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        in Vector<u32> cIds = world.m_graph.colors[c].contactIds;
-        for(usize idx = 0u; idx < cIds.size(); ++idx){
-            in Contact contact = world.m_contacts[cIds[idx]];
-            in Body bA = world.m_bodies[contact.edges[0u].bodyId];
-            in Body bB = world.m_bodies[contact.edges[1u].bodyId];
-            u32 dynAwakeIdx = s_NullIndex;
-            if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
-                dynAwakeIdx = bA.localIndex;
-            else if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
-                dynAwakeIdx = bB.localIndex;
-            if(dynAwakeIdx != s_NullIndex){
-                const u32 ci = awakeCompIdx[dynAwakeIdx];
-                if(ci != s_NullIndex){
-                    ++components[ci].contactCount;
-                    if((bA.type != BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex) || (bB.type != BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex))
-                        components[ci].hasAwakeKinematic = true;
-                    if(c == s_OverflowColorIndex){
-                        components[ci].hasOverflowContact = true;
-                    }
-                    else{
-                        components[ci].colorMask |= (1u << cast<u32>(c));
-                        if(c < s_DynamicColorCount && cast<u32>(c) > components[ci].maxDynamicColor)
-                            components[ci].maxDynamicColor = cast<u32>(c);
-                    }
-                }
-            }
+    for(usize ri = 0u; ri < conRecs.size(); ++ri){
+        in PartitionContactRec rec = conRecs[ri];
+        if(rec.dynAwakeIdx == s_NullIndex)
+            continue;
+        const u32 ci = awakeCompIdx[rec.dynAwakeIdx];
+        if(ci == s_NullIndex)
+            continue;
+        ++components[ci].contactCount;
+        if(rec.hasAwakeKin != 0u)
+            components[ci].hasAwakeKinematic = true;
+        if(rec.color == s_OverflowColorIndex){
+            components[ci].hasOverflowContact = true;
+        }
+        else{
+            components[ci].colorMask |= (1u << rec.color);
+            if(rec.color < s_DynamicColorCount && rec.color > components[ci].maxDynamicColor)
+                components[ci].maxDynamicColor = rec.color;
         }
     }
 
-    for(usize ji = 0u; ji < activeJointIds.size(); ++ji){
-        in Joint joint = world.m_joints[activeJointIds[ji]];
-        in Body bA = world.m_bodies[joint.edges[0u].bodyId];
-        in Body bB = world.m_bodies[joint.edges[1u].bodyId];
-        u32 dynAwakeIdx = s_NullIndex;
-        if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
-            dynAwakeIdx = bA.localIndex;
-        else if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
-            dynAwakeIdx = bB.localIndex;
-        if(dynAwakeIdx != s_NullIndex){
-            const u32 ci = awakeCompIdx[dynAwakeIdx];
-            if(ci != s_NullIndex){
-                ++components[ci].jointCount;
-                if((bA.type != BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex) || (bB.type != BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex))
-                    components[ci].hasAwakeKinematic = true;
-            }
-        }
+    for(usize ri = 0u; ri < jointRecs.size(); ++ri){
+        in PartitionJointRec jRec = jointRecs[ri];
+        if(jRec.dynAwakeIdx == s_NullIndex)
+            continue;
+        const u32 ci = awakeCompIdx[jRec.dynAwakeIdx];
+        if(ci == s_NullIndex)
+            continue;
+        ++components[ci].jointCount;
+        if(jRec.hasAwakeKin != 0u)
+            components[ci].hasAwakeKinematic = true;
     }
 
     if(components.empty()){
@@ -3053,12 +3915,14 @@ void BuildSolverWorkPartition(
     mut Vector<u32> binNexts = outPartition.scratchBinNexts;
     mut Vector<u32> binBodies = outPartition.scratchBinBodies;
     mut Vector<u32> binContacts = outPartition.scratchBinContacts;
+    mut Vector<u32> binJoints = outPartition.scratchBinJoints;
     mut Vector<u8> binOverflow = outPartition.scratchBinOverflow;
-    binHeads.clear();
-    binTails.clear();
-    binBodies.clear();
-    binContacts.clear();
-    binOverflow.clear();
+    mut Vector<u32> jointBinHeads = outPartition.scratchJointBinHeads;
+    mut Vector<u32> jointBinTails = outPartition.scratchJointBinTails;
+    mut Vector<u32> jointBinBodies = outPartition.scratchJointBinBodies;
+    mut Vector<u32> jointBinContacts = outPartition.scratchJointBinContacts;
+    mut Vector<u32> jointBinJoints = outPartition.scratchJointBinJoints;
+    mut Vector<u8> jointBinOverflow = outPartition.scratchJointBinOverflow;
     binNexts.resize(compCount);
     for(usize ci = 0u; ci < compCount; ++ci)
         binNexts[ci] = s_NullIndex;
@@ -3067,43 +3931,43 @@ void BuildSolverWorkPartition(
     compToIslandIdx.clear();
     compToIslandIdx.resize(compCount, s_NullIndex);
 
-    for(usize ii = 0u; ii < sortedContactIslands.size(); ++ii){
-        const u32 ci = cast<u32>(sortedContactIslands[ii]);
-        in SolverComponentInfo cInfo = components[ci];
-        u32 targetBin = s_NullIndex;
-        if(!cInfo.hasOverflowContact){
-            for(usize bi = 0u; bi < binBodies.size(); ++bi){
-                if(binOverflow[bi] != 0u)
-                    continue;
-                if(binBodies[bi] + cInfo.bodyCount <= s_GpuContactIslandMaxBodies && binContacts[bi] + cInfo.contactCount <= s_GpuContactIslandMaxContacts){
-                    targetBin = cast<u32>(bi);
-                    break;
-                }
-            }
-        }
-        if(targetBin == s_NullIndex){
-            targetBin = cast<u32>(binHeads.size());
-            binHeads.push_back(ci);
-            binTails.push_back(ci);
-            binBodies.push_back(cInfo.bodyCount);
-            binContacts.push_back(cInfo.contactCount);
-            u8 ovFlag = 0u;
-            if(cInfo.hasOverflowContact)
-                ovFlag = 1u;
-            binOverflow.push_back(ovFlag);
-        }
-        else{
-            const u32 tailCi = binTails[targetBin];
-            binNexts[tailCi] = ci;
-            binTails[targetBin] = ci;
-            binBodies[targetBin] += cInfo.bodyCount;
-            binContacts[targetBin] += cInfo.contactCount;
-        }
-        compToIslandIdx[ci] = targetBin;
-    }
+    PackComponentsIntoIslandBins(
+        components,
+        sortedContactIslands,
+        s_GpuContactIslandMaxBodies,
+        s_GpuContactIslandMaxContacts,
+        0u,
+        0u,
+        binHeads,
+        binTails,
+        binNexts,
+        binBodies,
+        binContacts,
+        binJoints,
+        binOverflow,
+        compToIslandIdx
+    );
 
     outPartition.gpuContactIslandCount = cast<u32>(binHeads.size());
-    outPartition.gpuJointIslandCount = cast<u32>(sortedJointIslands.size());
+
+    PackComponentsIntoIslandBins(
+        components,
+        sortedJointIslands,
+        s_GpuJointIslandMaxBodies,
+        s_GpuJointIslandMaxContacts,
+        s_GpuJointIslandMaxJoints,
+        outPartition.gpuContactIslandCount,
+        jointBinHeads,
+        jointBinTails,
+        binNexts,
+        jointBinBodies,
+        jointBinContacts,
+        jointBinJoints,
+        jointBinOverflow,
+        compToIslandIdx
+    );
+
+    outPartition.gpuJointIslandCount = cast<u32>(jointBinHeads.size());
     const u32 totalIslandCount = outPartition.gpuContactIslandCount + outPartition.gpuJointIslandCount;
     outPartition.gpuIslandSlices.resize(totalIslandCount);
     for(u32 si = 0u; si < totalIslandCount; ++si){
@@ -3115,11 +3979,6 @@ void BuildSolverWorkPartition(
         outPartition.gpuIslandSlices[si].jointCount = 0u;
         for(usize c = 0u; c < s_GraphColorCount; ++c)
             outPartition.gpuIslandSlices[si].contactColorCounts[c] = 0u;
-    }
-    for(u32 si = 0u; si < outPartition.gpuJointIslandCount; ++si){
-        const u32 dstIdx = outPartition.gpuContactIslandCount + si;
-        const u32 ci = cast<u32>(sortedJointIslands[si]);
-        compToIslandIdx[ci] = dstIdx;
     }
 
     mut Vector<u32> compDynOffsets = outPartition.scratchCompDynOffsets;
@@ -3177,11 +4036,14 @@ void BuildSolverWorkPartition(
     }
     for(u32 si = 0u; si < outPartition.gpuJointIslandCount; ++si){
         const u32 dstIdx = outPartition.gpuContactIslandCount + si;
-        const u32 ci = cast<u32>(sortedJointIslands[si]);
         const u32 bodyOff = cast<u32>(outPartition.gpuAwakeIndices.size());
+        u32 curCi = jointBinHeads[si];
+        while(curCi != s_NullIndex){
+            emitGpuOwnedComp(curCi);
+            curCi = binNexts[curCi];
+        }
         outPartition.gpuIslandSlices[dstIdx].bodyOffset = bodyOff;
-        outPartition.gpuIslandSlices[dstIdx].bodyCount = compDynOffsets[ci + 1u] - compDynOffsets[ci];
-        emitGpuOwnedComp(ci);
+        outPartition.gpuIslandSlices[dstIdx].bodyCount = jointBinBodies[si];
     }
 
     outPartition.gpuColorBodyOffset = cast<u32>(outPartition.gpuAwakeIndices.size());
@@ -3213,22 +4075,26 @@ void BuildSolverWorkPartition(
     }
     outPartition.cpuCompBodyOffsets[cpuCompCount] = cast<u32>(outPartition.cpuCompBodyIndices.size());
 
-    for(u32 i = 0u; i < awakeCount; ++i){
-        in Body body = world.m_bodies[awakeSet.sims[i].bodyId];
-        if(body.type == BodyType::Dynamic)
-            continue;
-        if(outPartition.cpuOwnedBodyCount > 0u || frac <= 0.0f){
-            outPartition.awakeBodyOwner[i] = 0u;
-            outPartition.cpuAwakeIndices.push_back(i);
-            outPartition.cpuKinAwakeIndices.push_back(i);
-            ++outPartition.cpuOwnedBodyCount;
-        }
-        else{
-            outPartition.awakeBodyOwner[i] = 1u;
-            outPartition.awakeToGpuSlot[i] = cast<u32>(outPartition.gpuAwakeIndices.size());
-            outPartition.gpuAwakeIndices.push_back(i);
-            outPartition.gpuAwakeWriteBack.push_back(1u);
-            ++outPartition.gpuOwnedBodyCount;
+    if(totalDynAwake == awakeCount){
+        outPartition.allAwakeDynamic = true;
+    }
+    else{
+        for(u32 i = 0u; i < awakeCount; ++i){
+            if((awakeSet.sims[i].flags & dynBit) != 0u)
+                continue;
+            if(outPartition.cpuOwnedBodyCount > 0u || frac <= 0.0f){
+                outPartition.awakeBodyOwner[i] = 0u;
+                outPartition.cpuAwakeIndices.push_back(i);
+                outPartition.cpuKinAwakeIndices.push_back(i);
+                ++outPartition.cpuOwnedBodyCount;
+            }
+            else{
+                outPartition.awakeBodyOwner[i] = 1u;
+                outPartition.awakeToGpuSlot[i] = cast<u32>(outPartition.gpuAwakeIndices.size());
+                outPartition.gpuAwakeIndices.push_back(i);
+                outPartition.gpuAwakeWriteBack.push_back(1u);
+                ++outPartition.gpuOwnedBodyCount;
+            }
         }
     }
 
@@ -3241,63 +4107,62 @@ void BuildSolverWorkPartition(
     stagedCpuContactSlots.clear();
     stagedCpuContactComps.clear();
     outPartition.cpuCompContactOffsets.resize(cpuCompCount + 1u, 0u);
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        in Vector<u32> cIds = world.m_graph.colors[c].contactIds;
-        for(usize idx = 0u; idx < cIds.size(); ++idx){
-            const u32 cId = cIds[idx];
-            in Contact contact = world.m_contacts[cId];
-            in Body bA = world.m_bodies[contact.edges[0u].bodyId];
-            in Body bB = world.m_bodies[contact.edges[1u].bodyId];
+    for(usize ri = 0u; ri < conRecs.size(); ++ri){
+        in PartitionContactRec rec = conRecs[ri];
+        const u32 cId = rec.contactId;
+        const u32 c = rec.color;
 
-            u8 owner = 0u;
-            u32 compIdx = s_NullIndex;
-            if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex){
-                owner = outPartition.awakeBodyOwner[bA.localIndex];
-                compIdx = awakeCompIdx[bA.localIndex];
-            }
-            else if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex){
-                owner = outPartition.awakeBodyOwner[bB.localIndex];
-                compIdx = awakeCompIdx[bB.localIndex];
-            }
+        u8 owner = 0u;
+        u32 compIdx = s_NullIndex;
+        if(rec.dynAwakeIdx != s_NullIndex){
+            owner = outPartition.awakeBodyOwner[rec.dynAwakeIdx];
+            compIdx = awakeCompIdx[rec.dynAwakeIdx];
+        }
 
-            if(owner != 0u){
-                outPartition.gpuColorContactIds[c].push_back(cId);
-                u32 islandIdx = s_NullIndex;
-                if(compIdx != s_NullIndex)
-                    islandIdx = compToIslandIdx[compIdx];
-                if(islandIdx != s_NullIndex){
-                    stagedContactIds.push_back(cId);
-                    stagedContactIslands.push_back(islandIdx);
-                    ++outPartition.gpuIslandSlices[islandIdx].contactCount;
-                    ++outPartition.gpuIslandSlices[islandIdx].contactColorCounts[c];
-                }
-                else{
+        if(owner != 0u){
+            outPartition.gpuColorContactIds[c].push_back(cId);
+            u32 islandIdx = s_NullIndex;
+            if(compIdx != s_NullIndex)
+                islandIdx = compToIslandIdx[compIdx];
+            if(islandIdx != s_NullIndex){
+                stagedContactIds.push_back(cId);
+                stagedContactIslands.push_back(islandIdx);
+                ++outPartition.gpuIslandSlices[islandIdx].contactCount;
+                ++outPartition.gpuIslandSlices[islandIdx].contactColorCounts[c];
+            }
+            else{
+                if(rec.hasAwakeKin != 0u){
+                    in Contact contact = world.m_contacts[cId];
+                    in Body bA = world.m_bodies[contact.edges[0u].bodyId];
+                    in Body bB = world.m_bodies[contact.edges[1u].bodyId];
                     if(bA.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bA.localIndex] == s_NullIndex){
                         outPartition.awakeToGpuSlot[bA.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
                         outPartition.gpuAwakeIndices.push_back(bA.localIndex);
                         outPartition.gpuAwakeWriteBack.push_back(0u);
+                        outPartition.hasSharedKinematic = true;
                     }
                     if(bB.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bB.localIndex] == s_NullIndex){
                         outPartition.awakeToGpuSlot[bB.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
                         outPartition.gpuAwakeIndices.push_back(bB.localIndex);
                         outPartition.gpuAwakeWriteBack.push_back(0u);
+                        outPartition.hasSharedKinematic = true;
                     }
-                    outPartition.gpuColorOnlyContactIds[c].push_back(cId);
                 }
+                outPartition.gpuColorOnlyContactIds[c].push_back(cId);
             }
-            else{
-                const u32 slotIdx = cast<u32>(outPartition.cpuColorContactIds[c].size());
-                outPartition.cpuColorContactIds[c].push_back(cId);
-                if(compIdx != s_NullIndex){
-                    const u32 cci = compToCpuCompIdx[compIdx];
-                    if(cci != s_NullIndex){
-                        CpuContactSlotRef slotRef;
-                        slotRef.color = cast<u32>(c);
-                        slotRef.index = slotIdx;
-                        stagedCpuContactSlots.push_back(slotRef);
-                        stagedCpuContactComps.push_back(cci);
-                        ++outPartition.cpuCompContactOffsets[cci + 1u];
-                    }
+        }
+        else{
+            const u32 slotIdx = cast<u32>(outPartition.cpuColorContactIds[c].size());
+            outPartition.cpuColorContactIds[c].push_back(cId);
+            if(compIdx != s_NullIndex){
+                const u32 cci = compToCpuCompIdx[compIdx];
+                if(cci != s_NullIndex){
+                    CpuContactSlotRef slotRef;
+                    slotRef.color = c;
+                    slotRef.index = slotIdx;
+                    stagedCpuContactSlots.push_back(slotRef);
+                    stagedCpuContactComps.push_back(cci);
+                    ++outPartition.cpuCompContactOffsets[cci + 1u];
                 }
             }
         }
@@ -3347,21 +4212,15 @@ void BuildSolverWorkPartition(
     stagedCpuJointLocalIds.clear();
     stagedCpuJointComps.clear();
     outPartition.cpuCompJointOffsets.resize(cpuCompCount + 1u, 0u);
-    for(usize ji = 0u; ji < activeJointIds.size(); ++ji){
-        const u32 jId = activeJointIds[ji];
-        in Joint joint = world.m_joints[jId];
-        in Body bA = world.m_bodies[joint.edges[0u].bodyId];
-        in Body bB = world.m_bodies[joint.edges[1u].bodyId];
+    for(usize ri = 0u; ri < jointRecs.size(); ++ri){
+        in PartitionJointRec jRec = jointRecs[ri];
+        const u32 jId = jRec.jointId;
 
         u8 owner = 0u;
         u32 compIdx = s_NullIndex;
-        if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex){
-            owner = outPartition.awakeBodyOwner[bA.localIndex];
-            compIdx = awakeCompIdx[bA.localIndex];
-        }
-        else if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex){
-            owner = outPartition.awakeBodyOwner[bB.localIndex];
-            compIdx = awakeCompIdx[bB.localIndex];
+        if(jRec.dynAwakeIdx != s_NullIndex){
+            owner = outPartition.awakeBodyOwner[jRec.dynAwakeIdx];
+            compIdx = awakeCompIdx[jRec.dynAwakeIdx];
         }
 
         if(owner != 0u){
@@ -3375,15 +4234,22 @@ void BuildSolverWorkPartition(
                 ++outPartition.gpuIslandSlices[islandIdx].jointCount;
             }
             else{
-                if(bA.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bA.localIndex] == s_NullIndex){
-                    outPartition.awakeToGpuSlot[bA.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
-                    outPartition.gpuAwakeIndices.push_back(bA.localIndex);
-                    outPartition.gpuAwakeWriteBack.push_back(0u);
-                }
-                if(bB.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bB.localIndex] == s_NullIndex){
-                    outPartition.awakeToGpuSlot[bB.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
-                    outPartition.gpuAwakeIndices.push_back(bB.localIndex);
-                    outPartition.gpuAwakeWriteBack.push_back(0u);
+                if(jRec.hasAwakeKin != 0u){
+                    in Joint joint = world.m_joints[jId];
+                    in Body bA = world.m_bodies[joint.edges[0u].bodyId];
+                    in Body bB = world.m_bodies[joint.edges[1u].bodyId];
+                    if(bA.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bA.localIndex] == s_NullIndex){
+                        outPartition.awakeToGpuSlot[bA.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
+                        outPartition.gpuAwakeIndices.push_back(bA.localIndex);
+                        outPartition.gpuAwakeWriteBack.push_back(0u);
+                        outPartition.hasSharedKinematic = true;
+                    }
+                    if(bB.setIndex == s_AwakeSetIndex && outPartition.awakeToGpuSlot[bB.localIndex] == s_NullIndex){
+                        outPartition.awakeToGpuSlot[bB.localIndex] = cast<u32>(outPartition.gpuAwakeIndices.size());
+                        outPartition.gpuAwakeIndices.push_back(bB.localIndex);
+                        outPartition.gpuAwakeWriteBack.push_back(0u);
+                        outPartition.hasSharedKinematic = true;
+                    }
                 }
                 outPartition.gpuColorOnlyJointIds.push_back(jId);
             }
@@ -3505,8 +4371,7 @@ void SolveSingleComponentBatchCpu(
     mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorCaches,
     mut Vector<JointConstraint> jointConstraints,
     mut Vector<JointConstraintStepCache> jointCaches,
-    mut Array<Vector<u8>, s_GraphColorCount> contactHitFlags,
-    mut Vector<u8> jointBreakFlags,
+    mut CpuBucketSolverScratch bucketScratch,
     in Span<u32> compBodyIndices,
     in u32 bodyStart,
     in u32 bodyEnd,
@@ -3518,13 +4383,16 @@ void SolveSingleComponentBatchCpu(
     in u32 jointEnd,
     in VectorSingle gravity,
     in u32 subStepCount,
+    in f32 dt,
     in f32 h,
     in f32 invH,
     in f32 maxLinVel,
     in f32 restThresh,
     in f32 hitThresh,
     in b8 enableWarmStarting,
-    in b8 contactCachesPrebuilt
+    in b8 contactCachesPrebuilt,
+    in b8 checkHitEvents,
+    in b8 checkBreakJoints
 ){
     if(!contactCachesPrebuilt){
         for(u32 ci = contactStart; ci < contactEnd; ++ci){
@@ -3580,19 +4448,43 @@ void SolveSingleComponentBatchCpu(
         }
     }
 
+    const u32 hitEvtBit = cast<u32>(ContactFlags::EnableHitEvents);
     for(u32 ci = contactStart; ci < contactEnd; ++ci){
         const CpuContactSlotRef ref = compContactSlots[ci];
-        ApplyRestitutionContactConstraint(states, colorConstraints[ref.color][ref.index], restThresh);
-        in ContactConstraint cc = colorConstraints[ref.color][ref.index];
+        mut ContactConstraint cc = colorConstraints[ref.color][ref.index];
+        ApplyRestitutionContactConstraintCached(states, cc, colorCaches[ref.color][ref.index], restThresh);
         mut Contact contact = world.m_contacts[cc.contactId];
-        contactHitFlags[ref.color][ref.index] = StoreContactConstraintImpulsesFast(cc, contact, hitThresh);
+        StoreContactConstraintImpulses(cc, contact);
+        if(checkHitEvents && (contact.flags & hitEvtBit) != 0u){
+            f32 maxApproach = 0.0f;
+            u32 maxApproachIdx = 0u;
+            for(u32 p = 0u; p < cc.pointCount; ++p){
+                const f32 relVel = cc.points[p].relativeVelocity();
+                if(-relVel > maxApproach && cc.points[p].totalNormalImpulse > 0.0f){
+                    maxApproach = -relVel;
+                    maxApproachIdx = p;
+                }
+            }
+            if(maxApproach >= hitThresh && maxApproachIdx < contact.manifold.pointCount())
+                bucketScratch.hitSlots.push_back(ref);
+        }
     }
     for(u32 ji = jointStart; ji < jointEnd; ++ji){
         const u32 jointIdx = compJointIndices[ji];
         in JointConstraint jc = jointConstraints[jointIdx];
         mut Joint joint = world.m_joints[jc.jointId];
-        jointBreakFlags[jointIdx] = StoreJointImpulsesFast(jc, invH, joint);
+        StoreJointConstraintImpulses(jc, invH, joint);
+        if(checkBreakJoints && (joint.breakForce > 0.0f || joint.breakTorque > 0.0f)){
+            const f32 peakForce = Max(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
+            const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
+            const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
+            const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
+            if(brokeForce || brokeTorque)
+                bucketScratch.brokenJointSlotIndices.push_back(jointIdx);
+        }
     }
+    for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
+        FinalizeAwakeBodyAt(world, dt, cast<usize>(compBodyIndices[bi]));
 }
 
 b8 TrySolvePartitionComponentsParallelCpu(
@@ -4023,21 +4915,21 @@ b8 TrySolvePartitionComponentsParallelCpu(
         jointCaches.resize(jointConstraints.size());
 
     const f32 hitThresh = world.m_def.hitEventThreshold;
-    mut Array<Vector<u8>, s_GraphColorCount> contactHitFlags = world.m_cpuScratch.parContactHitFlags;
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        contactHitFlags[c].clear();
-        contactHitFlags[c].resize(colorConstraints[c].size(), 0u);
-    }
-    mut Vector<u8> jointBreakFlags = world.m_cpuScratch.parJointBreakFlags;
-    jointBreakFlags.clear();
-    jointBreakFlags.resize(jointConstraints.size(), 0u);
+    const b8 checkHitEvents = world.m_hitEventShapeCount > 0u;
+    const b8 checkBreakJoints = world.m_breakableJointCount > 0u;
+    mut Vector<CpuBucketSolverScratch> bucketScratches = world.m_cpuScratch.parBucketScratch;
+    if(bucketScratches.size() < bucketCount)
+        bucketScratches.resize(bucketCount);
+    for(usize b = 0u; b < bucketCount; ++b)
+        bucketScratches[b].clear();
 
     const auto res = cpuScheduler.parallelFor(
         0u,
         bucketCount,
         1u,
-        lambda[mut world, mut sims, mut states, mut colorConstraints, mut colorCaches, mut jointConstraints, mut jointCaches, mut contactHitFlags, mut jointBreakFlags, in bodyOffSpan, in bodyIdxSpan, in contactOffSpan, in contactSlotSpan, in jointOffSpan, in jointIdxSpan, in bucketSpan, in gravity, in subStepCount, in h, in invH, in maxLinVel, in restThresh, in hitThresh, in enableWarmStarting, in contactCachesPrebuilt](in usize bucketIdx) -> void{
+        lambda[mut world, mut sims, mut states, mut colorConstraints, mut colorCaches, mut jointConstraints, mut jointCaches, mut bucketScratches, in bodyOffSpan, in bodyIdxSpan, in contactOffSpan, in contactSlotSpan, in jointOffSpan, in jointIdxSpan, in bucketSpan, in gravity, in subStepCount, in dt, in h, in invH, in maxLinVel, in restThresh, in hitThresh, in enableWarmStarting, in contactCachesPrebuilt, in checkHitEvents, in checkBreakJoints](in usize bucketIdx) -> void{
             in Vector<usize> compIds = bucketSpan[bucketIdx];
+            mut CpuBucketSolverScratch bScratch = bucketScratches[bucketIdx];
             for(usize k = 0u; k < compIds.size(); ++k){
                 const usize ci = compIds[k];
                 SolveSingleComponentBatchCpu(
@@ -4048,8 +4940,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
                     colorCaches,
                     jointConstraints,
                     jointCaches,
-                    contactHitFlags,
-                    jointBreakFlags,
+                    bScratch,
                     bodyIdxSpan,
                     bodyOffSpan[ci],
                     bodyOffSpan[ci + 1u],
@@ -4061,13 +4952,16 @@ b8 TrySolvePartitionComponentsParallelCpu(
                     jointOffSpan[ci + 1u],
                     gravity,
                     subStepCount,
+                    dt,
                     h,
                     invH,
                     maxLinVel,
                     restThresh,
                     hitThresh,
                     enableWarmStarting,
-                    contactCachesPrebuilt
+                    contactCachesPrebuilt,
+                    checkHitEvents,
+                    checkBreakJoints
                 );
             }
         },
@@ -4077,6 +4971,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         return false;
 
     const usize kinCount = kinAwakeIndices.size();
+    world.m_cpuScratch.parAllAwakeDynamic = (kinCount == 0u && bodyCount == totalAwake);
     if(kinCount >= s_CpuColorParallelThreshold){
         const Span<u32> kinSpan = Span<u32>(kinAwakeIndices);
         const usize kGrain = ComputePhysicsGrain(cpuScheduler, kinCount, cast<usize>(64u));
@@ -4103,7 +4998,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
             FinalizeAwakeBodyAt(world, dt, kIdx);
         }
     }
-    FinalizeDynamicBodiesCpu(world, Span<u32>(dynAwakeIndices), dynCount, totalAwake, kinAwakeIndices.empty() && bodyCount == totalAwake, dt, cpuScheduler);
+    world.m_cpuScratch.parUsedBucketCount = bucketCount;
     world.m_cpuScratch.parImpulsesStored = true;
 
     outHandled = true;
@@ -4322,12 +5217,13 @@ b8 SolvePartitionSubStepsCpuImpl(
             continue;
         if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
             const usize grain = ComputePhysicsGrain(cpuScheduler, cCount, cast<usize>(64u));
+            const Span<ContactConstraintStepCache> cacheSpan = Span<ContactConstraintStepCache>(colorCaches[c]);
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 cCount,
                 grain,
-                lambda[mut states, mut colorConstraints, in c, in restThresh](in usize idx) -> void{
-                    ApplyRestitutionContactConstraint(states, colorConstraints[c][idx], restThresh);
+                lambda[mut states, mut colorConstraints, in cacheSpan, in c, in restThresh](in usize idx) -> void{
+                    ApplyRestitutionContactConstraintCached(states, colorConstraints[c][idx], cacheSpan[idx], restThresh);
                 },
                 CpuTaskOptions()
             );
@@ -4336,11 +5232,11 @@ b8 SolvePartitionSubStepsCpuImpl(
         }
         else{
             for(usize idx = 0u; idx < cCount; ++idx)
-                ApplyRestitutionContactConstraint(states, colorConstraints[c][idx], restThresh);
+                ApplyRestitutionContactConstraintCached(states, colorConstraints[c][idx], colorCaches[c][idx], restThresh);
         }
     }
     for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
-        ApplyRestitutionContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], restThresh);
+        ApplyRestitutionContactConstraintCached(states, colorConstraints[s_OverflowColorIndex][idx], colorCaches[s_OverflowColorIndex][idx], restThresh);
 
     if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
         const usize grain = ComputePhysicsGrain(cpuScheduler, bodyCount, cast<usize>(64u));
@@ -4363,28 +5259,18 @@ b8 SolvePartitionSubStepsCpuImpl(
     return true;
 }
 
-b8 SolvePartitionSubStepsCpu(
-    mut PhysicsWorld world,
-    in Vector<u32> awakeIndices,
-    mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
-    mut Vector<JointConstraint> jointConstraints,
-    in f32 dt,
-    in u32 subStepCount,
-    mut CpuTaskScheduler cpuScheduler
-){
-    return SolvePartitionSubStepsCpuImpl(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, false);
-}
-
 b8 SolvePartitionSubStepsCpuWithPartition(
     mut PhysicsWorld world,
-    in SolverWorkPartition partition,
     mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
     mut Vector<JointConstraint> jointConstraints,
+    mut CpuTaskScheduler cpuScheduler,
+    in SolverWorkPartition partition,
     in f32 dt,
     in u32 subStepCount,
-    mut CpuTaskScheduler cpuScheduler
+    in b8 contactCachesPrebuilt
 ){
     world.m_cpuScratch.parImpulsesStored = false;
+    world.m_cpuScratch.parAllAwakeDynamic = partition.allAwakeDynamic;
     const usize bodyCount = partition.cpuAwakeIndices.size();
     if(bodyCount == 0u || dt <= 0.0f || subStepCount == 0u)
         return true;
@@ -4442,23 +5328,26 @@ b8 SolvePartitionSubStepsCpuWithPartition(
         const Span<Vector<usize>> bucketSpan = Span<Vector<usize>>(buckets);
         mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorCaches = world.m_cpuScratch.colorConstraintCaches;
         mut Vector<JointConstraintStepCache> jointCaches = world.m_cpuScratch.jointConstraintCaches;
-        ResizeConstraintStepCaches(colorConstraints, jointConstraints, colorCaches, jointCaches);
+        if(!contactCachesPrebuilt)
+            ResizeConstraintStepCaches(colorConstraints, jointConstraints, colorCaches, jointCaches);
+        else
+            jointCaches.resize(jointConstraints.size());
 
-        mut Array<Vector<u8>, s_GraphColorCount> contactHitFlags = world.m_cpuScratch.parContactHitFlags;
-        for(usize c = 0u; c < s_GraphColorCount; ++c){
-            contactHitFlags[c].clear();
-            contactHitFlags[c].resize(colorConstraints[c].size(), 0u);
-        }
-        mut Vector<u8> jointBreakFlags = world.m_cpuScratch.parJointBreakFlags;
-        jointBreakFlags.clear();
-        jointBreakFlags.resize(jointConstraints.size(), 0u);
+        const b8 checkHitEvents = world.m_hitEventShapeCount > 0u;
+        const b8 checkBreakJoints = world.m_breakableJointCount > 0u;
+        mut Vector<CpuBucketSolverScratch> bucketScratches = world.m_cpuScratch.parBucketScratch;
+        if(bucketScratches.size() < bucketCount)
+            bucketScratches.resize(bucketCount);
+        for(usize b = 0u; b < bucketCount; ++b)
+            bucketScratches[b].clear();
 
         const auto res = cpuScheduler.parallelFor(
             0u,
             bucketCount,
             1u,
-            lambda[mut world, mut sims, mut states, mut colorConstraints, mut colorCaches, mut jointConstraints, mut jointCaches, mut contactHitFlags, mut jointBreakFlags, in bodyOffSpan, in bodyIdxSpan, in contactOffSpan, in contactSlotSpan, in jointOffSpan, in jointIdxSpan, in bucketSpan, in gravity, in subStepCount, in h, in invH, in maxLinVel, in restThresh, in hitThresh, in enableWarmStarting](in usize bucketIdx) -> void{
+            lambda[mut world, mut sims, mut states, mut colorConstraints, mut colorCaches, mut jointConstraints, mut jointCaches, mut bucketScratches, in bodyOffSpan, in bodyIdxSpan, in contactOffSpan, in contactSlotSpan, in jointOffSpan, in jointIdxSpan, in bucketSpan, in gravity, in subStepCount, in dt, in h, in invH, in maxLinVel, in restThresh, in hitThresh, in enableWarmStarting, in contactCachesPrebuilt, in checkHitEvents, in checkBreakJoints](in usize bucketIdx) -> void{
                 in Vector<usize> compIds = bucketSpan[bucketIdx];
+                mut CpuBucketSolverScratch bScratch = bucketScratches[bucketIdx];
                 for(usize k = 0u; k < compIds.size(); ++k){
                     const usize ci = compIds[k];
                     SolveSingleComponentBatchCpu(
@@ -4469,8 +5358,7 @@ b8 SolvePartitionSubStepsCpuWithPartition(
                         colorCaches,
                         jointConstraints,
                         jointCaches,
-                        contactHitFlags,
-                        jointBreakFlags,
+                        bScratch,
                         bodyIdxSpan,
                         bodyOffSpan[ci],
                         bodyOffSpan[ci + 1u],
@@ -4482,13 +5370,16 @@ b8 SolvePartitionSubStepsCpuWithPartition(
                         jointOffSpan[ci + 1u],
                         gravity,
                         subStepCount,
+                        dt,
                         h,
                         invH,
                         maxLinVel,
                         restThresh,
                         hitThresh,
                         enableWarmStarting,
-                        false
+                        contactCachesPrebuilt,
+                        checkHitEvents,
+                        checkBreakJoints
                     );
                 }
             },
@@ -4503,21 +5394,688 @@ b8 SolvePartitionSubStepsCpuWithPartition(
                 IntegrateBodyPositionsAt(states, h, kIdx);
             FinalizeAwakeBodyAt(world, dt, kIdx);
         }
-        const usize totalAwake = world.m_solverSets[s_AwakeSetIndex].states.size();
-        FinalizeDynamicBodiesCpu(
-            world,
-            bodyIdxSpan,
-            partition.cpuCompBodyIndices.size(),
-            totalAwake,
-            partition.cpuKinAwakeIndices.empty() && partition.cpuCompBodyIndices.size() == totalAwake,
-            dt,
-            cpuScheduler
-        );
+        world.m_cpuScratch.parUsedBucketCount = bucketCount;
         world.m_cpuScratch.parImpulsesStored = true;
         return true;
     }
 
-    return SolvePartitionSubStepsCpu(world, partition.cpuAwakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler);
+    return SolvePartitionSubStepsCpuImpl(world, partition.cpuAwakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, contactCachesPrebuilt);
+}
+
+void SolveSingleComponentFusedCpu(
+    mut PhysicsWorld world,
+    mut Vector<BodySim> sims,
+    mut Vector<BodyState> states,
+    mut CpuBucketSolverScratch bucketScratch,
+    in Span<u32> compBodyIndices,
+    in u32 bodyStart,
+    in u32 bodyEnd,
+    in Span<u32> compContactIds,
+    in u32 contactStart,
+    in u32 contactEnd,
+    in Span<u32> compJointIds,
+    in u32 jointStart,
+    in u32 jointEnd,
+    in VectorSingle gravity,
+    in u32 subStepCount,
+    in f32 dt,
+    in f32 h,
+    in f32 invH,
+    in f32 maxLinVel,
+    in f32 restThresh,
+    in f32 hitThresh,
+    in f32 contactHertz,
+    in f32 contactDampingRatio,
+    in b8 enableContactSoftening,
+    in Softness dynamicSoftness,
+    in Softness staticSoftness,
+    in f32 jointDefaultHertz,
+    in b8 enableWarmStarting,
+    in b8 checkHitEvents,
+    in b8 checkBreakJoints
+){
+    const usize conCnt = cast<usize>(contactEnd - contactStart);
+    const usize jntCnt = cast<usize>(jointEnd - jointStart);
+    mut Vector<ContactConstraint> localConstraints = bucketScratch.localConstraints;
+    mut Vector<ContactConstraintStepCache> localCaches = bucketScratch.localCaches;
+    mut Vector<JointConstraint> localJoints = bucketScratch.localJoints;
+    mut Vector<JointConstraintStepCache> localJointCaches = bucketScratch.localJointCaches;
+    localConstraints.resize(conCnt);
+    localCaches.resize(conCnt);
+    localJoints.resize(jntCnt);
+    localJointCaches.resize(jntCnt);
+
+    for(usize i = 0u; i < conCnt; ++i){
+        const u32 cId = compContactIds[cast<usize>(contactStart) + i];
+        PrepareContactConstraintWithCache(
+            world.m_bodies,
+            world.m_solverSets,
+            world.m_contacts[cId],
+            dynamicSoftness,
+            staticSoftness,
+            contactHertz,
+            contactDampingRatio,
+            h,
+            enableContactSoftening,
+            enableWarmStarting,
+            localConstraints[i],
+            localCaches[i]
+        );
+    }
+    for(usize i = 0u; i < jntCnt; ++i){
+        const u32 jId = compJointIds[cast<usize>(jointStart) + i];
+        PrepareJointConstraint(world.m_bodies, world.m_solverSets, world.m_joints[jId], jointDefaultHertz, h, enableWarmStarting, localJoints[i]);
+        BuildJointConstraintStepCache(states, localJoints[i], localJointCaches[i]);
+    }
+
+    for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+        for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
+            IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, cast<usize>(compBodyIndices[bi]));
+
+        if(enableWarmStarting){
+            for(usize i = 0u; i < conCnt; ++i)
+                WarmStartContactConstraintCached(states, localConstraints[i], localCaches[i]);
+            for(usize i = 0u; i < jntCnt; ++i)
+                WarmStartJointConstraint(states, localJoints[i]);
+        }
+        else if(subStep > 0u){
+            for(usize i = 0u; i < conCnt; ++i)
+                ResetContactConstraintSubStepImpulses(localConstraints[i]);
+            for(usize i = 0u; i < jntCnt; ++i)
+                ResetJointConstraintSubStepImpulses(localJoints[i]);
+        }
+
+        for(usize i = 0u; i < conCnt; ++i)
+            SolveContactConstraintCached(states, localConstraints[i], localCaches[i], invH, true);
+        for(usize i = 0u; i < jntCnt; ++i)
+            SolveJointConstraintCached(states, localJoints[i], localJointCaches[i], h, true);
+
+        for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
+            IntegrateBodyPositionsAt(states, h, cast<usize>(compBodyIndices[bi]));
+
+        for(usize i = 0u; i < conCnt; ++i)
+            SolveContactConstraintCached(states, localConstraints[i], localCaches[i], invH, false);
+        for(usize i = 0u; i < jntCnt; ++i)
+            SolveJointConstraintCached(states, localJoints[i], localJointCaches[i], h, false);
+    }
+
+    const u32 hitEvtBit = cast<u32>(ContactFlags::EnableHitEvents);
+    for(usize i = 0u; i < conCnt; ++i){
+        mut ContactConstraint cc = localConstraints[i];
+        ApplyRestitutionContactConstraintCached(states, cc, localCaches[i], restThresh);
+        mut Contact contact = world.m_contacts[cc.contactId];
+        StoreContactConstraintImpulses(cc, contact);
+        if(checkHitEvents && (contact.flags & hitEvtBit) != 0u){
+            f32 maxApproach = 0.0f;
+            u32 maxApproachIdx = 0u;
+            for(u32 p = 0u; p < cc.pointCount; ++p){
+                const f32 relVel = cc.points[p].relativeVelocity();
+                if(-relVel > maxApproach && cc.points[p].totalNormalImpulse > 0.0f){
+                    maxApproach = -relVel;
+                    maxApproachIdx = p;
+                }
+            }
+            if(maxApproach >= hitThresh && maxApproachIdx < contact.manifold.pointCount()){
+                ContactHitEvent hitEv;
+                hitEv.shapeIdA = world.makeShapeId(contact.shapeIdA);
+                hitEv.shapeIdB = world.makeShapeId(contact.shapeIdB);
+                hitEv.point = f32x4(contact.manifold.points[maxApproachIdx].point(), 0.0f);
+                hitEv.normalApproachSpeed = f32x4(contact.manifold.normal(), maxApproach);
+                bucketScratch.hitEvents.push_back(hitEv);
+                bucketScratch.hitContactIds.push_back(cc.contactId);
+            }
+        }
+    }
+    for(usize i = 0u; i < jntCnt; ++i){
+        in JointConstraint jc = localJoints[i];
+        mut Joint joint = world.m_joints[jc.jointId];
+        StoreJointConstraintImpulses(jc, invH, joint);
+        if(checkBreakJoints && (joint.breakForce > 0.0f || joint.breakTorque > 0.0f)){
+            const f32 peakForce = Max(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
+            const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
+            const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
+            const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
+            if(brokeForce || brokeTorque){
+                JointBreakEvent ev;
+                ev.jointId = world.makeJointId(jc.jointId);
+                ev.bodyIdA = world.makeBodyId(joint.edges[0u].bodyId);
+                ev.bodyIdB = world.makeBodyId(joint.edges[1u].bodyId);
+                ev.userData = joint.userData;
+                ev.peakForce = peakForce;
+                ev.peakTorque = peakTorque;
+                bucketScratch.breakEvents.push_back(ev);
+                bucketScratch.brokenJointIds.push_back(jc.jointId);
+            }
+        }
+    }
+    for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
+        FinalizeAwakeBodyAt(world, dt, cast<usize>(compBodyIndices[bi]));
+}
+
+b8 TrySolveIslandsFusedCpu(
+    mut PhysicsWorld world,
+    mut CpuTaskScheduler cpuScheduler,
+    mut Vector<u32> outBrokenJointIds,
+    mut b8 outHandled,
+    in f32 dt,
+    in u32 subStepCount
+){
+    outHandled = false;
+    const usize totalAwake = world.m_solverSets[s_AwakeSetIndex].states.size();
+    const usize awakeIslandCount = world.m_solverSets[s_AwakeSetIndex].islands.size();
+    if(totalAwake == 0u || dt <= 0.0f || subStepCount == 0u || awakeIslandCount < 2u)
+        return true;
+
+    const u32 dynBit = cast<u32>(BodyFlags::Dynamic);
+    in Vector<BodyState> statesView = world.m_solverSets[s_AwakeSetIndex].states;
+    in Vector<BodySim> simsView = world.m_solverSets[s_AwakeSetIndex].sims;
+
+    mut Vector<u32> awakeBodyIslLoc = world.m_cpuScratch.parAwakeToLocal;
+    awakeBodyIslLoc.clear();
+    awakeBodyIslLoc.resize(totalAwake, s_NullIndex);
+    mut Vector<u32> dynAwakeIndices = world.m_cpuScratch.parDynAwakeIndices;
+    mut Vector<u32> kinAwakeIndices = world.m_cpuScratch.parKinAwakeIndices;
+    dynAwakeIndices.clear();
+    kinAwakeIndices.clear();
+    dynAwakeIndices.reserve(totalAwake);
+
+    b8 anyKin = false;
+    for(usize i = 0u; i < totalAwake; ++i){
+        in BodyState st = statesView[i];
+        if((st.flags() & dynBit) == 0u){
+            anyKin = true;
+            if(Vector3LengthSq(VectorSingle(st.linearVelocity)).x > 0.0f || Vector3LengthSq(VectorSingle(st.angularVelocity)).x > 0.0f)
+                return true;
+            kinAwakeIndices.push_back(cast<u32>(i));
+        }
+        else{
+            const u32 islId = world.m_bodies[simsView[i].bodyId].islandId;
+            if(islId >= world.m_islands.size())
+                return true;
+            in Island isl = world.m_islands[islId];
+            if(!isl.alive || isl.setIndex != s_AwakeSetIndex || isl.localIndex >= awakeIslandCount)
+                return true;
+            awakeBodyIslLoc[i] = isl.localIndex;
+            dynAwakeIndices.push_back(cast<u32>(i));
+        }
+    }
+    world.m_cpuScratch.parAllAwakeDynamic = !anyKin;
+
+    const usize dynCount = dynAwakeIndices.size();
+    if(dynCount == 0u && kinAwakeIndices.empty())
+        return true;
+
+    mut Vector<u64> crossIslandEdges = world.m_cpuScratch.parCrossIslandEdges;
+    crossIslandEdges.clear();
+    mut Vector<u32> flatContactIds = world.m_cpuScratch.parFlatContactIds;
+    mut Vector<u32> flatContactIslands = world.m_cpuScratch.parFlatContactComps;
+    flatContactIds.clear();
+    flatContactIslands.clear();
+    const u32 cAliveBit = cast<u32>(ContactFlags::Alive);
+    const u32 cSensorBit = cast<u32>(ContactFlags::Sensor);
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        in Vector<u32> cIds = world.m_graph.colors[c].contactIds;
+        for(usize idx = 0u; idx < cIds.size(); ++idx){
+            const u32 cId = cIds[idx];
+            in Contact contact = world.m_contacts[cId];
+            if((contact.flags & (cAliveBit | cSensorBit)) != cAliveBit || contact.manifold.pointCount() == 0u)
+                continue;
+            u32 islLoc = s_NullIndex;
+            if(contact.islandId < world.m_islands.size()){
+                in Island isl = world.m_islands[contact.islandId];
+                if(isl.alive && isl.setIndex == s_AwakeSetIndex && isl.localIndex < awakeIslandCount)
+                    islLoc = isl.localIndex;
+            }
+            if(islLoc == s_NullIndex){
+                in Body bA = world.m_bodies[contact.edges[0u].bodyId];
+                in Body bB = world.m_bodies[contact.edges[1u].bodyId];
+                u32 locA = s_NullIndex;
+                u32 locB = s_NullIndex;
+                if(bA.type == BodyType::Dynamic){
+                    if(bA.setIndex != s_AwakeSetIndex)
+                        return true;
+                    locA = awakeBodyIslLoc[bA.localIndex];
+                }
+                if(bB.type == BodyType::Dynamic){
+                    if(bB.setIndex != s_AwakeSetIndex)
+                        return true;
+                    locB = awakeBodyIslLoc[bB.localIndex];
+                }
+                if(locA != s_NullIndex && locB != s_NullIndex){
+                    if(locA != locB)
+                        crossIslandEdges.push_back((cast<u64>(locA) << 32u) | cast<u64>(locB));
+                    islLoc = locA;
+                }
+                else if(locA != s_NullIndex){
+                    islLoc = locA;
+                }
+                else{
+                    islLoc = locB;
+                }
+            }
+            if(islLoc != s_NullIndex){
+                flatContactIds.push_back(cId);
+                flatContactIslands.push_back(islLoc);
+            }
+        }
+    }
+
+    mut Vector<u32> activeJointIds = world.m_cpuScratch.activeJointIds;
+    CollectActiveAwakeJointIds(world, world.m_cpuScratch.jointVisitStamps, world.m_cpuScratch.jointVisitStamp, activeJointIds);
+    mut Vector<u32> flatJointIds = world.m_cpuScratch.parFlatJointIds;
+    mut Vector<u32> flatJointIslands = world.m_cpuScratch.parFlatJointComps;
+    flatJointIds.clear();
+    flatJointIslands.clear();
+    flatJointIds.reserve(activeJointIds.size());
+    flatJointIslands.reserve(activeJointIds.size());
+    for(usize ji = 0u; ji < activeJointIds.size(); ++ji){
+        const u32 jId = activeJointIds[ji];
+        in Joint joint = world.m_joints[jId];
+        u32 islLoc = s_NullIndex;
+        if(joint.islandId < world.m_islands.size()){
+            in Island isl = world.m_islands[joint.islandId];
+            if(isl.alive && isl.setIndex == s_AwakeSetIndex && isl.localIndex < awakeIslandCount)
+                islLoc = isl.localIndex;
+        }
+        if(islLoc == s_NullIndex){
+            in Body bA = world.m_bodies[joint.edges[0u].bodyId];
+            in Body bB = world.m_bodies[joint.edges[1u].bodyId];
+            u32 locA = s_NullIndex;
+            u32 locB = s_NullIndex;
+            if(bA.type == BodyType::Dynamic){
+                if(bA.setIndex != s_AwakeSetIndex)
+                    return true;
+                locA = awakeBodyIslLoc[bA.localIndex];
+            }
+            if(bB.type == BodyType::Dynamic){
+                if(bB.setIndex != s_AwakeSetIndex)
+                    return true;
+                locB = awakeBodyIslLoc[bB.localIndex];
+            }
+            if(locA != s_NullIndex && locB != s_NullIndex){
+                if(locA != locB)
+                    crossIslandEdges.push_back((cast<u64>(locA) << 32u) | cast<u64>(locB));
+                islLoc = locA;
+            }
+            else if(locA != s_NullIndex){
+                islLoc = locA;
+            }
+            else{
+                islLoc = locB;
+            }
+        }
+        if(islLoc != s_NullIndex){
+            flatJointIds.push_back(jId);
+            flatJointIslands.push_back(islLoc);
+        }
+    }
+
+    mut Vector<u32> islDsuParents = world.m_cpuScratch.parDsuParents;
+    mut Vector<u8> islDsuRanks = world.m_cpuScratch.parDsuRanks;
+    const b8 hasCrossEdges = !crossIslandEdges.empty();
+    if(hasCrossEdges){
+        islDsuParents.resize(awakeIslandCount);
+        islDsuRanks.clear();
+        islDsuRanks.resize(awakeIslandCount, 0u);
+        for(usize ii = 0u; ii < awakeIslandCount; ++ii)
+            islDsuParents[ii] = cast<u32>(ii);
+        for(usize ei = 0u; ei < crossIslandEdges.size(); ++ei){
+            const u64 edge = crossIslandEdges[ei];
+            JoinDisjointSets(cast<isize>(edge >> 32u), cast<isize>(edge & 0xffffffffull), islDsuParents, islDsuRanks);
+        }
+    }
+
+    mut Vector<u32> rootToComp = world.m_cpuScratch.parRootToComp;
+    rootToComp.clear();
+    rootToComp.resize(awakeIslandCount, s_NullIndex);
+    usize compCount = 0u;
+    for(usize fi = 0u; fi < flatContactIds.size(); ++fi){
+        u32 root = flatContactIslands[fi];
+        if(hasCrossEdges)
+            root = cast<u32>(FindDisjointRoot(cast<isize>(root), islDsuParents));
+        flatContactIslands[fi] = root;
+        if(rootToComp[root] == s_NullIndex){
+            rootToComp[root] = cast<u32>(compCount);
+            ++compCount;
+        }
+    }
+    for(usize fi = 0u; fi < flatJointIds.size(); ++fi){
+        u32 root = flatJointIslands[fi];
+        if(hasCrossEdges)
+            root = cast<u32>(FindDisjointRoot(cast<isize>(root), islDsuParents));
+        flatJointIslands[fi] = root;
+        if(rootToComp[root] == s_NullIndex){
+            rootToComp[root] = cast<u32>(compCount);
+            ++compCount;
+        }
+    }
+
+    if(cpuScheduler.isParallelEnabled() && compCount == 1u && flatContactIds.size() >= s_CpuColorParallelThreshold)
+        return true;
+
+    mut Vector<u32> freeBodyIndices = world.m_cpuScratch.parFreeBodyIndices;
+    freeBodyIndices.clear();
+    mut Vector<u32> dynBodyComps = world.m_cpuScratch.parDynBodyComps;
+    dynBodyComps.resize(dynCount);
+    mut Vector<u32> compBodyOffsets = world.m_cpuScratch.parCompBodyOffsets;
+    compBodyOffsets.clear();
+    compBodyOffsets.resize(compCount + 1u, 0u);
+    for(usize i = 0u; i < dynCount; ++i){
+        const u32 awakeIdx = dynAwakeIndices[i];
+        u32 root = awakeBodyIslLoc[awakeIdx];
+        if(hasCrossEdges)
+            root = cast<u32>(FindDisjointRoot(cast<isize>(root), islDsuParents));
+        const u32 compIdx = rootToComp[root];
+        dynBodyComps[i] = compIdx;
+        if(compIdx == s_NullIndex)
+            freeBodyIndices.push_back(awakeIdx);
+        else
+            ++compBodyOffsets[compIdx + 1u];
+    }
+    for(usize ci = 1u; ci <= compCount; ++ci)
+        compBodyOffsets[ci] += compBodyOffsets[ci - 1u];
+
+    mut Vector<u32> compBodyCursors = world.m_cpuScratch.parCompBodyCursors;
+    compBodyCursors.resize(compCount + 1u);
+    for(usize ci = 0u; ci <= compCount; ++ci)
+        compBodyCursors[ci] = compBodyOffsets[ci];
+    mut Vector<u32> compBodyIndices = world.m_cpuScratch.parCompBodyIndices;
+    compBodyIndices.resize(dynCount - freeBodyIndices.size());
+    for(usize i = 0u; i < dynCount; ++i){
+        const u32 compIdx = dynBodyComps[i];
+        if(compIdx == s_NullIndex)
+            continue;
+        const u32 dst = compBodyCursors[compIdx];
+        compBodyCursors[compIdx] = dst + 1u;
+        compBodyIndices[dst] = dynAwakeIndices[i];
+    }
+
+    mut Vector<u32> compContactOffsets = world.m_cpuScratch.parCompContactOffsets;
+    compContactOffsets.clear();
+    compContactOffsets.resize(compCount + 1u, 0u);
+    for(usize fi = 0u; fi < flatContactIds.size(); ++fi){
+        const u32 compIdx = rootToComp[flatContactIslands[fi]];
+        flatContactIslands[fi] = compIdx;
+        ++compContactOffsets[compIdx + 1u];
+    }
+    for(usize ci = 1u; ci <= compCount; ++ci)
+        compContactOffsets[ci] += compContactOffsets[ci - 1u];
+    mut Vector<u32> compContactCursors = world.m_cpuScratch.parCursors;
+    compContactCursors.resize(compCount + 1u);
+    for(usize ci = 0u; ci <= compCount; ++ci)
+        compContactCursors[ci] = compContactOffsets[ci];
+    mut Vector<u32> compContactIds = world.m_cpuScratch.parCompContactIds;
+    compContactIds.resize(flatContactIds.size());
+    for(usize fi = 0u; fi < flatContactIds.size(); ++fi){
+        const u32 compIdx = flatContactIslands[fi];
+        const u32 dst = compContactCursors[compIdx];
+        compContactCursors[compIdx] = dst + 1u;
+        compContactIds[dst] = flatContactIds[fi];
+    }
+
+    mut Vector<u32> compJointOffsets = world.m_cpuScratch.parCompJointOffsets;
+    compJointOffsets.clear();
+    compJointOffsets.resize(compCount + 1u, 0u);
+    for(usize fi = 0u; fi < flatJointIds.size(); ++fi){
+        const u32 compIdx = rootToComp[flatJointIslands[fi]];
+        flatJointIslands[fi] = compIdx;
+        ++compJointOffsets[compIdx + 1u];
+    }
+    for(usize ci = 1u; ci <= compCount; ++ci)
+        compJointOffsets[ci] += compJointOffsets[ci - 1u];
+    mut Vector<u32> compJointCursors = world.m_cpuScratch.parCursors;
+    compJointCursors.resize(compCount + 1u);
+    for(usize ci = 0u; ci <= compCount; ++ci)
+        compJointCursors[ci] = compJointOffsets[ci];
+    mut Vector<u32> compJointIndices = world.m_cpuScratch.parCompJointIndices;
+    compJointIndices.resize(flatJointIds.size());
+    for(usize fi = 0u; fi < flatJointIds.size(); ++fi){
+        const u32 compIdx = flatJointIslands[fi];
+        const u32 dst = compJointCursors[compIdx];
+        compJointCursors[compIdx] = dst + 1u;
+        compJointIndices[dst] = flatJointIds[fi];
+    }
+
+    const f32 h = dt / cast<f32>(subStepCount);
+    const f32 invH = 1.0f / h;
+    const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+    const f32 maxLinVel = world.m_def.maxLinearVelocity;
+    const f32 restThresh = world.m_def.restitutionThreshold;
+    const f32 hitThresh = world.m_def.hitEventThreshold;
+    const f32 contactHertz = world.m_def.contactHertz;
+    const f32 contactDampingRatio = world.m_def.contactDampingRatio;
+    const b8 enableContactSoftening = world.m_def.enableContactSoftening;
+    const Softness dynamicSoftness = MakeSoftness(contactHertz, contactDampingRatio, h);
+    const Softness staticSoftness = MakeSoftness(2.0f * contactHertz, contactDampingRatio, h);
+    const f32 jointDefaultHertz = Max(contactHertz, 30.0f);
+    const b8 enableWarmStarting = world.m_enableWarmStarting;
+    const b8 checkHitEvents = world.m_hitEventShapeCount > 0u;
+    const b8 checkBreakJoints = world.m_breakableJointCount > 0u;
+    mut Vector<BodySim> sims = world.m_solverSets[s_AwakeSetIndex].sims;
+    mut Vector<BodyState> states = world.m_solverSets[s_AwakeSetIndex].states;
+
+    const usize freeCount = freeBodyIndices.size();
+    const Span<u32> freeSpan = Span<u32>(freeBodyIndices);
+
+    usize usedBuckets = 0u;
+    if(compCount >= 2u && cpuScheduler.isParallelEnabled()){
+        mut Vector<u32> compScores = world.m_cpuScratch.parCompScores;
+        mut Vector<usize> compOrder = world.m_cpuScratch.parCompOrder;
+        compScores.resize(compCount);
+        compOrder.resize(compCount);
+        for(usize ci = 0u; ci < compCount; ++ci){
+            const u32 bCnt = compBodyOffsets[ci + 1u] - compBodyOffsets[ci];
+            const u32 cCnt = compContactOffsets[ci + 1u] - compContactOffsets[ci];
+            const u32 jCnt = compJointOffsets[ci + 1u] - compJointOffsets[ci];
+            compScores[ci] = bCnt + cCnt * 2u + jCnt * 3u;
+            compOrder[ci] = ci;
+        }
+        const Span<u32> scoreSpan = Span<u32>(compScores);
+        SortSequence<usize>(
+            compOrder,
+            lambda[in scoreSpan](in usize lhs, in usize rhs) -> b8{
+                return scoreSpan[lhs] > scoreSpan[rhs];
+            }
+        );
+
+        const usize bucketCount = ComputePhysicsBucketCount(cpuScheduler, compCount);
+        mut Vector<Vector<usize>> buckets = world.m_cpuScratch.parBuckets;
+        buckets.resize(bucketCount);
+        for(usize b = 0u; b < bucketCount; ++b)
+            buckets[b].clear();
+        mut Vector<u64> bucketLoads = world.m_cpuScratch.parBucketLoads;
+        bucketLoads.clear();
+        bucketLoads.resize(bucketCount, 0u);
+        for(usize oi = 0u; oi < compOrder.size(); ++oi){
+            const usize ci = compOrder[oi];
+            usize bestBucket = 0u;
+            for(usize b = 1u; b < bucketCount; ++b){
+                if(bucketLoads[b] < bucketLoads[bestBucket])
+                    bestBucket = b;
+            }
+            buckets[bestBucket].push_back(ci);
+            bucketLoads[bestBucket] += cast<u64>(compScores[ci]);
+        }
+
+        mut Vector<CpuBucketSolverScratch> bucketScratches = world.m_cpuScratch.parBucketScratch;
+        if(bucketScratches.size() < bucketCount)
+            bucketScratches.resize(bucketCount);
+        for(usize b = 0u; b < bucketCount; ++b)
+            bucketScratches[b].clear();
+
+        const Span<u32> bodyOffSpan = Span<u32>(compBodyOffsets);
+        const Span<u32> bodyIdxSpan = Span<u32>(compBodyIndices);
+        const Span<u32> contactOffSpan = Span<u32>(compContactOffsets);
+        const Span<u32> contactIdSpan = Span<u32>(compContactIds);
+        const Span<u32> jointOffSpan = Span<u32>(compJointOffsets);
+        const Span<u32> jointIdxSpan = Span<u32>(compJointIndices);
+        const Span<Vector<usize>> bucketSpan = Span<Vector<usize>>(buckets);
+
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            bucketCount,
+            1u,
+            lambda[mut world, mut sims, mut states, mut bucketScratches, in bodyOffSpan, in bodyIdxSpan, in contactOffSpan, in contactIdSpan, in jointOffSpan, in jointIdxSpan, in bucketSpan, in freeSpan, in freeCount, in bucketCount, in gravity, in subStepCount, in dt, in h, in invH, in maxLinVel, in restThresh, in hitThresh, in contactHertz, in contactDampingRatio, in enableContactSoftening, in dynamicSoftness, in staticSoftness, in jointDefaultHertz, in enableWarmStarting, in checkHitEvents, in checkBreakJoints](in usize bucketIdx) -> void{
+                in Vector<usize> compIds = bucketSpan[bucketIdx];
+                mut CpuBucketSolverScratch bScratch = bucketScratches[bucketIdx];
+                for(usize k = 0u; k < compIds.size(); ++k){
+                    const usize ci = compIds[k];
+                    SolveSingleComponentFusedCpu(
+                        world,
+                        sims,
+                        states,
+                        bScratch,
+                        bodyIdxSpan,
+                        bodyOffSpan[ci],
+                        bodyOffSpan[ci + 1u],
+                        contactIdSpan,
+                        contactOffSpan[ci],
+                        contactOffSpan[ci + 1u],
+                        jointIdxSpan,
+                        jointOffSpan[ci],
+                        jointOffSpan[ci + 1u],
+                        gravity,
+                        subStepCount,
+                        dt,
+                        h,
+                        invH,
+                        maxLinVel,
+                        restThresh,
+                        hitThresh,
+                        contactHertz,
+                        contactDampingRatio,
+                        enableContactSoftening,
+                        dynamicSoftness,
+                        staticSoftness,
+                        jointDefaultHertz,
+                        enableWarmStarting,
+                        checkHitEvents,
+                        checkBreakJoints
+                    );
+                }
+                const usize freeStart = (freeCount * bucketIdx) / bucketCount;
+                const usize freeEnd = (freeCount * (bucketIdx + 1u)) / bucketCount;
+                for(usize fi = freeStart; fi < freeEnd; ++fi){
+                    const usize bIdx = cast<usize>(freeSpan[fi]);
+                    for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+                        IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, bIdx);
+                        IntegrateBodyPositionsAt(states, h, bIdx);
+                    }
+                    FinalizeAwakeBodyAt(world, dt, bIdx);
+                }
+            },
+            CpuTaskOptions()
+        );
+        if(!res.has_value())
+            return false;
+        usedBuckets = bucketCount;
+    }
+    else{
+        b8 freeParOk = false;
+        if(freeCount >= s_CpuParallelThreshold && cpuScheduler.isParallelEnabled()){
+            const usize grain = ComputePhysicsGrain(cpuScheduler, freeCount, cast<usize>(64u));
+            const auto fRes = cpuScheduler.parallelFor(
+                0u,
+                freeCount,
+                grain,
+                lambda[mut world, mut sims, mut states, in freeSpan, in gravity, in subStepCount, in h, in dt, in maxLinVel](in usize fi) -> void{
+                    const usize bIdx = cast<usize>(freeSpan[fi]);
+                    for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+                        IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, bIdx);
+                        IntegrateBodyPositionsAt(states, h, bIdx);
+                    }
+                    FinalizeAwakeBodyAt(world, dt, bIdx);
+                },
+                CpuTaskOptions()
+            );
+            if(!fRes.has_value())
+                return false;
+            freeParOk = true;
+        }
+        if(!freeParOk){
+            for(usize fi = 0u; fi < freeCount; ++fi){
+                const usize bIdx = cast<usize>(freeBodyIndices[fi]);
+                for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+                    IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, bIdx);
+                    IntegrateBodyPositionsAt(states, h, bIdx);
+                }
+                FinalizeAwakeBodyAt(world, dt, bIdx);
+            }
+        }
+        if(compCount > 0u){
+            mut Vector<CpuBucketSolverScratch> bucketScratches = world.m_cpuScratch.parBucketScratch;
+            if(bucketScratches.empty())
+                bucketScratches.resize(1u);
+            bucketScratches[0u].clear();
+            mut CpuBucketSolverScratch bScratch = bucketScratches[0u];
+            const Span<u32> bodyIdxSpan = Span<u32>(compBodyIndices);
+            const Span<u32> contactIdSpan = Span<u32>(compContactIds);
+            const Span<u32> jointIdxSpan = Span<u32>(compJointIndices);
+            for(usize ci = 0u; ci < compCount; ++ci){
+                SolveSingleComponentFusedCpu(
+                    world,
+                    sims,
+                    states,
+                    bScratch,
+                    bodyIdxSpan,
+                    compBodyOffsets[ci],
+                    compBodyOffsets[ci + 1u],
+                    contactIdSpan,
+                    compContactOffsets[ci],
+                    compContactOffsets[ci + 1u],
+                    jointIdxSpan,
+                    compJointOffsets[ci],
+                    compJointOffsets[ci + 1u],
+                    gravity,
+                    subStepCount,
+                    dt,
+                    h,
+                    invH,
+                    maxLinVel,
+                    restThresh,
+                    hitThresh,
+                    contactHertz,
+                    contactDampingRatio,
+                    enableContactSoftening,
+                    dynamicSoftness,
+                    staticSoftness,
+                    jointDefaultHertz,
+                    enableWarmStarting,
+                    checkHitEvents,
+                    checkBreakJoints
+                );
+            }
+            usedBuckets = 1u;
+        }
+    }
+
+    for(usize ki = 0u; ki < kinAwakeIndices.size(); ++ki)
+        FinalizeAwakeBodyAt(world, dt, cast<usize>(kinAwakeIndices[ki]));
+
+    for(usize b = 0u; b < usedBuckets; ++b){
+        in CpuBucketSolverScratch bs = world.m_cpuScratch.parBucketScratch[b];
+        for(usize k = 0u; k < bs.hitEvents.size(); ++k)
+            world.m_contactHitEvents.push_back(bs.hitEvents[k]);
+        for(usize k = 0u; k < bs.breakEvents.size(); ++k)
+            world.m_jointBreakEvents.push_back(bs.breakEvents[k]);
+        for(usize k = 0u; k < bs.brokenJointIds.size(); ++k)
+            outBrokenJointIds.push_back(bs.brokenJointIds[k]);
+    }
+
+    outHandled = true;
+    return true;
+}
+
+b8 SolvePartitionSubStepsCpu(
+    mut PhysicsWorld world,
+    in Vector<u32> awakeIndices,
+    mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
+    mut Vector<JointConstraint> jointConstraints,
+    in f32 dt,
+    in u32 subStepCount,
+    mut CpuTaskScheduler cpuScheduler
+){
+    return SolvePartitionSubStepsCpuImpl(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, false);
 }
 
 void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut CpuTaskScheduler cpuScheduler){
@@ -4530,10 +6088,11 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     world.m_sensorEndEvents.clear();
     world.consumePendingEndEvents(world.m_contactEndEvents, world.m_sensorEndEvents);
     world.m_jointBreakEvents.clear();
+    world.m_cpuScratch.parAllAwakeDynamic = false;
     world.flushDirtyBodyMasses();
 
     WakeJointConnectedIslands(world);
-    EnlargeFastAndBulletBroadphaseBounds(world, dt);
+    EnlargeFastAndBulletBroadphaseBoundsWithScheduler(world, dt, cpuScheduler);
 
     u32 pairCount = 0u;
     UpdateBroadPhasePairsCpu(world, cpuScheduler, pairCount);
@@ -4554,41 +6113,50 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
         return;
     }
 
-    const f32 h = dt / cast<f32>(subStepCount);
-    const f32 invH = 1.0f / h;
-
-    mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints = world.m_cpuScratch.colorConstraints;
-    mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorCaches = world.m_cpuScratch.colorConstraintCaches;
-    if(!PrepareColorContactConstraintsFromGraphWithCache(
-        world,
-        h,
-        cpuScheduler,
-        colorConstraints,
-        colorCaches
-    )){
-        world.m_inStep = false;
-        return;
-    }
-
-    mut Vector<u32> activeJointIds = world.m_cpuScratch.activeJointIds;
-    CollectActiveAwakeJointIds(world, world.m_cpuScratch.jointVisitStamps, world.m_cpuScratch.jointVisitStamp, activeJointIds);
-    mut Vector<JointConstraint> jointConstraints = world.m_cpuScratch.jointConstraints;
-    const f32 jointDefaultHertz = Max(world.m_def.contactHertz, 30.0f);
-    PrepareJointConstraintsCpu(world, activeJointIds, jointDefaultHertz, h, cpuScheduler, jointConstraints);
-
-    mut Vector<u32> awakeIndices = world.m_cpuScratch.awakeIndices;
-    awakeIndices.resize(awakeCount);
-    for(u32 i = 0u; i < awakeCount; ++i)
-        awakeIndices[i] = i;
-
-    if(!SolvePartitionSubStepsCpuImpl(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, true)){
-        world.m_inStep = false;
-        return;
-    }
-
     mut Vector<u32> brokenJointIds = world.m_cpuScratch.brokenJointIds;
     brokenJointIds.clear();
-    StoreSolvedPartitionImpulsesAndEventsCpu(world, colorConstraints, jointConstraints, invH, brokenJointIds);
+    b8 fusedHandled = false;
+    if(!TrySolveIslandsFusedCpu(world, cpuScheduler, brokenJointIds, fusedHandled, dt, subStepCount)){
+        world.m_inStep = false;
+        return;
+    }
+
+    if(!fusedHandled){
+        const f32 h = dt / cast<f32>(subStepCount);
+        const f32 invH = 1.0f / h;
+
+        mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints = world.m_cpuScratch.colorConstraints;
+        mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorCaches = world.m_cpuScratch.colorConstraintCaches;
+        if(!PrepareColorContactConstraintsFromGraphWithCache(
+            world,
+            h,
+            cpuScheduler,
+            colorConstraints,
+            colorCaches
+        )){
+            world.m_inStep = false;
+            return;
+        }
+
+        mut Vector<u32> activeJointIds = world.m_cpuScratch.activeJointIds;
+        CollectActiveAwakeJointIds(world, world.m_cpuScratch.jointVisitStamps, world.m_cpuScratch.jointVisitStamp, activeJointIds);
+        mut Vector<JointConstraint> jointConstraints = world.m_cpuScratch.jointConstraints;
+        const f32 jointDefaultHertz = Max(world.m_def.contactHertz, 30.0f);
+        PrepareJointConstraintsCpu(world, activeJointIds, jointDefaultHertz, h, cpuScheduler, jointConstraints);
+
+        mut Vector<u32> awakeIndices = world.m_cpuScratch.awakeIndices;
+        awakeIndices.resize(awakeCount);
+        for(u32 i = 0u; i < awakeCount; ++i)
+            awakeIndices[i] = i;
+
+        if(!SolvePartitionSubStepsCpuImpl(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, true)){
+            world.m_inStep = false;
+            return;
+        }
+
+        StoreSolvedPartitionImpulsesAndEventsCpu(world, colorConstraints, jointConstraints, invH, brokenJointIds);
+    }
+
     for(usize bi = 0u; bi < brokenJointIds.size(); ++bi)
         world.destroyJointInternal(brokenJointIds[bi]);
 

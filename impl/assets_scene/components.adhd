@@ -9,6 +9,7 @@ interface IComponent{
     b8 validatePayload()const;
     void applyToEntity(mut Entity entity)const;
     b8 serializeComponentPayload(mut Vector<u8> outPayload)const;
+    b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const;
 }
 
 

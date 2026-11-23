@@ -38,6 +38,32 @@ class BulletToiQueryResult{
     public Sweep3D bestSweepB;
 }
 
+class CpuBucketSolverScratch{
+    public Vector<ContactConstraint> localConstraints;
+    public Vector<ContactConstraintStepCache> localCaches;
+    public Vector<JointConstraint> localJoints;
+    public Vector<JointConstraintStepCache> localJointCaches;
+    public Vector<ContactHitEvent> hitEvents;
+    public Vector<u32> hitContactIds;
+    public Vector<CpuContactSlotRef> hitSlots;
+    public Vector<JointBreakEvent> breakEvents;
+    public Vector<u32> brokenJointIds;
+    public Vector<u32> brokenJointSlotIndices;
+
+    public void clear(){
+        this.localConstraints.clear();
+        this.localCaches.clear();
+        this.localJoints.clear();
+        this.localJointCaches.clear();
+        this.hitEvents.clear();
+        this.hitContactIds.clear();
+        this.hitSlots.clear();
+        this.breakEvents.clear();
+        this.brokenJointIds.clear();
+        this.brokenJointSlotIndices.clear();
+    }
+}
+
 class PhysicsWorldCpuScratch{
     public Vector<u64> candidateKeys;
     public Vector<u32> activeContactIds;
@@ -95,6 +121,16 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> sensorCandShapeB;
     public Vector<u64> sensorCandPairKeys;
     public Vector<usize> sensorCandOrder;
+    public Vector<f32x4> parEnlargeDisps;
+    public Vector<u8> parEnlargeFlags;
+    public Vector<u32> parContactTxIds;
+    public Vector<usize> bulletHitIndices;
+    public Vector<u32> parFreeBodyIndices;
+    public Vector<u32> parFlatContactIds;
+    public Vector<u32> parCompContactIds;
+    public Vector<CpuBucketSolverScratch> parBucketScratch;
+    public usize parUsedBucketCount = 0u;
+    public b8 parAllAwakeDynamic = false;
 
     public void clear(){
         this.candidateKeys.clear();
@@ -157,6 +193,17 @@ class PhysicsWorldCpuScratch{
         this.sensorCandShapeB.clear();
         this.sensorCandPairKeys.clear();
         this.sensorCandOrder.clear();
+        this.parEnlargeDisps.clear();
+        this.parEnlargeFlags.clear();
+        this.parContactTxIds.clear();
+        this.bulletHitIndices.clear();
+        this.parFreeBodyIndices.clear();
+        this.parFlatContactIds.clear();
+        this.parCompContactIds.clear();
+        for(usize b = 0u; b < this.parBucketScratch.size(); ++b)
+            this.parBucketScratch[b].clear();
+        this.parUsedBucketCount = 0u;
+        this.parAllAwakeDynamic = false;
     }
 }
 
@@ -204,6 +251,9 @@ class PhysicsWorld{
     public b8 m_inStep = false;
     private b8 m_hasDirtyBodyMass = false;
     public u32 m_sensorEventShapeCount = 0u;
+    public u32 m_hitEventShapeCount = 0u;
+    public u32 m_breakableJointCount = 0u;
+    public u32 m_bulletBodyCount = 0u;
     public Vector<ContactEndTouchEvent> m_pendingContactEndEvents;
     public Vector<SensorEndTouchEvent> m_pendingSensorEndEvents;
 
@@ -270,6 +320,9 @@ class PhysicsWorld{
         this.m_inStep = false;
         this.m_hasDirtyBodyMass = false;
         this.m_sensorEventShapeCount = 0u;
+        this.m_hitEventShapeCount = 0u;
+        this.m_breakableJointCount = 0u;
+        this.m_bulletBodyCount = 0u;
         ++this.m_worldGeneration;
         this.m_lastStats = WorldStepStats();
         this.m_customFilterCallback.reset();
@@ -476,7 +529,23 @@ class PhysicsWorld{
         this.refreshCustomFilterContactsAndBroadphase();
     }
     public void setPreSolveCallback(in PreSolveCallback cb){ this.m_preSolveCallback = cb; }
-    public void clearPreSolveCallback(){ this.m_preSolveCallback.reset(); }
+    public void clearPreSolveCallback(){
+        const b8 hadCallback = this.m_preSolveCallback.has_value();
+        this.m_preSolveCallback.reset();
+        if(!hadCallback)
+            return;
+        for(usize i = 0u; i < this.m_contacts.size(); ++i){
+            mut Contact c = this.m_contacts[i];
+            if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                continue;
+            in Shape sA = this.m_shapes[c.shapeIdA];
+            in Shape sB = this.m_shapes[c.shapeIdB];
+            c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
+            c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
+            c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
+            c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
+        }
+    }
 
     public b8 setWorldDef(in WorldDef def){
         if(
@@ -719,6 +788,8 @@ class PhysicsWorld{
         }
 
         AddBodyToSolverSet(this.m_bodies, this.m_solverSets[targetSet], sim, state);
+        if(def.isBullet)
+            ++this.m_bulletBodyCount;
 
         if(def.type == BodyType::Dynamic && def.isEnabled){
             const u32 islandId = CreateIslandInWorld(this.m_islands, this.m_freeIslandIds, this.m_solverSets, targetSet);
@@ -740,6 +811,8 @@ class PhysicsWorld{
             return false;
 
         const u32 idx = bodyId.index;
+        if((this.m_bodies[idx].flags & cast<u32>(BodyFlags::IsBullet)) != 0u && this.m_bulletBodyCount > 0u)
+            --this.m_bulletBodyCount;
         this.wakeBodyNeighbors(idx);
         while(this.m_bodies[idx].headJointKey != s_NullIndex){
             const u32 jointId = DecodeJointKeyId(this.m_bodies[idx].headJointKey);
@@ -755,6 +828,8 @@ class PhysicsWorld{
                 this.m_broadPhase.destroyProxy(this.m_shapes[shapeId].proxyKey);
                 this.m_shapes[shapeId].proxyKey = s_NullIndex;
             }
+            if(this.m_shapes[shapeId].enableHitEvents() && this.m_hitEventShapeCount > 0u)
+                --this.m_hitEventShapeCount;
             if(this.m_shapes[shapeId].isSensor() && this.m_shapes[shapeId].enableSensorEvents() && this.m_sensorEventShapeCount > 0u)
                 --this.m_sensorEventShapeCount;
             this.releaseShapeGeometry(this.m_shapes[shapeId]);
@@ -909,6 +984,8 @@ class PhysicsWorld{
         shape.setFlag(ShapeFlags::EnablePreSolveEvents, def.enablePreSolveEvents);
         shape.setFlag(ShapeFlags::Alive, true);
         shape.userData = def.userData;
+        if(def.enableHitEvents)
+            ++this.m_hitEventShapeCount;
         if(def.isSensor && def.enableSensorEvents)
             ++this.m_sensorEventShapeCount;
 
@@ -1053,6 +1130,8 @@ class PhysicsWorld{
             }
         }
 
+        if(this.m_shapes[idx].enableHitEvents() && this.m_hitEventShapeCount > 0u)
+            --this.m_hitEventShapeCount;
         if(this.m_shapes[idx].isSensor() && this.m_shapes[idx].enableSensorEvents() && this.m_sensorEventShapeCount > 0u)
             --this.m_sensorEventShapeCount;
         this.releaseShapeGeometry(this.m_shapes[idx]);
@@ -1833,6 +1912,10 @@ class PhysicsWorld{
         if(this.m_shapes[shapeId.index].enableHitEvents() == enabled)
             return true;
         this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableHitEvents, enabled);
+        if(enabled)
+            ++this.m_hitEventShapeCount;
+        else if(this.m_hitEventShapeCount > 0u)
+            --this.m_hitEventShapeCount;
         this.refreshShapeContactEventFlags(shapeId.index);
         return true;
     }
@@ -2174,6 +2257,46 @@ class PhysicsWorld{
                 return false;
         }
         const u32 idx = shapeId.index;
+        if(!updateBodyMass && this.m_shapes[idx].type == ShapeType::Hull){
+            in HullShape cur = this.m_hullShapes[this.m_shapes[idx].geometryIndex];
+            if(
+                cur.halfExtentsFlags.w == hull.halfExtentsFlags.w
+                && cur.centroidRadius.x == hull.centroidRadius.x
+                && cur.centroidRadius.y == hull.centroidRadius.y
+                && cur.centroidRadius.z == hull.centroidRadius.z
+                && cur.centroidRadius.w == hull.centroidRadius.w
+            ){
+                if(hull.halfExtentsFlags.w != 0u){
+                    if(
+                        cur.halfExtentsFlags.x == hull.halfExtentsFlags.x
+                        && cur.halfExtentsFlags.y == hull.halfExtentsFlags.y
+                        && cur.halfExtentsFlags.z == hull.halfExtentsFlags.z
+                        && cur.boxRotation.x == hull.boxRotation.x
+                        && cur.boxRotation.y == hull.boxRotation.y
+                        && cur.boxRotation.z == hull.boxRotation.z
+                        && cur.boxRotation.w == hull.boxRotation.w
+                    )
+                        return true;
+                }
+                else if(
+                    cur.vertices.size() == hull.vertices.size()
+                    && cur.facePlanes.size() == hull.facePlanes.size()
+                    && cur.halfEdges.size() == hull.halfEdges.size()
+                ){
+                    b8 allVertsEqual = true;
+                    for(usize vi = 0u; vi < hull.vertices.size(); ++vi){
+                        in f32x3u a = cur.vertices[vi];
+                        in f32x3u b = hull.vertices[vi];
+                        if(a.x != b.x || a.y != b.y || a.z != b.z){
+                            allVertsEqual = false;
+                            break;
+                        }
+                    }
+                    if(allVertsEqual)
+                        return true;
+                }
+            }
+        }
         this.releaseShapeGeometry(this.m_shapes[idx]);
         this.m_shapes[idx].type = ShapeType::Hull;
         this.m_shapes[idx].geometryIndex = this.allocateHullShape(hull);
@@ -2397,6 +2520,10 @@ class PhysicsWorld{
         if(wasBullet == isBullet)
             return true;
         this.setBodyFlagBit(bodyId, bulletBit, isBullet);
+        if(isBullet)
+            ++this.m_bulletBodyCount;
+        else if(this.m_bulletBodyCount > 0u)
+            --this.m_bulletBodyCount;
         if(this.m_bodies[idx].setIndex != s_AwakeSetIndex)
             ++this.m_topologyVersion;
         return true;
@@ -2458,6 +2585,7 @@ class PhysicsWorld{
                     }
                     shapeIdx = shape.nextShapeId;
                 }
+                this.m_bodies[bId].flags &= ~cast<u32>(BodyFlags::HasEnlargedShapeAabb);
             }
             SleepIslandWithGraph(
                 this.m_graph,
@@ -2793,6 +2921,8 @@ class PhysicsWorld{
         joint.suspensionDampingRatio = def.suspensionDampingRatio;
         joint.breakForce = def.breakForce;
         joint.breakTorque = def.breakTorque;
+        if(joint.breakForce > 0.0f || joint.breakTorque > 0.0f)
+            ++this.m_breakableJointCount;
         joint.setFlag(JointFlags::EnableLimit, def.enableLimit);
         joint.setFlag(JointFlags::EnableMotor, def.enableMotor);
         joint.setFlag(JointFlags::EnableSpring, def.enableSpring);
@@ -3054,8 +3184,15 @@ class PhysicsWorld{
     public b8 setJointBreakThresholds(in JointId jointId, in f32 breakForce, in f32 breakTorque){
         if(!this.isValidJoint(jointId) || !IsFinite(breakForce) || !IsFinite(breakTorque) || breakForce < 0.0f || breakTorque < 0.0f)
             return false;
-        this.m_joints[jointId.index].breakForce = breakForce;
-        this.m_joints[jointId.index].breakTorque = breakTorque;
+        mut Joint joint = this.m_joints[jointId.index];
+        const b8 wasBreakable = joint.breakForce > 0.0f || joint.breakTorque > 0.0f;
+        const b8 nowBreakable = breakForce > 0.0f || breakTorque > 0.0f;
+        joint.breakForce = breakForce;
+        joint.breakTorque = breakTorque;
+        if(!wasBreakable && nowBreakable)
+            ++this.m_breakableJointCount;
+        else if(wasBreakable && !nowBreakable && this.m_breakableJointCount > 0u)
+            --this.m_breakableJointCount;
         this.wakeJointBodies(jointId.index);
         return true;
     }
@@ -3393,6 +3530,8 @@ class PhysicsWorld{
                 --this.m_bodies[bodyId].jointCount;
         }
 
+        if((this.m_joints[jointIdx].breakForce > 0.0f || this.m_joints[jointIdx].breakTorque > 0.0f) && this.m_breakableJointCount > 0u)
+            --this.m_breakableJointCount;
         this.m_joints[jointIdx].setFlag(JointFlags::Alive, false);
         this.m_joints[jointIdx].islandId = s_NullIndex;
         this.m_joints[jointIdx].islandIndex = s_NullIndex;
@@ -3420,54 +3559,7 @@ class PhysicsWorld{
         }
     }
 
-    public u32 createContactInternal(in u32 shapeIdA, in u32 shapeIdB){
-        if(shapeIdA >= this.m_shapes.size() || shapeIdB >= this.m_shapes.size() || shapeIdA == shapeIdB)
-            return s_NullIndex;
-
-        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
-        const auto existing = this.m_pairContactMap.find(pairKey);
-        if(existing != this.m_pairContactMap.end()){
-            if(!this.m_customFilterCallback.has_value())
-                return existing.value();
-            u32 ordA = shapeIdA;
-            u32 ordB = shapeIdB;
-            if(shapeIdB < shapeIdA){
-                ordA = shapeIdB;
-                ordB = shapeIdA;
-            }
-            if(this.m_customFilterCallback.value()(this.makeShapeId(ordA), this.makeShapeId(ordB)))
-                return existing.value();
-            return s_NullIndex;
-        }
-
-        in Shape sA = this.m_shapes[shapeIdA];
-        in Shape sB = this.m_shapes[shapeIdB];
-        if(!sA.alive() || !sB.alive() || sA.bodyId == sB.bodyId)
-            return s_NullIndex;
-
-        in Body bA = this.m_bodies[sA.bodyId];
-        in Body bB = this.m_bodies[sB.bodyId];
-        const b8 hasSensor = sA.isSensor() || sB.isSensor();
-        const b8 hasDynamic = (bA.type == BodyType::Dynamic) || (bB.type == BodyType::Dynamic);
-        const b8 hasKinematic = (bA.type == BodyType::Kinematic) || (bB.type == BodyType::Kinematic);
-        if(!hasDynamic && !(hasSensor && hasKinematic))
-            return s_NullIndex;
-        if(!ShouldCollideFilters(sA.filter, sB.filter))
-            return s_NullIndex;
-        if(!hasSensor && this.areBodiesConnectedNonColliding(sA.bodyId, sB.bodyId))
-            return s_NullIndex;
-
-        u32 orderedA = shapeIdA;
-        u32 orderedB = shapeIdB;
-        if(shapeIdB < shapeIdA){
-            orderedA = shapeIdB;
-            orderedB = shapeIdA;
-        }
-        if(this.m_customFilterCallback.has_value()){
-            if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
-                return s_NullIndex;
-        }
-
+    private u32 createContactAllocAndLinkInternal(in u32 orderedA, in u32 orderedB, in u64 pairKey){
         u32 cId = s_NullIndex;
         if(!this.m_freeContactIds.empty()){
             cId = this.m_freeContactIds[this.m_freeContactIds.size() - 1u];
@@ -3525,6 +3617,73 @@ class PhysicsWorld{
 
         this.m_pairContactMap.emplace(pairKey, cId);
         return cId;
+    }
+
+    public u32 createContactFromValidatedPair(in u32 orderedA, in u32 orderedB, in u64 pairKey){
+        const auto existing = this.m_pairContactMap.find(pairKey);
+        if(existing != this.m_pairContactMap.end()){
+            if(!this.m_customFilterCallback.has_value())
+                return existing.value();
+            if(this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
+                return existing.value();
+            return s_NullIndex;
+        }
+        if(this.m_customFilterCallback.has_value()){
+            if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
+                return s_NullIndex;
+        }
+        return this.createContactAllocAndLinkInternal(orderedA, orderedB, pairKey);
+    }
+
+    public u32 createContactInternal(in u32 shapeIdA, in u32 shapeIdB){
+        if(shapeIdA >= this.m_shapes.size() || shapeIdB >= this.m_shapes.size() || shapeIdA == shapeIdB)
+            return s_NullIndex;
+
+        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
+        const auto existing = this.m_pairContactMap.find(pairKey);
+        if(existing != this.m_pairContactMap.end()){
+            if(!this.m_customFilterCallback.has_value())
+                return existing.value();
+            u32 ordA = shapeIdA;
+            u32 ordB = shapeIdB;
+            if(shapeIdB < shapeIdA){
+                ordA = shapeIdB;
+                ordB = shapeIdA;
+            }
+            if(this.m_customFilterCallback.value()(this.makeShapeId(ordA), this.makeShapeId(ordB)))
+                return existing.value();
+            return s_NullIndex;
+        }
+
+        in Shape sA = this.m_shapes[shapeIdA];
+        in Shape sB = this.m_shapes[shapeIdB];
+        if(!sA.alive() || !sB.alive() || sA.bodyId == sB.bodyId)
+            return s_NullIndex;
+
+        in Body bA = this.m_bodies[sA.bodyId];
+        in Body bB = this.m_bodies[sB.bodyId];
+        const b8 hasSensor = sA.isSensor() || sB.isSensor();
+        const b8 hasDynamic = (bA.type == BodyType::Dynamic) || (bB.type == BodyType::Dynamic);
+        const b8 hasKinematic = (bA.type == BodyType::Kinematic) || (bB.type == BodyType::Kinematic);
+        if(!hasDynamic && !(hasSensor && hasKinematic))
+            return s_NullIndex;
+        if(!ShouldCollideFilters(sA.filter, sB.filter))
+            return s_NullIndex;
+        if(!hasSensor && this.areBodiesConnectedNonColliding(sA.bodyId, sB.bodyId))
+            return s_NullIndex;
+
+        u32 orderedA = shapeIdA;
+        u32 orderedB = shapeIdB;
+        if(shapeIdB < shapeIdA){
+            orderedA = shapeIdB;
+            orderedB = shapeIdA;
+        }
+        if(this.m_customFilterCallback.has_value()){
+            if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
+                return s_NullIndex;
+        }
+
+        return this.createContactAllocAndLinkInternal(orderedA, orderedB, pairKey);
     }
 
     public void destroyContactInternal(in u32 contactId){

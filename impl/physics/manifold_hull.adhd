@@ -452,24 +452,38 @@ void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle 
     outZ = VectorSingle(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
 }
 
-u32 ClipBoxQuadAgainstPlane(
-    in Array<ClipVertex, 8u> inVerts,
+class ClipBoxLocalVertex{
+    public f32 u = 0.0f;
+    public f32 v = 0.0f;
+    public f32 s = 0.0f;
+    public u8 id0 = 0u;
+    public u8 id1 = 0u;
+}
+
+u32 ClipBoxLocalQuadMax(
+    in Array<ClipBoxLocalVertex, 8u> inVerts,
     in u32 inCount,
-    in VectorSingle planeNormal,
-    in f32 planeOffset,
+    in b8 useV,
+    in f32 limit,
     in u8 edgeTag,
-    mut Array<ClipVertex, 8u> outVerts
+    mut Array<ClipBoxLocalVertex, 8u> outVerts
 ){
     u32 outCount = 0u;
     if(inCount == 0u)
         return 0u;
 
-    ClipVertex prev = inVerts[inCount - 1u];
-    f32 prevDist = Vector3Dot(planeNormal, Vec3FromU(prev.position)).x - planeOffset;
+    ClipBoxLocalVertex prev = inVerts[inCount - 1u];
+    f32 prevCoord = prev.u;
+    if(useV)
+        prevCoord = prev.v;
+    f32 prevDist = prevCoord - limit;
 
     for(u32 i = 0u; i < inCount; ++i){
-        const ClipVertex cur = inVerts[i];
-        const f32 curDist = Vector3Dot(planeNormal, Vec3FromU(cur.position)).x - planeOffset;
+        const ClipBoxLocalVertex cur = inVerts[i];
+        f32 curCoord = cur.u;
+        if(useV)
+            curCoord = cur.v;
+        const f32 curDist = curCoord - limit;
 
         if(curDist <= 0.0f){
             if(prevDist > 0.0f){
@@ -478,8 +492,10 @@ u32 ClipBoxQuadAgainstPlane(
                 if(Abs(denom) > 1.0e-12f)
                     t = Clamp(prevDist / denom, 0.0f, 1.0f);
                 if(outCount < 8u){
-                    ClipVertex interp;
-                    interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
+                    ClipBoxLocalVertex interp;
+                    interp.u = prev.u + (cur.u - prev.u) * t;
+                    interp.v = prev.v + (cur.v - prev.v) * t;
+                    interp.s = prev.s + (cur.s - prev.s) * t;
                     interp.id0 = edgeTag;
                     interp.id1 = cur.id1;
                     outVerts[outCount] = interp;
@@ -497,8 +513,81 @@ u32 ClipBoxQuadAgainstPlane(
             if(Abs(denom) > 1.0e-12f)
                 t = Clamp(prevDist / denom, 0.0f, 1.0f);
             if(outCount < 8u){
-                ClipVertex interp;
-                interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
+                ClipBoxLocalVertex interp;
+                interp.u = prev.u + (cur.u - prev.u) * t;
+                interp.v = prev.v + (cur.v - prev.v) * t;
+                interp.s = prev.s + (cur.s - prev.s) * t;
+                interp.id0 = cur.id0;
+                interp.id1 = edgeTag;
+                outVerts[outCount] = interp;
+                ++outCount;
+            }
+        }
+
+        prev = cur;
+        prevDist = curDist;
+    }
+
+    return outCount;
+}
+
+u32 ClipBoxLocalQuadMin(
+    in Array<ClipBoxLocalVertex, 8u> inVerts,
+    in u32 inCount,
+    in b8 useV,
+    in f32 negLimit,
+    in u8 edgeTag,
+    mut Array<ClipBoxLocalVertex, 8u> outVerts
+){
+    u32 outCount = 0u;
+    if(inCount == 0u)
+        return 0u;
+
+    ClipBoxLocalVertex prev = inVerts[inCount - 1u];
+    f32 prevCoord = prev.u;
+    if(useV)
+        prevCoord = prev.v;
+    f32 prevDist = negLimit - prevCoord;
+
+    for(u32 i = 0u; i < inCount; ++i){
+        const ClipBoxLocalVertex cur = inVerts[i];
+        f32 curCoord = cur.u;
+        if(useV)
+            curCoord = cur.v;
+        const f32 curDist = negLimit - curCoord;
+
+        if(curDist <= 0.0f){
+            if(prevDist > 0.0f){
+                const f32 denom = prevDist - curDist;
+                f32 t = 0.0f;
+                if(Abs(denom) > 1.0e-12f)
+                    t = Clamp(prevDist / denom, 0.0f, 1.0f);
+                if(outCount < 8u){
+                    ClipBoxLocalVertex interp;
+                    interp.u = prev.u + (cur.u - prev.u) * t;
+                    interp.v = prev.v + (cur.v - prev.v) * t;
+                    interp.s = prev.s + (cur.s - prev.s) * t;
+                    interp.id0 = edgeTag;
+                    interp.id1 = cur.id1;
+                    outVerts[outCount] = interp;
+                    ++outCount;
+                }
+            }
+            if(outCount < 8u){
+                outVerts[outCount] = cur;
+                ++outCount;
+            }
+        }
+        else if(prevDist <= 0.0f){
+            const f32 denom = prevDist - curDist;
+            f32 t = 0.0f;
+            if(Abs(denom) > 1.0e-12f)
+                t = Clamp(prevDist / denom, 0.0f, 1.0f);
+            if(outCount < 8u){
+                ClipBoxLocalVertex interp;
+                interp.u = prev.u + (cur.u - prev.u) * t;
+                interp.v = prev.v + (cur.v - prev.v) * t;
+                interp.s = prev.s + (cur.s - prev.s) * t;
                 interp.id0 = cur.id0;
                 interp.id1 = edgeTag;
                 outVerts[outCount] = interp;
@@ -623,13 +712,22 @@ b8 EvalBoxSatEdgeRow(
     mut f32 bestSign
 ){
     const VectorSingle lenSqVec = VectorSingle(1.0f) - rI * rI;
-    const VectorSingle invLenVec = Rsqrt(Max(lenSqVec, VectorSingle(1.0e-5f)));
     const VectorSingle projVec = rI1 * tA2 - rI2 * tA1;
     const VectorSingle raVec = aI2 * hA1 + aI1 * hA2;
     const VectorSingle aShift2(aI.z, aI.x, aI.y, 0.0f);
     const VectorSingle aShift1(aI.y, aI.z, aI.x, 0.0f);
     const VectorSingle rbVec = hbShift1 * aShift2 + hbShift2 * aShift1;
-    const VectorSingle sepVec = (Abs(projVec) - (raVec + rbVec)) * invLenVec - VectorSingle(totalR);
+    const VectorSingle rawSep = Abs(projVec) - (raVec + rbVec);
+    const f32 skipCeiling = Min(0.0f, Min(bestSep + 5.0e-4f, maxDistance) + totalR);
+    const VectorSingle needEval = VectorAndInt(
+        VectorGreaterOrEqual(lenSqVec, VectorSingle(1.0e-5f)),
+        VectorGreater(rawSep, VectorSingle(skipCeiling))
+    );
+    if((VectorMoveMask(needEval) & 0x7u) == 0u)
+        return true;
+
+    const VectorSingle invLenVec = Rsqrt(Max(lenSqVec, VectorSingle(1.0e-5f)));
+    const VectorSingle sepVec = rawSep * invLenVec - VectorSingle(totalR);
 
     if(lenSqVec.x >= 1.0e-5f){
         if(sepVec.x > maxDistance)
@@ -982,48 +1080,70 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
         incNormal = incZ;
     incNormal = incNormal * incSign;
 
-    const VectorSingle fc = incCenter + incNormal * incH[incAxisIdx];
+    const VectorSingle relFc = (incCenter - refCenter) + incNormal * incH[incAxisIdx];
     const VectorSingle eu = incU * incHu;
     const VectorSingle ev = incV * incHv;
+    const f32 fcU = Vector3Dot(uAxis, relFc).x;
+    const f32 fcV = Vector3Dot(vAxis, relFc).x;
+    const f32 fcS = Vector3Dot(refNormal, relFc).x;
+    const f32 euU = Vector3Dot(uAxis, eu).x;
+    const f32 euV = Vector3Dot(vAxis, eu).x;
+    const f32 euS = Vector3Dot(refNormal, eu).x;
+    const f32 evU = Vector3Dot(uAxis, ev).x;
+    const f32 evV = Vector3Dot(vAxis, ev).x;
+    const f32 evS = Vector3Dot(refNormal, ev).x;
 
-    Array<ClipVertex, 8u> poly0;
-    Array<ClipVertex, 8u> poly1;
-    poly0[0u].position = PackVec3U(fc - eu - ev);
+    Array<ClipBoxLocalVertex, 8u> poly0;
+    Array<ClipBoxLocalVertex, 8u> poly1;
+    poly0[0u].u = fcU - euU - evU;
+    poly0[0u].v = fcV - euV - evV;
+    poly0[0u].s = fcS - euS - evS;
     poly0[0u].id0 = 0u;
     poly0[0u].id1 = incFaceIdx;
-    poly0[1u].position = PackVec3U(fc + eu - ev);
+    poly0[1u].u = fcU + euU - evU;
+    poly0[1u].v = fcV + euV - evV;
+    poly0[1u].s = fcS + euS - evS;
     poly0[1u].id0 = 1u;
     poly0[1u].id1 = incFaceIdx;
-    poly0[2u].position = PackVec3U(fc + eu + ev);
+    poly0[2u].u = fcU + euU + evU;
+    poly0[2u].v = fcV + euV + evV;
+    poly0[2u].s = fcS + euS + evS;
     poly0[2u].id0 = 2u;
     poly0[2u].id1 = incFaceIdx;
-    poly0[3u].position = PackVec3U(fc - eu + ev);
+    poly0[3u].u = fcU - euU + evU;
+    poly0[3u].v = fcV - euV + evV;
+    poly0[3u].s = fcS - euS + evS;
     poly0[3u].id0 = 3u;
     poly0[3u].id1 = incFaceIdx;
 
+    const f32 limU = refH[uIdx];
+    const f32 limV = refH[vIdx];
     u32 polyCount = 4u;
-    polyCount = ClipBoxQuadAgainstPlane(poly0, polyCount, uAxis, Vector3Dot(uAxis, refCenter).x + refH[uIdx], 0u, poly1);
+    polyCount = ClipBoxLocalQuadMax(poly0, polyCount, false, limU, 0u, poly1);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxQuadAgainstPlane(poly1, polyCount, -uAxis, Vector3Dot(-uAxis, refCenter).x + refH[uIdx], 1u, poly0);
+    polyCount = ClipBoxLocalQuadMin(poly1, polyCount, false, -limU, 1u, poly0);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxQuadAgainstPlane(poly0, polyCount, vAxis, Vector3Dot(vAxis, refCenter).x + refH[vIdx], 2u, poly1);
+    polyCount = ClipBoxLocalQuadMax(poly0, polyCount, true, limV, 2u, poly1);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxQuadAgainstPlane(poly1, polyCount, -vAxis, Vector3Dot(-vAxis, refCenter).x + refH[vIdx], 3u, poly0);
+    polyCount = ClipBoxLocalQuadMin(poly1, polyCount, true, -limV, 3u, poly0);
     if(polyCount == 0u)
         return m;
 
-    const f32 refPlaneDist = Vector3Dot(refNormal, refCenter).x + refH[refAxisIdx];
+    const f32 refHOffset = refH[refAxisIdx];
     Array<ClipVertex, 8u> validPoints;
     u32 validCount = 0u;
     for(u32 p = 0u; p < polyCount; ++p){
-        const VectorSingle pt = Vec3FromU(poly0[p].position);
-        const f32 sep = Vector3Dot(refNormal, pt).x - refPlaneDist - totalR;
+        in ClipBoxLocalVertex lv = poly0[p];
+        const f32 sep = lv.s - refHOffset - totalR;
         if(sep <= maxDistance){
-            validPoints[validCount] = poly0[p];
+            const VectorSingle pt = refCenter + uAxis * lv.u + vAxis * lv.v + refNormal * lv.s;
+            validPoints[validCount].position = PackVec3U(pt);
             validPoints[validCount].separation = sep;
+            validPoints[validCount].id0 = lv.id0;
+            validPoints[validCount].id1 = lv.id1;
             ++validCount;
         }
     }

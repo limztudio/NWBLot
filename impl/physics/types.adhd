@@ -69,6 +69,7 @@ flag<u32> BodyFlags{
     AllowFastRotation = 0x00000400u,
     Dynamic = 0x00001000u,
     EnableSleep = 0x00002000u,
+    HasEnlargedShapeAabb = 0x00004000u,
     DirtyMass = 0x00008000u,
     EnableGyroscopicTorque = 0x00010000u,
 }

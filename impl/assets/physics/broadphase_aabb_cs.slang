@@ -79,22 +79,26 @@ void nwbPhysicsEmitBroadphasePair(
     const uint bodyB,
     const bool isComplex
 ){
-    uint writeIndex = 0u;
-    if(isComplex){
-        InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][1u], 1u, writeIndex);
-        if(writeIndex < maxPairs){
-            NwbPhysicsGpuBroadphasePair pairOut;
-            pairOut.indices = uint4(idxA, idxB, bodyA, bodyB);
-            g_NwbPhysicsBroadphasePairBuffers[pairSlot][maxPairs - 1u - writeIndex] = pairOut;
-        }
+    const uint primOffset = WavePrefixCountBits(!isComplex);
+    const uint primCount = WaveActiveCountBits(!isComplex);
+    const uint cpxOffset = WavePrefixCountBits(isComplex);
+    const uint cpxCount = WaveActiveCountBits(isComplex);
+    uint primBase = 0u;
+    uint cpxBase = 0u;
+    if(WaveIsFirstLane()){
+        if(primCount > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], primCount, primBase);
+        if(cpxCount > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][1u], cpxCount, cpxBase);
     }
-    else{
-        InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], 1u, writeIndex);
-        if(writeIndex < maxPairs){
-            NwbPhysicsGpuBroadphasePair pairOut;
-            pairOut.indices = uint4(idxA, idxB, bodyA, bodyB);
-            g_NwbPhysicsBroadphasePairBuffers[pairSlot][writeIndex] = pairOut;
-        }
+    primBase = WaveReadLaneFirst(primBase);
+    cpxBase = WaveReadLaneFirst(cpxBase);
+    const uint writeIndex = isComplex ? (cpxBase + cpxOffset) : (primBase + primOffset);
+    if(writeIndex < maxPairs){
+        NwbPhysicsGpuBroadphasePair pairOut;
+        pairOut.indices = uint4(idxA, idxB, bodyA, bodyB);
+        const uint dstIdx = isComplex ? (maxPairs - 1u - writeIndex) : writeIndex;
+        g_NwbPhysicsBroadphasePairBuffers[pairSlot][dstIdx] = pairOut;
     }
 }
 
@@ -102,6 +106,7 @@ void nwbPhysicsEmitBroadphasePair(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[require(spvGroupNonUniform, spvGroupNonUniformBallot)]
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID){
     const uint tid = dispatchThreadID.x;
@@ -109,6 +114,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint itemCount = g_NwbPhysicsPushConstants.itemCount;
     const uint itemOffset = g_NwbPhysicsPushConstants.itemOffset;
     const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.x;
+    const uint shapeAabbSlot = g_NwbPhysicsPushConstants.slots0.y;
     const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
     const uint pairSlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint counterSlot = g_NwbPhysicsPushConstants.slots1.y;
@@ -149,15 +155,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         if(tid >= itemCount)
             return;
         const uint shapeIdx = itemOffset + tid;
-        const uint4 bodyMeta = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].bodyIndexTypeShape;
-        const float4 localCenterRadius = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localCenterRadius;
-        const float4 localExtentOrP1 = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localExtentOrP1;
-        const float4 localRotation = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotation;
+        const NwbPhysicsGpuShapeProxy sp = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx];
+        const uint4 bodyMeta = sp.bodyIndexTypeShape;
+        const float4 localCenterRadius = sp.localCenterRadius;
+        const float4 localExtentOrP1 = sp.localExtentOrP1;
+        const float4 localRotation = sp.localRotation;
 
         const uint bodySlotIdx = bodyMeta.x;
         const NwbPhysicsGpuBodyPose bodyPose = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][bodySlotIdx];
         const float3 bodyOrigin = bodyPose.originPad.xyz;
         const float4 bodyQ = bodyPose.rotation;
+        const float3 sweepDisp = bodyPose.sweepDispFlags.xyz;
 
         const uint shapeType = bodyMeta.y;
         const float radius = localCenterRadius.w;
@@ -195,22 +203,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             maxOut = worldCenter + extent;
         }
 
-        g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].aabbMinPad = float4(minOut, 0.0f);
-        g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].aabbMaxPad.xyz = maxOut;
+        minOut += min(sweepDisp, float3(0.0f, 0.0f, 0.0f));
+        maxOut += max(sweepDisp, float3(0.0f, 0.0f, 0.0f));
+
+        g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 0u] = float4(minOut, 0.0f);
+        g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 1u] = float4(maxOut, asfloat(bodySlotIdx));
         return;
     }
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_INSERT){
         if(tid >= itemCount)
             return;
-        const float3 aabbMin = g_NwbPhysicsShapeProxyBuffers[shapeSlot][tid].aabbMinPad.xyz;
-        const float3 aabbMax = g_NwbPhysicsShapeProxyBuffers[shapeSlot][tid].aabbMaxPad.xyz;
+        const float3 aabbMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].xyz;
+        const float3 aabbMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 1u].xyz;
         const float invCellSize = g_NwbPhysicsPushConstants.deltaTime;
         const float3 minScaled = aabbMin * invCellSize;
         const float3 maxScaled = aabbMax * invCellSize;
         const bool finiteBounds = all(isfinite(minScaled)) && all(isfinite(maxScaled)) && all(abs(minScaled) < 1.0e6f) && all(abs(maxScaled) < 1.0e6f);
 
         bool isLarge = !finiteBounds;
+        bool maybeDup = false;
         int3 cMin = int3(0, 0, 0);
         int3 span = int3(0, 0, 0);
         if(!isLarge){
@@ -226,6 +238,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
 
         if(!isLarge){
+            uint bloom0 = 0u;
+            uint bloom1 = 0u;
             for(int dz = 0; dz < span.z; ++dz){
                 const int cz = cMin.z + dz;
                 for(int dy = 0; dy < span.y; ++dy){
@@ -233,6 +247,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     for(int dx = 0; dx < span.x; ++dx){
                         const int cx = cMin.x + dx;
                         const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
+                        const uint bitIdx = bucket & 63u;
+                        if(bitIdx < 32u){
+                            const uint bitMask = 1u << bitIdx;
+                            if((bloom0 & bitMask) != 0u)
+                                maybeDup = true;
+                            bloom0 |= bitMask;
+                        }
+                        else{
+                            const uint bitMask = 1u << (bitIdx - 32u);
+                            if((bloom1 & bitMask) != 0u)
+                                maybeDup = true;
+                            bloom1 |= bitMask;
+                        }
                         uint slotIdx = 0u;
                         InterlockedAdd(g_NwbPhysicsUintBuffers[gridSlot][bucket], 1u, slotIdx);
                         if(slotIdx < NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY){
@@ -258,7 +285,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 g_NwbPhysicsUintBuffers[largeListSlot][1u + largePos] = tid;
         }
 
-        g_NwbPhysicsShapeProxyBuffers[shapeSlot][tid].aabbMinPad.w = isLarge ? 1.0f : 0.0f;
+        const uint aabbFlags = (isLarge ? 1u : 0u) | (maybeDup ? 2u : 0u);
+        g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].w = asfloat(aabbFlags);
         return;
     }
 
@@ -270,20 +298,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_PAIRS){
         const bool active = (tid < awakeCount);
-        float4 minPadA = float4(0.0f, 0.0f, 0.0f, 0.0f);
         float3 minA = float3(0.0f, 0.0f, 0.0f);
         float3 maxA = float3(0.0f, 0.0f, 0.0f);
+        uint bodyA = NWB_PHYSICS_INVALID_INDEX;
         uint4 metaA = uint4(0u, 0u, 0u, 0u);
         uint4 filterA = uint4(0u, 0u, 0u, 0u);
         bool isLargeA = false;
 
         if(active){
-            minPadA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad;
-            minA = minPadA.xyz;
-            maxA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMaxPad.xyz;
+            const float4 aabb0A = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idx * 2u + 0u];
+            const float4 aabb1A = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idx * 2u + 1u];
+            minA = aabb0A.xyz;
+            maxA = aabb1A.xyz;
+            bodyA = asuint(aabb1A.w);
+            isLargeA = ((asuint(aabb0A.w) & 1u) != 0u);
             metaA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].bodyIndexTypeShape;
             filterA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].filterData;
-            isLargeA = (minPadA.w > 0.5f);
         }
 
         const float invCellSize = g_NwbPhysicsPushConstants.deltaTime;
@@ -311,20 +341,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                     if(idxB >= awakeOffset && idxB <= idx)
                                         continue;
 
-                                    const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad;
-                                    if(minPadB.w > 0.5f || any(minPadB.xyz > maxA))
+                                    const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 0u];
+                                    const float4 aabb1B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 1u];
+                                    const uint flagsB = asuint(aabb0B.w);
+                                    if((flagsB & 1u) != 0u || bodyA == asuint(aabb1B.w) || any(aabb0B.xyz > maxA) || any(minA > aabb1B.xyz))
                                         continue;
 
-                                    const float3 minScaledB = minPadB.xyz * invCellSize;
-                                    if(!all(isfinite(minScaledB)) || any(abs(minScaledB) >= 1.0e6f))
-                                        continue;
-                                    const int3 cMinB = int3(floor(minScaledB));
+                                    const int3 cMinB = int3(floor(aabb0B.xyz * invCellSize));
                                     const int3 canon = max(cMinA, cMinB);
                                     if(cx != canon.x || cy != canon.y || cz != canon.z)
-                                        continue;
-
-                                    const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
-                                    if(any(minA > maxB))
                                         continue;
 
                                     const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
@@ -332,15 +357,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                     if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                                         continue;
 
-                                    bool seenInBucket = false;
-                                    for(uint p = 0u; p < k; ++p){
-                                        if(g_NwbPhysicsUintBuffers[gridSlot][entryBase + p] == idxB){
-                                            seenInBucket = true;
-                                            break;
+                                    if((flagsB & 2u) != 0u){
+                                        bool seenInBucket = false;
+                                        for(uint p = 0u; p < k; ++p){
+                                            if(g_NwbPhysicsUintBuffers[gridSlot][entryBase + p] == idxB){
+                                                seenInBucket = true;
+                                                break;
+                                            }
                                         }
+                                        if(seenInBucket)
+                                            continue;
                                     }
-                                    if(seenInBucket)
-                                        continue;
 
                                     const uint outA = idx < idxB ? idx : idxB;
                                     const uint outB = idx < idxB ? idxB : idx;
@@ -361,8 +388,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(listPos < largeCount){
                 const uint lIdx = g_NwbPhysicsUintBuffers[largeListSlot][1u + listPos];
                 s_LargeIdx[groupThreadID.x] = lIdx;
-                s_LargeMin[groupThreadID.x] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][lIdx].aabbMinPad.xyz;
-                s_LargeMax[groupThreadID.x] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][lIdx].aabbMaxPad.xyz;
+                s_LargeMin[groupThreadID.x] = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][lIdx * 2u + 0u].xyz;
+                s_LargeMax[groupThreadID.x] = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][lIdx * 2u + 1u].xyz;
                 s_LargeMeta[groupThreadID.x] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][lIdx].bodyIndexTypeShape;
                 s_LargeFilter[groupThreadID.x] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][lIdx].filterData;
             }
@@ -392,11 +419,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         if(active && isLargeA){
             for(uint otherIdx = 0u; otherIdx < awakeOffset; ++otherIdx){
-                const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMinPad;
-                if(any(minPadB.xyz > maxA))
-                    continue;
-                const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMaxPad.xyz;
-                if(any(minA > maxB))
+                const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][otherIdx * 2u + 0u];
+                const float4 aabb1B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][otherIdx * 2u + 1u];
+                if(bodyA == asuint(aabb1B.w) || any(aabb0B.xyz > maxA) || any(minA > aabb1B.xyz))
                     continue;
                 const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
                 const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
@@ -405,11 +430,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, otherIdx, idx, metaB.x, metaA.x, nwbPhysicsIsComplexPair(metaA, metaB));
             }
             for(uint otherIdx = idx + 1u; otherIdx < totalShapeCount; ++otherIdx){
-                const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMinPad;
-                if(any(minPadB.xyz > maxA))
-                    continue;
-                const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMaxPad.xyz;
-                if(any(minA > maxB))
+                const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][otherIdx * 2u + 0u];
+                const float4 aabb1B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][otherIdx * 2u + 1u];
+                if(bodyA == asuint(aabb1B.w) || any(aabb0B.xyz > maxA) || any(minA > aabb1B.xyz))
                     continue;
                 const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
                 const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
@@ -424,17 +447,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_EMIT_PAIRS){
         if(tid >= awakeCount)
             return;
-        const float3 minA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad.xyz;
-        const float3 maxA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMaxPad.xyz;
+        const float3 minA = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idx * 2u + 0u].xyz;
+        const float4 aabb1A = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idx * 2u + 1u];
+        const float3 maxA = aabb1A.xyz;
+        const uint bodyA = asuint(aabb1A.w);
         const uint4 metaA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].bodyIndexTypeShape;
         const uint4 filterA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].filterData;
 
         for(uint idxB = 0u; idxB < awakeOffset; ++idxB){
-            const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad;
-            if(any(minPadB.xyz > maxA))
-                continue;
-            const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
-            if(any(minA > maxB))
+            const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 0u];
+            const float4 aabb1B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 1u];
+            if(bodyA == asuint(aabb1B.w) || any(aabb0B.xyz > maxA) || any(minA > aabb1B.xyz))
                 continue;
             const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
             const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
@@ -443,11 +466,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idxB, idx, metaB.x, metaA.x, nwbPhysicsIsComplexPair(metaA, metaB));
         }
         for(uint idxB = idx + 1u; idxB < totalShapeCount; ++idxB){
-            const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad;
-            if(any(minPadB.xyz > maxA))
-                continue;
-            const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
-            if(any(minA > maxB))
+            const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 0u];
+            const float4 aabb1B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 1u];
+            if(bodyA == asuint(aabb1B.w) || any(aabb0B.xyz > maxA) || any(minA > aabb1B.xyz))
                 continue;
             const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
             const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;

@@ -41,7 +41,7 @@ class CandidatePair{
 class BroadPhase{
     public Array<DynamicTree, s_TreeCount> trees;
     public Vector<u32> moveArray;
-    public Vector<Vector<CandidatePair>> workerBuckets;
+    public Vector<Vector<u64>> workerBuckets;
     public Vector<CandidatePair> discoveredPairs;
 
     public void clear(){
@@ -102,6 +102,15 @@ class BroadPhase{
         const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
         const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
         return this.trees[treeIdx].needsMove(proxyId, aabb, keepEnlarged);
+    }
+
+    public void moveProxyUnchecked(in u32 proxyKey, in Aabb3D aabb, in VectorSingle displacement){
+        if(proxyKey == s_NullIndex)
+            return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        this.trees[treeIdx].moveProxyUnchecked(proxyId, aabb, displacement);
+        this.bufferMove(proxyKey);
     }
 
     public void moveProxy(in u32 proxyKey, in Aabb3D aabb, in VectorSingle displacement){

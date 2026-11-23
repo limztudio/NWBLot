@@ -113,7 +113,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
     public void paintUiLayer(mut UiPaintContext context)override{
         if(this.m_showPhysicsDebug)
-            PaintPhysicsDebugOverlay(this.m_world, context, this.m_physicsDebugOptions, this.m_physicsDebugLines);
+            PaintPhysicsDebugOverlay(this.m_world, context, this.m_physicsDebugOptions, this.m_physicsDebugLines, this.m_physicsScreenLines);
         this.drawUiControls(context);
         this.m_uiPreview.paint(context);
     }
@@ -180,30 +180,51 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         SeparatorOptions separator = SeparatorOptions();
         separator.thickness = 1.0f;
         TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
-        StringView backendName = "None";
-        if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
-            backendName = "CPU";
-        else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
-            backendName = "GPU";
-        else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
-            backendName = "CPU+GPU";
-        const String physicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts, {}j/{}i ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, stats.jointCount, stats.islandCount, backendName);
-        const String splitLine = StringFormat(
-            "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
-            stats.cpuSolvedBodyCount,
-            stats.cpuSolvedIslandCount,
-            stats.gpuSolvedBodyCount,
-            stats.gpuSolvedIslandCount,
-            stats.stepMs
-        );
+        const b8 needPhysicsLine = !this.m_hasCachedHudStats
+            || stats.bodyCount != this.m_cachedHudStats.bodyCount
+            || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
+            || stats.contactCount != this.m_cachedHudStats.contactCount
+            || stats.jointCount != this.m_cachedHudStats.jointCount
+            || stats.islandCount != this.m_cachedHudStats.islandCount
+            || stats.backendUsed != this.m_cachedHudStats.backendUsed;
+        if(needPhysicsLine){
+            StringView backendName = "None";
+            if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
+                backendName = "CPU";
+            else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
+                backendName = "GPU";
+            else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
+                backendName = "CPU+GPU";
+            this.m_cachedPhysicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts, {}j/{}i ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, stats.jointCount, stats.islandCount, backendName);
+        }
+        const i64 stepCentis = cast<i64>(stats.stepMs * 100.0 + 0.5);
+        const b8 needSplitLine = !this.m_hasCachedHudStats
+            || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
+            || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
+            || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
+            || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount
+            || stepCentis != this.m_cachedStepCentis;
+        if(needSplitLine){
+            this.m_cachedStepCentis = stepCentis;
+            this.m_cachedSplitLine = StringFormat(
+                "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
+                stats.cpuSolvedBodyCount,
+                stats.cpuSolvedIslandCount,
+                stats.gpuSolvedBodyCount,
+                stats.gpuSolvedIslandCount,
+                stats.stepMs
+            );
+        }
+        this.m_cachedHudStats = stats;
+        this.m_hasCachedHudStats = true;
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
             b8 declared =
                 context.ui.label("renderer", s_RendererLine)
                 && context.ui.separator("separator", separator)
                 && context.ui.label("character", s_CharacterLine)
                 && context.ui.separator("physics_sep", separator)
-                && context.ui.label("physics", StringView(physicsLine))
-                && context.ui.label("physics_split", StringView(splitLine))
+                && context.ui.label("physics", StringView(this.m_cachedPhysicsLine))
+                && context.ui.label("physics_split", StringView(this.m_cachedSplitLine))
             ;
             WidgetOptions btnOpts = WidgetOptions();
             btnOpts.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -280,6 +301,12 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_showPhysicsDebug = false;
     private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
     private Vector<PhysicsDebugLine> m_physicsDebugLines;
+    private Vector<PaintLineSegment> m_physicsScreenLines;
+    private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
+    private String m_cachedPhysicsLine;
+    private String m_cachedSplitLine;
+    private i64 m_cachedStepCentis = -1;
+    private b8 m_hasCachedHudStats = false;
 }
 
 

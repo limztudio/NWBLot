@@ -119,18 +119,13 @@ class DynamicTree{
         return !AabbContains(hugeAabb, curAabb);
     }
 
-    public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
+    public void moveProxyUnchecked(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
-            return false;
+            return;
 
         const f32 margin = ComputeAabbMargin(aabb);
         const Aabb3D fattened = FattenAabb(aabb, margin);
-        const Aabb3D hugeAabb = FattenAabb(fattened, 4.0f * margin);
-        const Aabb3D curAabb = this.m_nodes[proxyId].aabb();
-        if(AabbContains(curAabb, aabb) && AabbContains(hugeAabb, curAabb))
-            return false;
-
-        VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
+        const VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
         VectorSingle lower = VectorSingle(fattened.lowerBound);
         VectorSingle upper = VectorSingle(fattened.upperBound);
         if(d.x < 0.0f)
@@ -149,6 +144,20 @@ class DynamicTree{
         this.removeLeaf(proxyId);
         this.m_nodes[proxyId].setAabb(Aabb3D(lower, upper));
         this.insertLeaf(proxyId);
+    }
+
+    public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
+        if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
+            return false;
+
+        const f32 margin = ComputeAabbMargin(aabb);
+        const Aabb3D fattened = FattenAabb(aabb, margin);
+        const Aabb3D hugeAabb = FattenAabb(fattened, 4.0f * margin);
+        const Aabb3D curAabb = this.m_nodes[proxyId].aabb();
+        if(AabbContains(curAabb, aabb) && AabbContains(hugeAabb, curAabb))
+            return false;
+
+        this.moveProxyUnchecked(proxyId, aabb, displacement);
         return true;
     }
 
@@ -178,6 +187,10 @@ class DynamicTree{
         return this.m_nodes[proxyId].aabb();
     }
 
+    public u32 root()const{
+        return this.m_root;
+    }
+
     public u32 userData(in u32 proxyId)const{
         return this.m_nodes[proxyId].userData();
     }
@@ -198,8 +211,17 @@ class DynamicTree{
             return;
         if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
             return;
-        if(!AabbOverlaps(rootNode.aabb(), queryBox))
+        const VectorSingle qMin = VectorSingle(queryBox.lowerBound);
+        const VectorSingle qMax = VectorSingle(queryBox.upperBound);
+        if(
+            (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(rootNode.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(rootNode.aabbMaxCategory, 0.0f)))) & 7u)
+            != 7u
+        )
             return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData());
+            return;
+        }
 
         Array<u32, 256u> fixedStack;
         fixedStack[0u] = this.m_root;
@@ -207,39 +229,38 @@ class DynamicTree{
         while(fixedCount > 0u){
             --fixedCount;
             const u32 nodeId = fixedStack[fixedCount];
-            if(nodeId == s_NullIndex)
-                continue;
-
             in TreeNode node = this.m_nodes[nodeId];
-            if(node.isLeaf()){
-                if(!callback(nodeId, node.userData()))
-                    return;
-            }
-            else{
-                if(node.child1 != s_NullIndex){
-                    in TreeNode c1 = this.m_nodes[node.child1];
-                    if(
-                        (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
-                        && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                        && AabbOverlaps(c1.aabb(), queryBox)
-                    ){
-                        if(fixedCount < 256u){
-                            fixedStack[fixedCount] = node.child1;
-                            ++fixedCount;
-                        }
+            if(node.child1 != s_NullIndex){
+                in TreeNode c1 = this.m_nodes[node.child1];
+                if(
+                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
+                    && (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(c1.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(c1.aabbMaxCategory, 0.0f)))) & 7u) == 7u
+                ){
+                    if(c1.isLeaf()){
+                        if(!callback(node.child1, c1.userData()))
+                            return;
+                    }
+                    else if(fixedCount < 256u){
+                        fixedStack[fixedCount] = node.child1;
+                        ++fixedCount;
                     }
                 }
-                if(node.child2 != s_NullIndex){
-                    in TreeNode c2 = this.m_nodes[node.child2];
-                    if(
-                        (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
-                        && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                        && AabbOverlaps(c2.aabb(), queryBox)
-                    ){
-                        if(fixedCount < 256u){
-                            fixedStack[fixedCount] = node.child2;
-                            ++fixedCount;
-                        }
+            }
+            if(node.child2 != s_NullIndex){
+                in TreeNode c2 = this.m_nodes[node.child2];
+                if(
+                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
+                    && (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(c2.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(c2.aabbMaxCategory, 0.0f)))) & 7u) == 7u
+                ){
+                    if(c2.isLeaf()){
+                        if(!callback(node.child2, c2.userData()))
+                            return;
+                    }
+                    else if(fixedCount < 256u){
+                        fixedStack[fixedCount] = node.child2;
+                        ++fixedCount;
                     }
                 }
             }
@@ -272,6 +293,10 @@ class DynamicTree{
         f32 rootTMin = 0.0f;
         if(!AabbRayCastFast(rootNode.aabb(), ray, maxFraction, rootTMin))
             return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData(), maxFraction);
+            return;
+        }
 
         Array<u32, 256u> fixedStack;
         Array<f32, 256u> fixedStackTMin;
@@ -282,7 +307,7 @@ class DynamicTree{
             --fixedCount;
             const u32 nodeId = fixedStack[fixedCount];
             const f32 poppedTMin = fixedStackTMin[fixedCount];
-            if(nodeId == s_NullIndex || poppedTMin > maxFraction)
+            if(poppedTMin > maxFraction)
                 continue;
 
             in TreeNode node = this.m_nodes[nodeId];

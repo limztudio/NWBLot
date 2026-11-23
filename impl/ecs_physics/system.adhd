@@ -218,13 +218,17 @@ class PhysicsSystem{
     public void registerNamedEntity(in Name tag, in EntityID entity){
         if(tag != s_NameNone && entity.valid()){
             this.m_namedEntities.insert_or_assign(tag, entity);
-            this.m_syncScratch.hasManualNamedEntities = true;
+            this.m_syncScratch.manualNamedEntities.insert_or_assign(tag, entity);
+            this.m_syncScratch.manualNamedEntitiesDirty = true;
         }
     }
 
     public void unregisterNamedEntity(in Name tag){
-        if(tag != s_NameNone)
+        if(tag != s_NameNone){
             this.m_namedEntities.erase(tag);
+            this.m_syncScratch.manualNamedEntities.erase(tag);
+            this.m_syncScratch.manualNamedEntitiesDirty = true;
+        }
     }
 
     public EntityID findNamedEntity(in Name tag)const{
@@ -451,7 +455,7 @@ class PhysicsSystem{
         }
 
         if(plannedSteps > 1u && hasDrivenKinematic)
-            SnapshotDrivenKinematicTargets(this.m_world, this.m_physicsWorld, hasAnyPhysicsParents, this.m_syncScratch.kinematicTargets);
+            SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntities, hasAnyPhysicsParents, this.m_world, this.m_syncScratch.kinematicTargets);
 
         mut CpuTaskScheduler scheduler = this.m_world.taskScheduler();
         u32 stepsExecuted = 0u;
@@ -462,10 +466,10 @@ class PhysicsSystem{
                 this.m_accumulator = 0.0f;
 
             if(stepsExecuted + 1u == plannedSteps)
-                PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.m_frameBodyMoveEvents, this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_bodyTransformSnapshots);
+                PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.m_frameBodyMoveEvents, this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_syncScratch.snapshotBodyStamps, this.m_syncScratch.snapshotStamp, this.m_bodyTransformSnapshots);
             if(hasDrivenKinematic){
                 if(plannedSteps <= 1u)
-                    ApplyKinematicTargetsFromEcs(this.m_world, this.m_physicsWorld, fixedDt, hasAnyPhysicsParents);
+                    ApplyKinematicTargetsFromEcs(this.m_syncScratch.drivenKinematicEntities, fixedDt, hasAnyPhysicsParents, this.m_world, this.m_physicsWorld);
                 else
                     ApplyInterpolatedKinematicTargets(this.m_syncScratch.kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
             }

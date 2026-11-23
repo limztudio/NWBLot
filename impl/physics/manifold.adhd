@@ -238,7 +238,9 @@ Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereSha
         return m;
 
     const f32 dist = Sqrt(distSq);
-    const VectorSingle n = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    if(distSq > s_NormalizeEpsilonSq)
+        n = d * (1.0f / dist);
     const VectorSingle wA = pA + n * rA;
     const VectorSingle wB = pB - n * rB;
 
@@ -265,7 +267,9 @@ Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in 
         return m;
 
     const f32 dist = Sqrt(distSq);
-    const VectorSingle n = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    if(distSq > s_NormalizeEpsilonSq)
+        n = d * (1.0f / dist);
     const VectorSingle wA = pA + n * rA;
     const VectorSingle wB = qB - n * rB;
 
@@ -303,23 +307,29 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
         return m;
 
     const f32 dist = Sqrt(distSq);
-    VectorSingle fallback = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
-    if(lenSqA > s_NormalizeEpsilonSq){
-        VectorSingle t1(0.0f);
-        VectorSingle t2(0.0f);
-        ComputeTangentBasis(dirA, t1, t2);
-        fallback = t1;
+    VectorSingle n(0.0f);
+    if(distSq > s_NormalizeEpsilonSq){
+        n = d * (1.0f / dist);
     }
-    const VectorSingle n = SafeNormalizeVec3(d, fallback);
+    else{
+        VectorSingle fallback = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+        if(lenSqA > s_NormalizeEpsilonSq){
+            VectorSingle t1(0.0f);
+            VectorSingle t2(0.0f);
+            ComputeTangentBasis(dirA, t1, t2);
+            fallback = t1;
+        }
+        n = fallback;
+    }
     m.normalTwist = f32x4(n, 0.0f);
 
     if(lenSqA > s_NormalizeEpsilonSq && lenSqB > s_NormalizeEpsilonSq){
-        const VectorSingle uA = dirA / Sqrt(lenSqA);
-        const VectorSingle uB = dirB / Sqrt(lenSqB);
+        const f32 lenA = Sqrt(lenSqA);
+        const VectorSingle uA = dirA * (1.0f / lenA);
+        const VectorSingle uB = dirB * Rsqrt(VectorSingle(lenSqB)).x;
         if(Abs(Vector3Dot(uA, uB).x) > 0.9995f){
             const f32 pB1 = Vector3Dot(VectorSingle(b1 - a1, 0.0f), uA).x;
             const f32 pB2 = Vector3Dot(VectorSingle(b2 - a1, 0.0f), uA).x;
-            const f32 lenA = Sqrt(lenSqA);
             const f32 minB = Min(pB1, pB2);
             const f32 maxB = Max(pB1, pB2);
             const f32 overlapMin = Max(0.0f, minB);
@@ -356,8 +366,13 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
     const f32 totalR = sphereR + hullR;
 
     if(hullB.isBox()){
-        const VectorSingle cBox = TransformPoint(xfB, hullB.centroid());
-        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+        const VectorSingle localCB = hullB.centroid();
+        VectorSingle cBox = VectorSingle(xfB.position);
+        if(localCB.x != 0.0f || localCB.y != 0.0f || localCB.z != 0.0f)
+            cBox = TransformPoint(xfB, localCB);
+        VectorSingle qBox = VectorSingle(xfB.rotation);
+        if(hullB.boxRotation.x != 0.0f || hullB.boxRotation.y != 0.0f || hullB.boxRotation.z != 0.0f || hullB.boxRotation.w != 1.0f)
+            qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hullB.boxRotation)));
         const VectorSingle localS = Vector3InverseRotate(VectorSingle(worldSphereC - cBox, 0.0f), qBox);
         const VectorSingle hBox = hullB.halfExtents();
         const VectorSingle negH = VectorSingle(-hBox.x, -hBox.y, -hBox.z, 0.0f);
@@ -436,7 +451,7 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
 
         if(separation > maxDistance)
             return m;
-        const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, qBox), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle worldOutward = Vector3Rotate(localOutward, qBox);
         const VectorSingle nAtoB = -worldOutward;
         const VectorSingle wA = worldSphereC + nAtoB * sphereR;
         const VectorSingle wB = worldBoxPt + worldOutward * hullR;
@@ -704,8 +719,13 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const f32 totalR = capR + hullR;
 
     if(hullB.isBox()){
-        const VectorSingle cBox = TransformPoint(xfB, hullB.centroid());
-        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+        const VectorSingle localCB = hullB.centroid();
+        VectorSingle cBox = VectorSingle(xfB.position);
+        if(localCB.x != 0.0f || localCB.y != 0.0f || localCB.z != 0.0f)
+            cBox = TransformPoint(xfB, localCB);
+        VectorSingle qBox = VectorSingle(xfB.rotation);
+        if(hullB.boxRotation.x != 0.0f || hullB.boxRotation.y != 0.0f || hullB.boxRotation.z != 0.0f || hullB.boxRotation.w != 1.0f)
+            qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hullB.boxRotation)));
         const VectorSingle hBox = hullB.halfExtents();
         const VectorSingle l0 = Vector3InverseRotate(VectorSingle(w1 - cBox, 0.0f), qBox);
         const VectorSingle l1 = Vector3InverseRotate(VectorSingle(w2 - cBox, 0.0f), qBox);
@@ -1637,8 +1657,8 @@ void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in
     if(!hasFriction && !hasTwist && !hasRoll)
         return;
 
-    const VectorSingle oldN = SafeNormalizeVec3(oldManifold.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const VectorSingle newN = SafeNormalizeVec3(newManifold.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle oldN = VectorSingle(oldManifold.normal(), 0.0f);
+    const VectorSingle newN = VectorSingle(newManifold.normal(), 0.0f);
     const f32 nDot = Vector3Dot(oldN, newN).x;
     if(nDot > 0.9f){
         if(hasFriction){
@@ -1648,10 +1668,10 @@ void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in
             else{
                 VectorSingle oldT1(0.0f);
                 VectorSingle oldT2(0.0f);
-                ComputeTangentBasis(oldN, oldT1, oldT2);
+                ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
                 VectorSingle newT1(0.0f);
                 VectorSingle newT2(0.0f);
-                ComputeTangentBasis(newN, newT1, newT2);
+                ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
                 const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
                 newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
             }

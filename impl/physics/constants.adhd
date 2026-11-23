@@ -48,10 +48,10 @@ const u32 s_TreeDynamic = 2u;
 const u32 s_DefaultGpuBodyThreshold = 32u;
 const f32 s_DefaultGpuWorkloadFraction = 0.7f;
 const u32 s_GpuContactIslandMaxBodies = 64u;
-const u32 s_GpuContactIslandMaxContacts = 255u;
+const u32 s_GpuContactIslandMaxContacts = 192u;
 const u32 s_GpuJointIslandMaxBodies = 64u;
-const u32 s_GpuJointIslandMaxContacts = 255u;
-const u32 s_GpuJointIslandMaxJoints = 48u;
+const u32 s_GpuJointIslandMaxContacts = 128u;
+const u32 s_GpuJointIslandMaxJoints = 64u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

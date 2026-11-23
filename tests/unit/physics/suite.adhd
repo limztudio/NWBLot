@@ -383,9 +383,9 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsBroadphasePair>(), 16u);
     EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 160u);
     EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 48u);
-    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 384u);
+    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 336u);
     EXPECT_EQ(size_of<GpuPhysicsContactImpulseOut>(), 64u);
-    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 320u);
+    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 272u);
     EXPECT_EQ(size_of<GpuPhysicsJointImpulseOut>(), 48u);
     EXPECT_EQ(size_of<GpuPhysicsIslandSlice>(), s_GpuIslandSliceBytes);
     EXPECT_EQ(offset_of<GpuPhysicsPushConstants>(gravitySpeculative), 32u);
@@ -393,13 +393,13 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 192u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 144u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(qA0), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffsetMaxTorque), 160u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness), 208u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearImpulse), 272u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(limitImpulses), 304u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearImpulse), 224u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(limitImpulses), 256u);
 
     {
         PhysicsWorld gpuFallbackWorld;

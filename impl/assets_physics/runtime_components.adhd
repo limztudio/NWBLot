@@ -33,6 +33,10 @@ b8 RigidBodyComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)
     return PhysicsComponentBinaryCodec().serializeRigidBody(this.component, outPayload);
 }
 
+b8 RigidBodyComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return PhysicsComponentBinaryCodec().appendRigidBodyValidated(this.component, outBinary);
+}
+
 b8 ColliderComponentAsset::loadBinary(in Span<u8> binary){
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -54,6 +58,10 @@ b8 ColliderComponentAsset::validatePayload()const{
 
 b8 ColliderComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
     return PhysicsComponentBinaryCodec().serializeCollider(this.component, outPayload);
+}
+
+b8 ColliderComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return PhysicsComponentBinaryCodec().appendColliderValidated(this.component, outBinary);
 }
 
 b8 JointComponentAsset::loadBinary(in Span<u8> binary){
@@ -79,6 +87,10 @@ b8 JointComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)cons
     return PhysicsComponentBinaryCodec().serializeJoint(this.component, outPayload);
 }
 
+b8 JointComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return PhysicsComponentBinaryCodec().appendJointValidated(this.component, outBinary);
+}
+
 b8 PhysicsWorldConfigComponentAsset::loadBinary(in Span<u8> binary){
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -102,6 +114,10 @@ b8 PhysicsWorldConfigComponentAsset::serializeComponentPayload(mut Vector<u8> ou
     return PhysicsComponentBinaryCodec().serializeWorldConfig(this.component, outPayload);
 }
 
+b8 PhysicsWorldConfigComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return PhysicsComponentBinaryCodec().appendWorldConfigValidated(this.component, outBinary);
+}
+
 b8 PhysicsParentComponentAsset::loadBinary(in Span<u8> binary){
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -123,6 +139,10 @@ b8 PhysicsParentComponentAsset::validatePayload()const{
 
 b8 PhysicsParentComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
     return PhysicsComponentBinaryCodec().serializePhysicsParent(this.component, outPayload);
+}
+
+b8 PhysicsParentComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return PhysicsComponentBinaryCodec().appendPhysicsParentValidated(this.component, outBinary);
 }
 
 

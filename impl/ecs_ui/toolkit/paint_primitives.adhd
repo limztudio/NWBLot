@@ -103,6 +103,12 @@ class ResolvedGlyphDraw{
     public b8 isSdf = false;
 }
 
+class PaintLineSegment{
+    public Point start = Point(0.0f, 0.0f);
+    public Point end = Point(0.0f, 0.0f);
+    public Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
 class SkinBindingRecord<TUiSkin, TTexture>{
     public AssetRef<TUiSkin> skin;
     public AssetRef<TTexture> texture;

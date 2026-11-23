@@ -95,12 +95,18 @@ class ComponentAssetBinaryCodec{
         return outComponent.validatePayload();
     }
 
-    public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendTransform(in TransformComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_TransformComponentPayloadBinaryBytes))
+            return false;
         const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_TransformComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_TransformComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendTransform(component, outPayload);
     }
 
     public b8 deserializeTransform(in Span<u8> payload, mut TransformComponent outComponent)const{
@@ -114,12 +120,18 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendCamera(in CameraComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_CameraComponentPayloadBinaryBytes))
+            return false;
         const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_CameraComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_CameraComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendCamera(component, outPayload);
     }
 
     public b8 deserializeCamera(in Span<u8> payload, mut CameraComponent outComponent)const{
@@ -133,12 +145,18 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendLight(in LightComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_LightComponentPayloadBinaryBytes))
+            return false;
         const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_LightComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_LightComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendLight(component, outPayload);
     }
 
     public b8 deserializeLight(in Span<u8> payload, mut LightComponent outComponent)const{
@@ -166,7 +184,7 @@ b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     if(!component.validatePayload())
         return false;
     Vector<u8> payload;
-    if(!component.serializeComponentPayload(payload))
+    if(!component.appendValidatedComponentPayload(payload))
         return false;
     return ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
 }

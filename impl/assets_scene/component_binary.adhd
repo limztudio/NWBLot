@@ -127,6 +127,7 @@ class TransformComponentAsset : IComponent{
         entity.addComponent<TransformComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("camera_component")]
@@ -140,6 +141,7 @@ class CameraComponentAsset : IComponent{
         entity.addComponent<CameraComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("light_component")]
@@ -153,6 +155,7 @@ class LightComponentAsset : IComponent{
         entity.addComponent<LightComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 

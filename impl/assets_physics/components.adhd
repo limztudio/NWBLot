@@ -21,8 +21,10 @@ class RigidBodyComponentAsset : IComponent{
         dst = this.component;
         dst.dirty = true;
         dst.runtimeBodyId = BodyId();
+        dst.syncedEntityTag = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("collider_component")]
@@ -41,8 +43,10 @@ class ColliderComponentAsset : IComponent{
         dst.boundBodyId = BodyId();
         dst.syncedWorldScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
         dst.hasSyncedWorldScale = false;
+        dst.syncedEntityTag = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("joint_component")]
@@ -63,6 +67,7 @@ class JointComponentAsset : IComponent{
         dst.bodyEntityB = s_InvalidEntityId;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("physics_parent_component")]
@@ -76,8 +81,10 @@ class PhysicsParentComponentAsset : IComponent{
         mut PhysicsParentComponent dst = entity.addComponent<PhysicsParentComponent>();
         dst = this.component;
         dst.parent = s_InvalidEntityId;
+        dst.syncedParentName = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("physics_world_config_component")]
@@ -93,6 +100,7 @@ class PhysicsWorldConfigComponentAsset : IComponent{
         dst.dirty = true;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [serialize]

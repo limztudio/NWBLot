@@ -67,7 +67,7 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 validColliderEntryFields(
+    private b8 validColliderEntryHeaderFields(
         in ShapeType shapeType,
         in VectorSingle center,
         in VectorSingle center2,
@@ -81,10 +81,10 @@ class PhysicsComponentBinaryCodec{
         in f32 rollingResistance,
         in f32 tangentSpeed,
         in b8 isBox,
-        in Vector<f32x4> hullPoints,
-        in Vector<f32x4> meshVertices,
-        in Vector<u32> meshIndices,
-        in AssetRef<Mesh> meshAsset
+        in usize hullPointCount,
+        in usize meshVertexCount,
+        in usize meshIndexCount,
+        in b8 meshAssetValid
     )const{
         if(cast<u8>(shapeType) > cast<u8>(ShapeType::Mesh))
             return false;
@@ -110,20 +110,32 @@ class PhysicsComponentBinaryCodec{
         if(shapeType == ShapeType::Hull){
             if(isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
                 return false;
-            if(!isBox){
-                if(hullPoints.size() < 4u)
+            if(!isBox && hullPointCount < 4u)
+                return false;
+        }
+        else if(shapeType == ShapeType::Mesh){
+            if(!meshAssetValid && (meshVertexCount == 0u || meshIndexCount == 0u))
+                return false;
+            if((meshIndexCount % 3u) != 0u)
+                return false;
+        }
+        return true;
+    }
+
+    private b8 validColliderEntryArrayFields(
+        in ShapeType shapeType,
+        in b8 isBox,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices
+    )const{
+        if(shapeType == ShapeType::Hull && !isBox){
+            for(usize i = 0u; i < hullPoints.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(hullPoints[i])))
                     return false;
-                for(usize i = 0u; i < hullPoints.size(); ++i){
-                    if(!IsValidPositionVec3(VectorSingle(hullPoints[i])))
-                        return false;
-                }
             }
         }
         else if(shapeType == ShapeType::Mesh){
-            if(!meshAsset.valid() && (meshVertices.empty() || meshIndices.empty()))
-                return false;
-            if((meshIndices.size() % 3u) != 0u)
-                return false;
             for(usize i = 0u; i < meshVertices.size(); ++i){
                 if(!IsValidPositionVec3(VectorSingle(meshVertices[i])))
                     return false;
@@ -137,6 +149,46 @@ class PhysicsComponentBinaryCodec{
             }
         }
         return true;
+    }
+
+    private b8 validColliderEntryFields(
+        in ShapeType shapeType,
+        in VectorSingle center,
+        in VectorSingle center2,
+        in VectorSingle halfExtents,
+        in VectorSingle localRotation,
+        in f32 radius,
+        in f32 skinRadius,
+        in f32 density,
+        in f32 friction,
+        in f32 restitution,
+        in f32 rollingResistance,
+        in f32 tangentSpeed,
+        in b8 isBox,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices,
+        in AssetRef<Mesh> meshAsset
+    )const{
+        return this.validColliderEntryHeaderFields(
+            shapeType,
+            center,
+            center2,
+            halfExtents,
+            localRotation,
+            radius,
+            skinRadius,
+            density,
+            friction,
+            restitution,
+            rollingResistance,
+            tangentSpeed,
+            isBox,
+            hullPoints.size(),
+            meshVertices.size(),
+            meshIndices.size(),
+            meshAsset.valid()
+        ) && this.validColliderEntryArrayFields(shapeType, isBox, hullPoints, meshVertices, meshIndices);
     }
 
     private b8 validColliderEntryData(in ColliderShapeEntry e)const{
@@ -211,8 +263,8 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeRigidBody(in RigidBodyComponent c, mut Vector<u8> outPayload)const{
-        if(!this.validRigidBodyData(c))
+    public b8 appendRigidBodyValidated(in RigidBodyComponent c, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, size_of<RigidBodyComponentPayloadBinary>()))
             return false;
         RigidBodyComponentPayloadBinary bin;
         bin.version = s_PhysicsComponentBinaryVersion;
@@ -240,10 +292,16 @@ class PhysicsComponentBinaryCodec{
         bin.customCenterOfMass = c.customCenterOfMass;
         bin.customInertiaDiag = c.customInertiaDiag;
         bin.customInertiaOffDiag = c.customInertiaOffDiag;
-        outPayload.clear();
-        outPayload.reserve(size_of<RigidBodyComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        outBinary.reserve(outBinary.size() + size_of<RigidBodyComponentPayloadBinary>());
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeRigidBody(in RigidBodyComponent c, mut Vector<u8> outPayload)const{
+        if(!this.validRigidBodyData(c))
+            return false;
+        outPayload.clear();
+        return this.appendRigidBodyValidated(c, outPayload);
     }
 
     public b8 deserializeRigidBody(in Span<u8> payload, mut RigidBodyComponent outComp)const{
@@ -285,6 +343,7 @@ class PhysicsComponentBinaryCodec{
         c.customInertiaDiag = bin.customInertiaDiag;
         c.customInertiaOffDiag = bin.customInertiaOffDiag;
         c.dirty = true;
+        c.syncedEntityTag = s_NameNone;
         if(!this.validRigidBodyData(c)){
             error("RigidBodyComponentAsset::loadComponentPayload failed: invalid rigid body fields");
             return false;
@@ -293,7 +352,7 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 serializeColliderEntryFields(
+    private b8 appendColliderEntryFieldsUnchecked(
         in ShapeType shapeType,
         in VectorSingle center,
         in VectorSingle center2,
@@ -323,7 +382,11 @@ class PhysicsComponentBinaryCodec{
         in AssetRef<Mesh> meshAsset,
         mut Vector<u8> outPayload
     )const{
-        if(!this.validColliderEntryFields(shapeType, center, center2, halfExtents, localRotation, radius, skinRadius, density, friction, restitution, rollingResistance, tangentSpeed, isBox, hullPoints, meshVertices, meshIndices, meshAsset))
+        if(
+            hullPoints.size() > cast<usize>(u32.max)
+            || meshVertices.size() > cast<usize>(u32.max)
+            || meshIndices.size() > cast<usize>(u32.max)
+        )
             return false;
         ColliderShapeEntryHeaderBinary hdr;
         hdr.version = s_PhysicsComponentBinaryVersion;
@@ -351,12 +414,6 @@ class PhysicsComponentBinaryCodec{
         hdr.restitution = restitution;
         hdr.rollingResistance = rollingResistance;
         hdr.tangentSpeed = tangentSpeed;
-        if(
-            hullPoints.size() > cast<usize>(u32.max)
-            || meshVertices.size() > cast<usize>(u32.max)
-            || meshIndices.size() > cast<usize>(u32.max)
-        )
-            return false;
         hdr.meshAssetHash = meshAsset.name().hash();
         hdr.hullPointCount = cast<u32>(hullPoints.size());
         hdr.meshVertexCount = cast<u32>(meshVertices.size());
@@ -372,8 +429,8 @@ class PhysicsComponentBinaryCodec{
         ;
     }
 
-    private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
-        return this.serializeColliderEntryFields(
+    private b8 appendColliderEntryUnchecked(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
+        return this.appendColliderEntryFieldsUnchecked(
             e.shapeType,
             VectorSingle(e.center),
             VectorSingle(e.center2),
@@ -476,6 +533,27 @@ class PhysicsComponentBinaryCodec{
         else
             outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
 
+        if(!this.validColliderEntryHeaderFields(
+            outShapeType,
+            outCenter,
+            outCenter2,
+            outHalfExtents,
+            outLocalRotation,
+            outRadius,
+            outSkinRadius,
+            outDensity,
+            outFriction,
+            outRestitution,
+            outRollingResistance,
+            outTangentSpeed,
+            outIsBox,
+            cast<usize>(hdr.hullPointCount),
+            cast<usize>(hdr.meshVertexCount),
+            cast<usize>(hdr.meshIndexCount),
+            outMeshAsset.valid()
+        ))
+            return false;
+
         static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
         if(
             !ReadBinaryVectorPayload(payload, hdr.hullPointCount, inOutCursor, outHullPoints).has_value()
@@ -484,7 +562,7 @@ class PhysicsComponentBinaryCodec{
         )
             return false;
 
-        return this.validColliderEntryFields(outShapeType, outCenter, outCenter2, outHalfExtents, outLocalRotation, outRadius, outSkinRadius, outDensity, outFriction, outRestitution, outRollingResistance, outTangentSpeed, outIsBox, outHullPoints, outMeshVertices, outMeshIndices, outMeshAsset);
+        return this.validColliderEntryArrayFields(outShapeType, outIsBox, outHullPoints, outMeshVertices, outMeshIndices);
     }
 
     private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
@@ -545,31 +623,47 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
-        if(c.extraShapes.size() > cast<usize>(u32.max)){
-            outPayload.clear();
+    public b8 appendColliderValidated(in ColliderComponent c, mut Vector<u8> outBinary)const{
+        if(c.extraShapes.size() > cast<usize>(u32.max))
             return false;
-        }
         ColliderComponentPayloadHeaderBinary rootHdr;
         rootHdr.version = s_PhysicsComponentBinaryVersion;
         rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
         rootHdr.entityTagHash = c.entityTag.hash();
         usize totalBytes = size_of<ColliderComponentPayloadHeaderBinary>()
             + this.colliderEntrySerializedBytes(c.hullPoints.size(), c.meshVertices.size(), c.meshIndices.size());
-        for(usize i = 0u; i < c.extraShapes.size(); ++i)
-            totalBytes += this.colliderEntrySerializedBytes(c.extraShapes[i].hullPoints.size(), c.extraShapes[i].meshVertices.size(), c.extraShapes[i].meshIndices.size());
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            const usize entryBytes = this.colliderEntrySerializedBytes(c.extraShapes[i].hullPoints.size(), c.extraShapes[i].meshVertices.size(), c.extraShapes[i].meshIndices.size());
+            if(entryBytes > usize.max - totalBytes)
+                return false;
+            totalBytes += entryBytes;
+        }
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        AppendPOD(outBinary, rootHdr);
+        if(!this.appendColliderEntryFieldsUnchecked(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outBinary))
+            return false;
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            if(!this.appendColliderEntryUnchecked(c.extraShapes[i], outBinary))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
         outPayload.clear();
-        outPayload.reserve(totalBytes);
-        AppendPOD(outPayload, rootHdr);
-        if(!this.serializeColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outPayload)){
+        if(c.extraShapes.size() > cast<usize>(u32.max))
+            return false;
+        if(!this.validColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.isBox, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset))
+            return false;
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            if(!this.validColliderEntryData(c.extraShapes[i]))
+                return false;
+        }
+        if(!this.appendColliderValidated(c, outPayload)){
             outPayload.clear();
             return false;
-        }
-        for(usize i = 0u; i < c.extraShapes.size(); ++i){
-            if(!this.serializeColliderEntry(c.extraShapes[i], outPayload)){
-                outPayload.clear();
-                return false;
-            }
         }
         return true;
     }
@@ -656,6 +750,7 @@ class PhysicsComponentBinaryCodec{
         outComp.boundBodyId = BodyId();
         outComp.syncedWorldScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
         outComp.hasSyncedWorldScale = false;
+        outComp.syncedEntityTag = s_NameNone;
         return true;
     }
 
@@ -666,8 +761,8 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeJoint(in JointComponent j, mut Vector<u8> outPayload)const{
-        if(!this.validJointData(j))
+    public b8 appendJointValidated(in JointComponent j, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, size_of<JointComponentPayloadBinary>()))
             return false;
         JointComponentPayloadBinary bin;
         bin.version = s_PhysicsComponentBinaryVersion;
@@ -704,10 +799,16 @@ class PhysicsComponentBinaryCodec{
         bin.bodyEntityNameAHash = j.bodyEntityNameA.hash();
         bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
         bin.userData = j.userData;
-        outPayload.clear();
-        outPayload.reserve(size_of<JointComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        outBinary.reserve(outBinary.size() + size_of<JointComponentPayloadBinary>());
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeJoint(in JointComponent j, mut Vector<u8> outPayload)const{
+        if(!this.validJointData(j))
+            return false;
+        outPayload.clear();
+        return this.appendJointValidated(j, outPayload);
     }
 
     public b8 deserializeJoint(in Span<u8> payload, mut JointComponent outComp)const{
@@ -776,8 +877,8 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeWorldConfig(in PhysicsWorldConfigComponent w, mut Vector<u8> outPayload)const{
-        if(!this.validWorldConfigData(w))
+    public b8 appendWorldConfigValidated(in PhysicsWorldConfigComponent w, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, size_of<PhysicsWorldConfigComponentPayloadBinary>()))
             return false;
         PhysicsWorldConfigComponentPayloadBinary bin;
         bin.version = s_PhysicsComponentBinaryVersion;
@@ -800,10 +901,16 @@ class PhysicsComponentBinaryCodec{
         bin.maxLinearVelocity = w.maxLinearVelocity;
         bin.fixedDeltaTime = w.fixedDeltaTime;
         bin.gpuWorkloadFraction = w.gpuWorkloadFraction;
-        outPayload.clear();
-        outPayload.reserve(size_of<PhysicsWorldConfigComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        outBinary.reserve(outBinary.size() + size_of<PhysicsWorldConfigComponentPayloadBinary>());
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeWorldConfig(in PhysicsWorldConfigComponent w, mut Vector<u8> outPayload)const{
+        if(!this.validWorldConfigData(w))
+            return false;
+        outPayload.clear();
+        return this.appendWorldConfigValidated(w, outPayload);
     }
 
     public b8 deserializeWorldConfig(in Span<u8> payload, mut PhysicsWorldConfigComponent outComp)const{
@@ -852,8 +959,8 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializePhysicsParent(in PhysicsParentComponent p, mut Vector<u8> outPayload)const{
-        if(!this.validPhysicsParentData(p))
+    public b8 appendPhysicsParentValidated(in PhysicsParentComponent p, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, size_of<PhysicsParentComponentPayloadBinary>()))
             return false;
         PhysicsParentComponentPayloadBinary bin;
         bin.version = s_PhysicsComponentBinaryVersion;
@@ -861,10 +968,16 @@ class PhysicsComponentBinaryCodec{
         if(p.inheritScale) flags |= s_PhysicsParentFlagInheritScale;
         bin.flags = flags;
         bin.parentEntityNameHash = p.parentEntityName.hash();
-        outPayload.clear();
-        outPayload.reserve(size_of<PhysicsParentComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        outBinary.reserve(outBinary.size() + size_of<PhysicsParentComponentPayloadBinary>());
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializePhysicsParent(in PhysicsParentComponent p, mut Vector<u8> outPayload)const{
+        if(!this.validPhysicsParentData(p))
+            return false;
+        outPayload.clear();
+        return this.appendPhysicsParentValidated(p, outPayload);
     }
 
     public b8 deserializePhysicsParent(in Span<u8> payload, mut PhysicsParentComponent outComp)const{
@@ -885,6 +998,7 @@ class PhysicsComponentBinaryCodec{
             p.parentEntityName = s_NameNone;
         else
             p.parentEntityName = Name(bin.parentEntityNameHash);
+        p.syncedParentName = s_NameNone;
         if(!this.validPhysicsParentData(p)){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid parent component");
             return false;

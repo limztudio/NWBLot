@@ -152,6 +152,10 @@ b8 TransformComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)
     return ComponentAssetBinaryCodec().serializeTransform(this.component, outPayload);
 }
 
+b8 TransformComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return ComponentAssetBinaryCodec().appendTransform(this.component, outBinary);
+}
+
 b8 CameraComponentAsset::loadBinary(in Span<u8> binary){
     return ComponentAssetBinaryCodec().loadBinary(binary, this);
 }
@@ -170,6 +174,10 @@ b8 CameraComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)con
     return ComponentAssetBinaryCodec().serializeCamera(this.component, outPayload);
 }
 
+b8 CameraComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return ComponentAssetBinaryCodec().appendCamera(this.component, outBinary);
+}
+
 b8 LightComponentAsset::loadBinary(in Span<u8> binary){
     return ComponentAssetBinaryCodec().loadBinary(binary, this);
 }
@@ -186,6 +194,10 @@ b8 LightComponentAsset::validatePayload()const{
 
 b8 LightComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
     return ComponentAssetBinaryCodec().serializeLight(this.component, outPayload);
+}
+
+b8 LightComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return ComponentAssetBinaryCodec().appendLight(this.component, outBinary);
 }
 
 b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){

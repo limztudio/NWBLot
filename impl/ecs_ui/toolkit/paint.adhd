@@ -345,6 +345,14 @@ class PaintBuilder : NoCopy{
         );
     }
     [cpp_unwind]
+    public void drawLineBatch(in Span<PaintLineSegment> lines, in f32 thickness){
+        assert(this.m_recording);
+        EmitPaintLineBatch(
+            this.m_recording, this.m_clips.back().rect, lines, thickness, this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
     public b8 drawRegion(in Name regionName, in Rect rectangle){ return this.drawRegion(regionName, rectangle, Color()); }
     [cpp_unwind]
     public b8 drawRegion(in Name regionName, in Rect rectangle, in Color tint){

@@ -756,7 +756,8 @@ void PaintPhysicsDebugOverlay(
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
     in PhysicsDebugDrawOptions options,
-    mut Vector<PhysicsDebugLine> debugLines
+    mut Vector<PhysicsDebugLine> debugLines,
+    mut Vector<PaintLineSegment> screenLines
 ){
     mut World world = worldHandle.deref();
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
@@ -771,19 +772,31 @@ void PaintPhysicsDebugOverlay(
     if(!cameraView.valid())
         return;
 
-    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), options, debugLines);
-    if(debugLines.empty())
-        return;
-
     in TransformComponent camXf = cameraView.components.value().transform;
     in CameraProjection camProj = cameraView.projection;
     const PhysicsDebugScreenProjector projector(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight);
+    if(!projector.valid())
+        return;
+
+    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), options, projector, debugLines);
+    if(debugLines.empty())
+        return;
+
+    screenLines.clear();
+    screenLines.reserve(debugLines.size());
     for(usize li = 0u; li < debugLines.size(); ++li){
         in PhysicsDebugLine line = debugLines[li];
         VectorSingle seg(0.0f);
-        if(projector.projectSegment(VectorSingle(line.start), VectorSingle(line.end), seg))
-            context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
+        if(projector.projectSegment(VectorSingle(line.start), VectorSingle(line.end), seg)){
+            PaintLineSegment batchLine;
+            batchLine.start = Point(seg.x, seg.y);
+            batchLine.end = Point(seg.z, seg.w);
+            batchLine.color = Color(line.color.x, line.color.y, line.color.z, line.color.w);
+            screenLines.push_back(batchLine);
+        }
     }
+    if(!screenLines.empty())
+        context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), 1.5f);
 }
 
 

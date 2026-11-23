@@ -206,6 +206,15 @@ class JointConstraintStepCache{
     public SymMat3 sumInvI;
     public SymMat3 kAngInv;
     public Mat3 pointEffectiveMass0;
+    public Mat3 cachedPointEffectiveMass;
+    public f32x4 cachedDeltaRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 cachedDeltaRotB(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 cachedRA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 cachedRB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 cachedQA(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 cachedQB(0.0f, 0.0f, 0.0f, 1.0f);
+    public b8 hasCachedPose = false;
+    public b8 cachedPointMassValid = false;
 }
 
 
@@ -551,64 +560,112 @@ void WarmStartJointConstraint(mut Vector<BodyState> states, in JointConstraint j
     const VectorSingle angImp = jc.angularImpulse();
 
     if(jc.type == JointType::Distance){
+        const f32 totalLin = linImp.x + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(totalLin == 0.0f)
+            return;
         const VectorSingle d0 = baseDelta + rB0 - rA0;
         const VectorSingle u0 = SafeNormalizeVec3(d0, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const VectorSingle p = u0 * (linImp.x + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        const VectorSingle p = u0 * totalLin;
         ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0, p, -1.0f);
         ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, p, 1.0f);
         return;
     }
 
-    const VectorSingle axisA0 = SafeNormalizeVec3(
-        Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)),
-        VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
-    );
-    const VectorSingle axisB0 = SafeNormalizeVec3(
-        Vector3Rotate(jc.localAxisB(), VectorSingle(jc.qB0)),
-        VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
-    );
-
     if(jc.type == JointType::Prismatic){
-        const VectorSingle rA0Eff = rA0 + (baseDelta + rB0 - rA0);
-        const VectorSingle linP = linImp + axisA0 * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-        ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0Eff, linP, -1.0f);
-        ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linP, 1.0f);
-        ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angImp, -1.0f);
-        ApplyAngularImpulseToBody(states, jc.indexB, jc.invIB, angImp, 1.0f);
+        const f32 axialLin = jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        VectorSingle linP = linImp;
+        if(axialLin != 0.0f){
+            const VectorSingle axisA0 = SafeNormalizeVec3(
+                Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)),
+                VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
+            );
+            linP = linP + axisA0 * axialLin;
+        }
+        if(linP.x != 0.0f || linP.y != 0.0f || linP.z != 0.0f){
+            const VectorSingle rA0Eff = rA0 + (baseDelta + rB0 - rA0);
+            ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0Eff, linP, -1.0f);
+            ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linP, 1.0f);
+        }
+        if(angImp.x != 0.0f || angImp.y != 0.0f || angImp.z != 0.0f){
+            ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angImp, -1.0f);
+            ApplyAngularImpulseToBody(states, jc.indexB, jc.invIB, angImp, 1.0f);
+        }
         return;
     }
 
     if(jc.type == JointType::Wheel){
-        const VectorSingle rA0Eff = rA0 + (baseDelta + rB0 - rA0);
-        const VectorSingle linP = linImp + axisA0 * (jc.coneOrSuspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-        ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0Eff, linP, -1.0f);
-        ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linP, 1.0f);
-        const VectorSingle axleA0 = SafeNormalizeVec3(
-            Vector3Rotate(jc.localAxisB(), QuaternionMultiply(VectorSingle(jc.qA0), VectorSingle(jc.referenceRotation))),
-            VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)
-        );
-        const VectorSingle angP = angImp + axleA0 * jc.motorImpulse;
-        ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angP, -1.0f);
-        ApplyAngularImpulseToBody(states, jc.indexB, jc.invIB, angP, 1.0f);
+        const f32 axialLin = jc.coneOrSuspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        VectorSingle linP = linImp;
+        if(axialLin != 0.0f){
+            const VectorSingle axisA0 = SafeNormalizeVec3(
+                Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)),
+                VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
+            );
+            linP = linP + axisA0 * axialLin;
+        }
+        if(linP.x != 0.0f || linP.y != 0.0f || linP.z != 0.0f){
+            const VectorSingle rA0Eff = rA0 + (baseDelta + rB0 - rA0);
+            ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0Eff, linP, -1.0f);
+            ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linP, 1.0f);
+        }
+        VectorSingle angP = angImp;
+        if(jc.motorImpulse != 0.0f){
+            const VectorSingle axleA0 = SafeNormalizeVec3(
+                Vector3Rotate(jc.localAxisB(), QuaternionMultiply(VectorSingle(jc.qA0), VectorSingle(jc.referenceRotation))),
+                VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)
+            );
+            angP = angP + axleA0 * jc.motorImpulse;
+        }
+        if(angP.x != 0.0f || angP.y != 0.0f || angP.z != 0.0f){
+            ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angP, -1.0f);
+            ApplyAngularImpulseToBody(states, jc.indexB, jc.invIB, angP, 1.0f);
+        }
         return;
     }
 
-    ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0, linImp, -1.0f);
-    ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linImp, 1.0f);
+    if(linImp.x != 0.0f || linImp.y != 0.0f || linImp.z != 0.0f){
+        ApplyVelocityImpulseToBody(states, jc.indexA, invMassA, jc.invIA, rA0, linImp, -1.0f);
+        ApplyVelocityImpulseToBody(states, jc.indexB, invMassB, jc.invIB, rB0, linImp, 1.0f);
+    }
 
     VectorSingle angP = angImp;
     if(jc.type == JointType::Revolute){
-        angP = angP + axisA0 * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        const f32 axialAng = jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(axialAng != 0.0f){
+            const VectorSingle axisA0 = SafeNormalizeVec3(
+                Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)),
+                VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
+            );
+            angP = angP + axisA0 * axialAng;
+        }
     }
     else if(jc.type == JointType::Spherical){
-        VectorSingle fU1(0.0f);
-        VectorSingle fU2(0.0f);
-        ComputeTangentBasis(axisA0, fU1, fU2);
-        const VectorSingle swingAxis0 = SafeNormalizeVec3(Cross(axisA0, axisB0), fU1);
-        angP = angP + axisB0 * (jc.lowerLimitImpulse + jc.upperLimitImpulse) + swingAxis0 * jc.coneOrSuspensionImpulse;
+        const f32 twistImp = jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        const f32 coneImp = jc.coneOrSuspensionImpulse;
+        if(twistImp != 0.0f || coneImp != 0.0f){
+            const VectorSingle axisB0 = SafeNormalizeVec3(
+                Vector3Rotate(jc.localAxisB(), VectorSingle(jc.qB0)),
+                VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
+            );
+            angP = angP + axisB0 * twistImp;
+            if(coneImp != 0.0f){
+                const VectorSingle axisA0 = SafeNormalizeVec3(
+                    Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)),
+                    VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)
+                );
+                VectorSingle fU1(0.0f);
+                VectorSingle fU2(0.0f);
+                ComputeTangentBasisFromUnitNormal(axisA0, fU1, fU2);
+                const VectorSingle swingAxis0 = SafeNormalizeVec3(Cross(axisA0, axisB0), fU1);
+                angP = angP + swingAxis0 * coneImp;
+            }
+        }
     }
 
-    if(jc.type == JointType::Fixed || jc.type == JointType::Revolute || jc.type == JointType::Motor || jc.type == JointType::Spherical){
+    if(
+        (jc.type == JointType::Fixed || jc.type == JointType::Revolute || jc.type == JointType::Motor || jc.type == JointType::Spherical)
+        && (angP.x != 0.0f || angP.y != 0.0f || angP.z != 0.0f)
+    ){
         ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angP, -1.0f);
         ApplyAngularImpulseToBody(states, jc.indexB, jc.invIB, angP, 1.0f);
     }
@@ -628,38 +685,66 @@ void ComputeJointConstraintTotalImpulses(
     mut VectorSingle outLinP,
     mut VectorSingle outAngL
 ){
-    const VectorSingle qA = VectorSingle(jc.qA0);
-    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     outLinP = jc.linearImpulse();
     outAngL = jc.angularImpulse();
     if(jc.type == JointType::Distance){
+        const f32 totalLin = outLinP.x + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(totalLin == 0.0f){
+            outLinP = VectorSingle(0.0f);
+            return;
+        }
         const VectorSingle d0 = jc.baseCenterDelta() + jc.rB0() - jc.rA0();
         const VectorSingle u0 = SafeNormalizeVec3(d0, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        outLinP = u0 * (outLinP.x + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        outLinP = u0 * totalLin;
     }
     else if(jc.type == JointType::Prismatic){
-        outLinP = outLinP + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        const f32 axialLin = jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(axialLin != 0.0f){
+            const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            outLinP = outLinP + axisA * axialLin;
+        }
     }
     else if(jc.type == JointType::Wheel){
-        outLinP = outLinP + axisA * (jc.coneOrSuspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-        const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
-        const VectorSingle axleA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        outAngL = outAngL + axleA * jc.motorImpulse;
+        const VectorSingle qA = VectorSingle(jc.qA0);
+        const f32 axialLin = jc.coneOrSuspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(axialLin != 0.0f){
+            const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            outLinP = outLinP + axisA * axialLin;
+        }
+        if(jc.motorImpulse != 0.0f){
+            const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
+            const VectorSingle axleA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+            outAngL = outAngL + axleA * jc.motorImpulse;
+        }
     }
     else if(jc.type == JointType::Revolute){
-        outAngL = outAngL + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        const f32 axialAng = jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        if(axialAng != 0.0f){
+            const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            outAngL = outAngL + axisA * axialAng;
+        }
     }
     else if(jc.type == JointType::Spherical){
-        const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), VectorSingle(jc.qB0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        VectorSingle fU1(0.0f);
-        VectorSingle fU2(0.0f);
-        ComputeTangentBasis(axisA, fU1, fU2);
-        const VectorSingle swingAxis = SafeNormalizeVec3(Cross(axisA, axisB), fU1);
-        outAngL = outAngL + axisB * (jc.lowerLimitImpulse + jc.upperLimitImpulse) + swingAxis * jc.coneOrSuspensionImpulse;
+        const f32 twistImp = jc.lowerLimitImpulse + jc.upperLimitImpulse;
+        const f32 coneImp = jc.coneOrSuspensionImpulse;
+        if(twistImp != 0.0f || coneImp != 0.0f){
+            const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), VectorSingle(jc.qB0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            outAngL = outAngL + axisB * twistImp;
+            if(coneImp != 0.0f){
+                const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), VectorSingle(jc.qA0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                VectorSingle fU1(0.0f);
+                VectorSingle fU2(0.0f);
+                ComputeTangentBasisFromUnitNormal(axisA, fU1, fU2);
+                const VectorSingle swingAxis = SafeNormalizeVec3(Cross(axisA, axisB), fU1);
+                outAngL = outAngL + swingAxis * coneImp;
+            }
+        }
     }
 }
 
 void BuildJointConstraintStepCache(in Vector<BodyState> states, in JointConstraint jc, mut JointConstraintStepCache outCache){
+    outCache.hasCachedPose = false;
+    outCache.cachedPointMassValid = false;
     outCache.sumInvI = AddSymMat3(jc.invIA, jc.invIB);
     if(jc.type == JointType::Fixed || jc.type == JointType::Prismatic || (jc.type == JointType::Motor && jc.maxTorque > 0.0f))
         outCache.kAngInv = InvertSymMat3(outCache.sumInvI);
@@ -675,8 +760,8 @@ void BuildJointConstraintStepCache(in Vector<BodyState> states, in JointConstrai
 }
 
 Mat3 ResolveJointPointEffectiveMass(
+    mut JointConstraintStepCache cache,
     in JointConstraint jc,
-    in JointConstraintStepCache cache,
     in f32 invMassA,
     in f32 invMassB,
     in VectorSingle rA,
@@ -687,49 +772,91 @@ Mat3 ResolveJointPointEffectiveMass(
 ){
     if(zeroDeltaRot)
         return cache.pointEffectiveMass0;
-    return ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+    if(cache.cachedPointMassValid)
+        return cache.cachedPointEffectiveMass;
+    cache.cachedPointEffectiveMass = ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+    cache.cachedPointMassValid = true;
+    return cache.cachedPointEffectiveMass;
 }
 
-void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstraint jc, in JointConstraintStepCache cache, in f32 h, in b8 useBias){
-    BodyState stateA;
-    BodyState stateB;
-    if(jc.indexA != s_NullIndex)
-        stateA = states[jc.indexA];
-    if(jc.indexB != s_NullIndex)
-        stateB = states[jc.indexB];
+void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstraint jc, mut JointConstraintStepCache cache, in f32 h, in b8 useBias){
+    u32 flagsA = 0u;
+    VectorSingle vA(0.0f);
+    VectorSingle wA(0.0f);
+    VectorSingle deltaRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle deltaPosA(0.0f);
+    if(jc.indexA != s_NullIndex){
+        in BodyState stateA = states[jc.indexA];
+        flagsA = stateA.flags();
+        vA = VectorSingle(stateA.linearVelocity);
+        wA = VectorSingle(stateA.angularVelocity);
+        deltaRotA = VectorSingle(stateA.deltaRotation);
+        deltaPosA = stateA.deltaPosition();
+    }
 
-    const u32 flagsA = stateA.flags();
-    const u32 flagsB = stateB.flags();
-    VectorSingle vA = VectorSingle(stateA.linearVelocity);
-    VectorSingle wA = VectorSingle(stateA.angularVelocity);
-    VectorSingle vB = VectorSingle(stateB.linearVelocity);
-    VectorSingle wB = VectorSingle(stateB.angularVelocity);
+    u32 flagsB = 0u;
+    VectorSingle vB(0.0f);
+    VectorSingle wB(0.0f);
+    VectorSingle deltaRotB(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle deltaPosB(0.0f);
+    if(jc.indexB != s_NullIndex){
+        in BodyState stateB = states[jc.indexB];
+        flagsB = stateB.flags();
+        vB = VectorSingle(stateB.linearVelocity);
+        wB = VectorSingle(stateB.angularVelocity);
+        deltaRotB = VectorSingle(stateB.deltaRotation);
+        deltaPosB = stateB.deltaPosition();
+    }
 
     const f32 invMassA = jc.invMassA();
     const f32 invMassB = jc.invMassB();
-    const VectorSingle deltaRotA = VectorSingle(stateA.deltaRotation);
-    const VectorSingle deltaRotB = VectorSingle(stateB.deltaRotation);
     const b8 zeroDeltaRot =
         (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) <= 1.0e-12f
         && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) <= 1.0e-12f
     ;
-    const b8 exactIdentityDeltaRotA =
-        deltaRotA.x == 0.0f && deltaRotA.y == 0.0f && deltaRotA.z == 0.0f && deltaRotA.w == 1.0f;
-    const b8 exactIdentityDeltaRotB =
-        deltaRotB.x == 0.0f && deltaRotB.y == 0.0f && deltaRotB.z == 0.0f && deltaRotB.w == 1.0f;
-    VectorSingle rA = jc.rA0();
-    VectorSingle qA = VectorSingle(jc.qA0);
-    if(!exactIdentityDeltaRotA){
-        rA = Vector3Rotate(rA, deltaRotA);
-        qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, qA));
+    VectorSingle rA(0.0f);
+    VectorSingle qA(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle rB(0.0f);
+    VectorSingle qB(0.0f, 0.0f, 0.0f, 1.0f);
+    if(
+        cache.hasCachedPose
+        && deltaRotA.x == cache.cachedDeltaRotA.x
+        && deltaRotA.y == cache.cachedDeltaRotA.y
+        && deltaRotA.z == cache.cachedDeltaRotA.z
+        && deltaRotA.w == cache.cachedDeltaRotA.w
+        && deltaRotB.x == cache.cachedDeltaRotB.x
+        && deltaRotB.y == cache.cachedDeltaRotB.y
+        && deltaRotB.z == cache.cachedDeltaRotB.z
+        && deltaRotB.w == cache.cachedDeltaRotB.w
+    ){
+        rA = VectorSingle(cache.cachedRA, 0.0f);
+        qA = VectorSingle(cache.cachedQA);
+        rB = VectorSingle(cache.cachedRB, 0.0f);
+        qB = VectorSingle(cache.cachedQB);
     }
-    VectorSingle rB = jc.rB0();
-    VectorSingle qB = VectorSingle(jc.qB0);
-    if(!exactIdentityDeltaRotB){
-        rB = Vector3Rotate(rB, deltaRotB);
-        qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, qB));
+    else{
+        rA = jc.rA0();
+        qA = VectorSingle(jc.qA0);
+        if(!(deltaRotA.x == 0.0f && deltaRotA.y == 0.0f && deltaRotA.z == 0.0f && deltaRotA.w == 1.0f)){
+            rA = Vector3Rotate(rA, deltaRotA);
+            qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, qA));
+        }
+        rB = jc.rB0();
+        qB = VectorSingle(jc.qB0);
+        if(!(deltaRotB.x == 0.0f && deltaRotB.y == 0.0f && deltaRotB.z == 0.0f && deltaRotB.w == 1.0f)){
+            rB = Vector3Rotate(rB, deltaRotB);
+            qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, qB));
+        }
+        cache.cachedDeltaRotA = f32x4(deltaRotA);
+        cache.cachedDeltaRotB = f32x4(deltaRotB);
+        cache.cachedRA = f32x4(rA, 0.0f);
+        cache.cachedRB = f32x4(rB, 0.0f);
+        cache.cachedQA = f32x4(qA);
+        cache.cachedQB = f32x4(qB);
+        cache.hasCachedPose = true;
+        cache.cachedPointMassValid = false;
     }
-    const VectorSingle d = jc.baseCenterDelta() + stateB.deltaPosition() - stateA.deltaPosition() + rB - rA;
+    const VectorSingle d = jc.baseCenterDelta() + deltaPosB - deltaPosA + rB - rA;
 
     if(jc.type == JointType::Distance){
         const f32 dist = Vector3Length(VectorSingle(d, 0.0f)).x;
@@ -813,7 +940,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
     }
     else if(jc.type == JointType::Spherical){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(cache, jc, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -949,7 +1076,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
     }
     else if(jc.type == JointType::Fixed){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(cache, jc, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -988,7 +1115,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
     }
     else if(jc.type == JointType::Revolute){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(cache, jc, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -1265,7 +1392,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         const VectorSingle linTarget = Vector3Rotate(jc.linearOffset(), qA);
         const VectorSingle errLin = d - linTarget;
         const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
-        const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
+        const Mat3 kInv = ResolveJointPointEffectiveMass(cache, jc, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
         const f32 corrRate = jc.correctionFactor() / h;
         const VectorSingle linBias = errLin * corrRate;
 

@@ -16,10 +16,16 @@ const StringView s_PhysicsShaderDefaultVariant = "default";
 const StringView s_PhysicsShaderNpPrimVariant = "NWB_PHYSICS_NP_PROFILE=0";
 const StringView s_PhysicsShaderNpComplexVariant = "NWB_PHYSICS_NP_PROFILE=1";
 const StringView s_PhysicsShaderNpBulletToiVariant = "NWB_PHYSICS_NP_PROFILE=2";
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_COLOR_COUNT")]
+extern const u32 s_ShaderGpuIslandJointColorCount;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_OVERFLOW_COLOR_INDEX")]
+extern const u32 s_ShaderGpuIslandJointOverflowColorIndex;
+
 const usize s_GpuJointColorCount = s_GraphColorCount;
 const usize s_GpuJointOverflowColorIndex = s_OverflowColorIndex;
-const usize s_GpuIslandJointColorCount = 8u;
-const usize s_GpuIslandJointOverflowColorIndex = 7u;
+const usize s_GpuIslandJointColorCount = cast<usize>(s_ShaderGpuIslandJointColorCount);
+const usize s_GpuIslandJointOverflowColorIndex = cast<usize>(s_ShaderGpuIslandJointOverflowColorIndex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

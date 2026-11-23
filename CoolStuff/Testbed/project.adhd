@@ -197,7 +197,10 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 backendName = "CPU+GPU";
             this.m_cachedPhysicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts, {}j/{}i ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, stats.jointCount, stats.islandCount, backendName);
         }
-        const i64 stepCentis = cast<i64>(stats.stepMs * 100.0 + 0.5);
+        f64 clampedStepMs = 0.0;
+        if(IsFinite(stats.stepMs) && stats.stepMs > 0.0)
+            clampedStepMs = Min(stats.stepMs, 1.0e9);
+        const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
         const b8 needSplitLine = !this.m_hasCachedHudStats
             || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
             || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
@@ -207,12 +210,13 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(needSplitLine){
             this.m_cachedStepCentis = stepCentis;
             this.m_cachedSplitLine = StringFormat(
-                "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
+                "Split: CPU {}b/{}i | GPU {}b/{}i | {}.{:02} ms",
                 stats.cpuSolvedBodyCount,
                 stats.cpuSolvedIslandCount,
                 stats.gpuSolvedBodyCount,
                 stats.gpuSolvedIslandCount,
-                stats.stepMs
+                stepCentis / 100,
+                stepCentis % 100
             );
         }
         this.m_cachedHudStats = stats;

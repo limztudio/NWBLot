@@ -62,7 +62,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint jointCount = slice.jointFlags.y;
     const uint islandFlags = slice.jointFlags.z;
     const uint denseContactColors = min(slice.jointFlags.w, NWB_PHYSICS_OVERFLOW_COLOR_INDEX);
-    const uint denseJointColors = (islandFlags >> 8u) & 0x7u;
+    const uint denseJointColors = (islandFlags >> 8u) & NWB_PHYSICS_ISLAND_JOINT_OVERFLOW_COLOR_INDEX;
     const bool hasRolling = (islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_ROLLING) != 0u;
 
     const uint subStepCount = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
@@ -108,6 +108,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseContactColors, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodySimSlot, bodyStateSlot, constraintSlot, invH, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
             }
             else if(subStep > 0u){
+                if(hasRolling)
+                    AllMemoryBarrierWithGroupSync();
                 nwbPhysicsClearIslandContactWarmStartLds(tid, contactOffset, contactCount, constraintSlot, hasRolling);
                 if(hasRolling)
                     AllMemoryBarrierWithGroupSync();
@@ -120,6 +122,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 nwbPhysicsIslandSolveJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodySimSlot, bodyStateSlot, jointSlot, h, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
             }
             else{
+                AllMemoryBarrierWithGroupSync();
                 for(uint j = tid; j < jointCount; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                     nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodySimSlot, bodyStateSlot, jointSlot, h, 0u);
                 AllMemoryBarrierWithGroupSync();

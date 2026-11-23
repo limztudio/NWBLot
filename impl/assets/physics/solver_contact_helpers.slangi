@@ -326,18 +326,22 @@ void nwbPhysicsWarmStartContact(
     }
 
     if(twistImpulse != 0.0f){
-        const float3 twistAng = twistImpulse * normal;
-        if(dynA){
-            wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, twistAng);
-            if((flagsA & 0x38u) != 0u)
-                wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+        const float maxLeverArm = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentVelRollMaxLever.z;
+        const float twistMass = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerATwistMass.w;
+        if(maxLeverArm > 0.0f && twistMass > 0.0f){
+            const float3 twistAng = twistImpulse * normal;
+            if(dynA){
+                wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, twistAng);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+            }
+            if(dynB){
+                wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, twistAng);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
+            }
+            anyWarmApplied = true;
         }
-        if(dynB){
-            wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, twistAng);
-            if((flagsB & 0x38u) != 0u)
-                wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-        }
-        anyWarmApplied = true;
     }
 
     const float rollResist = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentVelRollMaxLever.y;

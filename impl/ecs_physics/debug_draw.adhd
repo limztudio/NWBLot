@@ -83,7 +83,16 @@ class PhysicsDebugScreenProjector{
         in f32 viewportWidth,
         in f32 viewportHeight
     ){
-        this.m_valid = viewportWidth > 0.0f && viewportHeight > 0.0f;
+        this.m_valid =
+            IsFinite(viewportWidth)
+            && IsFinite(viewportHeight)
+            && viewportWidth > 0.0f
+            && viewportHeight > 0.0f
+            && IsFinite(projection.projectionParams.x)
+            && IsFinite(projection.projectionParams.y)
+            && projection.projectionParams.x > 0.0f
+            && projection.projectionParams.y > 0.0f
+        ;
         if(!this.m_valid)
             return;
         const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
@@ -386,7 +395,7 @@ void AppendPhysicsDebugBoxEdges(
         return;
     const VectorSingle worldCenter = TransformPoint(xf, localCenter);
     VectorSingle worldRot = VectorSingle(xf.rotation);
-    if(Abs(boxRotation.w) <= 0.99999f)
+    if(Abs(boxRotation.x) > 1.0e-5f || Abs(boxRotation.y) > 1.0e-5f || Abs(boxRotation.z) > 1.0e-5f)
         worldRot = SafeNormalizeQuat(QuaternionMultiply(worldRot, SafeNormalizeQuat(boxRotation)));
     VectorSingle ex(0.0f);
     VectorSingle ey(0.0f);
@@ -493,12 +502,16 @@ void AppendPhysicsDebugMeshLines(
         localPlanes[pi] = f32x4(nLocal.x, nLocal.y, nLocal.z, dLocal);
     }
 
+    const usize bvhNodeCount = cast<usize>(mesh.bvhNodeCount());
+    if(bvhNodeCount == 0u)
+        return;
+
     FixedVector<u32, 128u> nodeStack;
     nodeStack.push_back(0u);
     while(!nodeStack.empty()){
         const u32 nodeIdx = nodeStack[nodeStack.size() - 1u];
         nodeStack.pop_back();
-        if(cast<usize>(nodeIdx) >= mesh.nodes.size())
+        if(cast<usize>(nodeIdx) >= bvhNodeCount)
             continue;
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         if(!TestAabbAgainstFrustumPlanes5(localPlanes, node.aabb()))
@@ -516,9 +529,9 @@ void AppendPhysicsDebugMeshLines(
         else{
             const u32 leftIdx = node.leftOrFirst();
             const u32 rightIdx = node.rightOrCount();
-            if(cast<usize>(rightIdx) < mesh.nodes.size() && nodeStack.size() < 128u)
+            if(cast<usize>(rightIdx) < bvhNodeCount && nodeStack.size() < 128u)
                 nodeStack.push_back(rightIdx);
-            if(cast<usize>(leftIdx) < mesh.nodes.size() && nodeStack.size() < 128u)
+            if(cast<usize>(leftIdx) < bvhNodeCount && nodeStack.size() < 128u)
                 nodeStack.push_back(leftIdx);
         }
     }
@@ -735,10 +748,57 @@ void BuildPhysicsDebugLinesInternal(
             const VectorSingle cB = simB.center();
             const VectorSingle aA = TransformPoint(simA.transform, j.localAnchorA());
             const VectorSingle aB = TransformPoint(simB.transform, j.localAnchorB());
+            const VectorSingle qA = SafeNormalizeQuat(VectorSingle(simA.transform.rotation));
             if(useProjector){
                 const VectorSingle marginVec(0.4f, 0.4f, 0.4f, 0.0f);
-                const VectorSingle jLo = Min(Min(cA, aA), Min(aB, cB)) - marginVec;
-                const VectorSingle jHi = Max(Max(cA, aA), Max(aB, cB)) + marginVec;
+                VectorSingle jLo = Min(Min(cA, aA), Min(aB, cB));
+                VectorSingle jHi = Max(Max(cA, aA), Max(aB, cB));
+                if(j.type == JointType::Distance){
+                    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle dir = SafeNormalizeVec3(VectorSingle(aB - aA, 0.0f), axisA);
+                    const VectorSingle restPt = aA + dir * j.length();
+                    jLo = Min(jLo, restPt);
+                    jHi = Max(jHi, restPt);
+                    if(j.enableLimit() && j.minLength() <= j.maxLength()){
+                        const VectorSingle minPt = aA + dir * j.minLength();
+                        const VectorSingle maxPt = aA + dir * j.maxLength();
+                        jLo = Min(jLo, Min(minPt, maxPt));
+                        jHi = Max(jHi, Max(minPt, maxPt));
+                    }
+                }
+                else if(j.type == JointType::Prismatic){
+                    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    f32 lo = -0.3f;
+                    f32 hi = 0.3f;
+                    if(j.enableLimit() && j.lowerLimit() <= j.upperLimit()){
+                        lo = j.lowerLimit();
+                        hi = j.upperLimit();
+                    }
+                    const VectorSingle pMin = aA + axisA * lo;
+                    const VectorSingle pMax = aA + axisA * hi;
+                    jLo = Min(jLo, Min(pMin, pMax));
+                    jHi = Max(jHi, Max(pMin, pMax));
+                }
+                else if(j.type == JointType::Motor){
+                    const VectorSingle targetPos = TransformPoint(simA.transform, j.localAnchorA() + j.linearOffset());
+                    jLo = Min(jLo, targetPos);
+                    jHi = Max(jHi, targetPos);
+                }
+                else if(j.type == JointType::Wheel){
+                    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    f32 lo = -0.25f;
+                    f32 hi = 0.25f;
+                    if(j.enableLimit() && j.lowerLimit() <= j.upperLimit()){
+                        lo = j.lowerLimit();
+                        hi = j.upperLimit();
+                    }
+                    const VectorSingle wMin = aA + axisA * lo;
+                    const VectorSingle wMax = aA + axisA * hi;
+                    jLo = Min(jLo, Min(wMin, wMax));
+                    jHi = Max(jHi, Max(wMin, wMax));
+                }
+                jLo = jLo - marginVec;
+                jHi = jHi + marginVec;
                 if(!projector.isAabbVisible(Aabb3D(jLo, jHi)))
                     continue;
             }
@@ -749,7 +809,6 @@ void BuildPhysicsDebugLinesInternal(
             AppendPhysicsDebugLine(options.maxLines, aA, aB, activeJointColor, outLines);
             AppendPhysicsDebugLine(options.maxLines, aB, cB, activeJointColor, outLines);
 
-            const VectorSingle qA = SafeNormalizeQuat(VectorSingle(simA.transform.rotation));
             const VectorSingle qB = SafeNormalizeQuat(VectorSingle(simB.transform.rotation));
 
             if(j.type == JointType::Distance){

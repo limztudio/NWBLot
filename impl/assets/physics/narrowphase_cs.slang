@@ -935,7 +935,7 @@ float3 nwbPhysicsSupportWorld(
 
     const uint vOffset = proxy.filterData.w;
     const uint metaPack = asuint(proxy.aabbMaxPad.w);
-    const uint vCount = min(metaPack & 0xffu, 128u);
+    const uint vCount = min(metaPack & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
     if(vCount == 0u){
         outIdx = 0u;
         return origin;
@@ -1596,7 +1596,7 @@ void nwbPhysicsSolveSphereHullDeep(
     const float4 qH = sphereIsA ? rotB : rotA;
     const uint fCount = nwbPhysicsHullFaceCount(pH);
     const uint vCount = nwbPhysicsHullVertexCount(pH);
-    if(fCount == 0u || fCount > 128u || vCount == 0u){
+    if(fCount == 0u || fCount > NWB_PHYSICS_MAX_HULL_FACES || vCount == 0u){
         result.pairInfo.w = 1u;
         return;
     }
@@ -1628,6 +1628,102 @@ void nwbPhysicsSolveSphereHullDeep(
     result.anchorBSeparation[0] = float4((sphereIsA ? wH : wS) - bodyPosB, maxPlaneDist - totalR);
 }
 
+bool nwbPhysicsTryClipCapsuleAgainstHullFace(
+    const bool capIsA,
+    const NwbPhysicsGpuShapeProxy pH,
+    const float3 origH,
+    const float4 qH,
+    const float3 bodyPosA,
+    const float3 bodyPosB,
+    const float3 l0,
+    const float3 l1,
+    const float rC,
+    const float rH,
+    const float totalR,
+    const uint bestFace,
+    const float3 bestLocalN,
+    const float bestFaceOff,
+    const uint hullVertexSlot,
+    const float maxDist,
+    inout NwbPhysicsGpuNarrowphaseManifold result
+){
+    float4 faceVerts[16];
+    float3 faceNUnused = bestLocalN;
+    float faceOffUnused = bestFaceOff;
+    const uint faceVertCount = nwbPhysicsGatherHullWorldFacePoly(
+        pH,
+        float3(0.0f, 0.0f, 0.0f),
+        float4(0.0f, 0.0f, 0.0f, 1.0f),
+        hullVertexSlot,
+        bestFace,
+        faceVerts,
+        faceNUnused,
+        faceOffUnused
+    );
+    if(faceVertCount < 3u){
+        result.pairInfo.w = 1u;
+        return true;
+    }
+
+    float3 clipA = l0;
+    float3 clipB = l1;
+    bool clippedOut = false;
+    for(uint vi = 0u; vi < faceVertCount; ++vi){
+        const float3 v0 = faceVerts[vi].xyz;
+        const float3 v1 = faceVerts[(vi + 1u) % faceVertCount].xyz;
+        const float3 sideN = nwbPhysicsSafeNormal(cross(v1 - v0, bestLocalN), float3(1.0f, 0.0f, 0.0f));
+        const float sideOff = dot(sideN, v0);
+        const float dA = dot(sideN, clipA) - sideOff;
+        const float dB = dot(sideN, clipB) - sideOff;
+        if(dA > 0.0f && dB > 0.0f){
+            clippedOut = true;
+            break;
+        }
+        if(dA > 0.0f){
+            const float t = dA / max(dA - dB, 1.0e-12f);
+            clipA = lerp(clipA, clipB, clamp(t, 0.0f, 1.0f));
+        }
+        else if(dB > 0.0f){
+            const float t = dA / min(dA - dB, -1.0e-12f);
+            clipB = lerp(clipA, clipB, clamp(t, 0.0f, 1.0f));
+        }
+    }
+    if(clippedOut)
+        return false;
+
+    const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, qH), float3(0.0f, 1.0f, 0.0f));
+    const float3 nAtoB = capIsA ? -worldOut : worldOut;
+    uint emitted = 0u;
+    const float sepA = dot(bestLocalN, clipA) - bestFaceOff - totalR;
+    if(sepA <= maxDist){
+        const float3 wpA = origH + nwbPhysicsQuatRotate(clipA, qH);
+        const float3 wC = wpA - worldOut * rC;
+        const float3 wH = wpA + worldOut * (rH - (sepA + totalR));
+        result.anchorAFeature[emitted] = float4((capIsA ? wC : wH) - bodyPosA, asfloat(22u + bestFace));
+        result.anchorBSeparation[emitted] = float4((capIsA ? wH : wC) - bodyPosB, sepA);
+        ++emitted;
+    }
+    const float3 segDelta = clipB - clipA;
+    if(dot(segDelta, segDelta) > 2.5e-5f){
+        const float sepB = dot(bestLocalN, clipB) - bestFaceOff - totalR;
+        if(sepB <= maxDist && emitted < NWB_PHYSICS_MAX_MANIFOLD_POINTS){
+            const float3 wpB = origH + nwbPhysicsQuatRotate(clipB, qH);
+            const float3 wC = wpB - worldOut * rC;
+            const float3 wH = wpB + worldOut * (rH - (sepB + totalR));
+            const uint feat = (emitted == 0u) ? (22u + bestFace) : (23u + bestFace);
+            result.anchorAFeature[emitted] = float4((capIsA ? wC : wH) - bodyPosA, asfloat(feat));
+            result.anchorBSeparation[emitted] = float4((capIsA ? wH : wC) - bodyPosB, sepB);
+            ++emitted;
+        }
+    }
+    if(emitted > 0u){
+        result.normalPad = float4(nAtoB, 0.0f);
+        result.pairInfo.z = emitted;
+        return true;
+    }
+    return false;
+}
+
 void nwbPhysicsSolveCapsuleHullDeep(
     const NwbPhysicsGpuShapeProxy proxyA,
     const float3 originA,
@@ -1654,7 +1750,7 @@ void nwbPhysicsSolveCapsuleHullDeep(
     const uint fCount = nwbPhysicsHullFaceCount(pH);
     const uint eCount = nwbPhysicsHullEdgeCount(pH);
     const uint vCount = nwbPhysicsHullVertexCount(pH);
-    if(fCount == 0u || fCount > 128u || eCount > 128u || vCount == 0u || vCount > 128u){
+    if(fCount == 0u || fCount > NWB_PHYSICS_MAX_HULL_FACES || eCount > NWB_PHYSICS_MAX_HULL_EDGES || vCount == 0u || vCount > NWB_PHYSICS_MAX_HULL_VERTICES){
         result.pairInfo.w = 1u;
         return;
     }
@@ -1708,7 +1804,7 @@ void nwbPhysicsSolveCapsuleHullDeep(
             const float3 eDir = e1 - e0;
             const float3 cr = cross(dSegHull, eDir);
             const float crLenSq = dot(cr, cr);
-            const float normTol = 0.005f * 0.005f * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
+            const float normTol = NWB_PHYSICS_PARALLEL_EDGE_TOL * NWB_PHYSICS_PARALLEL_EDGE_TOL * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
             if(crLenSq <= normTol)
                 continue;
 
@@ -1765,80 +1861,30 @@ void nwbPhysicsSolveCapsuleHullDeep(
         return;
     }
 
+    if(nwbPhysicsTryClipCapsuleAgainstHullFace(
+        capIsA,
+        pH,
+        origH,
+        qH,
+        bodyPosA,
+        bodyPosB,
+        l0,
+        l1,
+        rC,
+        rH,
+        totalR,
+        bestFace,
+        bestLocalN,
+        bestFaceOff,
+        hullVertexSlot,
+        maxDist,
+        result
+    ))
+        return;
+
     const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, qH), float3(0.0f, 1.0f, 0.0f));
     const float3 nAtoB = capIsA ? -worldOut : worldOut;
     result.normalPad = float4(nAtoB, 0.0f);
-
-    float3 clipA = l0;
-    float3 clipB = l1;
-    bool clippedOut = false;
-    float4 faceVerts[16];
-    float3 faceNUnused = bestLocalN;
-    float faceOffUnused = bestFaceOff;
-    const uint faceVertCount = nwbPhysicsGatherHullWorldFacePoly(
-        pH,
-        float3(0.0f, 0.0f, 0.0f),
-        float4(0.0f, 0.0f, 0.0f, 1.0f),
-        hullVertexSlot,
-        bestFace,
-        faceVerts,
-        faceNUnused,
-        faceOffUnused
-    );
-    if(faceVertCount < 3u){
-        clippedOut = true;
-    }
-    else{
-        for(uint vi = 0u; vi < faceVertCount; ++vi){
-            const float3 v0 = faceVerts[vi].xyz;
-            const float3 v1 = faceVerts[(vi + 1u) % faceVertCount].xyz;
-            const float3 sideN = nwbPhysicsSafeNormal(cross(v1 - v0, bestLocalN), float3(1.0f, 0.0f, 0.0f));
-            const float sideOff = dot(sideN, v0);
-            const float dA = dot(sideN, clipA) - sideOff;
-            const float dB = dot(sideN, clipB) - sideOff;
-            if(dA > 0.0f && dB > 0.0f){
-                clippedOut = true;
-                break;
-            }
-            if(dA > 0.0f){
-                const float t = dA / max(dA - dB, 1.0e-12f);
-                clipA = lerp(clipA, clipB, clamp(t, 0.0f, 1.0f));
-            }
-            else if(dB > 0.0f){
-                const float t = dA / min(dA - dB, -1.0e-12f);
-                clipB = lerp(clipA, clipB, clamp(t, 0.0f, 1.0f));
-            }
-        }
-    }
-    if(!clippedOut){
-        uint emitted = 0u;
-        const float sepA = dot(bestLocalN, clipA) - bestFaceOff - totalR;
-        if(sepA <= maxDist){
-            const float3 wpA = origH + nwbPhysicsQuatRotate(clipA, qH);
-            const float3 wC = wpA - worldOut * rC;
-            const float3 wH = wpA + worldOut * (rH - (sepA + totalR));
-            result.anchorAFeature[emitted] = float4((capIsA ? wC : wH) - bodyPosA, asfloat(22u + bestFace));
-            result.anchorBSeparation[emitted] = float4((capIsA ? wH : wC) - bodyPosB, sepA);
-            ++emitted;
-        }
-        const float3 segDelta = clipB - clipA;
-        if(dot(segDelta, segDelta) > 2.5e-5f){
-            const float sepB = dot(bestLocalN, clipB) - bestFaceOff - totalR;
-            if(sepB <= maxDist && emitted < NWB_PHYSICS_MAX_MANIFOLD_POINTS){
-                const float3 wpB = origH + nwbPhysicsQuatRotate(clipB, qH);
-                const float3 wC = wpB - worldOut * rC;
-                const float3 wH = wpB + worldOut * (rH - (sepB + totalR));
-                const uint feat = (emitted == 0u) ? (22u + bestFace) : (23u + bestFace);
-                result.anchorAFeature[emitted] = float4((capIsA ? wC : wH) - bodyPosA, asfloat(feat));
-                result.anchorBSeparation[emitted] = float4((capIsA ? wH : wC) - bodyPosB, sepB);
-                ++emitted;
-            }
-        }
-        if(emitted > 0u){
-            result.pairInfo.z = emitted;
-            return;
-        }
-    }
 
     const float3 deepLocal = (bestD1 < bestD0) ? l1 : l0;
     const float minD = min(bestD0, bestD1);
@@ -1873,7 +1919,18 @@ void nwbPhysicsSolveHullHullDeep(
     const uint vCountB = nwbPhysicsHullVertexCount(proxyB);
     const uint eCountA = nwbPhysicsHullEdgeCount(proxyA);
     const uint eCountB = nwbPhysicsHullEdgeCount(proxyB);
-    if(fCountA == 0u || fCountB == 0u || fCountA > 128u || fCountB > 128u || vCountA == 0u || vCountB == 0u || vCountA > 128u || vCountB > 128u || eCountA > 128u || eCountB > 128u){
+    if(
+        fCountA == 0u
+        || fCountB == 0u
+        || fCountA > NWB_PHYSICS_MAX_HULL_FACES
+        || fCountB > NWB_PHYSICS_MAX_HULL_FACES
+        || vCountA == 0u
+        || vCountB == 0u
+        || vCountA > NWB_PHYSICS_MAX_HULL_VERTICES
+        || vCountB > NWB_PHYSICS_MAX_HULL_VERTICES
+        || eCountA > NWB_PHYSICS_MAX_HULL_EDGES
+        || eCountB > NWB_PHYSICS_MAX_HULL_EDGES
+    ){
         result.pairInfo.w = 1u;
         return;
     }
@@ -2583,20 +2640,38 @@ void nwbPhysicsCollideMeshMeshPair(
                     }
                     else{
                         float3 wTriNA = rawWTriNA;
-                        if(!closedA && dot(wCB - wCA, wTriNA) < 0.0f)
-                            wTriNA = -wTriNA;
-                        float3 wTriNB = rawWTriNB;
-                        if(!closedB && dot(wCA - wCB, wTriNB) < 0.0f)
-                            wTriNB = -wTriNB;
-
-                        const float minBOnA = min(dot(wTriNA, wB0), min(dot(wTriNA, wB1), dot(wTriNA, wB2)));
-                        const float sepA = minBOnA - dot(wTriNA, wA0) - totalR;
+                        const float dA = dot(rawWTriNA, wA0);
+                        const float b0A = dot(rawWTriNA, wB0);
+                        const float b1A = dot(rawWTriNA, wB1);
+                        const float b2A = dot(rawWTriNA, wB2);
+                        const float minBOnA = min(b0A, min(b1A, b2A));
+                        float sepA = minBOnA - dA - totalR;
+                        if(!closedA){
+                            const float maxBOnA = max(b0A, max(b1A, b2A));
+                            const float sepANeg = dA - maxBOnA - totalR;
+                            if(sepANeg > sepA){
+                                sepA = sepANeg;
+                                wTriNA = -rawWTriNA;
+                            }
+                        }
                         if(sepA > maxDist)
                             continue;
 
-                        const float3 nBtoA = -wTriNB;
-                        const float maxAOnB = max(dot(nBtoA, wA0), max(dot(nBtoA, wA1), dot(nBtoA, wA2)));
-                        const float sepB = dot(nBtoA, wB0) - maxAOnB - totalR;
+                        float3 nBtoA = -rawWTriNB;
+                        const float dB = dot(nBtoA, wB0);
+                        const float a0B = dot(nBtoA, wA0);
+                        const float a1B = dot(nBtoA, wA1);
+                        const float a2B = dot(nBtoA, wA2);
+                        const float maxAOnB = max(a0B, max(a1B, a2B));
+                        float sepB = dB - maxAOnB - totalR;
+                        if(!closedB){
+                            const float minAOnB = min(a0B, min(a1B, a2B));
+                            const float sepBNeg = minAOnB - dB - totalR;
+                            if(sepBNeg > sepB){
+                                sepB = sepBNeg;
+                                nBtoA = rawWTriNB;
+                            }
+                        }
                         if(sepB > maxDist)
                             continue;
 
@@ -2972,6 +3047,8 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
 
                 if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
                     const float3 lc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
+                    if(isClosed && dot(triN, lc - v0) < -NWB_PHYSICS_LINEAR_SLOP)
+                        continue;
                     float3 qL = nwbPhysicsClosestPointOnTriangle(lc, v0, v1, v2);
                     const float3 dL = qL - lc;
                     const float dSq = dot(dL, dL);
@@ -3417,7 +3494,7 @@ void nwbPhysicsCollideMeshPair(
                     const uint fCountO = nwbPhysicsHullFaceCount(otherP);
                     const uint eCountO = nwbPhysicsHullEdgeCount(otherP);
                     const uint vCountO = nwbPhysicsHullVertexCount(otherP);
-                    if(fCountO == 0u || fCountO > 128u || eCountO > 128u || vCountO == 0u || vCountO > 128u){
+                    if(fCountO == 0u || fCountO > NWB_PHYSICS_MAX_HULL_FACES || eCountO > NWB_PHYSICS_MAX_HULL_EDGES || vCountO == 0u || vCountO > NWB_PHYSICS_MAX_HULL_VERTICES){
                         result.pairInfo.w = 1u;
                         return;
                     }
@@ -3845,7 +3922,7 @@ void nwbPhysicsSolveBulletToi(
 
                     float t1 = 0.0f;
                     bool atMax = false;
-                    for(uint iter = 0u; iter < 25u; ++iter){
+                    for(uint iter = 0u; iter <= NWB_PHYSICS_TOI_MAX_ITERATIONS; ++iter){
                         float3 oAt;
                         float4 rAt;
                         nwbPhysicsEvalBulletSweep(bodyA, t1, oAt, rAt);
@@ -3913,7 +3990,7 @@ void nwbPhysicsSolveBulletToi(
 
     float t1 = 0.0f;
     bool atMax = false;
-    for(uint iter = 0u; iter < 25u; ++iter){
+    for(uint iter = 0u; iter <= NWB_PHYSICS_TOI_MAX_ITERATIONS; ++iter){
         float3 oAt;
         float4 rAt;
         nwbPhysicsEvalBulletSweep(bodyA, t1, oAt, rAt);
@@ -4066,36 +4143,93 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             }
         }
         else{
-            bool runDeepCap = (hitDeep || dist <= 1.0e-5f);
-            if(!runDeepCap){
+            if(hitDeep || dist <= 1.0e-5f){
+                nwbPhysicsSolveCapsuleHullDeep(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, hullVertexSlot, maxDist, result);
+            }
+            else{
                 const float sep = dist - totalR;
                 if(sep <= maxDist){
                     const float3 n = (pB - pA) / dist;
-                    if(typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
-                        const bool hullIsB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL);
-                        const NwbPhysicsGpuShapeProxy pH = hullIsB ? proxyB : proxyA;
-                        const float4 qH = hullIsB ? rotB : rotA;
-                        const float3 worldOut = hullIsB ? -n : n;
+                    bool handled = false;
+                    if(
+                        (typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE)
+                        && (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL || typeB == NWB_PHYSICS_SHAPE_TYPE_HULL)
+                    ){
+                        const bool capIsA = (typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE);
+                        const NwbPhysicsGpuShapeProxy pC = capIsA ? proxyA : proxyB;
+                        const NwbPhysicsGpuShapeProxy pH = capIsA ? proxyB : proxyA;
+                        const float3 origC = capIsA ? originA : originB;
+                        const float4 qC = capIsA ? rotA : rotB;
+                        const float3 origH = capIsA ? originB : originA;
+                        const float4 qH = capIsA ? rotB : rotA;
                         const uint fCount = nwbPhysicsHullFaceCount(pH);
-                        for(uint fi = 0u; fi < fCount; ++fi){
-                            const float4 lp = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, fi);
-                            const float3 worldFaceN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, qH), float3(0.0f, 1.0f, 0.0f));
-                            if(dot(worldFaceN, worldOut) > 0.995f){
-                                runDeepCap = true;
-                                break;
+                        if(fCount == 0u || fCount > NWB_PHYSICS_MAX_HULL_FACES){
+                            result.pairInfo.w = 1u;
+                            handled = true;
+                        }
+                        else{
+                            const float3 wP0 = origC + nwbPhysicsQuatRotate(pC.localCenterRadius.xyz, qC);
+                            const float3 wP1 = origC + nwbPhysicsQuatRotate(pC.localExtentOrP1.xyz, qC);
+                            const float3 l0 = nwbPhysicsQuatInvRotate(wP0 - origH, qH);
+                            const float3 l1 = nwbPhysicsQuatInvRotate(wP1 - origH, qH);
+                            float maxFaceSep = -1.0e20f;
+                            uint bestFace = 0u;
+                            float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
+                            float bestFaceOff = 0.0f;
+                            bool faceSeparated = false;
+                            for(uint fi = 0u; fi < fCount; ++fi){
+                                const float4 pl = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, fi);
+                                const float d0 = dot(pl.xyz, l0) - pl.w;
+                                const float d1 = dot(pl.xyz, l1) - pl.w;
+                                const float faceSep = min(d0, d1);
+                                if(faceSep > totalR + maxDist){
+                                    faceSeparated = true;
+                                    break;
+                                }
+                                if(faceSep > maxFaceSep){
+                                    maxFaceSep = faceSep;
+                                    bestFace = fi;
+                                    bestLocalN = pl.xyz;
+                                    bestFaceOff = pl.w;
+                                }
+                            }
+                            if(faceSeparated){
+                                handled = true;
+                            }
+                            else{
+                                const float3 worldOut = capIsA ? -n : n;
+                                const float3 bestWorldFaceN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, qH), float3(0.0f, 1.0f, 0.0f));
+                                if(dot(bestWorldFaceN, worldOut) > 0.995f && maxFaceSep <= totalR + maxDist){
+                                    handled = nwbPhysicsTryClipCapsuleAgainstHullFace(
+                                        capIsA,
+                                        pH,
+                                        origH,
+                                        qH,
+                                        originA,
+                                        originB,
+                                        l0,
+                                        l1,
+                                        pC.localCenterRadius.w,
+                                        pH.localCenterRadius.w,
+                                        totalR,
+                                        bestFace,
+                                        bestLocalN,
+                                        bestFaceOff,
+                                        hullVertexSlot,
+                                        maxDist,
+                                        result
+                                    );
+                                }
                             }
                         }
                     }
-                    if(!runDeepCap){
+                    if(!handled){
                         result.pairInfo.z = 1u;
                         result.normalPad = float4(n, 0.0f);
                         result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - originA, asfloat(20u));
                         result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - originB, sep);
                     }
                 }
-            }
-            if(runDeepCap){
-                nwbPhysicsSolveCapsuleHullDeep(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, hullVertexSlot, maxDist, result);
             }
         }
     }
@@ -4385,6 +4519,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float singleSep = 0.0f;
         float3 localBoxSurface = bestBoxPt;
         bool wonByEdge = false;
+        bool edgeSeparated = false;
         if(bestDistSq > 1.0e-10f){
             const float dist = sqrt(bestDistSq);
             outLocalN = (bestSegPt - bestBoxPt) / dist;
@@ -4439,8 +4574,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         axis = -axis;
                     const float boxExtProj = abs(axis.x) * hBox.x + abs(axis.y) * hBox.y + abs(axis.z) * hBox.z;
                     const float edgeSep = dot(axis, l0) - boxExtProj;
-                    if(edgeSep - totalR > maxDist)
-                        return;
+                    if(edgeSep - totalR > maxDist){
+                        edgeSeparated = true;
+                        break;
+                    }
                     if(!hasEdgeCandidate || edgeSep > bestEdgeSep){
                         hasEdgeCandidate = true;
                         bestEdgeSep = edgeSep;
@@ -4449,7 +4586,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     }
                 }
             }
-            if(hasEdgeCandidate && bestEdgeSep > maxFaceSep + 5.0e-4f){
+            if(!edgeSeparated && hasEdgeCandidate && bestEdgeSep > maxFaceSep + 5.0e-4f){
                 wonByEdge = true;
                 const float sx = (bestEdgeAxis.x < 0.0f) ? -hBox.x : hBox.x;
                 const float sy = (bestEdgeAxis.y < 0.0f) ? -hBox.y : hBox.y;
@@ -4467,7 +4604,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             }
         }
 
-        if(singleSep <= maxDist){
+        if(!edgeSeparated && singleSep <= maxDist){
             const float3 outWorldN = nwbPhysicsQuatRotate(outLocalN, qBox);
             const float3 nAtoB = capIsA ? -outWorldN : outWorldN;
             result.normalPad = float4(nAtoB, 0.0f);

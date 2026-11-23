@@ -33,23 +33,16 @@ u32 DecodeBroadPhaseTreeType(in u32 proxyKey){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CandidatePair{
-    public u32 shapeIdA = s_NullIndex;
-    public u32 shapeIdB = s_NullIndex;
-}
-
 class BroadPhase{
     public Array<DynamicTree, s_TreeCount> trees;
     public Vector<u32> moveArray;
     public Vector<Vector<u64>> workerBuckets;
-    public Vector<CandidatePair> discoveredPairs;
 
     public void clear(){
         for(usize i = 0u; i < s_TreeCount; ++i)
             this.trees[i].clear();
         this.moveArray.clear();
         this.workerBuckets.clear();
-        this.discoveredPairs.clear();
     }
 
     public void createProxyWithFlags(

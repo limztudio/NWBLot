@@ -4099,6 +4099,266 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
     }
 }
 
+void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
+    {
+        PhysicsWorld trWorld;
+        BodyDef floorBd;
+        floorBd.type = BodyType::Static;
+        floorBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId floorId = trWorld.createBody(floorBd).value();
+        ASSERT_TRUE(trWorld.createSphereShape(floorId, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).has_value());
+
+        BodyDef dynBd;
+        dynBd.type = BodyType::Dynamic;
+        dynBd.position = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+        const BodyId dynId = trWorld.createBody(dynBd).value();
+        ShapeDef dynSd;
+        dynSd.density = 1.0f;
+        ASSERT_TRUE(trWorld.createSphereShape(dynId, dynSd, MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).has_value());
+
+        Contact c;
+        c.contactId = 0u;
+        c.edges[0u].bodyId = floorId.index;
+        c.edges[1u].bodyId = dynId.index;
+        c.friction = 0.5f;
+        c.rollingResistance = 0.0f;
+        c.manifold.setPointCount(1u);
+        c.manifold.setNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        c.manifold.setTwistImpulse(4.0f);
+        c.manifold.setRollingImpulse(VectorSingle(1.0f, 2.0f, 3.0f, 0.0f));
+        SetManifoldPoint(c.manifold, 0u, VectorSingle(0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), -0.01f, 1u);
+        c.manifold.points[0u].setNormalImpulse(2.0f);
+
+        const Softness soft = MakeSoftness(30.0f, 10.0f, 1.0f / 60.0f);
+        ContactConstraint cc;
+        ContactConstraintStepCache cache;
+        PrepareContactConstraintWithCache(trWorld.m_bodies, trWorld.m_solverSets, c, soft, soft, 30.0f, 10.0f, 1.0f / 60.0f, false, true, cc, cache);
+        EXPECT_NEAR(cc.twistImpulse(), 0.0f, 1.0e-6f);
+        EXPECT_NEAR(cc.rollingImpulse.x, 0.0f, 1.0e-6f);
+        EXPECT_NEAR(cc.rollingImpulse.y, 0.0f, 1.0e-6f);
+        EXPECT_NEAR(cc.rollingImpulse.z, 0.0f, 1.0e-6f);
+
+        WarmStartContactConstraintCached(trWorld.m_solverSets[s_AwakeSetIndex].states, cc, cache);
+        cc.rollingImpulse = f32x3u(1.0f, 2.0f, 3.0f);
+        cc.points[0u].normalImpulse = 0.0f;
+        cc.points[0u].totalNormalImpulse = 0.0f;
+        SolveContactConstraintCached(trWorld.m_solverSets[s_AwakeSetIndex].states, cc, cache, 60.0f, true);
+        EXPECT_NEAR(cc.rollingImpulse.x, 0.0f, 1.0e-6f);
+        EXPECT_NEAR(cc.rollingImpulse.y, 0.0f, 1.0e-6f);
+        EXPECT_NEAR(cc.rollingImpulse.z, 0.0f, 1.0e-6f);
+
+        const u32 dynLocal = trWorld.m_bodies[dynId.index].localIndex;
+        const VectorSingle wOut = VectorSingle(trWorld.m_solverSets[s_AwakeSetIndex].states[dynLocal].angularVelocity);
+        EXPECT_GT(Vector3Length(wOut).x, 0.0f);
+
+        trWorld.m_solverSets[s_AwakeSetIndex].states[dynLocal].angularVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        PrepareContactConstraintWithCache(trWorld.m_bodies, trWorld.m_solverSets, c, soft, soft, 30.0f, 10.0f, 1.0f / 60.0f, false, true, cc, cache);
+        WarmStartContactConstraintCached(trWorld.m_solverSets[s_AwakeSetIndex].states, cc, cache);
+        const VectorSingle wClean = VectorSingle(trWorld.m_solverSets[s_AwakeSetIndex].states[dynLocal].angularVelocity);
+        EXPECT_NEAR(Vector3Length(wClean).x, 0.0f, 1.0e-6f);
+    }
+
+    {
+        const VectorSingle oldN = SafeNormalizeVec3(VectorSingle(0.4362f, 0.89985f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle newN = SafeNormalizeVec3(VectorSingle(0.4355f, 0.90019f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        ASSERT_LT(Abs(oldN.y), 0.9f);
+        ASSERT_GT(Abs(newN.y), 0.9f);
+        ASSERT_GT(Vector3Dot(oldN, newN).x, 0.99999f);
+
+        Manifold oldM;
+        oldM.setPointCount(1u);
+        oldM.setNormal(oldN);
+        oldM.frictionImpulse = f32x2u(5.0f, 3.0f);
+        SetManifoldPoint(oldM, 0u, VectorSingle(0.0f), VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), -0.01f, 7u);
+
+        Manifold newM;
+        newM.setPointCount(1u);
+        newM.setNormal(newN);
+        SetManifoldPoint(newM, 0u, VectorSingle(0.0f), VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), -0.01f, 7u);
+
+        MatchManifoldImpulses(oldM, newM, true);
+
+        VectorSingle oldT1(0.0f);
+        VectorSingle oldT2(0.0f);
+        ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
+        VectorSingle newT1(0.0f);
+        VectorSingle newT2(0.0f);
+        ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
+        const VectorSingle worldOldF = oldT1 * oldM.frictionImpulse.x + oldT2 * oldM.frictionImpulse.y;
+        const VectorSingle worldNewF = newT1 * newM.frictionImpulse.x + newT2 * newM.frictionImpulse.y;
+        EXPECT_LT(Vector3Length(VectorSingle(worldNewF - worldOldF, 0.0f)).x, 1.0e-2f);
+    }
+
+    {
+        PhysicsWorld mw;
+        BodyDef bd;
+        bd.type = BodyType::Dynamic;
+        bd.isAwake = false;
+        const BodyId bId = mw.createBody(bd).value();
+        const ShapeId sId = mw.createHullShape(bId, ShapeDef(), MakeBoxHull(0.5f, 0.5f, 0.5f, 0.0f).value()).value();
+        ASSERT_FALSE(mw.isBodyAwake(bId));
+
+        MassData md;
+        md.setCenterMass(VectorSingle(0.0f), 2.0f);
+        md.inertia = Mat3(
+            VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, 1.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)
+        );
+        EXPECT_TRUE(mw.setBodyMassData(bId, md));
+        EXPECT_TRUE(mw.isBodyAwake(bId));
+
+        mw.setBodyAwake(bId, false);
+        ASSERT_FALSE(mw.isBodyAwake(bId));
+        EXPECT_TRUE(mw.destroyShape(sId, true));
+        EXPECT_TRUE(mw.isBodyAwake(bId));
+        in Body b = mw.m_bodies[bId.index];
+        in BodySim sim = mw.m_solverSets[b.setIndex].sims[b.localIndex];
+        EXPECT_NEAR(sim.minExtent(), 0.0f, 1.0e-6f);
+        EXPECT_NEAR(sim.maxExtent(), 0.0f, 1.0e-6f);
+
+        Array<f32x4, 4u> tetPts;
+        tetPts[0u] = f32x4(-1.0f, 0.0f, -1.0f, 0.0f);
+        tetPts[1u] = f32x4(1.0f, 0.0f, -1.0f, 0.0f);
+        tetPts[2u] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        tetPts[3u] = f32x4(0.0f, 1.5f, 0.0f, 0.0f);
+        const HullShape tet = BuildConvexHull(Span<f32x4>(tetPts.data(), tetPts.size()), 0.0f).value();
+        const ShapeId tetId = mw.createHullShape(bId, ShapeDef(), tet).value();
+        HullShape modTet = tet;
+        const f32 expectedOffset = modTet.facePlanes[0u].normalOffset.w + 0.25f;
+        modTet.facePlanes[0u].normalOffset.w = expectedOffset;
+        EXPECT_TRUE(mw.setHullShape(tetId, modTet, false));
+        const u32 storedIdx = mw.m_shapes[tetId.index].geometryIndex;
+        EXPECT_NEAR(mw.m_hullShapes[storedIdx].facePlanes[0u].normalOffset.w, expectedOffset, 1.0e-6f);
+    }
+
+    {
+        EcsTestWorld tagTw;
+        mut PhysicsSystem tagSys = tagTw.world.addSystem<PhysicsSystem>(tagTw.world);
+        Entity cfgEnt = tagTw.world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+
+        Entity readdEnt = tagTw.world.createEntity();
+        readdEnt.addComponent<TransformComponent>();
+        mut RigidBodyComponent readdRb = readdEnt.addComponent<RigidBodyComponent>();
+        readdRb.entityTag = Name("readd_tag");
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_TRUE(tagSys.findNamedEntity(Name("readd_tag")) == readdEnt.id());
+
+        readdEnt.removeComponent<TransformComponent>();
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_FALSE(tagSys.findNamedEntity(Name("readd_tag")).valid());
+
+        readdEnt.addComponent<TransformComponent>();
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_TRUE(tagSys.findNamedEntity(Name("readd_tag")) == readdEnt.id());
+
+        Entity dupA = tagTw.world.createEntity();
+        dupA.addComponent<TransformComponent>();
+        mut RigidBodyComponent dupRbA = dupA.addComponent<RigidBodyComponent>();
+        dupRbA.entityTag = Name("dup_tag");
+
+        Entity dupB = tagTw.world.createEntity();
+        dupB.addComponent<TransformComponent>();
+        mut RigidBodyComponent dupRbB = dupB.addComponent<RigidBodyComponent>();
+        dupRbB.entityTag = Name("dup_tag");
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+
+        const EntityID owner = tagSys.findNamedEntity(Name("dup_tag"));
+        ASSERT_TRUE(owner == dupA.id() || owner == dupB.id());
+        EntityID survivor = dupB.id();
+        if(owner == dupA.id()){
+            dupA.getComponent<RigidBodyComponent>().entityTag = Name("other_tag");
+            survivor = dupB.id();
+        }
+        else{
+            dupB.getComponent<RigidBodyComponent>().entityTag = Name("other_tag");
+            survivor = dupA.id();
+        }
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_TRUE(tagSys.findNamedEntity(Name("dup_tag")) == survivor);
+
+        Entity manualEnt = tagTw.world.createEntity();
+        manualEnt.addComponent<TransformComponent>();
+        tagSys.registerNamedEntity(Name("shared_manual"), manualEnt.id());
+
+        Entity compEnt = tagTw.world.createEntity();
+        compEnt.addComponent<TransformComponent>();
+        mut RigidBodyComponent compRb = compEnt.addComponent<RigidBodyComponent>();
+        compRb.entityTag = Name("shared_manual");
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+
+        tagTw.world.destroyEntity(compEnt.id());
+        ASSERT_TRUE(tagTw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_TRUE(tagSys.findNamedEntity(Name("shared_manual")) == manualEnt.id());
+    }
+
+    {
+        PhysicsWorld dbgJ;
+        BodyDef bdA;
+        bdA.type = BodyType::Static;
+        bdA.position = f32x4(-25.0f, 0.0f, 10.0f, 0.0f);
+        const BodyId jA = dbgJ.createBody(bdA).value();
+        BodyDef bdB;
+        bdB.type = BodyType::Dynamic;
+        bdB.position = f32x4(-25.0f, 1.0f, 10.0f, 0.0f);
+        const BodyId jB = dbgJ.createBody(bdB).value();
+
+        JointDef prisJd;
+        prisJd.type = JointType::Prismatic;
+        prisJd.bodyIdA = jA;
+        prisJd.bodyIdB = jB;
+        prisJd.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        prisJd.enableLimit = true;
+        prisJd.lowerLimit = 0.0f;
+        prisJd.upperLimit = 30.0f;
+        const Expected<JointId> prisRes = dbgJ.createJoint(prisJd);
+        ASSERT_TRUE(prisRes.has_value());
+        const JointId prisId = prisRes.value();
+
+        TransformComponent camXf;
+        CameraProjection camProj;
+        camProj.projectionParams = f32x4(1.0f, 1.0f, 0.0f, 0.0f);
+        camProj.nearPlane = 0.1f;
+        const PhysicsDebugScreenProjector projector(camXf, camProj, 1280.0f, 720.0f);
+        ASSERT_TRUE(projector.valid());
+
+        PhysicsDebugDrawOptions opts;
+        opts.drawShapes = false;
+        opts.drawContacts = false;
+        opts.drawJoints = true;
+        Vector<PhysicsDebugLine> lines;
+        BuildPhysicsDebugLines(dbgJ, opts, projector, lines);
+        EXPECT_GT(lines.size(), cast<usize>(0u));
+
+        EXPECT_TRUE(dbgJ.destroyJoint(prisId));
+        JointDef motJd;
+        motJd.type = JointType::Motor;
+        motJd.bodyIdA = jA;
+        motJd.bodyIdB = jB;
+        motJd.linearOffset = f32x4(25.0f, 0.0f, 0.0f, 0.0f);
+        motJd.maxMotorForce = 10.0f;
+        ASSERT_TRUE(dbgJ.createJoint(motJd).has_value());
+        BuildPhysicsDebugLines(dbgJ, opts, projector, lines);
+        EXPECT_GT(lines.size(), cast<usize>(0u));
+
+        const VectorSingle smallRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.002f, 0.0f, 0.0f));
+        ASSERT_GT(Abs(smallRot.w), 0.99999f);
+        Vector<PhysicsDebugLine> idBoxLines;
+        Vector<PhysicsDebugLine> rotBoxLines;
+        AppendPhysicsDebugBoxEdges(256u, Transform3D(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
+        AppendPhysicsDebugBoxEdges(256u, Transform3D(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), smallRot, VectorSingle(1.0f), rotBoxLines);
+        ASSERT_EQ(idBoxLines.size(), rotBoxLines.size());
+        f32 maxDiff = 0.0f;
+        for(usize li = 0u; li < idBoxLines.size(); ++li){
+            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].start) - VectorSingle(idBoxLines[li].start)).x);
+            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].end) - VectorSingle(idBoxLines[li].end)).x);
+        }
+        EXPECT_GT(maxDiff, 1.0e-4f);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -4134,6 +4394,7 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, BinaryPaddingMotorScaleAndFilterNoOp, VerifyPhy
 NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeSolverLocksToiAndQueries, VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries)
 NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeEcsSyncAndLifecycle, VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle)
 NWB_ADHD_GTEST(PhysicsEdgeCases, AuditFixesAndParityEdgeCases, VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, AuditV4ParityAndLifecycle, VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

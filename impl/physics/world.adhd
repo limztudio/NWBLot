@@ -44,7 +44,6 @@ class CpuBucketSolverScratch{
     public Vector<JointConstraint> localJoints;
     public Vector<JointConstraintStepCache> localJointCaches;
     public Vector<ContactHitEvent> hitEvents;
-    public Vector<u32> hitContactIds;
     public Vector<CpuContactSlotRef> hitSlots;
     public Vector<JointBreakEvent> breakEvents;
     public Vector<u32> brokenJointIds;
@@ -56,7 +55,6 @@ class CpuBucketSolverScratch{
         this.localJoints.clear();
         this.localJointCaches.clear();
         this.hitEvents.clear();
-        this.hitContactIds.clear();
         this.hitSlots.clear();
         this.breakEvents.clear();
         this.brokenJointIds.clear();
@@ -110,8 +108,6 @@ class PhysicsWorldCpuScratch{
     public Vector<u64> parBucketLoads;
     public Vector<u64> parCrossIslandEdges;
     public Vector<u8> parContactCollectFlags;
-    public Array<Vector<u8>, s_GraphColorCount> parContactHitFlags;
-    public Vector<u8> parJointBreakFlags;
     public b8 parImpulsesStored = false;
     public Vector<u32> parBulletBodyIndices;
     public Vector<BulletToiQueryResult> parBulletResults;
@@ -181,9 +177,6 @@ class PhysicsWorldCpuScratch{
         this.parBucketLoads.clear();
         this.parCrossIslandEdges.clear();
         this.parContactCollectFlags.clear();
-        for(usize c = 0u; c < s_GraphColorCount; ++c)
-            this.parContactHitFlags[c].clear();
-        this.parJointBreakFlags.clear();
         this.parImpulsesStored = false;
         this.parBulletBodyIndices.clear();
         this.parBulletResults.clear();
@@ -1094,6 +1087,8 @@ class PhysicsWorld{
         const u32 idx = shapeId.index;
         const u32 bodyIdx = this.m_shapes[idx].bodyId;
         this.wakeShapeNeighbors(idx);
+        if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive && this.m_bodies[bodyIdx].type == BodyType::Dynamic && this.m_bodies[bodyIdx].setIndex >= 3u)
+            this.wakeBody(this.makeBodyId(bodyIdx));
 
         if(bodyIdx < this.m_bodies.size()){
             u32 edgeKey = this.m_bodies[bodyIdx].headContactKey;
@@ -1191,6 +1186,7 @@ class PhysicsWorld{
             sim.setInvMass(0.0f);
             sim.setLocalCenter(VectorSingle(0.0f));
             sim.setCenter(VectorSingle(sim.transform.position));
+            sim.setCenter0(VectorSingle(sim.transform.position));
             sim.invInertiaLocal = ZeroSymMat3();
             sim.invInertiaWorld = ZeroSymMat3();
             this.updateBodyExtentsFromShapes(body, sim);
@@ -1273,6 +1269,10 @@ class PhysicsWorld{
             const VectorSingle ext = (maxLocal - minLocal) * 0.5f;
             sim.setMinExtent(Min(ext.x, Min(ext.y, ext.z)));
             sim.setMaxExtent(Vector3Length(VectorSingle(ext, 0.0f)).x);
+        }
+        else{
+            sim.setMinExtent(0.0f);
+            sim.setMaxExtent(0.0f);
         }
 
         body.flags &= ~cast<u32>(BodyFlags::DirtyMass);
@@ -1598,6 +1598,12 @@ class PhysicsWorld{
             || !IsFiniteVec3(VectorSingle(massData.inertia.row2))
         )
             return false;
+
+        if(this.m_bodies[bodyId.index].setIndex != s_DisabledSetIndex){
+            if(this.m_bodies[bodyId.index].setIndex >= 3u)
+                this.wakeBody(bodyId);
+            this.wakeBodyNeighbors(bodyId.index);
+        }
 
         mut Body body = this.m_bodies[bodyId.index];
         mut BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
@@ -2257,7 +2263,7 @@ class PhysicsWorld{
                 return false;
         }
         const u32 idx = shapeId.index;
-        if(!updateBodyMass && this.m_shapes[idx].type == ShapeType::Hull){
+        if(!updateBodyMass && this.m_shapes[idx].type == ShapeType::Hull && this.m_shapes[idx].geometryIndex < this.m_hullShapes.size()){
             in HullShape cur = this.m_hullShapes[this.m_shapes[idx].geometryIndex];
             if(
                 cur.halfExtentsFlags.w == hull.halfExtentsFlags.w
@@ -2281,18 +2287,49 @@ class PhysicsWorld{
                 else if(
                     cur.vertices.size() == hull.vertices.size()
                     && cur.facePlanes.size() == hull.facePlanes.size()
+                    && cur.faceTopologies.size() == hull.faceTopologies.size()
                     && cur.halfEdges.size() == hull.halfEdges.size()
                 ){
-                    b8 allVertsEqual = true;
+                    b8 allEqual = true;
                     for(usize vi = 0u; vi < hull.vertices.size(); ++vi){
                         in f32x3u a = cur.vertices[vi];
                         in f32x3u b = hull.vertices[vi];
                         if(a.x != b.x || a.y != b.y || a.z != b.z){
-                            allVertsEqual = false;
+                            allEqual = false;
                             break;
                         }
                     }
-                    if(allVertsEqual)
+                    if(allEqual){
+                        for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+                            in f32x4 a = cur.facePlanes[fi].normalOffset;
+                            in f32x4 b = hull.facePlanes[fi].normalOffset;
+                            if(a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w){
+                                allEqual = false;
+                                break;
+                            }
+                        }
+                    }
+                    if(allEqual){
+                        for(usize ti = 0u; ti < hull.faceTopologies.size(); ++ti){
+                            in HullFaceTopology a = cur.faceTopologies[ti];
+                            in HullFaceTopology b = hull.faceTopologies[ti];
+                            if(a.edge != b.edge || a.vertexCount != b.vertexCount){
+                                allEqual = false;
+                                break;
+                            }
+                        }
+                    }
+                    if(allEqual){
+                        for(usize ei = 0u; ei < hull.halfEdges.size(); ++ei){
+                            in HalfEdge a = cur.halfEdges[ei];
+                            in HalfEdge b = hull.halfEdges[ei];
+                            if(a.tail != b.tail || a.face != b.face || a.next != b.next || a.twin != b.twin){
+                                allEqual = false;
+                                break;
+                            }
+                        }
+                    }
+                    if(allEqual)
                         return true;
                 }
             }

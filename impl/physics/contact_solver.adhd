@@ -345,7 +345,10 @@ b8 PrepareContactConstraintSetup(
     if(enableWarmStarting){
         outConstraint.frictionImpulse = contact.manifold.frictionImpulse;
         outWarmTwistImpulse = contact.manifold.normalTwist.w;
-        outConstraint.rollingImpulse = f32x3u(contact.manifold.rollingImpulseMeta.x, contact.manifold.rollingImpulseMeta.y, contact.manifold.rollingImpulseMeta.z);
+        if(contact.rollingResistance > 0.0f)
+            outConstraint.rollingImpulse = f32x3u(contact.manifold.rollingImpulseMeta.x, contact.manifold.rollingImpulseMeta.y, contact.manifold.rollingImpulseMeta.z);
+        else
+            outConstraint.rollingImpulse = f32x3u(0.0f, 0.0f, 0.0f);
     }
     else{
         outConstraint.frictionImpulse = f32x2u(0.0f, 0.0f);
@@ -533,8 +536,11 @@ void FinalizeContactConstraintFrame(
         if(kTwist > 1.0e-12f)
             twistMassVal = 1.0f / kTwist;
     }
+    f32 clampedWarmTwist = 0.0f;
+    if(twistMassVal > 0.0f && maxLeverArm > 0.0f && outConstraint.normalFriction.w > 0.0f)
+        clampedWarmTwist = warmTwistImpulse;
     outConstraint.centerATwistMass = f32x4(centerA, twistMassVal);
-    outConstraint.centerBTwistImpulse = f32x4(centerB, warmTwistImpulse);
+    outConstraint.centerBTwistImpulse = f32x4(centerB, clampedWarmTwist);
 }
 
 void PrepareContactConstraintWithCache(
@@ -962,7 +968,7 @@ void WarmStartContactConstraintCached(mut Vector<BodyState> states, in ContactCo
         }
     }
 
-    if(c.centerBTwistImpulse.w != 0.0f){
+    if(c.centerBTwistImpulse.w != 0.0f && c.centerATwistMass.w > 0.0f && c.maxLeverArm > 0.0f){
         anyWarmApplied = true;
         if(dynA)
             wA = wA - VectorSingle(cache.invIA_n, 0.0f) * c.centerBTwistImpulse.w;
@@ -970,7 +976,7 @@ void WarmStartContactConstraintCached(mut Vector<BodyState> states, in ContactCo
             wB = wB + VectorSingle(cache.invIB_n, 0.0f) * c.centerBTwistImpulse.w;
     }
 
-    if(c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
+    if(c.rollingResistance > 0.0f && (c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f)){
         anyWarmApplied = true;
         const VectorSingle rollP(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         if(dynA)
@@ -1215,7 +1221,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         }
     }
 
-    if(c.rollingResistance > 0.0f && (totalNormalImpulse > 0.0f || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f)){
+    if((c.rollingResistance > 0.0f && totalNormalImpulse > 0.0f) || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
         const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
         const VectorSingle deltaR = -ApplySymMat3Local(cache.rollingMass, dw);
         const VectorSingle oldR(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);

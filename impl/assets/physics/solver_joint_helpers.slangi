@@ -216,7 +216,7 @@ void nwbPhysicsSolve2DLinearPlaneRows(
 
     float dP1 = 0.0f;
     float dP2 = 0.0f;
-    if(abs(det) > 1.0e-30f){
+    if(abs(det) > 1.0e-18f){
         const float invDet = 1.0f / det;
         dP1 = (k11 * rhs1 - k01 * rhs2) * invDet * mScale - iScale * old1;
         dP2 = (-k01 * rhs1 + k00 * rhs2) * invDet * mScale - iScale * old2;
@@ -761,7 +761,7 @@ void nwbPhysicsSolveSingleJoint(
 
         float dL1 = 0.0f;
         float dL2 = 0.0f;
-        if(abs(det) > 1.0e-30f){
+        if(abs(det) > 1.0e-18f){
             const float invDet = 1.0f / det;
             dL1 = (m11 * rhs1 - m01 * rhs2) * invDet * angMScale - angIScale * oldL1;
             dL2 = (-m01 * rhs1 + m00 * rhs2) * invDet * angMScale - angIScale * oldL2;
@@ -1094,7 +1094,7 @@ void nwbPhysicsSolveSingleJoint(
 
         float dL1 = 0.0f;
         float dL2 = 0.0f;
-        if(abs(det) > 1.0e-30f){
+        if(abs(det) > 1.0e-18f){
             const float invDet = 1.0f / det;
             dL1 = (m11 * rhs1 - m01 * rhs2) * invDet * angMScale - angIScale * oldL1;
             dL2 = (-m01 * rhs1 + m00 * rhs2) * invDet * angMScale - angIScale * oldL2;

@@ -610,12 +610,16 @@ void EmitPaintLineBatch(
     }
     if(lines.empty())
         return;
-    if(!(clip.width > 0.0f) || !(clip.height > 0.0f) || !IsFinite(thickness) || thickness <= 0.0f)
-        return;
     const f32 clipEndX = clip.x + clip.width;
     const f32 clipEndY = clip.y + clip.height;
-    if(!IsFinite(clipEndX) || !IsFinite(clipEndY))
+    if(!(clip.width > 0.0f) || !(clip.height > 0.0f) || !IsFinite(thickness) || thickness <= 0.0f || !IsFinite(clipEndX) || !IsFinite(clipEndY)){
+        for(usize li = 0u; li < lines.size(); ++li){
+            in Color color = lines[li].color;
+            if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f)
+                ReportPaintLineInvalidColor();
+        }
         return;
+    }
 
     const usize maxQuadVertsAvail = (cast<usize>(u32.max) - vertices.size()) / cast<usize>(s_PaintQuadVertexCount);
     const usize maxQuadIndicesAvail = (cast<usize>(u32.max) - indices.size()) / cast<usize>(s_PaintQuadIndexCount);

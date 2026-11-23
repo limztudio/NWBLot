@@ -1662,7 +1662,7 @@ void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in
     const f32 nDot = Vector3Dot(oldN, newN).x;
     if(nDot > 0.9f){
         if(hasFriction){
-            if(nDot > 0.99999f){
+            if(nDot > 0.99999f && ((Abs(oldN.y) > 0.9f) == (Abs(newN.y) > 0.9f))){
                 newManifold.frictionImpulse = oldManifold.frictionImpulse;
             }
             else{

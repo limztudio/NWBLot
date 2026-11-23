@@ -147,7 +147,6 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
             QueryBroadPhaseMovedProxy(worldRef, moveIdx, bucket);
     }
 
-    world.m_broadPhase.discoveredPairs.clear();
     usize totalCandidates = 0u;
     for(usize i = 0u; i < usedBucketCount; ++i)
         totalCandidates += world.m_broadPhase.workerBuckets[i].size();
@@ -2562,9 +2561,6 @@ u8 EvaluateAwakeBodyFinalize(
             if(shape.proxyKey != s_NullIndex && worldRef.m_broadPhase.needsMove(shape.proxyKey, shape.aabb, keepEnlarged))
                 needsProxyUpdate = true;
         }
-        else if(shape.enlargeAabb()){
-            anyEnlargedLeft = true;
-        }
         shapeIdx = shape.nextShapeId;
     }
     if(anyEnlargedLeft)
@@ -3001,85 +2997,6 @@ b8 PrepareColorContactConstraintsWithCache(
     return true;
 }
 
-b8 PrepareColorContactConstraintsFromGraph(
-    in PhysicsWorld world,
-    in f32 h,
-    mut CpuTaskScheduler cpuScheduler,
-    mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints
-){
-    const f32 contactHertz = world.m_def.contactHertz;
-    const f32 contactDampingRatio = world.m_def.contactDampingRatio;
-    const b8 enableContactSoftening = world.m_def.enableContactSoftening;
-    const Softness dynamicSoftness = MakeSoftness(contactHertz, contactDampingRatio, h);
-    const Softness staticSoftness = MakeSoftness(2.0f * contactHertz, contactDampingRatio, h);
-
-    in PhysicsWorld worldRef = world;
-
-    Array<usize, s_GraphColorCount> colorStarts;
-    usize totalContacts = 0u;
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        colorStarts[c] = totalContacts;
-        const usize cCount = world.m_graph.colors[c].contactIds.size();
-        outConstraints[c].resize(cCount);
-        totalContacts += cCount;
-    }
-    if(totalContacts == 0u)
-        return true;
-
-    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuPrepareContactThreshold){
-        in Array<usize, s_GraphColorCount> colorStartsRef = colorStarts;
-        const usize grain = ComputePhysicsGrain(cpuScheduler, totalContacts, cast<usize>(32u));
-        const auto res = cpuScheduler.parallelFor(
-            0u,
-            totalContacts,
-            grain,
-            lambda[in worldRef, in colorStartsRef, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize flatIdx) -> void{
-                const usize c = ResolveColorSlotIndex(colorStartsRef, flatIdx);
-                const usize idx = flatIdx - colorStartsRef[c];
-                const u32 contactId = worldRef.m_graph.colors[c].contactIds[idx];
-                PrepareContactConstraint(
-                    worldRef.m_bodies,
-                    worldRef.m_solverSets,
-                    worldRef.m_contacts[contactId],
-                    dynamicSoftness,
-                    staticSoftness,
-                    contactHertz,
-                    contactDampingRatio,
-                    h,
-                    enableContactSoftening,
-                    worldRef.m_enableWarmStarting,
-                    outConstraints[c][idx]
-                );
-            },
-            CpuTaskOptions()
-        );
-        if(!res.has_value())
-            return false;
-        return true;
-    }
-
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        in Vector<u32> ids = world.m_graph.colors[c].contactIds;
-        for(usize idx = 0u; idx < ids.size(); ++idx){
-            const u32 contactId = ids[idx];
-            PrepareContactConstraint(
-                world.m_bodies,
-                world.m_solverSets,
-                world.m_contacts[contactId],
-                dynamicSoftness,
-                staticSoftness,
-                contactHertz,
-                contactDampingRatio,
-                h,
-                enableContactSoftening,
-                world.m_enableWarmStarting,
-                outConstraints[c][idx]
-            );
-        }
-    }
-    return true;
-}
-
 b8 PrepareColorContactConstraintsFromGraphWithCache(
     in PhysicsWorld world,
     in f32 h,
@@ -3185,24 +3102,6 @@ void EmitContactHitEventIfNeeded(mut PhysicsWorld world, in ContactConstraint cc
     }
 }
 
-u8 StoreContactConstraintImpulsesFast(in ContactConstraint cc, mut Contact contact, in f32 hitThreshold){
-    StoreContactConstraintImpulses(cc, contact);
-    if((contact.flags & cast<u32>(ContactFlags::EnableHitEvents)) == 0u)
-        return 1u;
-    f32 maxApproach = 0.0f;
-    u32 maxApproachIdx = 0u;
-    for(u32 p = 0u; p < cc.pointCount; ++p){
-        const f32 relVel = cc.points[p].relativeVelocity();
-        if(-relVel > maxApproach && cc.points[p].totalNormalImpulse > 0.0f){
-            maxApproach = -relVel;
-            maxApproachIdx = p;
-        }
-    }
-    if(maxApproach >= hitThreshold && maxApproachIdx < contact.manifold.pointCount())
-        return 2u;
-    return 1u;
-}
-
 void StoreContactConstraintImpulsesAndHitEvents(mut PhysicsWorld world, in ContactConstraint cc){
     mut Contact contact = world.m_contacts[cc.contactId];
     StoreContactConstraintImpulses(cc, contact);
@@ -3233,19 +3132,6 @@ void EmitJointBreakEventIfNeeded(
         world.m_jointBreakEvents.push_back(ev);
         outBrokenJointIds.push_back(jc.jointId);
     }
-}
-
-u8 StoreJointImpulsesFast(in JointConstraint jc, in f32 invH, mut Joint joint){
-    StoreJointConstraintImpulses(jc, invH, joint);
-    if(joint.breakForce <= 0.0f && joint.breakTorque <= 0.0f)
-        return 1u;
-    const f32 peakForce = Max(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
-    const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
-    const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
-    const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
-    if(brokeForce || brokeTorque)
-        return 2u;
-    return 1u;
 }
 
 void StoreJointImpulsesAndCollectBroken(
@@ -4315,52 +4201,6 @@ void ResizeConstraintStepCaches(
     for(usize c = 0u; c < s_GraphColorCount; ++c)
         colorCaches[c].resize(colorConstraints[c].size());
     jointCaches.resize(jointConstraints.size());
-}
-
-void FinalizeDynamicBodiesCpu(
-    mut PhysicsWorld world,
-    in Span<u32> dynIndices,
-    in usize dynCount,
-    in usize totalAwake,
-    in b8 contiguousAwake,
-    in f32 dt,
-    mut CpuTaskScheduler cpuScheduler
-){
-    if(dynCount == 0u)
-        return;
-
-    if(cpuScheduler.isParallelEnabled() && dynCount >= s_CpuColorParallelThreshold){
-        const usize grain = ComputePhysicsGrain(cpuScheduler, dynCount, cast<usize>(64u));
-        if(contiguousAwake && dynCount == totalAwake){
-            const auto res = cpuScheduler.parallelFor(
-                0u,
-                totalAwake,
-                grain,
-                lambda[mut world, in dt](in usize idx) -> void{
-                    FinalizeAwakeBodyAt(world, dt, idx);
-                },
-                CpuTaskOptions()
-            );
-            if(res.has_value())
-                return;
-        }
-        else{
-            const auto res = cpuScheduler.parallelFor(
-                0u,
-                dynCount,
-                grain,
-                lambda[mut world, in dynIndices, in dt](in usize idx) -> void{
-                    FinalizeAwakeBodyAt(world, dt, cast<usize>(dynIndices[idx]));
-                },
-                CpuTaskOptions()
-            );
-            if(res.has_value())
-                return;
-        }
-    }
-
-    for(usize idx = 0u; idx < dynCount; ++idx)
-        FinalizeAwakeBodyAt(world, dt, cast<usize>(dynIndices[idx]));
 }
 
 void SolveSingleComponentBatchCpu(
@@ -5522,7 +5362,6 @@ void SolveSingleComponentFusedCpu(
                 hitEv.point = f32x4(contact.manifold.points[maxApproachIdx].point(), 0.0f);
                 hitEv.normalApproachSpeed = f32x4(contact.manifold.normal(), maxApproach);
                 bucketScratch.hitEvents.push_back(hitEv);
-                bucketScratch.hitContactIds.push_back(cc.contactId);
             }
         }
     }

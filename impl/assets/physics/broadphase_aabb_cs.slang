@@ -229,7 +229,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             cMin = int3(floor(minScaled));
             const int3 cMax = int3(floor(maxScaled));
             span = cMax - cMin + int3(1, 1, 1);
-            isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 27 || span.y > 27 || span.z > 27);
+            isLarge = (
+                span.x <= 0
+                || span.y <= 0
+                || span.z <= 0
+                || span.x > int(NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
+                || span.y > int(NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
+                || span.z > int(NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
+            );
             if(!isLarge){
                 const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
                 if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)

@@ -211,15 +211,16 @@ void nwbPhysicsApplyGyroscopicStep(
     float3 i0 = float3(0.0f, 0.0f, 0.0f);
     float3 i1 = float3(0.0f, 0.0f, 0.0f);
     float3 i2 = float3(0.0f, 0.0f, 0.0f);
-    if(abs(detInv) > 1.0e-30f){
+    const float tr = a11 + a22 + a33;
+    const float s2 = c11 + c22 + c33;
+    const float detTol = max(1.0e-30f, 1.0e-6f * abs(tr * s2) + 1.0e-12f * abs(tr * tr * tr));
+    if(abs(detInv) > detTol){
         const float invDet = 1.0f / detInv;
         i0 = float3(c11, c12, c13) * invDet;
         i1 = float3(c12, c22, c23) * invDet;
         i2 = float3(c13, c23, c33) * invDet;
     }
     else{
-        const float s2 = c11 + c22 + c33;
-        const float tr = a11 + a22 + a33;
         bool solvedPseudoinv = false;
         if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
             float nx = c11;

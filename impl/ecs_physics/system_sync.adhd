@@ -1097,17 +1097,17 @@ Expected<ShapeId> AttachEcsColliderEntry(
     return physicsWorld.createHullShape(bodyId, sd, hullRes.value());
 }
 
-void EraseSyncedTagIfUnused(
+b8 EraseSyncedTagIfUnused(
     in EntityID entity,
     in Name oldTag,
     mut World world,
     mut HashMap<Name, EntityID> namedEntities
 ){
     if(oldTag == s_NameNone)
-        return;
+        return false;
     const auto found = namedEntities.find(oldTag);
     if(found == namedEntities.end() || found.value() != entity)
-        return;
+        return false;
     b8 stillInUse = false;
     if(world.alive(entity) && world.hasComponent<TransformComponent>(entity)){
         const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
@@ -1117,22 +1117,27 @@ void EraseSyncedTagIfUnused(
         if(!stillInUse && colOpt.has_value() && colOpt.value().entityTag == oldTag)
             stillInUse = true;
     }
-    if(!stillInUse)
-        namedEntities.erase(oldTag);
+    if(stillInUse)
+        return false;
+    namedEntities.erase(oldTag);
+    return true;
 }
 
 b8 SyncComponentEntityTag(
     in EntityID entity,
     in Name entityTag,
-    in b8 prunedAnyTag,
+    in b8 needTagRecovery,
     mut World world,
     mut Name syncedEntityTag,
     mut HashMap<Name, EntityID> namedEntities,
-    mut HashMap<EntityID, Name> syncedTags
+    mut HashMap<EntityID, Name> syncedTags,
+    mut b8 outErasedTag
 ){
     if(entityTag != syncedEntityTag){
-        if(syncedEntityTag != s_NameNone)
-            EraseSyncedTagIfUnused(entity, syncedEntityTag, world, namedEntities);
+        if(syncedEntityTag != s_NameNone){
+            if(EraseSyncedTagIfUnused(entity, syncedEntityTag, world, namedEntities))
+                outErasedTag = true;
+        }
         if(entityTag != s_NameNone){
             syncedTags.insert_or_assign(entity, entityTag);
             namedEntities.insert_or_assign(entityTag, entity);
@@ -1143,14 +1148,61 @@ b8 SyncComponentEntityTag(
         syncedEntityTag = entityTag;
         return true;
     }
-    if(prunedAnyTag && entityTag != s_NameNone){
+    if(needTagRecovery && entityTag != s_NameNone){
         const auto namedIt = namedEntities.find(entityTag);
-        if(namedIt == namedEntities.end() || namedIt.value() != entity){
+        if(namedIt == namedEntities.end() || !namedIt.value().valid() || !world.alive(namedIt.value())){
             namedEntities.insert_or_assign(entityTag, entity);
             return true;
         }
     }
     return false;
+}
+
+b8 RestoreMissingNamedEntities(
+    in b8 restoreComponents,
+    in HashMap<Name, EntityID> manualNamedEntities,
+    in HashMap<EntityID, Name> syncedRigidBodyTags,
+    in HashMap<EntityID, Name> syncedColliderTags,
+    in World world,
+    mut HashMap<Name, EntityID> namedEntities
+){
+    b8 restored = false;
+    for(in auto kv : manualNamedEntities){
+        const Name tag = kv.first;
+        const EntityID ent = kv.second;
+        if(tag == s_NameNone || !ent.valid() || !world.alive(ent))
+            continue;
+        const auto namedIt = namedEntities.find(tag);
+        if(namedIt == namedEntities.end() || !namedIt.value().valid() || !world.alive(namedIt.value())){
+            namedEntities.insert_or_assign(tag, ent);
+            restored = true;
+        }
+    }
+    if(!restoreComponents)
+        return restored;
+    for(in auto kv : syncedRigidBodyTags){
+        const EntityID ent = kv.first;
+        const Name tag = kv.second;
+        if(tag == s_NameNone || !ent.valid() || !world.alive(ent))
+            continue;
+        const auto namedIt = namedEntities.find(tag);
+        if(namedIt == namedEntities.end() || !namedIt.value().valid() || !world.alive(namedIt.value())){
+            namedEntities.insert_or_assign(tag, ent);
+            restored = true;
+        }
+    }
+    for(in auto kv : syncedColliderTags){
+        const EntityID ent = kv.first;
+        const Name tag = kv.second;
+        if(tag == s_NameNone || !ent.valid() || !world.alive(ent))
+            continue;
+        const auto namedIt = namedEntities.find(tag);
+        if(namedIt == namedEntities.end() || !namedIt.value().valid() || !world.alive(namedIt.value())){
+            namedEntities.insert_or_assign(tag, ent);
+            restored = true;
+        }
+    }
+    return restored;
 }
 
 b8 EcsColliderHasMeshShape(in ColliderComponent col){
@@ -1334,19 +1386,7 @@ void PruneRemovedPhysicsEntities(
     scratch.lastPhysicsParentMutationVersion = parentVer;
     scratch.mutationVersionsValid = true;
 
-    if(needBodyPrune && !namedEntities.empty()){
-        scratch.staleNames.clear();
-        for(in auto kv : namedEntities){
-            if(!kv.second.valid() || !world.alive(kv.second))
-                scratch.staleNames.push_back(kv.first);
-        }
-        for(usize i = 0u; i < scratch.staleNames.size(); ++i){
-            namedEntities.erase(scratch.staleNames[i]);
-            scratch.manualNamedEntities.erase(scratch.staleNames[i]);
-            outPrunedAnyTag = true;
-        }
-    }
-    else if(!scratch.manualNamedEntities.empty()){
+    if(!scratch.manualNamedEntities.empty()){
         scratch.staleNames.clear();
         for(in auto kv : scratch.manualNamedEntities){
             if(!kv.second.valid() || !world.alive(kv.second))
@@ -1365,6 +1405,18 @@ void PruneRemovedPhysicsEntities(
         }
     }
 
+    if(needBodyPrune && !namedEntities.empty()){
+        scratch.staleNames.clear();
+        for(in auto kv : namedEntities){
+            if(!kv.second.valid() || !world.alive(kv.second))
+                scratch.staleNames.push_back(kv.first);
+        }
+        for(usize i = 0u; i < scratch.staleNames.size(); ++i){
+            namedEntities.erase(scratch.staleNames[i]);
+            outPrunedAnyTag = true;
+        }
+    }
+
     if(needBodyPrune && !syncedRigidBodyTags.empty()){
         scratch.staleRbTags.clear();
         for(in auto kv : syncedRigidBodyTags){
@@ -1373,10 +1425,13 @@ void PruneRemovedPhysicsEntities(
             const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(e);
             if(!world.alive(e) || !world.hasComponent<TransformComponent>(e) || !rbOpt.has_value()){
                 EraseSyncedTagIfUnused(e, oldTag, world, namedEntities);
+                if(world.alive(e) && rbOpt.has_value())
+                    rbOpt.value().syncedEntityTag = s_NameNone;
                 scratch.staleRbTags.push_back(e);
             }
             else if(rbOpt.value().entityTag != oldTag){
                 EraseSyncedTagIfUnused(e, oldTag, world, namedEntities);
+                rbOpt.value().syncedEntityTag = s_NameNone;
                 scratch.staleRbTags.push_back(e);
             }
         }
@@ -1394,10 +1449,13 @@ void PruneRemovedPhysicsEntities(
             const Optional<mut ColliderComponent> colOpt = world.borrowComponent<ColliderComponent>(e);
             if(!world.alive(e) || !world.hasComponent<TransformComponent>(e) || !colOpt.has_value()){
                 EraseSyncedTagIfUnused(e, oldTag, world, namedEntities);
+                if(world.alive(e) && colOpt.has_value())
+                    colOpt.value().syncedEntityTag = s_NameNone;
                 scratch.staleColTags.push_back(e);
             }
             else if(colOpt.value().entityTag != oldTag){
                 EraseSyncedTagIfUnused(e, oldTag, world, namedEntities);
+                colOpt.value().syncedEntityTag = s_NameNone;
                 scratch.staleColTags.push_back(e);
             }
         }
@@ -1614,8 +1672,12 @@ void SyncEcsEntitiesToPhysicsWorld(
 
     const b8 hasPhysicsParentCandidates = world.view<PhysicsParentComponent>().candidateCount() > 0u;
     mut World worldForTagSync = world;
+    const b8 needTagRecovery = prunedAnyTag || scratch.manualNamedEntitiesDirty;
+    b8 anyTagErased = false;
+    if(needTagRecovery)
+        RestoreMissingNamedEntities(false, scratch.manualNamedEntities, syncedRigidBodyTags, syncedColliderTags, world, namedEntities);
     b8 hasNamedPhysicsParents = false;
-    b8 needNamedParentResolve = prunedAnyTag || scratch.manualNamedEntitiesDirty;
+    b8 needNamedParentResolve = needTagRecovery;
     if(hasPhysicsParentCandidates){
         world.view<PhysicsParentComponent>().each(
             lambda[mut worldForTagSync, mut outHasAnyPhysicsParents, mut hasNamedPhysicsParents, mut needNamedParentResolve](
@@ -1639,26 +1701,31 @@ void SyncEcsEntitiesToPhysicsWorld(
         if(hasNamedPhysicsParents){
             b8 anyTagMutated = false;
             world.view<RigidBodyComponent, TransformComponent>().each(
-                lambda[in prunedAnyTag, mut worldForTagSync, mut namedEntities, mut syncedRigidBodyTags, mut anyTagMutated](
+                lambda[in needTagRecovery, mut worldForTagSync, mut namedEntities, mut syncedRigidBodyTags, mut anyTagMutated, mut anyTagErased](
                     in EntityID entity,
                     mut RigidBodyComponent rb,
                     in TransformComponent xf
                 ) -> void{
-                    if(SyncComponentEntityTag(entity, rb.entityTag, prunedAnyTag, worldForTagSync, rb.syncedEntityTag, namedEntities, syncedRigidBodyTags))
+                    if(SyncComponentEntityTag(entity, rb.entityTag, needTagRecovery, worldForTagSync, rb.syncedEntityTag, namedEntities, syncedRigidBodyTags, anyTagErased))
                         anyTagMutated = true;
                 }
             );
 
             world.view<ColliderComponent, TransformComponent>().each(
-                lambda[in prunedAnyTag, mut worldForTagSync, mut namedEntities, mut syncedColliderTags, mut anyTagMutated](
+                lambda[in needTagRecovery, mut worldForTagSync, mut namedEntities, mut syncedColliderTags, mut anyTagMutated, mut anyTagErased](
                     in EntityID entity,
                     mut ColliderComponent col,
                     in TransformComponent xf
                 ) -> void{
-                    if(SyncComponentEntityTag(entity, col.entityTag, prunedAnyTag, worldForTagSync, col.syncedEntityTag, namedEntities, syncedColliderTags))
+                    if(SyncComponentEntityTag(entity, col.entityTag, needTagRecovery, worldForTagSync, col.syncedEntityTag, namedEntities, syncedColliderTags, anyTagErased))
                         anyTagMutated = true;
                 }
             );
+
+            if(needTagRecovery || anyTagErased){
+                if(RestoreMissingNamedEntities(true, scratch.manualNamedEntities, syncedRigidBodyTags, syncedColliderTags, worldForTagSync, namedEntities))
+                    anyTagMutated = true;
+            }
 
             if(needNamedParentResolve || anyTagMutated){
                 in HashMap<Name, EntityID> namedEntitiesForParent = namedEntities;
@@ -1687,13 +1754,13 @@ void SyncEcsEntitiesToPhysicsWorld(
     mut World worldForBodyView = world;
     scratch.deferredDynamicBodyEntities.clear();
     world.view<RigidBodyComponent, TransformComponent>().each(
-        lambda[in hasAnyPhysicsParents, in didPrepassTags, in prunedAnyTag, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut outHasDrivenKinematic](
+        lambda[in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut outHasDrivenKinematic, mut anyTagErased](
             in EntityID entity,
             mut RigidBodyComponent rb,
             in TransformComponent xf
         ) -> void{
             if(!didPrepassTags)
-                SyncComponentEntityTag(entity, rb.entityTag, prunedAnyTag, worldForBodyView, rb.syncedEntityTag, namedEntities, syncedRigidBodyTags);
+                SyncComponentEntityTag(entity, rb.entityTag, needTagRecovery, worldForBodyView, rb.syncedEntityTag, namedEntities, syncedRigidBodyTags, anyTagErased);
 
             if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled){
                 outHasDrivenKinematic = true;
@@ -1874,6 +1941,10 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                     else if(actualType.has_value()){
                         rb.type = actualType.value();
+                        if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled){
+                            outHasDrivenKinematic = true;
+                            scratch.drivenKinematicEntities.push_back(entity);
+                        }
                     }
                 }
                 const Expected<BodyType> curTypeExp = physicsWorld.tryGetBodyType(bodyId);
@@ -1945,13 +2016,13 @@ void SyncEcsEntitiesToPhysicsWorld(
 
     in Optional<mut AssetManager> assetsRef = assetManager;
     world.view<ColliderComponent, TransformComponent>().each(
-        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, in didPrepassTags, in prunedAnyTag, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut scratch](
+        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut anyTagErased](
             in EntityID entity,
             mut ColliderComponent col,
             in TransformComponent xf
         ) -> void{
             if(!didPrepassTags)
-                SyncComponentEntityTag(entity, col.entityTag, prunedAnyTag, world, col.syncedEntityTag, namedEntities, syncedColliderTags);
+                SyncComponentEntityTag(entity, col.entityTag, needTagRecovery, world, col.syncedEntityTag, namedEntities, syncedColliderTags, anyTagErased);
 
             const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
             if(
@@ -2202,6 +2273,9 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
         }
     );
+
+    if(!didPrepassTags && (needTagRecovery || anyTagErased))
+        RestoreMissingNamedEntities(true, scratch.manualNamedEntities, syncedRigidBodyTags, syncedColliderTags, world, namedEntities);
 
     for(usize di = 0u; di < scratch.deferredDynamicBodyEntities.size(); ++di){
         const EntityID entity = scratch.deferredDynamicBodyEntities[di];

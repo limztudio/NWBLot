@@ -338,8 +338,12 @@ void nwbPhysicsSolveSingleJoint(
     const uint indexB = indicesTypeFlags.y;
     const uint jType = indicesTypeFlags.z;
     const uint jFlags = indicesTypeFlags.w;
+    const bool enableLimit = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_LIMIT) != 0u;
+    const bool enableMotor = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_MOTOR) != 0u;
+    const bool isSpring = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_SPRING) != 0u;
+    const bool isBreakable = (jFlags & NWB_PHYSICS_JOINT_FLAG_BREAKABLE) != 0u;
     const bool useBias = (mode == NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS);
-    if(mode != NWB_PHYSICS_SOLVER_MODE_WARM_START && jType == NWB_PHYSICS_JOINT_TYPE_MOTOR && (!useBias || h <= 0.0f))
+    if(jType == NWB_PHYSICS_JOINT_TYPE_MOTOR && (!enableMotor || (mode != NWB_PHYSICS_SOLVER_MODE_WARM_START && (!useBias || h <= 0.0f))))
         return;
 
     float4 linearImpulse = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse;
@@ -377,8 +381,12 @@ void nwbPhysicsSolveSingleJoint(
         const float3 invIB1 = float3(rawIB0.y, rawIB0.w, rawIB1.x);
         const float3 invIB2 = float3(rawIB0.z, rawIB1.x, rawIB1.y);
 
-        const float3 rA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA.xyz;
-        const float3 rB0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB.xyz;
+        const float4 rA0InvMassA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA;
+        const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
+        const float3 rA0 = rA0InvMassA.xyz;
+        const float3 rB0 = rB0InvMassB.xyz;
+        invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
+        invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
 
         if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
             const float3 baseDelta = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor.xyz;
@@ -394,7 +402,7 @@ void nwbPhysicsSolveSingleJoint(
             const float3 baseDelta = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor.xyz;
             const float3 rA0Eff = rA0 + (baseDelta + rB0 - rA0);
             if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
-                const float3 linP = linearImpulse.xyz + axisA0 * (limitImpulses.z + limitImpulses.x + limitImpulses.y);
+                const float3 linP = linearImpulse.xyz + axisA0 * (limitImpulses.z + limitImpulses.x + limitImpulses.y + limitImpulses.w);
                 nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA0Eff, rB0, linP, flagsA, flagsB, vA, wA, vB, wB);
                 wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angularImpulse.xyz);
                 if((flagsA & 0x38u) != 0u)
@@ -425,7 +433,7 @@ void nwbPhysicsSolveSingleJoint(
                 const float4 qA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
                 const float3 localAxisA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisALowerLimit.xyz;
                 const float3 axisA0 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisA, qA0), float3(0.0f, 1.0f, 0.0f));
-                angP += axisA0 * (limitImpulses.z + limitImpulses.x + limitImpulses.y);
+                angP += axisA0 * (limitImpulses.z + limitImpulses.x + limitImpulses.y + limitImpulses.w);
             }
             else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL && (limitImpulses.x != 0.0f || limitImpulses.y != 0.0f || limitImpulses.w != 0.0f)){
                 const float4 qA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
@@ -485,13 +493,12 @@ void nwbPhysicsSolveSingleJoint(
     const float3 invIB1 = float3(rawIB0.y, rawIB0.w, rawIB1.x);
     const float3 invIB2 = float3(rawIB0.z, rawIB1.x, rawIB1.y);
 
-    const bool enableLimit = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_LIMIT) != 0u;
-    const bool enableMotor = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_MOTOR) != 0u;
-    const bool isSpring = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_SPRING) != 0u;
-    const bool isBreakable = (jFlags & NWB_PHYSICS_JOINT_FLAG_BREAKABLE) != 0u;
-
-    const float3 rA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA.xyz;
-    const float3 rB0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB.xyz;
+    const float4 rA0InvMassA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA;
+    const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
+    const float3 rA0 = rA0InvMassA.xyz;
+    const float3 rB0 = rB0InvMassB.xyz;
+    invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
+    invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
     const float4 baseCenterDeltaMaxMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor;
 
     const bool hasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
@@ -751,7 +758,7 @@ void nwbPhysicsSolveSingleJoint(
     else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
         writeAng = true;
         const float4 linSoftMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearSoftnessMotorSpeed;
-        if(!isSpring || useBias){
+        {
             float3 kInv0;
             float3 kInv1;
             float3 kInv2;
@@ -836,10 +843,41 @@ void nwbPhysicsSolveSingleJoint(
         const float maxMotorForce = baseCenterDeltaMaxMotor.w;
         const float lowLim = localAxisLower.w;
         const float highLim = localAxisUpper.w;
-        if((enableMotor && maxMotorForce > 0.0f) || (enableLimit && lowLim <= highLim)){
+        const float4 freeSpringRaw = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].suspensionSoftness;
+        const bool hasFreeSpring = useBias && isSpring && (freeSpringRaw.y > 0.0f);
+        if((enableMotor && maxMotorForce > 0.0f) || (enableLimit && lowLim <= highLim) || hasFreeSpring){
             writeLim = true;
             const float kAxis = dot(axisA, nwbPhysicsMulMat3Rows(sInv0, sInv1, sInv2, axisA));
             const float axialMass = kAxis > 1.0e-12f ? (1.0f / kAxis) : 0.0f;
+            float angle = 0.0f;
+            if(axialMass > 0.0f && (hasFreeSpring || (enableLimit && lowLim <= highLim))){
+                const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
+                const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA, refRot));
+                float4 qErr = nwbPhysicsQuatMul(qB, float4(-qTarget.xyz, qTarget.w));
+                if(qErr.w < 0.0f)
+                    qErr = -qErr;
+                const float projSin = dot(qErr.xyz, axisA);
+                angle = 2.0f * atan2(projSin, qErr.w);
+            }
+            if(hasFreeSpring && axialMass > 0.0f){
+                const float wAxis = dot(wB - wA, axisA);
+                const float sBias = clamp(freeSpringRaw.x * (angle - freeSpringRaw.w), -maxBias, maxBias);
+                const float dSpr = -axialMass * freeSpringRaw.y * (wAxis + sBias) - freeSpringRaw.z * limitImpulses.w;
+                float newSpr = limitImpulses.w + dSpr;
+                if(maxMotorForce > 0.0f && !enableMotor){
+                    const float maxSpr = maxMotorForce * h;
+                    newSpr = clamp(newSpr, -maxSpr, maxSpr);
+                }
+                const float appliedSpr = newSpr - limitImpulses.w;
+                limitImpulses.w = newSpr;
+                const float3 sprP = axisA * appliedSpr;
+                wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, sprP);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, sprP);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
+            }
             if(enableMotor && maxMotorForce > 0.0f && axialMass > 0.0f){
                 const float wAxis = dot(wB - wA, axisA);
                 const float maxImp = maxMotorForce * h;
@@ -855,13 +893,6 @@ void nwbPhysicsSolveSingleJoint(
                     wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
             if(enableLimit && lowLim <= highLim && axialMass > 0.0f){
-                const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
-                const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA, refRot));
-                float4 qErr = nwbPhysicsQuatMul(qB, float4(-qTarget.xyz, qTarget.w));
-                if(qErr.w < 0.0f)
-                    qErr = -qErr;
-                const float projSin = dot(qErr.xyz, axisA);
-                const float angle = 2.0f * atan2(projSin, qErr.w);
                 if(angle < lowLim){
                     const float limBias = useBias ? clamp(angSoft.x * (angle - lowLim), -maxBias, maxBias) : 0.0f;
                     const float newLow = max(limitImpulses.x - axialMass * (dot(wB - wA, axisA) + limBias), 0.0f);
@@ -934,7 +965,7 @@ void nwbPhysicsSolveSingleJoint(
         nwbPhysicsComputeTangentBasis(axisA, u1, u2);
         const float3 rAEff = rA + d;
 
-        if(!isSpring || useBias){
+        {
             float3 linImp = linearImpulse.xyz;
             nwbPhysicsSolve2DLinearPlaneRows(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, u1, u2, dot(d, u1), dot(d, u2), linSoftMotor.xyz, useBias, flagsA, flagsB, linImp, vA, wA, vB, wB);
             linearImpulse.xyz = linImp;
@@ -948,7 +979,9 @@ void nwbPhysicsSolveSingleJoint(
         const float maxMotorForce = baseCenterDeltaMaxMotor.w;
         const float lowLim = localAxisLower.w;
         const float highLim = enableLimit ? g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisBUpperLimit.w : (lowLim - 1.0f);
-        if((enableMotor && maxMotorForce > 0.0f) || (enableLimit && lowLim <= highLim)){
+        const float4 freeSpringRaw = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].suspensionSoftness;
+        const bool hasFreeSpring = useBias && isSpring && (freeSpringRaw.y > 0.0f);
+        if((enableMotor && maxMotorForce > 0.0f) || (enableLimit && lowLim <= highLim) || hasFreeSpring){
             writeLim = true;
             const float3 rnA = cross(rAEff, axisA);
             const float3 rnB = cross(rB, axisA);
@@ -956,6 +989,22 @@ void nwbPhysicsSolveSingleJoint(
                 + dot(rnA, nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, rnA))
                 + dot(rnB, nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, rnB));
             const float axialMass = kAxis > 1.0e-12f ? (1.0f / kAxis) : 0.0f;
+            const float trans = dot(d, axisA);
+
+            if(hasFreeSpring && axialMass > 0.0f){
+                const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
+                const float vAxis = dot(dv, axisA);
+                const float sBias = clamp(freeSpringRaw.x * (trans - freeSpringRaw.w), -maxBias, maxBias);
+                const float dSpr = -axialMass * freeSpringRaw.y * (vAxis + sBias) - freeSpringRaw.z * limitImpulses.w;
+                float newSpr = limitImpulses.w + dSpr;
+                if(maxMotorForce > 0.0f && !enableMotor){
+                    const float maxSpr = maxMotorForce * h;
+                    newSpr = clamp(newSpr, -maxSpr, maxSpr);
+                }
+                const float appliedSpr = newSpr - limitImpulses.w;
+                limitImpulses.w = newSpr;
+                nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, axisA * appliedSpr, flagsA, flagsB, vA, wA, vB, wB);
+            }
 
             if(enableMotor && maxMotorForce > 0.0f && axialMass > 0.0f){
                 const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
@@ -968,7 +1017,6 @@ void nwbPhysicsSolveSingleJoint(
             }
 
             if(enableLimit && lowLim <= highLim && axialMass > 0.0f){
-                const float trans = dot(d, axisA);
                 if(trans < lowLim){
                     const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
                     const float limBias = useBias ? clamp(linSoftMotor.x * (trans - lowLim), -maxBias, maxBias) : 0.0f;
@@ -1075,7 +1123,9 @@ void nwbPhysicsSolveSingleJoint(
         const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
         const float4 linSoftMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearSoftnessMotorSpeed;
         const float3 angSoft = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularSoftnessSwingLimit.xyz;
-        const float3 suspSoft = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].suspensionSoftness.xyz;
+        const float4 suspSoftRaw = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].suspensionSoftness;
+        const float3 suspSoft = suspSoftRaw.xyz;
+        const float suspRestLen = suspSoftRaw.w;
 
         const float3 suspAxis = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisLower.xyz, qA), float3(0.0f, 1.0f, 0.0f));
         float3 u1;
@@ -1099,7 +1149,7 @@ void nwbPhysicsSolveSingleJoint(
         if(useBias && suspSoft.y > 0.0f && suspMass > 0.0f){
             const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
             const float vSusp = dot(dv, suspAxis);
-            const float cSusp = dot(d, suspAxis);
+            const float cSusp = dot(d, suspAxis) - suspRestLen;
             const float sBias = clamp(suspSoft.x * cSusp, -maxBias, maxBias);
             const float dSusp = -suspMass * suspSoft.y * (vSusp + sBias) - suspSoft.z * limitImpulses.w;
             limitImpulses.w += dSusp;
@@ -1227,7 +1277,7 @@ void nwbPhysicsSolveSingleJoint(
             const float3 localAxisA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisALowerLimit.xyz;
             const float3 axisA0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisA, qA0n), float3(0.0f, 1.0f, 0.0f));
             if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
-                totalLinP += axisA0Tot * (limitImpulses.z + limitImpulses.x + limitImpulses.y);
+                totalLinP += axisA0Tot * (limitImpulses.z + limitImpulses.x + limitImpulses.y + limitImpulses.w);
             }
             else if(jType == NWB_PHYSICS_JOINT_TYPE_WHEEL){
                 totalLinP += axisA0Tot * (limitImpulses.w + limitImpulses.x + limitImpulses.y);
@@ -1238,7 +1288,7 @@ void nwbPhysicsSolveSingleJoint(
                 totalAngL += axleA * limitImpulses.z;
             }
             else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
-                totalAngL += axisA0Tot * (limitImpulses.z + limitImpulses.x + limitImpulses.y);
+                totalAngL += axisA0Tot * (limitImpulses.z + limitImpulses.x + limitImpulses.y + limitImpulses.w);
             }
             else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
                 const float4 qB0n = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qB0;

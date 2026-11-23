@@ -1,0 +1,84 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PhysicsMaterialAsset::validatePayload()const{
+    if(!this.checkVirtualPath("PhysicsMaterialAsset::validatePayload"))
+        return false;
+    return PhysicsAssetBinaryCodec().validatePhysicsMaterial(this.material, this.virtualPath());
+}
+
+b8 PhysicsMaterialAsset::loadBinary(in Span<u8> binary){
+    const Expected<SurfaceMaterial> decoded = PhysicsAssetBinaryCodec().deserializePhysicsMaterial(binary);
+    if(!decoded.has_value())
+        return false;
+    PhysicsMaterialAsset candidate(this.virtualPath());
+    candidate.material = decoded.value();
+    if(!candidate.validatePayload())
+        return false;
+    this.material = candidate.material;
+    return true;
+}
+
+b8 CollisionLayerMatrixAsset::validatePayload()const{
+    if(!this.checkVirtualPath("CollisionLayerMatrixAsset::validatePayload"))
+        return false;
+    return PhysicsAssetBinaryCodec().validateCollisionLayerMatrix(this.matrix, this.virtualPath());
+}
+
+b8 CollisionLayerMatrixAsset::loadBinary(in Span<u8> binary){
+    const Expected<CollisionLayerMatrix> decoded = PhysicsAssetBinaryCodec().deserializeCollisionLayerMatrix(binary);
+    if(!decoded.has_value())
+        return false;
+    CollisionLayerMatrixAsset candidate(this.virtualPath());
+    candidate.matrix = decoded.value();
+    if(!candidate.validatePayload())
+        return false;
+    this.matrix = candidate.matrix;
+    return true;
+}
+
+b8 ConvexHullAsset::validatePayload()const{
+    if(!this.checkVirtualPath("ConvexHullAsset::validatePayload"))
+        return false;
+    return PhysicsAssetBinaryCodec().validateConvexHull(this.hull, this.virtualPath());
+}
+
+b8 ConvexHullAsset::loadBinary(in Span<u8> binary){
+    const Expected<HullShape> decoded = PhysicsAssetBinaryCodec().deserializeConvexHull(binary);
+    if(!decoded.has_value())
+        return false;
+    ConvexHullAsset candidate(this.virtualPath());
+    candidate.hull = decoded.value();
+    if(!candidate.validatePayload())
+        return false;
+    this.hull = candidate.hull;
+    return true;
+}
+
+b8 CollisionMeshAsset::validatePayload()const{
+    if(!this.checkVirtualPath("CollisionMeshAsset::validatePayload"))
+        return false;
+    return PhysicsAssetBinaryCodec().validateCollisionMesh(this.mesh, this.virtualPath());
+}
+
+b8 CollisionMeshAsset::loadBinary(in Span<u8> binary){
+    const Expected<MeshShape> decoded = PhysicsAssetBinaryCodec().deserializeCollisionMesh(binary);
+    if(!decoded.has_value())
+        return false;
+    CollisionMeshAsset candidate(this.virtualPath());
+    candidate.mesh = decoded.value();
+    if(!candidate.validatePayload())
+        return false;
+    this.mesh = candidate.mesh;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

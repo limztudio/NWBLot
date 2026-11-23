@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_EntityHeaderBinaryBytes = 16u;
+const usize s_EntityHeaderBinaryBytes = 80u;
 const usize s_ProjectHeaderBinaryBytes = 72u;
 const usize s_SceneHeaderBinaryBytes = 32u;
 const usize s_NameHashBinaryBytes = 64u;
@@ -30,6 +30,7 @@ class EntityHeaderBinary{
     public u32 magic = s_EntityMagic;
     public u32 version = s_EntityVersion;
     public u64 componentCount = 0u;
+    public NameHash entityNameHash;
 }
 
 [serialize]
@@ -56,7 +57,10 @@ b8 LessSceneAssetEntryBinary(in SceneAssetEntryBinary lhs, in SceneAssetEntryBin
 }
 
 b8 IsAllowedEntityAssetField(in StringView fieldName){
-    return fieldName == s_EntityComponentsField;
+    return
+        fieldName == s_EntityComponentsField
+        || fieldName == s_EntityNameField
+    ;
 }
 
 b8 IsAllowedProjectAssetField(in StringView fieldName){

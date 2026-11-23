@@ -462,6 +462,43 @@ void DestroyPhysicsSceneEntities(mut NotNullUniquePtr<World> worldHandle, mut En
     configEntity = EntityID();
 }
 
+void SetStartupGroundPlaneActive(
+    mut NotNullUniquePtr<World> worldHandle,
+    in InstantiatedSceneEntities startupEntities,
+    in b8 active
+){
+    mut World world = worldHandle.deref();
+    for(usize i = 0u; i < startupEntities.entities.size(); ++i){
+        const EntityID e = startupEntities.entities[i];
+        if(!e.valid() || !world.alive(e))
+            continue;
+        if(!world.hasComponent<RigidBodyComponent>(e) || !world.hasComponent<ColliderComponent>(e))
+            continue;
+        mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(e);
+        if(active){
+            if(world.hasComponent<TransformComponent>(e))
+                world.getComponent<TransformComponent>(e).position.y = 0.0f;
+            rb.isEnabled = true;
+            rb.dirty = true;
+        }
+        else{
+            if(world.hasComponent<TransformComponent>(e))
+                world.getComponent<TransformComponent>(e).position.y = -1000.0f;
+            rb.isEnabled = false;
+            rb.dirty = true;
+        }
+    }
+}
+
+void SetPhysicsPaused(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in b8 paused){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
+    cfg.paused = paused;
+    cfg.dirty = true;
+}
+
 void ApplyPhysicsBackendChoice(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in TestbedPhysicsBackendChoice choice){
     mut World world = worldHandle.deref();
     if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
@@ -777,6 +814,14 @@ b8 InstantiateSceneSubsystemsEntities(in ActiveSceneSubsystems sceneSubsystems, 
     return sceneSubsystems.instantiateEntities(worldHandle.deref());
 }
 
+b8 InstantiateSceneSubsystemsEntities(
+    in ActiveSceneSubsystems sceneSubsystems,
+    mut NotNullUniquePtr<World> worldHandle,
+    mut InstantiatedSceneEntities outInstantiated
+){
+    return sceneSubsystems.instantiateEntities(worldHandle.deref(), outInstantiated);
+}
+
 AssetRef<Texture> ResolveUiGallerySkinTextureRef(in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
     const auto uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
     if(uiSubsystem.has_value() && uiSubsystem.value().basicSkin.valid()){
@@ -820,9 +865,13 @@ void PaintPhysicsDebugOverlay(
         return;
 
     TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
-    BuildPhysicsDebugLinesToSink(physicsSystem.value().physicsWorld(), options, projector, sink);
-    if(!screenLines.empty())
-        context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), 1.5f);
+    BuildEcsPhysicsDebugLinesToSink(world, physicsSystem.value(), options, projector, sink);
+    if(!screenLines.empty()){
+        f32 lineThickness = 1.5f;
+        if(IsFinite(options.lineThickness) && options.lineThickness > 0.0f)
+            lineThickness = options.lineThickness;
+        context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
+    }
 }
 
 

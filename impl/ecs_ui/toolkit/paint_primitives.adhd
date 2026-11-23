@@ -19,6 +19,7 @@ const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
 const usize s_PaintMaxImages = 64u;
 const usize s_PaintMaxOverlayDepth = 16u;
 const usize s_PaintDefaultClipDepth = 8u;
+const usize s_PaintMaxTransformDepth = 32u;
 const u32 s_PaintQuadVertexCount = 4u;
 const u32 s_PaintQuadIndexCount = 6u;
 const u32 s_PaintNineSliceAxisCells = 3u;
@@ -103,10 +104,43 @@ class ResolvedGlyphDraw{
     public b8 isSdf = false;
 }
 
+enum<u8> PaintLineCap{
+    Butt = 0u,
+    Square = 1u,
+    Round = 2u,
+}
+
+enum<u8> PaintLineJoin{
+    Miter = 0u,
+    Bevel = 1u,
+    Round = 2u,
+}
+
+class PaintLineStyle{
+    public f32 thickness = 1.0f;
+    public PaintLineCap cap = PaintLineCap::Butt;
+    public PaintLineJoin join = PaintLineJoin::Miter;
+    public f32 miterLimit = 4.0f;
+    public f32 dashLength = 0.0f;
+    public f32 gapLength = 0.0f;
+    public f32 dashOffset = 0.0f;
+    public b8 antiAlias = false;
+}
+
+class PaintTransform2D{
+    public f32 m00 = 1.0f;
+    public f32 m01 = 0.0f;
+    public f32 tx = 0.0f;
+    public f32 m10 = 0.0f;
+    public f32 m11 = 1.0f;
+    public f32 ty = 0.0f;
+}
+
 class PaintLineSegment{
     public Point start = Point(0.0f, 0.0f);
     public Point end = Point(0.0f, 0.0f);
     public Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+    public f32 thickness = 0.0f;
 }
 
 class SkinBindingRecord<TUiSkin, TTexture>{

@@ -1,0 +1,252 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_physics/system_sync.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PruneRemovedEcsRagdolls(
+    mut World world,
+    mut PhysicsWorld physicsWorld,
+    mut HashMap<EntityID, RagdollInstance> activeRagdolls
+){
+    if(activeRagdolls.empty())
+        return;
+
+    Vector<EntityID> toRemove;
+    for(in auto kv : activeRagdolls){
+        const EntityID ent = kv.first;
+        if(!ent.valid() || !world.alive(ent)){
+            toRemove.push_back(ent);
+            continue;
+        }
+        const Optional<mut RagdollComponent> rcOpt = world.borrowComponent<RagdollComponent>(ent);
+        if(!rcOpt.has_value() || !rcOpt.value().enabled)
+            toRemove.push_back(ent);
+    }
+
+    for(usize i = 0u; i < toRemove.size(); ++i){
+        const EntityID ent = toRemove[i];
+        const auto it = activeRagdolls.find(ent);
+        if(it != activeRagdolls.end()){
+            it.value().destroy(physicsWorld);
+            activeRagdolls.erase(ent);
+        }
+        if(ent.valid() && world.alive(ent)){
+            const Optional<mut RagdollComponent> rcOpt = world.borrowComponent<RagdollComponent>(ent);
+            if(rcOpt.has_value()){
+                rcOpt.value().initialized = false;
+                rcOpt.value().instance = RagdollInstance();
+            }
+        }
+    }
+}
+
+void StepEcsPhysicsSubsystemBridges(
+    mut World world,
+    mut PhysicsWorld physicsWorld,
+    in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    in f32 dt,
+    mut PhysicsEnvironment envScratch,
+    mut HashMap<EntityID, RagdollInstance> activeRagdolls
+){
+    PruneRemovedEcsRagdolls(world, physicsWorld, activeRagdolls);
+
+    if(world.view<CharacterControllerComponent>().candidateCount() > 0u){
+        mut World worldForChar = world;
+        mut PhysicsWorld physMut = physicsWorld;
+        world.view<CharacterControllerComponent>().each(
+            lambda[in dt, mut worldForChar, mut physMut](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+                if(!cc.enabled)
+                    return;
+                const Optional<mut TransformComponent> xfOpt = worldForChar.borrowComponent<TransformComponent>(entity);
+                if(!cc.initialized || cc.dirty){
+                    VectorSingle startPos(0.0f);
+                    VectorSingle startRot(0.0f, 0.0f, 0.0f, 1.0f);
+                    if(xfOpt.has_value()){
+                        in TransformComponent xf = xfOpt.value();
+                        startPos = VectorSingle(xf.position);
+                        startRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+                    }
+                    cc.controller.init(cc.def, startPos, startRot);
+                    cc.initialized = true;
+                    cc.dirty = false;
+                    cc.syncFromTransform = false;
+                }
+                else if(cc.syncFromTransform && xfOpt.has_value()){
+                    in TransformComponent xf = xfOpt.value();
+                    cc.controller.position = xf.position;
+                    cc.controller.rotation = f32x4(SafeNormalizeQuat(VectorSingle(xf.rotation)));
+                    cc.syncFromTransform = false;
+                }
+                cc.controller.update(physMut, dt);
+                if(xfOpt.has_value()){
+                    mut TransformComponent xf = xfOpt.value();
+                    xf.position = cc.controller.position;
+                    xf.rotation = cc.controller.rotation;
+                }
+            }
+        );
+    }
+
+    if(world.view<VehicleComponent>().candidateCount() > 0u){
+        in HashMap<EntityID, EcsEntityPhysicsRecord> recordsRef = entityRecords;
+        mut PhysicsWorld physMut = physicsWorld;
+        world.view<VehicleComponent>().each(
+            lambda[in dt, in recordsRef, mut physMut](in EntityID entity, mut VehicleComponent vc) -> void{
+                if(!vc.enabled)
+                    return;
+                const auto recIt = recordsRef.find(entity);
+                if(recIt == recordsRef.end())
+                    return;
+                const BodyId chassisId = recIt.value().bodyId;
+                if(!chassisId.valid() || !physMut.isValidBody(chassisId))
+                    return;
+                if(!vc.initialized || vc.dirty || !(vc.controller.chassisBodyId == chassisId)){
+                    vc.controller.init(chassisId, vc.engine, Span<VehicleWheelDef>(vc.wheels.data(), vc.wheels.size()));
+                    vc.initialized = true;
+                    vc.dirty = false;
+                }
+                vc.controller.step(physMut, vc.input, dt);
+            }
+        );
+    }
+
+    if(world.view<RagdollComponent>().candidateCount() > 0u){
+        mut PhysicsWorld physMut = physicsWorld;
+        mut HashMap<EntityID, RagdollInstance> trackedRagdolls = activeRagdolls;
+        world.view<RagdollComponent>().each(
+            lambda[mut physMut, mut trackedRagdolls](in EntityID entity, mut RagdollComponent rc) -> void{
+                if(!rc.enabled)
+                    return;
+                if(!rc.initialized || rc.dirty || !rc.instance.isValid(physMut)){
+                    const auto prevIt = trackedRagdolls.find(entity);
+                    if(prevIt != trackedRagdolls.end()){
+                        prevIt.value().destroy(physMut);
+                        trackedRagdolls.erase(entity);
+                    }
+                    else if(rc.instance.isValid(physMut)){
+                        rc.instance.destroy(physMut);
+                    }
+                    rc.instance = RagdollInstance();
+                    if(rc.instance.create(physMut, Span<RagdollBoneDef>(rc.bones.data(), rc.bones.size()))){
+                        rc.initialized = true;
+                        rc.dirty = false;
+                        rc.syncedKinematic = rc.kinematic;
+                        if(rc.kinematic)
+                            rc.instance.setKinematic(physMut, true);
+                        trackedRagdolls.insert_or_assign(entity, rc.instance);
+                    }
+                    else{
+                        rc.initialized = false;
+                    }
+                }
+                else if(rc.kinematic != rc.syncedKinematic){
+                    rc.instance.setKinematic(physMut, rc.kinematic);
+                    rc.syncedKinematic = rc.kinematic;
+                }
+            }
+        );
+    }
+
+    const b8 hasFluids = world.view<FluidVolumeComponent>().candidateCount() > 0u;
+    const b8 hasFields = world.view<ForceFieldComponent>().candidateCount() > 0u;
+    if(hasFluids || hasFields){
+        envScratch.fluids.clear();
+        envScratch.forceFields.clear();
+        if(hasFluids){
+            mut Vector<FluidVolume> volumes = envScratch.fluids;
+            world.view<FluidVolumeComponent>().each(
+                lambda[mut volumes](in EntityID entity, in FluidVolumeComponent fvc) -> void{
+                    if(fvc.enabled)
+                        volumes.push_back(fvc.volume);
+                }
+            );
+        }
+        if(hasFields){
+            mut Vector<ForceField> fields = envScratch.forceFields;
+            world.view<ForceFieldComponent>().each(
+                lambda[mut fields](in EntityID entity, in ForceFieldComponent ffc) -> void{
+                    if(ffc.enabled)
+                        fields.push_back(ffc.field);
+                }
+            );
+        }
+        if(!envScratch.fluids.empty() || !envScratch.forceFields.empty())
+            envScratch.step(physicsWorld, dt);
+    }
+
+    if(world.view<ArticulationComponent>().candidateCount() > 0u){
+        mut World worldForArt = world;
+        mut PhysicsWorld physMut = physicsWorld;
+        world.view<ArticulationComponent>().each(
+            lambda[in dt, mut worldForArt, mut physMut](in EntityID entity, mut ArticulationComponent ac) -> void{
+                if(!ac.enabled)
+                    return;
+                if(!ac.initialized || ac.dirty){
+                    Transform3D rootXf;
+                    const Optional<mut TransformComponent> xfOpt = worldForArt.borrowComponent<TransformComponent>(entity);
+                    if(xfOpt.has_value()){
+                        in TransformComponent xf = xfOpt.value();
+                        rootXf = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
+                    }
+                    if(ac.articulation.init(rootXf, ac.isFixedBase, Span<ArticulationLinkDef>(ac.links.data(), ac.links.size()))){
+                        ac.initialized = true;
+                        ac.dirty = false;
+                    }
+                    else{
+                        ac.initialized = false;
+                    }
+                }
+                if(ac.initialized)
+                    ac.articulation.step(physMut, dt);
+            }
+        );
+    }
+
+    if(world.view<SoftBodyComponent>().candidateCount() > 0u){
+        mut PhysicsWorld physMut = physicsWorld;
+        world.view<SoftBodyComponent>().each(
+            lambda[in dt, mut physMut](in EntityID entity, mut SoftBodyComponent sb) -> void{
+                if(sb.enabled)
+                    sb.softBody.step(physMut, dt);
+            }
+        );
+    }
+}
+
+void CollectEcsGpuRenderTransformBindings(
+    mut World world,
+    in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    in PhysicsWorld physicsWorld,
+    mut Vector<GpuPhysicsRenderTransformBinding> outBindings
+){
+    outBindings.clear();
+    if(world.view<GpuRenderTransformExportComponent>().candidateCount() == 0u)
+        return;
+
+    in HashMap<EntityID, EcsEntityPhysicsRecord> recordsRef = entityRecords;
+    in PhysicsWorld physRef = physicsWorld;
+    world.view<GpuRenderTransformExportComponent>().each(
+        lambda[in recordsRef, in physRef, mut outBindings](in EntityID entity, in GpuRenderTransformExportComponent ex) -> void{
+            if(!ex.enabled)
+                return;
+            const auto recIt = recordsRef.find(entity);
+            if(recIt == recordsRef.end())
+                return;
+            const BodyId bodyId = recIt.value().bodyId;
+            if(!bodyId.valid() || !physRef.isValidBody(bodyId))
+                return;
+            GpuPhysicsRenderTransformBinding binding;
+            binding.bodyDestFlags = u32x4(bodyId.index, ex.instanceIndex, entity.index(), ex.flags);
+            binding.scalePad = f32x4(ex.localScale.x, ex.localScale.y, ex.localScale.z, 0.0f);
+            outBindings.push_back(binding);
+        }
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -63,6 +63,9 @@ class JointComponentAsset : IComponent{
         dst.runtimeJointId = JointId();
         dst.boundBodyIdA = BodyId();
         dst.boundBodyIdB = BodyId();
+        dst.runtimeExtraJointIds.clear();
+        dst.boundExtraBodyIdAs.clear();
+        dst.boundExtraBodyIdBs.clear();
         dst.bodyEntityA = s_InvalidEntityId;
         dst.bodyEntityB = s_InvalidEntityId;
     }

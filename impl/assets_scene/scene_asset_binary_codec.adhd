@@ -15,9 +15,10 @@ class SceneAssetBinaryCodec{
         return header;
     }
 
-    private EntityHeaderBinary makeEntityHeader(in u64 componentCount)const{
+    private EntityHeaderBinary makeEntityHeader(in u64 componentCount, in NameHash entityNameHash)const{
         EntityHeaderBinary header;
         header.componentCount = componentCount;
+        header.entityNameHash = entityNameHash;
         return header;
     }
 
@@ -66,7 +67,8 @@ class SceneAssetBinaryCodec{
         });
     }
 
-    public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary)const{
+    public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, in NameHash entityNameHash, mut Vector<u8> outBinary)const{
+        static_assert(size_of<EntityHeaderBinary>() == s_EntityHeaderBinaryBytes);
         usize reserveBytes = s_EntityHeaderBinaryBytes;
         if(!AddBinaryRepeatedReserveBytes(reserveBytes, components.size(), s_NameHashBinaryBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
             error("EntityAssetCodec::serialize failed: 'components' payload byte size overflows");
@@ -74,10 +76,14 @@ class SceneAssetBinaryCodec{
         }
         outBinary.clear();
         outBinary.reserve(reserveBytes);
-        AppendPOD(outBinary, this.makeEntityHeader(cast<u64>(components.size())));
+        AppendPOD(outBinary, this.makeEntityHeader(cast<u64>(components.size()), entityNameHash));
         for(in AssetRef<TComponent> component : components)
             AppendPOD(outBinary, component.name().hash());
         return true;
+    }
+
+    public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary)const{
+        return this.serializeEntity(components, s_NameNone.hash(), outBinary);
     }
 
     public b8 serializeProject(in NameHash startSceneHash, mut Vector<u8> outBinary)const{
@@ -202,7 +208,8 @@ class SceneAssetBinaryCodec{
 
     public b8 deserializeEntity<TComponent>(
         in Span<u8> binary,
-        mut Vector<AssetRef<TComponent>> outComponents
+        mut Vector<AssetRef<TComponent>> outComponents,
+        mut Name outEntityName
     )const{
         usize cursor = 0u;
         const Expected<EntityHeaderBinary> headerResult = ReadPOD<EntityHeaderBinary>(binary, cursor);
@@ -225,7 +232,19 @@ class SceneAssetBinaryCodec{
             return false;
         }
         AssignAssetRefsFromHashes(componentHashes, outComponents);
+        if(header.entityNameHash == s_NameNone.hash())
+            outEntityName = s_NameNone;
+        else
+            outEntityName = Name(header.entityNameHash);
         return true;
+    }
+
+    public b8 deserializeEntity<TComponent>(
+        in Span<u8> binary,
+        mut Vector<AssetRef<TComponent>> outComponents
+    )const{
+        Name ignoredName = s_NameNone;
+        return this.deserializeEntity(binary, outComponents, ignoredName);
     }
 
     public b8 deserializeScene<TSubsystem, TEntity, TAsset>(

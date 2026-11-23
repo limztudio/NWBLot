@@ -38,7 +38,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint contactOffset = slice.bodyContact.z;
     const uint contactCount = slice.bodyContact.w;
     const uint islandFlags = slice.jointFlags.z;
-    const uint denseColorCount = min(slice.jointFlags.w, NWB_PHYSICS_OVERFLOW_COLOR_INDEX);
+    const uint denseColorCount = min(slice.jointFlags.w & NWB_PHYSICS_ISLAND_DENSE_COLOR_MASK, NWB_PHYSICS_OVERFLOW_COLOR_INDEX);
+    const uint overflowContactCount = (slice.jointFlags.w >> NWB_PHYSICS_ISLAND_OVERFLOW_COUNT_SHIFT) & NWB_PHYSICS_ISLAND_OVERFLOW_COUNT_MASK;
     const bool hasRolling = (islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_ROLLING) != 0u;
 
     const uint subStepCount = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
@@ -78,7 +79,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         GroupMemoryBarrierWithGroupSync();
 
         if(warmStart){
-            nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodySimSlot, bodyStateSlot, constraintSlot, invH, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
+            nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodySimSlot, bodyStateSlot, constraintSlot, invH, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
         }
         else if(subStep > 0u){
             if(hasRolling)
@@ -90,17 +91,17 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 GroupMemoryBarrierWithGroupSync();
         }
 
-        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
+        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
 
         if(tid < bodyCount)
             nwbPhysicsIntegrateIslandBodyPosition(tid, h, maxAngSpeed);
         GroupMemoryBarrierWithGroupSync();
 
-        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, NWB_PHYSICS_SOLVER_MODE_RELAX, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
+        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_RELAX, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
     }
 
     if((islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_RESTITUTION) != 0u)
-        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, NWB_PHYSICS_SOLVER_MODE_RESTITUTION, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
+        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_RESTITUTION, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u);
 
     const uint impulseOutSlot = g_NwbPhysicsPushConstants.slots1.y;
     if(hasRolling)

@@ -44,9 +44,6 @@ extern const u32 s_ShaderPhysicsTimeOfImpactMaxIterations;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_TABLE_SIZE")]
 extern const u32 s_GpuGridTableSize;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY")]
-extern const u32 s_GpuGridBucketCapacity;
-
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_INVALID_INDEX")]
 extern const u32 s_NullIndex;
 
@@ -92,11 +89,15 @@ const usize s_OverflowColorIndex = cast<usize>(s_ShaderPhysicsOverflowColorIndex
 const usize s_MaxManifoldPoints = cast<usize>(s_ShaderPhysicsMaxManifoldPoints);
 const usize s_MaxClipPoints = 64u;
 const usize s_MaxHullVertices = cast<usize>(s_ShaderPhysicsMaxHullVertices);
+const usize s_MaxHullFaceVertices = 16u;
 const usize s_MaxHullFaces = cast<usize>(s_ShaderPhysicsMaxHullFaces);
 const usize s_MaxHullEdges = cast<usize>(s_ShaderPhysicsMaxHullEdges);
+const f32 s_PlaneHalfExtentDefault = 1.0e4f;
 const usize s_GjkMaxIterations = 20u;
 const usize s_ShapeCastMaxIterations = 20u;
 const usize s_TimeOfImpactMaxIterations = cast<usize>(s_ShaderPhysicsTimeOfImpactMaxIterations);
+const u32 s_MaxBulletToiIterations = 4u;
+const f32 s_BulletToiRemainingEpsilon = 1.0e-4f;
 
 const u32 s_StaticSetIndex = 0u;
 const u32 s_DisabledSetIndex = 1u;

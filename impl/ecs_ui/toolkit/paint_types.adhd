@@ -244,6 +244,67 @@ b8 CanAdmitPaintImageBindingCounts(
         && addedGlyphs + addedSdf + addedTextures <= s_PaintMaxImages - existingCount;
 }
 
+PaintTransform2D PaintTransformIdentity(){
+    return PaintTransform2D();
+}
+
+PaintTransform2D MakePaintTranslate(in f32 dx, in f32 dy){
+    PaintTransform2D xf;
+    xf.tx = dx;
+    xf.ty = dy;
+    return xf;
+}
+
+PaintTransform2D MakePaintScale(in f32 sx, in f32 sy){
+    PaintTransform2D xf;
+    xf.m00 = sx;
+    xf.m11 = sy;
+    return xf;
+}
+
+PaintTransform2D MakePaintRotate(in f32 radians){
+    const f32 c = Cos(radians);
+    const f32 s = Sin(radians);
+    PaintTransform2D xf;
+    xf.m00 = c;
+    xf.m01 = -s;
+    xf.m10 = s;
+    xf.m11 = c;
+    return xf;
+}
+
+PaintTransform2D MultiplyPaintTransform(in PaintTransform2D a, in PaintTransform2D b){
+    PaintTransform2D out;
+    out.m00 = a.m00 * b.m00 + a.m01 * b.m10;
+    out.m01 = a.m00 * b.m01 + a.m01 * b.m11;
+    out.tx = a.m00 * b.tx + a.m01 * b.ty + a.tx;
+    out.m10 = a.m10 * b.m00 + a.m11 * b.m10;
+    out.m11 = a.m10 * b.m01 + a.m11 * b.m11;
+    out.ty = a.m10 * b.tx + a.m11 * b.ty + a.ty;
+    return out;
+}
+
+Point ApplyPaintTransform(in PaintTransform2D xf, in Point p){
+    return Point(xf.m00 * p.x + xf.m01 * p.y + xf.tx, xf.m10 * p.x + xf.m11 * p.y + xf.ty);
+}
+
+b8 IsIdentityPaintTransform(in PaintTransform2D xf){
+    return
+        Abs(xf.m00 - 1.0f) <= 1.0e-6f
+        && Abs(xf.m01) <= 1.0e-6f
+        && Abs(xf.tx) <= 1.0e-6f
+        && Abs(xf.m10) <= 1.0e-6f
+        && Abs(xf.m11 - 1.0f) <= 1.0e-6f
+        && Abs(xf.ty) <= 1.0e-6f
+    ;
+}
+
+f32 ResolvePaintTransformScale(in PaintTransform2D xf){
+    const f32 sx = Sqrt(xf.m00 * xf.m00 + xf.m10 * xf.m10);
+    const f32 sy = Sqrt(xf.m01 * xf.m01 + xf.m11 * xf.m11);
+    return 0.5f * (sx + sy);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

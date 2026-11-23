@@ -106,6 +106,36 @@ struct NwbPhysicsGpuIslandSlice{
     uint4 contactColorCounts1;
 };
 
+struct NwbPhysicsGpuLbvhNode{
+    float4 minLeft;
+    float4 maxRight;
+    uint4 parentMeta;
+};
+
+struct NwbPhysicsGpuSpatialQuery{
+    float4 originMin;
+    float4 dirMax;
+    uint4 params;
+};
+
+struct NwbPhysicsGpuSpatialQueryResult{
+    float4 hitPointFraction;
+    float4 hitNormalDist;
+    uint4 hitIds;
+};
+
+struct NwbPhysicsGpuRenderTransformBinding{
+    uint4 bodyDestFlags;
+    float4 scalePad;
+};
+
+struct NwbPhysicsGpuRenderTransformOut{
+    float4 rotation;
+    float4 translationFlags;
+    float4 scaleEntityId;
+    float4 linearVelSleep;
+};
+
 struct NwbPhysicsGpuContactConstraint{
     uint4 indicesCountFlags;
     float4 normalFriction;
@@ -163,6 +193,11 @@ struct NwbPhysicsGpuJointConstraint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuContactImpulseOut, Std430DataLayout> g_NwbPhysicsContactImpulseOutBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuJointImpulseOut, Std430DataLayout> g_NwbPhysicsJointImpulseOutBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuIslandSlice, Std430DataLayout> g_NwbPhysicsIslandSliceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] globallycoherent RWStructuredBuffer<NwbPhysicsGpuLbvhNode, Std430DataLayout> g_NwbPhysicsLbvhNodeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSpatialQuery, Std430DataLayout> g_NwbPhysicsSpatialQueryBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSpatialQueryResult, Std430DataLayout> g_NwbPhysicsSpatialQueryResultBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuRenderTransformBinding, Std430DataLayout> g_NwbPhysicsRenderBindingBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuRenderTransformOut, Std430DataLayout> g_NwbPhysicsRenderTransformOutBuffers[];
 #pragma warning(pop)
 
 
@@ -244,6 +279,51 @@ float3 nwbPhysicsApplyAngularLocks(const float3 w, const uint flags){
         (flags & NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Y) != 0u ? 0.0f : w.y,
         (flags & NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Z) != 0u ? 0.0f : w.z
     );
+}
+
+void nwbPhysicsRotateSymMat3(const float4 q, const float4 loc0, const float2 loc1, out float4 outW0, out float2 outW1){
+    float3 r0;
+    float3 r1;
+    float3 r2;
+    nwbPhysicsQuatToAxes(q, r0, r1, r2);
+    const float3 xAxis = float3(r0.x, r1.x, r2.x);
+    const float3 yAxis = float3(r0.y, r1.y, r2.y);
+    const float3 zAxis = float3(r0.z, r1.z, r2.z);
+
+    const float3 c0 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), xAxis);
+    const float3 c1 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), yAxis);
+    const float3 c2 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), zAxis);
+
+    const float3 lx0 = float3(r0.x, r1.x, r2.x);
+    const float3 lx1 = float3(r0.y, r1.y, r2.y);
+    const float3 lx2 = float3(r0.z, r1.z, r2.z);
+    const float m00 = dot(lx0, c0);
+    const float m01 = dot(lx0, c1);
+    const float m02 = dot(lx0, c2);
+    const float m11 = dot(lx1, c1);
+    const float m12 = dot(lx1, c2);
+    const float m22 = dot(lx2, c2);
+    outW0 = float4(m00, m01, m02, m11);
+    outW1 = float2(m12, m22);
+}
+
+bool nwbPhysicsIsNonCollidingBodyPair(const uint tableSlot, const uint tableMask, const uint bodyA, const uint bodyB){
+    if(tableSlot == NWB_PHYSICS_INVALID_INDEX)
+        return false;
+    const uint lo = min(bodyA, bodyB);
+    const uint hi = max(bodyA, bodyB);
+    const uint baseHash = ((lo * 73856093u) ^ (hi * 19349663u)) & tableMask;
+    [loop]
+    for(uint probe = 0u; probe < NWB_PHYSICS_NONCOLLIDE_MAX_PROBE; ++probe){
+        const uint slot = (baseHash + probe) & tableMask;
+        const uint k0 = g_NwbPhysicsUintBuffers[tableSlot][slot * 2u + 0u];
+        if(k0 == NWB_PHYSICS_NONCOLLIDE_HASH_EMPTY)
+            return false;
+        const uint k1 = g_NwbPhysicsUintBuffers[tableSlot][slot * 2u + 1u];
+        if(k0 == lo && k1 == hi)
+            return true;
+    }
+    return false;
 }
 
 

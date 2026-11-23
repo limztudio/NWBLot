@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/physics/manifold_hull.adhd>
+#include <impl/physics/heightfield.adhd>
 #include <impl/physics/broad_phase.adhd>
 
 
@@ -17,6 +17,8 @@ flag<u32> ContactFlags{
     EnableHitEvents = 0x00000020u,
     EnableSensorEvents = 0x00000040u,
     Alive = 0x00000100u,
+    HasSurfaceVelocity = 0x00000200u,
+    HasAnisotropicFriction = 0x00000400u,
 }
 
 flag<u8> ShapeFlags{
@@ -28,6 +30,7 @@ flag<u8> ShapeFlags{
     EnablePreSolveEvents = 0x10u,
     EnlargeAabb = 0x20u,
     Alive = 0x40u,
+    HasLocalTransform = 0x80u,
 }
 
 flag<u8> JointFlags{
@@ -37,6 +40,8 @@ flag<u8> JointFlags{
     EnableSpring = 0x04u,
     CollideConnected = 0x08u,
     Alive = 0x10u,
+    Enabled = 0x20u,
+    EnableProjection = 0x40u,
 }
 
 class Body{
@@ -54,6 +59,7 @@ class Body{
     public f32 sleepThreshold = s_DefaultSleepThreshold;
     public f32 sleepTime = 0.0f;
     public f32 mass = 0.0f;
+    public f32 maxAngularVelocity = 0.0f;
     public u32 bodyMoveIndex = s_NullIndex;
     public u32 id = s_NullIndex;
     public u32 flags = 0u;
@@ -98,6 +104,7 @@ class BodySim{
     public f32 gravityScale = 1.0f;
     public u32 flags = 0u;
     public u32 bodyId = s_NullIndex;
+    public f32 maxAngularVelocity = 0.0f;
 
     public VectorSingle center()const{
         return VectorSingle(this.centerInvMass, 0.0f);
@@ -184,6 +191,7 @@ class Shape{
     public f32x4 geom0(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 geom1(0.0f, 0.0f, 0.0f, 0.0f);
     public Aabb3D aabb;
+    public Transform3D localTransform;
     public u64 userData = 0u;
     public SurfaceMaterial material;
     public Filter filter;
@@ -218,6 +226,76 @@ class Shape{
     public void setCapsule(in CapsuleShape c){
         this.geom0 = c.center1Radius;
         this.geom1 = c.center2;
+    }
+
+    public CylinderShape cylinderShape()const{
+        CylinderShape c;
+        c.centerRadius = this.geom0;
+        c.halfHeightRadiusConvex = this.geom1;
+        return c;
+    }
+
+    public void setCylinder(in CylinderShape c){
+        this.geom0 = c.centerRadius;
+        this.geom1 = c.halfHeightRadiusConvex;
+    }
+
+    public ConeShape coneShape()const{
+        ConeShape c;
+        c.centerRadius = this.geom0;
+        c.halfHeightRadiusConvex = this.geom1;
+        return c;
+    }
+
+    public void setCone(in ConeShape c){
+        this.geom0 = c.centerRadius;
+        this.geom1 = c.halfHeightRadiusConvex;
+    }
+
+    public TaperedCapsuleShape taperedCapsuleShape()const{
+        TaperedCapsuleShape tc;
+        tc.center1Radius1 = this.geom0;
+        tc.center2Radius2 = this.geom1;
+        return tc;
+    }
+
+    public void setTaperedCapsule(in TaperedCapsuleShape tc){
+        this.geom0 = tc.center1Radius1;
+        this.geom1 = tc.center2Radius2;
+    }
+
+    public PlaneShape planeShape()const{
+        PlaneShape pl;
+        pl.normalOffset = this.geom0;
+        pl.halfExtent = this.geom1;
+        return pl;
+    }
+
+    public void setPlane(in PlaneShape pl){
+        this.geom0 = pl.normalOffset;
+        this.geom1 = pl.halfExtent;
+    }
+
+    public SegmentShape segmentShape()const{
+        SegmentShape seg;
+        seg.point1Radius = this.geom0;
+        seg.point2Meta = this.geom1;
+        return seg;
+    }
+
+    public void setSegment(in SegmentShape seg){
+        this.geom0 = seg.point1Radius;
+        this.geom1 = seg.point2Meta;
+    }
+
+    public b8 hasLocalTransform()const{
+        return this.hasFlag(ShapeFlags::HasLocalTransform);
+    }
+
+    public Transform3D worldTransform(in Transform3D bodyXf)const{
+        if(!this.hasFlag(ShapeFlags::HasLocalTransform))
+            return bodyXf;
+        return ComposeTransform(bodyXf, this.localTransform);
     }
 
     public b8 hasFlag(in ShapeFlags flagBit)const{
@@ -271,6 +349,9 @@ class Contact{
     public Manifold manifold;
     public u64 pairKey = 0u;
     public Array<ContactEdge, 2u> edges;
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
     public u32 contactId = s_NullIndex;
     public u32 shapeIdA = s_NullIndex;
     public u32 shapeIdB = s_NullIndex;
@@ -279,6 +360,7 @@ class Contact{
     public u32 islandId = s_NullIndex;
     public u32 islandIndex = s_NullIndex;
     public f32 friction = 0.6f;
+    public f32 staticFriction = 0.6f;
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
@@ -297,6 +379,30 @@ class JointEdge{
     public u32 nextKey = s_NullIndex;
 }
 
+class JointExtraData{
+    public Array<SixDofAxisConfig, 6u> sixDofAxes;
+    public Array<f32, 6u> sixDofLowerImpulses;
+    public Array<f32, 6u> sixDofUpperImpulses;
+    public Array<f32, 6u> sixDofMotorImpulses;
+    public Array<f32, 6u> sixDofSpringImpulses;
+    public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 pulleyConstant = 0.0f;
+    public Vector<f32x4> pathPoints;
+    public b8 pathClosed = false;
+    public b8 pathLockRotation = false;
+    public b8 alive = false;
+
+    public JointExtraData(){
+        for(usize i = 0u; i < 6u; ++i){
+            this.sixDofLowerImpulses[i] = 0.0f;
+            this.sixDofUpperImpulses[i] = 0.0f;
+            this.sixDofMotorImpulses[i] = 0.0f;
+            this.sixDofSpringImpulses[i] = 0.0f;
+        }
+    }
+}
+
 class Joint{
     public f32x4 localAnchorALength(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 localAnchorBMinLength(0.0f, 0.0f, 0.0f, 0.0f);
@@ -313,14 +419,29 @@ class Joint{
     public u32 jointId = s_NullIndex;
     public u32 islandId = s_NullIndex;
     public u32 islandIndex = s_NullIndex;
+    public u32 extraDataIndex = s_NullIndex;
     public f32 maxMotorForce = 0.0f;
     public f32 hertz = 0.0f;
     public f32 dampingRatio = 1.0f;
     public f32 correctionFactor = 0.3f;
     public f32 maxTorque = 0.0f;
     public f32 swingLimit = 0.0f;
+    public f32 swingLimitY = 0.0f;
+    public f32 springTarget = 0.0f;
     public f32 suspensionHertz = 4.0f;
     public f32 suspensionDampingRatio = 0.7f;
+    public f32 steeringAngle = 0.0f;
+    public f32 suspensionRestLength = 0.0f;
+    public f32 invMassScaleA = 1.0f;
+    public f32 invMassScaleB = 1.0f;
+    public f32 invInertiaScaleA = 1.0f;
+    public f32 invInertiaScaleB = 1.0f;
+    public f32 limitRestitution = 0.0f;
+    public f32 limitHertz = 0.0f;
+    public f32 limitDampingRatio = 1.0f;
+    public f32 projectionLinearTolerance = 0.1f;
+    public f32 projectionAngularTolerance = 0.1f;
+    public f32 ratio = 1.0f;
     public f32 breakForce = 0.0f;
     public f32 breakTorque = 0.0f;
     public u16 generation = 0u;
@@ -502,6 +623,14 @@ class Joint{
     public b8 alive()const{
         return this.hasFlag(JointFlags::Alive);
     }
+
+    public b8 enabled()const{
+        return this.hasFlag(JointFlags::Enabled);
+    }
+
+    public b8 enableProjection()const{
+        return this.hasFlag(JointFlags::EnableProjection);
+    }
 }
 
 class JointLink{
@@ -539,19 +668,75 @@ b8 ShouldCollideFilters(in Filter filterA, in Filter filterB){
     return ((filterA.categoryBits & filterB.maskBits) != 0u) && ((filterB.categoryBits & filterA.maskBits) != 0u);
 }
 
-Aabb3D ComputeShapeLocalAabb(in Shape shape, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
+Aabb3D ComputeShapeWorldAabbWithHeightfields(
+    in Shape shape,
+    in Transform3D xf,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes
+){
+    const Transform3D effXf = shape.worldTransform(xf);
     if(shape.type == ShapeType::Sphere)
-        return ComputeSphereAabb(shape.sphereShape(), Transform3D());
+        return ComputeSphereAabb(shape.sphereShape(), effXf);
     if(shape.type == ShapeType::Capsule)
-        return ComputeCapsuleAabb(shape.capsuleShape(), Transform3D());
+        return ComputeCapsuleAabb(shape.capsuleShape(), effXf);
+    if(shape.type == ShapeType::Cylinder)
+        return ComputeCylinderAabb(shape.cylinderShape(), effXf);
+    if(shape.type == ShapeType::Cone)
+        return ComputeConeAabb(shape.coneShape(), effXf);
+    if(shape.type == ShapeType::TaperedCapsule)
+        return ComputeTaperedCapsuleAabb(shape.taperedCapsuleShape(), effXf);
+    if(shape.type == ShapeType::Plane)
+        return ComputePlaneAabb(shape.planeShape(), effXf);
+    if(shape.type == ShapeType::Segment)
+        return ComputeSegmentAabb(shape.segmentShape(), effXf);
+    if(shape.type == ShapeType::Heightfield){
+        if(shape.geometryIndex < heightfieldShapes.size())
+            return ComputeHeightfieldAabb(heightfieldShapes[shape.geometryIndex], effXf);
+        return Aabb3D();
+    }
     if(shape.type == ShapeType::Mesh){
         if(shape.geometryIndex < meshShapes.size())
-            return meshShapes[shape.geometryIndex].localAabb();
+            return ComputeMeshAabb(meshShapes[shape.geometryIndex], effXf);
         return Aabb3D();
     }
     if(shape.geometryIndex < hullShapes.size())
-        return ComputeHullAabb(hullShapes[shape.geometryIndex], Transform3D());
+        return ComputeHullAabb(hullShapes[shape.geometryIndex], effXf);
     return Aabb3D();
+}
+
+Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
+    Vector<HeightfieldShape> emptyHfs;
+    return ComputeShapeWorldAabbWithHeightfields(shape, xf, hullShapes, meshShapes, emptyHfs);
+}
+
+Aabb3D ComputeShapeLocalAabb(in Shape shape, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
+    Vector<HeightfieldShape> emptyHfs;
+    return ComputeShapeWorldAabbWithHeightfields(shape, Transform3D(), hullShapes, meshShapes, emptyHfs);
+}
+
+Aabb3D ComputeShapeLocalAabbCachedWithHeightfields(
+    in Shape shape,
+    in Vector<HullShape> hullShapes,
+    in Vector<Aabb3D> hullLocalAabbs,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes
+){
+    if(!shape.hasLocalTransform()){
+        if(shape.type == ShapeType::Hull && shape.geometryIndex < hullLocalAabbs.size())
+            return hullLocalAabbs[shape.geometryIndex];
+        if(shape.type == ShapeType::Mesh){
+            if(shape.geometryIndex < meshShapes.size())
+                return meshShapes[shape.geometryIndex].localAabb();
+            return Aabb3D();
+        }
+        if(shape.type == ShapeType::Heightfield){
+            if(shape.geometryIndex < heightfieldShapes.size())
+                return heightfieldShapes[shape.geometryIndex].computeLocalAabb();
+            return Aabb3D();
+        }
+    }
+    return ComputeShapeWorldAabbWithHeightfields(shape, Transform3D(), hullShapes, meshShapes, heightfieldShapes);
 }
 
 Aabb3D ComputeShapeLocalAabbCached(
@@ -560,24 +745,8 @@ Aabb3D ComputeShapeLocalAabbCached(
     in Vector<Aabb3D> hullLocalAabbs,
     in Vector<MeshShape> meshShapes
 ){
-    if(shape.type == ShapeType::Hull && shape.geometryIndex < hullLocalAabbs.size())
-        return hullLocalAabbs[shape.geometryIndex];
-    return ComputeShapeLocalAabb(shape, hullShapes, meshShapes);
-}
-
-Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
-    if(shape.type == ShapeType::Sphere)
-        return ComputeSphereAabb(shape.sphereShape(), xf);
-    if(shape.type == ShapeType::Capsule)
-        return ComputeCapsuleAabb(shape.capsuleShape(), xf);
-    if(shape.type == ShapeType::Mesh){
-        if(shape.geometryIndex < meshShapes.size())
-            return ComputeMeshAabb(meshShapes[shape.geometryIndex], xf);
-        return Aabb3D();
-    }
-    if(shape.geometryIndex < hullShapes.size())
-        return ComputeHullAabb(hullShapes[shape.geometryIndex], xf);
-    return Aabb3D();
+    Vector<HeightfieldShape> emptyHfs;
+    return ComputeShapeLocalAabbCachedWithHeightfields(shape, hullShapes, hullLocalAabbs, meshShapes, emptyHfs);
 }
 
 ShapeProxy MakeShapeProxyFromShape(in Shape shape, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
@@ -585,11 +754,16 @@ ShapeProxy MakeShapeProxyFromShape(in Shape shape, in Vector<HullShape> hullShap
         return MakeSphereProxy(shape.sphereShape());
     if(shape.type == ShapeType::Capsule)
         return MakeCapsuleProxy(shape.capsuleShape());
-    if(shape.type == ShapeType::Mesh){
-        if(shape.geometryIndex < meshShapes.size())
-            return ShapeProxy();
+    if(shape.type == ShapeType::Cylinder)
+        return MakeCylinderProxy(shape.cylinderShape());
+    if(shape.type == ShapeType::Cone)
+        return MakeConeProxy(shape.coneShape());
+    if(shape.type == ShapeType::TaperedCapsule)
+        return MakeTaperedCapsuleProxy(shape.taperedCapsuleShape());
+    if(shape.type == ShapeType::Segment)
+        return MakeSegmentProxy(shape.segmentShape());
+    if(shape.type == ShapeType::Mesh || shape.type == ShapeType::Heightfield || shape.type == ShapeType::Plane)
         return ShapeProxy();
-    }
     if(shape.geometryIndex < hullShapes.size())
         return MakeHullProxy(hullShapes[shape.geometryIndex]);
     return ShapeProxy();
@@ -612,14 +786,190 @@ ShapeProxyView MakeShapeProxyViewFromShape(
         outInlinePts[1u] = f32x3u(c.center2.x, c.center2.y, c.center2.z);
         return MakeSpanProxyView(Span<f32x3u>(outInlinePts), c.center1Radius.w);
     }
-    if(shape.type == ShapeType::Mesh){
-        if(shape.geometryIndex < meshShapes.size())
-            return ShapeProxyView();
-        return ShapeProxyView();
+    if(shape.type == ShapeType::Segment){
+        const SegmentShape seg = shape.segmentShape();
+        outInlinePts[0u] = f32x3u(seg.point1Radius.x, seg.point1Radius.y, seg.point1Radius.z);
+        outInlinePts[1u] = f32x3u(seg.point2Meta.x, seg.point2Meta.y, seg.point2Meta.z);
+        return MakeSpanProxyView(Span<f32x3u>(outInlinePts), seg.radius());
     }
+    if(shape.type == ShapeType::Cylinder){
+        const CylinderShape cyl = shape.cylinderShape();
+        ShapeProxyView v;
+        v.kind = ProxyKind::Cylinder;
+        v.param0 = f32x4(cyl.center(), cyl.radius());
+        v.param1 = f32x4(cyl.halfHeight(), 0.0f, 0.0f, 0.0f);
+        v.radius = cyl.convexRadius();
+        return v;
+    }
+    if(shape.type == ShapeType::Cone){
+        const ConeShape cone = shape.coneShape();
+        ShapeProxyView v;
+        v.kind = ProxyKind::Cone;
+        v.param0 = f32x4(cone.center(), cone.radius());
+        v.param1 = f32x4(cone.halfHeight(), 0.0f, 0.0f, 0.0f);
+        v.radius = cone.convexRadius();
+        return v;
+    }
+    if(shape.type == ShapeType::TaperedCapsule){
+        const TaperedCapsuleShape tc = shape.taperedCapsuleShape();
+        const f32 r1 = tc.radius1();
+        const f32 r2 = tc.radius2();
+        const f32 minR = Min(r1, r2);
+        ShapeProxyView v;
+        v.kind = ProxyKind::TaperedCapsule;
+        v.param0 = f32x4(tc.center1(), r1 - minR);
+        v.param1 = f32x4(tc.center2(), r2 - minR);
+        v.radius = minR;
+        return v;
+    }
+    if(shape.type == ShapeType::Mesh || shape.type == ShapeType::Heightfield || shape.type == ShapeType::Plane)
+        return ShapeProxyView();
     if(shape.geometryIndex < hullShapes.size())
         return MakeHullProxyView(hullShapes[shape.geometryIndex]);
     return ShapeProxyView();
+}
+
+Manifold CollideShapePairRaw(
+    in Shape shapeA,
+    in Transform3D effXfA,
+    in Shape shapeB,
+    in Transform3D effXfB,
+    in f32 maxDistance,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes
+){
+    if(shapeA.type == ShapeType::Plane){
+        if(shapeB.type == ShapeType::Plane || shapeB.type == ShapeType::Mesh || shapeB.type == ShapeType::Heightfield)
+            return Manifold();
+        Array<f32x3u, 2u> ptsB;
+        const ShapeProxyView pB = MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB);
+        return FlipManifoldNormalAndAnchors(CollideConvexProxyVsPlane(pB, effXfB, shapeA.planeShape(), effXfA, maxDistance));
+    }
+    if(shapeB.type == ShapeType::Plane){
+        if(shapeA.type == ShapeType::Mesh || shapeA.type == ShapeType::Heightfield)
+            return Manifold();
+        Array<f32x3u, 2u> ptsA;
+        const ShapeProxyView pA = MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA);
+        return CollideConvexProxyVsPlane(pA, effXfA, shapeB.planeShape(), effXfB, maxDistance);
+    }
+
+    if(shapeA.type == ShapeType::Heightfield){
+        if(shapeA.geometryIndex >= heightfieldShapes.size())
+            return Manifold();
+        if(shapeB.type == ShapeType::Heightfield || shapeB.type == ShapeType::Mesh)
+            return Manifold();
+        Array<f32x3u, 2u> ptsB;
+        const ShapeProxyView pB = MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB);
+        return FlipManifoldNormalAndAnchors(CollideConvexProxyAndHeightfield(pB, effXfB, heightfieldShapes[shapeA.geometryIndex], effXfA, maxDistance));
+    }
+    if(shapeB.type == ShapeType::Heightfield){
+        if(shapeB.geometryIndex >= heightfieldShapes.size())
+            return Manifold();
+        if(shapeA.type == ShapeType::Mesh)
+            return Manifold();
+        Array<f32x3u, 2u> ptsA;
+        const ShapeProxyView pA = MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA);
+        return CollideConvexProxyAndHeightfield(pA, effXfA, heightfieldShapes[shapeB.geometryIndex], effXfB, maxDistance);
+    }
+
+    if(shapeA.type == ShapeType::Sphere){
+        const SphereShape sphA = shapeA.sphereShape();
+        if(shapeB.type == ShapeType::Sphere)
+            return CollideSpheres(sphA, effXfA, shapeB.sphereShape(), effXfB, maxDistance);
+        if(shapeB.type == ShapeType::Capsule)
+            return CollideSphereAndCapsule(sphA, effXfA, shapeB.capsuleShape(), effXfB, maxDistance);
+        if(shapeB.type == ShapeType::Hull){
+            if(shapeB.geometryIndex < hullShapes.size())
+                return CollideSphereAndHull(sphA, effXfA, hullShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideSphereAndMesh(sphA, effXfA, meshShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        Array<f32x3u, 2u> ptsA;
+        Array<f32x3u, 2u> ptsB;
+        return CollideConvexProxyViews(MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA), effXfA, MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB), effXfB, maxDistance);
+    }
+
+    if(shapeA.type == ShapeType::Capsule){
+        const CapsuleShape capA = shapeA.capsuleShape();
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(shapeB.sphereShape(), effXfB, capA, effXfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return CollideCapsules(capA, effXfA, shapeB.capsuleShape(), effXfB, maxDistance);
+        if(shapeB.type == ShapeType::Hull){
+            if(shapeB.geometryIndex < hullShapes.size())
+                return CollideCapsuleAndHull(capA, effXfA, hullShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideCapsuleAndMesh(capA, effXfA, meshShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        Array<f32x3u, 2u> ptsA;
+        Array<f32x3u, 2u> ptsB;
+        return CollideConvexProxyViews(MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA), effXfA, MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB), effXfB, maxDistance);
+    }
+
+    if(shapeA.type == ShapeType::Mesh){
+        if(shapeA.geometryIndex >= meshShapes.size())
+            return Manifold();
+        in MeshShape meshA = meshShapes[shapeA.geometryIndex];
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndMesh(shapeB.sphereShape(), effXfB, meshA, effXfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return FlipManifoldNormalAndAnchors(CollideCapsuleAndMesh(shapeB.capsuleShape(), effXfB, meshA, effXfA, maxDistance));
+        if(shapeB.type == ShapeType::Hull){
+            if(shapeB.geometryIndex < hullShapes.size())
+                return FlipManifoldNormalAndAnchors(CollideHullAndMesh(hullShapes[shapeB.geometryIndex], effXfB, meshA, effXfA, maxDistance));
+            return Manifold();
+        }
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideMeshes(meshA, effXfA, meshShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        Array<f32x3u, 2u> ptsB;
+        return FlipManifoldNormalAndAnchors(CollideConvexProxyAndMesh(MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB), effXfB, meshA, effXfA, maxDistance));
+    }
+
+    if(shapeA.type == ShapeType::Hull){
+        if(shapeA.geometryIndex >= hullShapes.size())
+            return Manifold();
+        in HullShape hullA = hullShapes[shapeA.geometryIndex];
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndHull(shapeB.sphereShape(), effXfB, hullA, effXfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(shapeB.capsuleShape(), effXfB, hullA, effXfA, maxDistance));
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideHullAndMesh(hullA, effXfA, meshShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        if(shapeB.type == ShapeType::Hull){
+            if(shapeB.geometryIndex < hullShapes.size())
+                return CollideHulls(hullA, effXfA, hullShapes[shapeB.geometryIndex], effXfB, maxDistance);
+            return Manifold();
+        }
+        Array<f32x3u, 2u> ptsA;
+        Array<f32x3u, 2u> ptsB;
+        return CollideConvexProxyViews(MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA), effXfA, MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB), effXfB, maxDistance);
+    }
+
+    if(shapeB.type == ShapeType::Mesh){
+        if(shapeB.geometryIndex >= meshShapes.size())
+            return Manifold();
+        Array<f32x3u, 2u> ptsA;
+        return CollideConvexProxyAndMesh(MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA), effXfA, meshShapes[shapeB.geometryIndex], effXfB, maxDistance);
+    }
+
+    Array<f32x3u, 2u> ptsA;
+    Array<f32x3u, 2u> ptsB;
+    return CollideConvexProxyViews(MakeShapeProxyViewFromShape(shapeA, hullShapes, meshShapes, ptsA), effXfA, MakeShapeProxyViewFromShape(shapeB, hullShapes, meshShapes, ptsB), effXfB, maxDistance);
 }
 
 Manifold CollideShapePair(
@@ -629,70 +979,28 @@ Manifold CollideShapePair(
     in Transform3D xfB,
     in f32 maxDistance,
     in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes
 ){
-    if(shapeA.type == ShapeType::Sphere){
-        const SphereShape sphA = shapeA.sphereShape();
-        if(shapeB.type == ShapeType::Sphere)
-            return CollideSpheres(sphA, xfA, shapeB.sphereShape(), xfB, maxDistance);
-        if(shapeB.type == ShapeType::Capsule)
-            return CollideSphereAndCapsule(sphA, xfA, shapeB.capsuleShape(), xfB, maxDistance);
-        if(shapeB.type == ShapeType::Mesh){
-            if(shapeB.geometryIndex < meshShapes.size())
-                return CollideSphereAndMesh(sphA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
-            return Manifold();
+    const Transform3D effXfA = shapeA.worldTransform(xfA);
+    const Transform3D effXfB = shapeB.worldTransform(xfB);
+    Manifold m = CollideShapePairRaw(shapeA, effXfA, shapeB, effXfB, maxDistance, hullShapes, meshShapes, heightfieldShapes);
+    if((shapeA.hasLocalTransform() || shapeB.hasLocalTransform()) && m.pointCount() > 0u){
+        const VectorSingle shiftA = VectorSingle(effXfA.position) - VectorSingle(xfA.position);
+        const VectorSingle shiftB = VectorSingle(effXfB.position) - VectorSingle(xfB.position);
+        const u32 count = m.pointCount();
+        for(u32 pi = 0u; pi < count; ++pi){
+            if(shapeA.hasLocalTransform()){
+                const f32 nImp = m.points[pi].normalImpulse();
+                m.points[pi].anchorANormalImpulse = f32x4(m.points[pi].anchorA() + shiftA, nImp);
+            }
+            if(shapeB.hasLocalTransform()){
+                const f32 tImp = m.points[pi].totalNormalImpulse();
+                m.points[pi].anchorBTotalImpulse = f32x4(m.points[pi].anchorB() + shiftB, tImp);
+            }
         }
-        if(shapeB.geometryIndex < hullShapes.size())
-            return CollideSphereAndHull(sphA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
-        return Manifold();
     }
-    if(shapeA.type == ShapeType::Capsule){
-        const CapsuleShape capA = shapeA.capsuleShape();
-        if(shapeB.type == ShapeType::Sphere)
-            return FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(shapeB.sphereShape(), xfB, capA, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Capsule)
-            return CollideCapsules(capA, xfA, shapeB.capsuleShape(), xfB, maxDistance);
-        if(shapeB.type == ShapeType::Mesh){
-            if(shapeB.geometryIndex < meshShapes.size())
-                return CollideCapsuleAndMesh(capA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
-            return Manifold();
-        }
-        if(shapeB.geometryIndex < hullShapes.size())
-            return CollideCapsuleAndHull(capA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
-        return Manifold();
-    }
-    if(shapeA.type == ShapeType::Mesh){
-        if(shapeA.geometryIndex >= meshShapes.size())
-            return Manifold();
-        in MeshShape meshA = meshShapes[shapeA.geometryIndex];
-        if(shapeB.type == ShapeType::Sphere)
-            return FlipManifoldNormalAndAnchors(CollideSphereAndMesh(shapeB.sphereShape(), xfB, meshA, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Capsule)
-            return FlipManifoldNormalAndAnchors(CollideCapsuleAndMesh(shapeB.capsuleShape(), xfB, meshA, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Hull){
-            if(shapeB.geometryIndex < hullShapes.size())
-                return FlipManifoldNormalAndAnchors(CollideHullAndMesh(hullShapes[shapeB.geometryIndex], xfB, meshA, xfA, maxDistance));
-            return Manifold();
-        }
-        if(shapeB.geometryIndex < meshShapes.size())
-            return CollideMeshes(meshA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
-        return Manifold();
-    }
-    if(shapeA.geometryIndex >= hullShapes.size())
-        return Manifold();
-    in HullShape hullA = hullShapes[shapeA.geometryIndex];
-    if(shapeB.type == ShapeType::Sphere)
-        return FlipManifoldNormalAndAnchors(CollideSphereAndHull(shapeB.sphereShape(), xfB, hullA, xfA, maxDistance));
-    if(shapeB.type == ShapeType::Capsule)
-        return FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(shapeB.capsuleShape(), xfB, hullA, xfA, maxDistance));
-    if(shapeB.type == ShapeType::Mesh){
-        if(shapeB.geometryIndex < meshShapes.size())
-            return CollideHullAndMesh(hullA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
-        return Manifold();
-    }
-    if(shapeB.geometryIndex < hullShapes.size())
-        return CollideHulls(hullA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
-    return Manifold();
+    return m;
 }
 
 f32 CombineMaterialFriction(in f32 a, in f32 b){
@@ -705,6 +1013,104 @@ f32 CombineMaterialRestitution(in f32 a, in f32 b){
 
 f32 CombineMaterialRollingResistance(in f32 a, in f32 b){
     return Max(a, b);
+}
+
+MaterialCombineMode ResolveMaterialCombineMode(
+    in MaterialCombineMode a,
+    in MaterialCombineMode b,
+    in MaterialCombineMode defaultMode
+){
+    if(a == b)
+        return a;
+    if(a == defaultMode)
+        return b;
+    if(b == defaultMode)
+        return a;
+    if(cast<u8>(a) >= cast<u8>(b))
+        return a;
+    return b;
+}
+
+f32 CombineMaterialWithMode(in f32 a, in f32 b, in MaterialCombineMode mode){
+    switch(mode){
+    case MaterialCombineMode::Average:
+        return 0.5f * (a + b);
+    case MaterialCombineMode::Min:
+        return Min(a, b);
+    case MaterialCombineMode::Multiply:
+        return a * b;
+    case MaterialCombineMode::Max:
+        return Max(a, b);
+    case MaterialCombineMode::GeometricMean:
+    default:
+        return SqrtFast(Max(a, 0.0f) * Max(b, 0.0f));
+    }
+}
+
+void CombineResolvedSurfaceMaterials(
+    in SurfaceMaterial matA,
+    in Transform3D xfA,
+    in SurfaceMaterial matB,
+    in Transform3D xfB,
+    mut Contact outContact
+){
+    const MaterialCombineMode fricMode = ResolveMaterialCombineMode(matA.frictionCombineMode, matB.frictionCombineMode, MaterialCombineMode::GeometricMean);
+    const MaterialCombineMode restMode = ResolveMaterialCombineMode(matA.restitutionCombineMode, matB.restitutionCombineMode, MaterialCombineMode::Max);
+
+    outContact.friction = CombineMaterialWithMode(Max(matA.friction, 0.0f), Max(matB.friction, 0.0f), fricMode);
+    outContact.restitution = Max(CombineMaterialWithMode(matA.restitution, matB.restitution, restMode), 0.0f);
+    outContact.rollingResistance = CombineMaterialRollingResistance(matA.rollingResistance, matB.rollingResistance);
+    outContact.tangentSpeed = matA.tangentSpeed + matB.tangentSpeed;
+
+    f32 statA = matA.staticFriction;
+    if(statA < 0.0f)
+        statA = matA.friction;
+    f32 statB = matB.staticFriction;
+    if(statB < 0.0f)
+        statB = matB.friction;
+    outContact.staticFriction = Max(CombineMaterialWithMode(Max(statA, 0.0f), Max(statB, 0.0f), fricMode), outContact.friction);
+
+    outContact.flags &= ~(cast<u32>(ContactFlags::HasSurfaceVelocity) | cast<u32>(ContactFlags::HasAnisotropicFriction));
+    if(matA.surfaceVelocity.w != 0.0f || matB.surfaceVelocity.w != 0.0f){
+        VectorSingle sv(0.0f);
+        if(matA.surfaceVelocity.w != 0.0f)
+            sv = sv + Vector3Rotate(VectorSingle(matA.surfaceVelocity, 0.0f), VectorSingle(xfA.rotation));
+        if(matB.surfaceVelocity.w != 0.0f)
+            sv = sv - Vector3Rotate(VectorSingle(matB.surfaceVelocity, 0.0f), VectorSingle(xfB.rotation));
+        outContact.surfaceVelocity = f32x4(sv, 1.0f);
+        outContact.flags |= cast<u32>(ContactFlags::HasSurfaceVelocity);
+    }
+    else{
+        outContact.surfaceVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    if(matA.anisotropicFriction.w != 0.0f || matB.anisotropicFriction.w != 0.0f){
+        const f32 sx = CombineMaterialWithMode(Max(matA.anisotropicFriction.x, 0.0f), Max(matB.anisotropicFriction.x, 0.0f), fricMode);
+        const f32 sy = CombineMaterialWithMode(Max(matA.anisotropicFriction.y, 0.0f), Max(matB.anisotropicFriction.y, 0.0f), fricMode);
+        const f32 sz = CombineMaterialWithMode(Max(matA.anisotropicFriction.z, 0.0f), Max(matB.anisotropicFriction.z, 0.0f), fricMode);
+        outContact.anisotropicFriction = f32x4(sx, sy, sz, 1.0f);
+        VectorSingle dir(1.0f, 0.0f, 0.0f, 0.0f);
+        if(matA.anisotropicFriction.w != 0.0f)
+            dir = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matA.frictionDirection, 0.0f), VectorSingle(xfA.rotation)), dir);
+        else
+            dir = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matB.frictionDirection, 0.0f), VectorSingle(xfB.rotation)), dir);
+        outContact.frictionDirection = f32x4(dir, 0.0f);
+        outContact.flags |= cast<u32>(ContactFlags::HasAnisotropicFriction);
+    }
+    else{
+        outContact.anisotropicFriction = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        outContact.frictionDirection = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+}
+
+void CombineSurfaceMaterials(
+    in Shape shapeA,
+    in Transform3D xfA,
+    in Shape shapeB,
+    in Transform3D xfB,
+    mut Contact outContact
+){
+    CombineResolvedSurfaceMaterials(shapeA.material, xfA, shapeB.material, xfB, outContact);
 }
 
 u32 EncodeContactKey(in u32 contactId, in u32 edgeIndex){

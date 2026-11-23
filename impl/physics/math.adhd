@@ -206,6 +206,24 @@ Transform3D RelativeTransform(in Transform3D frameA, in Transform3D frameB){
     return Transform3D(relP, relQ);
 }
 
+Transform3D ComposeTransform(in Transform3D parentXf, in Transform3D localXf){
+    const VectorSingle pos = TransformPoint(parentXf, VectorSingle(localXf.position));
+    const VectorSingle rot = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(parentXf.rotation), VectorSingle(localXf.rotation)));
+    return Transform3D(pos, rot);
+}
+
+b8 IsIdentityTransform(in Transform3D xf){
+    return
+        Abs(xf.position.x) <= 1.0e-6f
+        && Abs(xf.position.y) <= 1.0e-6f
+        && Abs(xf.position.z) <= 1.0e-6f
+        && Abs(xf.rotation.x) <= 1.0e-6f
+        && Abs(xf.rotation.y) <= 1.0e-6f
+        && Abs(xf.rotation.z) <= 1.0e-6f
+        && Abs(Abs(xf.rotation.w) - 1.0f) <= 1.0e-5f
+    ;
+}
+
 VectorSingle IntegrateDeltaQuaternion(in VectorSingle q, in VectorSingle omega, in f32 h){
     if(omega.x == 0.0f && omega.y == 0.0f && omega.z == 0.0f)
         return q;

@@ -38,12 +38,23 @@ class EcsEntityPhysicsRecord{
     public ShapeId primaryShapeId;
     public Vector<ShapeId> extraShapeIds;
     public EcsWorldPose syncedBodyPose;
+    public EcsWorldPose syncedRenderPose;
+    public Transform3D syncedRelativeTransform;
     public f32x4 syncedColliderScale(1.0f, 1.0f, 1.0f, 0.0f);
     public usize syncedExtraShapeCount = 0u;
     public b8 hasBodyPose = false;
     public b8 hasColliderSync = false;
     public b8 syncedUseCustomMass = false;
     public b8 hadPhysicsParent = false;
+    public b8 hasInterpolatedRenderTransform = false;
+    public b8 attachedToParentBody = false;
+    public b8 hasDecomposedShapes = false;
+    public EntityID parentBodyEntity = s_InvalidEntityId;
+    public Name failedMeshAsset = s_NameNone;
+    public Name failedHullAsset = s_NameNone;
+    public Name failedCollisionMeshAsset = s_NameNone;
+    public Name failedMaterialAsset = s_NameNone;
+    public u64 failedMeshSignature = 0u;
 }
 
 class EcsJointStructuralSnapshot{
@@ -60,6 +71,9 @@ class EcsJointSyncRecord{
     public JointId jointId;
     public EcsJointStructuralSnapshot structure;
     public b8 hasStructure = false;
+    public Vector<JointId> extraJointIds;
+    public Vector<BodyId> extraBoundBodyIdAs;
+    public Vector<BodyId> extraBoundBodyIdBs;
 }
 
 class EcsStaticBodyPoseCache{
@@ -108,6 +122,8 @@ class EcsPhysicsSyncScratch{
     public Vector<EcsJointFastCache> jointFastCache;
     public HashMap<EntityID, EcsWorldPose> writeBackPoseCache;
     public HashMap<Name, EntityID> manualNamedEntities;
+    public HashMap<u64, EntityID> destroyedBodyOwners;
+    public HashMap<u64, EntityID> destroyedShapeOwners;
     public u32 writeBackStamp = 0u;
     public u32 snapshotStamp = 0u;
     public u64 lastJointMutationVersion = 0u;
@@ -269,6 +285,31 @@ void EraseSlotOwnerIfMatches(
         slotTable[slotIndex].generation = 0u;
         slotTable[slotIndex].hasPhysicsParent = false;
     }
+}
+
+u64 PackEcsSlotKey(in u32 slotIndex, in u16 generation){
+    return (cast<u64>(generation) << 32u) | cast<u64>(slotIndex);
+}
+
+void EraseSlotOwnerAndRecordDestroyed(
+    in u32 slotIndex,
+    in u16 generation,
+    mut Vector<EcsSlotOwner> slotTable,
+    mut HashMap<u64, EntityID> destroyedOwners
+){
+    if(slotIndex >= cast<u32>(slotTable.size()))
+        return;
+    if(slotTable[slotIndex].entity.valid() && slotTable[slotIndex].generation == generation){
+        destroyedOwners.insert_or_assign(PackEcsSlotKey(slotIndex, generation), slotTable[slotIndex].entity);
+        slotTable[slotIndex].entity = s_InvalidEntityId;
+        slotTable[slotIndex].generation = 0u;
+        slotTable[slotIndex].hasPhysicsParent = false;
+    }
+}
+
+void ClearDestroyedSlotOwners(mut EcsPhysicsSyncScratch scratch){
+    scratch.destroyedBodyOwners.clear();
+    scratch.destroyedShapeOwners.clear();
 }
 
 u32 ResolvePhysicsParentDepthChecked(in EntityID entity, mut World world, mut b8 outCycleOrMaxDepth){
@@ -652,16 +693,18 @@ void ResolvePhysicsConfigSettings(
     mut f32 outFixedDt,
     mut u32 outSubSteps,
     mut u32 outMaxSubSteps,
-    mut b8 outPaused
+    mut b8 outPaused,
+    mut b8 outInterpolateTransforms
 ){
     outFixedDt = 1.0f / 60.0f;
     outSubSteps = 4u;
     outMaxSubSteps = 4u;
     outPaused = false;
+    outInterpolateTransforms = false;
 
     b8 resolved = false;
     world.view<PhysicsWorldConfigComponent>().each(
-        lambda[mut resolved, mut physicsWorld, mut outFixedDt, mut outSubSteps, mut outMaxSubSteps, mut outPaused](
+        lambda[mut resolved, mut physicsWorld, mut outFixedDt, mut outSubSteps, mut outMaxSubSteps, mut outPaused, mut outInterpolateTransforms](
             in EntityID entity,
             mut PhysicsWorldConfigComponent cfg
         ) -> void{
@@ -673,6 +716,7 @@ void ResolvePhysicsConfigSettings(
             outSubSteps = Max(cfg.subStepCount, 1u);
             outMaxSubSteps = Max(cfg.maxSubStepsPerFrame, 1u);
             outPaused = cfg.paused;
+            outInterpolateTransforms = cfg.interpolateTransforms;
 
             if(cfg.dirty){
                 WorldDef wd = physicsWorld.worldDef();
@@ -690,6 +734,10 @@ void ResolvePhysicsConfigSettings(
                 physicsWorld.setGpuDispatchThreshold(cfg.gpuDispatchThreshold);
                 physicsWorld.setGpuWorkloadFraction(cfg.gpuWorkloadFraction);
                 physicsWorld.setWarmStarting(cfg.enableWarmStarting);
+                physicsWorld.setEnableGpuCollision(cfg.enableGpuCollision);
+                physicsWorld.setForceGpuCollision(cfg.forceGpuCollision);
+                physicsWorld.setGpuResidentMode(cfg.gpuResidentMode);
+                physicsWorld.setUseGpuLbvhBroadphase(cfg.useGpuLbvhBroadphase);
                 if(wdOk)
                     cfg.dirty = false;
             }
@@ -723,6 +771,20 @@ ColliderShapeEntry BuildPrimaryColliderEntryScalar(in ColliderComponent col){
     entry.enablePreSolveEvents = col.enablePreSolveEvents;
     entry.invokeContactCreation = col.invokeContactCreation;
     entry.meshAsset = col.meshAsset;
+    entry.materialAsset = col.materialAsset;
+    entry.convexHullAsset = col.convexHullAsset;
+    entry.collisionMeshAsset = col.collisionMeshAsset;
+    entry.staticFriction = col.staticFriction;
+    entry.anisotropicFriction = col.anisotropicFriction;
+    entry.cullBackfaces = col.cullBackfaces;
+    entry.autoConvexDecompose = col.autoConvexDecompose;
+    entry.vhacdMaxHulls = col.vhacdMaxHulls;
+    entry.cylinderHalfHeight = col.cylinderHalfHeight;
+    entry.topRadius = col.topRadius;
+    entry.planeNormalOffset = col.planeNormalOffset;
+    entry.heightfieldRows = col.heightfieldRows;
+    entry.heightfieldCols = col.heightfieldCols;
+    entry.heightfieldScale = col.heightfieldScale;
     return entry;
 }
 
@@ -734,13 +796,40 @@ void FlipMeshTriangleWindingInPlace(mut Vector<u32> indices){
     }
 }
 
-ShapeDef BuildShapeDefFromEntry(in ColliderShapeEntry entry, in b8 updateBodyMass){
+SurfaceMaterial BuildEcsShapeSurfaceMaterial(in ColliderShapeEntry entry, in Optional<mut AssetManager> assetManager){
+    if(entry.materialAsset.valid() && assetManager.has_value()){
+        const auto matRes = LoadTypedAssetSync<PhysicsMaterialAsset>(assetManager.value(), entry.materialAsset.name(), "PhysicsCollider");
+        if(matRes.has_value())
+            return matRes.value().deref().surfaceMaterial();
+    }
+    SurfaceMaterial mat;
+    mat.friction = Max(entry.friction, 0.0f);
+    if(entry.staticFriction >= 0.0f)
+        mat.staticFriction = entry.staticFriction;
+    else
+        mat.staticFriction = -1.0f;
+    mat.restitution = Max(entry.restitution, 0.0f);
+    mat.rollingResistance = Max(entry.rollingResistance, 0.0f);
+    mat.tangentSpeed = entry.tangentSpeed;
+    mat.anisotropicFriction = f32x4(
+        Max(entry.anisotropicFriction.x, 0.0f),
+        Max(entry.anisotropicFriction.y, 0.0f),
+        Max(entry.anisotropicFriction.z, 0.0f),
+        0.0f
+    );
+    return mat;
+}
+
+ShapeDef BuildShapeDefFromEntry(
+    in ColliderShapeEntry entry,
+    in b8 updateBodyMass,
+    in Optional<mut AssetManager> assetManager,
+    in Transform3D localTransform
+){
     ShapeDef sd;
+    sd.localTransform = localTransform;
     sd.density = Max(entry.density, 0.0f);
-    sd.material.friction = Max(entry.friction, 0.0f);
-    sd.material.restitution = Max(entry.restitution, 0.0f);
-    sd.material.rollingResistance = Max(entry.rollingResistance, 0.0f);
-    sd.material.tangentSpeed = entry.tangentSpeed;
+    sd.material = BuildEcsShapeSurfaceMaterial(entry, assetManager);
     sd.filter.categoryBits = entry.categoryBits;
     sd.filter.maskBits = entry.maskBits;
     sd.filter.groupIndex = entry.groupIndex;
@@ -920,11 +1009,278 @@ Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in Span<f32x4
     return boxHull;
 }
 
+Expected<CylinderShape> BuildEcsCylinderShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
+    const f32 radialS = Max(Abs(signedScale.x), Abs(signedScale.z));
+    const f32 maxS = Max(radialS, Abs(signedScale.y));
+    const VectorSingle offset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    return MakeCylinderShape(offset, Max(entry.cylinderHalfHeight * Abs(signedScale.y), 1.0e-3f), Max(entry.radius * radialS, 1.0e-3f), Max(entry.skinRadius * maxS, 0.0f));
+}
+
+Expected<ConeShape> BuildEcsConeShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
+    const f32 radialS = Max(Abs(signedScale.x), Abs(signedScale.z));
+    const f32 maxS = Max(radialS, Abs(signedScale.y));
+    const VectorSingle offset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    return MakeConeShape(offset, Max(entry.cylinderHalfHeight * Abs(signedScale.y), 1.0e-3f), Max(entry.radius * radialS, 1.0e-3f), Max(entry.skinRadius * maxS, 0.0f));
+}
+
+Expected<TaperedCapsuleShape> BuildEcsTaperedCapsuleShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
+    const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
+    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    VectorSingle c1 = VectorSingle(entry.center);
+    VectorSingle c2 = VectorSingle(entry.center2);
+    if(hasRot){
+        const VectorSingle mid = (c1 + c2) * 0.5f;
+        c1 = mid + Vector3Rotate(VectorSingle(c1 - mid, 0.0f), localRot);
+        c2 = mid + Vector3Rotate(VectorSingle(c2 - mid, 0.0f), localRot);
+    }
+    const VectorSingle p1(c1.x * signedScale.x, c1.y * signedScale.y, c1.z * signedScale.z, 0.0f);
+    const VectorSingle p2(c2.x * signedScale.x, c2.y * signedScale.y, c2.z * signedScale.z, 0.0f);
+    const f32 maxS = Max(Abs(signedScale.x), Max(Abs(signedScale.y), Abs(signedScale.z)));
+    return MakeTaperedCapsuleShape(p1, p2, Max(entry.radius * maxS, 1.0e-3f), Max(entry.topRadius * maxS, 1.0e-3f));
+}
+
+Expected<PlaneShape> BuildEcsPlaneShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
+    const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
+    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    VectorSingle n(entry.planeNormalOffset.x, entry.planeNormalOffset.y, entry.planeNormalOffset.z, 0.0f);
+    if(hasRot)
+        n = Vector3Rotate(n, localRot);
+    const VectorSingle invScaledN(n.x / signedScale.x, n.y / signedScale.y, n.z / signedScale.z, 0.0f);
+    const VectorSingle unitN = SafeNormalizeVec3(invScaledN, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle scaledCenter(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    const f32 scaleLen = Vector3Length(VectorSingle(n.x * signedScale.x, n.y * signedScale.y, n.z * signedScale.z, 0.0f)).x;
+    const f32 offset = entry.planeNormalOffset.w * Max(scaleLen, 1.0e-4f) + Vector3Dot(unitN, scaledCenter).x;
+    const VectorSingle halfExt(Max(entry.halfExtents.x * Abs(signedScale.x), 0.0f), 0.0f, Max(entry.halfExtents.z * Abs(signedScale.z), 0.0f), 0.0f);
+    return MakePlaneShape(unitN, offset, halfExt);
+}
+
+Expected<SegmentShape> BuildEcsSegmentShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
+    const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
+    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    VectorSingle c1 = VectorSingle(entry.center);
+    VectorSingle c2 = VectorSingle(entry.center2);
+    if(hasRot){
+        const VectorSingle mid = (c1 + c2) * 0.5f;
+        c1 = mid + Vector3Rotate(VectorSingle(c1 - mid, 0.0f), localRot);
+        c2 = mid + Vector3Rotate(VectorSingle(c2 - mid, 0.0f), localRot);
+    }
+    const VectorSingle p1(c1.x * signedScale.x, c1.y * signedScale.y, c1.z * signedScale.z, 0.0f);
+    const VectorSingle p2(c2.x * signedScale.x, c2.y * signedScale.y, c2.z * signedScale.z, 0.0f);
+    const f32 maxS = Max(Abs(signedScale.x), Max(Abs(signedScale.y), Abs(signedScale.z)));
+    return MakeSegmentShape(p1, p2, Max(entry.radius * maxS, 0.0f));
+}
+
+Expected<HeightfieldShape> BuildEcsHeightfieldShape(in ColliderShapeEntry entry, in Span<f32> heightfieldHeights, in VectorSingle signedScale){
+    const VectorSingle scaledOffset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    const VectorSingle hfScale(entry.heightfieldScale.x * Abs(signedScale.x), entry.heightfieldScale.y * Abs(signedScale.y), entry.heightfieldScale.z * Abs(signedScale.z), 0.0f);
+    return MakeHeightfieldShape(entry.heightfieldCols, entry.heightfieldRows, heightfieldHeights, hfScale, scaledOffset);
+}
+
+void TransformEcsPointArray(
+    in Span<f32x4> srcPts,
+    in VectorSingle signedScale,
+    in VectorSingle localRot,
+    in b8 hasRot,
+    in VectorSingle scaledOffset,
+    mut Vector<f32x4> outPts
+){
+    outPts.resize(srcPts.size());
+    if(hasRot){
+        const Mat3 rotMat = Mat3FromQuaternion(localRot);
+        const VectorSingle row0 = VectorSingle(rotMat.row0) * signedScale.x;
+        const VectorSingle row1 = VectorSingle(rotMat.row1) * signedScale.y;
+        const VectorSingle row2 = VectorSingle(rotMat.row2) * signedScale.z;
+        for(usize vi = 0u; vi < srcPts.size(); ++vi){
+            const VectorSingle pt = VectorSingle(srcPts[vi]);
+            outPts[vi] = f32x4(
+                Vector3Dot(row0, pt).x + scaledOffset.x,
+                Vector3Dot(row1, pt).x + scaledOffset.y,
+                Vector3Dot(row2, pt).x + scaledOffset.z,
+                0.0f
+            );
+        }
+    }
+    else{
+        for(usize vi = 0u; vi < srcPts.size(); ++vi){
+            const f32x4 pt = srcPts[vi];
+            outPts[vi] = f32x4(
+                pt.x * signedScale.x + scaledOffset.x,
+                pt.y * signedScale.y + scaledOffset.y,
+                pt.z * signedScale.z + scaledOffset.z,
+                0.0f
+            );
+        }
+    }
+}
+
+Expected<HullShape> BuildEcsHullOrAssetShape(
+    in ColliderShapeEntry entry,
+    in Span<f32x4> hullPoints,
+    in VectorSingle signedScale,
+    in Optional<mut AssetManager> assetManager
+){
+    if(entry.convexHullAsset.valid() && assetManager.has_value()){
+        const auto hullAssetRes = LoadTypedAssetSync<ConvexHullAsset>(assetManager.value(), entry.convexHullAsset.name(), "PhysicsCollider");
+        if(!hullAssetRes.has_value())
+            return MakeUnexpected(Failure());
+        in HullShape assetHull = hullAssetRes.value().deref().hullShape();
+        const f32 sx = Abs(signedScale.x);
+        const f32 sy = Abs(signedScale.y);
+        const f32 sz = Abs(signedScale.z);
+        const f32 maxS = Max(sx, Max(sy, sz));
+        const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
+        const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+        const b8 isIdentityXform = !hasRot
+            && signedScale.x > 0.0f && signedScale.y > 0.0f && signedScale.z > 0.0f
+            && Abs(entry.center.x) <= 1.0e-6f && Abs(entry.center.y) <= 1.0e-6f && Abs(entry.center.z) <= 1.0e-6f
+            && Abs(sx - 1.0f) <= 1.0e-5f && Abs(sy - 1.0f) <= 1.0e-5f && Abs(sz - 1.0f) <= 1.0e-5f
+            && entry.skinRadius <= 0.0f;
+        if(isIdentityXform)
+            return Expected<HullShape>(assetHull);
+
+        Vector<f32x4> srcVerts;
+        srcVerts.resize(assetHull.vertices.size());
+        for(usize vi = 0u; vi < assetHull.vertices.size(); ++vi)
+            srcVerts[vi] = f32x4(Vec3FromU(assetHull.vertices[vi]), 0.0f);
+        Vector<f32x4> transformedVerts;
+        const VectorSingle scaledOffset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+        TransformEcsPointArray(Span<f32x4>(srcVerts.data(), srcVerts.size()), signedScale, localRot, hasRot, scaledOffset, transformedVerts);
+        return BuildConvexHull(Span<f32x4>(transformedVerts.data(), transformedVerts.size()), Max(Max(assetHull.radius(), entry.skinRadius) * maxS, 0.0f));
+    }
+    return BuildEcsHullShape(entry, hullPoints, signedScale);
+}
+
+b8 PrepareEcsMeshColliderGeometry(
+    in ColliderShapeEntry entry,
+    in Span<f32x4> meshVertices,
+    in Span<u32> meshIndices,
+    in VectorSingle signedScale,
+    in Optional<mut AssetManager> assetManager,
+    mut b8 outUseDirectMeshShape,
+    mut MeshShape outDirectMeshShape,
+    mut Vector<f32x4> outVerts,
+    mut Vector<u32> outIndices,
+    mut f32 outSkinRadius,
+    mut MeshSidedness outSidedness,
+    mut Vector<SurfaceMaterial> outMaterials,
+    mut Vector<u16> outTriMaterialIndices,
+    mut Vector<u32> outTriUserData
+){
+    outUseDirectMeshShape = false;
+    outVerts.clear();
+    outIndices.clear();
+    outMaterials.clear();
+    outTriMaterialIndices.clear();
+    outTriUserData.clear();
+
+    const f32 sx = Abs(signedScale.x);
+    const f32 sy = Abs(signedScale.y);
+    const f32 sz = Abs(signedScale.z);
+    const f32 maxS = Max(sx, Max(sy, sz));
+    const b8 isMirrored = (signedScale.x * signedScale.y * signedScale.z) < 0.0f;
+    const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
+    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    const VectorSingle scaledOffset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    const b8 isIdentityXform = !hasRot
+        && !isMirrored
+        && Abs(entry.center.x) <= 1.0e-6f
+        && Abs(entry.center.y) <= 1.0e-6f
+        && Abs(entry.center.z) <= 1.0e-6f
+        && Abs(signedScale.x - 1.0f) <= 1.0e-5f
+        && Abs(signedScale.y - 1.0f) <= 1.0e-5f
+        && Abs(signedScale.z - 1.0f) <= 1.0e-5f;
+
+    outSkinRadius = Max(entry.skinRadius * maxS, 0.0f);
+    if(entry.cullBackfaces)
+        outSidedness = MeshSidedness::SingleSided;
+    else
+        outSidedness = MeshSidedness::DoubleSided;
+
+    if(entry.collisionMeshAsset.valid() && assetManager.has_value()){
+        const auto cmRes = LoadTypedAssetSync<CollisionMeshAsset>(assetManager.value(), entry.collisionMeshAsset.name(), "PhysicsCollider");
+        if(!cmRes.has_value())
+            return false;
+        in MeshShape srcMesh = cmRes.value().deref().meshShape();
+        if(isIdentityXform && !entry.autoConvexDecompose){
+            outDirectMeshShape = srcMesh;
+            if(entry.cullBackfaces)
+                outDirectMeshShape.setSidedness(MeshSidedness::SingleSided);
+            outUseDirectMeshShape = true;
+            return true;
+        }
+        Vector<f32x4> rawVerts;
+        rawVerts.reserve(srcMesh.triangles.size() * 3u);
+        outIndices.reserve(srcMesh.triangles.size() * 3u);
+        for(usize ti = 0u; ti < srcMesh.triangles.size(); ++ti){
+            in MeshTriangle tri = srcMesh.triangles[ti];
+            const u32 baseIdx = cast<u32>(rawVerts.size());
+            rawVerts.push_back(f32x4(Vec3FromU(tri.v0), 0.0f));
+            rawVerts.push_back(f32x4(Vec3FromU(tri.v1), 0.0f));
+            rawVerts.push_back(f32x4(Vec3FromU(tri.v2), 0.0f));
+            outIndices.push_back(baseIdx + 0u);
+            outIndices.push_back(baseIdx + 1u);
+            outIndices.push_back(baseIdx + 2u);
+        }
+        TransformEcsPointArray(Span<f32x4>(rawVerts.data(), rawVerts.size()), signedScale, localRot, hasRot, scaledOffset, outVerts);
+        if(isMirrored)
+            FlipMeshTriangleWindingInPlace(outIndices);
+        outSkinRadius = Max(Max(srcMesh.radius(), entry.skinRadius) * maxS, 0.0f);
+        if(!entry.cullBackfaces)
+            outSidedness = srcMesh.sidedness();
+        outMaterials = srcMesh.materials;
+        outTriMaterialIndices = srcMesh.triangleMaterialIndices;
+        outTriUserData = srcMesh.triangleUserData;
+        return !outVerts.empty() && !outIndices.empty();
+    }
+
+    if(entry.meshAsset.valid() && assetManager.has_value()){
+        const auto meshRes = LoadTypedAssetSync<Mesh>(assetManager.value(), entry.meshAsset.name(), "PhysicsCollider");
+        if(!meshRes.has_value())
+            return false;
+        in Mesh loadedMesh = meshRes.value().deref();
+        Expected<Vector<u32>> indicesRes = BuildMeshletTriangleIndices(loadedMesh);
+        if(!indicesRes.has_value())
+            return false;
+        outIndices.swap(indicesRes.value());
+        in Vector<f32x3u> posStream = loadedMesh.positionStream();
+        Vector<f32x4> rawVerts;
+        rawVerts.resize(posStream.size());
+        for(usize vi = 0u; vi < posStream.size(); ++vi)
+            rawVerts[vi] = f32x4(Vec3FromU(posStream[vi]), 0.0f);
+        TransformEcsPointArray(Span<f32x4>(rawVerts.data(), rawVerts.size()), signedScale, localRot, hasRot, scaledOffset, outVerts);
+        if(isMirrored)
+            FlipMeshTriangleWindingInPlace(outIndices);
+        return !outVerts.empty() && !outIndices.empty();
+    }
+
+    if(meshVertices.empty() || meshIndices.empty())
+        return false;
+    outIndices.resize(meshIndices.size());
+    for(usize ii = 0u; ii < meshIndices.size(); ++ii)
+        outIndices[ii] = meshIndices[ii];
+    if(isIdentityXform){
+        outVerts.resize(meshVertices.size());
+        for(usize vi = 0u; vi < meshVertices.size(); ++vi)
+            outVerts[vi] = meshVertices[vi];
+    }
+    else{
+        TransformEcsPointArray(meshVertices, signedScale, localRot, hasRot, scaledOffset, outVerts);
+        if(isMirrored)
+            FlipMeshTriangleWindingInPlace(outIndices);
+    }
+    return true;
+}
+
 b8 ApplyEcsColliderPropertiesInPlace(
     in ShapeId shapeId,
     in ColliderShapeEntry entry,
     in Span<f32x4> hullPoints,
+    in Span<f32x4> meshVertices,
+    in Span<u32> meshIndices,
+    in Span<f32> heightfieldHeights,
     in VectorSingle signedScale,
+    in Transform3D localTransform,
+    in Optional<mut AssetManager> assetManager,
     mut PhysicsWorld physicsWorld
 ){
     if(entry.shapeType == ShapeType::Sphere){
@@ -938,19 +1294,52 @@ b8 ApplyEcsColliderPropertiesInPlace(
             return false;
     }
     else if(entry.shapeType == ShapeType::Hull){
-        const Expected<HullShape> hullRes = BuildEcsHullShape(entry, hullPoints, signedScale);
+        const Expected<HullShape> hullRes = BuildEcsHullOrAssetShape(entry, hullPoints, signedScale, assetManager);
         if(!hullRes.has_value() || !physicsWorld.setHullShape(shapeId, hullRes.value(), false))
+            return false;
+    }
+    else if(entry.shapeType == ShapeType::Mesh){
+        if(entry.autoConvexDecompose)
+            return false;
+        b8 useDirect = false;
+        MeshShape directMesh;
+        Vector<f32x4> verts;
+        Vector<u32> indices;
+        f32 skinRadius = 0.0f;
+        MeshSidedness sidedness = MeshSidedness::DoubleSided;
+        Vector<SurfaceMaterial> materials;
+        Vector<u16> triMatIdx;
+        Vector<u32> triUserData;
+        if(!PrepareEcsMeshColliderGeometry(entry, meshVertices, meshIndices, signedScale, assetManager, useDirect, directMesh, verts, indices, skinRadius, sidedness, materials, triMatIdx, triUserData))
+            return false;
+        if(useDirect){
+            if(!physicsWorld.setMeshShape(shapeId, directMesh))
+                return false;
+        }
+        else{
+            const Expected<MeshShape> builtMesh = MakeMeshShapeWithMaterials(
+                Span<f32x4>(verts.data(), verts.size()),
+                Span<u32>(indices.data(), indices.size()),
+                skinRadius,
+                sidedness,
+                Span<SurfaceMaterial>(materials.data(), materials.size()),
+                Span<u16>(triMatIdx.data(), triMatIdx.size()),
+                Span<u32>(triUserData.data(), triUserData.size())
+            );
+            if(!builtMesh.has_value() || !physicsWorld.setMeshShape(shapeId, builtMesh.value()))
+                return false;
+        }
+    }
+    else if(entry.shapeType == ShapeType::Heightfield){
+        const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldShape(entry, heightfieldHeights, signedScale);
+        if(!hfRes.has_value() || !physicsWorld.setShapeHeightfield(shapeId, hfRes.value()))
             return false;
     }
     else{
         return false;
     }
 
-    SurfaceMaterial mat;
-    mat.friction = Max(entry.friction, 0.0f);
-    mat.restitution = Max(entry.restitution, 0.0f);
-    mat.rollingResistance = Max(entry.rollingResistance, 0.0f);
-    mat.tangentSpeed = entry.tangentSpeed;
+    const SurfaceMaterial mat = BuildEcsShapeSurfaceMaterial(entry, assetManager);
     if(!physicsWorld.setShapeMaterial(shapeId, mat))
         return false;
 
@@ -975,168 +1364,174 @@ b8 ApplyEcsColliderPropertiesInPlace(
         return false;
     if(!physicsWorld.setShapeUserData(shapeId, entry.userData))
         return false;
+    if(!physicsWorld.setShapeLocalTransform(shapeId, localTransform))
+        return false;
     if(entry.invokeContactCreation && !physicsWorld.invokeShapeContactCreation(shapeId))
         return false;
     return true;
 }
 
-Expected<ShapeId> AttachEcsColliderEntry(
+b8 AttachEcsColliderEntryMulti(
     in ColliderShapeEntry entry,
     in Span<f32x4> hullPoints,
     in Span<f32x4> meshVertices,
     in Span<u32> meshIndices,
+    in Span<f32> heightfieldHeights,
     in BodyId bodyId,
     in VectorSingle scale,
+    in Transform3D localTransform,
     in b8 updateBodyMass,
     in Optional<mut AssetManager> assetManager,
-    mut PhysicsWorld physicsWorld
+    mut PhysicsWorld physicsWorld,
+    mut Vector<ShapeId> outCreatedShapes
 ){
-    const ShapeDef sd = BuildShapeDefFromEntry(entry, updateBodyMass);
+    outCreatedShapes.clear();
+    const ShapeDef sd = BuildShapeDefFromEntry(entry, updateBodyMass, assetManager, localTransform);
     const VectorSingle signedScale = ResolveSignedColliderScale(scale);
-    const f32 sx = Abs(signedScale.x);
-    const f32 sy = Abs(signedScale.y);
-    const f32 sz = Abs(signedScale.z);
-    const f32 maxS = Max(sx, Max(sy, sz));
-    const b8 isMirrored = (signedScale.x * signedScale.y * signedScale.z) < 0.0f;
-    const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
-    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
 
     if(entry.shapeType == ShapeType::Sphere){
-        return physicsWorld.createSphereShape(bodyId, sd, BuildEcsSphereShape(entry, signedScale));
+        const Expected<ShapeId> res = physicsWorld.createSphereShape(bodyId, sd, BuildEcsSphereShape(entry, signedScale));
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
     }
 
     if(entry.shapeType == ShapeType::Capsule){
-        return physicsWorld.createCapsuleShape(bodyId, sd, BuildEcsCapsuleShape(entry, signedScale));
+        const Expected<ShapeId> res = physicsWorld.createCapsuleShape(bodyId, sd, BuildEcsCapsuleShape(entry, signedScale));
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::Cylinder){
+        const Expected<CylinderShape> cylRes = BuildEcsCylinderShape(entry, signedScale);
+        if(!cylRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createCylinderShape(bodyId, sd, cylRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::Cone){
+        const Expected<ConeShape> coneRes = BuildEcsConeShape(entry, signedScale);
+        if(!coneRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createConeShape(bodyId, sd, coneRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::TaperedCapsule){
+        const Expected<TaperedCapsuleShape> tcRes = BuildEcsTaperedCapsuleShape(entry, signedScale);
+        if(!tcRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createTaperedCapsuleShape(bodyId, sd, tcRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::Plane){
+        const Expected<PlaneShape> plRes = BuildEcsPlaneShape(entry, signedScale);
+        if(!plRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createPlaneShape(bodyId, sd, plRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::Segment){
+        const Expected<SegmentShape> segRes = BuildEcsSegmentShape(entry, signedScale);
+        if(!segRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createSegmentShape(bodyId, sd, segRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
+    }
+
+    if(entry.shapeType == ShapeType::Heightfield){
+        const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldShape(entry, heightfieldHeights, signedScale);
+        if(!hfRes.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createHeightfieldShape(bodyId, sd, hfRes.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
     }
 
     if(entry.shapeType == ShapeType::Mesh){
-        Vector<f32x4> transformedVerts;
-        const VectorSingle scaledOffset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
-
-        if(entry.meshAsset.valid() && assetManager.has_value()){
-            const auto meshRes = LoadTypedAssetSync<Mesh>(assetManager.value(), entry.meshAsset.name(), "PhysicsCollider");
-            if(!meshRes.has_value())
-                return MakeUnexpected(Failure());
-            in Mesh loadedMesh = meshRes.value().deref();
-            Expected<Vector<u32>> indicesRes = BuildMeshletTriangleIndices(loadedMesh);
-            if(!indicesRes.has_value())
-                return MakeUnexpected(Failure());
-            Vector<u32> decodedIndices;
-            decodedIndices.swap(indicesRes.value());
-            in Vector<f32x3u> posStream = loadedMesh.positionStream();
-            transformedVerts.resize(posStream.size());
-            if(hasRot){
-                const Mat3 rotMat = Mat3FromQuaternion(localRot);
-                const VectorSingle row0 = VectorSingle(rotMat.row0) * signedScale.x;
-                const VectorSingle row1 = VectorSingle(rotMat.row1) * signedScale.y;
-                const VectorSingle row2 = VectorSingle(rotMat.row2) * signedScale.z;
-                for(usize vi = 0u; vi < posStream.size(); ++vi){
-                    const VectorSingle pt = Vec3FromU(posStream[vi]);
-                    transformedVerts[vi] = f32x4(
-                        Vector3Dot(row0, pt).x + scaledOffset.x,
-                        Vector3Dot(row1, pt).x + scaledOffset.y,
-                        Vector3Dot(row2, pt).x + scaledOffset.z,
-                        0.0f
-                    );
-                }
-            }
-            else{
-                for(usize vi = 0u; vi < posStream.size(); ++vi){
-                    in f32x3u p = posStream[vi];
-                    transformedVerts[vi] = f32x4(
-                        p.x * signedScale.x + scaledOffset.x,
-                        p.y * signedScale.y + scaledOffset.y,
-                        p.z * signedScale.z + scaledOffset.z,
-                        0.0f
-                    );
-                }
-            }
-
-            if(isMirrored)
-                FlipMeshTriangleWindingInPlace(decodedIndices);
-
-            const Expected<MeshShape> builtMeshRes = MakeMeshShape(
-                Span<f32x4>(transformedVerts.data(), transformedVerts.size()),
-                Span<u32>(decodedIndices.data(), decodedIndices.size()),
-                Max(entry.skinRadius * maxS, 0.0f)
+        b8 useDirect = false;
+        MeshShape directMesh;
+        Vector<f32x4> verts;
+        Vector<u32> indices;
+        f32 skinRadius = 0.0f;
+        MeshSidedness sidedness = MeshSidedness::DoubleSided;
+        Vector<SurfaceMaterial> materials;
+        Vector<u16> triMatIdx;
+        Vector<u32> triUserData;
+        if(!PrepareEcsMeshColliderGeometry(entry, meshVertices, meshIndices, signedScale, assetManager, useDirect, directMesh, verts, indices, skinRadius, sidedness, materials, triMatIdx, triUserData))
+            return false;
+        if(entry.autoConvexDecompose){
+            VhacdParams params;
+            params.maxConvexHulls = Clamp(entry.vhacdMaxHulls, 1u, 64u);
+            params.hullRadius = skinRadius;
+            const Expected<Vector<ShapeId>> hullsRes = physicsWorld.createCompoundHullShapesFromMesh(
+                bodyId,
+                sd,
+                Span<f32x4>(verts.data(), verts.size()),
+                Span<u32>(indices.data(), indices.size()),
+                params
             );
-            if(!builtMeshRes.has_value())
-                return MakeUnexpected(Failure());
-            return physicsWorld.createMeshShape(bodyId, sd, builtMeshRes.value());
+            if(!hullsRes.has_value() || hullsRes.value().empty())
+                return false;
+            outCreatedShapes = hullsRes.value();
+            return true;
         }
-
-        const b8 isIdentityXform = !hasRot
-            && !isMirrored
-            && Abs(entry.center.x) <= 1.0e-6f
-            && Abs(entry.center.y) <= 1.0e-6f
-            && Abs(entry.center.z) <= 1.0e-6f
-            && Abs(signedScale.x - 1.0f) <= 1.0e-5f
-            && Abs(signedScale.y - 1.0f) <= 1.0e-5f
-            && Abs(signedScale.z - 1.0f) <= 1.0e-5f;
-        if(isIdentityXform){
-            const Expected<MeshShape> builtMeshRes = MakeMeshShape(
-                meshVertices,
-                meshIndices,
-                Max(entry.skinRadius * maxS, 0.0f)
-            );
-            if(!builtMeshRes.has_value())
-                return MakeUnexpected(Failure());
-            return physicsWorld.createMeshShape(bodyId, sd, builtMeshRes.value());
+        if(useDirect){
+            const Expected<ShapeId> res = physicsWorld.createMeshShape(bodyId, sd, directMesh);
+            if(!res.has_value())
+                return false;
+            outCreatedShapes.push_back(res.value());
+            return true;
         }
-
-        transformedVerts.resize(meshVertices.size());
-        if(hasRot){
-            const Mat3 rotMat = Mat3FromQuaternion(localRot);
-            const VectorSingle row0 = VectorSingle(rotMat.row0) * signedScale.x;
-            const VectorSingle row1 = VectorSingle(rotMat.row1) * signedScale.y;
-            const VectorSingle row2 = VectorSingle(rotMat.row2) * signedScale.z;
-            for(usize vi = 0u; vi < meshVertices.size(); ++vi){
-                const f32x4 v = meshVertices[vi];
-                const VectorSingle pt(v.x, v.y, v.z, 0.0f);
-                transformedVerts[vi] = f32x4(
-                    Vector3Dot(row0, pt).x + scaledOffset.x,
-                    Vector3Dot(row1, pt).x + scaledOffset.y,
-                    Vector3Dot(row2, pt).x + scaledOffset.z,
-                    0.0f
-                );
-            }
-        }
-        else{
-            for(usize vi = 0u; vi < meshVertices.size(); ++vi){
-                const f32x4 v = meshVertices[vi];
-                transformedVerts[vi] = f32x4(
-                    v.x * signedScale.x + scaledOffset.x,
-                    v.y * signedScale.y + scaledOffset.y,
-                    v.z * signedScale.z + scaledOffset.z,
-                    0.0f
-                );
-            }
-        }
-
-        Span<u32> indexSpan = meshIndices;
-        Vector<u32> mirroredIndices;
-        if(isMirrored){
-            mirroredIndices.resize(meshIndices.size());
-            for(usize ii = 0u; ii < meshIndices.size(); ++ii)
-                mirroredIndices[ii] = meshIndices[ii];
-            FlipMeshTriangleWindingInPlace(mirroredIndices);
-            indexSpan = Span<u32>(mirroredIndices.data(), mirroredIndices.size());
-        }
-
-        const Expected<MeshShape> builtMeshRes = MakeMeshShape(
-            Span<f32x4>(transformedVerts.data(), transformedVerts.size()),
-            indexSpan,
-            Max(entry.skinRadius * maxS, 0.0f)
+        const Expected<MeshShape> builtMesh = MakeMeshShapeWithMaterials(
+            Span<f32x4>(verts.data(), verts.size()),
+            Span<u32>(indices.data(), indices.size()),
+            skinRadius,
+            sidedness,
+            Span<SurfaceMaterial>(materials.data(), materials.size()),
+            Span<u16>(triMatIdx.data(), triMatIdx.size()),
+            Span<u32>(triUserData.data(), triUserData.size())
         );
-        if(!builtMeshRes.has_value())
-            return MakeUnexpected(Failure());
-        return physicsWorld.createMeshShape(bodyId, sd, builtMeshRes.value());
+        if(!builtMesh.has_value())
+            return false;
+        const Expected<ShapeId> res = physicsWorld.createMeshShape(bodyId, sd, builtMesh.value());
+        if(!res.has_value())
+            return false;
+        outCreatedShapes.push_back(res.value());
+        return true;
     }
 
-    const Expected<HullShape> hullRes = BuildEcsHullShape(entry, hullPoints, signedScale);
+    const Expected<HullShape> hullRes = BuildEcsHullOrAssetShape(entry, hullPoints, signedScale, assetManager);
     if(!hullRes.has_value())
-        return MakeUnexpected(Failure());
-    return physicsWorld.createHullShape(bodyId, sd, hullRes.value());
+        return false;
+    const Expected<ShapeId> res = physicsWorld.createHullShape(bodyId, sd, hullRes.value());
+    if(!res.has_value())
+        return false;
+    outCreatedShapes.push_back(res.value());
+    return true;
 }
 
 b8 EraseSyncedTagIfUnused(
@@ -1323,11 +1718,19 @@ void PruneRemovedPhysicsEntities(
         }
         for(usize i = 0u; i < scratch.deadJoints.size(); ++i){
             const EntityID e = scratch.deadJoints[i];
-            const JointId jId = entityJoints.at(e).jointId;
+            in EcsJointSyncRecord jRec = entityJoints.at(e);
+            const JointId jId = jRec.jointId;
             EraseSlotOwnerIfMatches(jId.index, jId.generation, jointIndexToEntity);
             ClearJointFastCacheIfMatches(jId, scratch.jointFastCache);
             if(physicsWorld.isValidJoint(jId))
                 physicsWorld.destroyJoint(jId);
+            for(usize ej = 0u; ej < jRec.extraJointIds.size(); ++ej){
+                const JointId extraJId = jRec.extraJointIds[ej];
+                EraseSlotOwnerIfMatches(extraJId.index, extraJId.generation, jointIndexToEntity);
+                ClearJointFastCacheIfMatches(extraJId, scratch.jointFastCache);
+                if(physicsWorld.isValidJoint(extraJId))
+                    physicsWorld.destroyJoint(extraJId);
+            }
             entityJoints.erase(e);
         }
     }
@@ -1364,17 +1767,31 @@ void PruneRemovedPhysicsEntities(
                 const b8 hasCustomMass = world.alive(e) && world.hasComponent<RigidBodyComponent>(e) && world.getComponent<RigidBodyComponent>(e).useCustomMass;
                 const b8 updateMassOnDetach = !hasCustomMass;
                 if(rec.primaryShapeId.valid()){
-                    EraseSlotOwnerIfMatches(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity);
+                    EraseSlotOwnerAndRecordDestroyed(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
                     if(physicsWorld.isValidShape(rec.primaryShapeId))
                         physicsWorld.destroyShape(rec.primaryShapeId, updateMassOnDetach);
                 }
                 for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
                     const ShapeId extraId = rec.extraShapeIds[si];
-                    EraseSlotOwnerIfMatches(extraId.index, extraId.generation, shapeIndexToEntity);
+                    EraseSlotOwnerAndRecordDestroyed(extraId.index, extraId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
                     if(physicsWorld.isValidShape(extraId))
                         physicsWorld.destroyShape(extraId, updateMassOnDetach);
                 }
-                if(hasCustomMass && world.hasComponent<TransformComponent>(e) && physicsWorld.isValidBody(rec.bodyId)){
+                if(rec.attachedToParentBody && rec.parentBodyEntity.valid() && world.alive(rec.parentBodyEntity) && physicsWorld.isValidBody(rec.bodyId)){
+                    const Optional<mut RigidBodyComponent> parentRbOpt = world.borrowComponent<RigidBodyComponent>(rec.parentBodyEntity);
+                    if(parentRbOpt.has_value() && parentRbOpt.value().type == BodyType::Dynamic){
+                        if(parentRbOpt.value().useCustomMass && world.hasComponent<TransformComponent>(rec.parentBodyEntity)){
+                            f32x4 pScale = world.getComponent<TransformComponent>(rec.parentBodyEntity).scale;
+                            if(world.hasComponent<PhysicsParentComponent>(rec.parentBodyEntity))
+                                pScale = ResolveEntityWorldScale(rec.parentBodyEntity, world);
+                            physicsWorld.setBodyMassData(rec.bodyId, BuildCustomMassData(parentRbOpt.value(), VectorSingle(pScale)));
+                        }
+                        else{
+                            physicsWorld.updateBodyMass(rec.bodyId);
+                        }
+                    }
+                }
+                else if(hasCustomMass && world.hasComponent<TransformComponent>(e) && physicsWorld.isValidBody(rec.bodyId)){
                     in RigidBodyComponent rbRef = world.getComponent<RigidBodyComponent>(e);
                     if(rbRef.type == BodyType::Dynamic){
                         f32x4 worldScale = world.getComponent<TransformComponent>(e).scale;
@@ -1386,16 +1803,59 @@ void PruneRemovedPhysicsEntities(
                 rec.primaryShapeId = ShapeId();
                 rec.extraShapeIds.clear();
                 rec.hasColliderSync = false;
+                rec.hasDecomposedShapes = false;
                 rec.syncedExtraShapeCount = 0u;
                 rec.syncedColliderScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+                rec.failedMeshAsset = s_NameNone;
+                rec.failedHullAsset = s_NameNone;
+                rec.failedCollisionMeshAsset = s_NameNone;
+                rec.failedMaterialAsset = s_NameNone;
+                rec.failedMeshSignature = 0u;
             }
         }
 
         if(needBodyPrune){
             for(usize i = 0u; i < scratch.deadBodies.size(); ++i){
                 const EntityID e = scratch.deadBodies[i];
-                const BodyId bId = entityRecords.at(e).bodyId;
-                EraseSlotOwnerIfMatches(bId.index, bId.generation, bodyIndexToEntity);
+                in EcsEntityPhysicsRecord rec = entityRecords.at(e);
+                if(rec.attachedToParentBody){
+                    if(rec.primaryShapeId.valid()){
+                        EraseSlotOwnerAndRecordDestroyed(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
+                        if(physicsWorld.isValidShape(rec.primaryShapeId))
+                            physicsWorld.destroyShape(rec.primaryShapeId, true);
+                    }
+                    for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
+                        const ShapeId extraId = rec.extraShapeIds[si];
+                        EraseSlotOwnerAndRecordDestroyed(extraId.index, extraId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
+                        if(physicsWorld.isValidShape(extraId))
+                            physicsWorld.destroyShape(extraId, true);
+                    }
+                    if(rec.parentBodyEntity.valid() && world.alive(rec.parentBodyEntity) && physicsWorld.isValidBody(rec.bodyId)){
+                        const Optional<mut RigidBodyComponent> parentRbOpt = world.borrowComponent<RigidBodyComponent>(rec.parentBodyEntity);
+                        if(parentRbOpt.has_value() && parentRbOpt.value().type == BodyType::Dynamic){
+                            if(parentRbOpt.value().useCustomMass && world.hasComponent<TransformComponent>(rec.parentBodyEntity)){
+                                f32x4 pScale = world.getComponent<TransformComponent>(rec.parentBodyEntity).scale;
+                                if(world.hasComponent<PhysicsParentComponent>(rec.parentBodyEntity))
+                                    pScale = ResolveEntityWorldScale(rec.parentBodyEntity, world);
+                                physicsWorld.setBodyMassData(rec.bodyId, BuildCustomMassData(parentRbOpt.value(), VectorSingle(pScale)));
+                            }
+                            else{
+                                physicsWorld.updateBodyMass(rec.bodyId);
+                            }
+                        }
+                    }
+                    entityRecords.erase(e);
+                    continue;
+                }
+                const BodyId bId = rec.bodyId;
+                if(rec.primaryShapeId.valid())
+                    EraseSlotOwnerAndRecordDestroyed(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
+                for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
+                    const ShapeId extraId = rec.extraShapeIds[si];
+                    if(extraId.valid())
+                        EraseSlotOwnerAndRecordDestroyed(extraId.index, extraId.generation, shapeIndexToEntity, scratch.destroyedShapeOwners);
+                }
+                EraseSlotOwnerAndRecordDestroyed(bId.index, bId.generation, bodyIndexToEntity, scratch.destroyedBodyOwners);
                 ClearBodyTransformSnapshotIfMatches(bId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                 ClearStaticBodyPoseCacheIfMatches(bId, scratch.staticBodyPoseCache);
                 if(physicsWorld.isValidBody(bId))
@@ -1509,6 +1969,68 @@ void PruneRemovedPhysicsEntities(
     }
 }
 
+u64 ComputeColliderAssetFailureSignature(in ColliderComponent col){
+    u64 h = 0x9E3779B97F4A7C15u;
+    h ^= cast<u64>(col.shapeType) + 0x9E3779B97F4A7C15u + (h << 6u) + (h >> 2u);
+    h ^= cast<u64>(col.autoConvexDecompose) + 0x9E3779B97F4A7C15u + (h << 6u) + (h >> 2u);
+    h ^= cast<u64>(col.meshVertices.size()) + 0x9E3779B97F4A7C15u + (h << 6u) + (h >> 2u);
+    h ^= cast<u64>(col.meshIndices.size()) + 0x9E3779B97F4A7C15u + (h << 6u) + (h >> 2u);
+    h ^= cast<u64>(col.extraShapes.size()) + 0x9E3779B97F4A7C15u + (h << 6u) + (h >> 2u);
+    if(h == 0u)
+        h = 1u;
+    return h;
+}
+
+b8 MatchesFailedColliderAssets(in EcsEntityPhysicsRecord rec, in ColliderComponent col, in u64 sig){
+    return rec.failedMeshSignature != 0u
+        && rec.failedMeshSignature == sig
+        && rec.failedMeshAsset == col.meshAsset.name()
+        && rec.failedHullAsset == col.convexHullAsset.name()
+        && rec.failedCollisionMeshAsset == col.collisionMeshAsset.name()
+        && rec.failedMaterialAsset == col.materialAsset.name();
+}
+
+void ClearFailedColliderAssets(mut EcsEntityPhysicsRecord rec){
+    rec.failedMeshAsset = s_NameNone;
+    rec.failedHullAsset = s_NameNone;
+    rec.failedCollisionMeshAsset = s_NameNone;
+    rec.failedMaterialAsset = s_NameNone;
+    rec.failedMeshSignature = 0u;
+}
+
+b8 CanUpdateEcsShapeEntryInPlace(in ShapeType entryType, in b8 autoDecompose, in b8 recDecomposed, in ShapeId existingShapeId, in PhysicsWorld physicsWorld){
+    if(recDecomposed || autoDecompose)
+        return false;
+    if(entryType == ShapeType::Cylinder || entryType == ShapeType::Cone || entryType == ShapeType::TaperedCapsule || entryType == ShapeType::Plane || entryType == ShapeType::Segment)
+        return false;
+    const Expected<ShapeType> curType = physicsWorld.tryGetShapeType(existingShapeId);
+    return curType.has_value() && curType.value() == entryType;
+}
+
+void DestroyEcsRecordColliderShapes(
+    mut PhysicsWorld physicsWorld,
+    mut Vector<EcsSlotOwner> shapeIndexToEntity,
+    mut HashMap<u64, EntityID> destroyedShapeOwners,
+    mut EcsEntityPhysicsRecord rec,
+    in b8 updateBodyMassOnDetach
+){
+    if(rec.primaryShapeId.valid()){
+        EraseSlotOwnerAndRecordDestroyed(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity, destroyedShapeOwners);
+        if(physicsWorld.isValidShape(rec.primaryShapeId))
+            physicsWorld.destroyShape(rec.primaryShapeId, updateBodyMassOnDetach);
+    }
+    for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
+        const ShapeId oldShapeId = rec.extraShapeIds[si];
+        EraseSlotOwnerAndRecordDestroyed(oldShapeId.index, oldShapeId.generation, shapeIndexToEntity, destroyedShapeOwners);
+        if(physicsWorld.isValidShape(oldShapeId))
+            physicsWorld.destroyShape(oldShapeId, updateBodyMassOnDetach);
+    }
+    rec.primaryShapeId = ShapeId();
+    rec.extraShapeIds.clear();
+    rec.hasColliderSync = false;
+    rec.hasDecomposedShapes = false;
+}
+
 void SyncEntityColliderRecord(
     in Optional<mut AssetManager> assetsRef,
     in Optional<mut RigidBodyComponent> rbOpt,
@@ -1518,13 +2040,19 @@ void SyncEntityColliderRecord(
     in b8 useCustomMass,
     in BodyType targetBodyType,
     in VectorSingle worldScale,
+    in Transform3D localTransform,
     mut PhysicsWorld physicsWorld,
     mut Vector<EcsSlotOwner> shapeIndexToEntity,
+    mut HashMap<u64, EntityID> destroyedShapeOwners,
     mut EcsEntityPhysicsRecord rec
 ){
     const b8 bodyChanged = !(col.boundBodyId == targetBodyId);
     const b8 scaleChanged = !rec.hasColliderSync || !EcsVec4NearlyEqual(VectorSingle(rec.syncedColliderScale), worldScale, 1.0e-5f);
     const b8 extraCountChanged = rec.hasColliderSync && (rec.syncedExtraShapeCount != col.extraShapes.size());
+    const u64 assetFailSig = ComputeColliderAssetFailureSignature(col);
+
+    if(!col.dirty && !bodyChanged && !scaleChanged && MatchesFailedColliderAssets(rec, col, assetFailSig) && !rec.primaryShapeId.valid())
+        return;
 
     b8 existingShapesValid = true;
     if(rec.primaryShapeId.valid() && !physicsWorld.isValidShape(rec.primaryShapeId))
@@ -1537,7 +2065,8 @@ void SyncEntityColliderRecord(
             }
         }
     }
-    const b8 hasAllValidShapes = existingShapesValid && rec.primaryShapeId.valid() && (rec.extraShapeIds.size() == col.extraShapes.size());
+    const b8 hasExactShapeSlots = !rec.hasDecomposedShapes && (rec.extraShapeIds.size() == col.extraShapes.size());
+    const b8 hasAllValidShapes = existingShapesValid && rec.primaryShapeId.valid() && hasExactShapeSlots;
 
     const b8 needsSync = !rec.hasColliderSync || !existingShapesValid || !hasAllValidShapes || col.dirty || bodyChanged || scaleChanged || extraCountChanged;
     if(!needsSync)
@@ -1547,36 +2076,35 @@ void SyncEntityColliderRecord(
     const Span<f32x4> primaryHullSpan(col.hullPoints.data(), col.hullPoints.size());
     const Span<f32x4> primaryMeshVertsSpan(col.meshVertices.data(), col.meshVertices.size());
     const Span<u32> primaryMeshIndicesSpan(col.meshIndices.data(), col.meshIndices.size());
+    const Span<f32> primaryHfSpan(col.heightfieldHeights.data(), col.heightfieldHeights.size());
     const VectorSingle signedScale = ResolveSignedColliderScale(worldScale);
 
     if(hasAllValidShapes && !bodyChanged && (col.dirty || scaleChanged)){
-        b8 canUpdateInPlace = true;
-        if(primaryEntry.shapeType == ShapeType::Mesh){
-            canUpdateInPlace = false;
-        }
-        else{
-            const Expected<ShapeType> curType0 = physicsWorld.tryGetShapeType(rec.primaryShapeId);
-            if(!curType0.has_value() || curType0.value() != primaryEntry.shapeType)
-                canUpdateInPlace = false;
-        }
+        b8 canUpdateInPlace = CanUpdateEcsShapeEntryInPlace(primaryEntry.shapeType, primaryEntry.autoConvexDecompose, rec.hasDecomposedShapes, rec.primaryShapeId, physicsWorld);
         for(usize ei = 0u; ei < col.extraShapes.size() && canUpdateInPlace; ++ei){
-            const ShapeType entryType = col.extraShapes[ei].shapeType;
-            if(entryType == ShapeType::Mesh){
-                canUpdateInPlace = false;
-                break;
-            }
-            const Expected<ShapeType> curType = physicsWorld.tryGetShapeType(rec.extraShapeIds[ei]);
-            if(!curType.has_value() || curType.value() != entryType){
+            in ColliderShapeEntry ee = col.extraShapes[ei];
+            if(!CanUpdateEcsShapeEntryInPlace(ee.shapeType, ee.autoConvexDecompose, false, rec.extraShapeIds[ei], physicsWorld)){
                 canUpdateInPlace = false;
                 break;
             }
         }
 
         if(canUpdateInPlace){
-            b8 inPlaceOk = ApplyEcsColliderPropertiesInPlace(rec.primaryShapeId, primaryEntry, primaryHullSpan, signedScale, physicsWorld);
+            b8 inPlaceOk = ApplyEcsColliderPropertiesInPlace(rec.primaryShapeId, primaryEntry, primaryHullSpan, primaryMeshVertsSpan, primaryMeshIndicesSpan, primaryHfSpan, signedScale, localTransform, assetsRef, physicsWorld);
             for(usize ei = 0u; ei < col.extraShapes.size() && inPlaceOk; ++ei){
                 in ColliderShapeEntry extraEntry = col.extraShapes[ei];
-                inPlaceOk = ApplyEcsColliderPropertiesInPlace(rec.extraShapeIds[ei], extraEntry, Span<f32x4>(extraEntry.hullPoints.data(), extraEntry.hullPoints.size()), signedScale, physicsWorld);
+                inPlaceOk = ApplyEcsColliderPropertiesInPlace(
+                    rec.extraShapeIds[ei],
+                    extraEntry,
+                    Span<f32x4>(extraEntry.hullPoints.data(), extraEntry.hullPoints.size()),
+                    Span<f32x4>(extraEntry.meshVertices.data(), extraEntry.meshVertices.size()),
+                    Span<u32>(extraEntry.meshIndices.data(), extraEntry.meshIndices.size()),
+                    Span<f32>(extraEntry.heightfieldHeights.data(), extraEntry.heightfieldHeights.size()),
+                    signedScale,
+                    localTransform,
+                    assetsRef,
+                    physicsWorld
+                );
             }
 
             if(inPlaceOk){
@@ -1597,62 +2125,80 @@ void SyncEntityColliderRecord(
                 col.hasSyncedWorldScale = true;
                 rec.syncedColliderScale = f32x4(worldScale);
                 rec.syncedExtraShapeCount = col.extraShapes.size();
+                rec.syncedRelativeTransform = localTransform;
                 rec.hasColliderSync = true;
+                ClearFailedColliderAssets(rec);
                 return;
             }
         }
     }
 
-    if(rec.primaryShapeId.valid()){
-        EraseSlotOwnerIfMatches(rec.primaryShapeId.index, rec.primaryShapeId.generation, shapeIndexToEntity);
-        if(physicsWorld.isValidShape(rec.primaryShapeId))
-            physicsWorld.destroyShape(rec.primaryShapeId, false);
-    }
-    for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
-        const ShapeId oldShapeId = rec.extraShapeIds[si];
-        EraseSlotOwnerIfMatches(oldShapeId.index, oldShapeId.generation, shapeIndexToEntity);
-        if(physicsWorld.isValidShape(oldShapeId))
-            physicsWorld.destroyShape(oldShapeId, false);
-    }
-    rec.primaryShapeId = ShapeId();
-    rec.extraShapeIds.clear();
+    const BodyId prevBoundBodyId = col.boundBodyId;
+    DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, destroyedShapeOwners, rec, false);
+    if(bodyChanged && prevBoundBodyId.valid() && physicsWorld.isValidBody(prevBoundBodyId))
+        physicsWorld.updateBodyMass(prevBoundBodyId);
     col.runtimeShapeId = ShapeId();
     col.runtimeExtraShapeIds.clear();
 
-    const Expected<ShapeId> primaryShape = AttachEcsColliderEntry(
+    Vector<ShapeId> primaryCreated;
+    const b8 primaryOk = AttachEcsColliderEntryMulti(
         primaryEntry,
         primaryHullSpan,
         primaryMeshVertsSpan,
         primaryMeshIndicesSpan,
+        primaryHfSpan,
         targetBodyId,
         worldScale,
+        localTransform,
         false,
         assetsRef,
-        physicsWorld
+        physicsWorld,
+        primaryCreated
     );
-    if(primaryShape.has_value()){
-        rec.primaryShapeId = primaryShape.value();
-        col.runtimeShapeId = primaryShape.value();
-        InsertSlotOwner(primaryShape.value().index, primaryShape.value().generation, entity, shapeIndexToEntity);
+    b8 decomposedAny = false;
+    if(primaryOk && !primaryCreated.empty()){
+        rec.primaryShapeId = primaryCreated[0u];
+        col.runtimeShapeId = primaryCreated[0u];
+        InsertSlotOwner(primaryCreated[0u].index, primaryCreated[0u].generation, entity, shapeIndexToEntity);
+        if(primaryCreated.size() > 1u){
+            decomposedAny = true;
+            for(usize pi = 1u; pi < primaryCreated.size(); ++pi){
+                rec.extraShapeIds.push_back(primaryCreated[pi]);
+                col.runtimeExtraShapeIds.push_back(primaryCreated[pi]);
+                InsertSlotOwner(primaryCreated[pi].index, primaryCreated[pi].generation, entity, shapeIndexToEntity);
+            }
+        }
     }
 
+    b8 extraAllOk = true;
     for(usize ei = 0u; ei < col.extraShapes.size(); ++ei){
         in ColliderShapeEntry extraEntry = col.extraShapes[ei];
-        const Expected<ShapeId> extraShape = AttachEcsColliderEntry(
+        Vector<ShapeId> extraCreated;
+        const b8 ok = AttachEcsColliderEntryMulti(
             extraEntry,
             Span<f32x4>(extraEntry.hullPoints.data(), extraEntry.hullPoints.size()),
             Span<f32x4>(extraEntry.meshVertices.data(), extraEntry.meshVertices.size()),
             Span<u32>(extraEntry.meshIndices.data(), extraEntry.meshIndices.size()),
+            Span<f32>(extraEntry.heightfieldHeights.data(), extraEntry.heightfieldHeights.size()),
             targetBodyId,
             worldScale,
+            localTransform,
             false,
             assetsRef,
-            physicsWorld
+            physicsWorld,
+            extraCreated
         );
-        if(extraShape.has_value()){
-            rec.extraShapeIds.push_back(extraShape.value());
-            InsertSlotOwner(extraShape.value().index, extraShape.value().generation, entity, shapeIndexToEntity);
-            col.runtimeExtraShapeIds.push_back(extraShape.value());
+        if(ok && !extraCreated.empty()){
+            if(extraCreated.size() > 1u)
+                decomposedAny = true;
+            for(usize ki = 0u; ki < extraCreated.size(); ++ki){
+                rec.extraShapeIds.push_back(extraCreated[ki]);
+                InsertSlotOwner(extraCreated[ki].index, extraCreated[ki].generation, entity, shapeIndexToEntity);
+                col.runtimeExtraShapeIds.push_back(extraCreated[ki]);
+            }
+        }
+        else{
+            extraAllOk = false;
         }
     }
 
@@ -1664,15 +2210,474 @@ void SyncEntityColliderRecord(
         physicsWorld.updateBodyMass(targetBodyId);
     }
 
-    const b8 allAttached = rec.primaryShapeId.valid() && (rec.extraShapeIds.size() == col.extraShapes.size());
+    const b8 allAttached = primaryOk && rec.primaryShapeId.valid() && extraAllOk;
+    rec.hasDecomposedShapes = decomposedAny;
     rec.syncedColliderScale = f32x4(worldScale);
     rec.syncedExtraShapeCount = col.extraShapes.size();
+    rec.syncedRelativeTransform = localTransform;
     rec.hasColliderSync = allAttached;
     col.boundBodyId = targetBodyId;
-    if(allAttached)
-        col.dirty = false;
     col.syncedWorldScale = f32x4(worldScale);
     col.hasSyncedWorldScale = true;
+    if(allAttached){
+        col.dirty = false;
+        ClearFailedColliderAssets(rec);
+    }
+    else if(primaryEntry.meshAsset.valid() || primaryEntry.collisionMeshAsset.valid() || primaryEntry.convexHullAsset.valid()){
+        rec.failedMeshAsset = primaryEntry.meshAsset.name();
+        rec.failedHullAsset = primaryEntry.convexHullAsset.name();
+        rec.failedCollisionMeshAsset = primaryEntry.collisionMeshAsset.name();
+        rec.failedMaterialAsset = primaryEntry.materialAsset.name();
+        rec.failedMeshSignature = assetFailSig;
+        col.dirty = false;
+    }
+}
+
+JointEntry MakePrimaryJointEntry(in JointComponent jc){
+    JointEntry e;
+    e.bodyEntityA = jc.bodyEntityA;
+    e.bodyEntityB = jc.bodyEntityB;
+    e.bodyEntityNameA = jc.bodyEntityNameA;
+    e.bodyEntityNameB = jc.bodyEntityNameB;
+    e.userData = jc.userData;
+    e.type = jc.type;
+    e.localAnchorA = jc.localAnchorA;
+    e.localAnchorB = jc.localAnchorB;
+    e.localAxisA = jc.localAxisA;
+    e.localAxisB = jc.localAxisB;
+    e.referenceRotation = jc.referenceRotation;
+    e.useReferenceRotation = jc.useReferenceRotation;
+    e.length = jc.length;
+    e.minLength = jc.minLength;
+    e.maxLength = jc.maxLength;
+    e.enableLimit = jc.enableLimit;
+    e.lowerLimit = jc.lowerLimit;
+    e.upperLimit = jc.upperLimit;
+    e.enableMotor = jc.enableMotor;
+    e.motorSpeed = jc.motorSpeed;
+    e.maxMotorForce = jc.maxMotorForce;
+    e.enableSpring = jc.enableSpring;
+    e.hertz = jc.hertz;
+    e.dampingRatio = jc.dampingRatio;
+    e.linearOffset = jc.linearOffset;
+    e.correctionFactor = jc.correctionFactor;
+    e.maxTorque = jc.maxTorque;
+    e.swingLimit = jc.swingLimit;
+    e.suspensionHertz = jc.suspensionHertz;
+    e.suspensionDampingRatio = jc.suspensionDampingRatio;
+    e.breakForce = jc.breakForce;
+    e.breakTorque = jc.breakTorque;
+    e.collideConnected = jc.collideConnected;
+    e.enabled = jc.enabled;
+    e.enableProjection = jc.enableProjection;
+    e.projectionLinearTolerance = jc.projectionLinearTolerance;
+    e.projectionAngularTolerance = jc.projectionAngularTolerance;
+    e.invMassScaleA = jc.invMassScaleA;
+    e.invMassScaleB = jc.invMassScaleB;
+    e.invInertiaScaleA = jc.invInertiaScaleA;
+    e.invInertiaScaleB = jc.invInertiaScaleB;
+    e.limitRestitution = jc.limitRestitution;
+    e.limitHertz = jc.limitHertz;
+    e.limitDampingRatio = jc.limitDampingRatio;
+    e.swingLimitY = jc.swingLimitY;
+    e.springTarget = jc.springTarget;
+    e.steeringAngle = jc.steeringAngle;
+    e.suspensionRestLength = jc.suspensionRestLength;
+    e.ratio = jc.ratio;
+    e.groundAnchorA = jc.groundAnchorA;
+    e.groundAnchorB = jc.groundAnchorB;
+    e.lengthA = jc.lengthA;
+    e.lengthB = jc.lengthB;
+    e.sixDofAxes = jc.sixDofAxes;
+    e.pathPoints = jc.pathPoints;
+    e.pathClosed = jc.pathClosed;
+    e.pathLockRotation = jc.pathLockRotation;
+    return e;
+}
+
+f32x4 ResolveEcsJointEntityScale(
+    in EntityID ent,
+    in b8 hasAnyPhysicsParents,
+    mut World world
+){
+    f32x4 scale(1.0f, 1.0f, 1.0f, 0.0f);
+    if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(ent))
+        return ResolveEntityWorldScale(ent, world);
+    if(ent.valid() && world.alive(ent)){
+        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(ent);
+        if(xfOpt.has_value())
+            scale = xfOpt.value().scale;
+    }
+    return scale;
+}
+
+b8 SyncSingleEcsJointEntry(
+    in EntityID ownerEntity,
+    mut JointEntry je,
+    in b8 dirtyRequested,
+    in HashMap<EntityID, EcsEntityPhysicsRecord> bodiesRef,
+    in HashMap<Name, EntityID> namedEntitiesRef,
+    in b8 hasAnyPhysicsParents,
+    mut World worldForJoints,
+    mut PhysicsWorld physicsWorld,
+    mut Vector<EcsSlotOwner> jointIndexToEntity,
+    mut EcsPhysicsSyncScratch scratch,
+    mut JointId inOutJointId,
+    mut BodyId inOutBoundA,
+    mut BodyId inOutBoundB,
+    mut EcsJointStructuralSnapshot inOutStructure,
+    mut b8 inOutHasStructure
+){
+    EntityID entA = je.bodyEntityA;
+    if((!entA.valid() || !worldForJoints.alive(entA) || dirtyRequested) && je.bodyEntityNameA != s_NameNone){
+        const auto foundNameA = namedEntitiesRef.find(je.bodyEntityNameA);
+        if(foundNameA != namedEntitiesRef.end()){
+            entA = foundNameA.value();
+            je.bodyEntityA = entA;
+        }
+        else{
+            entA = s_InvalidEntityId;
+            je.bodyEntityA = s_InvalidEntityId;
+        }
+    }
+    EntityID entB = je.bodyEntityB;
+    if((!entB.valid() || !worldForJoints.alive(entB) || dirtyRequested) && je.bodyEntityNameB != s_NameNone){
+        const auto foundNameB = namedEntitiesRef.find(je.bodyEntityNameB);
+        if(foundNameB != namedEntitiesRef.end()){
+            entB = foundNameB.value();
+            je.bodyEntityB = entB;
+        }
+        else{
+            entB = s_InvalidEntityId;
+            je.bodyEntityB = s_InvalidEntityId;
+        }
+    }
+
+    const auto foundA = bodiesRef.find(entA);
+    const auto foundB = bodiesRef.find(entB);
+    if(
+        foundA == bodiesRef.end()
+        || foundB == bodiesRef.end()
+        || !foundA.value().bodyId.valid()
+        || !foundB.value().bodyId.valid()
+        || !physicsWorld.isValidBody(foundA.value().bodyId)
+        || !physicsWorld.isValidBody(foundB.value().bodyId)
+    ){
+        if(inOutJointId.valid()){
+            EraseSlotOwnerIfMatches(inOutJointId.index, inOutJointId.generation, jointIndexToEntity);
+            ClearJointFastCacheIfMatches(inOutJointId, scratch.jointFastCache);
+            if(physicsWorld.isValidJoint(inOutJointId))
+                physicsWorld.destroyJoint(inOutJointId);
+        }
+        inOutJointId = JointId();
+        inOutBoundA = BodyId();
+        inOutBoundB = BodyId();
+        inOutHasStructure = false;
+        return false;
+    }
+
+    const BodyId bodyIdA = foundA.value().bodyId;
+    const BodyId bodyIdB = foundB.value().bodyId;
+    const b8 hasPrevRecord = inOutJointId.valid();
+    const b8 isAliveInWorld = hasPrevRecord && physicsWorld.isValidJoint(inOutJointId);
+    const b8 bodiesChanged = !(inOutBoundA == bodyIdA) || !(inOutBoundB == bodyIdB);
+
+    if(hasPrevRecord && !isAliveInWorld && !dirtyRequested && !bodiesChanged){
+        inOutJointId = JointId();
+        return true;
+    }
+
+    const f32x4 scaleA = ResolveEcsJointEntityScale(entA, hasAnyPhysicsParents, worldForJoints);
+    const f32x4 scaleB = ResolveEcsJointEntityScale(entB, hasAnyPhysicsParents, worldForJoints);
+    const f32x4 scaledAnchorA(je.localAnchorA.x * scaleA.x, je.localAnchorA.y * scaleA.y, je.localAnchorA.z * scaleA.z, 0.0f);
+    const f32x4 scaledAnchorB(je.localAnchorB.x * scaleB.x, je.localAnchorB.y * scaleB.y, je.localAnchorB.z * scaleB.z, 0.0f);
+    const f32x4 scaledOffset(je.linearOffset.x * scaleA.x, je.linearOffset.y * scaleA.y, je.linearOffset.z * scaleA.z, 0.0f);
+    const f32 maxScaleA = Max(Abs(scaleA.x), Max(Abs(scaleA.y), Abs(scaleA.z)));
+    const f32 maxScaleB = Max(Abs(scaleB.x), Max(Abs(scaleB.y), Abs(scaleB.z)));
+
+    EcsJointStructuralSnapshot curStruct;
+    curStruct.type = je.type;
+    curStruct.scaledAnchorA = scaledAnchorA;
+    curStruct.scaledAnchorB = scaledAnchorB;
+    curStruct.localAxisA = je.localAxisA;
+    curStruct.localAxisB = je.localAxisB;
+    curStruct.useReferenceRotation = je.useReferenceRotation;
+    curStruct.scaledLinearOffset = scaledOffset;
+
+    const b8 typeMatches = inOutHasStructure && (inOutStructure.type == je.type) && (inOutStructure.useReferenceRotation == je.useReferenceRotation);
+    const b8 structureMatches = inOutHasStructure && JointStructuralSnapshotsEqual(inOutStructure, curStruct);
+    b8 offsetChanged = !inOutHasStructure;
+    if(!offsetChanged)
+        offsetChanged = !EcsVec4NearlyEqual(VectorSingle(inOutStructure.scaledLinearOffset), VectorSingle(scaledOffset), 1.0e-5f);
+
+    if(isAliveInWorld && !bodiesChanged && !dirtyRequested && structureMatches && !offsetChanged){
+        SetJointFastCache(inOutJointId, ownerEntity, entA, entB, bodyIdA, bodyIdB, curStruct, scratch.jointFastCache);
+        return true;
+    }
+
+    const b8 canUpdateInPlace = isAliveInWorld && !bodiesChanged && typeMatches && (je.type != JointType::Pulley || !dirtyRequested);
+    if(canUpdateInPlace){
+        b8 allOk = true;
+        if(!physicsWorld.setJointUserData(inOutJointId, je.userData))
+            allOk = false;
+        if(!physicsWorld.setJointCollideConnected(inOutJointId, je.collideConnected))
+            allOk = false;
+        if(!physicsWorld.setJointEnabled(inOutJointId, je.enabled))
+            allOk = false;
+        if(!physicsWorld.setJointLocalAnchorA(inOutJointId, VectorSingle(scaledAnchorA)))
+            allOk = false;
+        if(!physicsWorld.setJointLocalAnchorB(inOutJointId, VectorSingle(scaledAnchorB)))
+            allOk = false;
+        if(LengthSq(VectorSingle(je.localAxisA)) > s_NormalizeEpsilonSq){
+            if(!physicsWorld.setJointLocalAxisA(inOutJointId, VectorSingle(je.localAxisA)))
+                allOk = false;
+        }
+        if(LengthSq(VectorSingle(je.localAxisB)) > s_NormalizeEpsilonSq){
+            if(!physicsWorld.setJointLocalAxisB(inOutJointId, VectorSingle(je.localAxisB)))
+                allOk = false;
+        }
+        if(!physicsWorld.setJointEnableMotor(inOutJointId, je.enableMotor))
+            allOk = false;
+        if(!physicsWorld.setJointMotorSpeed(inOutJointId, je.motorSpeed))
+            allOk = false;
+        if(!physicsWorld.setJointMaxMotorForce(inOutJointId, je.maxMotorForce))
+            allOk = false;
+        if(!physicsWorld.setJointEnableLimit(inOutJointId, je.enableLimit))
+            allOk = false;
+        if(je.lowerLimit <= je.upperLimit){
+            if(!physicsWorld.setJointLimits(inOutJointId, je.lowerLimit, je.upperLimit))
+                allOk = false;
+        }
+        else{
+            allOk = false;
+        }
+        if(!physicsWorld.setJointSwingLimits(inOutJointId, je.swingLimit, je.swingLimitY))
+            allOk = false;
+        if(!physicsWorld.setJointLimitProperties(inOutJointId, je.limitRestitution, je.limitHertz, je.limitDampingRatio))
+            allOk = false;
+        if(!physicsWorld.setJointSpring(inOutJointId, je.enableSpring, je.hertz, je.dampingRatio))
+            allOk = false;
+        if(!physicsWorld.setJointSpringTarget(inOutJointId, je.springTarget))
+            allOk = false;
+        if(!physicsWorld.setJointLinearOffset(inOutJointId, VectorSingle(scaledOffset)))
+            allOk = false;
+        if(!physicsWorld.setJointLength(inOutJointId, je.length))
+            allOk = false;
+        if(je.minLength <= je.maxLength){
+            if(!physicsWorld.setJointLengthRange(inOutJointId, je.minLength, je.maxLength))
+                allOk = false;
+        }
+        else{
+            allOk = false;
+        }
+        if(!physicsWorld.setJointMaxTorque(inOutJointId, je.maxTorque))
+            allOk = false;
+        if(!physicsWorld.setJointCorrectionFactor(inOutJointId, je.correctionFactor))
+            allOk = false;
+        if(je.useReferenceRotation){
+            if(!physicsWorld.setJointTargetRotation(inOutJointId, VectorSingle(je.referenceRotation)))
+                allOk = false;
+        }
+        if(!physicsWorld.setJointProjection(inOutJointId, je.enableProjection, je.projectionLinearTolerance, je.projectionAngularTolerance))
+            allOk = false;
+        if(!physicsWorld.setJointMassScales(inOutJointId, je.invMassScaleA, je.invMassScaleB, je.invInertiaScaleA, je.invInertiaScaleB))
+            allOk = false;
+        if(!physicsWorld.setJointSuspension(inOutJointId, je.suspensionHertz, je.suspensionDampingRatio))
+            allOk = false;
+        if(!physicsWorld.setJointSuspensionRestLength(inOutJointId, je.suspensionRestLength))
+            allOk = false;
+        if(!physicsWorld.setJointSteeringAngle(inOutJointId, je.steeringAngle))
+            allOk = false;
+        if(!physicsWorld.setJointBreakThresholds(inOutJointId, je.breakForce, je.breakTorque))
+            allOk = false;
+        if(je.type == JointType::Gear || je.type == JointType::RackAndPinion || je.type == JointType::Pulley){
+            if(!physicsWorld.setJointRatio(inOutJointId, je.ratio))
+                allOk = false;
+        }
+        if(je.type == JointType::SixDof){
+            for(u32 axisIdx = 0u; axisIdx < 6u; ++axisIdx){
+                if(!physicsWorld.setJointSixDofAxis(inOutJointId, axisIdx, je.sixDofAxes[axisIdx]))
+                    allOk = false;
+            }
+        }
+        if(je.type == JointType::Path && je.pathPoints.size() >= 2u){
+            Vector<f32x4> scaledPath;
+            scaledPath.resize(je.pathPoints.size());
+            for(usize pi = 0u; pi < je.pathPoints.size(); ++pi){
+                in f32x4 pt = je.pathPoints[pi];
+                scaledPath[pi] = f32x4(pt.x * scaleA.x, pt.y * scaleA.y, pt.z * scaleA.z, pt.w);
+            }
+            if(!physicsWorld.setJointPathPoints(inOutJointId, Span<f32x4>(scaledPath.data(), scaledPath.size()), je.pathClosed, je.pathLockRotation))
+                allOk = false;
+        }
+        if(allOk){
+            inOutStructure = curStruct;
+            inOutHasStructure = true;
+            SetJointFastCache(inOutJointId, ownerEntity, entA, entB, bodyIdA, bodyIdB, curStruct, scratch.jointFastCache);
+            return true;
+        }
+    }
+
+    if(hasPrevRecord){
+        EraseSlotOwnerIfMatches(inOutJointId.index, inOutJointId.generation, jointIndexToEntity);
+        ClearJointFastCacheIfMatches(inOutJointId, scratch.jointFastCache);
+        if(isAliveInWorld)
+            physicsWorld.destroyJoint(inOutJointId);
+    }
+
+    JointDef jd;
+    jd.bodyIdA = bodyIdA;
+    jd.bodyIdB = bodyIdB;
+    jd.userData = je.userData;
+    jd.type = je.type;
+    jd.localAnchorA = scaledAnchorA;
+    jd.localAnchorB = scaledAnchorB;
+    jd.localAxisA = je.localAxisA;
+    jd.localAxisB = je.localAxisB;
+    jd.referenceRotation = je.referenceRotation;
+    jd.useReferenceRotation = je.useReferenceRotation;
+    jd.length = je.length;
+    jd.minLength = je.minLength;
+    jd.maxLength = je.maxLength;
+    jd.enableLimit = je.enableLimit;
+    jd.lowerLimit = je.lowerLimit;
+    jd.upperLimit = je.upperLimit;
+    jd.enableMotor = je.enableMotor;
+    jd.motorSpeed = je.motorSpeed;
+    jd.maxMotorForce = je.maxMotorForce;
+    jd.enableSpring = je.enableSpring;
+    jd.hertz = je.hertz;
+    jd.dampingRatio = je.dampingRatio;
+    jd.linearOffset = scaledOffset;
+    jd.correctionFactor = je.correctionFactor;
+    jd.maxTorque = je.maxTorque;
+    jd.swingLimit = je.swingLimit;
+    jd.suspensionHertz = je.suspensionHertz;
+    jd.suspensionDampingRatio = je.suspensionDampingRatio;
+    jd.breakForce = je.breakForce;
+    jd.breakTorque = je.breakTorque;
+    jd.collideConnected = je.collideConnected;
+    jd.enabled = je.enabled;
+    jd.enableProjection = je.enableProjection;
+    jd.projectionLinearTolerance = je.projectionLinearTolerance;
+    jd.projectionAngularTolerance = je.projectionAngularTolerance;
+    jd.invMassScaleA = je.invMassScaleA;
+    jd.invMassScaleB = je.invMassScaleB;
+    jd.invInertiaScaleA = je.invInertiaScaleA;
+    jd.invInertiaScaleB = je.invInertiaScaleB;
+    jd.limitRestitution = je.limitRestitution;
+    jd.limitHertz = je.limitHertz;
+    jd.limitDampingRatio = je.limitDampingRatio;
+    jd.swingLimitY = je.swingLimitY;
+    jd.springTarget = je.springTarget;
+    jd.steeringAngle = je.steeringAngle;
+    jd.suspensionRestLength = je.suspensionRestLength;
+    jd.ratio = je.ratio;
+    jd.groundAnchorA = f32x4(je.groundAnchorA.x * scaleA.x, je.groundAnchorA.y * scaleA.y, je.groundAnchorA.z * scaleA.z, 0.0f);
+    jd.groundAnchorB = f32x4(je.groundAnchorB.x * scaleB.x, je.groundAnchorB.y * scaleB.y, je.groundAnchorB.z * scaleB.z, 0.0f);
+    jd.lengthA = je.lengthA * maxScaleA;
+    jd.lengthB = je.lengthB * maxScaleB;
+    jd.sixDofAxes = je.sixDofAxes;
+    jd.pathClosed = je.pathClosed;
+    jd.pathLockRotation = je.pathLockRotation;
+    if(!je.pathPoints.empty()){
+        jd.pathPoints.resize(je.pathPoints.size());
+        for(usize pi = 0u; pi < je.pathPoints.size(); ++pi){
+            in f32x4 pt = je.pathPoints[pi];
+            jd.pathPoints[pi] = f32x4(pt.x * scaleA.x, pt.y * scaleA.y, pt.z * scaleA.z, pt.w);
+        }
+    }
+
+    const Expected<JointId> createdJoint = physicsWorld.createJoint(jd);
+    if(createdJoint.has_value()){
+        inOutJointId = createdJoint.value();
+        inOutBoundA = bodyIdA;
+        inOutBoundB = bodyIdB;
+        inOutStructure = curStruct;
+        inOutHasStructure = true;
+        InsertSlotOwner(createdJoint.value().index, createdJoint.value().generation, ownerEntity, jointIndexToEntity);
+        SetJointFastCache(createdJoint.value(), ownerEntity, entA, entB, bodyIdA, bodyIdB, curStruct, scratch.jointFastCache);
+        return true;
+    }
+
+    inOutJointId = JointId();
+    inOutBoundA = BodyId();
+    inOutBoundB = BodyId();
+    inOutHasStructure = false;
+    return false;
+}
+
+b8 ResolveAncestorRigidBody(
+    in EntityID childEntity,
+    mut World world,
+    in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    in PhysicsWorld physicsWorld,
+    mut EntityID outAncestorEntity,
+    mut BodyId outAncestorBodyId,
+    mut BodyType outAncestorBodyType,
+    mut b8 outAncestorUsesCustomMass,
+    mut Transform3D outRelativeTransform,
+    mut VectorSingle outChildWorldScale
+){
+    outAncestorEntity = s_InvalidEntityId;
+    outAncestorBodyId = BodyId();
+    outAncestorBodyType = BodyType::Static;
+    outAncestorUsesCustomMass = false;
+    outRelativeTransform = Transform3D();
+    outChildWorldScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
+
+    if(!childEntity.valid() || !world.alive(childEntity) || !world.hasComponent<PhysicsParentComponent>(childEntity))
+        return false;
+
+    const Optional<mut PhysicsParentComponent> selfPp = world.borrowComponent<PhysicsParentComponent>(childEntity);
+    if(!selfPp.has_value() || !selfPp.value().attachColliderToParentBody)
+        return false;
+
+    FixedVector<EntityID, 33u> visited;
+    visited.push_back(childEntity);
+    EntityID cur = childEntity;
+    for(u32 step = 0u; step < 32u; ++step){
+        const Optional<mut PhysicsParentComponent> ppOpt = world.borrowComponent<PhysicsParentComponent>(cur);
+        if(!ppOpt.has_value())
+            break;
+        const EntityID parent = ppOpt.value().parent;
+        if(!parent.valid() || !world.alive(parent) || !world.hasComponent<TransformComponent>(parent))
+            break;
+        b8 seen = false;
+        for(usize k = 0u; k < visited.size(); ++k){
+            if(visited[k] == parent){
+                seen = true;
+                break;
+            }
+        }
+        if(seen)
+            break;
+        visited.push_back(parent);
+
+        const Optional<mut RigidBodyComponent> parentRbOpt = world.borrowComponent<RigidBodyComponent>(parent);
+        if(parentRbOpt.has_value()){
+            in RigidBodyComponent prb = parentRbOpt.value();
+            BodyId ancBodyId = prb.runtimeBodyId;
+            if(!ancBodyId.valid()){
+                const auto ancRecIt = entityRecords.find(parent);
+                if(ancRecIt != entityRecords.end() && !ancRecIt.value().attachedToParentBody)
+                    ancBodyId = ancRecIt.value().bodyId;
+            }
+            if(ancBodyId.valid() && physicsWorld.isValidBody(ancBodyId)){
+                const EcsWorldPose childPose = ResolveEntityWorldPose(childEntity, world);
+                const EcsWorldPose ancPose = ResolveEntityWorldPose(parent, world);
+                outAncestorEntity = parent;
+                outAncestorBodyId = ancBodyId;
+                outAncestorBodyType = prb.type;
+                outAncestorUsesCustomMass = prb.useCustomMass;
+                outRelativeTransform = RelativeTransform(ancPose.transform, childPose.transform);
+                outChildWorldScale = VectorSingle(childPose.scale);
+                return true;
+            }
+        }
+        cur = parent;
+    }
+    return false;
 }
 
 void SyncEcsEntitiesToPhysicsWorld(
@@ -1800,7 +2805,7 @@ void SyncEcsEntitiesToPhysicsWorld(
     mut World worldForBodyView = world;
     scratch.deferredDynamicBodyEntities.clear();
     world.view<RigidBodyComponent, TransformComponent>().each(
-        lambda[in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in bodyHandlesTrusted, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut outHasDrivenKinematic, mut anyTagErased](
+        lambda[in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in bodyHandlesTrusted, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut outHasDrivenKinematic, mut anyTagErased](
             in EntityID entity,
             mut RigidBodyComponent rb,
             in TransformComponent xf
@@ -1844,10 +2849,14 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
 
             const auto found = entityRecords.find(entity);
-            const b8 hasValidBody = found != entityRecords.end() && found.value().bodyId.valid() && physicsWorld.isValidBody(found.value().bodyId);
+            const b8 hasExistingOwnBody = found != entityRecords.end() && !found.value().attachedToParentBody;
+            const b8 hasValidBody = hasExistingOwnBody && found.value().bodyId.valid() && physicsWorld.isValidBody(found.value().bodyId);
 
             if(hasValidBody && rb.runtimeBodyId.valid() && !rb.dirty && rb.type == BodyType::Static){
                 mut EcsEntityPhysicsRecord rec = found.value();
+                EcsWorldPose comparePose = rec.syncedBodyPose;
+                if(rec.hasInterpolatedRenderTransform)
+                    comparePose = rec.syncedRenderPose;
                 if(!hasAnyPhysicsParents || !worldForBodyView.hasComponent<PhysicsParentComponent>(entity)){
                     if(!rec.hasBodyPose){
                         const Transform3D normalizedXf(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
@@ -1855,28 +2864,31 @@ void SyncEcsEntitiesToPhysicsWorld(
                         rec.syncedBodyPose.transform = normalizedXf;
                         rec.syncedBodyPose.scale = xf.scale;
                         rec.hasBodyPose = true;
+                        rec.hasInterpolatedRenderTransform = false;
                         SetStaticBodyPoseCache(rec.bodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                         return;
                     }
                     Transform3D normalizedXf;
-                    if(EcsTransformMatchesSyncedRawOrNormalized(xf, rec.syncedBodyPose.transform, normalizedXf)){
-                        SetStaticBodyPoseCache(rec.bodyId, entity, rec.syncedBodyPose.transform, scratch.staticBodyPoseCache);
+                    if(EcsTransformMatchesSyncedRawOrNormalized(xf, comparePose.transform, normalizedXf)){
+                        SetStaticBodyPoseCache(rec.bodyId, entity, comparePose.transform, scratch.staticBodyPoseCache);
                         return;
                     }
                     physicsWorld.setBodyTransform(rec.bodyId, VectorSingle(normalizedXf.position), VectorSingle(normalizedXf.rotation));
                     rec.syncedBodyPose.transform = normalizedXf;
                     rec.syncedBodyPose.scale = xf.scale;
                     rec.hasBodyPose = true;
+                    rec.hasInterpolatedRenderTransform = false;
                     SetStaticBodyPoseCache(rec.bodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                 }
                 else{
                     ClearStaticBodyPoseCacheIfMatches(rec.bodyId, scratch.staticBodyPoseCache);
                     const EcsWorldPose worldPose = ResolveEntityWorldPose(entity, worldForBodyView);
-                    if(rec.hasBodyPose && EcsTransformsNearlyEqual(rec.syncedBodyPose.transform, worldPose.transform))
+                    if(rec.hasBodyPose && EcsTransformsNearlyEqual(comparePose.transform, worldPose.transform))
                         return;
                     physicsWorld.setBodyTransform(rec.bodyId, VectorSingle(worldPose.transform.position), VectorSingle(worldPose.transform.rotation));
                     rec.syncedBodyPose = worldPose;
                     rec.hasBodyPose = true;
+                    rec.hasInterpolatedRenderTransform = false;
                 }
                 return;
             }
@@ -1891,13 +2903,26 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
 
             if(!hasValidBody || !rb.runtimeBodyId.valid()){
-                if(found != entityRecords.end() && found.value().bodyId.valid()){
-                    const BodyId oldBodyId = found.value().bodyId;
-                    EraseSlotOwnerIfMatches(oldBodyId.index, oldBodyId.generation, bodyIndexToEntity);
-                    ClearBodyTransformSnapshotIfMatches(oldBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
-                    ClearStaticBodyPoseCacheIfMatches(oldBodyId, scratch.staticBodyPoseCache);
-                    if(physicsWorld.isValidBody(oldBodyId))
-                        physicsWorld.destroyBody(oldBodyId);
+                if(found != entityRecords.end()){
+                    mut EcsEntityPhysicsRecord oldRec = found.value();
+                    if(oldRec.attachedToParentBody){
+                        const BodyId oldParentBodyId = oldRec.bodyId;
+                        DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, scratch.destroyedShapeOwners, oldRec, true);
+                        if(oldParentBodyId.valid() && physicsWorld.isValidBody(oldParentBodyId))
+                            physicsWorld.updateBodyMass(oldParentBodyId);
+                        oldRec.bodyId = BodyId();
+                        oldRec.attachedToParentBody = false;
+                        oldRec.parentBodyEntity = s_InvalidEntityId;
+                    }
+                    else if(oldRec.bodyId.valid()){
+                        const BodyId oldBodyId = oldRec.bodyId;
+                        EraseSlotOwnerAndRecordDestroyed(oldBodyId.index, oldBodyId.generation, bodyIndexToEntity, scratch.destroyedBodyOwners);
+                        ClearBodyTransformSnapshotIfMatches(oldBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
+                        ClearStaticBodyPoseCacheIfMatches(oldBodyId, scratch.staticBodyPoseCache);
+                        if(physicsWorld.isValidBody(oldBodyId))
+                            physicsWorld.destroyBody(oldBodyId);
+                        oldRec.bodyId = BodyId();
+                    }
                 }
 
                 BodyDef bd;
@@ -1931,6 +2956,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         rec.syncedUseCustomMass = rb.useCustomMass;
                         rec.syncedBodyPose = worldPose;
                         rec.hasBodyPose = true;
+                        rec.hasInterpolatedRenderTransform = false;
                         rec.hadPhysicsParent = hasParentNow;
                     }
                     else{
@@ -2036,6 +3062,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     rec.syncedUseCustomMass = rb.useCustomMass;
                     rec.syncedBodyPose = worldPose;
                     rec.hasBodyPose = true;
+                    rec.hasInterpolatedRenderTransform = false;
                     rec.hadPhysicsParent = hasParentNow;
                     if(bodyId.index < cast<u32>(bodyIndexToEntity.size()) && bodyIndexToEntity[bodyId.index].generation == bodyId.generation)
                         bodyIndexToEntity[bodyId.index].hasPhysicsParent = hasParentNow;
@@ -2083,6 +3110,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                 rbOpt.has_value()
                 && !col.dirty
                 && col.hasSyncedWorldScale
+                && !col.autoConvexDecompose
                 && (col.extraShapes.size() == col.runtimeExtraShapeIds.size())
                 && col.runtimeShapeId.valid()
                 && col.boundBodyId.valid()
@@ -2126,6 +3154,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                 !rbOpt.has_value()
                 && !col.dirty
                 && col.hasSyncedWorldScale
+                && !col.autoConvexDecompose
                 && col.boundBodyId.valid()
                 && col.runtimeShapeId.valid()
                 && (col.extraShapes.size() == col.runtimeExtraShapeIds.size())
@@ -2172,6 +3201,9 @@ void SyncEcsEntitiesToPhysicsWorld(
             b8 useCustomMass = false;
             BodyType targetBodyType = BodyType::Static;
             f32x4 worldScale = xf.scale;
+            Transform3D localShapeTransform;
+            b8 attachedToParentBody = false;
+            EntityID parentBodyEntity = s_InvalidEntityId;
             b8 hasExistingRecord = false;
             if(rbOpt.has_value()){
                 in RigidBodyComponent rb = rbOpt.value();
@@ -2181,9 +3213,129 @@ void SyncEcsEntitiesToPhysicsWorld(
                 if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity))
                     worldScale = ResolveEntityWorldScale(entity, world);
                 hasExistingRecord = initialRecIt != entityRecords.end();
+                if(hasExistingRecord && initialRecIt.value().attachedToParentBody){
+                    mut EcsEntityPhysicsRecord oldChildRec = initialRecIt.value();
+                    const BodyId prevParentBody = oldChildRec.bodyId;
+                    DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, scratch.destroyedShapeOwners, oldChildRec, true);
+                    if(prevParentBody.valid() && physicsWorld.isValidBody(prevParentBody))
+                        physicsWorld.updateBodyMass(prevParentBody);
+                    oldChildRec.bodyId = targetBodyId;
+                    oldChildRec.attachedToParentBody = false;
+                    oldChildRec.parentBodyEntity = s_InvalidEntityId;
+                }
             }
             else{
-                if(initialRecIt != entityRecords.end() && initialRecIt.value().bodyId.valid() && physicsWorld.isValidBody(initialRecIt.value().bodyId)){
+                EntityID ancEnt = s_InvalidEntityId;
+                BodyId ancBodyId;
+                BodyType ancBodyType = BodyType::Static;
+                b8 ancCustomMass = false;
+                Transform3D ancRelXf;
+                VectorSingle ancChildScale(1.0f, 1.0f, 1.0f, 0.0f);
+                const b8 foundAncestorRb = hasAnyPhysicsParents && ResolveAncestorRigidBody(
+                    entity,
+                    world,
+                    entityRecords,
+                    physicsWorld,
+                    ancEnt,
+                    ancBodyId,
+                    ancBodyType,
+                    ancCustomMass,
+                    ancRelXf,
+                    ancChildScale
+                );
+
+                if(foundAncestorRb){
+                    targetBodyId = ancBodyId;
+                    useCustomMass = ancCustomMass;
+                    targetBodyType = ancBodyType;
+                    worldScale = f32x4(ancChildScale);
+                    localShapeTransform = ancRelXf;
+                    attachedToParentBody = true;
+                    parentBodyEntity = ancEnt;
+
+                    if(initialRecIt != entityRecords.end()){
+                        hasExistingRecord = true;
+                        mut EcsEntityPhysicsRecord existingRec = initialRecIt.value();
+                        if(!existingRec.attachedToParentBody && existingRec.bodyId.valid()){
+                            const BodyId oldOwnBody = existingRec.bodyId;
+                            DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, scratch.destroyedShapeOwners, existingRec, false);
+                            EraseSlotOwnerAndRecordDestroyed(oldOwnBody.index, oldOwnBody.generation, bodyIndexToEntity, scratch.destroyedBodyOwners);
+                            ClearBodyTransformSnapshotIfMatches(oldOwnBody, bodyTransformSnapshots, bodyTransformSnapshotMeta);
+                            ClearStaticBodyPoseCacheIfMatches(oldOwnBody, scratch.staticBodyPoseCache);
+                            if(physicsWorld.isValidBody(oldOwnBody))
+                                physicsWorld.destroyBody(oldOwnBody);
+                        }
+                        else if(existingRec.attachedToParentBody && !(existingRec.bodyId == targetBodyId)){
+                            const BodyId oldAncBody = existingRec.bodyId;
+                            DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, scratch.destroyedShapeOwners, existingRec, true);
+                            if(oldAncBody.valid() && physicsWorld.isValidBody(oldAncBody))
+                                physicsWorld.updateBodyMass(oldAncBody);
+                        }
+                        existingRec.bodyId = targetBodyId;
+                        existingRec.attachedToParentBody = true;
+                        existingRec.parentBodyEntity = parentBodyEntity;
+                        existingRec.hadPhysicsParent = true;
+
+                        if(
+                            !col.dirty
+                            && existingRec.hasColliderSync
+                            && existingRec.primaryShapeId.valid()
+                            && physicsWorld.isValidShape(existingRec.primaryShapeId)
+                            && (!existingRec.hasDecomposedShapes && existingRec.extraShapeIds.size() == col.extraShapes.size())
+                            && EcsVec4NearlyEqual(VectorSingle(existingRec.syncedColliderScale), ancChildScale, 1.0e-5f)
+                        ){
+                            if(EcsTransformsNearlyEqual(existingRec.syncedRelativeTransform, localShapeTransform))
+                                return;
+                            physicsWorld.setShapeLocalTransform(existingRec.primaryShapeId, localShapeTransform);
+                            for(usize si = 0u; si < existingRec.extraShapeIds.size(); ++si)
+                                physicsWorld.setShapeLocalTransform(existingRec.extraShapeIds[si], localShapeTransform);
+                            if(ancBodyType == BodyType::Dynamic && !ancCustomMass)
+                                physicsWorld.updateBodyMass(targetBodyId);
+                            existingRec.syncedRelativeTransform = localShapeTransform;
+                            return;
+                        }
+                    }
+                }
+                else if(initialRecIt != entityRecords.end() && initialRecIt.value().attachedToParentBody){
+                    hasExistingRecord = true;
+                    mut EcsEntityPhysicsRecord existingRec = initialRecIt.value();
+                    const BodyId oldAncBody = existingRec.bodyId;
+                    DestroyEcsRecordColliderShapes(physicsWorld, shapeIndexToEntity, scratch.destroyedShapeOwners, existingRec, true);
+                    if(oldAncBody.valid() && physicsWorld.isValidBody(oldAncBody))
+                        physicsWorld.updateBodyMass(oldAncBody);
+                    existingRec.bodyId = BodyId();
+                    existingRec.attachedToParentBody = false;
+                    existingRec.parentBodyEntity = s_InvalidEntityId;
+
+                    EcsWorldPose worldPose;
+                    const b8 hasParentNow = hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity);
+                    if(hasParentNow){
+                        worldPose = ResolveEntityWorldPose(entity, world);
+                    }
+                    else{
+                        worldPose.transform = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
+                        worldPose.scale = xf.scale;
+                    }
+                    worldScale = worldPose.scale;
+                    BodyDef bd;
+                    bd.type = BodyType::Static;
+                    bd.position = worldPose.transform.position;
+                    bd.rotation = worldPose.transform.rotation;
+                    const Expected<BodyId> created = physicsWorld.createBody(bd);
+                    if(!created.has_value())
+                        return;
+                    targetBodyId = created.value();
+                    InsertBodySlotOwner(targetBodyId.index, targetBodyId.generation, entity, hasParentNow, bodyIndexToEntity);
+                    if(!hasParentNow)
+                        SetStaticBodyPoseCache(targetBodyId, entity, worldPose.transform, scratch.staticBodyPoseCache);
+                    else
+                        ClearStaticBodyPoseCacheIfMatches(targetBodyId, scratch.staticBodyPoseCache);
+                    existingRec.bodyId = targetBodyId;
+                    existingRec.syncedBodyPose = worldPose;
+                    existingRec.hasBodyPose = true;
+                    existingRec.hadPhysicsParent = hasParentNow;
+                }
+                else if(initialRecIt != entityRecords.end() && !initialRecIt.value().attachedToParentBody && initialRecIt.value().bodyId.valid() && physicsWorld.isValidBody(initialRecIt.value().bodyId)){
                     hasExistingRecord = true;
                     mut EcsEntityPhysicsRecord existingRec = initialRecIt.value();
                     targetBodyId = existingRec.bodyId;
@@ -2226,9 +3378,9 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                 }
                 else{
-                    if(initialRecIt != entityRecords.end() && initialRecIt.value().bodyId.valid()){
+                    if(initialRecIt != entityRecords.end() && !initialRecIt.value().attachedToParentBody && initialRecIt.value().bodyId.valid()){
                         const BodyId staleBodyId = initialRecIt.value().bodyId;
-                        EraseSlotOwnerIfMatches(staleBodyId.index, staleBodyId.generation, bodyIndexToEntity);
+                        EraseSlotOwnerAndRecordDestroyed(staleBodyId.index, staleBodyId.generation, bodyIndexToEntity, scratch.destroyedBodyOwners);
                         ClearBodyTransformSnapshotIfMatches(staleBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         ClearStaticBodyPoseCacheIfMatches(staleBodyId, scratch.staticBodyPoseCache);
                     }
@@ -2278,8 +3430,10 @@ void SyncEcsEntitiesToPhysicsWorld(
                             useCustomMass,
                             targetBodyType,
                             VectorSingle(worldScale),
+                            localShapeTransform,
                             physicsWorld,
                             shapeIndexToEntity,
+                            scratch.destroyedShapeOwners,
                             newRec
                         );
                         entityRecords.insert_or_assign(entity, newRec);
@@ -2301,14 +3455,23 @@ void SyncEcsEntitiesToPhysicsWorld(
                     useCustomMass,
                     targetBodyType,
                     VectorSingle(worldScale),
+                    localShapeTransform,
                     physicsWorld,
                     shapeIndexToEntity,
+                    scratch.destroyedShapeOwners,
                     initialRecIt.value()
                 );
+                if(attachedToParentBody && useCustomMass && targetBodyType == BodyType::Dynamic){
+                    const Optional<mut RigidBodyComponent> ancRbOpt = world.borrowComponent<RigidBodyComponent>(parentBodyEntity);
+                    if(ancRbOpt.has_value())
+                        physicsWorld.setBodyMassData(targetBodyId, BuildCustomMassData(ancRbOpt.value(), VectorSingle(ResolveEntityWorldScale(parentBodyEntity, world))));
+                }
             }
             else{
                 EcsEntityPhysicsRecord newRec;
                 newRec.bodyId = targetBodyId;
+                newRec.attachedToParentBody = attachedToParentBody;
+                newRec.parentBodyEntity = parentBodyEntity;
                 newRec.hadPhysicsParent = hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity);
                 SyncEntityColliderRecord(
                     assetsRef,
@@ -2319,11 +3482,18 @@ void SyncEcsEntitiesToPhysicsWorld(
                     useCustomMass,
                     targetBodyType,
                     VectorSingle(worldScale),
+                    localShapeTransform,
                     physicsWorld,
                     shapeIndexToEntity,
+                    scratch.destroyedShapeOwners,
                     newRec
                 );
                 entityRecords.insert_or_assign(entity, newRec);
+                if(attachedToParentBody && useCustomMass && targetBodyType == BodyType::Dynamic){
+                    const Optional<mut RigidBodyComponent> ancRbOpt = world.borrowComponent<RigidBodyComponent>(parentBodyEntity);
+                    if(ancRbOpt.has_value())
+                        physicsWorld.setBodyMassData(targetBodyId, BuildCustomMassData(ancRbOpt.value(), VectorSingle(ResolveEntityWorldScale(parentBodyEntity, world))));
+                }
             }
         }
     );
@@ -2400,6 +3570,8 @@ void SyncEcsEntitiesToPhysicsWorld(
         ) -> void{
             if(
                 !jc.dirty
+                && jc.extraJoints.empty()
+                && jc.runtimeExtraJointIds.empty()
                 && jc.runtimeJointId.valid()
                 && jc.runtimeJointId.index < cast<u32>(scratch.jointFastCache.size())
             ){
@@ -2427,26 +3599,8 @@ void SyncEcsEntitiesToPhysicsWorld(
                     && physicsWorld.isValidJoint(jc.runtimeJointId)
                     && (jointBodyHandlesTrusted || (physicsWorld.isValidBody(jCache.bodyIdA) && physicsWorld.isValidBody(jCache.bodyIdB)))
                 ){
-                    f32x4 fastScaleA(1.0f, 1.0f, 1.0f, 0.0f);
-                    if(hasAnyPhysicsParents && worldForJoints.hasComponent<PhysicsParentComponent>(jCache.entA)){
-                        fastScaleA = ResolveEntityWorldScale(jCache.entA, worldForJoints);
-                    }
-                    else{
-                        const Optional<mut TransformComponent> xfAOpt = worldForJoints.borrowComponent<TransformComponent>(jCache.entA);
-                        if(xfAOpt.has_value())
-                            fastScaleA = xfAOpt.value().scale;
-                    }
-
-                    f32x4 fastScaleB(1.0f, 1.0f, 1.0f, 0.0f);
-                    if(hasAnyPhysicsParents && worldForJoints.hasComponent<PhysicsParentComponent>(jCache.entB)){
-                        fastScaleB = ResolveEntityWorldScale(jCache.entB, worldForJoints);
-                    }
-                    else{
-                        const Optional<mut TransformComponent> xfBOpt = worldForJoints.borrowComponent<TransformComponent>(jCache.entB);
-                        if(xfBOpt.has_value())
-                            fastScaleB = xfBOpt.value().scale;
-                    }
-
+                    const f32x4 fastScaleA = ResolveEcsJointEntityScale(jCache.entA, hasAnyPhysicsParents, worldForJoints);
+                    const f32x4 fastScaleB = ResolveEcsJointEntityScale(jCache.entB, hasAnyPhysicsParents, worldForJoints);
                     const f32x4 fastScaledAnchorA(jc.localAnchorA.x * fastScaleA.x, jc.localAnchorA.y * fastScaleA.y, jc.localAnchorA.z * fastScaleA.z, 0.0f);
                     const f32x4 fastScaledAnchorB(jc.localAnchorB.x * fastScaleB.x, jc.localAnchorB.y * fastScaleB.y, jc.localAnchorB.z * fastScaleB.z, 0.0f);
                     const f32x4 fastScaledOffset(jc.linearOffset.x * fastScaleA.x, jc.linearOffset.y * fastScaleA.y, jc.linearOffset.z * fastScaleA.z, 0.0f);
@@ -2461,6 +3615,8 @@ void SyncEcsEntitiesToPhysicsWorld(
 
             if(
                 !jc.dirty
+                && jc.extraJoints.empty()
+                && jc.runtimeExtraJointIds.empty()
                 && !jc.runtimeJointId.valid()
                 && jc.boundBodyIdA.valid()
                 && jc.boundBodyIdB.valid()
@@ -2475,287 +3631,105 @@ void SyncEcsEntitiesToPhysicsWorld(
             )
                 return;
 
-            EntityID entA = jc.bodyEntityA;
-            if((!entA.valid() || !worldForJoints.alive(entA) || jc.dirty) && jc.bodyEntityNameA != s_NameNone){
-                const auto foundNameA = namedEntitiesRef.find(jc.bodyEntityNameA);
-                if(foundNameA != namedEntitiesRef.end()){
-                    entA = foundNameA.value();
-                    jc.bodyEntityA = entA;
+            const b8 dirtyRequested = jc.dirty;
+            if(entityJoints.find(entity) == entityJoints.end()){
+                EcsJointSyncRecord emptyRec;
+                entityJoints.insert_or_assign(entity, emptyRec);
+            }
+            mut EcsJointSyncRecord jRec = entityJoints.at(entity);
+
+            JointEntry primaryEntry = MakePrimaryJointEntry(jc);
+            EcsJointStructuralSnapshot primaryStruct = jRec.structure;
+            b8 primaryHasStruct = jRec.hasStructure;
+            JointId primaryId = jRec.jointId;
+            BodyId primaryBoundA = jc.boundBodyIdA;
+            BodyId primaryBoundB = jc.boundBodyIdB;
+            const b8 primaryOk = SyncSingleEcsJointEntry(
+                entity,
+                primaryEntry,
+                dirtyRequested,
+                bodiesRef,
+                namedEntitiesRef,
+                hasAnyPhysicsParents,
+                worldForJoints,
+                physicsWorld,
+                jointIndexToEntity,
+                scratch,
+                primaryId,
+                primaryBoundA,
+                primaryBoundB,
+                primaryStruct,
+                primaryHasStruct
+            );
+            jc.bodyEntityA = primaryEntry.bodyEntityA;
+            jc.bodyEntityB = primaryEntry.bodyEntityB;
+            jc.runtimeJointId = primaryId;
+            jc.boundBodyIdA = primaryBoundA;
+            jc.boundBodyIdB = primaryBoundB;
+            jRec.jointId = primaryId;
+            jRec.structure = primaryStruct;
+            jRec.hasStructure = primaryHasStruct;
+
+            const usize targetExtraCount = jc.extraJoints.size();
+            for(usize ej = targetExtraCount; ej < jRec.extraJointIds.size(); ++ej){
+                const JointId deadExtraId = jRec.extraJointIds[ej];
+                if(deadExtraId.valid()){
+                    EraseSlotOwnerIfMatches(deadExtraId.index, deadExtraId.generation, jointIndexToEntity);
+                    ClearJointFastCacheIfMatches(deadExtraId, scratch.jointFastCache);
+                    if(physicsWorld.isValidJoint(deadExtraId))
+                        physicsWorld.destroyJoint(deadExtraId);
                 }
-                else{
-                    entA = s_InvalidEntityId;
-                    jc.bodyEntityA = s_InvalidEntityId;
+            }
+            jRec.extraJointIds.resize(targetExtraCount);
+            jRec.extraBoundBodyIdAs.resize(targetExtraCount);
+            jRec.extraBoundBodyIdBs.resize(targetExtraCount);
+            jc.runtimeExtraJointIds.resize(targetExtraCount);
+            jc.boundExtraBodyIdAs.resize(targetExtraCount);
+            jc.boundExtraBodyIdBs.resize(targetExtraCount);
+
+            b8 allExtrasOk = true;
+            for(usize ei = 0u; ei < targetExtraCount; ++ei){
+                JointId extraId = jRec.extraJointIds[ei];
+                BodyId extraBoundA = jRec.extraBoundBodyIdAs[ei];
+                BodyId extraBoundB = jRec.extraBoundBodyIdBs[ei];
+                EcsJointStructuralSnapshot extraStruct;
+                b8 extraHasStruct = extraId.valid() && physicsWorld.isValidJoint(extraId);
+                if(extraHasStruct){
+                    extraStruct.type = jc.extraJoints[ei].type;
+                    extraStruct.useReferenceRotation = jc.extraJoints[ei].useReferenceRotation;
                 }
-            }
-            EntityID entB = jc.bodyEntityB;
-            if((!entB.valid() || !worldForJoints.alive(entB) || jc.dirty) && jc.bodyEntityNameB != s_NameNone){
-                const auto foundNameB = namedEntitiesRef.find(jc.bodyEntityNameB);
-                if(foundNameB != namedEntitiesRef.end()){
-                    entB = foundNameB.value();
-                    jc.bodyEntityB = entB;
-                }
-                else{
-                    entB = s_InvalidEntityId;
-                    jc.bodyEntityB = s_InvalidEntityId;
-                }
-            }
-
-            const auto foundJoint = entityJoints.find(entity);
-            const b8 hasRecord = foundJoint != entityJoints.end() && foundJoint.value().jointId.valid();
-
-            const auto foundA = bodiesRef.find(entA);
-            const auto foundB = bodiesRef.find(entB);
-            if(
-                foundA == bodiesRef.end()
-                || foundB == bodiesRef.end()
-                || !foundA.value().bodyId.valid()
-                || !foundB.value().bodyId.valid()
-            ){
-                if(hasRecord){
-                    const JointId oldJointId = foundJoint.value().jointId;
-                    EraseSlotOwnerIfMatches(oldJointId.index, oldJointId.generation, jointIndexToEntity);
-                    ClearJointFastCacheIfMatches(oldJointId, scratch.jointFastCache);
-                    if(physicsWorld.isValidJoint(oldJointId))
-                        physicsWorld.destroyJoint(oldJointId);
-                    entityJoints.erase(entity);
-                }
-                jc.runtimeJointId = JointId();
-                jc.boundBodyIdA = BodyId();
-                jc.boundBodyIdB = BodyId();
-                return;
-            }
-
-            const BodyId bodyIdA = foundA.value().bodyId;
-            const BodyId bodyIdB = foundB.value().bodyId;
-            if(!physicsWorld.isValidBody(bodyIdA) || !physicsWorld.isValidBody(bodyIdB)){
-                if(hasRecord){
-                    const JointId oldJointId = foundJoint.value().jointId;
-                    EraseSlotOwnerIfMatches(oldJointId.index, oldJointId.generation, jointIndexToEntity);
-                    ClearJointFastCacheIfMatches(oldJointId, scratch.jointFastCache);
-                    if(physicsWorld.isValidJoint(oldJointId))
-                        physicsWorld.destroyJoint(oldJointId);
-                    entityJoints.erase(entity);
-                }
-                jc.runtimeJointId = JointId();
-                jc.boundBodyIdA = BodyId();
-                jc.boundBodyIdB = BodyId();
-                return;
-            }
-
-            JointId existingJointId;
-            if(hasRecord)
-                existingJointId = foundJoint.value().jointId;
-            const b8 isAliveInWorld = hasRecord && physicsWorld.isValidJoint(existingJointId);
-            const b8 bodiesChanged = !(jc.boundBodyIdA == bodyIdA) || !(jc.boundBodyIdB == bodyIdB);
-
-            if(hasRecord && !isAliveInWorld && !jc.dirty && !bodiesChanged){
-                jc.runtimeJointId = JointId();
-                return;
-            }
-
-            f32x4 scaleA(1.0f, 1.0f, 1.0f, 0.0f);
-            if(hasAnyPhysicsParents && worldForJoints.hasComponent<PhysicsParentComponent>(entA)){
-                scaleA = ResolveEntityWorldScale(entA, worldForJoints);
-            }
-            else if(entA.valid() && worldForJoints.alive(entA)){
-                const Optional<mut TransformComponent> xfAOpt = worldForJoints.borrowComponent<TransformComponent>(entA);
-                if(xfAOpt.has_value())
-                    scaleA = xfAOpt.value().scale;
-            }
-
-            f32x4 scaleB(1.0f, 1.0f, 1.0f, 0.0f);
-            if(hasAnyPhysicsParents && worldForJoints.hasComponent<PhysicsParentComponent>(entB)){
-                scaleB = ResolveEntityWorldScale(entB, worldForJoints);
-            }
-            else if(entB.valid() && worldForJoints.alive(entB)){
-                const Optional<mut TransformComponent> xfBOpt = worldForJoints.borrowComponent<TransformComponent>(entB);
-                if(xfBOpt.has_value())
-                    scaleB = xfBOpt.value().scale;
-            }
-
-            const f32x4 scaledAnchorA(jc.localAnchorA.x * scaleA.x, jc.localAnchorA.y * scaleA.y, jc.localAnchorA.z * scaleA.z, 0.0f);
-            const f32x4 scaledAnchorB(jc.localAnchorB.x * scaleB.x, jc.localAnchorB.y * scaleB.y, jc.localAnchorB.z * scaleB.z, 0.0f);
-            const f32x4 scaledOffset(jc.linearOffset.x * scaleA.x, jc.linearOffset.y * scaleA.y, jc.linearOffset.z * scaleA.z, 0.0f);
-
-            EcsJointStructuralSnapshot curStruct;
-            curStruct.type = jc.type;
-            curStruct.scaledAnchorA = scaledAnchorA;
-            curStruct.scaledAnchorB = scaledAnchorB;
-            curStruct.localAxisA = jc.localAxisA;
-            curStruct.localAxisB = jc.localAxisB;
-            curStruct.useReferenceRotation = jc.useReferenceRotation;
-            curStruct.scaledLinearOffset = scaledOffset;
-
-            const b8 hasPrevStruct = hasRecord && foundJoint.value().hasStructure;
-            const b8 structureMatches = hasPrevStruct && JointStructuralSnapshotsEqual(foundJoint.value().structure, curStruct);
-            b8 offsetChanged = !hasPrevStruct;
-            if(!offsetChanged){
-                const f32x4 prevOffset = foundJoint.value().structure.scaledLinearOffset;
-                offsetChanged = !EcsVec4NearlyEqual(VectorSingle(prevOffset), VectorSingle(scaledOffset), 1.0e-5f);
-            }
-
-            if(hasRecord && isAliveInWorld && !bodiesChanged && !jc.dirty && structureMatches && !offsetChanged){
-                SetJointFastCache(
-                    existingJointId,
+                const b8 extraOk = SyncSingleEcsJointEntry(
                     entity,
-                    entA,
-                    entB,
-                    bodyIdA,
-                    bodyIdB,
-                    curStruct,
-                    scratch.jointFastCache
+                    jc.extraJoints[ei],
+                    dirtyRequested,
+                    bodiesRef,
+                    namedEntitiesRef,
+                    hasAnyPhysicsParents,
+                    worldForJoints,
+                    physicsWorld,
+                    jointIndexToEntity,
+                    scratch,
+                    extraId,
+                    extraBoundA,
+                    extraBoundB,
+                    extraStruct,
+                    extraHasStruct
                 );
-                return;
+                jRec.extraJointIds[ei] = extraId;
+                jRec.extraBoundBodyIdAs[ei] = extraBoundA;
+                jRec.extraBoundBodyIdBs[ei] = extraBoundB;
+                jc.runtimeExtraJointIds[ei] = extraId;
+                jc.boundExtraBodyIdAs[ei] = extraBoundA;
+                jc.boundExtraBodyIdBs[ei] = extraBoundB;
+                if(!extraOk)
+                    allExtrasOk = false;
             }
 
-            if(hasRecord && isAliveInWorld && !bodiesChanged && structureMatches){
-                b8 allOk = true;
-                if(!physicsWorld.setJointUserData(existingJointId, jc.userData))
-                    allOk = false;
-                if(!physicsWorld.setJointCollideConnected(existingJointId, jc.collideConnected))
-                    allOk = false;
-                if(!physicsWorld.setJointEnableMotor(existingJointId, jc.enableMotor))
-                    allOk = false;
-                if(!physicsWorld.setJointMotorSpeed(existingJointId, jc.motorSpeed))
-                    allOk = false;
-                if(!physicsWorld.setJointMaxMotorForce(existingJointId, jc.maxMotorForce))
-                    allOk = false;
-                if(!physicsWorld.setJointEnableLimit(existingJointId, jc.enableLimit))
-                    allOk = false;
-                if(jc.lowerLimit <= jc.upperLimit){
-                    if(!physicsWorld.setJointLimits(existingJointId, jc.lowerLimit, jc.upperLimit))
-                        allOk = false;
-                }
-                else{
-                    allOk = false;
-                }
-                if(!physicsWorld.setJointSwingLimit(existingJointId, jc.swingLimit))
-                    allOk = false;
-                if(!physicsWorld.setJointSpring(existingJointId, jc.enableSpring, jc.hertz, jc.dampingRatio))
-                    allOk = false;
-                if(!physicsWorld.setJointLinearOffset(existingJointId, VectorSingle(scaledOffset)))
-                    allOk = false;
-                if(!physicsWorld.setJointLength(existingJointId, jc.length))
-                    allOk = false;
-                if(jc.minLength <= jc.maxLength){
-                    if(!physicsWorld.setJointLengthRange(existingJointId, jc.minLength, jc.maxLength))
-                        allOk = false;
-                }
-                else{
-                    allOk = false;
-                }
-                if(!physicsWorld.setJointMaxTorque(existingJointId, jc.maxTorque))
-                    allOk = false;
-                if(!physicsWorld.setJointCorrectionFactor(existingJointId, jc.correctionFactor))
-                    allOk = false;
-                if(jc.useReferenceRotation){
-                    if(!physicsWorld.setJointTargetRotation(existingJointId, VectorSingle(jc.referenceRotation)))
-                        allOk = false;
-                }
-                if(!physicsWorld.setJointSuspension(existingJointId, jc.suspensionHertz, jc.suspensionDampingRatio))
-                    allOk = false;
-                if(!physicsWorld.setJointBreakThresholds(existingJointId, jc.breakForce, jc.breakTorque))
-                    allOk = false;
-                jc.runtimeJointId = existingJointId;
-                if(allOk){
-                    jc.dirty = false;
-                    foundJoint.value().structure = curStruct;
-                    foundJoint.value().hasStructure = true;
-                    SetJointFastCache(
-                        existingJointId,
-                        entity,
-                        entA,
-                        entB,
-                        bodyIdA,
-                        bodyIdB,
-                        curStruct,
-                        scratch.jointFastCache
-                    );
-                }
-                return;
-            }
-
-            if(hasRecord){
-                EraseSlotOwnerIfMatches(existingJointId.index, existingJointId.generation, jointIndexToEntity);
-                ClearJointFastCacheIfMatches(existingJointId, scratch.jointFastCache);
-                if(isAliveInWorld)
-                    physicsWorld.destroyJoint(existingJointId);
-            }
-
-            JointDef jd;
-            jd.bodyIdA = bodyIdA;
-            jd.bodyIdB = bodyIdB;
-            jd.userData = jc.userData;
-            jd.type = jc.type;
-            jd.localAnchorA = scaledAnchorA;
-            jd.localAnchorB = scaledAnchorB;
-            jd.localAxisA = jc.localAxisA;
-            jd.localAxisB = jc.localAxisB;
-            jd.referenceRotation = jc.referenceRotation;
-            jd.useReferenceRotation = jc.useReferenceRotation;
-            jd.length = jc.length;
-            jd.minLength = jc.minLength;
-            jd.maxLength = jc.maxLength;
-            jd.enableLimit = jc.enableLimit;
-            jd.lowerLimit = jc.lowerLimit;
-            jd.upperLimit = jc.upperLimit;
-            jd.enableMotor = jc.enableMotor;
-            jd.motorSpeed = jc.motorSpeed;
-            jd.maxMotorForce = jc.maxMotorForce;
-            jd.enableSpring = jc.enableSpring;
-            jd.hertz = jc.hertz;
-            jd.dampingRatio = jc.dampingRatio;
-            jd.linearOffset = scaledOffset;
-            jd.correctionFactor = jc.correctionFactor;
-            jd.maxTorque = jc.maxTorque;
-            jd.swingLimit = jc.swingLimit;
-            jd.suspensionHertz = jc.suspensionHertz;
-            jd.suspensionDampingRatio = jc.suspensionDampingRatio;
-            jd.breakForce = jc.breakForce;
-            jd.breakTorque = jc.breakTorque;
-            jd.collideConnected = jc.collideConnected;
-
-            const Expected<JointId> createdJoint = physicsWorld.createJoint(jd);
-            if(createdJoint.has_value()){
-                jc.runtimeJointId = createdJoint.value();
-                jc.boundBodyIdA = bodyIdA;
-                jc.boundBodyIdB = bodyIdB;
+            if(primaryOk && allExtrasOk)
                 jc.dirty = false;
-                InsertSlotOwner(createdJoint.value().index, createdJoint.value().generation, entity, jointIndexToEntity);
-                if(foundJoint != entityJoints.end()){
-                    foundJoint.value().jointId = createdJoint.value();
-                    foundJoint.value().structure = curStruct;
-                    foundJoint.value().hasStructure = true;
-                }
-                else{
-                    EcsJointSyncRecord newJointRec;
-                    newJointRec.jointId = createdJoint.value();
-                    newJointRec.structure = curStruct;
-                    newJointRec.hasStructure = true;
-                    entityJoints.insert_or_assign(entity, newJointRec);
-                }
-                SetJointFastCache(
-                    createdJoint.value(),
-                    entity,
-                    entA,
-                    entB,
-                    bodyIdA,
-                    bodyIdB,
-                    curStruct,
-                    scratch.jointFastCache
-                );
-            }
-            else{
-                if(hasRecord){
-                    const JointId oldJointId = foundJoint.value().jointId;
-                    EraseSlotOwnerIfMatches(oldJointId.index, oldJointId.generation, jointIndexToEntity);
-                    ClearJointFastCacheIfMatches(oldJointId, scratch.jointFastCache);
-                    entityJoints.erase(entity);
-                }
-                jc.runtimeJointId = JointId();
-                jc.boundBodyIdA = BodyId();
-                jc.boundBodyIdB = BodyId();
-            }
+
+            if(!jRec.jointId.valid() && jRec.extraJointIds.empty())
+                entityJoints.erase(entity);
         }
     );
 
@@ -2864,6 +3838,53 @@ void SyncRigidBodyVelocityAndAwakeDirect(
     rb.isAwake = awake;
 }
 
+Transform3D ComputeRenderPoseForPhysicsBody(
+    in Transform3D physXf,
+    in u32 bodyIdx,
+    in u16 bodyGen,
+    in b8 interpolateTransforms,
+    in f32 interpolationAlpha,
+    in Vector<EcsBodyTransformSnapshot> snapshots,
+    in Vector<u32> snapshotMeta,
+    mut b8 outWasInterpolated
+){
+    outWasInterpolated = false;
+    if(!interpolateTransforms || bodyIdx >= cast<u32>(snapshots.size()) || bodyIdx >= cast<u32>(snapshotMeta.size()))
+        return physXf;
+    if(!EcsSnapshotMetaMatches(snapshotMeta[bodyIdx], bodyGen))
+        return physXf;
+    in EcsBodyTransformSnapshot snap = snapshots[bodyIdx];
+    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
+    VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
+    VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
+    if(Vector4Dot(q0, q1).x < 0.0f)
+        q1 = -q1;
+    const VectorSingle tVec(alpha);
+    const VectorSingle pos = Lerp(VectorSingle(snap.prevTransform.position), VectorSingle(snap.currTransform.position), tVec);
+    const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
+    outWasInterpolated = true;
+    return Transform3D(pos, rot);
+}
+
+void UpdateEntityRecordWriteBackPose(
+    in EntityID entity,
+    in Transform3D physXf,
+    in Transform3D renderXf,
+    in b8 wasInterpolated,
+    mut HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords
+){
+    const auto recIt = entityRecords.find(entity);
+    if(recIt == entityRecords.end())
+        return;
+    mut EcsEntityPhysicsRecord rec = recIt.value();
+    if(rec.attachedToParentBody)
+        return;
+    rec.syncedBodyPose.transform = physXf;
+    rec.hasBodyPose = true;
+    rec.syncedRenderPose.transform = renderXf;
+    rec.hasInterpolatedRenderTransform = wasInterpolated;
+}
+
 void WriteBackSinglePhysicsBody(
     in PhysicsWorld physicsWorld,
     mut World world,
@@ -2871,6 +3892,11 @@ void WriteBackSinglePhysicsBody(
     in b8 hasAnyPhysicsParents,
     in u32 bodyIdx,
     in u32 stamp,
+    in Vector<EcsBodyTransformSnapshot> snapshots,
+    in Vector<u32> snapshotMeta,
+    in b8 interpolateTransforms,
+    in f32 interpolationAlpha,
+    mut HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
     mut Vector<u32> writeBackBodyStamps,
     mut Array<Vector<EntityID>, 33u> depthBuckets,
     mut u32 maxDeferredDepth,
@@ -2915,9 +3941,12 @@ void WriteBackSinglePhysicsBody(
     if(depth == 0u){
         if(body.setIndex < physicsWorld.m_solverSets.size() && body.localIndex < physicsWorld.m_solverSets[body.setIndex].sims.size()){
             in Transform3D physXf = physicsWorld.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+            b8 wasInterp = false;
+            const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
             mut TransformComponent xf = xfOpt.value();
-            xf.position = physXf.position;
-            xf.rotation = physXf.rotation;
+            xf.position = renderXf.position;
+            xf.rotation = renderXf.rotation;
+            UpdateEntityRecordWriteBackPose(owner.entity, physXf, renderXf, wasInterp, entityRecords);
         }
         SyncRigidBodyVelocityAndAwakeDirect(physicsWorld, bodyIdx, rb);
         return;
@@ -2928,13 +3957,138 @@ void WriteBackSinglePhysicsBody(
         maxDeferredDepth = depth;
 }
 
+void FlushWriteBackDeferredDepthBuckets(
+    in PhysicsWorld worldRef,
+    in u32 maxDeferredDepth,
+    in b8 interpolateTransforms,
+    in f32 interpolationAlpha,
+    in Vector<EcsBodyTransformSnapshot> snapshots,
+    in Vector<u32> snapshotMeta,
+    in b8 syncVelAndAwake,
+    mut World world,
+    mut EcsPhysicsSyncScratch scratch,
+    mut HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords
+){
+    if(maxDeferredDepth == 0u)
+        return;
+    const u32 worldBodyCount = cast<u32>(worldRef.m_bodies.size());
+    scratch.writeBackPoseCache.clear();
+    for(u32 d = 1u; d <= maxDeferredDepth; ++d){
+        mut Vector<EntityID> bucket = scratch.writeBackDepthBuckets[d];
+        if(bucket.empty())
+            continue;
+        for(usize bi = 0u; bi < bucket.size(); ++bi){
+            const EntityID entity = bucket[bi];
+            const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
+            const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
+            if(!rbOpt.has_value() || !xfOpt.has_value())
+                continue;
+
+            mut RigidBodyComponent rb = rbOpt.value();
+            mut TransformComponent xf = xfOpt.value();
+            const u32 bIdx = rb.runtimeBodyId.index;
+            if(!rb.runtimeBodyId.valid() || rb.runtimeBodyId.worldIndex != worldRef.m_worldIndex || bIdx >= worldBodyCount)
+                continue;
+            in Body bRef = worldRef.m_bodies[bIdx];
+            if(!bRef.alive || bRef.generation != rb.runtimeBodyId.generation)
+                continue;
+            if(bRef.setIndex < worldRef.m_solverSets.size() && bRef.localIndex < worldRef.m_solverSets[bRef.setIndex].sims.size()){
+                in Transform3D physXf = worldRef.m_solverSets[bRef.setIndex].sims[bRef.localIndex].transform;
+                b8 wasInterp = false;
+                const Transform3D renderWorldXf = ComputeRenderPoseForPhysicsBody(physXf, bIdx, bRef.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+                const Optional<mut PhysicsParentComponent> ppOpt = world.borrowComponent<PhysicsParentComponent>(entity);
+                b8 cachedChildPoseReady = false;
+                EcsWorldPose childWorldPose;
+                if(ppOpt.has_value()){
+                    in PhysicsParentComponent pp = ppOpt.value();
+                    if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
+                        EcsWorldPose parentPose;
+                        if(!scratch.writeBackDisablePoseCache){
+                            const auto parentPoseIt = scratch.writeBackPoseCache.find(pp.parent);
+                            if(parentPoseIt != scratch.writeBackPoseCache.end()){
+                                parentPose = parentPoseIt.value();
+                            }
+                            else{
+                                parentPose = ResolveEntityWorldPose(pp.parent, world);
+                                scratch.writeBackPoseCache.insert_or_assign(pp.parent, parentPose);
+                            }
+                        }
+                        else{
+                            parentPose = ResolveEntityWorldPose(pp.parent, world);
+                        }
+                        const Transform3D localXf = RelativeTransform(parentPose.transform, renderWorldXf);
+                        f32 lx = localXf.position.x;
+                        f32 ly = localXf.position.y;
+                        f32 lz = localXf.position.z;
+                        if(pp.inheritScale){
+                            if(Abs(parentPose.scale.x) > 1.0e-5f)
+                                lx /= parentPose.scale.x;
+                            if(Abs(parentPose.scale.y) > 1.0e-5f)
+                                ly /= parentPose.scale.y;
+                            if(Abs(parentPose.scale.z) > 1.0e-5f)
+                                lz /= parentPose.scale.z;
+                        }
+                        xf.position = f32x4(lx, ly, lz, 0.0f);
+                        xf.rotation = localXf.rotation;
+                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
+                            VectorSingle pScale = VectorSingle(parentPose.scale);
+                            if(!pp.inheritScale)
+                                pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
+                            if(!pp.inheritScale || (Abs(parentPose.scale.x) > 1.0e-5f && Abs(parentPose.scale.y) > 1.0e-5f && Abs(parentPose.scale.z) > 1.0e-5f)){
+                                childWorldPose.transform = renderWorldXf;
+                            }
+                            else{
+                                const VectorSingle scaledLocalPos(xf.position.x * pScale.x, xf.position.y * pScale.y, xf.position.z * pScale.z, 0.0f);
+                                const VectorSingle pRot = SafeNormalizeQuat(VectorSingle(parentPose.transform.rotation));
+                                const VectorSingle cRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+                                childWorldPose.transform.position = f32x4(VectorSingle(parentPose.transform.position) + Vector3Rotate(scaledLocalPos, pRot), 0.0f);
+                                childWorldPose.transform.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(pRot, cRot)));
+                            }
+                            childWorldPose.scale = f32x4(pScale.x * xf.scale.x, pScale.y * xf.scale.y, pScale.z * xf.scale.z, 0.0f);
+                            cachedChildPoseReady = true;
+                        }
+                    }
+                    else{
+                        xf.position = renderWorldXf.position;
+                        xf.rotation = renderWorldXf.rotation;
+                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
+                            childWorldPose.transform = renderWorldXf;
+                            childWorldPose.scale = xf.scale;
+                            cachedChildPoseReady = true;
+                        }
+                    }
+                }
+                else{
+                    xf.position = renderWorldXf.position;
+                    xf.rotation = renderWorldXf.rotation;
+                    if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
+                        childWorldPose.transform = renderWorldXf;
+                        childWorldPose.scale = xf.scale;
+                        cachedChildPoseReady = true;
+                    }
+                }
+                UpdateEntityRecordWriteBackPose(entity, physXf, renderWorldXf, wasInterp, entityRecords);
+                if(!scratch.writeBackDisablePoseCache && cachedChildPoseReady)
+                    scratch.writeBackPoseCache.insert_or_assign(entity, childWorldPose);
+            }
+
+            if(syncVelAndAwake)
+                SyncRigidBodyVelocityAndAwakeDirect(worldRef, bIdx, rb);
+        }
+        bucket.clear();
+    }
+}
+
 void WriteBackPhysicsTransformsToEcs(
     in PhysicsWorld physicsWorld,
     in Span<BodyMoveEvent> frameBodyMoveEvents,
     in Vector<EcsSlotOwner> bodyIndexToEntity,
     in b8 hasAnyPhysicsParents,
     in b8 commitSnapshotsFromMoves,
+    in b8 interpolateTransforms,
+    in f32 interpolationAlpha,
     mut World world,
+    mut HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
     mut EcsPhysicsSyncScratch scratch,
     mut Vector<EcsBodyTransformSnapshot> snapshots,
     mut Vector<u32> snapshotMeta
@@ -3004,8 +4158,11 @@ void WriteBackPhysicsTransformsToEcs(
         if(!hasAnyPhysicsParents || !owner.hasPhysicsParent){
             mut TransformComponent xf = xfOpt.value();
             in Transform3D physXf = awakeSims[i].transform;
-            xf.position = physXf.position;
-            xf.rotation = physXf.rotation;
+            b8 wasInterp = false;
+            const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+            xf.position = renderXf.position;
+            xf.rotation = renderXf.rotation;
+            UpdateEntityRecordWriteBackPose(owner.entity, physXf, renderXf, wasInterp, entityRecords);
             continue;
         }
 
@@ -3013,8 +4170,11 @@ void WriteBackPhysicsTransformsToEcs(
         if(depth == 0u){
             mut TransformComponent xf = xfOpt.value();
             in Transform3D physXf = awakeSims[i].transform;
-            xf.position = physXf.position;
-            xf.rotation = physXf.rotation;
+            b8 wasInterp = false;
+            const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+            xf.position = renderXf.position;
+            xf.rotation = renderXf.rotation;
+            UpdateEntityRecordWriteBackPose(owner.entity, physXf, renderXf, wasInterp, entityRecords);
             continue;
         }
         scratch.writeBackDepthBuckets[depth].push_back(owner.entity);
@@ -3041,26 +4201,26 @@ void WriteBackPhysicsTransformsToEcs(
             scratch.dirtyPrevSnapshotBodyIndices.push_back(bodyIdx);
         }
         if(bodyIdx < worldBodyCount && scratch.writeBackBodyStamps[bodyIdx] != stamp)
-            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
+            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, snapshots, snapshotMeta, interpolateTransforms, interpolationAlpha, entityRecords, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     for(usize i = 0u; i < scratch.prevAwakeWriteBackBodyIndices.size(); ++i){
         const u32 bodyIdx = scratch.prevAwakeWriteBackBodyIndices[i];
         if(bodyIdx < worldBodyCount && scratch.writeBackBodyStamps[bodyIdx] != stamp)
-            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
+            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, snapshots, snapshotMeta, interpolateTransforms, interpolationAlpha, entityRecords, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     for(usize i = 0u; i < scratch.pendingWriteBackBodyIndices.size(); ++i){
         const u32 bodyIdx = scratch.pendingWriteBackBodyIndices[i];
         if(bodyIdx < worldBodyCount && scratch.writeBackBodyStamps[bodyIdx] != stamp)
-            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
+            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, snapshots, snapshotMeta, interpolateTransforms, interpolationAlpha, entityRecords, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
     scratch.pendingWriteBackBodyIndices.clear();
 
     if(hasAnyPhysicsParents){
         mut World worldForParentWriteBack = world;
         world.view<PhysicsParentComponent, RigidBodyComponent, TransformComponent>().each(
-            lambda[in worldBodyCount, in ownerCount, in stamp, in physicsWorld, in bodyIndexToEntity, mut worldForParentWriteBack, mut scratch, mut maxDeferredDepth](
+            lambda[in worldBodyCount, in ownerCount, in stamp, in physicsWorld, in bodyIndexToEntity, in snapshots, in snapshotMeta, in interpolateTransforms, in interpolationAlpha, mut worldForParentWriteBack, mut entityRecords, mut scratch, mut maxDeferredDepth](
                 in EntityID entity,
                 in PhysicsParentComponent pp,
                 mut RigidBodyComponent rb,
@@ -3088,8 +4248,11 @@ void WriteBackPhysicsTransformsToEcs(
                 if(depth == 0u){
                     if(body.setIndex < physicsWorld.m_solverSets.size() && body.localIndex < physicsWorld.m_solverSets[body.setIndex].sims.size()){
                         in Transform3D physXf = physicsWorld.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-                        xf.position = physXf.position;
-                        xf.rotation = physXf.rotation;
+                        b8 wasInterp = false;
+                        const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+                        xf.position = renderXf.position;
+                        xf.rotation = renderXf.rotation;
+                        UpdateEntityRecordWriteBackPose(entity, physXf, renderXf, wasInterp, entityRecords);
                     }
                     SyncRigidBodyVelocityAndAwakeDirect(physicsWorld, bodyIdx, rb);
                     return;
@@ -3102,112 +4265,78 @@ void WriteBackPhysicsTransformsToEcs(
     }
 
     scratch.prevAwakeWriteBackBodyIndices.swap(scratch.nextAwakeWriteBackBodyIndices);
+    FlushWriteBackDeferredDepthBuckets(physicsWorld, maxDeferredDepth, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, true, world, scratch, entityRecords);
+}
 
-    if(maxDeferredDepth == 0u)
+void ApplyInterpolatedRenderTransformsToEcs(
+    in PhysicsWorld physicsWorld,
+    in Vector<EcsSlotOwner> bodyIndexToEntity,
+    in b8 hasAnyPhysicsParents,
+    in f32 interpolationAlpha,
+    in Vector<EcsBodyTransformSnapshot> snapshots,
+    in Vector<u32> snapshotMeta,
+    mut World world,
+    mut HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    mut EcsPhysicsSyncScratch scratch
+){
+    const usize worldBodySize = physicsWorld.m_bodies.size();
+    const u32 worldBodyCount = cast<u32>(worldBodySize);
+    const u32 ownerCount = cast<u32>(bodyIndexToEntity.size());
+    if(worldBodyCount == 0u || ownerCount == 0u)
         return;
+    if(scratch.writeBackBodyStamps.size() < worldBodySize)
+        scratch.writeBackBodyStamps.resize(worldBodySize, 0u);
+    const u32 stamp = NextEcsPhysicsStamp(scratch.writeBackBodyStamps, scratch.writeBackStamp);
 
-    in PhysicsWorld worldRef = physicsWorld;
-    scratch.writeBackPoseCache.clear();
-    for(u32 d = 1u; d <= maxDeferredDepth; ++d){
-        mut Vector<EntityID> bucket = scratch.writeBackDepthBuckets[d];
-        if(bucket.empty())
+    scratch.writeBackDisablePoseCache = false;
+    u32 maxDeferredDepth = 0u;
+
+    in Vector<BodySim> awakeSims = physicsWorld.m_solverSets[s_AwakeSetIndex].sims;
+    for(usize i = 0u; i < awakeSims.size(); ++i){
+        const u32 bodyIdx = awakeSims[i].bodyId;
+        if(bodyIdx >= worldBodyCount || bodyIdx >= ownerCount)
             continue;
-        for(usize bi = 0u; bi < bucket.size(); ++bi){
-            const EntityID entity = bucket[bi];
-            const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
-            const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
-            if(!rbOpt.has_value() || !xfOpt.has_value())
-                continue;
+        if(scratch.writeBackBodyStamps[bodyIdx] == stamp)
+            continue;
+        scratch.writeBackBodyStamps[bodyIdx] = stamp;
 
-            mut RigidBodyComponent rb = rbOpt.value();
+        in Body body = physicsWorld.m_bodies[bodyIdx];
+        if(!body.alive || body.type == BodyType::Static)
+            continue;
+        in EcsSlotOwner owner = bodyIndexToEntity[bodyIdx];
+        if(!owner.entity.valid() || owner.generation != body.generation)
+            continue;
+
+        const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(owner.entity);
+        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(owner.entity);
+        if(!rbOpt.has_value() || !xfOpt.has_value())
+            continue;
+        in RigidBodyComponent rb = rbOpt.value();
+        if(rb.type == BodyType::Static || !rb.isEnabled || (rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform))
+            continue;
+
+        b8 wasInterp = false;
+        const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(awakeSims[i].transform, bodyIdx, body.generation, true, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+        if(!wasInterp)
+            continue;
+
+        u32 depth = 0u;
+        if(hasAnyPhysicsParents && owner.hasPhysicsParent)
+            depth = ResolvePhysicsParentDepthChecked(owner.entity, world, scratch.writeBackDisablePoseCache);
+        if(depth == 0u){
             mut TransformComponent xf = xfOpt.value();
-            const u32 bIdx = rb.runtimeBodyId.index;
-            if(!rb.runtimeBodyId.valid() || rb.runtimeBodyId.worldIndex != worldRef.m_worldIndex || bIdx >= worldBodyCount)
-                continue;
-            in Body bRef = worldRef.m_bodies[bIdx];
-            if(!bRef.alive || bRef.generation != rb.runtimeBodyId.generation)
-                continue;
-            if(bRef.setIndex < worldRef.m_solverSets.size() && bRef.localIndex < worldRef.m_solverSets[bRef.setIndex].sims.size()){
-                in Transform3D physXf = worldRef.m_solverSets[bRef.setIndex].sims[bRef.localIndex].transform;
-                const Optional<mut PhysicsParentComponent> ppOpt = world.borrowComponent<PhysicsParentComponent>(entity);
-                b8 cachedChildPoseReady = false;
-                EcsWorldPose childWorldPose;
-                if(ppOpt.has_value()){
-                    in PhysicsParentComponent pp = ppOpt.value();
-                    if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
-                        EcsWorldPose parentPose;
-                        if(!scratch.writeBackDisablePoseCache){
-                            const auto parentPoseIt = scratch.writeBackPoseCache.find(pp.parent);
-                            if(parentPoseIt != scratch.writeBackPoseCache.end()){
-                                parentPose = parentPoseIt.value();
-                            }
-                            else{
-                                parentPose = ResolveEntityWorldPose(pp.parent, world);
-                                scratch.writeBackPoseCache.insert_or_assign(pp.parent, parentPose);
-                            }
-                        }
-                        else{
-                            parentPose = ResolveEntityWorldPose(pp.parent, world);
-                        }
-                        const Transform3D localXf = RelativeTransform(parentPose.transform, physXf);
-                        f32 lx = localXf.position.x;
-                        f32 ly = localXf.position.y;
-                        f32 lz = localXf.position.z;
-                        if(pp.inheritScale){
-                            if(Abs(parentPose.scale.x) > 1.0e-5f)
-                                lx /= parentPose.scale.x;
-                            if(Abs(parentPose.scale.y) > 1.0e-5f)
-                                ly /= parentPose.scale.y;
-                            if(Abs(parentPose.scale.z) > 1.0e-5f)
-                                lz /= parentPose.scale.z;
-                        }
-                        xf.position = f32x4(lx, ly, lz, 0.0f);
-                        xf.rotation = localXf.rotation;
-                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
-                            VectorSingle pScale = VectorSingle(parentPose.scale);
-                            if(!pp.inheritScale)
-                                pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
-                            if(!pp.inheritScale || (Abs(parentPose.scale.x) > 1.0e-5f && Abs(parentPose.scale.y) > 1.0e-5f && Abs(parentPose.scale.z) > 1.0e-5f)){
-                                childWorldPose.transform = physXf;
-                            }
-                            else{
-                                const VectorSingle scaledLocalPos(xf.position.x * pScale.x, xf.position.y * pScale.y, xf.position.z * pScale.z, 0.0f);
-                                const VectorSingle pRot = SafeNormalizeQuat(VectorSingle(parentPose.transform.rotation));
-                                const VectorSingle cRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
-                                childWorldPose.transform.position = f32x4(VectorSingle(parentPose.transform.position) + Vector3Rotate(scaledLocalPos, pRot), 0.0f);
-                                childWorldPose.transform.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(pRot, cRot)));
-                            }
-                            childWorldPose.scale = f32x4(pScale.x * xf.scale.x, pScale.y * xf.scale.y, pScale.z * xf.scale.z, 0.0f);
-                            cachedChildPoseReady = true;
-                        }
-                    }
-                    else{
-                        xf.position = physXf.position;
-                        xf.rotation = physXf.rotation;
-                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
-                            childWorldPose.transform = physXf;
-                            childWorldPose.scale = xf.scale;
-                            cachedChildPoseReady = true;
-                        }
-                    }
-                }
-                else{
-                    xf.position = physXf.position;
-                    xf.rotation = physXf.rotation;
-                    if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
-                        childWorldPose.transform = physXf;
-                        childWorldPose.scale = xf.scale;
-                        cachedChildPoseReady = true;
-                    }
-                }
-                if(!scratch.writeBackDisablePoseCache && cachedChildPoseReady)
-                    scratch.writeBackPoseCache.insert_or_assign(entity, childWorldPose);
-            }
-
-            SyncRigidBodyVelocityAndAwakeDirect(worldRef, bIdx, rb);
+            xf.position = renderXf.position;
+            xf.rotation = renderXf.rotation;
+            UpdateEntityRecordWriteBackPose(owner.entity, awakeSims[i].transform, renderXf, true, entityRecords);
         }
-        bucket.clear();
+        else{
+            scratch.writeBackDepthBuckets[depth].push_back(owner.entity);
+            if(depth > maxDeferredDepth)
+                maxDeferredDepth = depth;
+        }
     }
+
+    FlushWriteBackDeferredDepthBuckets(physicsWorld, maxDeferredDepth, true, interpolationAlpha, snapshots, snapshotMeta, false, world, scratch, entityRecords);
 }
 
 

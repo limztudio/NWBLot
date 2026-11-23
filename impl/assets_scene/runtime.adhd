@@ -87,7 +87,7 @@ b8 EntityAsset::validatePayload()const{
 
 b8 EntityAsset::loadBinary(in Span<u8> binary){
     EntityAsset candidate(this.virtualPath());
-    if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components))
+    if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components, candidate.m_name))
         return false;
     if(!candidate.validatePayload())
         return false;
@@ -229,18 +229,48 @@ b8 LightComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary
     return ComponentAssetBinaryCodec().appendLight(this.component, outBinary);
 }
 
-b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
-    if(!ValidateSceneLoadedEntityHasComponents(!components.empty(), entityName))
+b8 ActiveCameraComponentAsset::loadBinary(in Span<u8> binary){
+    ActiveCameraComponentAsset candidate(this.virtualPath());
+    return ComponentAssetBinaryCodec().loadBinary(binary, candidate);
+}
+
+b8 ActiveCameraComponentAsset::loadComponentPayload(in Span<u8> payload){
+    if(!payload.empty()){
+        error("ActiveCameraComponentAsset::loadComponentPayload failed: unexpected non-empty payload");
         return false;
-    Entity entity = world.createEntity();
-    if(!ValidateCreatedSceneEcsEntity(entity.id(), entityName))
-        return false;
-    for(usize i = 0u; i < components.size(); ++i){
-        if(!components[i].valid())
-            return false;
-        components[i].deref().applyToEntity(entity);
     }
     return true;
+}
+
+b8 ActiveCameraComponentAsset::validatePayload()const{
+    return this.checkVirtualPath("ActiveCameraComponentAsset::validatePayload");
+}
+
+b8 ActiveCameraComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    outPayload.clear();
+    return true;
+}
+
+b8 ActiveCameraComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return true;
+}
+
+EntityID InstantiateSceneLoadedEntityWithResult(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
+    if(!ValidateSceneLoadedEntityHasComponents(!components.empty(), entityName))
+        return s_InvalidEntityId;
+    Entity entity = world.createEntity();
+    if(!ValidateCreatedSceneEcsEntity(entity.id(), entityName))
+        return s_InvalidEntityId;
+    for(usize i = 0u; i < components.size(); ++i){
+        if(!components[i].valid())
+            return s_InvalidEntityId;
+        components[i].deref().applyToEntity(entity);
+    }
+    return entity.id();
+}
+
+b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
+    return InstantiateSceneLoadedEntityWithResult(entityName, components, world).valid();
 }
 
 
@@ -251,6 +281,7 @@ register_asset IComponent using AssetCodecRegistration<ComponentAssetCodec>;
 register_asset TransformComponentAsset using TypedComponentAutoRegistrar<TransformComponentAsset>;
 register_asset CameraComponentAsset using TypedComponentAutoRegistrar<CameraComponentAsset>;
 register_asset LightComponentAsset using TypedComponentAutoRegistrar<LightComponentAsset>;
+register_asset ActiveCameraComponentAsset using TypedComponentAutoRegistrar<ActiveCameraComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -315,6 +346,7 @@ b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetMana
         in EntityAsset entity = loadedEntity.value().deref();
         next.entities.push_back(LoadedSceneEntity());
         mut LoadedSceneEntity nextEntity = next.entities.back();
+        nextEntity.name = entity.name();
         nextEntity.entity = ref;
         nextEntity.components.reserve(entity.components().size());
         for(in ComponentRef componentRef : entity.components()){
@@ -341,14 +373,49 @@ b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetMana
     return true;
 }
 
-b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
+void InstantiatedSceneEntities::clear(){
+    this.entities.clear();
+    this.names.clear();
+    this.namedEntities.clear();
+}
+
+EntityID InstantiatedSceneEntities::findByName(in Name name)const{
+    if(name == s_NameNone)
+        return s_InvalidEntityId;
+    const auto found = this.namedEntities.find(name);
+    if(found == this.namedEntities.end())
+        return s_InvalidEntityId;
+    return found.value();
+}
+
+b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedSceneEntities outInstantiated)const{
+    outInstantiated.clear();
     if(!ValidateSceneEntityInstantiationReady(this.valid()))
         return false;
+    outInstantiated.entities.reserve(this.m_contents.entities.size());
+    outInstantiated.names.reserve(this.m_contents.entities.size());
     for(in LoadedSceneEntity entity : this.m_contents.entities){
-        if(!InstantiateSceneLoadedEntity(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world))
+        const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
+        if(!createdId.valid())
             return false;
+        outInstantiated.entities.push_back(createdId);
+        outInstantiated.names.push_back(entity.name);
+        if(entity.name != s_NameNone)
+            outInstantiated.namedEntities.insert_or_assign(entity.name, createdId);
     }
     return true;
+}
+
+Expected<InstantiatedSceneEntities> ActiveSceneSubsystems::instantiateEntitiesWithResult(mut World world)const{
+    InstantiatedSceneEntities result;
+    if(!this.instantiateEntities(world, result))
+        return MakeUnexpected(Failure());
+    return result;
+}
+
+b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
+    InstantiatedSceneEntities instantiated;
+    return this.instantiateEntities(world, instantiated);
 }
 
 

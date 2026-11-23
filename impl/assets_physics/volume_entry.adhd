@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_physics/cook_components.adhd>
+#include <impl/assets_physics/cook_physics_assets.adhd>
 #include <impl/assets_physics/physics_subsystem.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_subsystem/cook.adhd>
@@ -31,16 +32,34 @@ Expected<ColliderComponentAsset> CookColliderComponentVolumeEntry(in ColliderCom
     return BuildComponentAssetFromEntry<ColliderComponentAsset, ColliderComponentCookEntry>(entry);
 }
 
+b8 CollectColliderAssetDependencies(
+    in AssetRef<Mesh> meshAsset,
+    in AssetRef<PhysicsMaterialAsset> materialAsset,
+    in AssetRef<ConvexHullAsset> convexHullAsset,
+    in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+    mut ICookDependencyCollector collector
+){
+    if(meshAsset.valid() && !collector.addAssetDependency(meshAsset.name(), Mesh::AssetTypeName()))
+        return false;
+    if(materialAsset.valid() && !collector.addAssetDependency(materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    if(convexHullAsset.valid() && !collector.addAssetDependency(convexHullAsset.name(), ConvexHullAsset::AssetTypeName()))
+        return false;
+    if(collisionMeshAsset.valid() && !collector.addAssetDependency(collisionMeshAsset.name(), CollisionMeshAsset::AssetTypeName()))
+        return false;
+    return true;
+}
+
 b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
     const Expected<ColliderComponentCookEntry> entry = ReadCookDependencyEntry<ColliderComponentCookEntry>(context, s_ColliderComponentDiagnosticPrefix, ParseColliderComponentCookMetadata);
     if(!entry.has_value())
         return false;
     in ColliderComponent comp = entry.value().component;
-    if(comp.meshAsset.valid() && !collector.addAssetDependency(comp.meshAsset.name(), Mesh::AssetTypeName()))
+    if(!CollectColliderAssetDependencies(comp.meshAsset, comp.materialAsset, comp.convexHullAsset, comp.collisionMeshAsset, collector))
         return false;
     for(usize i = 0u; i < comp.extraShapes.size(); ++i){
-        in AssetRef<Mesh> extraMesh = comp.extraShapes[i].meshAsset;
-        if(extraMesh.valid() && !collector.addAssetDependency(extraMesh.name(), Mesh::AssetTypeName()))
+        in ColliderShapeEntry extra = comp.extraShapes[i];
+        if(!CollectColliderAssetDependencies(extra.meshAsset, extra.materialAsset, extra.convexHullAsset, extra.collisionMeshAsset, collector))
             return false;
     }
     return true;
@@ -73,13 +92,53 @@ b8 ExtractPhysicsParentComponentDependencies(in CookDependencyItemContext contex
     return ReadCookDependencyEntry<PhysicsParentComponentCookEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata).has_value();
 }
 
+[cook_entry("physics_material", s_PhysicsMaterialDiagnosticPrefix, ParsePhysicsMaterialCookMetadata, document_and_value, log_failure)]
+Expected<PhysicsMaterialAsset> CookPhysicsMaterialVolumeEntry(in PhysicsMaterialCookEntry entry){
+    return BuildPhysicsMaterialAsset(entry);
+}
+
+b8 ExtractPhysicsMaterialDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsMaterialCookEntry>(context, s_PhysicsMaterialDiagnosticPrefix, ParsePhysicsMaterialCookMetadata).has_value();
+}
+
+[cook_entry("collision_layer_matrix", s_CollisionLayerMatrixDiagnosticPrefix, ParseCollisionLayerMatrixCookMetadata, document_and_value, log_failure)]
+Expected<CollisionLayerMatrixAsset> CookCollisionLayerMatrixVolumeEntry(in CollisionLayerMatrixCookEntry entry){
+    return BuildCollisionLayerMatrixAsset(entry);
+}
+
+b8 ExtractCollisionLayerMatrixDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<CollisionLayerMatrixCookEntry>(context, s_CollisionLayerMatrixDiagnosticPrefix, ParseCollisionLayerMatrixCookMetadata).has_value();
+}
+
+[cook_entry("convex_hull", s_ConvexHullDiagnosticPrefix, ParseConvexHullCookMetadata, document_and_value, log_failure)]
+Expected<ConvexHullAsset> CookConvexHullVolumeEntry(in ConvexHullCookEntry entry){
+    return BuildConvexHullAsset(entry);
+}
+
+b8 ExtractConvexHullDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<ConvexHullCookEntry>(context, s_ConvexHullDiagnosticPrefix, ParseConvexHullCookMetadata).has_value();
+}
+
+[cook_entry("collision_mesh", s_CollisionMeshDiagnosticPrefix, ParseCollisionMeshCookMetadata, document_and_value, log_failure)]
+Expected<CollisionMeshAsset> CookCollisionMeshVolumeEntry(in CollisionMeshCookEntry entry){
+    return BuildCollisionMeshAsset(entry);
+}
+
+b8 ExtractCollisionMeshDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<CollisionMeshCookEntry>(context, s_CollisionMeshDiagnosticPrefix, ParseCollisionMeshCookMetadata).has_value();
+}
+
 [cook_registrar]
 b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry){
     return registry.registerType(RigidBodyComponentAsset::AssetTypeName(), ExtractRigidBodyComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(ColliderComponentAsset::AssetTypeName(), ExtractColliderComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(JointComponentAsset::AssetTypeName(), ExtractJointComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName())
-        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName());
+        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(PhysicsMaterialAsset::AssetTypeName(), ExtractPhysicsMaterialDependencies)
+        && registry.registerType(CollisionLayerMatrixAsset::AssetTypeName(), ExtractCollisionLayerMatrixDependencies)
+        && registry.registerType(ConvexHullAsset::AssetTypeName(), ExtractConvexHullDependencies)
+        && registry.registerType(CollisionMeshAsset::AssetTypeName(), ExtractCollisionMeshDependencies);
 }
 
 

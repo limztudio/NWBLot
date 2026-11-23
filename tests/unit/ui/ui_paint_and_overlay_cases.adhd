@@ -1380,6 +1380,85 @@ void VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinCh
     EXPECT_NE(UiPaintOverlayVerticesAddress(first), UiPaintOverlayVerticesAddress(second));
 }
 
+void VerifyUiPaintTests_ClippedStyledPolylinesAndTransformStackEdgeCases(mut UiPaintTests self){
+    EXPECT_FALSE(self.m_builder.popTransform());
+
+    self.m_builder.pushClip(Rect(10.0f, 0.0f, 40.0f, 20.0f));
+    self.m_builder.drawLine(Point(-5000.0f, 10.0f), Point(5000.0f, 10.0f), 2.0f, Color(1.0f, 0.0f, 0.0f, 1.0f));
+    self.m_builder.drawLine(Point(0.0f, 35.0f), Point(100.0f, 35.0f), 2.0f, Color(1.0f, 0.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot clippedSnap = self.m_builder.freeze();
+    ASSERT_GT(clippedSnap.vertices().size(), 0u);
+    for(usize vi = 0u; vi < clippedSnap.vertices().size(); ++vi){
+        EXPECT_GE(clippedSnap.vertices()[vi].position.x, 7.0f);
+        EXPECT_LE(clippedSnap.vertices()[vi].position.x, 53.0f);
+        EXPECT_GE(clippedSnap.vertices()[vi].position.y, -3.0f);
+        EXPECT_LE(clippedSnap.vertices()[vi].position.y, 23.0f);
+    }
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 8u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    Array<PaintLineSegment, 2u> segs;
+    segs[0u].start = Point(10.0f, 10.0f);
+    segs[0u].end = Point(50.0f, 10.0f);
+    segs[0u].color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+    segs[0u].thickness = 4.0f;
+    segs[1u].start = Point(10.0f, 20.0f);
+    segs[1u].end = Point(50.0f, 20.0f);
+    segs[1u].color = Color(0.5f, 0.5f, 1.0f, 1.0f);
+    segs[1u].thickness = 0.0f;
+    self.m_builder.drawLineBatch(Span<PaintLineSegment>(segs.data(), 2u), 2.0f);
+    const DrawSnapshot batchSnap = self.m_builder.freeze();
+    ASSERT_GE(batchSnap.vertices().size(), 8u);
+    const f32 thick0 = Abs(batchSnap.vertices()[3u].position.y - batchSnap.vertices()[0u].position.y);
+    const f32 thick1 = Abs(batchSnap.vertices()[7u].position.y - batchSnap.vertices()[4u].position.y);
+    EXPECT_NEAR(thick0, 4.0f, 0.05f);
+    EXPECT_NEAR(thick1, 2.0f, 0.05f);
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 9u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    PaintLineStyle styled;
+    styled.thickness = 2.0f;
+    styled.cap = PaintLineCap::Round;
+    styled.join = PaintLineJoin::Miter;
+    styled.miterLimit = 1.5f;
+    styled.dashLength = 6.0f;
+    styled.gapLength = 4.0f;
+    styled.dashOffset = 1.0f;
+    styled.antiAlias = true;
+    self.m_builder.drawLine(Point(10.0f, 50.0f), Point(90.0f, 50.0f), styled, Color(0.0f, 1.0f, 0.0f, 1.0f));
+
+    PaintLineStyle polyStyle;
+    polyStyle.thickness = 4.0f;
+    polyStyle.cap = PaintLineCap::Square;
+    polyStyle.join = PaintLineJoin::Miter;
+    polyStyle.miterLimit = 1.5f;
+    Array<Point, 3u> acutePts;
+    acutePts[0u] = Point(20.0f, 80.0f);
+    acutePts[1u] = Point(80.0f, 80.0f);
+    acutePts[2u] = Point(24.0f, 84.0f);
+    self.m_builder.drawPolyline(Span<Point>(acutePts.data(), 3u), true, polyStyle, Color(1.0f, 1.0f, 0.0f, 1.0f));
+    const DrawSnapshot styleSnap = self.m_builder.freeze();
+    EXPECT_GT(styleSnap.vertices().size(), 24u);
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 10u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    self.m_builder.pushTranslate(20.0f, 10.0f);
+    self.m_builder.pushScale(2.0f, 3.0f);
+    self.m_builder.fillRect(Rect(5.0f, 4.0f, 10.0f, 5.0f), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    self.m_builder.pushTranslate(5.0f, 0.0f);
+    self.m_builder.drawLine(Point(0.0f, 0.0f), Point(10.0f, 0.0f), 1.0f, Color(1.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.popTransform());
+    ASSERT_TRUE(self.m_builder.popTransform());
+    ASSERT_TRUE(self.m_builder.popTransform());
+    EXPECT_FALSE(self.m_builder.popTransform());
+    const DrawSnapshot xfSnap = self.m_builder.freeze();
+    ASSERT_GE(xfSnap.vertices().size(), 8u);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[0u].position.x, 30.0f);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[0u].position.y, 22.0f);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[2u].position.x, 50.0f);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[2u].position.y, 37.0f);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[4u].position.x, 30.0f);
+    EXPECT_FLOAT_EQ(xfSnap.vertices()[5u].position.x, 50.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1425,6 +1504,7 @@ NWB_ADHD_GTEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposi
 NWB_ADHD_GTEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios, VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios)
 NWB_ADHD_GTEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder, VerifyUiPaintTests_BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder)
 NWB_ADHD_GTEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges, VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges)
+NWB_ADHD_GTEST_F(UiPaintTests, ClippedStyledPolylinesAndTransformStackEdgeCases, VerifyUiPaintTests_ClippedStyledPolylinesAndTransformStackEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

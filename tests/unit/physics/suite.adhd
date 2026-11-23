@@ -2,9 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
 #include <impl/assets_physics/runtime_components.adhd>
 #include <impl/ecs_physics/debug_draw.adhd>
 #include <impl/ecs_physics/system.adhd>
+#include <impl/physics/articulation.adhd>
+#include <impl/physics/buoyancy.adhd>
+#include <impl/physics/character_controller.adhd>
+#include <impl/physics/ragdoll.adhd>
+#include <impl/physics/snapshot.adhd>
+#include <impl/physics/soft_body.adhd>
+#include <impl/physics/vehicle.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
@@ -352,8 +360,8 @@ static_assert(size_of<CapsuleShape>() == 32u, "CapsuleShape size");
 static_assert(size_of<HullShape>() <= 224u, "HullShape size");
 static_assert(size_of<MeshTriangle>() == 48u, "MeshTriangle size");
 static_assert(size_of<MeshBvhNode>() == 32u, "MeshBvhNode size");
-static_assert(size_of<MeshShape>() <= 128u, "MeshShape size");
-static_assert(size_of<Shape>() == 128u, "Shape size");
+static_assert(size_of<MeshShape>() <= 224u, "MeshShape size");
+static_assert(size_of<Shape>() == 224u, "Shape size");
 static_assert(size_of<SymMat3>() == 24u, "SymMat3 size");
 static_assert(size_of<MassData>() == 64u, "MassData size");
 static_assert(size_of<BodyMoveEvent>() == 48u, "BodyMoveEvent size");
@@ -363,11 +371,11 @@ static_assert(size_of<BodySim>() == 192u, "BodySim size");
 static_assert(size_of<TreeNode>() == 48u, "TreeNode size");
 static_assert(size_of<ManifoldPoint>() == 48u, "ManifoldPoint size");
 static_assert(size_of<Manifold>() == 256u, "Manifold size");
-static_assert(size_of<Contact>() == 336u, "Contact size");
+static_assert(size_of<Contact>() == 400u, "Contact size");
 static_assert(size_of<ManifoldConstraintPoint>() == 48u, "ManifoldConstraintPoint size");
-static_assert(size_of<ContactConstraint>() == 384u, "ContactConstraint size");
-static_assert(size_of<Joint>() == 256u, "Joint size");
-static_assert(size_of<JointConstraint>() == 336u, "JointConstraint size");
+static_assert(size_of<ContactConstraint>() == 400u, "ContactConstraint size");
+static_assert(size_of<Joint>() == 320u, "Joint size");
+static_assert(size_of<JointConstraint>() == 384u, "JointConstraint size");
 static_assert(size_of<DistanceOutput>() == 48u, "DistanceOutput size");
 static_assert(size_of<SimplexVertex>() == 48u, "SimplexVertex size");
 static_assert(size_of<LocalRayHit>() == 32u, "LocalRayHit size");
@@ -4419,6 +4427,814 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
+    CpuTaskScheduler scheduler(1u);
+    const f32 dt = 1.0f / 60.0f;
+
+    {
+        PhysicsWorld world;
+        BodyDef groundBd;
+        groundBd.type = BodyType::Static;
+        groundBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId groundId = world.createBody(groundBd).value();
+        ASSERT_TRUE(world.createHullShape(groundId, ShapeDef(), MakeBoxHull(20.0f, 0.5f, 20.0f, 0.0f).value()).has_value());
+
+        BodyDef stepBd;
+        stepBd.type = BodyType::Static;
+        stepBd.position = f32x4(2.5f, 0.125f, 0.0f, 0.0f);
+        const BodyId stepId = world.createBody(stepBd).value();
+        ASSERT_TRUE(world.createHullShape(stepId, ShapeDef(), MakeBoxHull(1.5f, 0.125f, 2.0f, 0.0f).value()).has_value());
+
+        BodyDef steepBd;
+        steepBd.type = BodyType::Static;
+        steepBd.position = f32x4(-3.0f, 1.0f, 0.0f, 0.0f);
+        steepBd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), -1.0471975f));
+        const BodyId steepId = world.createBody(steepBd).value();
+        ASSERT_TRUE(world.createHullShape(steepId, ShapeDef(), MakeBoxHull(2.0f, 0.25f, 2.0f, 0.0f).value()).has_value());
+
+        BodyDef crateBd;
+        crateBd.type = BodyType::Dynamic;
+        crateBd.position = f32x4(0.0f, 0.4f, 2.2f, 0.0f);
+        const BodyId crateId = world.createBody(crateBd).value();
+        ASSERT_TRUE(world.createHullShape(crateId, ShapeDef(), MakeBoxHull(0.4f, 0.4f, 0.4f, 0.0f).value()).has_value());
+
+        BodyDef platBd;
+        platBd.type = BodyType::Kinematic;
+        platBd.position = f32x4(0.0f, 0.1f, -5.0f, 0.0f);
+        const BodyId platId = world.createBody(platBd).value();
+        ASSERT_TRUE(world.createHullShape(platId, ShapeDef(), MakeBoxHull(2.0f, 0.1f, 2.0f, 0.0f).value()).has_value());
+
+        CharacterControllerDef cDef;
+        cDef.radius = 0.35f;
+        cDef.halfHeight = 0.5f;
+        cDef.stepUpHeight = 0.4f;
+        CharacterController cc;
+        cc.init(cDef, VectorSingle(0.0f, 0.85f, 0.0f, 0.0f), QuaternionIdentity());
+
+        for(u32 i = 0u; i < 15u; ++i){
+            cc.linearVelocity = f32x4(0.0f, -5.0f, 0.0f, 0.0f);
+            cc.update(world, dt);
+        }
+        EXPECT_TRUE(cc.groundState == CharacterGroundState::OnGround);
+
+        for(u32 i = 0u; i < 45u; ++i){
+            cc.linearVelocity = f32x4(4.0f, -1.0f, 0.0f, 0.0f);
+            cc.update(world, dt);
+        }
+        EXPECT_GT(cc.position.x, 1.3f);
+        EXPECT_GT(cc.position.y, 1.0f);
+        EXPECT_TRUE(cc.groundState == CharacterGroundState::OnGround);
+
+        cc.position = f32x4(0.0f, 0.9f, 0.0f, 0.0f);
+        for(u32 i = 0u; i < 45u; ++i){
+            cc.linearVelocity = f32x4(0.0f, -1.0f, 4.0f, 0.0f);
+            cc.update(world, dt);
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+        }
+        EXPECT_GT(world.tryGetBodyTransform(crateId).value().position.z, 2.3f);
+
+        cc.position = f32x4(0.0f, 1.15f, -5.0f, 0.0f);
+        cc.groundState = CharacterGroundState::InAir;
+        for(u32 i = 0u; i < 10u; ++i){
+            cc.linearVelocity = f32x4(0.0f, -2.0f, 0.0f, 0.0f);
+            cc.update(world, dt);
+        }
+        EXPECT_TRUE(cc.groundState == CharacterGroundState::OnGround);
+        const f32 zBeforePlat = cc.position.z;
+        for(u32 i = 0u; i < 10u; ++i){
+            world.setKinematicTarget(platId, Transform3D(VectorSingle(0.0f, 0.1f, -5.0f + 0.1f * cast<f32>(i + 1u), 0.0f), QuaternionIdentity()), dt);
+            StepPhysicsWorld(world, dt, 1u, scheduler);
+            cc.linearVelocity = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+            cc.update(world, dt);
+        }
+        EXPECT_GT(cc.position.z, zBeforePlat + 0.5f);
+
+        cc.position = f32x4(-2.2f, 2.4f, 0.0f, 0.0f);
+        cc.groundState = CharacterGroundState::InAir;
+        for(u32 i = 0u; i < 15u; ++i){
+            cc.linearVelocity = f32x4(-3.0f, -4.0f, 0.0f, 0.0f);
+            cc.update(world, dt);
+        }
+        EXPECT_TRUE(cc.groundState != CharacterGroundState::OnGround);
+        EXPECT_TRUE(cc.trySetShapeDimensions(world, 0.3f, 0.35f));
+    }
+
+    {
+        PhysicsWorld world;
+        BodyDef gBd;
+        gBd.type = BodyType::Static;
+        gBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId gId = world.createBody(gBd).value();
+        ASSERT_TRUE(world.createHullShape(gId, ShapeDef(), MakeBoxHull(100.0f, 0.5f, 100.0f, 0.0f).value()).has_value());
+
+        BodyDef chBd;
+        chBd.type = BodyType::Dynamic;
+        chBd.position = f32x4(0.0f, 0.75f, 0.0f, 0.0f);
+        chBd.allowFastRotation = true;
+        const BodyId chId = world.createBody(chBd).value();
+        ShapeDef chSd;
+        chSd.density = 300.0f;
+        ASSERT_TRUE(world.createHullShape(chId, chSd, MakeBoxHull(0.9f, 0.3f, 1.8f, 0.0f).value()).has_value());
+
+        Array<VehicleWheelDef, 4u> wDefs;
+        wDefs[0u].attachmentPoint = f32x4(-0.8f, -0.1f, 1.3f, 0.0f);
+        wDefs[0u].isSteerable = true; wDefs[0u].isDriven = false; wDefs[0u].antiRollPairIndex = 1;
+        wDefs[1u].attachmentPoint = f32x4(0.8f, -0.1f, 1.3f, 0.0f);
+        wDefs[1u].isSteerable = true; wDefs[1u].isDriven = false; wDefs[1u].antiRollPairIndex = 0;
+        wDefs[2u].attachmentPoint = f32x4(-0.8f, -0.1f, -1.3f, 0.0f);
+        wDefs[2u].isSteerable = false; wDefs[2u].isDriven = true; wDefs[2u].antiRollPairIndex = 3;
+        wDefs[3u].attachmentPoint = f32x4(0.8f, -0.1f, -1.3f, 0.0f);
+        wDefs[3u].isSteerable = false; wDefs[3u].isDriven = true; wDefs[3u].antiRollPairIndex = 2;
+
+        VehicleController veh;
+        veh.init(chId, VehicleEngineDef(), Span<VehicleWheelDef>(wDefs.data(), 4u));
+        const f32 ackLeft = veh.computeAckermanAngle(0u, 0.6f);
+        const f32 ackRight = veh.computeAckermanAngle(1u, 0.6f);
+        EXPECT_GT(Abs(ackRight), Abs(ackLeft) + 1.0e-3f);
+
+        VehicleInput vIn;
+        vIn.throttle = 1.0f;
+        for(u32 i = 0u; i < 60u; ++i){
+            veh.step(world, vIn, dt);
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+        }
+        EXPECT_TRUE(veh.wheelStates[2u].isGrounded);
+        EXPECT_GT(veh.currentSpeedMps, 1.5f);
+        EXPECT_GT(world.tryGetBodyTransform(chId).value().position.z, 0.5f);
+        EXPECT_GT(veh.engineRpm, veh.engine.idleRpm);
+    }
+
+    {
+        PhysicsWorld world;
+        Array<RagdollBoneDef, 2u> bones;
+        bones[0u].parentIndex = s_NullIndex;
+        bones[0u].bodyDef.type = BodyType::Dynamic;
+        bones[0u].bodyDef.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+        bones[0u].bodyDef.gravityScale = 0.0f;
+        bones[0u].capsule.center1Radius = f32x4(0.0f, -0.3f, 0.0f, 0.15f);
+        bones[0u].capsule.center2 = f32x4(0.0f, 0.3f, 0.0f, 0.0f);
+        bones[0u].motorMaxTorque = 80.0f;
+
+        bones[1u].parentIndex = 0u;
+        bones[1u].bodyDef.type = BodyType::Dynamic;
+        bones[1u].bodyDef.position = f32x4(0.0f, 2.8f, 0.0f, 0.0f);
+        bones[1u].bodyDef.gravityScale = 0.0f;
+        bones[1u].capsule.center1Radius = f32x4(0.0f, -0.25f, 0.0f, 0.14f);
+        bones[1u].capsule.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        bones[1u].jointAnchorWorld = f32x4(0.0f, 2.4f, 0.0f, 0.0f);
+        bones[1u].swingLimitY = 0.8f;
+        bones[1u].swingLimitZ = 0.8f;
+        bones[1u].motorMaxTorque = 120.0f;
+        bones[1u].motorHertz = 8.0f;
+
+        RagdollInstance rag;
+        ASSERT_TRUE(rag.create(world, Span<RagdollBoneDef>(bones.data(), 2u)));
+        EXPECT_TRUE(rag.isValid(world));
+
+        Array<Transform3D, 2u> targets;
+        targets[0u] = Transform3D(VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), QuaternionIdentity());
+        targets[1u] = Transform3D(VectorSingle(0.0f, 2.8f, 0.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.35f));
+
+        for(u32 i = 0u; i < 30u; ++i){
+            rag.driveToPose(world, Span<Transform3D>(targets.data(), 2u), 1.0f, dt);
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+        }
+
+        Vector<Transform3D> poseOut;
+        rag.readPose(world, poseOut);
+        ASSERT_EQ(poseOut.size(), cast<usize>(2u));
+        EXPECT_GT(Abs(poseOut[1u].rotation.z), 0.03f);
+        rag.destroy(world);
+        EXPECT_FALSE(rag.isValid(world));
+    }
+
+    {
+        PhysicsWorld world;
+        PhysicsEnvironment env;
+
+        FluidVolume water;
+        water.shape = FluidVolumeShape::HalfSpacePlane;
+        water.surfaceNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 2.0f);
+        water.density = 1000.0f;
+        env.fluids.push_back(water);
+
+        BodyDef floatBd;
+        floatBd.type = BodyType::Dynamic;
+        floatBd.position = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+        const BodyId floatId = world.createBody(floatBd).value();
+        ShapeDef floatSd;
+        floatSd.density = 350.0f;
+        ASSERT_TRUE(world.createSphereShape(floatId, floatSd, MakeSphereShape(VectorSingle(0.0f), 0.4f).value()).has_value());
+
+        ForceField ptField;
+        ptField.type = ForceFieldType::PointGravity;
+        ptField.originOrDirection = f32x4(12.0f, 5.0f, 0.0f, 0.0f);
+        ptField.strength = 80.0f;
+        ptField.radius = 10.0f;
+        env.forceFields.push_back(ptField);
+
+        BodyDef orbBd;
+        orbBd.type = BodyType::Dynamic;
+        orbBd.gravityScale = 0.0f;
+        orbBd.position = f32x4(10.0f, 5.0f, 0.0f, 0.0f);
+        const BodyId orbId = world.createBody(orbBd).value();
+        ASSERT_TRUE(world.createSphereShape(orbId, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.25f).value()).has_value());
+
+        for(u32 i = 0u; i < 35u; ++i){
+            env.step(world, dt);
+            StepPhysicsWorld(world, dt, 1u, scheduler);
+        }
+        EXPECT_GT(world.tryGetBodyTransform(floatId).value().position.y, 0.9f);
+        EXPECT_GT(world.tryGetBodyTransform(orbId).value().position.x, 10.2f);
+    }
+
+    {
+        PhysicsWorld world;
+        Array<ArticulationLinkDef, 3u> links;
+        links[0u].parentIndex = s_NullIndex;
+
+        links[1u].parentIndex = 0u;
+        links[1u].jointType = ArticulationJointType::Revolute;
+        links[1u].parentToJoint = Transform3D(VectorSingle(0.0f), QuaternionIdentity());
+        links[1u].jointToChild = Transform3D(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity());
+        links[1u].jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        links[1u].mass = 1.0f;
+
+        links[2u].parentIndex = 1u;
+        links[2u].jointType = ArticulationJointType::Revolute;
+        links[2u].parentToJoint = Transform3D(VectorSingle(0.0f), QuaternionIdentity());
+        links[2u].jointToChild = Transform3D(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity());
+        links[2u].jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        links[2u].mass = 1.0f;
+
+        Articulation art;
+        ASSERT_TRUE(art.init(Transform3D(VectorSingle(0.0f, 5.0f, 0.0f, 0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(links.data(), 3u)));
+        for(u32 i = 0u; i < 30u; ++i)
+            art.step(world, dt);
+
+        const VectorSingle p0 = VectorSingle(art.linkStates[0u].worldTransform.position);
+        const VectorSingle p1 = VectorSingle(art.linkStates[1u].worldTransform.position);
+        const VectorSingle p2 = VectorSingle(art.linkStates[2u].worldTransform.position);
+        const f32 len01 = Vector3Length(VectorSingle(p1 - p0, 0.0f)).x;
+        const f32 len12 = Vector3Length(VectorSingle(p2 - p1, 0.0f)).x;
+        EXPECT_NEAR(len01, 1.0f, 1.0e-4f);
+        EXPECT_NEAR(len12, 1.0f, 1.0e-4f);
+        EXPECT_LT(p1.y, p0.y - 0.1f);
+    }
+
+    {
+        PhysicsWorld world;
+        BodyDef floorBd;
+        floorBd.type = BodyType::Static;
+        floorBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId floorId = world.createBody(floorBd).value();
+        ASSERT_TRUE(world.createHullShape(floorId, ShapeDef(), MakeBoxHull(10.0f, 0.5f, 10.0f, 0.0f).value()).has_value());
+
+        BodyDef boxBd;
+        boxBd.type = BodyType::Dynamic;
+        boxBd.position = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+        const BodyId boxId = world.createBody(boxBd).value();
+        ASSERT_TRUE(world.createHullShape(boxId, ShapeDef(), MakeBoxHull(0.8f, 0.5f, 0.8f, 0.0f).value()).has_value());
+
+        SoftBody cloth = CreateClothGrid(
+            VectorSingle(3.0f, 4.0f, 0.0f, 0.0f),
+            VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, 0.0f, 1.0f, 0.0f),
+            3u, 3u, 0.5f, 0.5f, 0.002f, 0.005f
+        );
+        cloth.particles[0u].isFixed = true;
+        cloth.particles[2u].isFixed = true;
+        cloth.particles[6u].isFixed = true;
+        cloth.particles[8u].isFixed = true;
+
+        SoftBody tetBox = CreateTetrahedralBox(VectorSingle(0.0f, 1.3f, 0.0f, 0.0f), VectorSingle(0.3f, 0.3f, 0.3f, 0.0f), 4.0f, 0.0f, 0.0f);
+        for(u32 i = 0u; i < 40u; ++i){
+            cloth.step(world, dt);
+            tetBox.step(world, dt);
+            StepPhysicsWorld(world, dt, 1u, scheduler);
+        }
+        EXPECT_LT(cloth.particles[4u].position.y, 3.95f);
+        EXPECT_GT(tetBox.computeWorldAabb().lowerBound.y, 0.5f);
+    }
+
+    {
+        PhysicsWorld world;
+        BodyDef gBd;
+        gBd.type = BodyType::Static;
+        gBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId gId = world.createBody(gBd).value();
+        ASSERT_TRUE(world.createHullShape(gId, ShapeDef(), MakeBoxHull(10.0f, 0.5f, 10.0f, 0.0f).value()).has_value());
+
+        BodyDef aBd;
+        aBd.type = BodyType::Dynamic;
+        aBd.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+        aBd.linearVelocity = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        const BodyId aId = world.createBody(aBd).value();
+        ASSERT_TRUE(world.createHullShape(aId, ShapeDef(), MakeBoxHull(0.4f, 0.4f, 0.4f, 0.0f).value()).has_value());
+
+        BodyDef bBd;
+        bBd.type = BodyType::Dynamic;
+        bBd.position = f32x4(0.8f, 2.0f, 0.0f, 0.0f);
+        const BodyId bId = world.createBody(bBd).value();
+        ASSERT_TRUE(world.createSphereShape(bId, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.35f).value()).has_value());
+
+        JointDef jd;
+        jd.type = JointType::SixDof;
+        jd.bodyIdA = aId;
+        jd.bodyIdB = bId;
+        jd.localAnchorA = f32x4(0.4f, 0.0f, 0.0f, 0.0f);
+        jd.localAnchorB = f32x4(-0.4f, 0.0f, 0.0f, 0.0f);
+        jd.sixDofAxes[0u].motion = JointMotion::Limited;
+        jd.sixDofAxes[0u].lowerLimit = -0.2f;
+        jd.sixDofAxes[0u].upperLimit = 0.2f;
+        ASSERT_TRUE(world.createJoint(jd).has_value());
+
+        for(u32 i = 0u; i < 20u; ++i)
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+
+        Vector<u8> snap;
+        ASSERT_TRUE(SerializePhysicsWorldSnapshot(world, snap));
+        const u64 hashAtSnap = ComputePhysicsWorldStateHash(world);
+        EXPECT_NE(hashAtSnap, 0u);
+
+        Vector<u8> corrupt = snap;
+        corrupt[corrupt.size() - 1u] ^= 0x5au;
+        EXPECT_FALSE(RestorePhysicsWorldSnapshot(Span<u8>(corrupt.data(), corrupt.size()), world));
+        EXPECT_EQ(ComputePhysicsWorldStateHash(world), hashAtSnap);
+
+        for(u32 i = 0u; i < 20u; ++i)
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+        const u64 futureHash = ComputePhysicsWorldStateHash(world);
+
+        ASSERT_TRUE(RestorePhysicsWorldSnapshot(Span<u8>(snap.data(), snap.size()), world));
+        EXPECT_EQ(ComputePhysicsWorldStateHash(world), hashAtSnap);
+
+        for(u32 i = 0u; i < 20u; ++i)
+            StepPhysicsWorld(world, dt, 2u, scheduler);
+        EXPECT_EQ(ComputePhysicsWorldStateHash(world), futureHash);
+    }
+}
+
+void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
+    {
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+        PhysicsAssetBinaryCodec codec;
+
+        PhysicsMaterialAsset matAsset(Name("physics/edge_mat"));
+        SurfaceMaterial sm;
+        sm.friction = 0.42f;
+        sm.staticFriction = 0.65f;
+        sm.restitution = 0.25f;
+        sm.rollingResistance = 0.08f;
+        sm.tangentSpeed = 1.5f;
+        sm.anisotropicFriction = f32x4(1.0f, 0.8f, 0.6f, 0.0f);
+        sm.frictionCombineMode = MaterialCombineMode::Max;
+        sm.restitutionCombineMode = MaterialCombineMode::Multiply;
+        matAsset.setMaterial(sm);
+        ASSERT_TRUE(matAsset.validatePayload());
+        Vector<u8> matBin;
+        ASSERT_TRUE(codec.serializePhysicsMaterial(matAsset.surfaceMaterial(), matBin));
+        PhysicsMaterialAsset matLoaded(Name("physics/edge_mat"));
+        ASSERT_TRUE(matLoaded.loadBinary(matBin));
+        EXPECT_FLOAT_EQ(matLoaded.surfaceMaterial().friction, 0.42f);
+        EXPECT_FLOAT_EQ(matLoaded.surfaceMaterial().staticFriction, 0.65f);
+        EXPECT_EQ(cast<u8>(matLoaded.surfaceMaterial().frictionCombineMode), cast<u8>(MaterialCombineMode::Max));
+        Vector<u8> matTrunc = matBin;
+        matTrunc.pop_back();
+        EXPECT_FALSE(matLoaded.loadBinary(matTrunc));
+
+        CollisionLayerMatrixAsset layerAsset(Name("physics/edge_layers"));
+        layerAsset.matrix.layerNames[0u] = Name("player");
+        layerAsset.matrix.layerNames[1u] = Name("trigger");
+        ASSERT_TRUE(layerAsset.setLayersCollide(0u, 1u, false));
+        ASSERT_TRUE(layerAsset.validatePayload());
+        Vector<u8> layerBin;
+        ASSERT_TRUE(codec.serializeCollisionLayerMatrix(layerAsset.matrix, layerBin));
+        CollisionLayerMatrixAsset layerLoaded(Name("physics/edge_layers"));
+        ASSERT_TRUE(layerLoaded.loadBinary(layerBin));
+        EXPECT_FALSE(layerLoaded.layersCollide(0u, 1u));
+        EXPECT_EQ(layerLoaded.findLayerIndex(Name("trigger")), 1u);
+        Vector<u8> layerBad = layerBin;
+        layerBad[0u] ^= 0xFFu;
+        EXPECT_FALSE(layerLoaded.loadBinary(layerBad));
+
+        Array<f32x4, 8u> pts;
+        pts[0u] = f32x4(-0.5f, -0.5f, -0.5f, 0.0f);
+        pts[1u] = f32x4( 0.5f, -0.5f, -0.5f, 0.0f);
+        pts[2u] = f32x4( 0.5f, -0.5f,  0.5f, 0.0f);
+        pts[3u] = f32x4(-0.5f, -0.5f,  0.5f, 0.0f);
+        pts[4u] = f32x4(-0.3f,  0.5f, -0.3f, 0.0f);
+        pts[5u] = f32x4( 0.3f,  0.5f, -0.3f, 0.0f);
+        pts[6u] = f32x4( 0.3f,  0.5f,  0.3f, 0.0f);
+        pts[7u] = f32x4(-0.3f,  0.5f,  0.3f, 0.0f);
+        const Expected<HullShape> hullRes = BuildConvexHull(pts, 0.02f);
+        ASSERT_TRUE(hullRes.has_value());
+        ConvexHullAsset hullAsset(Name("physics/edge_hull"));
+        hullAsset.setHull(hullRes.value());
+        ASSERT_TRUE(hullAsset.validatePayload());
+        Vector<u8> hullBin;
+        ASSERT_TRUE(codec.serializeConvexHull(hullAsset.hullShape(), hullBin));
+        ConvexHullAsset hullLoaded(Name("physics/edge_hull"));
+        ASSERT_TRUE(hullLoaded.loadBinary(hullBin));
+        EXPECT_EQ(hullLoaded.hullShape().vertices.size(), hullAsset.hullShape().vertices.size());
+        Vector<u8> hullTrunc = hullBin;
+        hullTrunc.pop_back();
+        EXPECT_FALSE(hullLoaded.loadBinary(hullTrunc));
+
+        Vector<f32x4> mVerts;
+        mVerts.push_back(f32x4(-2.0f, 0.0f, -2.0f, 0.0f));
+        mVerts.push_back(f32x4( 2.0f, 0.0f, -2.0f, 0.0f));
+        mVerts.push_back(f32x4( 2.0f, 0.0f,  2.0f, 0.0f));
+        mVerts.push_back(f32x4(-2.0f, 0.0f,  2.0f, 0.0f));
+        Vector<u32> mIdx;
+        mIdx.push_back(0u); mIdx.push_back(1u); mIdx.push_back(2u);
+        mIdx.push_back(0u); mIdx.push_back(2u); mIdx.push_back(3u);
+        const Expected<MeshShape> meshRes = MakeMeshShape(Span<f32x4>(mVerts), Span<u32>(mIdx), 0.01f);
+        ASSERT_TRUE(meshRes.has_value());
+        CollisionMeshAsset meshAsset(Name("physics/edge_mesh"));
+        meshAsset.setMesh(meshRes.value());
+        ASSERT_TRUE(meshAsset.validatePayload());
+        Vector<u8> meshBin;
+        ASSERT_TRUE(codec.serializeCollisionMesh(meshAsset.meshShape(), meshBin));
+        CollisionMeshAsset meshLoaded(Name("physics/edge_mesh"));
+        ASSERT_TRUE(meshLoaded.loadBinary(meshBin));
+        EXPECT_EQ(meshLoaded.meshShape().triangles.size(), 2u);
+        Vector<u8> meshBad = meshBin;
+        meshBad[meshBad.size() - 1u] ^= 0x55u;
+        meshBad[0u] ^= 0x55u;
+        EXPECT_FALSE(meshLoaded.loadBinary(meshBad));
+    }
+
+    {
+        ColliderComponentAsset colV3(Name("physics/v3_col"));
+        colV3.component.shapeType = ShapeType::Cylinder;
+        colV3.component.radius = 0.45f;
+        colV3.component.cylinderHalfHeight = 0.9f;
+        colV3.component.staticFriction = 0.75f;
+        colV3.component.anisotropicFriction = f32x4(1.0f, 0.5f, 0.5f, 0.0f);
+        ColliderShapeEntry extraCone;
+        extraCone.shapeType = ShapeType::Cone;
+        extraCone.radius = 0.35f;
+        extraCone.cylinderHalfHeight = 0.6f;
+        colV3.component.extraShapes.push_back(extraCone);
+        ColliderShapeEntry extraPlane;
+        extraPlane.shapeType = ShapeType::Plane;
+        extraPlane.planeNormalOffset = f32x4(0.0f, 1.0f, 0.0f, -1.5f);
+        extraPlane.halfExtents = f32x4(5.0f, 0.0f, 5.0f, 0.0f);
+        colV3.component.extraShapes.push_back(extraPlane);
+        ASSERT_TRUE(colV3.validatePayload());
+        Vector<u8> colBytes;
+        ASSERT_TRUE(colV3.serializeComponentPayload(colBytes));
+        ColliderComponentAsset colOut(Name("physics/v3_col"));
+        ASSERT_TRUE(colOut.loadComponentPayload(colBytes));
+        EXPECT_EQ(cast<u8>(colOut.component.shapeType), cast<u8>(ShapeType::Cylinder));
+        EXPECT_FLOAT_EQ(colOut.component.cylinderHalfHeight, 0.9f);
+        ASSERT_EQ(colOut.component.extraShapes.size(), 2u);
+        EXPECT_EQ(cast<u8>(colOut.component.extraShapes[0u].shapeType), cast<u8>(ShapeType::Cone));
+        EXPECT_EQ(cast<u8>(colOut.component.extraShapes[1u].shapeType), cast<u8>(ShapeType::Plane));
+
+        JointComponentAsset jV3(Name("physics/v3_joint"));
+        jV3.component.type = JointType::SixDof;
+        jV3.component.sixDofAxes[0u].motion = JointMotion::Limited;
+        jV3.component.sixDofAxes[0u].lowerLimit = -0.5f;
+        jV3.component.sixDofAxes[0u].upperLimit = 0.5f;
+        JointEntry pulleyExtra;
+        pulleyExtra.type = JointType::Pulley;
+        pulleyExtra.ratio = 1.5f;
+        pulleyExtra.groundAnchorA = f32x4(-1.0f, 4.0f, 0.0f, 0.0f);
+        pulleyExtra.groundAnchorB = f32x4(1.0f, 4.0f, 0.0f, 0.0f);
+        pulleyExtra.lengthA = 2.0f;
+        pulleyExtra.lengthB = 2.0f;
+        jV3.component.extraJoints.push_back(pulleyExtra);
+        JointEntry pathExtra;
+        pathExtra.type = JointType::Path;
+        pathExtra.pathClosed = true;
+        pathExtra.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        pathExtra.pathPoints.push_back(f32x4(2.0f, 0.0f, 0.0f, 0.0f));
+        pathExtra.pathPoints.push_back(f32x4(2.0f, 2.0f, 0.0f, 0.0f));
+        jV3.component.extraJoints.push_back(pathExtra);
+        ASSERT_TRUE(jV3.validatePayload());
+        Vector<u8> jBytes;
+        ASSERT_TRUE(jV3.serializeComponentPayload(jBytes));
+        JointComponentAsset jOut(Name("physics/v3_joint"));
+        ASSERT_TRUE(jOut.loadComponentPayload(jBytes));
+        EXPECT_EQ(cast<u8>(jOut.component.type), cast<u8>(JointType::SixDof));
+        EXPECT_EQ(cast<u8>(jOut.component.sixDofAxes[0u].motion), cast<u8>(JointMotion::Limited));
+        ASSERT_EQ(jOut.component.extraJoints.size(), 2u);
+        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[0u].type), cast<u8>(JointType::Pulley));
+        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[1u].type), cast<u8>(JointType::Path));
+        EXPECT_EQ(jOut.component.extraJoints[1u].pathPoints.size(), 3u);
+
+        PhysicsParentComponentAsset ppAsset(Name("physics/v3_parent"));
+        ppAsset.component.parentEntityName = Name("parent_ent");
+        ppAsset.component.attachColliderToParentBody = true;
+        Vector<u8> ppBytes;
+        ASSERT_TRUE(ppAsset.serializeComponentPayload(ppBytes));
+        EXPECT_EQ(ppBytes.size(), size_of<PhysicsParentComponentPayloadBinary>());
+        PhysicsParentComponentAsset ppOut(Name("physics/v3_parent"));
+        ASSERT_TRUE(ppOut.loadComponentPayload(ppBytes));
+        EXPECT_TRUE(ppOut.component.attachColliderToParentBody);
+        EXPECT_TRUE(ppOut.component.inheritScale);
+
+        PhysicsWorldConfigComponentAsset wcV3(Name("physics/v3_cfg"));
+        wcV3.component.enableGpuCollision = false;
+        wcV3.component.forceGpuCollision = true;
+        wcV3.component.gpuResidentMode = true;
+        wcV3.component.useGpuLbvhBroadphase = true;
+        wcV3.component.interpolateTransforms = true;
+        Vector<u8> wcBytes;
+        ASSERT_TRUE(wcV3.serializeComponentPayload(wcBytes));
+        PhysicsWorldConfigComponentAsset wcOut(Name("physics/v3_cfg"));
+        ASSERT_TRUE(wcOut.loadComponentPayload(wcBytes));
+        EXPECT_FALSE(wcOut.component.enableGpuCollision);
+        EXPECT_TRUE(wcOut.component.forceGpuCollision);
+        EXPECT_TRUE(wcOut.component.gpuResidentMode);
+        EXPECT_TRUE(wcOut.component.useGpuLbvhBroadphase);
+        EXPECT_TRUE(wcOut.component.interpolateTransforms);
+    }
+
+    {
+        EcsTestWorld tw;
+        mut PhysicsSystem physSys = tw.world.addSystem<PhysicsSystem>(tw.world);
+
+        Entity cfgEnt = tw.world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        cfg.subStepCount = 1u;
+
+        Entity parentEnt = tw.world.createEntity();
+        mut TransformComponent pXf = parentEnt.addComponent<TransformComponent>();
+        pXf.position = f32x4(0.0f, 5.0f, 0.0f, 0.0f);
+        mut RigidBodyComponent pRb = parentEnt.addComponent<RigidBodyComponent>();
+        pRb.type = BodyType::Dynamic;
+        mut ColliderComponent pCol = parentEnt.addComponent<ColliderComponent>();
+        pCol.shapeType = ShapeType::Hull;
+        pCol.isBox = true;
+        pCol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        const BodyId parentBodyId = pRb.runtimeBodyId;
+        ASSERT_TRUE(parentBodyId.valid());
+        Vector<ShapeId> pShapes;
+        physSys.physicsWorld().bodyShapes(parentBodyId, pShapes);
+        EXPECT_EQ(pShapes.size(), 1u);
+        const f32 baseMass = physSys.physicsWorld().tryGetBodyMassData(parentBodyId).value().mass();
+
+        Entity childEnt = tw.world.createEntity();
+        childEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 3.0f, 0.0f, 0.0f);
+        childEnt.addComponent<PhysicsParentComponent>().parent = parentEnt.id();
+        childEnt.getComponent<PhysicsParentComponent>().attachColliderToParentBody = true;
+        mut ColliderComponent cCol = childEnt.addComponent<ColliderComponent>();
+        cCol.shapeType = ShapeType::Sphere;
+        cCol.radius = 0.5f;
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_EQ(cCol.boundBodyId, parentBodyId);
+        physSys.physicsWorld().bodyShapes(parentBodyId, pShapes);
+        EXPECT_EQ(pShapes.size(), 2u);
+        EXPECT_GT(physSys.physicsWorld().tryGetBodyMassData(parentBodyId).value().mass(), baseMass + 0.1f);
+
+        childEnt.getComponent<PhysicsParentComponent>().attachColliderToParentBody = false;
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_NE(cCol.boundBodyId, parentBodyId);
+        EXPECT_TRUE(cCol.boundBodyId.valid());
+        EXPECT_EQ(physSys.physicsWorld().tryGetBodyType(cCol.boundBodyId).value(), BodyType::Static);
+        physSys.physicsWorld().bodyShapes(parentBodyId, pShapes);
+        EXPECT_EQ(pShapes.size(), 1u);
+        EXPECT_NEAR(physSys.physicsWorld().tryGetBodyMassData(parentBodyId).value().mass(), baseMass, 1.0e-3f);
+
+        CollisionLayerMatrix mat;
+        mat.layerNames[0u] = Name("solid");
+        mat.layerNames[1u] = Name("ghost");
+        ASSERT_TRUE(mat.setLayersCollide(0u, 1u, false));
+        physSys.setCollisionLayerMatrix(mat);
+        const Filter ghostFilter = physSys.makeLayerFilterByName(Name("ghost"), 0);
+        EXPECT_EQ(ghostFilter.categoryBits, 2u);
+        EXPECT_EQ(ghostFilter.maskBits & 1u, 0u);
+
+        ASSERT_TRUE(physSys.setLinearVelocity(parentEnt.id(), VectorSingle(4.0f, 0.0f, 0.0f, 0.0f)));
+        Vector<u8> ecsSnap;
+        ASSERT_TRUE(physSys.captureWorldSnapshot(ecsSnap));
+        const Transform3D xfAtSnap = physSys.tryGetBodyTransform(parentEnt.id()).value();
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_GT(physSys.tryGetBodyTransform(parentEnt.id()).value().position.x, xfAtSnap.position.x + 0.05f);
+        ASSERT_TRUE(physSys.restoreWorldSnapshot(ecsSnap));
+        EXPECT_NEAR(physSys.tryGetBodyTransform(parentEnt.id()).value().position.x, xfAtSnap.position.x, 1.0e-5f);
+        EXPECT_NEAR(physSys.tryGetLinearVelocity(parentEnt.id()).value().x, 4.0f, 1.0e-5f);
+
+        const VectorSingle snapPos = VectorSingle(xfAtSnap.position);
+        RayCastInput rayIn;
+        rayIn.origin = f32x4(snapPos.x, snapPos.y + 3.0f, snapPos.z, 0.0f);
+        rayIn.translation = f32x4(0.0f, -6.0f, 0.0f, 0.0f);
+        EXPECT_TRUE(physSys.rayCastAny(rayIn));
+        const EcsClosestPointHit cpHit = physSys.closestPoint(VectorSingle(snapPos.x + 1.2f, snapPos.y, snapPos.z, 0.0f), 5.0f, Filter(), false);
+        ASSERT_TRUE(cpHit.hit.hit);
+        EXPECT_EQ(cpHit.entity, parentEnt.id());
+        Vector<EcsShapeOverlapHit> ovHits;
+        physSys.overlapShapeDetailed(MakePointProxy(VectorSingle(0.0f), 0.7f), Transform3D(snapPos, QuaternionIdentity()), Filter(), false, ovHits);
+        ASSERT_GE(ovHits.size(), 1u);
+        EXPECT_EQ(ovHits[0u].entity, parentEnt.id());
+
+        Entity deadEnt = tw.world.createEntity();
+        mut TransformComponent deadXf = deadEnt.addComponent<TransformComponent>();
+        deadXf.position = f32x4(-5.0f, 2.0f, 0.0f, 0.0f);
+        mut RigidBodyComponent deadRb = deadEnt.addComponent<RigidBodyComponent>();
+        deadRb.type = BodyType::Dynamic;
+        deadEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        const BodyId deadBodyId = deadRb.runtimeBodyId;
+        ASSERT_TRUE(deadBodyId.valid());
+        tw.world.destroyEntity(deadEnt.id());
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_FALSE(physSys.entityForBody(deadBodyId).valid());
+        EXPECT_EQ(physSys.entityForBodyIncludingDestroyed(deadBodyId), deadEnt.id());
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_FALSE(physSys.entityForBodyIncludingDestroyed(deadBodyId).valid());
+
+        mut PhysicsWorldConfigComponent cfgFluid = cfgEnt.getComponent<PhysicsWorldConfigComponent>();
+        cfgFluid.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
+        cfgFluid.dirty = true;
+
+        Entity fluidEnt = tw.world.createEntity();
+        mut FluidVolumeComponent fluidComp = fluidEnt.addComponent<FluidVolumeComponent>();
+        fluidComp.volume.shape = FluidVolumeShape::HalfSpacePlane;
+        fluidComp.volume.surfaceNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 3.0f);
+        fluidComp.volume.density = 1000.0f;
+
+        Entity fieldEnt = tw.world.createEntity();
+        mut ForceFieldComponent ffComp = fieldEnt.addComponent<ForceFieldComponent>();
+        ffComp.field.type = ForceFieldType::BoxWind;
+        ffComp.field.originOrDirection = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        ffComp.field.strength = 20.0f;
+
+        Entity floatEnt = tw.world.createEntity();
+        floatEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 1.0f, 15.0f, 0.0f);
+        floatEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
+        mut ColliderComponent flCol = floatEnt.addComponent<ColliderComponent>();
+        flCol.shapeType = ShapeType::Sphere;
+        flCol.density = 300.0f;
+
+        Entity charEnt = tw.world.createEntity();
+        charEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 1.5f, -10.0f, 0.0f);
+        mut CharacterControllerComponent chComp = charEnt.addComponent<CharacterControllerComponent>();
+        chComp.def.radius = 0.35f;
+        chComp.def.halfHeight = 0.5f;
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_TRUE(charEnt.getComponent<CharacterControllerComponent>().initialized);
+        charEnt.getComponent<CharacterControllerComponent>().controller.linearVelocity = f32x4(6.0f, 0.0f, 0.0f, 0.0f);
+        for(u32 step = 0u; step < 5u; ++step)
+            ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_GT(charEnt.getComponent<TransformComponent>().position.x, 0.1f);
+        EXPECT_GT(floatEnt.getComponent<TransformComponent>().position.y, 1.0f);
+        EXPECT_GT(floatEnt.getComponent<TransformComponent>().position.z, 15.0f);
+    }
+
+    {
+        TransformComponent camXf;
+        camXf.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        CameraProjection finiteProj;
+        finiteProj.projectionParams = f32x4(1.0f, 1.0f, 0.0f, 0.0f);
+        finiteProj.nearPlane = 0.1f;
+        finiteProj.farPlane = 20.0f;
+        const PhysicsDebugScreenProjector finiteScreen(camXf, finiteProj, 1280.0f, 720.0f);
+        ASSERT_TRUE(finiteScreen.valid());
+        EXPECT_FALSE(finiteScreen.projectSegment(VectorSingle(0.0f, 0.0f, 30.0f, 0.0f), VectorSingle(1.0f, 0.0f, 35.0f, 0.0f)).has_value());
+
+        CameraProjection defaultFarProj;
+        defaultFarProj.projectionParams = f32x4(1.0f, 1.0f, 0.0f, 0.0f);
+        defaultFarProj.nearPlane = 0.1f;
+        defaultFarProj.farPlane = 0.0f;
+        const PhysicsDebugScreenProjector infScreen(camXf, defaultFarProj, 1280.0f, 720.0f);
+        ASSERT_TRUE(infScreen.valid());
+        EXPECT_TRUE(infScreen.projectSegment(VectorSingle(0.0f, 0.0f, 50.0f, 0.0f), VectorSingle(1.0f, 0.0f, 55.0f, 0.0f)).has_value());
+
+        const Expected<VectorSingle> nearClipped = finiteScreen.projectSegment(
+            VectorSingle(-0.05f, 0.0f, -5.0f, 0.0f),
+            VectorSingle(0.25f, 0.1f, 4.0f, 0.0f)
+        );
+        ASSERT_TRUE(nearClipped.has_value());
+        EXPECT_TRUE(IsFinite(nearClipped.value()));
+        EXPECT_GE(nearClipped.value().x, -321.0f);
+        EXPECT_LE(nearClipped.value().x, 1601.0f);
+        EXPECT_GE(nearClipped.value().z, -321.0f);
+        EXPECT_LE(nearClipped.value().z, 1601.0f);
+
+        PhysicsWorld dbg;
+        CpuTaskScheduler scheduler(1u);
+        BodyDef bd;
+        bd.type = BodyType::Static;
+        bd.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        const BodyId bodyA = dbg.createBody(bd).value();
+        bd.type = BodyType::Dynamic;
+        bd.enableSleep = false;
+        bd.position = f32x4(0.0f, 0.4f, 0.0f, 0.0f);
+        const BodyId bodyB = dbg.createBody(bd).value();
+        ASSERT_TRUE(dbg.createCylinderShape(bodyB, ShapeDef(), MakeCylinderShape(VectorSingle(0.0f), 0.5f, 0.4f, 0.02f).value()).has_value());
+        ASSERT_TRUE(dbg.createConeShape(bodyB, ShapeDef(), MakeConeShape(VectorSingle(1.2f, 0.0f, 0.0f, 0.0f), 0.4f, 0.35f, 0.0f).value()).has_value());
+        ASSERT_TRUE(dbg.createTaperedCapsuleShape(bodyB, ShapeDef(), MakeTaperedCapsuleShape(VectorSingle(-1.0f, -0.3f, 0.0f, 0.0f), VectorSingle(-1.0f, 0.3f, 0.0f, 0.0f), 0.3f, 0.15f).value()).has_value());
+        ASSERT_TRUE(dbg.createPlaneShape(bodyA, ShapeDef(), MakePlaneShape(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.0f, VectorSingle(8.0f, 0.0f, 8.0f, 0.0f)).value()).has_value());
+        Array<f32, 4u> hfH;
+        hfH[0u] = 0.0f; hfH[1u] = 0.2f; hfH[2u] = 0.1f; hfH[3u] = 0.3f;
+        ASSERT_TRUE(dbg.createHeightfieldShape(bodyA, ShapeDef(), MakeHeightfieldShape(2u, 2u, Span<f32>(hfH.data(), 4u), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), VectorSingle(-4.0f, -0.5f, -4.0f, 0.0f)).value()).has_value());
+
+        for(u32 si = 0u; si < 12u; ++si){
+            BodyDef extraBd;
+            extraBd.type = BodyType::Dynamic;
+            extraBd.enableSleep = false;
+            extraBd.position = f32x4(cast<f32>(si) * 0.5f, 5.0f, 3.0f, 0.0f);
+            const BodyId extraB = dbg.createBody(extraBd).value();
+            ASSERT_TRUE(dbg.createSphereShape(extraB, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.25f).value()).has_value());
+        }
+
+        JointDef j6;
+        j6.type = JointType::SixDof;
+        j6.bodyIdA = bodyA; j6.bodyIdB = bodyB;
+        j6.sixDofAxes[0u].motion = JointMotion::Limited;
+        j6.sixDofAxes[0u].lowerLimit = -0.3f; j6.sixDofAxes[0u].upperLimit = 0.3f;
+        ASSERT_TRUE(dbg.createJoint(j6).has_value());
+
+        JointDef jp;
+        jp.type = JointType::Pulley;
+        jp.bodyIdA = bodyA; jp.bodyIdB = bodyB;
+        jp.groundAnchorA = f32x4(-1.0f, 2.0f, 0.0f, 0.0f);
+        jp.groundAnchorB = f32x4( 1.0f, 2.0f, 0.0f, 0.0f);
+        ASSERT_TRUE(dbg.createJoint(jp).has_value());
+
+        JointDef jg;
+        jg.type = JointType::Gear;
+        jg.bodyIdA = bodyA; jg.bodyIdB = bodyB;
+        jg.ratio = 2.0f;
+        ASSERT_TRUE(dbg.createJoint(jg).has_value());
+
+        JointDef jr;
+        jr.type = JointType::Rope;
+        jr.bodyIdA = bodyA; jr.bodyIdB = bodyB;
+        jr.length = 1.5f;
+        ASSERT_TRUE(dbg.createJoint(jr).has_value());
+
+        StepPhysicsWorld(dbg, 1.0f / 60.0f, 1u, scheduler);
+
+        PhysicsDebugDrawOptions phaseOpts;
+        phaseOpts.maxLines = 120u;
+        phaseOpts.drawShapes = true;
+        phaseOpts.drawContacts = true;
+        phaseOpts.drawJoints = true;
+        phaseOpts.drawFatAabbs = true;
+        phaseOpts.drawBroadPhaseTree = true;
+        phaseOpts.drawIslands = true;
+        phaseOpts.drawVelocities = true;
+        phaseOpts.drawBodyOriginVsCom = true;
+        Vector<PhysicsDebugLine> tightLines;
+        const PhysicsDebugDrawStats tightStats = BuildPhysicsDebugLines(dbg, phaseOpts, tightLines);
+        EXPECT_TRUE(tightStats.truncated);
+        EXPECT_LE(tightLines.size(), cast<usize>(120u));
+        b8 sawContactLine = false;
+        b8 sawJointLine = false;
+        for(usize li = 0u; li < tightLines.size(); ++li){
+            in f32x4 c = tightLines[li].color;
+            if(c.x > 0.98f && Abs(c.y - 0.22f) < 0.03f && Abs(c.z - 0.22f) < 0.03f)
+                sawContactLine = true;
+            if(c.x > 0.98f && Abs(c.y - 0.58f) < 0.03f && Abs(c.z - 0.12f) < 0.03f)
+                sawJointLine = true;
+        }
+        EXPECT_TRUE(sawContactLine);
+        EXPECT_TRUE(sawJointLine);
+
+        PhysicsWorld meshWorld;
+        BodyDef meshBd;
+        meshBd.type = BodyType::Static;
+        const BodyId meshBody = meshWorld.createBody(meshBd).value();
+        Vector<f32x4> mv;
+        mv.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
+        mv.push_back(f32x4( 1.0f, 0.0f, -1.0f, 0.0f));
+        mv.push_back(f32x4( 1.0f, 0.0f,  1.0f, 0.0f));
+        mv.push_back(f32x4(-1.0f, 0.0f,  1.0f, 0.0f));
+        Vector<u32> mi;
+        mi.push_back(0u); mi.push_back(1u); mi.push_back(2u);
+        mi.push_back(0u); mi.push_back(2u); mi.push_back(3u);
+        ASSERT_TRUE(meshWorld.createMeshShape(meshBody, ShapeDef(), MakeMeshShape(Span<f32x4>(mv), Span<u32>(mi), 0.0f).value()).has_value());
+        PhysicsDebugDrawOptions dedupOpts;
+        dedupOpts.drawContacts = false;
+        dedupOpts.drawJoints = false;
+        dedupOpts.deduplicateMeshEdges = true;
+        Vector<PhysicsDebugLine> dedupLines;
+        BuildPhysicsDebugLines(meshWorld, dedupOpts, dedupLines);
+        dedupOpts.deduplicateMeshEdges = false;
+        Vector<PhysicsDebugLine> rawMeshLines;
+        BuildPhysicsDebugLines(meshWorld, dedupOpts, rawMeshLines);
+        EXPECT_EQ(rawMeshLines.size(), cast<usize>(6u));
+        EXPECT_LT(dedupLines.size(), rawMeshLines.size());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(PhysicsEdgeCases, GenerationalHandleInvalidationAndReuse, VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse)
 NWB_ADHD_GTEST(PhysicsEdgeCases, DegenerateAndInvalidGeometryRejection, VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection)
 NWB_ADHD_GTEST(PhysicsEdgeCases, BoxStackStabilityAndSleeping, VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping)
@@ -4452,6 +5268,8 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeSolverLocksToiAndQueries, VerifyPhysic
 NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeEcsSyncAndLifecycle, VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle)
 NWB_ADHD_GTEST(PhysicsEdgeCases, AuditFixesAndParityEdgeCases, VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases)
 NWB_ADHD_GTEST(PhysicsEdgeCases, AuditV4ParityAndLifecycle, VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave4HighLevelSubsystemsAndSnapshot, VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave6And7EcsAssetsAndDebugDrawEdgeCases, VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

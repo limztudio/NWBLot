@@ -320,6 +320,7 @@ b8 RunPhysicsGpuParitySmoke(
     physWorld.setBackendMode(PhysicsBackendMode::GpuPreferred);
     physWorld.setGpuDispatchThreshold(1u);
     physWorld.setGpuWorkloadFraction(1.0f);
+    physWorld.setUseGpuLbvhBroadphase(true);
 
     ShapeDef sd;
     sd.density = 1.0f;
@@ -430,6 +431,24 @@ b8 RunPhysicsGpuParitySmoke(
             return false;
     }
 
+    BodyDef cylDef;
+    cylDef.type = BodyType::Dynamic;
+    cylDef.position = f32x4(2.0f, 0.55f, -3.0f, 0.0f);
+    cylDef.enableSleep = false;
+    const BodyId cylBody = physWorld.createBody(cylDef).value();
+    const Expected<CylinderShape> cylShape = MakeCylinderShape(VectorSingle(0.0f), 0.5f, 0.35f, 0.02f);
+    if(!cylShape.has_value() || !physWorld.createCylinderShape(cylBody, sd, cylShape.value()).has_value())
+        return false;
+
+    BodyDef coneDef;
+    coneDef.type = BodyType::Dynamic;
+    coneDef.position = f32x4(-2.0f, 0.55f, -3.0f, 0.0f);
+    coneDef.enableSleep = false;
+    const BodyId coneBody = physWorld.createBody(coneDef).value();
+    const Expected<ConeShape> coneShape = MakeConeShape(VectorSingle(0.0f), 0.5f, 0.4f, 0.02f);
+    if(!coneShape.has_value() || !physWorld.createConeShape(coneBody, sd, coneShape.value()).has_value())
+        return false;
+
     b8 sawSensorBegin = false;
     b8 sawGpuBackend = false;
     for(u32 step = 0u; step < 6u; ++step){
@@ -443,14 +462,80 @@ b8 RunPhysicsGpuParitySmoke(
     const Transform3D hullXf = physWorld.tryGetBodyTransform(hullBody).value();
     const Transform3D bulletXf = physWorld.tryGetBodyTransform(bulletBody).value();
     const Transform3D hubXf = physWorld.tryGetBodyTransform(hubBody).value();
+    const Transform3D cylXf = physWorld.tryGetBodyTransform(cylBody).value();
+    const Transform3D coneXf = physWorld.tryGetBodyTransform(coneBody).value();
     if(!sawGpuBackend || !sawSensorBegin){
         error("PhysicsStressSmoke: GPU parity check failed (gpu={} sensor={})", cast<u32>(sawGpuBackend), cast<u32>(sawSensorBegin));
         return false;
     }
-    if(hullXf.position.y < 0.25f || bulletXf.position.y < 2.0f || !IsFinite(VectorSingle(hubXf.position))){
-        error("PhysicsStressSmoke: GPU parity geometry failed (hullY={} bulletY={})", hullXf.position.y, bulletXf.position.y);
+    if(
+        hullXf.position.y < 0.25f
+        || bulletXf.position.y < 2.0f
+        || !IsFinite(VectorSingle(hubXf.position))
+        || !IsFinite(VectorSingle(cylXf.position))
+        || !IsFinite(VectorSingle(coneXf.position))
+        || cylXf.position.y <= 0.1f
+        || coneXf.position.y <= 0.1f
+    ){
+        error("PhysicsStressSmoke: GPU parity geometry failed (hullY={} bulletY={} cylY={} coneY={})", hullXf.position.y, bulletXf.position.y, cylXf.position.y, coneXf.position.y);
         return false;
     }
+
+    Array<GpuPhysicsSpatialQuery, 3u> queries;
+    queries[0u].originMin = f32x4(hullXf.position.x, hullXf.position.y + 4.0f, hullXf.position.z, 0.0f);
+    queries[0u].dirMax = f32x4(0.0f, -10.0f, 0.0f, 1.0f);
+    queries[0u].params = u32x4(s_GpuQueryTypeRaycastClosest, 0xFFFFFFFFu, 0xFFFFFFFFu, 0u);
+    queries[1u].originMin = f32x4(hullXf.position.x, hullXf.position.y, hullXf.position.z, 0.0f);
+    queries[1u].dirMax = f32x4(0.0f, 0.0f, 0.0f, 1.5f);
+    queries[1u].params = u32x4(s_GpuQueryTypeSphereOverlap, 0xFFFFFFFFu, 0xFFFFFFFFu, 0u);
+    queries[2u].originMin = f32x4(hullXf.position.x - 1.5f, hullXf.position.y - 1.5f, hullXf.position.z - 1.5f, 0.0f);
+    queries[2u].dirMax = f32x4(hullXf.position.x + 1.5f, hullXf.position.y + 1.5f, hullXf.position.z + 1.5f, 0.0f);
+    queries[2u].params = u32x4(s_GpuQueryTypeAabbOverlap, 0xFFFFFFFFu, 0xFFFFFFFFu, 0u);
+    Vector<GpuPhysicsSpatialQueryResult> queryResults;
+    if(!gpuDispatcher.dispatchBatchSpatialQueries(physWorld, Span<GpuPhysicsSpatialQuery>(queries.data(), 3u), queryResults) || queryResults.size() != 3u){
+        error("PhysicsStressSmoke: GPU batch spatial queries failed");
+        return false;
+    }
+    if(
+        queryResults[0u].hitIds.w != 1u
+        || !IsFinite(VectorSingle(queryResults[0u].hitPointFraction))
+        || queryResults[1u].hitIds.w != 1u
+        || queryResults[1u].hitIds.z < 1u
+        || queryResults[2u].hitIds.w != 1u
+        || queryResults[2u].hitIds.z < 1u
+    ){
+        error(
+            "PhysicsStressSmoke: GPU spatial query results invalid (ray={} sph={},{} aabb={},{})",
+            queryResults[0u].hitIds.w,
+            queryResults[1u].hitIds.w,
+            queryResults[1u].hitIds.z,
+            queryResults[2u].hitIds.w,
+            queryResults[2u].hitIds.z
+        );
+        return false;
+    }
+
+    Array<GpuPhysicsRenderTransformBinding, 1u> bindings;
+    bindings[0u].bodyDestFlags = u32x4(hullBody.index, 0u, 1u, 0u);
+    bindings[0u].scalePad = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+    Vector<GpuPhysicsRenderTransformOut> exported;
+    if(!gpuDispatcher.exportRenderTransforms(physWorld, Span<GpuPhysicsRenderTransformBinding>(bindings.data(), 1u), exported) || exported.size() != 1u){
+        error("PhysicsStressSmoke: GPU render transform export failed");
+        return false;
+    }
+    in f32x4 expRot = exported[0u].rotation;
+    in f32x4 expPos = exported[0u].translationFlags;
+    if(
+        !IsFinite(VectorSingle(expRot))
+        || !IsFinite(VectorSingle(expPos))
+        || Abs(expPos.x - hullXf.position.x) >= 0.05f
+        || Abs(expPos.y - hullXf.position.y) >= 0.05f
+        || Abs(expPos.z - hullXf.position.z) >= 0.05f
+    ){
+        error("PhysicsStressSmoke: GPU render transform export mismatch");
+        return false;
+    }
+
     [essential] info("PhysicsStressSmoke: gpu_parity_passed hull_y={:.3f} bullet_y={:.3f}", hullXf.position.y, bulletXf.position.y);
     return true;
 }

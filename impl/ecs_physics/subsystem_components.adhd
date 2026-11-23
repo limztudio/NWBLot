@@ -1,0 +1,155 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/components.adhd>
+#include <impl/physics/character_controller.adhd>
+#include <impl/physics/vehicle.adhd>
+#include <impl/physics/ragdoll.adhd>
+#include <impl/physics/buoyancy.adhd>
+#include <impl/physics/articulation.adhd>
+#include <impl/physics/soft_body.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EcsClosestPointHit{
+    public ClosestPointHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsShapeOverlapHit{
+    public ShapeOverlapHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsBodyMoveEvent{
+    public BodyMoveEvent event;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsContactBeginEvent{
+    public ContactBeginTouchEvent event;
+    public EntityID entityA = s_InvalidEntityId;
+    public EntityID entityB = s_InvalidEntityId;
+}
+
+class EcsContactEndEvent{
+    public ContactEndTouchEvent event;
+    public EntityID entityA = s_InvalidEntityId;
+    public EntityID entityB = s_InvalidEntityId;
+}
+
+class EcsContactPersistEvent{
+    public ContactPersistEvent event;
+    public EntityID entityA = s_InvalidEntityId;
+    public EntityID entityB = s_InvalidEntityId;
+}
+
+class EcsContactHitEvent{
+    public ContactHitEvent event;
+    public EntityID entityA = s_InvalidEntityId;
+    public EntityID entityB = s_InvalidEntityId;
+}
+
+class EcsSensorBeginEvent{
+    public SensorBeginTouchEvent event;
+    public EntityID sensorEntity = s_InvalidEntityId;
+    public EntityID visitorEntity = s_InvalidEntityId;
+}
+
+class EcsSensorEndEvent{
+    public SensorEndTouchEvent event;
+    public EntityID sensorEntity = s_InvalidEntityId;
+    public EntityID visitorEntity = s_InvalidEntityId;
+}
+
+class EcsSensorStayEvent{
+    public SensorStayEvent event;
+    public EntityID sensorEntity = s_InvalidEntityId;
+    public EntityID visitorEntity = s_InvalidEntityId;
+}
+
+class EcsBodyWakeEvent{
+    public BodyWakeEvent event;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsJointBreakEvent{
+    public JointBreakEvent event;
+    public EntityID entity = s_InvalidEntityId;
+    public EntityID entityA = s_InvalidEntityId;
+    public EntityID entityB = s_InvalidEntityId;
+}
+
+[arena, component("character_controller")]
+class CharacterControllerComponent{
+    public CharacterControllerDef def;
+    public CharacterController controller;
+    public b8 enabled = true;
+    public b8 initialized = false;
+    public b8 syncFromTransform = false;
+    public b8 dirty = true;
+}
+
+[arena, component("vehicle")]
+class VehicleComponent{
+    public VehicleEngineDef engine;
+    public Vector<VehicleWheelDef> wheels;
+    public VehicleInput input;
+    public VehicleController controller;
+    public b8 enabled = true;
+    public b8 initialized = false;
+    public b8 dirty = true;
+}
+
+[arena, component("ragdoll")]
+class RagdollComponent{
+    public Vector<RagdollBoneDef> bones;
+    public RagdollInstance instance;
+    public b8 enabled = true;
+    public b8 kinematic = false;
+    public b8 initialized = false;
+    public b8 syncedKinematic = false;
+    public b8 dirty = true;
+}
+
+[arena, component("fluid_volume")]
+class FluidVolumeComponent{
+    public FluidVolume volume;
+    public b8 enabled = true;
+}
+
+[arena, component("force_field")]
+class ForceFieldComponent{
+    public ForceField field;
+    public b8 enabled = true;
+}
+
+[arena, component("articulation")]
+class ArticulationComponent{
+    public Vector<ArticulationLinkDef> links;
+    public b8 isFixedBase = true;
+    public Articulation articulation;
+    public b8 enabled = true;
+    public b8 initialized = false;
+    public b8 dirty = true;
+}
+
+[arena, component("soft_body")]
+class SoftBodyComponent{
+    public SoftBody softBody;
+    public b8 enabled = true;
+}
+
+[arena, component("gpu_render_transform_export")]
+class GpuRenderTransformExportComponent{
+    public b8 enabled = true;
+    public u32 instanceIndex = 0u;
+    public u32 flags = 0u;
+    public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

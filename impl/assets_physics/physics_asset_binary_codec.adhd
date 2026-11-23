@@ -1,0 +1,697 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/physics_assets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class PhysicsSurfaceMaterialBinary{
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32 friction = 0.6f;
+    public f32 staticFriction = -1.0f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+    public u8 frictionCombineMode = cast<u8>(MaterialCombineMode::GeometricMean);
+    public u8 restitutionCombineMode = cast<u8>(MaterialCombineMode::Max);
+    public u16 reserved0 = 0u;
+    public u64 reserved1 = 0u;
+}
+
+[serialize]
+class PhysicsMaterialHeaderBinary{
+    public u32 magic = s_PhysicsMaterialMagic;
+    public u32 version = s_PhysicsMaterialVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+    public PhysicsSurfaceMaterialBinary fields;
+}
+
+[serialize]
+class CollisionLayerMatrixBinary{
+    public u32 magic = s_CollisionLayerMatrixMagic;
+    public u32 version = s_CollisionLayerMatrixVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+    public Array<NameHash, 32u> layerNameHashes;
+    public Array<u32, 32u> layerMasks;
+}
+
+[serialize]
+class ConvexHullHeaderBinary{
+    public u32 magic = s_ConvexHullMagic;
+    public u32 version = s_ConvexHullVersion;
+    public u32 vertexCount = 0u;
+    public u32 faceCount = 0u;
+    public u32 halfEdgeCount = 0u;
+    public u32 reserved0 = 0u;
+    public u64 reserved1 = 0u;
+    public f32x4 centroidRadius(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x3_u32 halfExtentsFlags(0.5f, 0.5f, 0.5f, 0u);
+    public f32x4 boxRotation(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+[serialize]
+class ConvexHullVertexBinary{
+    public f32 x = 0.0f;
+    public f32 y = 0.0f;
+    public f32 z = 0.0f;
+    public u32 reserved = 0u;
+}
+
+[serialize]
+class ConvexHullPlaneBinary{
+    public f32x4 normalOffset(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class ConvexHullFaceTopologyBinary{
+    public u8 edge = 0u;
+    public u8 vertexCount = 0u;
+    public u16 reserved = 0u;
+}
+
+[serialize]
+class ConvexHullHalfEdgeBinary{
+    public u8 tail = 0u;
+    public u8 face = 0u;
+    public u8 next = 0u;
+    public u8 twin = 0u;
+}
+
+[serialize]
+class CollisionMeshHeaderBinary{
+    public u32 magic = s_CollisionMeshMagic;
+    public u32 version = s_CollisionMeshVersion;
+    public u32 triangleCount = 0u;
+    public u32 nodeCount = 0u;
+    public u32 materialCount = 0u;
+    public u32 triMaterialCount = 0u;
+    public u32 triUserDataCount = 0u;
+    public u32 reserved0 = 0u;
+    public f32x4 localAabbMinRadius(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x3_u32 localAabbMaxMeta(0.0f, 0.0f, 0.0f, 0u);
+}
+
+[serialize]
+class CollisionMeshTriangleBinary{
+    public f32x4 v0Zero(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 v1Zero(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 v2Zero(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normalZero(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class CollisionMeshBvhNodeBinary{
+    public f32x3_u32 aabbMinLeft(0.0f, 0.0f, 0.0f, 0u);
+    public f32x3_u32 aabbMaxRight(0.0f, 0.0f, 0.0f, 0u);
+}
+
+[serialize]
+class CollisionMeshU16Binary{
+    public u16 value = 0u;
+}
+
+[serialize]
+class CollisionMeshU32Binary{
+    public u32 value = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PhysicsAssetBinaryCodec{
+    public b8 validSurfaceMaterial(in SurfaceMaterial mat)const{
+        if(!IsFinite(VectorSingle(mat.surfaceVelocity))
+            || !IsFinite(VectorSingle(mat.anisotropicFriction))
+            || !IsFinite(VectorSingle(mat.frictionDirection)))
+            return false;
+        if(mat.anisotropicFriction.x < 0.0f || mat.anisotropicFriction.y < 0.0f || mat.anisotropicFriction.z < 0.0f)
+            return false;
+        if(!IsFinite(VectorSingle(mat.friction, mat.staticFriction, mat.restitution, mat.rollingResistance)))
+            return false;
+        if(!IsFinite(mat.tangentSpeed))
+            return false;
+        if(mat.friction < 0.0f || mat.restitution < 0.0f || mat.rollingResistance < 0.0f)
+            return false;
+        if(mat.staticFriction < 0.0f && mat.staticFriction != -1.0f)
+            return false;
+        if(cast<u8>(mat.frictionCombineMode) >= cast<u8>(MaterialCombineMode::kCount))
+            return false;
+        if(cast<u8>(mat.restitutionCombineMode) >= cast<u8>(MaterialCombineMode::kCount))
+            return false;
+        return true;
+    }
+
+    public PhysicsSurfaceMaterialBinary packSurfaceMaterialFields(in SurfaceMaterial mat)const{
+        PhysicsSurfaceMaterialBinary fields;
+        fields.surfaceVelocity = mat.surfaceVelocity;
+        fields.anisotropicFriction = mat.anisotropicFriction;
+        fields.frictionDirection = mat.frictionDirection;
+        fields.friction = mat.friction;
+        fields.staticFriction = mat.staticFriction;
+        fields.restitution = mat.restitution;
+        fields.rollingResistance = mat.rollingResistance;
+        fields.tangentSpeed = mat.tangentSpeed;
+        fields.frictionCombineMode = cast<u8>(mat.frictionCombineMode);
+        fields.restitutionCombineMode = cast<u8>(mat.restitutionCombineMode);
+        fields.reserved0 = 0u;
+        fields.reserved1 = 0u;
+        return fields;
+    }
+
+    public Expected<SurfaceMaterial> unpackSurfaceMaterialFields(in PhysicsSurfaceMaterialBinary fields)const{
+        if(fields.reserved0 != 0u || fields.reserved1 != 0u)
+            return MakeUnexpected(Failure());
+        SurfaceMaterial mat;
+        mat.surfaceVelocity = fields.surfaceVelocity;
+        mat.anisotropicFriction = fields.anisotropicFriction;
+        mat.frictionDirection = fields.frictionDirection;
+        mat.friction = fields.friction;
+        mat.staticFriction = fields.staticFriction;
+        mat.restitution = fields.restitution;
+        mat.rollingResistance = fields.rollingResistance;
+        mat.tangentSpeed = fields.tangentSpeed;
+        mat.frictionCombineMode = cast<MaterialCombineMode>(fields.frictionCombineMode);
+        mat.restitutionCombineMode = cast<MaterialCombineMode>(fields.restitutionCombineMode);
+        if(!this.validSurfaceMaterial(mat))
+            return MakeUnexpected(Failure());
+        return mat;
+    }
+
+    public b8 validatePhysicsMaterial(in SurfaceMaterial mat, in Name virtualPath)const{
+        if(this.validSurfaceMaterial(mat))
+            return true;
+        error("PhysicsMaterialAsset::validatePayload failed: invalid surface material for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializePhysicsMaterial(in SurfaceMaterial mat, mut Vector<u8> outBinary)const{
+        if(!this.validSurfaceMaterial(mat))
+            return false;
+        PhysicsMaterialHeaderBinary bin;
+        bin.fields = this.packSurfaceMaterialFields(mat);
+        outBinary.clear();
+        outBinary.reserve(size_of<PhysicsMaterialHeaderBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public Expected<SurfaceMaterial> deserializePhysicsMaterial(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<PhysicsMaterialHeaderBinary> hdrRes = ReadPOD<PhysicsMaterialHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value() || cursor != binary.size()){
+            error("PhysicsMaterialAsset::loadBinary failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in PhysicsMaterialHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_PhysicsMaterialMagic || hdr.version != s_PhysicsMaterialVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("PhysicsMaterialAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<SurfaceMaterial> mat = this.unpackSurfaceMaterialFields(hdr.fields);
+        if(!mat.has_value()){
+            error("PhysicsMaterialAsset::loadBinary failed: invalid surface material fields");
+            return MakeUnexpected(Failure());
+        }
+        return mat.value();
+    }
+
+    public b8 validCollisionLayerMatrix(in CollisionLayerMatrix matrix)const{
+        for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
+            const u32 bitI = 1u << i;
+            for(u32 j = i + 1u; j < s_MaxCollisionLayers; ++j){
+                const b8 ij = (matrix.layerMasks[i] & (1u << j)) != 0u;
+                const b8 ji = (matrix.layerMasks[j] & bitI) != 0u;
+                if(ij != ji)
+                    return false;
+            }
+            if(matrix.layerNames[i] != s_NameNone){
+                for(u32 k = i + 1u; k < s_MaxCollisionLayers; ++k){
+                    if(matrix.layerNames[k] == matrix.layerNames[i])
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    public b8 validateCollisionLayerMatrix(in CollisionLayerMatrix matrix, in Name virtualPath)const{
+        if(this.validCollisionLayerMatrix(matrix))
+            return true;
+        error("CollisionLayerMatrixAsset::validatePayload failed: asymmetric masks or duplicate layer names for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeCollisionLayerMatrix(in CollisionLayerMatrix matrix, mut Vector<u8> outBinary)const{
+        if(!this.validCollisionLayerMatrix(matrix))
+            return false;
+        CollisionLayerMatrixBinary bin;
+        for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
+            bin.layerNameHashes[i] = matrix.layerNames[i].hash();
+            bin.layerMasks[i] = matrix.layerMasks[i];
+        }
+        outBinary.clear();
+        outBinary.reserve(size_of<CollisionLayerMatrixBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public Expected<CollisionLayerMatrix> deserializeCollisionLayerMatrix(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<CollisionLayerMatrixBinary> res = ReadPOD<CollisionLayerMatrixBinary>(binary, cursor);
+        if(!res.has_value() || cursor != binary.size()){
+            error("CollisionLayerMatrixAsset::loadBinary failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in CollisionLayerMatrixBinary bin = res.value();
+        if(bin.magic != s_CollisionLayerMatrixMagic || bin.version != s_CollisionLayerMatrixVersion || bin.reserved0 != 0u || bin.reserved1 != 0u){
+            error("CollisionLayerMatrixAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        CollisionLayerMatrix matrix;
+        for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
+            if(bin.layerNameHashes[i] == s_NameNone.hash())
+                matrix.layerNames[i] = s_NameNone;
+            else
+                matrix.layerNames[i] = Name(bin.layerNameHashes[i]);
+            matrix.layerMasks[i] = bin.layerMasks[i];
+        }
+        if(!this.validCollisionLayerMatrix(matrix)){
+            error("CollisionLayerMatrixAsset::loadBinary failed: invalid matrix data");
+            return MakeUnexpected(Failure());
+        }
+        return matrix;
+    }
+
+    public b8 validHullShapeData(in HullShape hull)const{
+        if(
+            hull.vertices.empty()
+            || hull.facePlanes.empty()
+            || hull.faceTopologies.empty()
+            || hull.halfEdges.empty()
+            || hull.faceTopologies.size() != hull.facePlanes.size()
+            || hull.vertices.size() > s_MaxHullVertices
+            || hull.facePlanes.size() > s_MaxHullFaces
+            || hull.halfEdges.size() > 256u
+            || !IsFinite(VectorSingle(hull.centroidRadius))
+            || hull.radius() < 0.0f
+            || !IsFinite(VectorSingle(hull.halfExtentsFlags.x, hull.halfExtentsFlags.y, hull.halfExtentsFlags.z, 0.0f))
+            || !IsFinite(VectorSingle(hull.boxRotation))
+            || hull.halfExtentsFlags.w > 1u
+        )
+            return false;
+        for(usize i = 0u; i < hull.vertices.size(); ++i){
+            if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
+                return false;
+        }
+        for(usize i = 0u; i < hull.facePlanes.size(); ++i){
+            if(!IsFinite(VectorSingle(hull.facePlanes[i].normalOffset)))
+                return false;
+        }
+        const usize edgeCount = hull.halfEdges.size();
+        const usize vCount = hull.vertices.size();
+        const usize fCount = hull.facePlanes.size();
+        for(usize fi = 0u; fi < fCount; ++fi){
+            in HullFaceTopology topo = hull.faceTopologies[fi];
+            if(topo.vertexCount < 3u || cast<usize>(topo.edge) >= edgeCount)
+                return false;
+        }
+        for(usize ei = 0u; ei < edgeCount; ++ei){
+            in HalfEdge he = hull.halfEdges[ei];
+            if(
+                cast<usize>(he.tail) >= vCount
+                || cast<usize>(he.face) >= fCount
+                || cast<usize>(he.next) >= edgeCount
+                || cast<usize>(he.twin) >= edgeCount
+            )
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateConvexHull(in HullShape hull, in Name virtualPath)const{
+        if(this.validHullShapeData(hull))
+            return true;
+        error("ConvexHullAsset::validatePayload failed: invalid convex hull for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeConvexHull(in HullShape hull, mut Vector<u8> outBinary)const{
+        if(!this.validHullShapeData(hull))
+            return false;
+        if(
+            hull.vertices.size() > cast<usize>(u32.max)
+            || hull.faceTopologies.size() > cast<usize>(u32.max)
+            || hull.halfEdges.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const usize totalBytes =
+            size_of<ConvexHullHeaderBinary>()
+            + hull.vertices.size() * size_of<ConvexHullVertexBinary>()
+            + hull.facePlanes.size() * size_of<ConvexHullPlaneBinary>()
+            + hull.faceTopologies.size() * size_of<ConvexHullFaceTopologyBinary>()
+            + hull.halfEdges.size() * size_of<ConvexHullHalfEdgeBinary>();
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        ConvexHullHeaderBinary hdr;
+        hdr.vertexCount = cast<u32>(hull.vertices.size());
+        hdr.faceCount = cast<u32>(hull.facePlanes.size());
+        hdr.halfEdgeCount = cast<u32>(hull.halfEdges.size());
+        hdr.centroidRadius = hull.centroidRadius;
+        hdr.halfExtentsFlags = hull.halfExtentsFlags;
+        hdr.boxRotation = hull.boxRotation;
+        AppendPOD(outBinary, hdr);
+
+        for(usize i = 0u; i < hull.vertices.size(); ++i){
+            ConvexHullVertexBinary v;
+            v.x = hull.vertices[i].x;
+            v.y = hull.vertices[i].y;
+            v.z = hull.vertices[i].z;
+            AppendPOD(outBinary, v);
+        }
+        for(usize i = 0u; i < hull.facePlanes.size(); ++i){
+            ConvexHullPlaneBinary p;
+            p.normalOffset = hull.facePlanes[i].normalOffset;
+            AppendPOD(outBinary, p);
+        }
+        for(usize i = 0u; i < hull.faceTopologies.size(); ++i){
+            ConvexHullFaceTopologyBinary t;
+            t.edge = hull.faceTopologies[i].edge;
+            t.vertexCount = hull.faceTopologies[i].vertexCount;
+            AppendPOD(outBinary, t);
+        }
+        for(usize i = 0u; i < hull.halfEdges.size(); ++i){
+            ConvexHullHalfEdgeBinary he;
+            he.tail = hull.halfEdges[i].tail;
+            he.face = hull.halfEdges[i].face;
+            he.next = hull.halfEdges[i].next;
+            he.twin = hull.halfEdges[i].twin;
+            AppendPOD(outBinary, he);
+        }
+        return true;
+    }
+
+    public Expected<HullShape> deserializeConvexHull(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<ConvexHullHeaderBinary> hdrRes = ReadPOD<ConvexHullHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("ConvexHullAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in ConvexHullHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_ConvexHullMagic || hdr.version != s_ConvexHullVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("ConvexHullAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+
+        const u64 expectedDataBytes =
+            cast<u64>(hdr.vertexCount) * cast<u64>(size_of<ConvexHullVertexBinary>())
+            + cast<u64>(hdr.faceCount) * (cast<u64>(size_of<ConvexHullPlaneBinary>()) + cast<u64>(size_of<ConvexHullFaceTopologyBinary>()))
+            + cast<u64>(hdr.halfEdgeCount) * cast<u64>(size_of<ConvexHullHalfEdgeBinary>());
+        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+            error("ConvexHullAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        HullShape hull;
+        hull.centroidRadius = hdr.centroidRadius;
+        hull.halfExtentsFlags = hdr.halfExtentsFlags;
+        hull.boxRotation = hdr.boxRotation;
+
+        hull.vertices.reserve(hdr.vertexCount);
+        for(u32 i = 0u; i < hdr.vertexCount; ++i){
+            const Expected<ConvexHullVertexBinary> vRes = ReadPOD<ConvexHullVertexBinary>(binary, cursor);
+            if(!vRes.has_value() || vRes.value().reserved != 0u)
+                return MakeUnexpected(Failure());
+            hull.vertices.push_back(f32x3u(vRes.value().x, vRes.value().y, vRes.value().z));
+        }
+
+        hull.facePlanes.reserve(hdr.faceCount);
+        for(u32 i = 0u; i < hdr.faceCount; ++i){
+            const Expected<ConvexHullPlaneBinary> pRes = ReadPOD<ConvexHullPlaneBinary>(binary, cursor);
+            if(!pRes.has_value())
+                return MakeUnexpected(Failure());
+            Plane3D pl;
+            pl.normalOffset = pRes.value().normalOffset;
+            hull.facePlanes.push_back(pl);
+        }
+
+        hull.faceTopologies.reserve(hdr.faceCount);
+        for(u32 i = 0u; i < hdr.faceCount; ++i){
+            const Expected<ConvexHullFaceTopologyBinary> tRes = ReadPOD<ConvexHullFaceTopologyBinary>(binary, cursor);
+            if(!tRes.has_value() || tRes.value().reserved != 0u)
+                return MakeUnexpected(Failure());
+            HullFaceTopology topo;
+            topo.edge = tRes.value().edge;
+            topo.vertexCount = tRes.value().vertexCount;
+            hull.faceTopologies.push_back(topo);
+        }
+
+        hull.halfEdges.reserve(hdr.halfEdgeCount);
+        for(u32 i = 0u; i < hdr.halfEdgeCount; ++i){
+            const Expected<ConvexHullHalfEdgeBinary> eRes = ReadPOD<ConvexHullHalfEdgeBinary>(binary, cursor);
+            if(!eRes.has_value())
+                return MakeUnexpected(Failure());
+            HalfEdge he;
+            he.tail = eRes.value().tail;
+            he.face = eRes.value().face;
+            he.next = eRes.value().next;
+            he.twin = eRes.value().twin;
+            hull.halfEdges.push_back(he);
+        }
+
+        if(!this.validHullShapeData(hull)){
+            error("ConvexHullAsset::loadBinary failed: invalid convex hull topology or geometry");
+            return MakeUnexpected(Failure());
+        }
+        return hull;
+    }
+
+    public b8 validMeshShapeData(in MeshShape mesh)const{
+        if(
+            mesh.triangles.empty()
+            || mesh.nodes.empty()
+            || !IsFinite(VectorSingle(mesh.localAabbMinRadius))
+            || !IsFinite(VectorSingle(mesh.localAabbMaxMeta.x, mesh.localAabbMaxMeta.y, mesh.localAabbMaxMeta.z, 0.0f))
+            || mesh.radius() < 0.0f
+        )
+            return false;
+
+        const u32 bvhCount = mesh.bvhNodeCount();
+        if(bvhCount == 0u || cast<usize>(bvhCount) > mesh.nodes.size())
+            return false;
+
+        const u32 triCount = cast<u32>(mesh.triangles.size());
+        for(u32 ni = 0u; ni < bvhCount; ++ni){
+            in MeshBvhNode node = mesh.nodes[ni];
+            const Aabb3D box = node.aabb();
+            if(!IsFinite(VectorSingle(box.lowerBound)) || !IsFinite(VectorSingle(box.upperBound)))
+                return false;
+            if(node.isLeaf()){
+                const u32 first = node.leftOrFirst();
+                const u32 cnt = node.rightOrCount();
+                if(cnt == 0u || cast<u64>(first) + cast<u64>(cnt) > cast<u64>(triCount))
+                    return false;
+            }
+            else{
+                if(node.leftOrFirst() >= bvhCount || node.rightOrCount() >= bvhCount)
+                    return false;
+            }
+        }
+
+        for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+            in MeshTriangle tri = mesh.triangles[ti];
+            if(
+                !IsValidPositionVec3(Vec3FromU(tri.v0))
+                || !IsValidPositionVec3(Vec3FromU(tri.v1))
+                || !IsValidPositionVec3(Vec3FromU(tri.v2))
+                || !IsFinite(Vec3FromU(tri.normal))
+            )
+                return false;
+        }
+
+        for(usize mi = 0u; mi < mesh.materials.size(); ++mi){
+            if(!this.validSurfaceMaterial(mesh.materials[mi]))
+                return false;
+        }
+        if(!mesh.triangleMaterialIndices.empty()){
+            if(mesh.triangleMaterialIndices.size() != mesh.triangles.size() || mesh.materials.empty())
+                return false;
+            const usize matCount = mesh.materials.size();
+            for(usize i = 0u; i < mesh.triangleMaterialIndices.size(); ++i){
+                if(cast<usize>(mesh.triangleMaterialIndices[i]) >= matCount)
+                    return false;
+            }
+        }
+        if(!mesh.triangleUserData.empty() && mesh.triangleUserData.size() != mesh.triangles.size())
+            return false;
+
+        return true;
+    }
+
+    public b8 validateCollisionMesh(in MeshShape mesh, in Name virtualPath)const{
+        if(this.validMeshShapeData(mesh))
+            return true;
+        error("CollisionMeshAsset::validatePayload failed: invalid collision mesh for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeCollisionMesh(in MeshShape mesh, mut Vector<u8> outBinary)const{
+        if(!this.validMeshShapeData(mesh))
+            return false;
+        if(
+            mesh.triangles.size() > cast<usize>(u32.max)
+            || mesh.nodes.size() > cast<usize>(u32.max)
+            || mesh.materials.size() > cast<usize>(u32.max)
+            || mesh.triangleMaterialIndices.size() > cast<usize>(u32.max)
+            || mesh.triangleUserData.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const usize totalBytes =
+            size_of<CollisionMeshHeaderBinary>()
+            + mesh.triangles.size() * size_of<CollisionMeshTriangleBinary>()
+            + mesh.nodes.size() * size_of<CollisionMeshBvhNodeBinary>()
+            + mesh.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + mesh.triangleMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
+            + mesh.triangleUserData.size() * size_of<CollisionMeshU32Binary>();
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        CollisionMeshHeaderBinary hdr;
+        hdr.triangleCount = cast<u32>(mesh.triangles.size());
+        hdr.nodeCount = cast<u32>(mesh.nodes.size());
+        hdr.materialCount = cast<u32>(mesh.materials.size());
+        hdr.triMaterialCount = cast<u32>(mesh.triangleMaterialIndices.size());
+        hdr.triUserDataCount = cast<u32>(mesh.triangleUserData.size());
+        hdr.localAabbMinRadius = mesh.localAabbMinRadius;
+        hdr.localAabbMaxMeta = mesh.localAabbMaxMeta;
+        AppendPOD(outBinary, hdr);
+
+        for(usize i = 0u; i < mesh.triangles.size(); ++i){
+            in MeshTriangle tri = mesh.triangles[i];
+            CollisionMeshTriangleBinary tb;
+            tb.v0Zero = f32x4(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+            tb.v1Zero = f32x4(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+            tb.v2Zero = f32x4(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+            tb.normalZero = f32x4(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
+            AppendPOD(outBinary, tb);
+        }
+        for(usize i = 0u; i < mesh.nodes.size(); ++i){
+            CollisionMeshBvhNodeBinary nb;
+            nb.aabbMinLeft = mesh.nodes[i].aabbMinLeft;
+            nb.aabbMaxRight = mesh.nodes[i].aabbMaxRight;
+            AppendPOD(outBinary, nb);
+        }
+        for(usize i = 0u; i < mesh.materials.size(); ++i)
+            AppendPOD(outBinary, this.packSurfaceMaterialFields(mesh.materials[i]));
+        for(usize i = 0u; i < mesh.triangleMaterialIndices.size(); ++i){
+            CollisionMeshU16Binary mIdx;
+            mIdx.value = mesh.triangleMaterialIndices[i];
+            AppendPOD(outBinary, mIdx);
+        }
+        for(usize i = 0u; i < mesh.triangleUserData.size(); ++i){
+            CollisionMeshU32Binary ud;
+            ud.value = mesh.triangleUserData[i];
+            AppendPOD(outBinary, ud);
+        }
+        return true;
+    }
+
+    public Expected<MeshShape> deserializeCollisionMesh(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<CollisionMeshHeaderBinary> hdrRes = ReadPOD<CollisionMeshHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("CollisionMeshAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in CollisionMeshHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_CollisionMeshMagic || hdr.version != s_CollisionMeshVersion || hdr.reserved0 != 0u){
+            error("CollisionMeshAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+
+        const u64 expectedDataBytes =
+            cast<u64>(hdr.triangleCount) * cast<u64>(size_of<CollisionMeshTriangleBinary>())
+            + cast<u64>(hdr.nodeCount) * cast<u64>(size_of<CollisionMeshBvhNodeBinary>())
+            + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
+            + cast<u64>(hdr.triMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>())
+            + cast<u64>(hdr.triUserDataCount) * cast<u64>(size_of<CollisionMeshU32Binary>());
+        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+            error("CollisionMeshAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        MeshShape mesh;
+        mesh.localAabbMinRadius = hdr.localAabbMinRadius;
+        mesh.localAabbMaxMeta = hdr.localAabbMaxMeta;
+
+        mesh.triangles.reserve(hdr.triangleCount);
+        for(u32 i = 0u; i < hdr.triangleCount; ++i){
+            const Expected<CollisionMeshTriangleBinary> tbRes = ReadPOD<CollisionMeshTriangleBinary>(binary, cursor);
+            if(!tbRes.has_value())
+                return MakeUnexpected(Failure());
+            in CollisionMeshTriangleBinary tb = tbRes.value();
+            if(tb.v0Zero.w != 0.0f || tb.v1Zero.w != 0.0f || tb.v2Zero.w != 0.0f || tb.normalZero.w != 0.0f)
+                return MakeUnexpected(Failure());
+            MeshTriangle tri;
+            tri.v0 = f32x3u(tb.v0Zero.x, tb.v0Zero.y, tb.v0Zero.z);
+            tri.v1 = f32x3u(tb.v1Zero.x, tb.v1Zero.y, tb.v1Zero.z);
+            tri.v2 = f32x3u(tb.v2Zero.x, tb.v2Zero.y, tb.v2Zero.z);
+            tri.normal = f32x3u(tb.normalZero.x, tb.normalZero.y, tb.normalZero.z);
+            mesh.triangles.push_back(tri);
+        }
+
+        mesh.nodes.reserve(hdr.nodeCount);
+        for(u32 i = 0u; i < hdr.nodeCount; ++i){
+            const Expected<CollisionMeshBvhNodeBinary> nbRes = ReadPOD<CollisionMeshBvhNodeBinary>(binary, cursor);
+            if(!nbRes.has_value())
+                return MakeUnexpected(Failure());
+            MeshBvhNode node;
+            node.aabbMinLeft = nbRes.value().aabbMinLeft;
+            node.aabbMaxRight = nbRes.value().aabbMaxRight;
+            mesh.nodes.push_back(node);
+        }
+
+        mesh.materials.reserve(hdr.materialCount);
+        for(u32 i = 0u; i < hdr.materialCount; ++i){
+            const Expected<PhysicsSurfaceMaterialBinary> matFieldsRes = ReadPOD<PhysicsSurfaceMaterialBinary>(binary, cursor);
+            if(!matFieldsRes.has_value())
+                return MakeUnexpected(Failure());
+            const Expected<SurfaceMaterial> matRes = this.unpackSurfaceMaterialFields(matFieldsRes.value());
+            if(!matRes.has_value())
+                return MakeUnexpected(Failure());
+            mesh.materials.push_back(matRes.value());
+        }
+
+        static_assert(size_of<CollisionMeshU16Binary>() == size_of<u16>() && size_of<CollisionMeshU32Binary>() == size_of<u32>());
+        if(
+            !ReadBinaryVectorPayload(binary, hdr.triMaterialCount, cursor, mesh.triangleMaterialIndices).has_value()
+            || !ReadBinaryVectorPayload(binary, hdr.triUserDataCount, cursor, mesh.triangleUserData).has_value()
+        )
+            return MakeUnexpected(Failure());
+
+        if(!this.validMeshShapeData(mesh)){
+            error("CollisionMeshAsset::loadBinary failed: invalid collision mesh BVH or triangle data");
+            return MakeUnexpected(Failure());
+        }
+        return mesh;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

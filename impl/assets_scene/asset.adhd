@@ -29,10 +29,19 @@ type LoadedComponentVector = Vector<UniquePtr<IComponent>>;
 
 [arena, asset("entity")]
 class EntityAsset{
+    private Name m_name = s_NameNone;
     private ComponentRefVector m_components;
 
     public b8 validatePayload()const;
     public b8 loadBinary(in Span<u8> binary);
+
+    public void setName(in Name name){
+        this.m_name = name;
+    }
+
+    public Name name()const{
+        return this.m_name;
+    }
 
     public void setComponents(in ComponentRefVector components){
         this.m_components = components;
@@ -109,6 +118,7 @@ class SceneAsset{
 
 [move_only]
 class LoadedSceneEntity{
+    public Name name = s_NameNone;
     public EntityRef entity;
     public LoadedComponentVector components;
 }
@@ -119,6 +129,16 @@ class LoadedSceneContents{
     public AssetMap assets;
     public LoadedSubsystemVector subsystems;
     public Vector<LoadedSceneEntity> entities;
+}
+
+[modular]
+class InstantiatedSceneEntities{
+    public Vector<EntityID> entities;
+    public Vector<Name> names;
+    public HashMap<Name, EntityID> namedEntities;
+
+    public void clear();
+    public EntityID findByName(in Name name)const;
 }
 
 
@@ -135,6 +155,8 @@ class ActiveSceneSubsystems{
     }
     public b8 loadScene(in SceneRef scene, in AssetManager assetManager);
     public b8 instantiateEntities(mut World world)const;
+    public b8 instantiateEntities(mut World world, mut InstantiatedSceneEntities outInstantiated)const;
+    public Expected<InstantiatedSceneEntities> instantiateEntitiesWithResult(mut World world)const;
 
     public b8 valid()const{ return this.m_contents.scene.valid() && !this.m_contents.subsystems.empty(); }
     public in SceneRef scene()const{ return this.m_contents.scene; }

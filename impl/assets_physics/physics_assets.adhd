@@ -1,0 +1,175 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/shapes.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_PhysicsMaterialMagic = 0x504D4154u;
+const u32 s_PhysicsMaterialVersion = 1u;
+
+const u32 s_CollisionLayerMatrixMagic = 0x50434C4Du;
+const u32 s_CollisionLayerMatrixVersion = 1u;
+const u32 s_MaxCollisionLayers = 32u;
+
+const u32 s_ConvexHullMagic = 0x5048554Cu;
+const u32 s_ConvexHullVersion = 1u;
+
+const u32 s_CollisionMeshMagic = 0x504D5348u;
+const u32 s_CollisionMeshVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CollisionLayerMatrix{
+    public Array<Name, 32u> layerNames;
+    public Array<u32, 32u> layerMasks;
+
+    public CollisionLayerMatrix(){
+        for(u32 i = 0u; i < s_MaxCollisionLayers; ++i)
+            this.layerMasks[i] = u32.max;
+    }
+
+    public u32 findLayerIndex(in Name layerName)const{
+        if(layerName == s_NameNone)
+            return u32.max;
+        for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
+            if(this.layerNames[i] == layerName)
+                return i;
+        }
+        return u32.max;
+    }
+
+    public b8 layersCollide(in u32 layerA, in u32 layerB)const{
+        if(layerA >= s_MaxCollisionLayers || layerB >= s_MaxCollisionLayers)
+            return false;
+        const u32 bitB = 1u << layerB;
+        const u32 bitA = 1u << layerA;
+        return ((this.layerMasks[layerA] & bitB) != 0u) && ((this.layerMasks[layerB] & bitA) != 0u);
+    }
+
+    public b8 setLayersCollide(in u32 layerA, in u32 layerB, in b8 collide){
+        if(layerA >= s_MaxCollisionLayers || layerB >= s_MaxCollisionLayers)
+            return false;
+        const u32 bitA = 1u << layerA;
+        const u32 bitB = 1u << layerB;
+        if(collide){
+            this.layerMasks[layerA] |= bitB;
+            this.layerMasks[layerB] |= bitA;
+        }
+        else{
+            this.layerMasks[layerA] &= ~bitB;
+            this.layerMasks[layerB] &= ~bitA;
+        }
+        return true;
+    }
+
+    public u32 maskForLayer(in u32 layerIdx)const{
+        if(layerIdx >= s_MaxCollisionLayers)
+            return u32.max;
+        return this.layerMasks[layerIdx];
+    }
+
+    public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
+        Filter f;
+        if(layerIdx < s_MaxCollisionLayers){
+            f.categoryBits = 1u << layerIdx;
+            f.maskBits = this.layerMasks[layerIdx];
+        }
+        f.groupIndex = groupIndex;
+        return f;
+    }
+
+    public Filter makeFilterByName(in Name layerName, in i32 groupIndex)const{
+        const u32 idx = this.findLayerIndex(layerName);
+        if(idx >= s_MaxCollisionLayers){
+            Filter f;
+            f.groupIndex = groupIndex;
+            return f;
+        }
+        return this.makeFilter(idx, groupIndex);
+    }
+}
+
+[arena, asset("physics_material")]
+class PhysicsMaterialAsset{
+    public SurfaceMaterial material;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setMaterial(in SurfaceMaterial mat){
+        this.material = mat;
+    }
+
+    public in SurfaceMaterial surfaceMaterial()const{
+        return this.material;
+    }
+}
+
+[arena, asset("collision_layer_matrix")]
+class CollisionLayerMatrixAsset{
+    public CollisionLayerMatrix matrix;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public u32 findLayerIndex(in Name layerName)const{
+        return this.matrix.findLayerIndex(layerName);
+    }
+
+    public b8 layersCollide(in u32 layerA, in u32 layerB)const{
+        return this.matrix.layersCollide(layerA, layerB);
+    }
+
+    public b8 setLayersCollide(in u32 layerA, in u32 layerB, in b8 collide){
+        return this.matrix.setLayersCollide(layerA, layerB, collide);
+    }
+
+    public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
+        return this.matrix.makeFilter(layerIdx, groupIndex);
+    }
+
+    public Filter makeFilterByName(in Name layerName, in i32 groupIndex)const{
+        return this.matrix.makeFilterByName(layerName, groupIndex);
+    }
+}
+
+[arena, asset("convex_hull")]
+class ConvexHullAsset{
+    public HullShape hull;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setHull(in HullShape inHull){
+        this.hull = inHull;
+    }
+
+    public in HullShape hullShape()const{
+        return this.hull;
+    }
+}
+
+[arena, asset("collision_mesh")]
+class CollisionMeshAsset{
+    public MeshShape mesh;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setMesh(in MeshShape inMesh){
+        this.mesh = inMesh;
+    }
+
+    public in MeshShape meshShape()const{
+        return this.mesh;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

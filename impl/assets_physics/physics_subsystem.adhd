@@ -13,6 +13,10 @@ class PhysicsSubsystem{
     public AssetRef<ComputeShader> solverFinalizeBodiesCs;
     public AssetRef<ComputeShader> solverIslandsCs;
     public AssetRef<ComputeShader> solverJointIslandsCs;
+    public AssetRef<ComputeShader> lbvhBroadphaseCs;
+    public AssetRef<ComputeShader> gpuResidentStepCs;
+    public AssetRef<ComputeShader> spatialQueryCs;
+    public AssetRef<ComputeShader> exportRenderTransformsCs;
 }
 
 

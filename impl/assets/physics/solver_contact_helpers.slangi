@@ -521,6 +521,7 @@ void nwbPhysicsSolveContactVelocity(
     const float tangentVelocity1 = tvrml.x;
     const float rollingResistance = tvrml.y;
     const float maxLeverArm = tvrml.z;
+    const float tangentVelocity2 = tvrml.w;
 
     const float4 soft00 = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].softnessTangent00;
     const float biasRate = soft00.x;
@@ -652,7 +653,7 @@ void nwbPhysicsSolveContactVelocity(
             const float3 velB = hasB ? (vB + cross(wB, centerB)) : float3(0.0f, 0.0f, 0.0f);
             const float3 dv = velB - velA;
             const float vt1 = dot(dv, tangent1) - tangentVelocity1;
-            const float vt2 = dot(dv, tangent2);
+            const float vt2 = dot(dv, tangent2) - tangentVelocity2;
 
             const float m00 = soft00.w;
             const float m01 = tm01_11.x;
@@ -661,12 +662,46 @@ void nwbPhysicsSolveContactVelocity(
             const float2 deltaF = float2(m00 * rhs.x + m01 * rhs.y, m01 * rhs.x + m11 * rhs.y);
 
             float2 newF = oldF + deltaF;
-            const float maxF = friction * totalNormalImpulse;
-            const float fLenSq = dot(newF, newF);
-            if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f)
-                newF *= maxF * rsqrt(fLenSq);
-            else if(maxF <= 0.0f)
-                newF = float2(0.0f, 0.0f);
+            const bool hasFrictionExt = (meta.w != NWB_PHYSICS_INVALID_INDEX) && ((meta.w & NWB_PHYSICS_CONTACT_AUX_HAS_FRICTION_EXT) != 0u);
+            if(!hasFrictionExt){
+                const float maxF = friction * totalNormalImpulse;
+                const float fLenSq = dot(newF, newF);
+                if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f)
+                    newF *= maxF * rsqrt(fLenSq);
+                else if(maxF <= 0.0f)
+                    newF = float2(0.0f, 0.0f);
+            }
+            else{
+                const uint auxSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.w);
+                const uint auxIdx = meta.w & NWB_PHYSICS_CONTACT_AUX_INDEX_MASK;
+                const float4 fExt = (auxSlot != NWB_PHYSICS_INVALID_INDEX)
+                    ? g_NwbPhysicsFloat4Buffers[auxSlot][auxIdx * NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4 + 2u]
+                    : float4(-1.0f, 1.0f, 1.0f, 0.0f);
+                const float sx = max(fExt.y, 0.0f);
+                const float sy = max(fExt.z, 0.0f);
+                float nx = 0.0f;
+                float ny = 0.0f;
+                if(sx > 1.0e-6f)
+                    nx = newF.x / sx;
+                else
+                    newF.x = 0.0f;
+                if(sy > 1.0e-6f)
+                    ny = newF.y / sy;
+                else
+                    newF.y = 0.0f;
+                const float normSq = nx * nx + ny * ny;
+                const float maxDyn = max(friction, 0.0f) * totalNormalImpulse;
+                const float statF = (fExt.x > friction) ? fExt.x : friction;
+                const float maxStat = max(statF, 0.0f) * totalNormalImpulse;
+                if(maxStat <= 0.0f){
+                    newF = float2(0.0f, 0.0f);
+                }
+                else if(normSq > maxStat * maxStat && normSq > 1.0e-18f){
+                    const float invLen = maxDyn * rsqrt(normSq);
+                    newF.x = nx * invLen * sx;
+                    newF.y = ny * invLen * sy;
+                }
+            }
 
             const float2 appliedF = newF - oldF;
             if(appliedF.x != 0.0f || appliedF.y != 0.0f){
@@ -722,8 +757,8 @@ void nwbPhysicsSolveContactVelocity(
             float4 rollingMass0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
             float4 rollingMass1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
             const uint rollingSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.w);
-            if(rollingSlot != NWB_PHYSICS_INVALID_INDEX && meta.w != NWB_PHYSICS_INVALID_INDEX){
-                const uint rollingBase = meta.w * 2u;
+            if(rollingSlot != NWB_PHYSICS_INVALID_INDEX && meta.w != NWB_PHYSICS_INVALID_INDEX && ((meta.w & NWB_PHYSICS_CONTACT_AUX_HAS_ROLLING) != 0u)){
+                const uint rollingBase = (meta.w & NWB_PHYSICS_CONTACT_AUX_INDEX_MASK) * NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4;
                 rollingMass0 = g_NwbPhysicsFloat4Buffers[rollingSlot][rollingBase];
                 rollingMass1 = g_NwbPhysicsFloat4Buffers[rollingSlot][rollingBase + 1u];
             }
@@ -796,6 +831,7 @@ void nwbPhysicsIslandSolveContactsPass(
     const uint4 counts0,
     const uint4 counts1,
     const uint denseColorCount,
+    const uint overflowContactCount,
     const uint mode,
     const uint bodySimSlot,
     const uint bodyStateSlot,
@@ -824,10 +860,9 @@ void nwbPhysicsIslandSolveContactsPass(
         off += cnt;
         GroupMemoryBarrierWithGroupSync();
     }
-    const uint overflowCnt = (counts1.y >> 24u) & 0xffu;
-    if(overflowCnt > 0u){
+    if(overflowContactCount > 0u){
         if(tid == 0u){
-            for(uint k = 0u; k < overflowCnt; ++k)
+            for(uint k = 0u; k < overflowContactCount; ++k)
                 nwbPhysicsSolveSingleContact(off + k, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags);
         }
         GroupMemoryBarrierWithGroupSync();

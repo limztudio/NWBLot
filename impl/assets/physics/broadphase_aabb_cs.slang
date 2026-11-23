@@ -302,6 +302,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint awakeOffset = itemOffset;
     const uint awakeCount = itemCount;
     const uint totalShapeCount = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
+    const uint nonCollideSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.y);
+    const uint nonCollideMask = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.z);
     const uint maxPairs = g_NwbPhysicsPushConstants.flags;
     const uint idx = awakeOffset + tid;
 
@@ -365,6 +367,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                     const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
                                     if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                                         continue;
+                                    if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+                                        continue;
 
                                     if((flagsB & 2u) != 0u){
                                         bool seenInBucket = false;
@@ -416,6 +420,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const uint4 filterB = s_LargeFilter[j];
                     if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                         continue;
+                    if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+                        continue;
                     const uint outA = idx < otherIdx ? idx : otherIdx;
                     const uint outB = idx < otherIdx ? otherIdx : idx;
                     const uint bodyOutA = idx < otherIdx ? metaA.x : metaB.x;
@@ -436,6 +442,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
                 if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                     continue;
+                if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+                    continue;
                 nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, otherIdx, idx, metaB.x, metaA.x, nwbPhysicsIsComplexPair(metaA, metaB));
             }
             for(uint otherIdx = idx + 1u; otherIdx < totalShapeCount; ++otherIdx){
@@ -446,6 +454,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
                 const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
                 if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+                    continue;
+                if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
                     continue;
                 nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, otherIdx, metaA.x, metaB.x, nwbPhysicsIsComplexPair(metaA, metaB));
             }
@@ -472,6 +482,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
             if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                 continue;
+            if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+                continue;
             nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idxB, idx, metaB.x, metaA.x, nwbPhysicsIsComplexPair(metaA, metaB));
         }
         for(uint idxB = idx + 1u; idxB < totalShapeCount; ++idxB){
@@ -482,6 +494,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
             const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
             if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+                continue;
+            if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
                 continue;
             nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, metaA.x, metaB.x, nwbPhysicsIsComplexPair(metaA, metaB));
         }

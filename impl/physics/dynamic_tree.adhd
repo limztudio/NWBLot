@@ -202,6 +202,22 @@ class DynamicTree{
         return this.m_root;
     }
 
+    public u32 rootNode()const{
+        return this.m_root;
+    }
+
+    public usize nodeCapacity()const{
+        return this.m_nodes.size();
+    }
+
+    public b8 isValidNode(in u32 nodeId)const{
+        return nodeId != s_NullIndex && cast<usize>(nodeId) < this.m_nodes.size() && this.m_nodes[nodeId].height >= 0;
+    }
+
+    public in TreeNode node(in u32 nodeId)const{
+        return this.m_nodes[nodeId];
+    }
+
     public u32 userData(in u32 proxyId)const{
         return this.m_nodes[proxyId].userData();
     }
@@ -211,6 +227,36 @@ class DynamicTree{
             return false;
         in TreeNode n = this.m_nodes[proxyId];
         return n.height == 0 && n.isLeaf() && n.userData() != s_NullIndex;
+    }
+
+    public in Vector<TreeNode> nodes()const{
+        return this.m_nodes;
+    }
+
+    public in Vector<u32> moveIndices()const{
+        return this.m_moveIndices;
+    }
+
+    public u32 freeList()const{
+        return this.m_freeList;
+    }
+
+    public u32 nodeCount()const{
+        return this.m_nodeCount;
+    }
+
+    public void restoreState(
+        in Vector<TreeNode> inNodes,
+        in Vector<u32> inMoveIndices,
+        in u32 inRoot,
+        in u32 inFreeList,
+        in u32 inNodeCount
+    ){
+        this.m_nodes = inNodes;
+        this.m_moveIndices = inMoveIndices;
+        this.m_root = inRoot;
+        this.m_freeList = inFreeList;
+        this.m_nodeCount = inNodeCount;
     }
 
     public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u32 maskBits, in u8 requiredNodeFlags, in Callback callback)const{

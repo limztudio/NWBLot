@@ -138,11 +138,14 @@ void WakeIslandInSets(
             continue;
 
         const BodySim sim = sets[oldSetIndex].sims[body.localIndex];
+        BodySim awakeSim = sim;
+        awakeSim.flags |= cast<u32>(BodyFlags::JustWoke);
+        body.flags |= cast<u32>(BodyFlags::JustWoke);
         BodyState state;
-        state.setFlags(sim.flags);
+        state.setFlags(awakeSim.flags);
         body.sleepTime = 0.0f;
         RemoveBodyFromSolverSet(bodies, sets[oldSetIndex], body.localIndex);
-        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
+        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], awakeSim, state);
     }
 
     const u32 oldLocal = islands[islandId].localIndex;
@@ -181,10 +184,14 @@ void WakeBodyWithIsland(
 
     if(bodies[bodyId].localIndex < sets[setIdx].sims.size()){
         const BodySim sim = sets[setIdx].sims[bodies[bodyId].localIndex];
+        BodySim awakeSim = sim;
+        awakeSim.flags |= BodyFlags::JustWoke;
+        bodies[bodyId].flags |= BodyFlags::JustWoke;
+        bodies[bodyId].sleepTime = 0.0f;
         BodyState state;
-        state.setFlags(sim.flags);
+        state.setFlags(awakeSim.flags);
         RemoveBodyFromSolverSet(bodies, sets[setIdx], bodies[bodyId].localIndex);
-        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
+        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], awakeSim, state);
     }
 }
 

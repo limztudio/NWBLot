@@ -49,6 +49,10 @@ class ContactConstraint{
     public f32 invMassA = 0.0f;
     public f32 invMassB = 0.0f;
     public f32 tangentVelocity1 = 0.0f;
+    public f32 tangentVelocity2 = 0.0f;
+    public f32 staticFriction = -1.0f;
+    public f32 frictionScale1 = 1.0f;
+    public f32 frictionScale2 = 1.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentMass00 = 0.0f;
     public f32 tangentMass01 = 0.0f;
@@ -121,28 +125,6 @@ class ContactConstraintStepCache{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void ResolveContactBodyMassAndState(
-    in Vector<Body> bodies,
-    in Vector<SolverSet> sets,
-    in u32 bodyId,
-    mut u32 outAwakeIndex,
-    mut BodySim outSim,
-    mut BodyState outState
-){
-    in Body body = bodies[bodyId];
-    outAwakeIndex = s_NullIndex;
-    if(body.setIndex == s_AwakeSetIndex && body.localIndex < sets[s_AwakeSetIndex].sims.size()){
-        outAwakeIndex = body.localIndex;
-        outSim = sets[s_AwakeSetIndex].sims[body.localIndex];
-        outState = sets[s_AwakeSetIndex].states[body.localIndex];
-        return;
-    }
-    if(body.setIndex < sets.size() && body.localIndex < sets[body.setIndex].sims.size()){
-        outSim = sets[body.setIndex].sims[body.localIndex];
-        return;
-    }
-}
 
 VectorSingle ApplySymMat3Local(in SymMat3 m, in VectorSingle v){
     const VectorSingle row0(m.m00, m.m01, m.m02, 0.0f);
@@ -318,7 +300,6 @@ b8 PrepareContactConstraintSetup(
     outConstraint.invMassB = invMassB;
     outConstraint.invIA = effInvIA;
     outConstraint.invIB = effInvIB;
-    outConstraint.tangentVelocity1 = contact.tangentSpeed;
     outConstraint.rollingResistance = contact.rollingResistance;
 
     if(indexA == s_NullIndex || indexB == s_NullIndex || invMassA == 0.0f || invMassB == 0.0f){
@@ -337,6 +318,28 @@ b8 PrepareContactConstraintSetup(
     outT1 = VectorSingle(0.0f);
     outT2 = VectorSingle(0.0f);
     ComputeTangentBasisFromUnitNormal(outN, outT1, outT2);
+    outConstraint.tangentVelocity1 = contact.tangentSpeed;
+    outConstraint.tangentVelocity2 = 0.0f;
+    outConstraint.staticFriction = -1.0f;
+    if(contact.staticFriction > contact.friction)
+        outConstraint.staticFriction = contact.staticFriction;
+    outConstraint.frictionScale1 = 1.0f;
+    outConstraint.frictionScale2 = 1.0f;
+    if((contact.flags & cast<u32>(ContactFlags::HasAnisotropicFriction)) != 0u){
+        const VectorSingle dir(contact.frictionDirection.x, contact.frictionDirection.y, contact.frictionDirection.z, 0.0f);
+        const VectorSingle proj = VectorSingle(dir - outN * Vector3Dot(dir, outN).x, 0.0f);
+        if(Vector3LengthSq(proj).x > 1.0e-10f){
+            outT1 = SafeNormalizeVec3(proj, outT1);
+            outT2 = SafeNormalizeVec3(Cross(outN, outT1), outT2);
+        }
+        outConstraint.frictionScale1 = Max(contact.anisotropicFriction.x, 0.0f);
+        outConstraint.frictionScale2 = Max(contact.anisotropicFriction.y, 0.0f);
+    }
+    if((contact.flags & cast<u32>(ContactFlags::HasSurfaceVelocity)) != 0u){
+        const VectorSingle sv(contact.surfaceVelocity.x, contact.surfaceVelocity.y, contact.surfaceVelocity.z, 0.0f);
+        outConstraint.tangentVelocity1 += Vector3Dot(sv, outT1).x;
+        outConstraint.tangentVelocity2 = Vector3Dot(sv, outT2).x;
+    }
     outConstraint.normalFriction = f32x4(outN, contact.friction);
     outConstraint.tangent1Restitution = f32x4(outT1, contact.restitution);
 
@@ -1173,23 +1176,54 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
             velB = vB + Cross(wB, centerB);
         const VectorSingle dv = velB - velA;
         const f32 vt1 = Vector3Dot(dv, t1).x - c.tangentVelocity1;
-        const f32 vt2 = Vector3Dot(dv, t2).x;
+        const f32 vt2 = Vector3Dot(dv, t2).x - c.tangentVelocity2;
 
         const f32 deltaFx = -(c.tangentMass00 * vt1 + c.tangentMass01 * vt2);
         const f32 deltaFy = -(c.tangentMass01 * vt1 + c.tangentMass11 * vt2);
 
         f32 newFx = c.frictionImpulse.x + deltaFx;
         f32 newFy = c.frictionImpulse.y + deltaFy;
-        const f32 maxF = friction * totalNormalImpulse;
-        const f32 fLenSq = newFx * newFx + newFy * newFy;
-        if(maxF <= 0.0f){
-            newFx = 0.0f;
-            newFy = 0.0f;
+        if(c.frictionScale1 == 1.0f && c.frictionScale2 == 1.0f && c.staticFriction <= friction){
+            const f32 maxF = friction * totalNormalImpulse;
+            const f32 fLenSq = newFx * newFx + newFy * newFy;
+            if(maxF <= 0.0f){
+                newFx = 0.0f;
+                newFy = 0.0f;
+            }
+            else if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f){
+                const f32 invLen = maxF / SqrtFast(fLenSq);
+                newFx *= invLen;
+                newFy *= invLen;
+            }
         }
-        else if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f){
-            const f32 invLen = maxF / SqrtFast(fLenSq);
-            newFx *= invLen;
-            newFy *= invLen;
+        else{
+            const f32 sx = Max(c.frictionScale1, 0.0f);
+            const f32 sy = Max(c.frictionScale2, 0.0f);
+            f32 nx = 0.0f;
+            f32 ny = 0.0f;
+            if(sx > 1.0e-6f)
+                nx = newFx / sx;
+            else
+                newFx = 0.0f;
+            if(sy > 1.0e-6f)
+                ny = newFy / sy;
+            else
+                newFy = 0.0f;
+            const f32 normSq = nx * nx + ny * ny;
+            const f32 maxDyn = Max(friction, 0.0f) * totalNormalImpulse;
+            f32 statF = friction;
+            if(c.staticFriction > friction)
+                statF = c.staticFriction;
+            const f32 maxStat = Max(statF, 0.0f) * totalNormalImpulse;
+            if(maxStat <= 0.0f){
+                newFx = 0.0f;
+                newFy = 0.0f;
+            }
+            else if(normSq > maxStat * maxStat && normSq > 1.0e-18f){
+                const f32 invLen = maxDyn / SqrtFast(normSq);
+                newFx = nx * invLen * sx;
+                newFy = ny * invLen * sy;
+            }
         }
 
         const f32 appliedFx = newFx - c.frictionImpulse.x;

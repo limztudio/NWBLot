@@ -230,8 +230,10 @@ void BindActiveSceneSubsystemsToWorld(mut NotNullUniquePtr<World> worldHandle, i
     const ActiveSceneSubsystemsRef subsystems = ActiveSceneSubsystemsRef(sceneSubsystems);
 
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
-    if(physicsSystem.has_value())
+    if(physicsSystem.has_value()){
         physicsSystem.value().setActiveSceneSubsystems(subsystems);
+        physicsSystem.value().validateResources();
+    }
 
     const Optional<mut RendererSystem> rendererSystem = world.borrowSystem<RendererSystem>();
     if(rendererSystem.has_value())
@@ -464,20 +466,6 @@ void CreateDefaultPhysicsScene(
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
     const Name whiteMatName = Name("project/materials/mat_white_opaque");
-
-    outEntities.push_back(
-        SpawnPhysicsStaticBox(
-            world,
-            VectorSingle(0.0f, -0.25f, 0.0f, 0.0f),
-            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
-            VectorSingle(3.0f, 0.25f, 3.0f, 0.0f),
-            0.7f,
-            0.1f,
-            false,
-            boxModelName,
-            whiteMatName
-        )
-    );
 
     for(u32 i = 0u; i < 4u; ++i){
         outEntities.push_back(
@@ -764,7 +752,12 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     return LoadImageSource(pool, context.assetManager, textureRef);
 }
 
-void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPaintContext context){
+void PaintPhysicsDebugOverlay(
+    mut NotNullUniquePtr<World> worldHandle,
+    mut UiPaintContext context,
+    in PhysicsDebugDrawOptions options,
+    mut Vector<PhysicsDebugLine> debugLines
+){
     mut World world = worldHandle.deref();
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
     if(!physicsSystem.has_value())
@@ -778,8 +771,7 @@ void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPai
     if(!cameraView.valid())
         return;
 
-    Vector<PhysicsDebugLine> debugLines;
-    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), PhysicsDebugDrawOptions(), debugLines);
+    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), options, debugLines);
     if(debugLines.empty())
         return;
 

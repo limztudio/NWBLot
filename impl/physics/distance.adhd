@@ -995,6 +995,8 @@ LocalRayHit ShapeCastProxyViews(
     in f32 maxFraction
 ){
     LocalRayHit hit;
+    if(proxyA.points.empty() || proxyB.points.empty() || maxFraction < 0.0f)
+        return hit;
     const f32 totalRadius = proxyA.radius + proxyB.radius;
     const f32 tolerance = 0.25f * s_LinearSlop;
     const VectorSingle relMove = VectorSingle(translationB - translationA, 0.0f);
@@ -1140,7 +1142,7 @@ TimeOfImpactOutput ComputeTimeOfImpactViewsWithPadding(
 
         if(dist.distance() <= targetDist + tolerance){
             u32 flags = 1u;
-            if(t1 == 0.0f && dist.distance() < totalRadius - tolerance)
+            if(t1 == 0.0f && (dist.distance() < totalRadius - tolerance || (totalRadius <= tolerance && dist.distance() <= tolerance)))
                 flags |= 2u;
             const VectorSingle n = SafeNormalizeVec3(dist.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle wA = dist.pointA() + n * proxyA.radius;
@@ -1462,6 +1464,18 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
 
     const VectorSingle localOrigin = InverseTransformPoint(xf, origin);
     const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), VectorSingle(xf.rotation));
+    if(mesh.isClosed() && IsPointInsideClosedMesh(mesh, localOrigin)){
+        VectorSingle closePt(0.0f);
+        VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+        u32 closeTri = 0u;
+        VectorSingle localHitN = SafeNormalizeVec3(-localDir, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        if(FindClosestPointOnClosedMesh(mesh, localOrigin, closePt, closeN, closeTri))
+            localHitN = closeN;
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localHitN, VectorSingle(xf.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        best.pointFraction = f32x4(origin, 0.0f);
+        best.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+        return best;
+    }
     const f32 meshRadius = mesh.localAabbMinRadius.w;
     Array<f32x3u, 1u> rayPtPts;
     rayPtPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
@@ -1627,7 +1641,7 @@ LocalRayHit ShapeCastMeshView(
             }
         }
     }
-    if(!best.hit() && mesh.isClosed()){
+    if((!best.hit() || best.fraction() > 0.0f) && mesh.isClosed()){
         const VectorSingle localStartCenter = sumQ / cast<f32>(queryProxy.points.size());
         if(IsPointInsideClosedMesh(mesh, localStartCenter)){
             VectorSingle closePt(0.0f);
@@ -1752,7 +1766,7 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
                 else
                     toi = ComputeTimeOfImpactViews(proxyA, sweepA, triView, sweepB, curMax);
                 if(toi.hit()){
-                    if(!toi.initialOverlap() && toi.fraction() < curMax){
+                    if(!toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < curMax){
                         curMax = toi.fraction();
                         bestOut = toi;
                     }

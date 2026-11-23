@@ -16,6 +16,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         this.m_world = TakeNotNullUnique<World>(world);
         this.m_sceneSubsystems = ActiveSceneSubsystems();
         this.m_uiPreview = UiSkinPreview();
+        this.m_physicsDebugOptions.maxLines = 32768u;
     }
 
     public ~Project(){
@@ -112,7 +113,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
     public void paintUiLayer(mut UiPaintContext context)override{
         if(this.m_showPhysicsDebug)
-            PaintPhysicsDebugOverlay(this.m_world, context);
+            PaintPhysicsDebugOverlay(this.m_world, context, this.m_physicsDebugOptions, this.m_physicsDebugLines);
         this.drawUiControls(context);
         this.m_uiPreview.paint(context);
     }
@@ -179,12 +180,14 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         SeparatorOptions separator = SeparatorOptions();
         separator.thickness = 1.0f;
         TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
-        StringView backendName = "CPU";
-        if(stats.backendUsed == 2u)
+        StringView backendName = "None";
+        if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
+            backendName = "CPU";
+        else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
             backendName = "GPU";
-        else if(stats.backendUsed == 3u)
+        else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
             backendName = "CPU+GPU";
-        const String physicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, backendName);
+        const String physicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts, {}j/{}i ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, stats.jointCount, stats.islandCount, backendName);
         const String splitLine = StringFormat(
             "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
             stats.cpuSolvedBodyCount,
@@ -233,6 +236,25 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_pendingBackendSwitch = true;
             }
             declared = context.ui.endContainer() && declared;
+            if(this.m_showPhysicsDebug){
+                declared = context.ui.beginRow("physics_debug_filter_row") && declared;
+                StringView aabbLabel = "AABBs: Off";
+                if(this.m_physicsDebugOptions.drawAabbs)
+                    aabbLabel = "AABBs: On";
+                if(context.ui.button("physics_debug_aabbs", aabbLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawAabbs = !this.m_physicsDebugOptions.drawAabbs;
+                StringView contactLabel = "Contacts: On";
+                if(!this.m_physicsDebugOptions.drawContacts)
+                    contactLabel = "Contacts: Off";
+                if(context.ui.button("physics_debug_contacts", contactLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawContacts = !this.m_physicsDebugOptions.drawContacts;
+                StringView jointLabel = "Joints: On";
+                if(!this.m_physicsDebugOptions.drawJoints)
+                    jointLabel = "Joints: Off";
+                if(context.ui.button("physics_debug_joints", jointLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawJoints = !this.m_physicsDebugOptions.drawJoints;
+                declared = context.ui.endContainer() && declared;
+            }
             [essential] assert(declared);
         }
         const b8 ended = context.ui.endWindow();
@@ -256,6 +278,8 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_pendingSceneSwitch = false;
     private b8 m_pendingBackendSwitch = false;
     private b8 m_showPhysicsDebug = false;
+    private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
+    private Vector<PhysicsDebugLine> m_physicsDebugLines;
 }
 
 

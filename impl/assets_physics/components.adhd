@@ -39,6 +39,8 @@ class ColliderComponentAsset : IComponent{
         dst.runtimeShapeId = ShapeId();
         dst.runtimeExtraShapeIds.clear();
         dst.boundBodyId = BodyId();
+        dst.syncedWorldScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        dst.hasSyncedWorldScale = false;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
@@ -57,6 +59,8 @@ class JointComponentAsset : IComponent{
         dst.runtimeJointId = JointId();
         dst.boundBodyIdA = BodyId();
         dst.boundBodyIdB = BodyId();
+        dst.bodyEntityA = s_InvalidEntityId;
+        dst.bodyEntityB = s_InvalidEntityId;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }

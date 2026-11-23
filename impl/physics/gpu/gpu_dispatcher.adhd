@@ -2717,11 +2717,22 @@ class PhysicsGpuDispatcher{
         for(usize bi = 0u; bi < bulletCount; ++bi){
             const u32 bodyIdA = bulletBodyIds[bi];
             in Body bodyInit = world.m_bodies[bodyIdA];
+            u32 bodyQueryMask = 0u;
+            u32 maskShapeIdx = bodyInit.headShapeId;
+            while(maskShapeIdx != s_NullIndex){
+                in Shape sMask = world.m_shapes[maskShapeIdx];
+                if(sMask.alive() && !sMask.isSensor() && sMask.type != ShapeType::Mesh)
+                    bodyQueryMask |= world.broadPhaseQueryMask(sMask.filter);
+                maskShapeIdx = sMask.nextShapeId;
+            }
+            if(bodyQueryMask == 0u)
+                continue;
             const Aabb3D queryBox = FattenAabb(Aabb3D(VectorSingle(bulletSweepMin[bi]), VectorSingle(bulletSweepMax[bi])), s_SpeculativeDistance);
             for(usize t = 0u; t < s_TreeCount; ++t){
-                world.m_broadPhase.trees[t].queryAabb(
+                world.m_broadPhase.trees[t].queryAabbFiltered(
                     queryBox,
-                    0xffffffffu,
+                    bodyQueryMask,
+                    s_TreeNodeHasNonSensor,
                     lambda[in worldRef, in bi, in bodyIdA, in bodyInit, mut pairBulletIdx, mut pairShapeA, mut pairShapeB](in u32 proxyId, in u32 shapeIdxB) -> b8{
                         if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive())
                             return true;
@@ -3827,6 +3838,7 @@ class PhysicsGpuDispatcher{
                             }
                         }
 
+                        b8 anyBodyWoke = false;
                         for(usize mi = 0u; mi < manifoldCount; ++mi){
                             const u8 txFlags = this.m_contactTransitionFlagsScratch[mi];
                             if(txFlags == 0u)
@@ -3843,11 +3855,19 @@ class PhysicsGpuDispatcher{
                                     const u32 bodyIdB = c.edges[1u].bodyId;
                                     const b8 awakeA = IsBodyAwakeForWaking(world, bodyIdA);
                                     const b8 awakeB = IsBodyAwakeForWaking(world, bodyIdB);
-                                    if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u)
+                                    if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u){
                                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
-                                    else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u)
+                                        anyBodyWoke = true;
+                                    }
+                                    else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u){
                                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
-                                    if(c.islandId == s_NullIndex && isTouching){
+                                        anyBodyWoke = true;
+                                    }
+                                    const b8 hasAwakeDynamic =
+                                        (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
+                                        || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
+                                    ;
+                                    if(hasAwakeDynamic && c.islandId == s_NullIndex && isTouching){
                                         LinkContactToIslandWithGraph(
                                             world.m_graph,
                                             world.m_bodies,
@@ -3860,7 +3880,7 @@ class PhysicsGpuDispatcher{
                                             cId
                                         );
                                     }
-                                    if(c.colorIndex == s_NullIndex)
+                                    if(hasAwakeDynamic && c.colorIndex == s_NullIndex)
                                         AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
                                 }
                                 else{
@@ -3886,6 +3906,39 @@ class PhysicsGpuDispatcher{
                                     ev.shapeIdA = world.makeShapeId(evC.shapeIdA);
                                     ev.shapeIdB = world.makeShapeId(evC.shapeIdB);
                                     world.m_contactEndEvents.push_back(ev);
+                                }
+                            }
+                        }
+                        if(anyBodyWoke){
+                            for(usize mi = 0u; mi < manifoldCount; ++mi){
+                                const u32 cId = this.m_manifoldContactIdsScratch[mi];
+                                if(cId == s_NullIndex)
+                                    continue;
+                                mut Contact c = world.m_contacts[cId];
+                                if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                                    continue;
+                                const u32 bIdA = c.edges[0u].bodyId;
+                                const u32 bIdB = c.edges[1u].bodyId;
+                                const b8 hasAwakeDynamic =
+                                    (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
+                                    || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
+                                ;
+                                if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
+                                    if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
+                                        LinkContactToIslandWithGraph(
+                                            world.m_graph,
+                                            world.m_bodies,
+                                            world.m_islands,
+                                            world.m_freeIslandIds,
+                                            world.m_solverSets,
+                                            world.m_freeSolverSetIds,
+                                            world.m_contacts,
+                                            world.m_joints,
+                                            cId
+                                        );
+                                    }
+                                    if(c.colorIndex == s_NullIndex)
+                                        AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
                                 }
                             }
                         }
@@ -3930,6 +3983,37 @@ class PhysicsGpuDispatcher{
                             const u32 cId = this.m_manifoldContactIdsScratch[mi];
                             if(cId != s_NullIndex)
                                 ApplyContactManifoldAndEvents(world, cId, this.m_resolvedManifoldsScratch[mi]);
+                        }
+                        for(usize mi = 0u; mi < manifoldCount; ++mi){
+                            const u32 cId = this.m_manifoldContactIdsScratch[mi];
+                            if(cId == s_NullIndex)
+                                continue;
+                            mut Contact c = world.m_contacts[cId];
+                            if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                                continue;
+                            const u32 bIdA = c.edges[0u].bodyId;
+                            const u32 bIdB = c.edges[1u].bodyId;
+                            const b8 hasAwakeDynamic =
+                                (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
+                                || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
+                            ;
+                            if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
+                                if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
+                                    LinkContactToIslandWithGraph(
+                                        world.m_graph,
+                                        world.m_bodies,
+                                        world.m_islands,
+                                        world.m_freeIslandIds,
+                                        world.m_solverSets,
+                                        world.m_freeSolverSetIds,
+                                        world.m_contacts,
+                                        world.m_joints,
+                                        cId
+                                    );
+                                }
+                                if(c.colorIndex == s_NullIndex)
+                                    AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
+                            }
                         }
                     }
                 }

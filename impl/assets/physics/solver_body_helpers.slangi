@@ -146,16 +146,68 @@ void nwbPhysicsApplyGyroscopicStep(
     const float c12 = a13 * a23 - a12 * a33;
     const float c13 = a12 * a23 - a13 * a22;
     const float detInv = a11 * c11 + a12 * c12 + a13 * c13;
-    if(abs(detInv) <= 1.0e-30f)
-        return;
-
-    const float invDet = 1.0f / detInv;
     const float c22 = a11 * a33 - a13 * a13;
     const float c23 = a12 * a13 - a11 * a23;
     const float c33 = a11 * a22 - a12 * a12;
-    const float3 i0 = float3(c11, c12, c13) * invDet;
-    const float3 i1 = float3(c12, c22, c23) * invDet;
-    const float3 i2 = float3(c13, c23, c33) * invDet;
+
+    float3 i0 = float3(0.0f, 0.0f, 0.0f);
+    float3 i1 = float3(0.0f, 0.0f, 0.0f);
+    float3 i2 = float3(0.0f, 0.0f, 0.0f);
+    if(abs(detInv) > 1.0e-30f){
+        const float invDet = 1.0f / detInv;
+        i0 = float3(c11, c12, c13) * invDet;
+        i1 = float3(c12, c22, c23) * invDet;
+        i2 = float3(c13, c23, c33) * invDet;
+    }
+    else{
+        const float s2 = c11 + c22 + c33;
+        const float tr = a11 + a22 + a33;
+        bool solvedPseudoinv = false;
+        if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+            float nx = c11;
+            float ny = c12;
+            float nz = c13;
+            float bestDiag = abs(c11);
+            if(abs(c22) > bestDiag){
+                bestDiag = abs(c22);
+                nx = c12;
+                ny = c22;
+                nz = c23;
+            }
+            if(abs(c33) > bestDiag){
+                nx = c13;
+                ny = c23;
+                nz = c33;
+            }
+            const float nLenSq = nx * nx + ny * ny + nz * nz;
+            if(nLenSq > 1.0e-30f){
+                const float invNLen = rsqrt(nLenSq);
+                nx *= invNLen;
+                ny *= invNLen;
+                nz *= invNLen;
+                const float invS2 = 1.0f / s2;
+                if(isfinite(invS2)){
+                    i0 = float3(tr * (1.0f - nx * nx) - a11, tr * (-nx * ny) - a12, tr * (-nx * nz) - a13) * invS2;
+                    i1 = float3(tr * (-nx * ny) - a12, tr * (1.0f - ny * ny) - a22, tr * (-ny * nz) - a23) * invS2;
+                    i2 = float3(tr * (-nx * nz) - a13, tr * (-ny * nz) - a23, tr * (1.0f - nz * nz) - a33) * invS2;
+                    solvedPseudoinv = true;
+                }
+            }
+        }
+        if(!solvedPseudoinv){
+            if(tr > 1.0e-15f){
+                const float invTrSq = 1.0f / (tr * tr);
+                if(isfinite(invTrSq)){
+                    i0 = float3(a11, a12, a13) * invTrSq;
+                    i1 = float3(a12, a22, a23) * invTrSq;
+                    i2 = float3(a13, a23, a33) * invTrSq;
+                    solvedPseudoinv = true;
+                }
+            }
+        }
+        if(!solvedPseudoinv)
+            return;
+    }
 
     const float3 iOmega = float3(dot(i0, wLocal), dot(i1, wLocal), dot(i2, wLocal));
     const float3 residual = cross(wLocal, iOmega) * h;

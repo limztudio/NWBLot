@@ -14,6 +14,10 @@ class PhysicsDebugDrawOptions{
     public b8 drawAabbs = false;
     public b8 drawContacts = true;
     public b8 drawJoints = true;
+    public b8 drawSpeculativeContacts = false;
+    public b8 drawContactImpulses = false;
+    public b8 drawDisabledBodies = false;
+    public b8 drawBodyAxes = false;
     public u32 maxLines = 8192u;
 }
 
@@ -328,7 +332,28 @@ void AppendPhysicsDebugHull(
     }
 }
 
+void ComputePhysicsJointRefBasis(
+    in VectorSingle axisA,
+    in VectorSingle localAxisA,
+    in VectorSingle qTarget,
+    mut VectorSingle outRefU,
+    mut VectorSingle outRefV
+){
+    VectorSingle localRefU(0.0f);
+    VectorSingle localRefV(0.0f);
+    ComputePhysicsDebugBasis(localAxisA, localRefU, localRefV);
+    const VectorSingle rotatedU = Vector3Rotate(localRefU, qTarget);
+    const VectorSingle projU = rotatedU - axisA * Vector3Dot(rotatedU, axisA).x;
+    if(Vector3LengthSq(VectorSingle(projU, 0.0f)).x > s_NormalizeEpsilonSq)
+        outRefU = SafeNormalizeVec3(projU, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    else
+        ComputePhysicsDebugBasis(axisA, outRefU, outRefV);
+    outRefV = SafeNormalizeVec3(Cross(axisA, outRefU), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+}
+
 VectorSingle ResolveDebugShapeColor(in Shape shape, in Body body){
+    if(body.setIndex == s_DisabledSetIndex)
+        return VectorSingle(0.40f, 0.40f, 0.44f, 0.55f);
     if(shape.isSensor())
         return VectorSingle(0.95f, 0.30f, 0.90f, 0.85f);
     if(body.type == BodyType::Static)
@@ -354,6 +379,8 @@ void BuildPhysicsDebugLines(
         estimatedLines += world.m_shapes.size() * 24u;
     if(options.drawAabbs)
         estimatedLines += world.m_shapes.size() * 12u;
+    if(options.drawBodyAxes)
+        estimatedLines += world.m_bodies.size() * 3u;
     if(options.drawContacts)
         estimatedLines += world.m_contacts.size() * 6u;
     if(options.drawJoints)
@@ -362,7 +389,9 @@ void BuildPhysicsDebugLines(
 
     const VectorSingle aabbColor(0.45f, 0.90f, 0.90f, 0.65f);
     const VectorSingle contactColor(1.0f, 0.22f, 0.22f, 1.0f);
+    const VectorSingle speculativeContactColor(0.95f, 0.78f, 0.20f, 0.85f);
     const VectorSingle jointColor(1.0f, 0.58f, 0.12f, 1.0f);
+    const VectorSingle disabledJointColor(0.55f, 0.42f, 0.30f, 0.55f);
 
     if(options.drawShapes || options.drawAabbs){
         for(usize si = 0u; si < world.m_shapes.size(); ++si){
@@ -372,7 +401,7 @@ void BuildPhysicsDebugLines(
             if(!shape.alive() || shape.bodyId >= world.m_bodies.size())
                 continue;
             in Body body = world.m_bodies[shape.bodyId];
-            if(!body.alive || body.setIndex == s_DisabledSetIndex || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
+            if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex) || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
                 continue;
             in Transform3D xf = world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
 
@@ -441,6 +470,22 @@ void BuildPhysicsDebugLines(
         }
     }
 
+    if(options.drawBodyAxes){
+        for(usize bi = 0u; bi < world.m_bodies.size(); ++bi){
+            if(outLines.size() >= cast<usize>(options.maxLines))
+                break;
+            in Body body = world.m_bodies[bi];
+            if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex) || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
+                continue;
+            in BodySim sim = world.m_solverSets[body.setIndex].sims[body.localIndex];
+            const VectorSingle q = SafeNormalizeQuat(VectorSingle(sim.transform.rotation));
+            const VectorSingle c = sim.center();
+            AppendPhysicsDebugLine(options.maxLines, c, c + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), q), VectorSingle(0.95f, 0.20f, 0.20f, 0.90f), outLines);
+            AppendPhysicsDebugLine(options.maxLines, c, c + Vector3Rotate(VectorSingle(0.0f, 0.15f, 0.0f, 0.0f), q), VectorSingle(0.20f, 0.95f, 0.25f, 0.90f), outLines);
+            AppendPhysicsDebugLine(options.maxLines, c, c + Vector3Rotate(VectorSingle(0.0f, 0.0f, 0.15f, 0.0f), q), VectorSingle(0.25f, 0.45f, 0.98f, 0.90f), outLines);
+        }
+    }
+
     if(options.drawContacts){
         for(usize ci = 0u; ci < world.m_contacts.size(); ++ci){
             if(outLines.size() >= cast<usize>(options.maxLines))
@@ -448,13 +493,24 @@ void BuildPhysicsDebugLines(
             in Contact c = world.m_contacts[ci];
             if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || c.manifold.pointCount() == 0u)
                 continue;
+            const b8 isTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+            if(!isTouching && !options.drawSpeculativeContacts)
+                continue;
+            VectorSingle activeContactColor = speculativeContactColor;
+            if(isTouching)
+                activeContactColor = contactColor;
             const VectorSingle n = c.manifold.normal();
             const u32 pCount = Min(c.manifold.pointCount(), cast<u32>(s_MaxManifoldPoints));
             for(u32 pi = 0u; pi < pCount; ++pi){
-                const VectorSingle p = c.manifold.points[pi].point();
-                AppendPhysicsDebugLine(options.maxLines, p, p + n * 0.2f, contactColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), p + VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), contactColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), p + VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), contactColor, outLines);
+                in ManifoldPoint mp = c.manifold.points[pi];
+                const VectorSingle p = mp.point();
+                f32 arrowLen = 0.2f;
+                if(options.drawContactImpulses)
+                    arrowLen = Clamp(0.12f + mp.normalImpulse() * 0.05f, 0.12f, 0.8f);
+                AppendPhysicsDebugLine(options.maxLines, p, p + n * arrowLen, activeContactColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), p + VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), activeContactColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.0f, 0.05f, 0.0f, 0.0f), p + VectorSingle(0.0f, 0.05f, 0.0f, 0.0f), activeContactColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), p + VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), activeContactColor, outLines);
             }
         }
     }
@@ -472,19 +528,22 @@ void BuildPhysicsDebugLines(
                 continue;
             in Body bA = world.m_bodies[bAId];
             in Body bB = world.m_bodies[bBId];
-            if(!bA.alive || !bB.alive || bA.setIndex == s_DisabledSetIndex || bB.setIndex == s_DisabledSetIndex)
+            if(!bA.alive || !bB.alive || (!options.drawDisabledBodies && (bA.setIndex == s_DisabledSetIndex || bB.setIndex == s_DisabledSetIndex)))
                 continue;
             if(bA.setIndex >= world.m_solverSets.size() || bB.setIndex >= world.m_solverSets.size())
                 continue;
             if(bA.localIndex >= world.m_solverSets[bA.setIndex].sims.size() || bB.localIndex >= world.m_solverSets[bB.setIndex].sims.size())
                 continue;
+            VectorSingle activeJointColor = jointColor;
+            if(bA.setIndex == s_DisabledSetIndex || bB.setIndex == s_DisabledSetIndex)
+                activeJointColor = disabledJointColor;
             in BodySim simA = world.m_solverSets[bA.setIndex].sims[bA.localIndex];
             in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
             const VectorSingle aA = TransformPoint(simA.transform, j.localAnchorA());
             const VectorSingle aB = TransformPoint(simB.transform, j.localAnchorB());
-            AppendPhysicsDebugLine(options.maxLines, simA.center(), aA, jointColor, outLines);
-            AppendPhysicsDebugLine(options.maxLines, aA, aB, jointColor, outLines);
-            AppendPhysicsDebugLine(options.maxLines, aB, simB.center(), jointColor, outLines);
+            AppendPhysicsDebugLine(options.maxLines, simA.center(), aA, activeJointColor, outLines);
+            AppendPhysicsDebugLine(options.maxLines, aA, aB, activeJointColor, outLines);
+            AppendPhysicsDebugLine(options.maxLines, aB, simB.center(), activeJointColor, outLines);
 
             const VectorSingle qA = SafeNormalizeQuat(VectorSingle(simA.transform.rotation));
             const VectorSingle qB = SafeNormalizeQuat(VectorSingle(simB.transform.rotation));
@@ -500,35 +559,58 @@ void BuildPhysicsDebugLines(
                 VectorSingle dV(0.0f);
                 ComputePhysicsDebugBasis(dir, dU, dV);
                 const VectorSingle restPt = aA + dir * j.length();
-                AppendPhysicsDebugLine(options.maxLines, restPt - dU * 0.08f, restPt + dU * 0.08f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, restPt - dU * 0.08f, restPt + dU * 0.08f, activeJointColor, outLines);
                 if(j.enableLimit() && j.minLength() <= j.maxLength()){
                     const VectorSingle minPt = aA + dir * j.minLength();
                     const VectorSingle maxPt = aA + dir * j.maxLength();
-                    AppendPhysicsDebugLine(options.maxLines, minPt - dV * 0.1f, minPt + dV * 0.1f, jointColor, outLines);
-                    AppendPhysicsDebugLine(options.maxLines, maxPt - dV * 0.1f, maxPt + dV * 0.1f, jointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, minPt - dV * 0.1f, minPt + dV * 0.1f, activeJointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, maxPt - dV * 0.1f, maxPt + dV * 0.1f, activeJointColor, outLines);
                 }
             }
             else if(j.type == JointType::Spherical){
-                AppendPhysicsDebugLine(options.maxLines, aA, aA + axisA * 0.25f, jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, aB, aB + axisB * 0.25f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA, aA + axisA * 0.25f, activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aB, aB + axisB * 0.25f, activeJointColor, outLines);
                 if(j.enableLimit() && j.swingLimit > 0.0f){
-                    const f32 angle = Min(j.swingLimit, s_PI * 0.45f);
+                    const f32 angle = Min(j.swingLimit, s_PI * 0.95f);
                     const f32 coneDist = Cos(angle) * 0.25f;
                     const f32 coneRad = Sin(angle) * 0.25f;
                     const VectorSingle coneCenter = aA + axisA * coneDist;
-                    AppendPhysicsDebugCircle(options.maxLines, coneCenter, jU, jV, coneRad, jointColor, outLines);
-                    AppendPhysicsDebugLine(options.maxLines, aA, coneCenter + jU * coneRad, jointColor, outLines);
-                    AppendPhysicsDebugLine(options.maxLines, aA, coneCenter - jU * coneRad, jointColor, outLines);
+                    AppendPhysicsDebugCircle(options.maxLines, coneCenter, jU, jV, coneRad, activeJointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, aA, coneCenter + jU * coneRad, activeJointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, aA, coneCenter - jU * coneRad, activeJointColor, outLines);
+                }
+                if(j.enableLimit() && j.lowerLimit() <= j.upperLimit() && (j.lowerLimit() < j.upperLimit() || Abs(j.lowerLimit()) > 1.0e-4f)){
+                    const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
+                    VectorSingle twU(0.0f);
+                    VectorSingle twV(0.0f);
+                    ComputePhysicsJointRefBasis(axisA, j.localAxisA(), qTarget, twU, twV);
+                    const VectorSingle lowDir = twU * Cos(j.lowerLimit()) + twV * Sin(j.lowerLimit());
+                    const VectorSingle highDir = twU * Cos(j.upperLimit()) + twV * Sin(j.upperLimit());
+                    AppendPhysicsDebugLine(options.maxLines, aA, aA + lowDir * 0.16f, activeJointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, aA, aA + highDir * 0.16f, activeJointColor, outLines);
                 }
             }
             else if(j.type == JointType::Revolute){
-                AppendPhysicsDebugLine(options.maxLines, aA - axisA * 0.2f, aA + axisA * 0.2f, jointColor, outLines);
-                AppendPhysicsDebugCircle(options.maxLines, aA, jU, jV, 0.15f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA - axisA * 0.2f, aA + axisA * 0.2f, activeJointColor, outLines);
+                const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
+                VectorSingle refU(0.0f);
+                VectorSingle refV(0.0f);
+                ComputePhysicsJointRefBasis(axisA, j.localAxisA(), qTarget, refU, refV);
+                AppendPhysicsDebugCircle(options.maxLines, aA, refU, refV, 0.15f, activeJointColor, outLines);
+                VectorSingle localRefU(0.0f);
+                VectorSingle localRefV(0.0f);
+                ComputePhysicsDebugBasis(j.localAxisA(), localRefU, localRefV);
+                const VectorSingle curRotU = Vector3Rotate(localRefU, qB);
+                const VectorSingle curProjU = curRotU - axisA * Vector3Dot(curRotU, axisA).x;
+                if(Vector3LengthSq(VectorSingle(curProjU, 0.0f)).x > s_NormalizeEpsilonSq){
+                    const VectorSingle curDir = SafeNormalizeVec3(curProjU, refU);
+                    AppendPhysicsDebugLine(options.maxLines, aA, aA + curDir * 0.18f, activeJointColor, outLines);
+                }
                 if(j.enableLimit() && j.lowerLimit() <= j.upperLimit()){
-                    const VectorSingle lowDir = jU * Cos(j.lowerLimit()) + jV * Sin(j.lowerLimit());
-                    const VectorSingle highDir = jU * Cos(j.upperLimit()) + jV * Sin(j.upperLimit());
-                    AppendPhysicsDebugLine(options.maxLines, aA, aA + lowDir * 0.18f, jointColor, outLines);
-                    AppendPhysicsDebugLine(options.maxLines, aA, aA + highDir * 0.18f, jointColor, outLines);
+                    const VectorSingle lowDir = refU * Cos(j.lowerLimit()) + refV * Sin(j.lowerLimit());
+                    const VectorSingle highDir = refU * Cos(j.upperLimit()) + refV * Sin(j.upperLimit());
+                    AppendPhysicsDebugLine(options.maxLines, aA, aA + lowDir * 0.18f, activeJointColor, outLines);
+                    AppendPhysicsDebugLine(options.maxLines, aA, aA + highDir * 0.18f, activeJointColor, outLines);
                 }
             }
             else if(j.type == JointType::Prismatic){
@@ -540,21 +622,27 @@ void BuildPhysicsDebugLines(
                 }
                 const VectorSingle pMin = aA + axisA * lo;
                 const VectorSingle pMax = aA + axisA * hi;
-                AppendPhysicsDebugLine(options.maxLines, pMin, pMax, jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, pMin - jU * 0.08f, pMin + jU * 0.08f, jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, pMax - jU * 0.08f, pMax + jU * 0.08f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, pMin, pMax, activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, pMin - jU * 0.08f, pMin + jU * 0.08f, activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, pMax - jU * 0.08f, pMax + jU * 0.08f, activeJointColor, outLines);
             }
             else if(j.type == JointType::Fixed){
                 const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
-                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qTarget), jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.0f, 0.15f, 0.0f, 0.0f), qTarget), jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.0f, 0.0f, 0.15f, 0.0f), qTarget), jointColor, outLines);
-                AppendPhysicsDebugLine(options.maxLines, aB, aB + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qB), jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qTarget), activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.0f, 0.15f, 0.0f, 0.0f), qTarget), activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA, aA + Vector3Rotate(VectorSingle(0.0f, 0.0f, 0.15f, 0.0f), qTarget), activeJointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aB, aB + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qB), activeJointColor, outLines);
             }
             else if(j.type == JointType::Motor){
                 const VectorSingle targetPos = TransformPoint(simA.transform, j.localAnchorA() + j.linearOffset());
-                AppendPhysicsDebugLine(options.maxLines, aA, targetPos, jointColor, outLines);
-                AppendPhysicsDebugCircle(options.maxLines, targetPos, jU, jV, 0.08f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA, targetPos, activeJointColor, outLines);
+                AppendPhysicsDebugCircle(options.maxLines, targetPos, jU, jV, 0.08f, activeJointColor, outLines);
+                if(j.maxTorque > 0.0f){
+                    const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
+                    AppendPhysicsDebugLine(options.maxLines, targetPos, targetPos + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qTarget), VectorSingle(0.95f, 0.25f, 0.25f, 0.95f), outLines);
+                    AppendPhysicsDebugLine(options.maxLines, targetPos, targetPos + Vector3Rotate(VectorSingle(0.0f, 0.15f, 0.0f, 0.0f), qTarget), VectorSingle(0.25f, 0.95f, 0.30f, 0.95f), outLines);
+                    AppendPhysicsDebugLine(options.maxLines, targetPos, targetPos + Vector3Rotate(VectorSingle(0.0f, 0.0f, 0.15f, 0.0f), qTarget), VectorSingle(0.30f, 0.50f, 0.98f, 0.95f), outLines);
+                }
             }
             else if(j.type == JointType::Wheel){
                 f32 lo = -0.25f;
@@ -563,14 +651,14 @@ void BuildPhysicsDebugLines(
                     lo = j.lowerLimit();
                     hi = j.upperLimit();
                 }
-                AppendPhysicsDebugLine(options.maxLines, aA + axisA * lo, aA + axisA * hi, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aA + axisA * lo, aA + axisA * hi, activeJointColor, outLines);
                 const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
                 const VectorSingle axle = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
                 VectorSingle wU(0.0f);
                 VectorSingle wV(0.0f);
                 ComputePhysicsDebugBasis(axle, wU, wV);
-                AppendPhysicsDebugLine(options.maxLines, aB - axle * 0.2f, aB + axle * 0.2f, jointColor, outLines);
-                AppendPhysicsDebugCircle(options.maxLines, aB, wU, wV, 0.18f, jointColor, outLines);
+                AppendPhysicsDebugLine(options.maxLines, aB - axle * 0.2f, aB + axle * 0.2f, activeJointColor, outLines);
+                AppendPhysicsDebugCircle(options.maxLines, aB, wU, wV, 0.18f, activeJointColor, outLines);
             }
         }
     }

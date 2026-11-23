@@ -365,6 +365,23 @@ void SleepIslandWithGraph(
         AddBodyToSolverSet(bodies, sets[sleepSetIndex], sim, emptyState);
     }
 
+    for(usize i = 0u; i < island.bodies.size(); ++i){
+        const u32 bodyId = island.bodies[i];
+        u32 edgeKey = bodies[bodyId].headContactKey;
+        while(edgeKey != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(edgeKey);
+            const u32 edgeIdx = DecodeContactKeyEdge(edgeKey);
+            const u32 nextKey = contacts[cId].edges[edgeIdx].nextKey;
+            if(cId < contacts.size() && contacts[cId].colorIndex != s_NullIndex){
+                const u32 otherId = contacts[cId].edges[edgeIdx ^ 1u].bodyId;
+                const b8 otherAwakeDyn = otherId < bodies.size() && bodies[otherId].alive && bodies[otherId].type == BodyType::Dynamic && bodies[otherId].setIndex == s_AwakeSetIndex;
+                if(!otherAwakeDyn)
+                    RemoveContactFromGraph(graph, bodies, contacts, cId);
+            }
+            edgeKey = nextKey;
+        }
+    }
+
     const u32 oldLocal = islands[islandId].localIndex;
     if(oldLocal < sets[s_AwakeSetIndex].islands.size()){
         const u32 lastIdx = cast<u32>(sets[s_AwakeSetIndex].islands.size() - 1u);

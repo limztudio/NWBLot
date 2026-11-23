@@ -43,20 +43,25 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public void packEnvelope(
+    public b8 packEnvelope(
         in NameHash componentTypeHash,
         in Span<u8> payload,
         mut Vector<u8> outBinary
     )const{
-        const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
         outBinary.clear();
+        if(payload.size() > usize.max - s_ComponentHeaderBinaryBytes)
+            return false;
+        const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
         outBinary.reserve(s_ComponentHeaderBinaryBytes + payload.size());
         AppendPOD(outBinary, header);
         if(!payload.empty()){
             const auto appendRes = AppendBinaryVectorPayload(outBinary, payload);
-            if(!appendRes.has_value())
-                return;
+            if(!appendRes.has_value()){
+                outBinary.clear();
+                return false;
+            }
         }
+        return true;
     }
 
     public Expected<Span<u8>> unpackEnvelope(
@@ -163,8 +168,7 @@ b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     Vector<u8> payload;
     if(!component.serializeComponentPayload(payload))
         return false;
-    ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
-    return true;
+    return ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
 }
 
 class ComponentAssetPolicy{

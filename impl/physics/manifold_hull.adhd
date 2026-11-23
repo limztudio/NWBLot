@@ -1312,10 +1312,11 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                     VectorSingle wA(0.0f);
                     VectorSingle wB(0.0f);
                     if(SmoothMeshContactNormal(tri, edgeFlags, localPtB, rawMeshToHullLocal, smoothedLocal)){
-                        const f32 planeDist = Vector3Dot(triNLocal, VectorSingle(localPtA - tv0, 0.0f)).x;
+                        const f32 planeDist = Vector3Dot(smoothedLocal, VectorSingle(localPtA - tv0, 0.0f)).x;
                         if(planeDist - totalR > maxDistance)
                             continue;
                         sep = planeDist - totalR;
+                        nAtoB = -SafeNormalizeVec3(Vector3Rotate(smoothedLocal, VectorSingle(xfB.rotation)), triWorldN);
                         wA = TransformPoint(xfB, localPtA) + nAtoB * hullR;
                         wB = wA + nAtoB * sep;
                     }
@@ -1994,7 +1995,7 @@ Manifold CollideMeshes(
                 }
             }
         }
-        else if(meshA.isClosed()){
+        if(candidates.empty() && meshA.isClosed()){
             const Aabb3D boxB = meshB.localAabb();
             const VectorSingle cBInA = TransformPoint(xfBtoA, (VectorSingle(boxB.lowerBound) + VectorSingle(boxB.upperBound)) * 0.5f);
             const VectorSingle vBInA = TransformPoint(xfBtoA, Vec3FromU(meshB.triangles[0u].v0));

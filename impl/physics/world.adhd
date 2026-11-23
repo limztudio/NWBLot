@@ -95,7 +95,6 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> sensorCandShapeB;
     public Vector<u64> sensorCandPairKeys;
     public Vector<usize> sensorCandOrder;
-    public Vector<u64> sensorSeenKeys;
 
     public void clear(){
         this.candidateKeys.clear();
@@ -158,7 +157,6 @@ class PhysicsWorldCpuScratch{
         this.sensorCandShapeB.clear();
         this.sensorCandPairKeys.clear();
         this.sensorCandOrder.clear();
-        this.sensorSeenKeys.clear();
     }
 }
 
@@ -982,7 +980,18 @@ class PhysicsWorld{
     }
 
     public Expected<ShapeId> createHullShape(in BodyId bodyId, in ShapeDef def, in HullShape hull){
-        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(hull.radius()) || hull.radius() < 0.0f)
+        if(
+            hull.vertices.empty()
+            || hull.facePlanes.empty()
+            || hull.faceTopologies.empty()
+            || hull.halfEdges.empty()
+            || hull.faceTopologies.size() != hull.facePlanes.size()
+            || hull.vertices.size() > s_MaxHullVertices
+            || hull.facePlanes.size() > s_MaxHullFaces
+            || hull.halfEdges.size() > 256u
+            || !IsFinite(hull.radius())
+            || hull.radius() < 0.0f
+        )
             return MakeUnexpected(Failure());
         for(usize i = 0u; i < hull.vertices.size(); ++i){
             if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
@@ -1067,6 +1076,30 @@ class PhysicsWorld{
         return true;
     }
 
+    private void updateBodyExtentsFromShapes(in Body body, mut BodySim sim)const{
+        VectorSingle minLocal(s_MaxF32);
+        VectorSingle maxLocal(-s_MaxF32);
+        u32 shapeIdx = body.headShapeId;
+        while(shapeIdx != s_NullIndex){
+            in Shape shape = this.m_shapes[shapeIdx];
+            if(shape.alive()){
+                const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, this.m_hullShapes, this.m_hullLocalAabbs, this.m_meshShapes);
+                minLocal = Min(minLocal, VectorSingle(localBox.lowerBound));
+                maxLocal = Max(maxLocal, VectorSingle(localBox.upperBound));
+            }
+            shapeIdx = shape.nextShapeId;
+        }
+        if(minLocal.x <= maxLocal.x){
+            const VectorSingle ext = (maxLocal - minLocal) * 0.5f;
+            sim.setMinExtent(Min(ext.x, Min(ext.y, ext.z)));
+            sim.setMaxExtent(Vector3Length(VectorSingle(ext, 0.0f)).x);
+        }
+        else{
+            sim.setMinExtent(0.0f);
+            sim.setMaxExtent(0.0f);
+        }
+    }
+
     public void updateBodyMassInternal(in u32 bodyIdx){
         if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
             return;
@@ -1081,27 +1114,7 @@ class PhysicsWorld{
             sim.setCenter(VectorSingle(sim.transform.position));
             sim.invInertiaLocal = ZeroSymMat3();
             sim.invInertiaWorld = ZeroSymMat3();
-            VectorSingle nonDynMin(s_MaxF32);
-            VectorSingle nonDynMax(-s_MaxF32);
-            u32 nonDynShapeIdx = body.headShapeId;
-            while(nonDynShapeIdx != s_NullIndex){
-                in Shape nonDynShape = this.m_shapes[nonDynShapeIdx];
-                if(nonDynShape.alive()){
-                    const Aabb3D localBox = ComputeShapeLocalAabbCached(nonDynShape, this.m_hullShapes, this.m_hullLocalAabbs, this.m_meshShapes);
-                    nonDynMin = Min(nonDynMin, VectorSingle(localBox.lowerBound));
-                    nonDynMax = Max(nonDynMax, VectorSingle(localBox.upperBound));
-                }
-                nonDynShapeIdx = nonDynShape.nextShapeId;
-            }
-            if(nonDynMin.x <= nonDynMax.x){
-                const VectorSingle ext = (nonDynMax - nonDynMin) * 0.5f;
-                sim.setMinExtent(Min(ext.x, Min(ext.y, ext.z)));
-                sim.setMaxExtent(Vector3Length(VectorSingle(ext, 0.0f)).x);
-            }
-            else{
-                sim.setMinExtent(0.0f);
-                sim.setMaxExtent(0.0f);
-            }
+            this.updateBodyExtentsFromShapes(body, sim);
             body.flags &= ~cast<u32>(BodyFlags::DirtyMass);
             this.syncBodyFlagsToSimAndState(bodyIdx);
             return;
@@ -1282,6 +1295,16 @@ class PhysicsWorld{
                 if(otherBodyId < this.m_bodies.size() && this.m_bodies[otherBodyId].alive && this.m_bodies[otherBodyId].setIndex >= 3u)
                     this.m_cpuScratch.wakeTargets.push_back(otherBodyId);
                 edgeKey = c.edges[edgeIdx].nextKey;
+            }
+            u32 jKey = body.headJointKey;
+            while(jKey != s_NullIndex){
+                const u32 jId = DecodeJointKeyId(jKey);
+                const u32 edgeIdx = DecodeJointKeyEdge(jKey);
+                in Joint j = this.m_joints[jId];
+                const u32 otherBodyId = j.edges[edgeIdx ^ 1u].bodyId;
+                if(otherBodyId < this.m_bodies.size() && this.m_bodies[otherBodyId].alive && this.m_bodies[otherBodyId].setIndex >= 3u)
+                    this.m_cpuScratch.wakeTargets.push_back(otherBodyId);
+                jKey = j.edges[edgeIdx].nextKey;
             }
             this.drainWakeTargetsFrom(wakeBase, true);
         }
@@ -1507,6 +1530,7 @@ class PhysicsWorld{
         sim.setCenter0(worldCenter);
         sim.invInertiaLocal = InvertSymMat3(SymMat3FromMat3(massData.inertia));
         sim.invInertiaWorld = RotateSymMat3(VectorSingle(sim.transform.rotation), sim.invInertiaLocal);
+        this.updateBodyExtentsFromShapes(body, sim);
         body.flags &= ~cast<u32>(BodyFlags::DirtyMass);
         this.syncBodyFlagsToSimAndState(bodyId.index);
         if(body.setIndex != s_AwakeSetIndex)
@@ -2011,6 +2035,10 @@ class PhysicsWorld{
         }
         this.m_shapes[shapeIdx].density = density;
         if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive){
+            if(this.m_bodies[bodyIdx].type == BodyType::Dynamic){
+                this.wakeBody(this.makeBodyId(bodyIdx));
+                this.wakeBodyNeighbors(bodyIdx);
+            }
             if(updateBodyMass){
                 this.updateBodyMassInternal(bodyIdx);
             }
@@ -2020,6 +2048,28 @@ class PhysicsWorld{
             }
             if(this.m_bodies[bodyIdx].setIndex != s_AwakeSetIndex)
                 ++this.m_topologyVersion;
+        }
+        return true;
+    }
+
+    public b8 invokeShapeContactCreation(in ShapeId shapeId){
+        if(!this.isValidShape(shapeId))
+            return false;
+        const u32 shapeIdx = shapeId.index;
+        in Shape shape = this.m_shapes[shapeIdx];
+        if(shape.bodyId >= this.m_bodies.size() || !this.m_bodies[shape.bodyId].alive || this.m_bodies[shape.bodyId].setIndex == s_DisabledSetIndex)
+            return true;
+        const Aabb3D queryBox = shape.aabb;
+        for(usize t = 0u; t < s_TreeCount; ++t){
+            this.m_broadPhase.trees[t].queryAabb(
+                queryBox,
+                0xffffffffu,
+                lambda[mut this, in shapeIdx](in u32 proxyId, in u32 otherShapeIdx) -> b8{
+                    if(otherShapeIdx != shapeIdx)
+                        this.createContactInternal(shapeIdx, otherShapeIdx);
+                    return true;
+                }
+            );
         }
         return true;
     }
@@ -2106,7 +2156,18 @@ class PhysicsWorld{
     public b8 setHullShape(in ShapeId shapeId, in HullShape hull, in b8 updateBodyMass){
         if(!this.isValidShape(shapeId))
             return false;
-        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(hull.radius()) || hull.radius() < 0.0f)
+        if(
+            hull.vertices.empty()
+            || hull.facePlanes.empty()
+            || hull.faceTopologies.empty()
+            || hull.halfEdges.empty()
+            || hull.faceTopologies.size() != hull.facePlanes.size()
+            || hull.vertices.size() > s_MaxHullVertices
+            || hull.facePlanes.size() > s_MaxHullFaces
+            || hull.halfEdges.size() > 256u
+            || !IsFinite(hull.radius())
+            || hull.radius() < 0.0f
+        )
             return false;
         for(usize i = 0u; i < hull.vertices.size(); ++i){
             if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))

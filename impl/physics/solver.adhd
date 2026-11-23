@@ -872,6 +872,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                 CollideSingleContactNoPreSolve(world, world.m_contacts, gravity, dt, enableContinuous, enableWarmStarting, idx, activeContactIds[idx], contactTransitionFlags);
         }
 
+        b8 anyBodyWoke = false;
         for(usize idx = 0u; idx < count; ++idx){
             const u8 txFlags = contactTransitionFlags[idx];
             if(txFlags == 0u)
@@ -886,10 +887,14 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                     const u32 bodyIdB = c.edges[1u].bodyId;
                     const b8 awakeA = IsBodyAwakeForWaking(world, bodyIdA);
                     const b8 awakeB = IsBodyAwakeForWaking(world, bodyIdB);
-                    if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u)
+                    if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u){
                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
-                    else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u)
+                        anyBodyWoke = true;
+                    }
+                    else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u){
                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
+                        anyBodyWoke = true;
+                    }
                     const b8 hasAwakeDynamic =
                         (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
                         || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
@@ -932,6 +937,37 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                     ev.shapeIdA = world.makeShapeId(c.shapeIdA);
                     ev.shapeIdB = world.makeShapeId(c.shapeIdB);
                     world.m_contactEndEvents.push_back(ev);
+                }
+            }
+        }
+        if(anyBodyWoke){
+            for(usize idx = 0u; idx < count; ++idx){
+                const u32 cId = activeContactIds[idx];
+                mut Contact c = world.m_contacts[cId];
+                if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                    continue;
+                const u32 bIdA = c.edges[0u].bodyId;
+                const u32 bIdB = c.edges[1u].bodyId;
+                const b8 hasAwakeDynamic =
+                    (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
+                    || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
+                ;
+                if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
+                    if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
+                        LinkContactToIslandWithGraph(
+                            world.m_graph,
+                            world.m_bodies,
+                            world.m_islands,
+                            world.m_freeIslandIds,
+                            world.m_solverSets,
+                            world.m_freeSolverSetIds,
+                            world.m_contacts,
+                            world.m_joints,
+                            cId
+                        );
+                    }
+                    if(c.colorIndex == s_NullIndex)
+                        AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
                 }
             }
         }
@@ -998,8 +1034,23 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
             || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
         ;
-        if(hasAwakeDynamic && c.manifold.pointCount() > 0u && c.colorIndex == s_NullIndex)
-            AddContactToGraph(world.m_graph, world.m_bodies, c);
+        if(hasAwakeDynamic && c.manifold.pointCount() > 0u){
+            if((c.flags & cast<u32>(ContactFlags::Touching)) != 0u && c.islandId == s_NullIndex){
+                LinkContactToIslandWithGraph(
+                    world.m_graph,
+                    world.m_bodies,
+                    world.m_islands,
+                    world.m_freeIslandIds,
+                    world.m_solverSets,
+                    world.m_freeSolverSetIds,
+                    world.m_contacts,
+                    world.m_joints,
+                    cId
+                );
+            }
+            if(c.colorIndex == s_NullIndex)
+                AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
+        }
     }
 }
 

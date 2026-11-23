@@ -53,12 +53,13 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(c.linearDamping < 0.0f || c.angularDamping < 0.0f || c.sleepThreshold < 0.0f)
             return false;
+        if(!IsFinite(c.customMass)
+            || !IsFinite(VectorSingle(c.customCenterOfMass))
+            || !IsFinite(VectorSingle(c.customInertiaDiag))
+            || !IsFinite(VectorSingle(c.customInertiaOffDiag)))
+            return false;
         if(c.useCustomMass){
-            if(!IsFinite(c.customMass) || c.customMass <= 0.0f)
-                return false;
-            if(!IsFinite(VectorSingle(c.customCenterOfMass))
-                || !IsFinite(VectorSingle(c.customInertiaDiag))
-                || !IsFinite(VectorSingle(c.customInertiaOffDiag)))
+            if(c.customMass <= 0.0f)
                 return false;
             if(c.customInertiaDiag.x < 0.0f || c.customInertiaDiag.y < 0.0f || c.customInertiaDiag.z < 0.0f)
                 return false;
@@ -184,7 +185,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
             return false;
-        return (!j.enableLimit || j.lowerLimit <= j.upperLimit) && j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
+        return j.lowerLimit <= j.upperLimit && j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
     }
 
     private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
@@ -350,6 +351,12 @@ class PhysicsComponentBinaryCodec{
         hdr.restitution = restitution;
         hdr.rollingResistance = rollingResistance;
         hdr.tangentSpeed = tangentSpeed;
+        if(
+            hullPoints.size() > cast<usize>(u32.max)
+            || meshVertices.size() > cast<usize>(u32.max)
+            || meshIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
         hdr.meshAssetHash = meshAsset.name().hash();
         hdr.hullPointCount = cast<u32>(hullPoints.size());
         hdr.meshVertexCount = cast<u32>(meshVertices.size());
@@ -464,7 +471,10 @@ class PhysicsComponentBinaryCodec{
         outRollingResistance = hdr.rollingResistance;
         outTangentSpeed = hdr.tangentSpeed;
         outUserData = hdr.userData;
-        outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
+        if(hdr.meshAssetHash == s_NameNone.hash())
+            outMeshAsset.virtualPath = s_NameNone;
+        else
+            outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
 
         static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
         if(
@@ -536,6 +546,10 @@ class PhysicsComponentBinaryCodec{
     }
 
     public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
+        if(c.extraShapes.size() > cast<usize>(u32.max)){
+            outPayload.clear();
+            return false;
+        }
         ColliderComponentPayloadHeaderBinary rootHdr;
         rootHdr.version = s_PhysicsComponentBinaryVersion;
         rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
@@ -547,11 +561,15 @@ class PhysicsComponentBinaryCodec{
         outPayload.clear();
         outPayload.reserve(totalBytes);
         AppendPOD(outPayload, rootHdr);
-        if(!this.serializeColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outPayload))
+        if(!this.serializeColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outPayload)){
+            outPayload.clear();
             return false;
+        }
         for(usize i = 0u; i < c.extraShapes.size(); ++i){
-            if(!this.serializeColliderEntry(c.extraShapes[i], outPayload))
+            if(!this.serializeColliderEntry(c.extraShapes[i], outPayload)){
+                outPayload.clear();
                 return false;
+            }
         }
         return true;
     }

@@ -1649,8 +1649,9 @@ void nwbPhysicsSolveCapsuleHullDeep(
     const float3 origH = capIsA ? originB : originA;
     const float4 qH = capIsA ? rotB : rotA;
     const uint fCount = nwbPhysicsHullFaceCount(pH);
+    const uint eCount = nwbPhysicsHullEdgeCount(pH);
     const uint vCount = nwbPhysicsHullVertexCount(pH);
-    if(fCount == 0u || fCount > 128u || vCount == 0u){
+    if(fCount == 0u || fCount > 128u || eCount > 128u || vCount == 0u || vCount > 128u){
         result.pairInfo.w = 1u;
         return;
     }
@@ -1684,6 +1685,83 @@ void nwbPhysicsSolveCapsuleHullDeep(
 
     const float rC = pC.localCenterRadius.w;
     const float rH = pH.localCenterRadius.w;
+    const float3 dSegHull = l1 - l0;
+    const float segHullLenSq = dot(dSegHull, dSegHull);
+    float bestEdgeSep = -1.0e20f;
+    float3 bestEdgeOut = float3(0.0f, 1.0f, 0.0f);
+    float3 bestEdgeV0 = float3(0.0f, 0.0f, 0.0f);
+    float3 bestEdgeV1 = float3(0.0f, 0.0f, 0.0f);
+    uint bestHullEdge = 0u;
+    bool hasEdgeCandidate = false;
+    if(segHullLenSq > 1.0e-10f){
+        for(uint ei = 0u; ei < eCount; ++ei){
+            const uint packE = nwbPhysicsHullEdgePacked(pH, hullVertexSlot, ei);
+            const uint v0Idx = packE & 0xffu;
+            const uint v1Idx = (packE >> 8u) & 0xffu;
+            if(v0Idx >= vCount || v1Idx >= vCount)
+                continue;
+            const float3 e0 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v0Idx);
+            const float3 e1 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v1Idx);
+            const float3 eDir = e1 - e0;
+            const float3 cr = cross(dSegHull, eDir);
+            const float crLenSq = dot(cr, cr);
+            const float normTol = 0.005f * 0.005f * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
+            if(crLenSq <= normTol)
+                continue;
+
+            const float3 axis = cr * rsqrt(crLenSq);
+            float hMax = -1.0e20f;
+            float hMin = 1.0e20f;
+            for(uint vi = 0u; vi < vCount; ++vi){
+                const float p = dot(axis, nwbPhysicsHullLocalVertex(pH, hullVertexSlot, vi));
+                hMax = max(hMax, p);
+                hMin = min(hMin, p);
+            }
+            const float cProj = dot(axis, l0);
+            const float sPos = cProj - hMax;
+            const float sNeg = hMin - cProj;
+
+            float sepE = sPos;
+            float3 outAxis = axis;
+            float supVal = hMax;
+            if(sNeg > sPos){
+                sepE = sNeg;
+                outAxis = -axis;
+                supVal = -hMin;
+            }
+            if(sepE - totalR > maxDist)
+                return;
+            if(abs(dot(outAxis, e0) - supVal) <= 1.0e-4f){
+                if(!hasEdgeCandidate || sepE > bestEdgeSep){
+                    hasEdgeCandidate = true;
+                    bestEdgeSep = sepE;
+                    bestEdgeOut = outAxis;
+                    bestEdgeV0 = e0;
+                    bestEdgeV1 = e1;
+                    bestHullEdge = ei;
+                }
+            }
+        }
+    }
+    if(hasEdgeCandidate && bestEdgeSep > maxFaceSep + 5.0e-4f){
+        float sSeg = 0.0f;
+        float tSeg = 0.0f;
+        float3 cCap = float3(0.0f, 0.0f, 0.0f);
+        float3 cEdge = float3(0.0f, 0.0f, 0.0f);
+        nwbPhysicsClosestPointsSegments(l0, l1, bestEdgeV0, bestEdgeV1, sSeg, tSeg, cCap, cEdge);
+        const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestEdgeOut, qH), float3(0.0f, 1.0f, 0.0f));
+        const float3 nAtoB = capIsA ? -worldOut : worldOut;
+        const float3 wCap = origH + nwbPhysicsQuatRotate(cCap, qH);
+        const float3 wEdge = origH + nwbPhysicsQuatRotate(cEdge, qH);
+        const float3 wC = wCap - worldOut * rC;
+        const float3 wH = wEdge + worldOut * rH;
+        result.pairInfo.z = 1u;
+        result.normalPad = float4(nAtoB, 0.0f);
+        result.anchorAFeature[0] = float4((capIsA ? wC : wH) - bodyPosA, asfloat(nwbPhysicsMakeFeatureId(0u, 4u, 2u, bestHullEdge & 0xffu)));
+        result.anchorBSeparation[0] = float4((capIsA ? wH : wC) - bodyPosB, bestEdgeSep - totalR);
+        return;
+    }
+
     const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, qH), float3(0.0f, 1.0f, 0.0f));
     const float3 nAtoB = capIsA ? -worldOut : worldOut;
     result.normalPad = float4(nAtoB, 0.0f);
@@ -2100,19 +2178,16 @@ void nwbPhysicsFinalizeMeshCand16(
     nwbPhysicsReduceManifoldTo4(useNormal, filtWA, filtWB, filtPos, filtSep, filtFeat, filtCount, true, bodyPosA, bodyPosB, result);
 }
 
-bool nwbPhysicsIsPointInsideClosedMesh(
+uint nwbPhysicsClosedMeshRayVote(
     const uint nodeBase,
     const uint triBase,
     const uint meshNodeSlot,
     const uint meshTriSlot,
-    const float3 localPoint
+    const float3 localPoint,
+    const float3 rayDir,
+    out bool outOverflow
 ){
-    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
-    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
-    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
-        return false;
-
-    const float3 rayDir = normalize(float3(1.0f, 0.37139f, 0.19327f));
+    outOverflow = false;
     const float3 invDir = 1.0f / rayDir;
     uint hitCount = 0u;
     uint stack[64];
@@ -2160,12 +2235,44 @@ bool nwbPhysicsIsPointInsideClosedMesh(
                     ++hitCount;
             }
         }
-        else if(sp + 2u <= 64u){
+        else{
+            if(sp + 2u > 64u){
+                outOverflow = true;
+                return 0u;
+            }
             stack[sp++] = asuint(n0.w);
             stack[sp++] = meta & 0x7fffffffu;
         }
     }
-    return (hitCount & 1u) != 0u;
+    return hitCount & 1u;
+}
+
+bool nwbPhysicsIsPointInsideClosedMesh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    out bool outOverflow
+){
+    outOverflow = false;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
+        return false;
+
+    const uint vote0 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(1.0f, 0.37139067f, 0.21821789f)), outOverflow);
+    if(outOverflow)
+        return false;
+    const uint vote1 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(-0.29317123f, 1.0f, 0.51791341f)), outOverflow);
+    if(outOverflow)
+        return false;
+    if(vote0 == vote1)
+        return vote0 != 0u;
+    const uint vote2 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(0.43189211f, -0.61923417f, 1.0f)), outOverflow);
+    if(outOverflow)
+        return false;
+    return (vote0 + vote1 + vote2) >= 2u;
 }
 
 bool nwbPhysicsFindClosestPointOnClosedMesh(
@@ -2177,12 +2284,14 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
     out float3 outPt,
     out float3 outTriN,
     out uint outLocalTriIdx,
-    out float outDist
+    out float outDist,
+    out bool outOverflow
 ){
     outPt = float3(0.0f, 0.0f, 0.0f);
     outTriN = float3(0.0f, 1.0f, 0.0f);
     outLocalTriIdx = 0u;
     outDist = 0.0f;
+    outOverflow = false;
 
     bool found = false;
     float bestDistSq = 1.0e30f;
@@ -2236,16 +2345,36 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
             const float dLeftSq = dot(dl, dl);
             const float dRightSq = dot(dr, dr);
             if(dLeftSq <= dRightSq){
-                if(dRightSq < bestDistSq && sp < 64u)
+                if(dRightSq < bestDistSq){
+                    if(sp >= 64u){
+                        outOverflow = true;
+                        return false;
+                    }
                     stack[sp++] = rightRel;
-                if(dLeftSq < bestDistSq && sp < 64u)
+                }
+                if(dLeftSq < bestDistSq){
+                    if(sp >= 64u){
+                        outOverflow = true;
+                        return false;
+                    }
                     stack[sp++] = leftRel;
+                }
             }
             else{
-                if(dLeftSq < bestDistSq && sp < 64u)
+                if(dLeftSq < bestDistSq){
+                    if(sp >= 64u){
+                        outOverflow = true;
+                        return false;
+                    }
                     stack[sp++] = leftRel;
-                if(dRightSq < bestDistSq && sp < 64u)
+                }
+                if(dRightSq < bestDistSq){
+                    if(sp >= 64u){
+                        outOverflow = true;
+                        return false;
+                    }
                     stack[sp++] = rightRel;
+                }
             }
         }
     }
@@ -2670,6 +2799,111 @@ void nwbPhysicsCollideMeshMeshPair(
         }
     }
 
+    if(candCount == 0u){
+        const bool closedB = (g_NwbPhysicsFloat4Buffers[meshTriSlot][triBaseB * 3u + 1u].w != 0.0f);
+        if(closedB){
+            const float4 invRotB = float4(-rotB.xyz, rotB.w);
+            const float3 posAInB = nwbPhysicsQuatRotate(originA - originB, invRotB);
+            const float4 rotAToB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(invRotB, rotA));
+            const float3 rootAN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBaseA * 2u + 0u].xyz;
+            const float3 rootAN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBaseA * 2u + 1u].xyz;
+            const float3 cAInB = posAInB + nwbPhysicsQuatRotate((rootAN0 + rootAN1) * 0.5f, rotAToB);
+            const float3 vAInB = posAInB + nwbPhysicsQuatRotate(g_NwbPhysicsFloat4Buffers[meshTriSlot][triBaseA * 3u + 0u].xyz, rotAToB);
+            float3 probeB = float3(0.0f, 0.0f, 0.0f);
+            bool overflow = false;
+            bool insideB = nwbPhysicsIsPointInsideClosedMesh(nodeBaseB, triBaseB, meshNodeSlot, meshTriSlot, cAInB, overflow);
+            if(overflow){
+                result.pairInfo.w = 1u;
+                return;
+            }
+            if(insideB){
+                probeB = cAInB;
+            }
+            else{
+                insideB = nwbPhysicsIsPointInsideClosedMesh(nodeBaseB, triBaseB, meshNodeSlot, meshTriSlot, vAInB, overflow);
+                if(overflow){
+                    result.pairInfo.w = 1u;
+                    return;
+                }
+                if(insideB)
+                    probeB = vAInB;
+            }
+            if(insideB){
+                float3 closePt = float3(0.0f, 0.0f, 0.0f);
+                float3 closeN = float3(0.0f, 1.0f, 0.0f);
+                uint closeTri = 0u;
+                float dist = 0.0f;
+                const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBaseB, triBaseB, meshNodeSlot, meshTriSlot, probeB, closePt, closeN, closeTri, dist, overflow);
+                if(overflow){
+                    result.pairInfo.w = 1u;
+                    return;
+                }
+                if(foundClosest){
+                    const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(closeN, rotB), float3(0.0f, 1.0f, 0.0f));
+                    const float3 nAtoB = -worldOut;
+                    const float3 wProbe = originB + nwbPhysicsQuatRotate(probeB, rotB);
+                    const float3 wSurf = originB + nwbPhysicsQuatRotate(closePt, rotB);
+                    const float sep = -(dist + totalR);
+                    const float3 wAOut = wProbe + nAtoB * rA;
+                    const float3 wBOut = wSurf - nAtoB * rB;
+                    if(sep <= maxDist){
+                        chosenWorldN = nAtoB;
+                        nwbPhysicsPushMeshCand16(wAOut, wBOut, nAtoB, sep, nwbPhysicsMakeFeatureId(3u, 0u, 3u, closeTri & 0xffu), candWA, candWB, candPos, candNorm, candSep, candFeat, candCount);
+                    }
+                }
+            }
+        }
+        const bool closedA = (g_NwbPhysicsFloat4Buffers[meshTriSlot][triBaseA * 3u + 1u].w != 0.0f);
+        if(candCount == 0u && closedA){
+            const float3 rootBN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBaseB * 2u + 0u].xyz;
+            const float3 rootBN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBaseB * 2u + 1u].xyz;
+            const float3 cBInA = posBInA + nwbPhysicsQuatRotate((rootBN0 + rootBN1) * 0.5f, rotBToA);
+            const float3 vBInA = posBInA + nwbPhysicsQuatRotate(g_NwbPhysicsFloat4Buffers[meshTriSlot][triBaseB * 3u + 0u].xyz, rotBToA);
+            float3 probeA = float3(0.0f, 0.0f, 0.0f);
+            bool overflow = false;
+            bool insideA = nwbPhysicsIsPointInsideClosedMesh(nodeBaseA, triBaseA, meshNodeSlot, meshTriSlot, cBInA, overflow);
+            if(overflow){
+                result.pairInfo.w = 1u;
+                return;
+            }
+            if(insideA){
+                probeA = cBInA;
+            }
+            else{
+                insideA = nwbPhysicsIsPointInsideClosedMesh(nodeBaseA, triBaseA, meshNodeSlot, meshTriSlot, vBInA, overflow);
+                if(overflow){
+                    result.pairInfo.w = 1u;
+                    return;
+                }
+                if(insideA)
+                    probeA = vBInA;
+            }
+            if(insideA){
+                float3 closePt = float3(0.0f, 0.0f, 0.0f);
+                float3 closeN = float3(0.0f, 1.0f, 0.0f);
+                uint closeTri = 0u;
+                float dist = 0.0f;
+                const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBaseA, triBaseA, meshNodeSlot, meshTriSlot, probeA, closePt, closeN, closeTri, dist, overflow);
+                if(overflow){
+                    result.pairInfo.w = 1u;
+                    return;
+                }
+                if(foundClosest){
+                    const float3 nAtoB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(closeN, rotA), float3(0.0f, 1.0f, 0.0f));
+                    const float3 wProbe = originA + nwbPhysicsQuatRotate(probeA, rotA);
+                    const float3 wSurf = originA + nwbPhysicsQuatRotate(closePt, rotA);
+                    const float sep = -(dist + totalR);
+                    const float3 wAOut = wSurf + nAtoB * rA;
+                    const float3 wBOut = wProbe - nAtoB * rB;
+                    if(sep <= maxDist){
+                        chosenWorldN = nAtoB;
+                        nwbPhysicsPushMeshCand16(wAOut, wBOut, nAtoB, sep, nwbPhysicsMakeFeatureId(3u, closeTri & 0xffu, 3u, 0u), candWA, candWB, candPos, candNorm, candSep, candFeat, candCount);
+                    }
+                }
+            }
+        }
+    }
+
     if(candCount > 0u)
         nwbPhysicsFinalizeMeshCand16(candWA, candWB, candPos, candNorm, candSep, candFeat, candCount, chosenWorldN, bodyPosA, bodyPosB, result);
 }
@@ -2826,7 +3060,9 @@ void nwbPhysicsCollideMeshPair(
                     float3 nL = -triN;
                     if(dist > 1.0e-5f){
                         const float3 candN = dL / dist;
-                        if(dot(candN, triN) > -0.95f)
+                        if(!isClosed && dot(candN, triN) > -0.95f)
+                            nL = candN;
+                        else if(isClosed && dot(candN, triN) < 0.0f)
                             nL = candN;
                     }
                     float3 smoothedMeshToSphere = -nL;
@@ -2933,8 +3169,6 @@ void nwbPhysicsCollideMeshPair(
                     else if(otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
                         const float3 deepL = isClosed ? ((capD0 < capD1) ? capL0 : capL1) : (abs(capD1) < abs(capD0) ? capL1 : capL0);
                         const float sep = isClosed ? (min(capD0, capD1) - totalR) : (-min(abs(capD0), abs(capD1)) - totalR);
-                        if(isClosed && sep < -(totalR + 0.25f))
-                            continue;
                         const float3 deepW = meshOrig + nwbPhysicsQuatRotate(deepL, meshRot);
                         const float3 nOtherToMesh = -wTriN;
                         const float3 wNOut = meshIsA ? -nOtherToMesh : nOtherToMesh;
@@ -3230,29 +3464,44 @@ void nwbPhysicsCollideMeshPair(
     }
 
     if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE || otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
-        if(!foundSingle){
+        bool usedInterior = false;
+        if(!foundSingle || bestSep > -otherR){
             const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
             if(anyClosedMesh || firstTri1.w != 0.0f){
+                bool meshOverflow = false;
                 if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
                     const float3 lc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-                    if(nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc)){
+                    const bool insideSphere = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, meshOverflow);
+                    if(meshOverflow){
+                        result.pairInfo.w = 1u;
+                        return;
+                    }
+                    if(insideSphere){
                         float3 qL = float3(0.0f, 0.0f, 0.0f);
                         float3 triNL = float3(0.0f, 1.0f, 0.0f);
                         uint localTri = 0u;
                         float dist = 0.0f;
-                        if(nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, qL, triNL, localTri, dist)){
+                        const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, qL, triNL, localTri, dist, meshOverflow);
+                        if(meshOverflow){
+                            result.pairInfo.w = 1u;
+                            return;
+                        }
+                        if(foundClosest){
                             const float3 nL = -triNL;
                             const float sep = -dist - totalR;
-                            const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
-                            const float3 wc = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
-                            const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
-                            foundSingle = true;
-                            bestSep = sep;
-                            chosenWorldN = meshIsA ? -wN : wN;
-                            bestNOtherToMesh = wN;
-                            bestWorldOther = wc + wN * otherR;
-                            bestWorldMesh = wQ - wN * meshR;
-                            bestLocalTriIdx = localTri;
+                            if(sep <= maxDist && (!foundSingle || sep < bestSep)){
+                                const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
+                                const float3 wc = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
+                                const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
+                                foundSingle = true;
+                                usedInterior = true;
+                                bestSep = sep;
+                                chosenWorldN = meshIsA ? -wN : wN;
+                                bestNOtherToMesh = wN;
+                                bestWorldOther = wc + wN * otherR;
+                                bestWorldMesh = wQ - wN * meshR;
+                                bestLocalTriIdx = localTri;
+                            }
                         }
                     }
                 }
@@ -3263,20 +3512,31 @@ void nwbPhysicsCollideMeshPair(
                     const float3 capPts[3] = { lMid, l0, l1 };
                     for(uint pi = 0u; pi < 3u; ++pi){
                         const float3 pL = capPts[pi];
-                        if(!nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL))
+                        const bool insidePt = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, meshOverflow);
+                        if(meshOverflow){
+                            result.pairInfo.w = 1u;
+                            return;
+                        }
+                        if(!insidePt)
                             continue;
                         float3 qL = float3(0.0f, 0.0f, 0.0f);
                         float3 triNL = float3(0.0f, 1.0f, 0.0f);
                         uint localTri = 0u;
                         float dist = 0.0f;
-                        if(nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, qL, triNL, localTri, dist)){
+                        const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, qL, triNL, localTri, dist, meshOverflow);
+                        if(meshOverflow){
+                            result.pairInfo.w = 1u;
+                            return;
+                        }
+                        if(foundClosest){
                             const float sep = -dist - totalR;
-                            if(!foundSingle || sep < bestSep){
+                            if(sep <= maxDist && (!foundSingle || sep < bestSep)){
                                 const float3 nL = -triNL;
                                 const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
                                 const float3 wP = meshOrig + nwbPhysicsQuatRotate(pL, meshRot);
                                 const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
                                 foundSingle = true;
+                                usedInterior = true;
                                 bestSep = sep;
                                 chosenWorldN = meshIsA ? -wN : wN;
                                 bestNOtherToMesh = wN;
@@ -3289,7 +3549,7 @@ void nwbPhysicsCollideMeshPair(
                 }
             }
         }
-        else if(otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
+        if(foundSingle && !usedInterior && otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
             const float3 nL = nwbPhysicsSafeNormal(nwbPhysicsQuatInvRotate(-bestNOtherToMesh, meshRot), bestTriRawN);
             if(abs(dot(nL, bestTriRawN)) > 0.99f){
                 const float3 l0 = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
@@ -3355,27 +3615,42 @@ void nwbPhysicsCollideMeshPair(
         }
     }
     else{
-        if(candCount == 0u){
+        if(candCount == 0u || bestSep > 0.0f){
             const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
             if(anyClosedMesh || firstTri1.w != 0.0f){
                 const float3 hullCenterL = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-                if(nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL)){
+                bool meshOverflow = false;
+                const bool insideHullCenter = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, meshOverflow);
+                if(meshOverflow){
+                    result.pairInfo.w = 1u;
+                    return;
+                }
+                if(insideHullCenter){
                     float3 qL = float3(0.0f, 0.0f, 0.0f);
                     float3 triNL = float3(0.0f, 1.0f, 0.0f);
                     uint localTri = 0u;
                     float dist = 0.0f;
-                    if(nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, qL, triNL, localTri, dist)){
-                        const float3 nL = -triNL;
-                        const float sep = -dist - totalR;
-                        const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
-                        const float3 wNOut = meshIsA ? -wN : wN;
-                        const float3 wC = meshOrig + nwbPhysicsQuatRotate(hullCenterL, meshRot);
-                        const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
-                        const float3 wO = wC + wN * otherR;
-                        const float3 wM = wQ - wN * meshR;
+                    const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, qL, triNL, localTri, dist, meshOverflow);
+                    if(meshOverflow){
+                        result.pairInfo.w = 1u;
+                        return;
+                    }
+                    if(foundClosest){
+                        const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(triNL, meshRot), float3(0.0f, 1.0f, 0.0f));
+                        const float3 wNOut = meshIsA ? worldOut : -worldOut;
+                        uint tmpSupIdx = 0u;
+                        const float3 supW = nwbPhysicsSupportWorld(otherP, otherOrig, otherRot, hullVertexSlot, -worldOut, tmpSupIdx);
+                        const float3 closeW = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
+                        const float depth = dot(closeW - supW, worldOut);
+                        const float sep = -(max(depth, 0.0f) + totalR);
+                        const float3 wO = supW - worldOut * otherR;
+                        const float3 wM = closeW + worldOut * meshR;
                         const float3 wAOut = meshIsA ? wM : wO;
                         const float3 wBOut = meshIsA ? wO : wM;
-                        chosenWorldN = wNOut;
+                        if(candCount == 0u || sep < bestSep){
+                            bestSep = sep;
+                            chosenWorldN = wNOut;
+                        }
                         nwbPhysicsPushMeshCand16(wAOut, wBOut, wNOut, sep, nwbPhysicsMakeFeatureId(4u, 0u, 3u, localTri & 0xffu), candWA, candWB, candPos, candNorm, candSep, candFeat, candCount);
                     }
                 }
@@ -3503,7 +3778,7 @@ void nwbPhysicsSolveBulletToi(
 
                     float t1 = 0.0f;
                     bool atMax = false;
-                    for(uint iter = 0u; iter < 24u; ++iter){
+                    for(uint iter = 0u; iter < 25u; ++iter){
                         float3 oAt;
                         float4 rAt;
                         nwbPhysicsEvalBulletSweep(bodyA, t1, oAt, rAt);
@@ -3532,7 +3807,7 @@ void nwbPhysicsSolveBulletToi(
                                 result.normalPad = float4(n, t1);
                                 result.anchorAFeature[0] = float4((wA + wB) * 0.5f, 0.0f);
                             }
-                            else if(t1 == 0.0f && dist < totalRadius - tolerance){
+                            else if(t1 == 0.0f && (dist < totalRadius - tolerance || (totalRadius <= tolerance && dist <= tolerance))){
                                 if(!hasHit)
                                     result.pairInfo.w = 1u;
                             }
@@ -3547,6 +3822,8 @@ void nwbPhysicsSolveBulletToi(
                         const float step = (dist - targetDist) / approach;
                         t1 += step <= 1.0e-6f ? (0.01f * curMax) : step;
                         if(t1 >= curMax){
+                            if(curMax <= 0.0f)
+                                break;
                             t1 = curMax;
                             atMax = true;
                         }
@@ -3568,7 +3845,8 @@ void nwbPhysicsSolveBulletToi(
     }
 
     float t1 = 0.0f;
-    for(uint iter = 0u; iter < 24u; ++iter){
+    bool atMax = false;
+    for(uint iter = 0u; iter < 25u; ++iter){
         float3 oAt;
         float4 rAt;
         nwbPhysicsEvalBulletSweep(bodyA, t1, oAt, rAt);
@@ -3587,9 +3865,13 @@ void nwbPhysicsSolveBulletToi(
             const float3 wA = pA + n * rA;
             const float3 wB = pB - n * rB;
             result.pairInfo.z = 1u;
-            result.pairInfo.w = (t1 == 0.0f && dist < totalRadius - tolerance) ? 1u : 0u;
+            result.pairInfo.w = (t1 == 0.0f && (dist < totalRadius - tolerance || (totalRadius <= tolerance && dist <= tolerance))) ? 1u : 0u;
             result.normalPad = float4(n, t1);
             result.anchorAFeature[0] = float4((wA + wB) * 0.5f, 0.0f);
+            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
+            return;
+        }
+        if(atMax){
             g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
             return;
         }
@@ -3601,22 +3883,9 @@ void nwbPhysicsSolveBulletToi(
         }
         const float step = (dist - targetDist) / approach;
         t1 += step <= 1.0e-6f ? 0.01f : step;
-        if(t1 > 1.0f){
-            nwbPhysicsEvalBulletSweep(bodyA, 1.0f, oAt, rAt);
-            nwbPhysicsEvalBulletSweep(bodyB, 1.0f, oBt, rBt);
-            nwbPhysicsRunGjkDistance(proxyA, oAt, rAt, proxyB, oBt, rBt, false, float3(0,0,0), float3(0,0,0), float3(0,0,0), hullVertexSlot, pA, pB, dist, deep);
-            if(deep)
-                dist = 0.0f;
-            if(dist <= targetDist + tolerance){
-                const float3 endN = nwbPhysicsSafeNormal(pB - pA, float3(0.0f, 1.0f, 0.0f));
-                const float3 wA = pA + endN * rA;
-                const float3 wB = pB - endN * rB;
-                result.pairInfo.z = 1u;
-                result.normalPad = float4(endN, 1.0f);
-                result.anchorAFeature[0] = float4((wA + wB) * 0.5f, 0.0f);
-            }
-            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
-            return;
+        if(t1 >= 1.0f){
+            t1 = 1.0f;
+            atMax = true;
         }
     }
     g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
@@ -4042,6 +4311,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float3 outLocalN = float3(0.0f, 1.0f, 0.0f);
         float singleSep = 0.0f;
         float3 localBoxSurface = bestBoxPt;
+        bool wonByEdge = false;
         if(bestDistSq > 1.0e-10f){
             const float dist = sqrt(bestDistSq);
             outLocalN = (bestSegPt - bestBoxPt) / dist;
@@ -4074,6 +4344,54 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             singleSep = bestMinD - totalR;
             localBoxSurface = bestDeepPt - bestLocalN * bestMinD;
             bestSegPt = bestDeepPt;
+
+            const float segLenSqEdge = dot(dSeg, dSeg);
+            const float3 segMid = (l0 + l1) * 0.5f;
+            float bestEdgeSep = -1.0e20f;
+            float3 bestEdgeAxis = float3(0.0f, 1.0f, 0.0f);
+            uint bestEdgeK = 0u;
+            bool hasEdgeCandidate = false;
+            if(segLenSqEdge > 1.0e-10f){
+                for(uint k = 0u; k < 3u; ++k){
+                    float3 unitAxis = float3(0.0f, 0.0f, 0.0f);
+                    if(k == 0u) unitAxis = float3(1.0f, 0.0f, 0.0f);
+                    else if(k == 1u) unitAxis = float3(0.0f, 1.0f, 0.0f);
+                    else unitAxis = float3(0.0f, 0.0f, 1.0f);
+                    const float3 cr = cross(dSeg, unitAxis);
+                    const float crLenSq = dot(cr, cr);
+                    if(crLenSq <= 1.0e-8f * segLenSqEdge)
+                        continue;
+                    float3 axis = cr * rsqrt(crLenSq);
+                    if(dot(axis, segMid) < 0.0f)
+                        axis = -axis;
+                    const float boxExtProj = abs(axis.x) * hBox.x + abs(axis.y) * hBox.y + abs(axis.z) * hBox.z;
+                    const float edgeSep = dot(axis, l0) - boxExtProj;
+                    if(edgeSep - totalR > maxDist)
+                        return;
+                    if(!hasEdgeCandidate || edgeSep > bestEdgeSep){
+                        hasEdgeCandidate = true;
+                        bestEdgeSep = edgeSep;
+                        bestEdgeAxis = axis;
+                        bestEdgeK = k;
+                    }
+                }
+            }
+            if(hasEdgeCandidate && bestEdgeSep > maxFaceSep + 5.0e-4f){
+                wonByEdge = true;
+                const float sx = (bestEdgeAxis.x < 0.0f) ? -hBox.x : hBox.x;
+                const float sy = (bestEdgeAxis.y < 0.0f) ? -hBox.y : hBox.y;
+                const float sz = (bestEdgeAxis.z < 0.0f) ? -hBox.z : hBox.z;
+                float3 e0 = float3(sx, sy, sz);
+                float3 e1 = float3(sx, sy, sz);
+                if(bestEdgeK == 0u){ e0.x = -hBox.x; e1.x = hBox.x; }
+                else if(bestEdgeK == 1u){ e0.y = -hBox.y; e1.y = hBox.y; }
+                else{ e0.z = -hBox.z; e1.z = hBox.z; }
+                float sSeg = 0.0f;
+                float tSeg = 0.0f;
+                nwbPhysicsClosestPointsSegments(l0, l1, e0, e1, sSeg, tSeg, bestSegPt, localBoxSurface);
+                outLocalN = bestEdgeAxis;
+                singleSep = bestEdgeSep - totalR;
+            }
         }
 
         if(singleSep <= maxDist){
@@ -4085,7 +4403,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float axY = abs(outLocalN.y);
             const float axZ = abs(outLocalN.z);
             uint emitted = 0u;
-            if(max(axX, max(axY, axZ)) > 0.995f){
+            if(!wonByEdge && max(axX, max(axY, axZ)) > 0.995f){
                 float tMin = 0.0f;
                 float tMax = 1.0f;
                 if(axX >= axY && axX >= axZ){

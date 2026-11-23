@@ -111,6 +111,8 @@ class EcsPhysicsSyncScratch{
     public u64 lastTransformMutationVersion = 0u;
     public u64 lastPhysicsParentMutationVersion = 0u;
     public b8 mutationVersionsValid = false;
+    public b8 hasManualNamedEntities = false;
+    public b8 writeBackDisablePoseCache = false;
 }
 
 u32 NextEcsPhysicsStamp(mut Vector<u32> stamps, mut u32 stamp){
@@ -184,7 +186,7 @@ void EraseSlotOwnerIfMatches(
     }
 }
 
-u32 ResolvePhysicsParentDepth(in World world, in EntityID entity){
+u32 ResolvePhysicsParentDepthChecked(in World world, in EntityID entity, mut b8 outCycleOrMaxDepth){
     if(!world.hasComponent<PhysicsParentComponent>(entity))
         return 0u;
     FixedVector<EntityID, 33u> chain;
@@ -204,13 +206,25 @@ u32 ResolvePhysicsParentDepth(in World world, in EntityID entity){
                 break;
             }
         }
-        if(seen)
+        if(seen){
+            outCycleOrMaxDepth = true;
             break;
+        }
         chain.push_back(pp.parent);
         cur = pp.parent;
         ++depth;
     }
+    if(depth >= 32u && world.hasComponent<PhysicsParentComponent>(cur)){
+        in PhysicsParentComponent tailPp = world.getComponent<PhysicsParentComponent>(cur);
+        if(tailPp.parent.valid() && world.alive(tailPp.parent) && world.hasComponent<TransformComponent>(tailPp.parent))
+            outCycleOrMaxDepth = true;
+    }
     return depth;
+}
+
+u32 ResolvePhysicsParentDepth(in World world, in EntityID entity){
+    b8 ignored = false;
+    return ResolvePhysicsParentDepthChecked(world, entity, ignored);
 }
 
 f32x4 ResolveEntityWorldScale(in World world, in EntityID entity){
@@ -689,8 +703,8 @@ Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in VectorSing
     }
 
     const b8 nonUniform = (Abs(sx - sy) > 1.0e-5f || Abs(sy - sz) > 1.0e-5f);
-    const b8 isMirrored = (signedScale.x * signedScale.y * signedScale.z) < 0.0f;
-    if(hasRot && (nonUniform || isMirrored)){
+    const b8 hasNegativeScale = (signedScale.x < 0.0f || signedScale.y < 0.0f || signedScale.z < 0.0f);
+    if(hasRot && (nonUniform || hasNegativeScale)){
         const f32 ehx = Max(entry.halfExtents.x, 1.0e-3f);
         const f32 ehy = Max(entry.halfExtents.y, 1.0e-3f);
         const f32 ehz = Max(entry.halfExtents.z, 1.0e-3f);
@@ -777,21 +791,32 @@ b8 ApplyEcsColliderPropertiesInPlace(
     mat.restitution = Max(entry.restitution, 0.0f);
     mat.rollingResistance = Max(entry.rollingResistance, 0.0f);
     mat.tangentSpeed = entry.tangentSpeed;
-    physicsWorld.setShapeMaterial(shapeId, mat);
+    if(!physicsWorld.setShapeMaterial(shapeId, mat))
+        return false;
 
     Filter flt;
     flt.categoryBits = entry.categoryBits;
     flt.maskBits = entry.maskBits;
     flt.groupIndex = entry.groupIndex;
-    physicsWorld.setShapeFilter(shapeId, flt);
+    if(!physicsWorld.setShapeFilter(shapeId, flt))
+        return false;
 
-    physicsWorld.setShapeSensor(shapeId, entry.isSensor);
-    physicsWorld.setShapeDensity(shapeId, Max(entry.density, 0.0f), false);
-    physicsWorld.setShapeEnableContactEvents(shapeId, entry.enableContactEvents);
-    physicsWorld.setShapeEnableHitEvents(shapeId, entry.enableHitEvents);
-    physicsWorld.setShapeEnableSensorEvents(shapeId, entry.enableSensorEvents);
-    physicsWorld.setShapeEnablePreSolveEvents(shapeId, entry.enablePreSolveEvents);
-    physicsWorld.setShapeUserData(shapeId, entry.userData);
+    if(!physicsWorld.setShapeSensor(shapeId, entry.isSensor))
+        return false;
+    if(!physicsWorld.setShapeDensity(shapeId, Max(entry.density, 0.0f), false))
+        return false;
+    if(!physicsWorld.setShapeEnableContactEvents(shapeId, entry.enableContactEvents))
+        return false;
+    if(!physicsWorld.setShapeEnableHitEvents(shapeId, entry.enableHitEvents))
+        return false;
+    if(!physicsWorld.setShapeEnableSensorEvents(shapeId, entry.enableSensorEvents))
+        return false;
+    if(!physicsWorld.setShapeEnablePreSolveEvents(shapeId, entry.enablePreSolveEvents))
+        return false;
+    if(!physicsWorld.setShapeUserData(shapeId, entry.userData))
+        return false;
+    if(entry.invokeContactCreation && !physicsWorld.invokeShapeContactCreation(shapeId))
+        return false;
     return true;
 }
 
@@ -894,7 +919,7 @@ void EraseSyncedTagIfUnused(
     if(found == namedEntities.end() || found.value() != entity)
         return;
     b8 stillInUse = false;
-    if(world.alive(entity)){
+    if(world.alive(entity) && world.hasComponent<TransformComponent>(entity)){
         if(world.hasComponent<RigidBodyComponent>(entity) && world.getComponent<RigidBodyComponent>(entity).entityTag == oldTag)
             stillInUse = true;
         if(world.hasComponent<ColliderComponent>(entity) && world.getComponent<ColliderComponent>(entity).entityTag == oldTag)
@@ -1070,6 +1095,7 @@ void PruneRemovedPhysicsEntities(
                 const b8 hasParentNow = world.alive(e) && world.hasComponent<PhysicsParentComponent>(e);
                 if(rec.hadPhysicsParent && !hasParentNow && rec.bodyId.valid() && physicsWorld.isValidBody(rec.bodyId))
                     scratch.pendingWriteBackBodyIndices.push_back(rec.bodyId.index);
+                ClearStaticBodyPoseCacheIfMatches(rec.bodyId, scratch.staticBodyPoseCache);
                 rec.hadPhysicsParent = hasParentNow;
             }
         }
@@ -1082,7 +1108,7 @@ void PruneRemovedPhysicsEntities(
     scratch.lastPhysicsParentMutationVersion = parentVer;
     scratch.mutationVersionsValid = true;
 
-    if(needBodyPrune && !namedEntities.empty()){
+    if((needBodyPrune || scratch.hasManualNamedEntities) && !namedEntities.empty()){
         scratch.staleNames.clear();
         for(in auto kv : namedEntities){
             if(!kv.second.valid() || !world.alive(kv.second))
@@ -1092,6 +1118,8 @@ void PruneRemovedPhysicsEntities(
             namedEntities.erase(scratch.staleNames[i]);
             outPrunedAnyTag = true;
         }
+        if(namedEntities.empty())
+            scratch.hasManualNamedEntities = false;
     }
 
     if(!syncedRigidBodyTags.empty()){
@@ -1099,7 +1127,7 @@ void PruneRemovedPhysicsEntities(
         for(in auto kv : syncedRigidBodyTags){
             const EntityID e = kv.first;
             const Name oldTag = kv.second;
-            if(!world.alive(e) || !world.hasComponent<RigidBodyComponent>(e)){
+            if(!world.alive(e) || !world.hasComponent<TransformComponent>(e) || !world.hasComponent<RigidBodyComponent>(e)){
                 EraseSyncedTagIfUnused(world, e, oldTag, namedEntities);
                 scratch.staleRbTags.push_back(e);
             }
@@ -1119,7 +1147,7 @@ void PruneRemovedPhysicsEntities(
         for(in auto kv : syncedColliderTags){
             const EntityID e = kv.first;
             const Name oldTag = kv.second;
-            if(!world.alive(e) || !world.hasComponent<ColliderComponent>(e)){
+            if(!world.alive(e) || !world.hasComponent<TransformComponent>(e) || !world.hasComponent<ColliderComponent>(e)){
                 EraseSyncedTagIfUnused(world, e, oldTag, namedEntities);
                 scratch.staleColTags.push_back(e);
             }
@@ -1386,7 +1414,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         const auto foundParent = namedEntitiesForParent.find(pp.parentEntityName);
                         if(foundParent != namedEntitiesForParent.end() && foundParent.value() != entity && worldForTagSync.alive(foundParent.value()))
                             pp.parent = foundParent.value();
-                        else if(!pp.parent.valid() || !worldForTagSync.alive(pp.parent))
+                        else
                             pp.parent = s_InvalidEntityId;
                     }
                 }
@@ -1451,9 +1479,12 @@ void SyncEcsEntitiesToPhysicsWorld(
                     && staticCache.entity == entity
                     && physicsWorld.isValidBody(rb.runtimeBodyId)
                 ){
-                    Transform3D normalizedXf;
-                    if(EcsTransformMatchesSyncedRawOrNormalized(xf, staticCache.syncedTransform, normalizedXf))
-                        return;
+                    const Expected<BodyType> curBt = physicsWorld.tryGetBodyType(rb.runtimeBodyId);
+                    if(curBt.has_value() && curBt.value() == BodyType::Static && physicsWorld.isBodyEnabled(rb.runtimeBodyId) == rb.isEnabled){
+                        Transform3D normalizedXf;
+                        if(EcsTransformMatchesSyncedRawOrNormalized(xf, staticCache.syncedTransform, normalizedXf))
+                            return;
+                    }
                 }
             }
 
@@ -1484,6 +1515,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     SetStaticBodyPoseCache(rec.bodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                 }
                 else{
+                    ClearStaticBodyPoseCacheIfMatches(rec.bodyId, scratch.staticBodyPoseCache);
                     const EcsWorldPose worldPose = ResolveEntityWorldPose(worldForBodyView, entity);
                     if(rec.hasBodyPose && EcsTransformsNearlyEqual(rec.syncedBodyPose.transform, worldPose.transform))
                         return;
@@ -2021,11 +2053,8 @@ void SyncEcsEntitiesToPhysicsWorld(
                     && bodyIndexToEntityRef[jCache.bodyIdB.index].generation == jCache.bodyIdB.generation
                     && jc.type == jCache.structure.type
                     && jc.useReferenceRotation == jCache.structure.useReferenceRotation
-                    && EcsVec4NearlyEqual(VectorSingle(jc.localAnchorA), VectorSingle(jCache.rawAnchorA), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(jc.localAnchorB), VectorSingle(jCache.rawAnchorB), 1.0e-5f)
                     && EcsVec4NearlyEqual(VectorSingle(jc.localAxisA), VectorSingle(jCache.structure.localAxisA), 1.0e-5f)
                     && EcsVec4NearlyEqual(VectorSingle(jc.localAxisB), VectorSingle(jCache.structure.localAxisB), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(jc.linearOffset), VectorSingle(jCache.rawLinearOffset), 1.0e-5f)
                     && worldForJoints.alive(jCache.entA)
                     && worldForJoints.alive(jCache.entB)
                     && physicsWorld.isValidJoint(jc.runtimeJointId)
@@ -2044,9 +2073,13 @@ void SyncEcsEntitiesToPhysicsWorld(
                     else if(worldForJoints.hasComponent<TransformComponent>(jCache.entB))
                         fastScaleB = worldForJoints.getComponent<TransformComponent>(jCache.entB).scale;
 
+                    const f32x4 fastScaledAnchorA(jc.localAnchorA.x * fastScaleA.x, jc.localAnchorA.y * fastScaleA.y, jc.localAnchorA.z * fastScaleA.z, 0.0f);
+                    const f32x4 fastScaledAnchorB(jc.localAnchorB.x * fastScaleB.x, jc.localAnchorB.y * fastScaleB.y, jc.localAnchorB.z * fastScaleB.z, 0.0f);
+                    const f32x4 fastScaledOffset(jc.linearOffset.x * fastScaleA.x, jc.linearOffset.y * fastScaleA.y, jc.linearOffset.z * fastScaleA.z, 0.0f);
                     if(
-                        EcsVec4NearlyEqual(VectorSingle(fastScaleA), VectorSingle(jCache.scaleA), 1.0e-5f)
-                        && EcsVec4NearlyEqual(VectorSingle(fastScaleB), VectorSingle(jCache.scaleB), 1.0e-5f)
+                        EcsVec4NearlyEqual(VectorSingle(fastScaledAnchorA), VectorSingle(jCache.structure.scaledAnchorA), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(fastScaledAnchorB), VectorSingle(jCache.structure.scaledAnchorB), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(fastScaledOffset), VectorSingle(jCache.structure.scaledLinearOffset), 1.0e-5f)
                     )
                         return;
                 }
@@ -2183,45 +2216,74 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
 
             if(hasRecord && isAliveInWorld && !bodiesChanged && structureMatches){
-                physicsWorld.setJointUserData(existingJointId, jc.userData);
-                physicsWorld.setJointCollideConnected(existingJointId, jc.collideConnected);
-                physicsWorld.setJointEnableMotor(existingJointId, jc.enableMotor);
-                physicsWorld.setJointMotorSpeed(existingJointId, jc.motorSpeed);
-                physicsWorld.setJointMaxMotorForce(existingJointId, jc.maxMotorForce);
-                physicsWorld.setJointEnableLimit(existingJointId, jc.enableLimit);
-                if(jc.lowerLimit <= jc.upperLimit)
-                    physicsWorld.setJointLimits(existingJointId, jc.lowerLimit, jc.upperLimit);
-                physicsWorld.setJointSwingLimit(existingJointId, jc.swingLimit);
-                physicsWorld.setJointSpring(existingJointId, jc.enableSpring, jc.hertz, jc.dampingRatio);
-                physicsWorld.setJointLinearOffset(existingJointId, VectorSingle(scaledOffset));
-                physicsWorld.setJointLength(existingJointId, jc.length);
-                if(jc.minLength <= jc.maxLength)
-                    physicsWorld.setJointLengthRange(existingJointId, jc.minLength, jc.maxLength);
-                physicsWorld.setJointMaxTorque(existingJointId, jc.maxTorque);
-                physicsWorld.setJointCorrectionFactor(existingJointId, jc.correctionFactor);
-                if(jc.useReferenceRotation)
-                    physicsWorld.setJointTargetRotation(existingJointId, VectorSingle(jc.referenceRotation));
-                physicsWorld.setJointSuspension(existingJointId, jc.suspensionHertz, jc.suspensionDampingRatio);
-                physicsWorld.setJointBreakThresholds(existingJointId, jc.breakForce, jc.breakTorque);
+                b8 allOk = true;
+                if(!physicsWorld.setJointUserData(existingJointId, jc.userData))
+                    allOk = false;
+                if(!physicsWorld.setJointCollideConnected(existingJointId, jc.collideConnected))
+                    allOk = false;
+                if(!physicsWorld.setJointEnableMotor(existingJointId, jc.enableMotor))
+                    allOk = false;
+                if(!physicsWorld.setJointMotorSpeed(existingJointId, jc.motorSpeed))
+                    allOk = false;
+                if(!physicsWorld.setJointMaxMotorForce(existingJointId, jc.maxMotorForce))
+                    allOk = false;
+                if(!physicsWorld.setJointEnableLimit(existingJointId, jc.enableLimit))
+                    allOk = false;
+                if(jc.lowerLimit <= jc.upperLimit){
+                    if(!physicsWorld.setJointLimits(existingJointId, jc.lowerLimit, jc.upperLimit))
+                        allOk = false;
+                }
+                else{
+                    allOk = false;
+                }
+                if(!physicsWorld.setJointSwingLimit(existingJointId, jc.swingLimit))
+                    allOk = false;
+                if(!physicsWorld.setJointSpring(existingJointId, jc.enableSpring, jc.hertz, jc.dampingRatio))
+                    allOk = false;
+                if(!physicsWorld.setJointLinearOffset(existingJointId, VectorSingle(scaledOffset)))
+                    allOk = false;
+                if(!physicsWorld.setJointLength(existingJointId, jc.length))
+                    allOk = false;
+                if(jc.minLength <= jc.maxLength){
+                    if(!physicsWorld.setJointLengthRange(existingJointId, jc.minLength, jc.maxLength))
+                        allOk = false;
+                }
+                else{
+                    allOk = false;
+                }
+                if(!physicsWorld.setJointMaxTorque(existingJointId, jc.maxTorque))
+                    allOk = false;
+                if(!physicsWorld.setJointCorrectionFactor(existingJointId, jc.correctionFactor))
+                    allOk = false;
+                if(jc.useReferenceRotation){
+                    if(!physicsWorld.setJointTargetRotation(existingJointId, VectorSingle(jc.referenceRotation)))
+                        allOk = false;
+                }
+                if(!physicsWorld.setJointSuspension(existingJointId, jc.suspensionHertz, jc.suspensionDampingRatio))
+                    allOk = false;
+                if(!physicsWorld.setJointBreakThresholds(existingJointId, jc.breakForce, jc.breakTorque))
+                    allOk = false;
                 jc.runtimeJointId = existingJointId;
-                jc.dirty = false;
-                foundJoint.value().structure = curStruct;
-                foundJoint.value().hasStructure = true;
-                SetJointFastCache(
-                    existingJointId,
-                    entity,
-                    entA,
-                    entB,
-                    bodyIdA,
-                    bodyIdB,
-                    curStruct,
-                    VectorSingle(scaleA),
-                    VectorSingle(scaleB),
-                    VectorSingle(jc.localAnchorA),
-                    VectorSingle(jc.localAnchorB),
-                    VectorSingle(jc.linearOffset),
-                    scratch.jointFastCache
-                );
+                if(allOk){
+                    jc.dirty = false;
+                    foundJoint.value().structure = curStruct;
+                    foundJoint.value().hasStructure = true;
+                    SetJointFastCache(
+                        existingJointId,
+                        entity,
+                        entA,
+                        entB,
+                        bodyIdA,
+                        bodyIdB,
+                        curStruct,
+                        VectorSingle(scaleA),
+                        VectorSingle(scaleB),
+                        VectorSingle(jc.localAnchorA),
+                        VectorSingle(jc.localAnchorB),
+                        VectorSingle(jc.linearOffset),
+                        scratch.jointFastCache
+                    );
+                }
                 return;
             }
 
@@ -2427,7 +2489,8 @@ void WriteBackSinglePhysicsBody(
     in u32 stamp,
     mut Vector<u32> writeBackBodyStamps,
     mut Array<Vector<EntityID>, 33u> depthBuckets,
-    mut u32 maxDeferredDepth
+    mut u32 maxDeferredDepth,
+    mut b8 writeBackDisablePoseCache
 ){
     if(bodyIdx >= cast<u32>(physicsWorld.m_bodies.size()) || bodyIdx >= cast<u32>(bodyIndexToEntity.size()))
         return;
@@ -2465,7 +2528,7 @@ void WriteBackSinglePhysicsBody(
     u32 depth = 0u;
     if(hasAnyPhysicsParents){
         in World worldForDepth = world;
-        depth = ResolvePhysicsParentDepth(worldForDepth, owner.entity);
+        depth = ResolvePhysicsParentDepthChecked(worldForDepth, owner.entity, writeBackDisablePoseCache);
     }
     if(depth == 0u){
         if(body.setIndex < physicsWorld.m_solverSets.size() && body.localIndex < physicsWorld.m_solverSets[body.setIndex].sims.size()){
@@ -2495,24 +2558,25 @@ void WriteBackPhysicsTransformsToEcs(
         scratch.writeBackBodyStamps.resize(physicsWorld.m_bodies.size(), 0u);
     const u32 stamp = NextEcsPhysicsStamp(scratch.writeBackBodyStamps, scratch.writeBackStamp);
 
+    scratch.writeBackDisablePoseCache = false;
     u32 maxDeferredDepth = 0u;
     for(usize i = 0u; i < frameBodyMoveEvents.size(); ++i){
         in BodyMoveEvent ev = frameBodyMoveEvents[i];
         if(ev.bodyId.valid())
-            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, ev.bodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, ev.bodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     in Vector<BodySim> awakeSims = physicsWorld.m_solverSets[s_AwakeSetIndex].sims;
     for(usize i = 0u; i < awakeSims.size(); ++i){
-        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, awakeSims[i].bodyId, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, awakeSims[i].bodyId, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     for(usize i = 0u; i < scratch.prevAwakeWriteBackBodyIndices.size(); ++i){
-        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, scratch.prevAwakeWriteBackBodyIndices[i], stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, scratch.prevAwakeWriteBackBodyIndices[i], stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     for(usize i = 0u; i < scratch.pendingWriteBackBodyIndices.size(); ++i){
-        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, scratch.pendingWriteBackBodyIndices[i], stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+        WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, scratch.pendingWriteBackBodyIndices[i], stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
     scratch.pendingWriteBackBodyIndices.clear();
 
@@ -2530,7 +2594,7 @@ void WriteBackPhysicsTransformsToEcs(
                 in RigidBodyComponent rb = rbOpt.value();
                 if(rb.type == BodyType::Static || !rb.isEnabled || !rb.runtimeBodyId.valid())
                     return;
-                WriteBackSinglePhysicsBody(worldRef, world, bodyIndexToEntityRef, hasAnyPhysicsParents, rb.runtimeBodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+                WriteBackSinglePhysicsBody(worldRef, world, bodyIndexToEntityRef, hasAnyPhysicsParents, rb.runtimeBodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
             }
         );
     }
@@ -2573,13 +2637,18 @@ void WriteBackPhysicsTransformsToEcs(
                     in PhysicsParentComponent pp = ppOpt.value();
                     if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
                         EcsWorldPose parentPose;
-                        const auto parentPoseIt = scratch.writeBackPoseCache.find(pp.parent);
-                        if(parentPoseIt != scratch.writeBackPoseCache.end()){
-                            parentPose = parentPoseIt.value();
+                        if(!scratch.writeBackDisablePoseCache){
+                            const auto parentPoseIt = scratch.writeBackPoseCache.find(pp.parent);
+                            if(parentPoseIt != scratch.writeBackPoseCache.end()){
+                                parentPose = parentPoseIt.value();
+                            }
+                            else{
+                                parentPose = ResolveEntityWorldPose(world, pp.parent);
+                                scratch.writeBackPoseCache.insert_or_assign(pp.parent, parentPose);
+                            }
                         }
                         else{
                             parentPose = ResolveEntityWorldPose(world, pp.parent);
-                            scratch.writeBackPoseCache.insert_or_assign(pp.parent, parentPose);
                         }
                         const Transform3D localXf = RelativeTransform(parentPose.transform, physXf);
                         f32 lx = localXf.position.x;
@@ -2595,7 +2664,7 @@ void WriteBackPhysicsTransformsToEcs(
                         }
                         xf.position = f32x4(lx, ly, lz, 0.0f);
                         xf.rotation = localXf.rotation;
-                        if(d < maxDeferredDepth){
+                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
                             VectorSingle pScale = VectorSingle(parentPose.scale);
                             if(!pp.inheritScale)
                                 pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
@@ -2616,7 +2685,7 @@ void WriteBackPhysicsTransformsToEcs(
                     else{
                         xf.position = physXf.position;
                         xf.rotation = physXf.rotation;
-                        if(d < maxDeferredDepth){
+                        if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
                             childWorldPose.transform = physXf;
                             childWorldPose.scale = xf.scale;
                             cachedChildPoseReady = true;
@@ -2626,13 +2695,13 @@ void WriteBackPhysicsTransformsToEcs(
                 else{
                     xf.position = physXf.position;
                     xf.rotation = physXf.rotation;
-                    if(d < maxDeferredDepth){
+                    if(!scratch.writeBackDisablePoseCache && d < maxDeferredDepth){
                         childWorldPose.transform = physXf;
                         childWorldPose.scale = xf.scale;
                         cachedChildPoseReady = true;
                     }
                 }
-                if(cachedChildPoseReady)
+                if(!scratch.writeBackDisablePoseCache && cachedChildPoseReady)
                     scratch.writeBackPoseCache.insert_or_assign(entity, childWorldPose);
             }
 

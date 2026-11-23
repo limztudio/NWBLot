@@ -234,7 +234,7 @@ Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereSha
     const f32 rB = sphereB.radius();
     const f32 totalR = rA + rB;
     const f32 maxD = totalR + maxDistance;
-    if(distSq > maxD * maxD)
+    if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
     const f32 dist = Sqrt(distSq);
@@ -261,7 +261,7 @@ Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in 
     const f32 rB = capsuleB.radius();
     const f32 totalR = rA + rB;
     const f32 maxD = totalR + maxDistance;
-    if(distSq > maxD * maxD)
+    if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
     const f32 dist = Sqrt(distSq);
@@ -299,7 +299,7 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
     const f32 rB = capsuleB.radius();
     const f32 totalR = rA + rB;
     const f32 maxD = totalR + maxDistance;
-    if(distSq > maxD * maxD)
+    if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
     const f32 dist = Sqrt(distSq);
@@ -365,7 +365,7 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         const VectorSingle deltaLocal = VectorSingle(localS - clamped, 0.0f);
         const f32 distSq = Vector3LengthSq(deltaLocal).x;
         const f32 maxD = totalR + maxDistance;
-        if(distSq > maxD * maxD)
+        if((maxD < 0.0f && distSq > 0.0f) || (maxD >= 0.0f && distSq > maxD * maxD))
             return m;
 
         VectorSingle localOutward = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
@@ -434,6 +434,8 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
             worldBoxPt = cBox + Vector3Rotate(faceLocal, qBox);
         }
 
+        if(separation > maxDistance)
+            return m;
         const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, qBox), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle nAtoB = -worldOutward;
         const VectorSingle wA = worldSphereC + nAtoB * sphereR;
@@ -714,7 +716,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
         ClosestPointSegmentToBoxLocal(l0, l1, hBox, bestSegPt, bestBoxPt, bestDistSq);
 
         const f32 maxD = totalR + maxDistance;
-        if(bestDistSq > maxD * maxD)
+        if((maxD < 0.0f && bestDistSq > 0.0f) || (maxD >= 0.0f && bestDistSq > maxD * maxD))
             return m;
 
         VectorSingle localOutward(0.0f, 1.0f, 0.0f, 0.0f);
@@ -1217,7 +1219,9 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
 
     Array<u32, 256u> stack;
     stack[0u] = 0u;
-    u32 stackCount = 1u;
+    u32 stackCount = 0u;
+    if(queryR >= 0.0f)
+        stackCount = 1u;
     while(stackCount > 0u){
         --stackCount;
         const u32 nodeIdx = stack[stackCount];
@@ -1301,7 +1305,7 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
             const VectorSingle worldQ = TransformPoint(xfB, closePt);
             const f32 interiorDist = Sqrt(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
             const f32 interiorSep = -(interiorDist + totalR);
-            if(!foundHit || interiorSep < bestSep){
+            if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                 foundHit = true;
                 bestSep = interiorSep;
                 bestNormal = worldN;
@@ -1352,7 +1356,9 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
 
     Array<u32, 256u> stack;
     stack[0u] = 0u;
-    u32 stackCount = 1u;
+    u32 stackCount = 0u;
+    if(queryR >= 0.0f)
+        stackCount = 1u;
     while(stackCount > 0u){
         --stackCount;
         const u32 nodeIdx = stack[stackCount];
@@ -1507,7 +1513,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
             }
             if(foundInt){
                 const f32 interiorSep = -(Sqrt(bestIntDistSq) + totalR);
-                if(!foundHit || interiorSep < bestSep){
+                if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestIntN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle worldN = -worldOut;
                     const VectorSingle wCap = TransformPoint(xfB, bestCapPt);

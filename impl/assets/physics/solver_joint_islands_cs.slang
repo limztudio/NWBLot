@@ -70,6 +70,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, maxRegularColors, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, constraintSlot, invH, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
             }
             else if(subStep > 0u){
+                AllMemoryBarrierWithGroupSync();
                 for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                     nwbPhysicsClearContactWarmStart(contactOffset + k, constraintSlot);
                 AllMemoryBarrierWithGroupSync();
@@ -84,6 +85,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 GroupMemoryBarrierWithGroupSync();
             }
             else{
+                AllMemoryBarrierWithGroupSync();
                 for(uint j = tid; j < jointCount; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                     nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, jointSlot, h, 0u);
                 AllMemoryBarrierWithGroupSync();

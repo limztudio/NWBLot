@@ -216,8 +216,10 @@ class PhysicsSystem{
     }
 
     public void registerNamedEntity(in Name tag, in EntityID entity){
-        if(tag != s_NameNone && entity.valid())
+        if(tag != s_NameNone && entity.valid()){
             this.m_namedEntities.insert_or_assign(tag, entity);
+            this.m_syncScratch.hasManualNamedEntities = true;
+        }
     }
 
     public void unregisterNamedEntity(in Name tag){
@@ -391,9 +393,10 @@ class PhysicsSystem{
     }
 
     public b8 validateResources(){
-        if(!this.m_gpuDispatcher.validateResources())
+        const b8 ok = this.m_gpuDispatcher.validateResources();
+        if(!ok)
             warning("PhysicsSystem: GPU physics pipelines unavailable; falling back to CPU solver");
-        return true;
+        return ok;
     }
 
     public void invalidateResources(){

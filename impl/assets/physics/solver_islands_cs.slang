@@ -2,9 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_PHYSICS_ISLAND_TIER
+#define NWB_PHYSICS_ISLAND_TIER 0
+#endif
+
 #define NWB_PHYSICS_USE_LDS_BODY_STATES 1
 #define NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES 1
+#if NWB_PHYSICS_ISLAND_TIER == 1
+#define NWB_PHYSICS_ISLAND_LDS_MAX_BODIES NWB_PHYSICS_LARGE_ISLAND_MAX_BODIES
+#define NWB_PHYSICS_ISLAND_LDS_MAX_CONTACTS NWB_PHYSICS_LARGE_ISLAND_MAX_CONTACTS
+#define NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE NWB_PHYSICS_LARGE_ISLAND_WORKGROUP_SIZE
+#else
+#define NWB_PHYSICS_ISLAND_LDS_MAX_BODIES NWB_PHYSICS_ISLAND_MAX_BODIES
 #define NWB_PHYSICS_ISLAND_LDS_MAX_CONTACTS NWB_PHYSICS_ISLAND_MAX_CONTACTS
+#define NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE NWB_PHYSICS_ISLAND_WORKGROUP_SIZE
+#endif
 
 #include "solver_contact_helpers.slangi"
 
@@ -12,7 +24,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_PHYSICS_ISLAND_WORKGROUP_SIZE, 1, 1)]
+[numthreads(NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE, 1, 1)]
 void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint localIdx = groupID.x;
     if(localIdx >= g_NwbPhysicsPushConstants.itemCount)
@@ -93,7 +105,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint impulseOutSlot = g_NwbPhysicsPushConstants.slots1.y;
     if(hasRolling)
         AllMemoryBarrierWithGroupSync();
-    for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
+    for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE)
         nwbPhysicsExportContactImpulses(contactOffset + k, constraintSlot, impulseOutSlot, hasRolling);
 
     if(tid < bodyCount)

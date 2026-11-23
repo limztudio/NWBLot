@@ -408,7 +408,7 @@ void Solve3DAngularLockRow(
         bias = thetaErr * soft.biasRate;
         const f32 bLenSq = Vector3LengthSq(bias).x;
         if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-            bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+            bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
         mScale = soft.massScale;
         iScale = soft.impulseScale;
     }
@@ -811,9 +811,10 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
     const f32 invMassA = jc.invMassA();
     const f32 invMassB = jc.invMassB();
     const b8 zeroDeltaRot =
-        (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) <= 1.0e-12f
-        && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) <= 1.0e-12f
+        Vector3LengthSq(VectorSingle(deltaRotA, 0.0f)).x <= 1.0e-12f
+        && Vector3LengthSq(VectorSingle(deltaRotB, 0.0f)).x <= 1.0e-12f
     ;
+    const b8 needOrient = (jc.type != JointType::Distance) && !(jc.type == JointType::Spherical && !jc.enableLimit());
     VectorSingle rA(0.0f);
     VectorSingle qA(0.0f, 0.0f, 0.0f, 1.0f);
     VectorSingle rB(0.0f);
@@ -839,13 +840,15 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         qA = VectorSingle(jc.qA0);
         if(!(deltaRotA.x == 0.0f && deltaRotA.y == 0.0f && deltaRotA.z == 0.0f && deltaRotA.w == 1.0f)){
             rA = Vector3Rotate(rA, deltaRotA);
-            qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, qA));
+            if(needOrient)
+                qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, qA));
         }
         rB = jc.rB0();
         qB = VectorSingle(jc.qB0);
         if(!(deltaRotB.x == 0.0f && deltaRotB.y == 0.0f && deltaRotB.z == 0.0f && deltaRotB.w == 1.0f)){
             rB = Vector3Rotate(rB, deltaRotB);
-            qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, qB));
+            if(needOrient)
+                qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, qB));
         }
         cache.cachedDeltaRotA = f32x4(deltaRotA);
         cache.cachedDeltaRotB = f32x4(deltaRotB);
@@ -949,7 +952,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1085,7 +1088,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1124,7 +1127,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1403,7 +1406,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const f32 maxP = jc.maxMotorForce * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newP, 0.0f)).x;
             if(lenSq > maxP * maxP && lenSq > s_NormalizeEpsilonSq)
-                newP = newP * (maxP / Sqrt(lenSq));
+                newP = newP * (maxP / SqrtFast(lenSq));
             const VectorSingle appliedP = newP - oldP;
             jc.setLinearImpulse(newP);
             ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, appliedP, flagsA, flagsB, vA, wA, vB, wB);
@@ -1422,7 +1425,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const f32 maxL = jc.maxTorque * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newL, 0.0f)).x;
             if(lenSq > maxL * maxL && lenSq > s_NormalizeEpsilonSq)
-                newL = newL * (maxL / Sqrt(lenSq));
+                newL = newL * (maxL / SqrtFast(lenSq));
             const VectorSingle appliedL = newL - oldL;
             jc.setAngularImpulse(newL);
             wA = wA - MulSymMat3Vec(jc.invIA, appliedL);

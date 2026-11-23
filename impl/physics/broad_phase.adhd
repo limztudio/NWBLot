@@ -37,12 +37,14 @@ class BroadPhase{
     public Array<DynamicTree, s_TreeCount> trees;
     public Vector<u32> moveArray;
     public Vector<Vector<u64>> workerBuckets;
+    public Vector<Vector<u32>> workerQueryStacks;
 
     public void clear(){
         for(usize i = 0u; i < s_TreeCount; ++i)
             this.trees[i].clear();
         this.moveArray.clear();
         this.workerBuckets.clear();
+        this.workerQueryStacks.clear();
     }
 
     public void createProxyWithFlags(

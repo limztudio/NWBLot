@@ -224,6 +224,15 @@ void ClosestPointsBetweenSegments(
     outC2 = p2 + d2 * t;
 }
 
+VectorSingle ClampVec3ToHalfExtents(in VectorSingle p, in VectorSingle h){
+    return VectorSingle(
+        Clamp(p.x, -h.x, h.x),
+        Clamp(p.y, -h.y, h.y),
+        Clamp(p.z, -h.z, h.z),
+        0.0f
+    );
+}
+
 Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereShape sphereB, in Transform3D xfB, in f32 maxDistance){
     Manifold m;
     const VectorSingle pA = TransformPoint(xfA, sphereA.center());
@@ -237,7 +246,7 @@ Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereSha
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = Sqrt(distSq);
+    const f32 dist = SqrtFast(distSq);
     VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     if(distSq > s_NormalizeEpsilonSq)
         n = d * (1.0f / dist);
@@ -266,7 +275,7 @@ Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in 
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = Sqrt(distSq);
+    const f32 dist = SqrtFast(distSq);
     VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     if(distSq > s_NormalizeEpsilonSq)
         n = d * (1.0f / dist);
@@ -306,7 +315,7 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = Sqrt(distSq);
+    const f32 dist = SqrtFast(distSq);
     VectorSingle n(0.0f);
     if(distSq > s_NormalizeEpsilonSq){
         n = d * (1.0f / dist);
@@ -324,7 +333,7 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
     m.normalTwist = f32x4(n, 0.0f);
 
     if(lenSqA > s_NormalizeEpsilonSq && lenSqB > s_NormalizeEpsilonSq){
-        const f32 lenA = Sqrt(lenSqA);
+        const f32 lenA = SqrtFast(lenSqA);
         const VectorSingle uA = dirA * (1.0f / lenA);
         const VectorSingle uB = dirB * Rsqrt(VectorSingle(lenSqB)).x;
         if(Abs(Vector3Dot(uA, uB).x) > 0.9995f){
@@ -375,8 +384,7 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
             qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hullB.boxRotation)));
         const VectorSingle localS = Vector3InverseRotate(VectorSingle(worldSphereC - cBox, 0.0f), qBox);
         const VectorSingle hBox = hullB.halfExtents();
-        const VectorSingle negH = VectorSingle(-hBox.x, -hBox.y, -hBox.z, 0.0f);
-        const VectorSingle clamped = Min(Max(localS, negH), hBox);
+        const VectorSingle clamped = ClampVec3ToHalfExtents(localS, hBox);
         const VectorSingle deltaLocal = VectorSingle(localS - clamped, 0.0f);
         const f32 distSq = Vector3LengthSq(deltaLocal).x;
         const f32 maxD = totalR + maxDistance;
@@ -389,7 +397,7 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         u8 featureIdx = 0u;
 
         if(distSq > 1.0e-10f){
-            const f32 dist = Sqrt(distSq);
+            const f32 dist = SqrtFast(distSq);
             localOutward = deltaLocal / dist;
             separation = dist - totalR;
             if(localS.x < -hBox.x)
@@ -519,7 +527,6 @@ void ClosestPointSegmentToBoxLocal(
     mut f32 outDistSq
 ){
     const VectorSingle d = VectorSingle(l1 - l0, 0.0f);
-    const VectorSingle negH(-hBox.x, -hBox.y, -hBox.z, 0.0f);
 
     Array<f32, 3u> l0Arr;
     l0Arr[0u] = l0.x;
@@ -566,10 +573,10 @@ void ClosestPointSegmentToBoxLocal(
     }
 
     outSegPt = l0;
-    outBoxPt = Min(Max(l0, negH), hBox);
+    outBoxPt = ClampVec3ToHalfExtents(l0, hBox);
     outDistSq = Vector3LengthSq(VectorSingle(outSegPt - outBoxPt, 0.0f)).x;
 
-    const VectorSingle bp1 = Min(Max(l1, negH), hBox);
+    const VectorSingle bp1 = ClampVec3ToHalfExtents(l1, hBox);
     const f32 dSq1 = Vector3LengthSq(VectorSingle(l1 - bp1, 0.0f)).x;
     if(dSq1 < outDistSq){
         outDistSq = dSq1;
@@ -618,7 +625,7 @@ void ClosestPointSegmentToBoxLocal(
             candT = Clamp(-num / denom, ta, tb);
 
         const VectorSingle sp = l0 + d * candT;
-        const VectorSingle bp = Min(Max(sp, negH), hBox);
+        const VectorSingle bp = ClampVec3ToHalfExtents(sp, hBox);
         const f32 dSq = Vector3LengthSq(VectorSingle(sp - bp, 0.0f)).x;
         if(dSq < outDistSq){
             outDistSq = dSq;
@@ -746,7 +753,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
 
         b8 wonByEdge = false;
         if(bestDistSq > 1.0e-10f){
-            const f32 dist = Sqrt(bestDistSq);
+            const f32 dist = SqrtFast(bestDistSq);
             localOutward = VectorSingle(bestSegPt - bestBoxPt, 0.0f) / dist;
             singleSep = dist - totalR;
             const f32 ax = Abs(localOutward.x);
@@ -1268,7 +1275,7 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
                 if(distSq > queryR * queryR)
                     continue;
 
-                const f32 dist = Sqrt(distSq);
+                const f32 dist = SqrtFast(distSq);
                 f32 sep = dist - totalR;
                 VectorSingle nLocal = -triN;
                 if(dist > 1.0e-5f){
@@ -1323,7 +1330,7 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
             const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle worldN = -worldOut;
             const VectorSingle worldQ = TransformPoint(xfB, closePt);
-            const f32 interiorDist = Sqrt(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
+            const f32 interiorDist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
             const f32 interiorSep = -(interiorDist + totalR);
             if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                 foundHit = true;
@@ -1532,7 +1539,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
                 }
             }
             if(foundInt){
-                const f32 interiorSep = -(Sqrt(bestIntDistSq) + totalR);
+                const f32 interiorSep = -(SqrtFast(bestIntDistSq) + totalR);
                 if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestIntN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle worldN = -worldOut;
@@ -1561,7 +1568,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
         const VectorSingle seg = VectorSingle(l2 - l1, 0.0f);
         const f32 segLenSq = Vector3LengthSq(seg).x;
         if(segLenSq > s_MinCapsuleLength * s_MinCapsuleLength && Abs(Vector3Dot(bestNormal, bTriWorldN).x) > 0.99f){
-            const VectorSingle segDir = seg / Sqrt(segLenSq);
+            const VectorSingle segDir = seg / SqrtFast(segLenSq);
             if(Abs(Vector3Dot(segDir, bTriN).x) < 0.08f){
                 VectorSingle clip0 = l1;
                 VectorSingle clip1 = l2;

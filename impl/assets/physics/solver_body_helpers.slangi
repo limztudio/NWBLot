@@ -12,14 +12,17 @@
 
 
 #ifdef NWB_PHYSICS_USE_LDS_BODY_STATES
-groupshared float3 g_NwbPhysicsLdsLinVel[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float3 g_NwbPhysicsLdsAngVel[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float3 g_NwbPhysicsLdsDeltaPos[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float4 g_NwbPhysicsLdsDeltaRot[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared uint g_NwbPhysicsLdsFlags[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float g_NwbPhysicsLdsInvMass[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float4 g_NwbPhysicsLdsInvI0[NWB_PHYSICS_ISLAND_MAX_BODIES];
-groupshared float2 g_NwbPhysicsLdsInvI1[NWB_PHYSICS_ISLAND_MAX_BODIES];
+#ifndef NWB_PHYSICS_ISLAND_LDS_MAX_BODIES
+#define NWB_PHYSICS_ISLAND_LDS_MAX_BODIES NWB_PHYSICS_ISLAND_MAX_BODIES
+#endif
+groupshared float3 g_NwbPhysicsLdsLinVel[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float3 g_NwbPhysicsLdsAngVel[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float3 g_NwbPhysicsLdsDeltaPos[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float4 g_NwbPhysicsLdsDeltaRot[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared uint g_NwbPhysicsLdsFlags[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float g_NwbPhysicsLdsInvMass[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float4 g_NwbPhysicsLdsInvI0[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
+groupshared float2 g_NwbPhysicsLdsInvI1[NWB_PHYSICS_ISLAND_LDS_MAX_BODIES];
 groupshared uint g_NwbPhysicsLdsBodyOffset;
 
 NwbPhysicsGpuBodyState nwbPhysicsReadBodyState(const uint bodyStateSlot, const uint bodyIdx){

@@ -331,13 +331,15 @@ void nwbPhysicsReduceBoxManifoldTo4(
         outCount = NWB_PHYSICS_MAX_MANIFOLD_POINTS;
     }
 
+    const float refR = refIsA ? rA : rB;
+    const float incR = refIsA ? rB : rA;
     for(uint k = 0u; k < outCount; ++k){
         const uint ci = outIndices[k];
         const float4 pt = candPts[ci];
         const float sep = pt.z - totalR;
         const float3 worldPt = refFaceCenter + uAxis * pt.x + vAxis * pt.y + clipRefN * pt.z;
-        const float3 wRef = worldPt - clipRefN * (sep + totalR - (refIsA ? rA : rB));
-        const float3 wInc = worldPt - clipRefN * (refIsA ? rB : rA);
+        const float3 wRef = worldPt - clipRefN * (sep + incR);
+        const float3 wInc = worldPt - clipRefN * incR;
         const float3 wA = refIsA ? wRef : wInc;
         const float3 wB = refIsA ? wInc : wRef;
         result.anchorAFeature[k] = float4(wA - bodyPosA, pt.w);
@@ -359,12 +361,16 @@ void nwbPhysicsCollideBoxes(
     inout NwbPhysicsGpuNarrowphaseManifold result
 ){
     const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
-    const float4 qA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotation));
+    const float4 qA = (proxyA.localRotationOrMeta.w >= 0.999999f)
+        ? rotA
+        : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotationOrMeta));
     const float3 hA = proxyA.localExtentOrP1.xyz;
     const float rA = proxyA.localCenterRadius.w;
 
     const float3 cB = originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB);
-    const float4 qB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotation));
+    const float4 qB = (proxyB.localRotationOrMeta.w >= 0.999999f)
+        ? rotB
+        : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotationOrMeta));
     const float3 hB = proxyB.localExtentOrP1.xyz;
     const float rB = proxyB.localCenterRadius.w;
 
@@ -924,7 +930,9 @@ float3 nwbPhysicsSupportWorld(
         return p1;
     }
     if(isBox){
-        const float4 qBox = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotation));
+        const float4 qBox = (proxy.localRotationOrMeta.w >= 0.999999f)
+            ? rot
+            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
         const float3 cBox = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
         const float3 ld = nwbPhysicsQuatInvRotate(worldDir, qBox);
         const float3 h = proxy.localExtentOrP1.xyz;
@@ -934,7 +942,7 @@ float3 nwbPhysicsSupportWorld(
     }
 
     const uint vOffset = proxy.filterData.w;
-    const uint metaPack = asuint(proxy.aabbMaxPad.w);
+    const uint metaPack = asuint(proxy.localRotationOrMeta.x);
     const uint vCount = min(metaPack & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
     if(vCount == 0u){
         outIdx = 0u;
@@ -1320,19 +1328,19 @@ bool nwbPhysicsRunGjkDistance(
 uint nwbPhysicsHullVertexCount(const NwbPhysicsGpuShapeProxy proxy){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
         return 8u;
-    return asuint(proxy.aabbMaxPad.w) & 0xffu;
+    return asuint(proxy.localRotationOrMeta.x) & 0xffu;
 }
 
 uint nwbPhysicsHullFaceCount(const NwbPhysicsGpuShapeProxy proxy){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
         return 6u;
-    return (asuint(proxy.aabbMaxPad.w) >> 8u) & 0xffu;
+    return (asuint(proxy.localRotationOrMeta.x) >> 8u) & 0xffu;
 }
 
 uint nwbPhysicsHullEdgeCount(const NwbPhysicsGpuShapeProxy proxy){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
         return 12u;
-    return asuint(proxy.aabbMaxPad.w) >> 16u;
+    return asuint(proxy.localRotationOrMeta.x) >> 16u;
 }
 
 float3 nwbPhysicsHullLocalVertex(const NwbPhysicsGpuShapeProxy proxy, const uint hullVertexSlot, const uint vIdx){
@@ -1343,7 +1351,7 @@ float3 nwbPhysicsHullLocalVertex(const NwbPhysicsGpuShapeProxy proxy, const uint
             (vIdx & 2u) != 0u ? h.y : -h.y,
             (vIdx & 4u) != 0u ? h.z : -h.z
         );
-        return proxy.localCenterRadius.xyz + nwbPhysicsQuatRotate(corner, proxy.localRotation);
+        return proxy.localCenterRadius.xyz + nwbPhysicsQuatRotate(corner, proxy.localRotationOrMeta);
     }
     const uint vOffset = proxy.filterData.w;
     return g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vIdx].xyz;
@@ -1459,7 +1467,7 @@ float4 nwbPhysicsHullLocalFacePlane(const NwbPhysicsGpuShapeProxy proxy, const u
         else if(faceIdx == 3u){ localN = float3(0.0f, -1.0f, 0.0f); off = h.y; }
         else if(faceIdx == 4u){ localN = float3(0.0f, 0.0f, 1.0f); off = h.z; }
         else{ localN = float3(0.0f, 0.0f, -1.0f); off = h.z; }
-        const float3 rotN = nwbPhysicsQuatRotate(localN, proxy.localRotation);
+        const float3 rotN = nwbPhysicsQuatRotate(localN, proxy.localRotationOrMeta);
         return float4(rotN, off + dot(rotN, proxy.localCenterRadius.xyz));
     }
     const uint vOffset = proxy.filterData.w;
@@ -1479,7 +1487,9 @@ uint nwbPhysicsGatherHullWorldFacePoly(
 ){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u){
         const float3 cBox = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float4 qBox = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotation));
+        const float4 qBox = (proxy.localRotationOrMeta.w >= 0.999999f)
+            ? rot
+            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
         float3 ax;
         float3 ay;
         float3 az;
@@ -2469,9 +2479,9 @@ void nwbPhysicsCollideMeshMeshPair(
     inout NwbPhysicsGpuNarrowphaseManifold result
 ){
     const uint nodeBaseA = proxyA.filterData.w;
-    const uint triBaseA = asuint(proxyA.aabbMaxPad.w);
+    const uint triBaseA = asuint(proxyA.localRotationOrMeta.x);
     const uint nodeBaseB = proxyB.filterData.w;
-    const uint triBaseB = asuint(proxyB.aabbMaxPad.w);
+    const uint triBaseB = asuint(proxyB.localRotationOrMeta.x);
     if(nodeBaseA == NWB_PHYSICS_INVALID_INDEX || triBaseA == NWB_PHYSICS_INVALID_INDEX || nodeBaseB == NWB_PHYSICS_INVALID_INDEX || triBaseB == NWB_PHYSICS_INVALID_INDEX){
         result.pairInfo.w = 1u;
         return;
@@ -3363,7 +3373,7 @@ void nwbPhysicsCollideMeshPair(
     const float4 otherRot = meshIsA ? rotB : rotA;
 
     const uint nodeBase = meshP.filterData.w;
-    const uint triBase = asuint(meshP.aabbMaxPad.w);
+    const uint triBase = asuint(meshP.localRotationOrMeta.x);
     if(nodeBase == NWB_PHYSICS_INVALID_INDEX || triBase == NWB_PHYSICS_INVALID_INDEX){
         result.pairInfo.w = 1u;
         return;
@@ -3385,7 +3395,9 @@ void nwbPhysicsCollideMeshPair(
     const float4 relRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(meshInvRot, otherRot));
 
     const float3 wOtherCenter = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
-    const float4 localBoxRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(relRot, otherP.localRotation));
+    const float4 localBoxRot = ((otherP.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u && otherP.localRotationOrMeta.w < 0.999999f)
+        ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(relRot, otherP.localRotationOrMeta))
+        : relRot;
     const float3 lc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
     float3 axX;
     float3 axY;
@@ -3869,7 +3881,7 @@ void nwbPhysicsSolveBulletToi(
 
     if(proxyB.bodyIndexTypeShape.y == NWB_PHYSICS_SHAPE_TYPE_MESH){
         const uint nodeBase = proxyB.filterData.w;
-        const uint triBase = asuint(proxyB.aabbMaxPad.w);
+        const uint triBase = asuint(proxyB.localRotationOrMeta.x);
         if(nodeBase == NWB_PHYSICS_INVALID_INDEX || triBase == NWB_PHYSICS_INVALID_INDEX){
             result.pairInfo.w = 2u;
             g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
@@ -4360,7 +4372,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float3 cS = sphereIsA ? (originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA)) : (originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB));
         const float rS = sphereIsA ? proxyA.localCenterRadius.w : proxyB.localCenterRadius.w;
         const float3 cBox = sphereIsA ? (originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB)) : (originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA));
-        const float4 qBox = sphereIsA ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotation)) : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotation));
+        const float4 qBox = sphereIsA
+            ? ((proxyB.localRotationOrMeta.w >= 0.999999f) ? rotB : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotationOrMeta)))
+            : ((proxyA.localRotationOrMeta.w >= 0.999999f) ? rotA : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotationOrMeta)));
         const float3 hBox = sphereIsA ? proxyB.localExtentOrP1.xyz : proxyA.localExtentOrP1.xyz;
         const float rBox = sphereIsA ? proxyB.localCenterRadius.w : proxyA.localCenterRadius.w;
 
@@ -4416,7 +4430,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float3 wP1 = capIsA ? (originA + nwbPhysicsQuatRotate(proxyA.localExtentOrP1.xyz, rotA)) : (originB + nwbPhysicsQuatRotate(proxyB.localExtentOrP1.xyz, rotB));
         const float rCap = capIsA ? proxyA.localCenterRadius.w : proxyB.localCenterRadius.w;
         const float3 cBox = capIsA ? (originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB)) : (originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA));
-        const float4 qBox = capIsA ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotation)) : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotation));
+        const float4 qBox = capIsA
+            ? ((proxyB.localRotationOrMeta.w >= 0.999999f) ? rotB : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotationOrMeta)))
+            : ((proxyA.localRotationOrMeta.w >= 0.999999f) ? rotA : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotationOrMeta)));
         const float3 hBox = capIsA ? proxyB.localExtentOrP1.xyz : proxyA.localExtentOrP1.xyz;
         const float rBox = capIsA ? proxyB.localCenterRadius.w : proxyA.localCenterRadius.w;
         const float totalR = rCap + rBox;

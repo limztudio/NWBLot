@@ -789,7 +789,7 @@ LocalRayHit RayCastSphere(in SphereShape sphere, in Transform3D xf, in VectorSin
     if(discr < 0.0f)
         return hit;
 
-    const f32 t = (-b - Sqrt(discr)) / a;
+    const f32 t = (-b - SqrtFast(discr)) / a;
     if(t < 0.0f || t > maxFraction)
         return hit;
 
@@ -840,7 +840,7 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
     if(Abs(qa) > 1.0e-12f){
         const f32 discr = qb * qb - qa * qc;
         if(discr >= 0.0f){
-            const f32 t = (-qb - Sqrt(discr)) / qa;
+            const f32 t = (-qb - SqrtFast(discr)) / qa;
             if(t >= 0.0f && t <= maxFraction){
                 const f32 axisProj = md + t * nd;
                 if(axisProj >= 0.0f && axisProj <= abLenSq){
@@ -1088,7 +1088,7 @@ f32 ComputeProxyViewBoundingRadius(in ShapeProxyView proxy, in VectorSingle loca
         if(dSq > maxSq)
             maxSq = dSq;
     }
-    return Sqrt(maxSq) + proxy.radius;
+    return SqrtFast(maxSq) + proxy.radius;
 }
 
 f32 ComputeProxyBoundingRadius(in ShapeProxy proxy, in VectorSingle localCenter){

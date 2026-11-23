@@ -25,8 +25,12 @@ class EcsSlotOwner{
 class EcsBodyTransformSnapshot{
     public Transform3D prevTransform;
     public Transform3D currTransform;
-    public u16 generation = 0u;
-    public b8 valid = false;
+}
+
+class EcsDrivenKinematicEntry{
+    public EntityID entity = s_InvalidEntityId;
+    public BodyId bodyId;
+    public b8 hasPhysicsParent = false;
 }
 
 class EcsEntityPhysicsRecord{
@@ -91,7 +95,7 @@ class EcsPhysicsSyncScratch{
     public Vector<EntityID> staleRbTags;
     public Vector<EntityID> staleColTags;
     public Vector<EcsKinematicInterpolationTarget> kinematicTargets;
-    public Vector<EntityID> drivenKinematicEntities;
+    public Vector<EcsDrivenKinematicEntry> drivenKinematicEntries;
     public Array<Vector<EntityID>, 33u> writeBackDepthBuckets;
     public Vector<u32> dirtyPrevSnapshotBodyIndices;
     public Vector<u32> pendingWriteBackBodyIndices;
@@ -111,9 +115,40 @@ class EcsPhysicsSyncScratch{
     public u64 lastColliderMutationVersion = 0u;
     public u64 lastTransformMutationVersion = 0u;
     public u64 lastPhysicsParentMutationVersion = 0u;
+    public u64 lastSyncedTopologyVersion = 0u;
     public b8 mutationVersionsValid = false;
+    public b8 hasSyncedTopologyVersion = false;
     public b8 manualNamedEntitiesDirty = false;
     public b8 writeBackDisablePoseCache = false;
+}
+
+const u32 s_EcsSnapshotValidBit = 0x80000000u;
+
+u32 PackEcsSnapshotMeta(in u16 generation){
+    return s_EcsSnapshotValidBit | cast<u32>(generation);
+}
+
+b8 IsEcsSnapshotMetaValid(in u32 meta){
+    return (meta & s_EcsSnapshotValidBit) != 0u;
+}
+
+b8 EcsSnapshotMetaMatches(in u32 meta, in u16 generation){
+    return meta == PackEcsSnapshotMeta(generation);
+}
+
+void PushDrivenKinematicEntry(
+    in EntityID entity,
+    in BodyId bodyId,
+    in b8 hasPhysicsParent,
+    mut Vector<EcsDrivenKinematicEntry> outEntries,
+    mut b8 outHasDrivenKinematic
+){
+    EcsDrivenKinematicEntry entry;
+    entry.entity = entity;
+    entry.bodyId = bodyId;
+    entry.hasPhysicsParent = hasPhysicsParent;
+    outEntries.push_back(entry);
+    outHasDrivenKinematic = true;
 }
 
 u32 NextEcsPhysicsStamp(mut Vector<u32> stamps, mut u32 stamp){
@@ -431,30 +466,30 @@ MassData BuildCustomMassData(in RigidBodyComponent rb, in VectorSingle scale){
 void SetBodyTransformSnapshotBoth(
     in BodyId bodyId,
     in Transform3D xf,
-    mut Vector<EcsBodyTransformSnapshot> snapshots
+    mut Vector<EcsBodyTransformSnapshot> snapshots,
+    mut Vector<u32> snapshotMeta
 ){
     if(!bodyId.valid())
         return;
     if(bodyId.index >= cast<u32>(snapshots.size()))
         snapshots.resize(cast<usize>(bodyId.index) + 1u);
+    if(bodyId.index >= cast<u32>(snapshotMeta.size()))
+        snapshotMeta.resize(cast<usize>(bodyId.index) + 1u, 0u);
     mut EcsBodyTransformSnapshot snap = snapshots[bodyId.index];
     snap.prevTransform = xf;
     snap.currTransform = xf;
-    snap.generation = bodyId.generation;
-    snap.valid = true;
+    snapshotMeta[bodyId.index] = PackEcsSnapshotMeta(bodyId.generation);
 }
 
 void ClearBodyTransformSnapshotIfMatches(
     in BodyId bodyId,
-    mut Vector<EcsBodyTransformSnapshot> snapshots
+    mut Vector<EcsBodyTransformSnapshot> snapshots,
+    mut Vector<u32> snapshotMeta
 ){
-    if(!bodyId.valid() || bodyId.index >= cast<u32>(snapshots.size()))
+    if(!bodyId.valid() || bodyId.index >= cast<u32>(snapshots.size()) || bodyId.index >= cast<u32>(snapshotMeta.size()))
         return;
-    mut EcsBodyTransformSnapshot snap = snapshots[bodyId.index];
-    if(snap.valid && snap.generation == bodyId.generation){
-        snap.valid = false;
-        snap.generation = 0u;
-    }
+    if(EcsSnapshotMetaMatches(snapshotMeta[bodyId.index], bodyId.generation))
+        snapshotMeta[bodyId.index] = 0u;
 }
 
 void SetStaticBodyPoseCache(
@@ -529,15 +564,18 @@ void ClearJointFastCacheIfMatches(
 
 void PreparePrevEcsBodyTransformSnapshots(
     in PhysicsWorld physicsWorld,
-    in Vector<BodyMoveEvent> frameBodyMoveEvents,
+    in Span<BodyMoveEvent> frameBodyMoveEvents,
     mut Vector<u32> dirtyPrevBodyIndices,
     mut Vector<u32> snapshotBodyStamps,
     mut u32 snapshotStamp,
-    mut Vector<EcsBodyTransformSnapshot> snapshots
+    mut Vector<EcsBodyTransformSnapshot> snapshots,
+    mut Vector<u32> snapshotMeta
 ){
     const usize bodyCount = physicsWorld.m_bodies.size();
     if(snapshots.size() < bodyCount)
         snapshots.resize(bodyCount);
+    if(snapshotMeta.size() < bodyCount)
+        snapshotMeta.resize(bodyCount, 0u);
     if(snapshotBodyStamps.size() < bodyCount)
         snapshotBodyStamps.resize(bodyCount, 0u);
     const u32 stamp = NextEcsPhysicsStamp(snapshotBodyStamps, snapshotStamp);
@@ -554,8 +592,7 @@ void PreparePrevEcsBodyTransformSnapshots(
         mut EcsBodyTransformSnapshot snap = snapshots[bodyIdx];
         snap.prevTransform = awakeSims[i].transform;
         snap.currTransform = awakeSims[i].transform;
-        snap.generation = body.generation;
-        snap.valid = true;
+        snapshotMeta[bodyIdx] = PackEcsSnapshotMeta(body.generation);
     }
 
     for(usize ri = frameBodyMoveEvents.size(); ri > 0u; --ri){
@@ -566,12 +603,12 @@ void PreparePrevEcsBodyTransformSnapshots(
         if(bodyIdx >= cast<u32>(bodyCount) || snapshotBodyStamps[bodyIdx] == stamp)
             continue;
         snapshotBodyStamps[bodyIdx] = stamp;
-        SetBodyTransformSnapshotBoth(ev.bodyId, ev.transform(), snapshots);
+        SetBodyTransformSnapshotBoth(ev.bodyId, ev.transform(), snapshots, snapshotMeta);
     }
 
     for(usize i = 0u; i < dirtyPrevBodyIndices.size(); ++i){
         const u32 bodyIdx = dirtyPrevBodyIndices[i];
-        if(bodyIdx < cast<u32>(bodyCount) && snapshotBodyStamps[bodyIdx] != stamp && snapshots[bodyIdx].valid)
+        if(bodyIdx < cast<u32>(bodyCount) && snapshotBodyStamps[bodyIdx] != stamp && IsEcsSnapshotMetaValid(snapshotMeta[bodyIdx]))
             snapshots[bodyIdx].prevTransform = snapshots[bodyIdx].currTransform;
     }
     dirtyPrevBodyIndices.clear();
@@ -580,11 +617,15 @@ void PreparePrevEcsBodyTransformSnapshots(
 void CommitCurrEcsBodyTransformSnapshots(
     in PhysicsWorld physicsWorld,
     mut Vector<u32> dirtyPrevBodyIndices,
-    mut Vector<EcsBodyTransformSnapshot> snapshots
+    mut Vector<EcsBodyTransformSnapshot> snapshots,
+    mut Vector<u32> snapshotMeta
 ){
     const Span<BodyMoveEvent> moves = physicsWorld.bodyMoveEvents();
-    if(snapshots.size() < physicsWorld.m_bodies.size())
-        snapshots.resize(physicsWorld.m_bodies.size());
+    const usize targetSize = Max(snapshots.size(), physicsWorld.m_bodies.size());
+    if(snapshots.size() < targetSize)
+        snapshots.resize(targetSize);
+    if(snapshotMeta.size() < targetSize)
+        snapshotMeta.resize(targetSize, 0u);
     dirtyPrevBodyIndices.reserve(dirtyPrevBodyIndices.size() + moves.size());
     for(usize i = 0u; i < moves.size(); ++i){
         in BodyMoveEvent ev = moves[i];
@@ -593,13 +634,14 @@ void CommitCurrEcsBodyTransformSnapshots(
         const u32 bodyIdx = ev.bodyId.index;
         if(bodyIdx >= cast<u32>(snapshots.size()))
             snapshots.resize(cast<usize>(bodyIdx) + 1u);
+        if(bodyIdx >= cast<u32>(snapshotMeta.size()))
+            snapshotMeta.resize(cast<usize>(bodyIdx) + 1u, 0u);
         mut EcsBodyTransformSnapshot snap = snapshots[bodyIdx];
         const Transform3D curXf = ev.transform();
-        if(!snap.valid || snap.generation != ev.bodyId.generation)
+        if(!EcsSnapshotMetaMatches(snapshotMeta[bodyIdx], ev.bodyId.generation))
             snap.prevTransform = curXf;
         snap.currTransform = curXf;
-        snap.generation = ev.bodyId.generation;
-        snap.valid = true;
+        snapshotMeta[bodyIdx] = PackEcsSnapshotMeta(ev.bodyId.generation);
         dirtyPrevBodyIndices.push_back(bodyIdx);
     }
 }
@@ -1256,6 +1298,7 @@ void PruneRemovedPhysicsEntities(
     mut HashMap<EntityID, Name> syncedRigidBodyTags,
     mut HashMap<EntityID, Name> syncedColliderTags,
     mut Vector<EcsBodyTransformSnapshot> bodyTransformSnapshots,
+    mut Vector<u32> bodyTransformSnapshotMeta,
     mut EcsPhysicsSyncScratch scratch,
     mut b8 outPrunedAnyTag
 ){
@@ -1353,7 +1396,7 @@ void PruneRemovedPhysicsEntities(
                 const EntityID e = scratch.deadBodies[i];
                 const BodyId bId = entityRecords.at(e).bodyId;
                 EraseSlotOwnerIfMatches(bId.index, bId.generation, bodyIndexToEntity);
-                ClearBodyTransformSnapshotIfMatches(bId, bodyTransformSnapshots);
+                ClearBodyTransformSnapshotIfMatches(bId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                 ClearStaticBodyPoseCacheIfMatches(bId, scratch.staticBodyPoseCache);
                 if(physicsWorld.isValidBody(bId))
                     physicsWorld.destroyBody(bId);
@@ -1645,13 +1688,14 @@ void SyncEcsEntitiesToPhysicsWorld(
     mut HashMap<EntityID, Name> syncedRigidBodyTags,
     mut HashMap<EntityID, Name> syncedColliderTags,
     mut Vector<EcsBodyTransformSnapshot> bodyTransformSnapshots,
+    mut Vector<u32> bodyTransformSnapshotMeta,
     mut EcsPhysicsSyncScratch scratch,
     mut b8 outHasAnyPhysicsParents,
     mut b8 outHasDrivenKinematic
 ){
     outHasAnyPhysicsParents = false;
     outHasDrivenKinematic = false;
-    scratch.drivenKinematicEntities.clear();
+    scratch.drivenKinematicEntries.clear();
 
     b8 prunedAnyTag = false;
     PruneRemovedPhysicsEntities(
@@ -1666,6 +1710,7 @@ void SyncEcsEntitiesToPhysicsWorld(
         syncedRigidBodyTags,
         syncedColliderTags,
         bodyTransformSnapshots,
+        bodyTransformSnapshotMeta,
         scratch,
         prunedAnyTag
     );
@@ -1751,21 +1796,17 @@ void SyncEcsEntitiesToPhysicsWorld(
 
     const b8 didPrepassTags = hasNamedPhysicsParents;
     const b8 hasAnyPhysicsParents = outHasAnyPhysicsParents;
+    const b8 bodyHandlesTrusted = scratch.hasSyncedTopologyVersion && (physicsWorld.m_topologyVersion == scratch.lastSyncedTopologyVersion);
     mut World worldForBodyView = world;
     scratch.deferredDynamicBodyEntities.clear();
     world.view<RigidBodyComponent, TransformComponent>().each(
-        lambda[in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut outHasDrivenKinematic, mut anyTagErased](
+        lambda[in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in bodyHandlesTrusted, mut worldForBodyView, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut outHasDrivenKinematic, mut anyTagErased](
             in EntityID entity,
             mut RigidBodyComponent rb,
             in TransformComponent xf
         ) -> void{
             if(!didPrepassTags)
                 SyncComponentEntityTag(entity, rb.entityTag, needTagRecovery, worldForBodyView, rb.syncedEntityTag, namedEntities, syncedRigidBodyTags, anyTagErased);
-
-            if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled){
-                outHasDrivenKinematic = true;
-                scratch.drivenKinematicEntities.push_back(entity);
-            }
 
             if(
                 !rb.dirty
@@ -1774,9 +1815,12 @@ void SyncEcsEntitiesToPhysicsWorld(
                 && rb.runtimeBodyId.index < cast<u32>(bodyIndexToEntity.size())
                 && bodyIndexToEntity[rb.runtimeBodyId.index].entity == entity
                 && bodyIndexToEntity[rb.runtimeBodyId.index].generation == rb.runtimeBodyId.generation
-                && physicsWorld.isValidBody(rb.runtimeBodyId)
-            )
+                && (bodyHandlesTrusted || physicsWorld.isValidBody(rb.runtimeBodyId))
+            ){
+                if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled)
+                    PushDrivenKinematicEntry(entity, rb.runtimeBodyId, bodyIndexToEntity[rb.runtimeBodyId.index].hasPhysicsParent, scratch.drivenKinematicEntries, outHasDrivenKinematic);
                 return;
+            }
 
             if(
                 !rb.dirty
@@ -1793,7 +1837,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     staticCache.valid
                     && staticCache.generation == rb.runtimeBodyId.generation
                     && staticCache.entity == entity
-                    && MatchesPhysicsBodyTypeAndEnabled(physicsWorld, rb.runtimeBodyId, BodyType::Static, rb.isEnabled)
+                    && (bodyHandlesTrusted || MatchesPhysicsBodyTypeAndEnabled(physicsWorld, rb.runtimeBodyId, BodyType::Static, rb.isEnabled))
                     && EcsTransformMatchesSynced(xf, staticCache.syncedTransform)
                 )
                     return;
@@ -1850,7 +1894,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                 if(found != entityRecords.end() && found.value().bodyId.valid()){
                     const BodyId oldBodyId = found.value().bodyId;
                     EraseSlotOwnerIfMatches(oldBodyId.index, oldBodyId.generation, bodyIndexToEntity);
-                    ClearBodyTransformSnapshotIfMatches(oldBodyId, bodyTransformSnapshots);
+                    ClearBodyTransformSnapshotIfMatches(oldBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                     ClearStaticBodyPoseCacheIfMatches(oldBodyId, scratch.staticBodyPoseCache);
                     if(physicsWorld.isValidBody(oldBodyId))
                         physicsWorld.destroyBody(oldBodyId);
@@ -1900,7 +1944,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                     InsertBodySlotOwner(created.value().index, created.value().generation, entity, hasParentNow, bodyIndexToEntity);
                     if(rb.type != BodyType::Static){
-                        SetBodyTransformSnapshotBoth(created.value(), worldPose.transform, bodyTransformSnapshots);
+                        SetBodyTransformSnapshotBoth(created.value(), worldPose.transform, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         ClearStaticBodyPoseCacheIfMatches(created.value(), scratch.staticBodyPoseCache);
                         scratch.pendingWriteBackBodyIndices.push_back(created.value().index);
                     }
@@ -1910,6 +1954,8 @@ void SyncEcsEntitiesToPhysicsWorld(
                     else{
                         ClearStaticBodyPoseCacheIfMatches(created.value(), scratch.staticBodyPoseCache);
                     }
+                    if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled)
+                        PushDrivenKinematicEntry(entity, created.value(), hasParentNow, scratch.drivenKinematicEntries, outHasDrivenKinematic);
                 }
                 return;
             }
@@ -1941,10 +1987,6 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                     else if(actualType.has_value()){
                         rb.type = actualType.value();
-                        if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled){
-                            outHasDrivenKinematic = true;
-                            scratch.drivenKinematicEntities.push_back(entity);
-                        }
                     }
                 }
                 const Expected<BodyType> curTypeExp = physicsWorld.tryGetBodyType(bodyId);
@@ -1998,12 +2040,12 @@ void SyncEcsEntitiesToPhysicsWorld(
                     if(bodyId.index < cast<u32>(bodyIndexToEntity.size()) && bodyIndexToEntity[bodyId.index].generation == bodyId.generation)
                         bodyIndexToEntity[bodyId.index].hasPhysicsParent = hasParentNow;
                     if(rb.type != BodyType::Static){
-                        SetBodyTransformSnapshotBoth(bodyId, worldPose.transform, bodyTransformSnapshots);
+                        SetBodyTransformSnapshotBoth(bodyId, worldPose.transform, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         ClearStaticBodyPoseCacheIfMatches(bodyId, scratch.staticBodyPoseCache);
                         scratch.pendingWriteBackBodyIndices.push_back(bodyId.index);
                     }
                     else{
-                        ClearBodyTransformSnapshotIfMatches(bodyId, bodyTransformSnapshots);
+                        ClearBodyTransformSnapshotIfMatches(bodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         if(!hasParentNow)
                             SetStaticBodyPoseCache(bodyId, entity, worldPose.transform, scratch.staticBodyPoseCache);
                         else
@@ -2011,12 +2053,24 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                 }
             }
+
+            if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled && rb.runtimeBodyId.valid()){
+                b8 hasParentNow = false;
+                if(hasAnyPhysicsParents){
+                    if(rb.runtimeBodyId.index < cast<u32>(bodyIndexToEntity.size()) && bodyIndexToEntity[rb.runtimeBodyId.index].generation == rb.runtimeBodyId.generation)
+                        hasParentNow = bodyIndexToEntity[rb.runtimeBodyId.index].hasPhysicsParent;
+                    else
+                        hasParentNow = worldForBodyView.hasComponent<PhysicsParentComponent>(entity);
+                }
+                PushDrivenKinematicEntry(entity, rb.runtimeBodyId, hasParentNow, scratch.drivenKinematicEntries, outHasDrivenKinematic);
+            }
         }
     );
 
     in Optional<mut AssetManager> assetsRef = assetManager;
+    const b8 shapeHandlesTrusted = scratch.hasSyncedTopologyVersion && (physicsWorld.m_topologyVersion == scratch.lastSyncedTopologyVersion);
     world.view<ColliderComponent, TransformComponent>().each(
-        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut anyTagErased](
+        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in shapeHandlesTrusted, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut anyTagErased](
             in EntityID entity,
             mut ColliderComponent col,
             in TransformComponent xf
@@ -2036,7 +2090,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                 && col.runtimeShapeId.index < cast<u32>(shapeIndexToEntity.size())
                 && shapeIndexToEntity[col.runtimeShapeId.index].entity == entity
                 && shapeIndexToEntity[col.runtimeShapeId.index].generation == col.runtimeShapeId.generation
-                && physicsWorld.isValidShape(col.runtimeShapeId)
+                && (shapeHandlesTrusted || physicsWorld.isValidShape(col.runtimeShapeId))
             ){
                 b8 hasParent = false;
                 if(hasAnyPhysicsParents){
@@ -2057,7 +2111,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                             || extraId.index >= cast<u32>(shapeIndexToEntity.size())
                             || shapeIndexToEntity[extraId.index].entity != entity
                             || shapeIndexToEntity[extraId.index].generation != extraId.generation
-                            || !physicsWorld.isValidShape(extraId)
+                            || (!shapeHandlesTrusted && !physicsWorld.isValidShape(extraId))
                         ){
                             extraShapesValid = false;
                             break;
@@ -2090,8 +2144,8 @@ void SyncEcsEntitiesToPhysicsWorld(
                     staticCache.valid
                     && staticCache.generation == col.boundBodyId.generation
                     && staticCache.entity == entity
-                    && MatchesPhysicsBodyTypeAndEnabled(physicsWorld, col.boundBodyId, BodyType::Static, true)
-                    && physicsWorld.isValidShape(col.runtimeShapeId)
+                    && (shapeHandlesTrusted || MatchesPhysicsBodyTypeAndEnabled(physicsWorld, col.boundBodyId, BodyType::Static, true))
+                    && (shapeHandlesTrusted || physicsWorld.isValidShape(col.runtimeShapeId))
                     && EcsTransformMatchesSynced(xf, staticCache.syncedTransform)
                 ){
                     b8 extraShapesValid = true;
@@ -2102,7 +2156,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                             || extraId.index >= cast<u32>(shapeIndexToEntity.size())
                             || shapeIndexToEntity[extraId.index].entity != entity
                             || shapeIndexToEntity[extraId.index].generation != extraId.generation
-                            || !physicsWorld.isValidShape(extraId)
+                            || (!shapeHandlesTrusted && !physicsWorld.isValidShape(extraId))
                         ){
                             extraShapesValid = false;
                             break;
@@ -2136,7 +2190,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     const Expected<BodyType> curBt = physicsWorld.tryGetBodyType(targetBodyId);
                     if(curBt.has_value() && curBt.value() != BodyType::Static){
                         physicsWorld.setBodyType(targetBodyId, BodyType::Static);
-                        ClearBodyTransformSnapshotIfMatches(targetBodyId, bodyTransformSnapshots);
+                        ClearBodyTransformSnapshotIfMatches(targetBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         ClearStaticBodyPoseCacheIfMatches(targetBodyId, scratch.staticBodyPoseCache);
                         existingRec.syncedUseCustomMass = false;
                         existingRec.hasBodyPose = false;
@@ -2175,7 +2229,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     if(initialRecIt != entityRecords.end() && initialRecIt.value().bodyId.valid()){
                         const BodyId staleBodyId = initialRecIt.value().bodyId;
                         EraseSlotOwnerIfMatches(staleBodyId.index, staleBodyId.generation, bodyIndexToEntity);
-                        ClearBodyTransformSnapshotIfMatches(staleBodyId, bodyTransformSnapshots);
+                        ClearBodyTransformSnapshotIfMatches(staleBodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
                         ClearStaticBodyPoseCacheIfMatches(staleBodyId, scratch.staticBodyPoseCache);
                     }
                     EcsWorldPose worldPose;
@@ -2306,7 +2360,7 @@ void SyncEcsEntitiesToPhysicsWorld(
             const Expected<BodyType> actualType = physicsWorld.tryGetBodyType(bodyId);
             if(actualType.has_value())
                 rb.type = actualType.value();
-            ClearBodyTransformSnapshotIfMatches(bodyId, bodyTransformSnapshots);
+            ClearBodyTransformSnapshotIfMatches(bodyId, bodyTransformSnapshots, bodyTransformSnapshotMeta);
             rb.dirty = false;
             continue;
         }
@@ -2328,7 +2382,7 @@ void SyncEcsEntitiesToPhysicsWorld(
         rec.syncedBodyPose = worldPose;
         rec.hasBodyPose = true;
         rec.hadPhysicsParent = hasParentNow;
-        SetBodyTransformSnapshotBoth(bodyId, worldPose.transform, bodyTransformSnapshots);
+        SetBodyTransformSnapshotBoth(bodyId, worldPose.transform, bodyTransformSnapshots, bodyTransformSnapshotMeta);
         ClearStaticBodyPoseCacheIfMatches(bodyId, scratch.staticBodyPoseCache);
         scratch.pendingWriteBackBodyIndices.push_back(bodyId.index);
     }
@@ -2338,8 +2392,9 @@ void SyncEcsEntitiesToPhysicsWorld(
     in HashMap<EntityID, EcsEntityPhysicsRecord> bodiesRef = entityRecords;
     in HashMap<Name, EntityID> namedEntitiesRef = namedEntities;
     in Vector<EcsSlotOwner> bodyIndexToEntityRef = bodyIndexToEntity;
+    const b8 jointBodyHandlesTrusted = scratch.hasSyncedTopologyVersion && (physicsWorld.m_topologyVersion == scratch.lastSyncedTopologyVersion);
     world.view<JointComponent>().each(
-        lambda[in bodiesRef, in namedEntitiesRef, in bodyIndexToEntityRef, in hasAnyPhysicsParents, mut worldForJoints, mut physicsWorld, mut entityJoints, mut jointIndexToEntity, mut scratch](
+        lambda[in bodiesRef, in namedEntitiesRef, in bodyIndexToEntityRef, in hasAnyPhysicsParents, in jointBodyHandlesTrusted, mut worldForJoints, mut physicsWorld, mut entityJoints, mut jointIndexToEntity, mut scratch](
             in EntityID entity,
             mut JointComponent jc
         ) -> void{
@@ -2370,8 +2425,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     && worldForJoints.alive(jCache.entA)
                     && worldForJoints.alive(jCache.entB)
                     && physicsWorld.isValidJoint(jc.runtimeJointId)
-                    && physicsWorld.isValidBody(jCache.bodyIdA)
-                    && physicsWorld.isValidBody(jCache.bodyIdB)
+                    && (jointBodyHandlesTrusted || (physicsWorld.isValidBody(jCache.bodyIdA) && physicsWorld.isValidBody(jCache.bodyIdB)))
                 ){
                     f32x4 fastScaleA(1.0f, 1.0f, 1.0f, 0.0f);
                     if(hasAnyPhysicsParents && worldForJoints.hasComponent<PhysicsParentComponent>(jCache.entA)){
@@ -2704,34 +2758,33 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
         }
     );
+
+    scratch.lastSyncedTopologyVersion = physicsWorld.m_topologyVersion;
+    scratch.hasSyncedTopologyVersion = true;
 }
 
 void SnapshotDrivenKinematicTargets(
     in PhysicsWorld physicsWorld,
-    in Vector<EntityID> drivenKinematicEntities,
+    in Vector<EcsDrivenKinematicEntry> drivenKinematicEntries,
     in b8 hasAnyPhysicsParents,
     mut World world,
     mut Vector<EcsKinematicInterpolationTarget> outTargets
 ){
     outTargets.clear();
-    for(usize i = 0u; i < drivenKinematicEntities.size(); ++i){
-        const EntityID entity = drivenKinematicEntities[i];
-        const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
-        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
-        if(!rbOpt.has_value() || !xfOpt.has_value())
+    for(usize i = 0u; i < drivenKinematicEntries.size(); ++i){
+        in EcsDrivenKinematicEntry driven = drivenKinematicEntries[i];
+        if(!physicsWorld.isValidBody(driven.bodyId))
             continue;
-        in RigidBodyComponent rb = rbOpt.value();
-        if(rb.type != BodyType::Kinematic || !rb.driveKinematicFromTransform || !rb.isEnabled)
+        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(driven.entity);
+        if(!xfOpt.has_value())
             continue;
-        if(!physicsWorld.isValidBody(rb.runtimeBodyId))
-            continue;
-        const Expected<Transform3D> curXf = physicsWorld.tryGetBodyTransform(rb.runtimeBodyId);
+        const Expected<Transform3D> curXf = physicsWorld.tryGetBodyTransform(driven.bodyId);
         if(!curXf.has_value())
             continue;
         in TransformComponent xf = xfOpt.value();
         Transform3D targetXf;
-        if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity))
-            targetXf = ResolveEntityWorldPose(entity, world).transform;
+        if(hasAnyPhysicsParents && driven.hasPhysicsParent)
+            targetXf = ResolveEntityWorldPose(driven.entity, world).transform;
         else
             targetXf = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
         const VectorSingle q0 = SafeNormalizeQuat(VectorSingle(curXf.value().rotation));
@@ -2739,7 +2792,7 @@ void SnapshotDrivenKinematicTargets(
         if(Vector4Dot(q0, q1).x < 0.0f)
             q1 = -q1;
         EcsKinematicInterpolationTarget entry;
-        entry.bodyId = rb.runtimeBodyId;
+        entry.bodyId = driven.bodyId;
         entry.startTransform = Transform3D(VectorSingle(curXf.value().position), q0);
         entry.targetTransform = Transform3D(VectorSingle(targetXf.position), q1);
         outTargets.push_back(entry);
@@ -2766,7 +2819,7 @@ void ApplyInterpolatedKinematicTargets(
 }
 
 void ApplyKinematicTargetsFromEcs(
-    in Vector<EntityID> drivenKinematicEntities,
+    in Vector<EcsDrivenKinematicEntry> drivenKinematicEntries,
     in f32 fixedDt,
     in b8 hasAnyPhysicsParents,
     mut World world,
@@ -2775,24 +2828,20 @@ void ApplyKinematicTargetsFromEcs(
     if(!IsFinite(fixedDt) || fixedDt <= 0.0f)
         return;
 
-    for(usize i = 0u; i < drivenKinematicEntities.size(); ++i){
-        const EntityID entity = drivenKinematicEntities[i];
-        const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
-        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
-        if(!rbOpt.has_value() || !xfOpt.has_value())
+    for(usize i = 0u; i < drivenKinematicEntries.size(); ++i){
+        in EcsDrivenKinematicEntry driven = drivenKinematicEntries[i];
+        if(!physicsWorld.isValidBody(driven.bodyId))
             continue;
-        in RigidBodyComponent rb = rbOpt.value();
-        if(rb.type != BodyType::Kinematic || !rb.driveKinematicFromTransform || !rb.isEnabled)
-            continue;
-        if(!physicsWorld.isValidBody(rb.runtimeBodyId))
+        const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(driven.entity);
+        if(!xfOpt.has_value())
             continue;
         in TransformComponent xf = xfOpt.value();
         Transform3D targetXf;
-        if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity))
-            targetXf = ResolveEntityWorldPose(entity, world).transform;
+        if(hasAnyPhysicsParents && driven.hasPhysicsParent)
+            targetXf = ResolveEntityWorldPose(driven.entity, world).transform;
         else
             targetXf = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
-        physicsWorld.setKinematicTarget(rb.runtimeBodyId, targetXf, fixedDt);
+        physicsWorld.setKinematicTarget(driven.bodyId, targetXf, fixedDt);
     }
 }
 
@@ -2881,17 +2930,28 @@ void WriteBackSinglePhysicsBody(
 
 void WriteBackPhysicsTransformsToEcs(
     in PhysicsWorld physicsWorld,
-    mut World world,
-    in Vector<BodyMoveEvent> frameBodyMoveEvents,
+    in Span<BodyMoveEvent> frameBodyMoveEvents,
     in Vector<EcsSlotOwner> bodyIndexToEntity,
     in b8 hasAnyPhysicsParents,
-    mut EcsPhysicsSyncScratch scratch
+    in b8 commitSnapshotsFromMoves,
+    mut World world,
+    mut EcsPhysicsSyncScratch scratch,
+    mut Vector<EcsBodyTransformSnapshot> snapshots,
+    mut Vector<u32> snapshotMeta
 ){
     const usize worldBodySize = physicsWorld.m_bodies.size();
     const u32 worldBodyCount = cast<u32>(worldBodySize);
     const u32 ownerCount = cast<u32>(bodyIndexToEntity.size());
     if(scratch.writeBackBodyStamps.size() < worldBodySize)
         scratch.writeBackBodyStamps.resize(worldBodySize, 0u);
+    if(commitSnapshotsFromMoves){
+        const usize snapTargetSize = Max(snapshots.size(), worldBodySize);
+        if(snapshots.size() < snapTargetSize)
+            snapshots.resize(snapTargetSize);
+        if(snapshotMeta.size() < snapTargetSize)
+            snapshotMeta.resize(snapTargetSize, 0u);
+        scratch.dirtyPrevSnapshotBodyIndices.reserve(scratch.dirtyPrevSnapshotBodyIndices.size() + frameBodyMoveEvents.size());
+    }
     const u32 stamp = NextEcsPhysicsStamp(scratch.writeBackBodyStamps, scratch.writeBackStamp);
 
     scratch.writeBackDisablePoseCache = false;
@@ -2964,8 +3024,24 @@ void WriteBackPhysicsTransformsToEcs(
 
     for(usize i = 0u; i < frameBodyMoveEvents.size(); ++i){
         in BodyMoveEvent ev = frameBodyMoveEvents[i];
-        if(ev.bodyId.valid() && ev.bodyId.index < worldBodyCount && scratch.writeBackBodyStamps[ev.bodyId.index] != stamp)
-            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, ev.bodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
+        if(!ev.bodyId.valid())
+            continue;
+        const u32 bodyIdx = ev.bodyId.index;
+        if(commitSnapshotsFromMoves){
+            if(bodyIdx >= cast<u32>(snapshots.size()))
+                snapshots.resize(cast<usize>(bodyIdx) + 1u);
+            if(bodyIdx >= cast<u32>(snapshotMeta.size()))
+                snapshotMeta.resize(cast<usize>(bodyIdx) + 1u, 0u);
+            mut EcsBodyTransformSnapshot snap = snapshots[bodyIdx];
+            const Transform3D curXf = ev.transform();
+            if(!EcsSnapshotMetaMatches(snapshotMeta[bodyIdx], ev.bodyId.generation))
+                snap.prevTransform = curXf;
+            snap.currTransform = curXf;
+            snapshotMeta[bodyIdx] = PackEcsSnapshotMeta(ev.bodyId.generation);
+            scratch.dirtyPrevSnapshotBodyIndices.push_back(bodyIdx);
+        }
+        if(bodyIdx < worldBodyCount && scratch.writeBackBodyStamps[bodyIdx] != stamp)
+            WriteBackSinglePhysicsBody(physicsWorld, world, bodyIndexToEntity, hasAnyPhysicsParents, bodyIdx, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth, scratch.writeBackDisablePoseCache);
     }
 
     for(usize i = 0u; i < scratch.prevAwakeWriteBackBodyIndices.size(); ++i){

@@ -696,7 +696,7 @@ Manifold CollideShapePair(
 }
 
 f32 CombineMaterialFriction(in f32 a, in f32 b){
-    return Sqrt(Max(a, 0.0f) * Max(b, 0.0f));
+    return SqrtFast(Max(a, 0.0f) * Max(b, 0.0f));
 }
 
 f32 CombineMaterialRestitution(in f32 a, in f32 b){

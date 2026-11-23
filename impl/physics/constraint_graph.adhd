@@ -8,60 +8,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class BitSet{
-    private Vector<u64> m_words;
-
-    public void clearAll(){
-        for(usize i = 0u; i < this.m_words.size(); ++i)
-            this.m_words[i] = 0u;
-    }
-
-    public void ensureCapacity(in u32 bitIndex){
-        const usize wordIndex = cast<usize>(bitIndex >> 6u);
-        if(wordIndex >= this.m_words.size())
-            this.m_words.resize(wordIndex + 1u, 0u);
-    }
-
-    public void setBit(in u32 bitIndex){
-        this.ensureCapacity(bitIndex);
-        const usize wordIndex = cast<usize>(bitIndex >> 6u);
-        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
-        this.m_words[wordIndex] = this.m_words[wordIndex] | mask;
-    }
-
-    public void clearBit(in u32 bitIndex){
-        const usize wordIndex = cast<usize>(bitIndex >> 6u);
-        if(wordIndex >= this.m_words.size())
-            return;
-        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
-        this.m_words[wordIndex] = this.m_words[wordIndex] & (~mask);
-    }
-
-    public b8 getBit(in u32 bitIndex)const{
-        const usize wordIndex = cast<usize>(bitIndex >> 6u);
-        if(wordIndex >= this.m_words.size())
-            return false;
-        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
-        return (this.m_words[wordIndex] & mask) != 0u;
-    }
-}
-
 class GraphColor{
-    public BitSet bodySet;
     public Vector<u32> contactIds;
 
     public void clear(){
-        this.bodySet.clearAll();
         this.contactIds.clear();
     }
 }
 
 class ConstraintGraph{
     public Array<GraphColor, s_GraphColorCount> colors;
+    public Vector<u32> bodyColorMasks;
 
     public void clear(){
         for(usize i = 0u; i < s_GraphColorCount; ++i)
             this.colors[i].clear();
+        for(usize i = 0u; i < this.bodyColorMasks.size(); ++i)
+            this.bodyColorMasks[i] = 0u;
     }
 }
 
@@ -78,40 +41,38 @@ void AddContactToGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Co
     const b8 staticA = (bodies[bodyIdA].type == BodyType::Static || bodies[bodyIdA].type == BodyType::Kinematic);
     const b8 staticB = (bodies[bodyIdB].type == BodyType::Static || bodies[bodyIdB].type == BodyType::Kinematic);
 
+    u32 maskA = 0u;
+    if(!staticA && cast<usize>(bodyIdA) < graph.bodyColorMasks.size())
+        maskA = graph.bodyColorMasks[bodyIdA];
+    u32 maskB = 0u;
+    if(!staticB && cast<usize>(bodyIdB) < graph.bodyColorMasks.size())
+        maskB = graph.bodyColorMasks[bodyIdB];
+    const u32 used = maskA | maskB;
+
     usize chosenColor = s_OverflowColorIndex;
     if(!staticA && !staticB){
-        for(usize c = 0u; c < s_DynamicColorCount; ++c){
-            if(!graph.colors[c].bodySet.getBit(bodyIdA) && !graph.colors[c].bodySet.getBit(bodyIdB)){
-                chosenColor = c;
-                break;
-            }
-        }
+        const u32 avail = (~used) & 0x000fffffu;
+        if(avail != 0u)
+            chosenColor = cast<usize>(CountTrailingZerosU32(avail));
     }
     else{
-        b8 found = false;
-        for(usize c = s_DynamicColorCount; c < s_OverflowColorIndex; ++c){
-            if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){
-                chosenColor = c;
-                found = true;
-                break;
-            }
-        }
-        if(!found){
-            for(usize c = 0u; c < s_DynamicColorCount; ++c){
-                if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){
-                    chosenColor = c;
-                    break;
-                }
-            }
-        }
+        u32 avail = (~used) & 0x00700000u;
+        if(avail == 0u)
+            avail = (~used) & 0x000fffffu;
+        if(avail != 0u)
+            chosenColor = cast<usize>(CountTrailingZerosU32(avail));
     }
 
     mut GraphColor color = graph.colors[chosenColor];
     if(chosenColor != s_OverflowColorIndex){
+        const u32 colorBit = 1u << cast<u32>(chosenColor);
+        const usize requiredSize = cast<usize>(Max(bodyIdA, bodyIdB)) + 1u;
+        if(requiredSize > graph.bodyColorMasks.size())
+            graph.bodyColorMasks.resize(requiredSize, 0u);
         if(!staticA)
-            color.bodySet.setBit(bodyIdA);
+            graph.bodyColorMasks[bodyIdA] |= colorBit;
         if(!staticB)
-            color.bodySet.setBit(bodyIdB);
+            graph.bodyColorMasks[bodyIdB] |= colorBit;
     }
 
     contact.colorIndex = cast<u32>(chosenColor);
@@ -141,10 +102,11 @@ void RemoveContactFromGraph(mut ConstraintGraph graph, in Vector<Body> bodies, m
     }
 
     if(colorIdx != s_OverflowColorIndex){
-        if(bodies[bodyIdA].type == BodyType::Dynamic)
-            color.bodySet.clearBit(bodyIdA);
-        if(bodies[bodyIdB].type == BodyType::Dynamic)
-            color.bodySet.clearBit(bodyIdB);
+        const u32 clearMask = ~(1u << colorIdx);
+        if(bodies[bodyIdA].type == BodyType::Dynamic && cast<usize>(bodyIdA) < graph.bodyColorMasks.size())
+            graph.bodyColorMasks[bodyIdA] &= clearMask;
+        if(bodies[bodyIdB].type == BodyType::Dynamic && cast<usize>(bodyIdB) < graph.bodyColorMasks.size())
+            graph.bodyColorMasks[bodyIdB] &= clearMask;
     }
 
     contact.colorIndex = s_NullIndex;

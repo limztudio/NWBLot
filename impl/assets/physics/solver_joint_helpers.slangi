@@ -85,7 +85,7 @@ void nwbPhysicsInvertSymmetric3(
 }
 
 float nwbPhysicsLinearInvMassDot(const float3 a, const float3 b, const float invMass, const uint flags){
-    const float3 ma = nwbPhysicsApplyLinearLocks(a, flags);
+    const float3 ma = ((flags & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(a, flags) : a;
     return invMass * dot(ma, b);
 }
 
@@ -106,7 +106,10 @@ void nwbPhysicsComputePointEffectiveMass(
     out float3 kInv1,
     out float3 kInv2
 ){
-    const float3 sumM = nwbPhysicsApplyLinearLocks(float3(invMassA, invMassA, invMassA), flagsA) + nwbPhysicsApplyLinearLocks(float3(invMassB, invMassB, invMassB), flagsB);
+    const float3 mAVec = float3(invMassA, invMassA, invMassA);
+    const float3 mBVec = float3(invMassB, invMassB, invMassB);
+    const float3 sumM = (((flagsA & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(mAVec, flagsA) : mAVec)
+        + (((flagsB & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(mBVec, flagsB) : mBVec);
     const float3 axX = cross(rA, float3(1.0f, 0.0f, 0.0f));
     const float3 axY = cross(rA, float3(0.0f, 1.0f, 0.0f));
     const float3 axZ = cross(rA, float3(0.0f, 0.0f, 1.0f));
@@ -154,10 +157,18 @@ void nwbPhysicsApplyLinearImpulsePair(
     inout float3 vB,
     inout float3 wB
 ){
-    vA = nwbPhysicsApplyLinearLocks(vA - invMassA * P, flagsA);
-    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, cross(rA, P)), flagsA);
-    vB = nwbPhysicsApplyLinearLocks(vB + invMassB * P, flagsB);
-    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, cross(rB, P)), flagsB);
+    vA -= invMassA * P;
+    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, cross(rA, P));
+    if((flagsA & 0x3Fu) != 0u){
+        vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
+        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+    }
+    vB += invMassB * P;
+    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, cross(rB, P));
+    if((flagsB & 0x3Fu) != 0u){
+        vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
+        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
+    }
 }
 
 void nwbPhysicsSolve2DLinearPlaneRows(
@@ -277,8 +288,14 @@ void nwbPhysicsSolve3DAngularLockRow(
     const float3 relW = wB - wA;
     const float3 deltaL = nwbPhysicsMulMat3Rows(kAngInv0, kAngInv1, kAngInv2, -(relW + bias)) * mScale - oldL * iScale;
     inOutImpulse = oldL + deltaL;
-    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, deltaL), flagsA);
-    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, deltaL), flagsB);
+    const float3 wADelta = nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, deltaL);
+    wA -= wADelta;
+    if((flagsA & 0x38u) != 0u)
+        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+    const float3 wBDelta = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, deltaL);
+    wB += wBDelta;
+    if((flagsB & 0x38u) != 0u)
+        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
 }
 
 
@@ -379,8 +396,12 @@ void nwbPhysicsSolveSingleJoint(
             if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
                 const float3 linP = linearImpulse.xyz + axisA0 * (limitImpulses.z + limitImpulses.x + limitImpulses.y);
                 nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA0Eff, rB0, linP, flagsA, flagsB, vA, wA, vB, wB);
-                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angularImpulse.xyz), flagsA);
-                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angularImpulse.xyz), flagsB);
+                wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angularImpulse.xyz);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angularImpulse.xyz);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
             else{
                 const float3 linP = linearImpulse.xyz + axisA0 * (limitImpulses.w + limitImpulses.x + limitImpulses.y);
@@ -389,8 +410,12 @@ void nwbPhysicsSolveSingleJoint(
                 const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
                 const float3 axleA0 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisB, nwbPhysicsQuatMul(qA0, refRot)), float3(0.0f, 0.0f, 1.0f));
                 const float3 angP = angularImpulse.xyz + axleA0 * limitImpulses.z;
-                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angP), flagsA);
-                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP), flagsB);
+                wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angP);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
         }
         else{
@@ -416,8 +441,12 @@ void nwbPhysicsSolveSingleJoint(
                 angP += axisB0 * (limitImpulses.x + limitImpulses.y) + swingAxis0 * limitImpulses.w;
             }
             if((jType == NWB_PHYSICS_JOINT_TYPE_FIXED || jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE || jType == NWB_PHYSICS_JOINT_TYPE_MOTOR || jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL) && any(angP != float3(0.0f, 0.0f, 0.0f))){
-                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angP), flagsA);
-                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP), flagsB);
+                wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angP);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
         }
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
@@ -596,16 +625,24 @@ void nwbPhysicsSolveSingleJoint(
                     const float appliedCone = newCone - limitImpulses.w;
                     limitImpulses.w = newCone;
                     const float3 coneP = swingAxis * appliedCone;
-                    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP), flagsA);
-                    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP), flagsB);
+                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP);
+                    if((flagsA & 0x38u) != 0u)
+                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP);
+                    if((flagsB & 0x38u) != 0u)
+                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                 }
                 else{
                     const float oldCone = limitImpulses.w;
                     if(oldCone != 0.0f){
                         limitImpulses.w = 0.0f;
                         const float3 coneP = swingAxis * (-oldCone);
-                        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP), flagsA);
-                        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP), flagsB);
+                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                     }
                 }
             }
@@ -628,16 +665,24 @@ void nwbPhysicsSolveSingleJoint(
                     const float appliedLow = newLow - limitImpulses.x;
                     limitImpulses.x = newLow;
                     const float3 limP = axisB * appliedLow;
-                    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                    if((flagsA & 0x38u) != 0u)
+                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                    if((flagsB & 0x38u) != 0u)
+                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                 }
                 else{
                     const float oldLow = limitImpulses.x;
                     if(oldLow != 0.0f){
                         limitImpulses.x = 0.0f;
                         const float3 limP = axisB * (-oldLow);
-                        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                     }
                 }
                 if(twistAngle > highLim){
@@ -646,16 +691,24 @@ void nwbPhysicsSolveSingleJoint(
                     const float appliedHigh = newHigh - limitImpulses.y;
                     limitImpulses.y = newHigh;
                     const float3 limP = axisB * appliedHigh;
-                    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                    if((flagsA & 0x38u) != 0u)
+                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                    if((flagsB & 0x38u) != 0u)
+                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                 }
                 else{
                     const float oldHigh = limitImpulses.y;
                     if(oldHigh != 0.0f){
                         limitImpulses.y = 0.0f;
                         const float3 limP = axisB * (-oldHigh);
-                        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                     }
                 }
             }
@@ -772,8 +825,12 @@ void nwbPhysicsSolveSingleJoint(
         }
         const float3 angDelta = u1 * dL1 + u2 * dL2;
         angularImpulse.xyz = u1 * (oldL1 + dL1) + u2 * (oldL2 + dL2);
-        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angDelta), flagsA);
-        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angDelta), flagsB);
+        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angDelta);
+        if((flagsA & 0x38u) != 0u)
+            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angDelta);
+        if((flagsB & 0x38u) != 0u)
+            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
 
         const float motorSpeed = linSoftMotor.w;
         const float maxMotorForce = baseCenterDeltaMaxMotor.w;
@@ -790,8 +847,12 @@ void nwbPhysicsSolveSingleJoint(
                 const float appliedMot = newMot - limitImpulses.z;
                 limitImpulses.z = newMot;
                 const float3 motP = axisA * appliedMot;
-                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, motP), flagsA);
-                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, motP), flagsB);
+                wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, motP);
+                if((flagsA & 0x38u) != 0u)
+                    wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, motP);
+                if((flagsB & 0x38u) != 0u)
+                    wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
             if(enableLimit && lowLim <= highLim && axialMass > 0.0f){
                 const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
@@ -807,16 +868,24 @@ void nwbPhysicsSolveSingleJoint(
                     const float appliedLow = newLow - limitImpulses.x;
                     limitImpulses.x = newLow;
                     const float3 limP = axisA * appliedLow;
-                    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                    if((flagsA & 0x38u) != 0u)
+                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                    if((flagsB & 0x38u) != 0u)
+                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                 }
                 else{
                     const float oldLow = limitImpulses.x;
                     if(oldLow != 0.0f){
                         limitImpulses.x = 0.0f;
                         const float3 limP = axisA * (-oldLow);
-                        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                     }
                 }
                 if(angle > highLim){
@@ -825,16 +894,24 @@ void nwbPhysicsSolveSingleJoint(
                     const float appliedHigh = newHigh - limitImpulses.y;
                     limitImpulses.y = newHigh;
                     const float3 limP = axisA * appliedHigh;
-                    wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                    wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                    if((flagsA & 0x38u) != 0u)
+                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                    if((flagsB & 0x38u) != 0u)
+                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                 }
                 else{
                     const float oldHigh = limitImpulses.y;
                     if(oldHigh != 0.0f){
                         limitImpulses.y = 0.0f;
                         const float3 limP = axisA * (-oldHigh);
-                        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP), flagsA);
-                        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP), flagsB);
+                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
                     }
                 }
             }
@@ -978,8 +1055,12 @@ void nwbPhysicsSolveSingleJoint(
                 newL *= maxL * rsqrt(lenSq);
             const float3 appliedL = newL - oldL;
             angularImpulse.xyz = newL;
-            wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, appliedL), flagsA);
-            wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, appliedL), flagsB);
+            wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, appliedL);
+            if((flagsA & 0x38u) != 0u)
+                wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+            wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, appliedL);
+            if((flagsB & 0x38u) != 0u)
+                wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
         }
     }
     else if(jType == NWB_PHYSICS_JOINT_TYPE_WHEEL){
@@ -1105,8 +1186,12 @@ void nwbPhysicsSolveSingleJoint(
         }
         const float3 angDelta = wU1 * dL1 + wU2 * dL2;
         angularImpulse.xyz = wU1 * (oldL1 + dL1) + wU2 * (oldL2 + dL2);
-        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angDelta), flagsA);
-        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angDelta), flagsB);
+        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angDelta);
+        if((flagsA & 0x38u) != 0u)
+            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angDelta);
+        if((flagsB & 0x38u) != 0u)
+            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
 
         const float kAxle = dot(axleA, nwbPhysicsMulMat3Rows(sInv0, sInv1, sInv2, axleA));
         const float motorSpeed = linSoftMotor.w;
@@ -1119,8 +1204,12 @@ void nwbPhysicsSolveSingleJoint(
             const float appliedMot = newMot - limitImpulses.z;
             limitImpulses.z = newMot;
             const float3 motP = axleA * appliedMot;
-            wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, motP), flagsA);
-            wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, motP), flagsB);
+            wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, motP);
+            if((flagsA & 0x38u) != 0u)
+                wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+            wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, motP);
+            if((flagsB & 0x38u) != 0u)
+                wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
         }
     }
 

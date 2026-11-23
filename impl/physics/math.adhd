@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/bit.h>"), cpp_name("::CountTrailingZeros")]
+extern i32 CountTrailingZerosU32(in u32 value);
+
+f32 SqrtFast(in f32 v){
+    return VectorSqrt(VectorSingle(v)).x;
+}
+
 f32x3_u32 PackVec3U32(in VectorSingle v, in u32 w){
     return f32x3_u32(v.x, v.y, v.z, w);
 }
@@ -407,7 +414,7 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
 SymMat3 RotateSymMat3(in VectorSingle q, in SymMat3 localMat){
     if(localMat.m01 == 0.0f && localMat.m02 == 0.0f && localMat.m12 == 0.0f && localMat.m00 == localMat.m11 && localMat.m11 == localMat.m22)
         return localMat;
-    if(q.x * q.x + q.y * q.y + q.z * q.z <= 1.0e-12f)
+    if(Vector3LengthSq(VectorSingle(q, 0.0f)).x <= 1.0e-12f)
         return localMat;
     const Mat3 m = RotateSymmetricMat3(q, Mat3FromSymMat3(localMat));
     return SymMat3FromMat3(m);
@@ -446,23 +453,32 @@ void ComputeTangentBasis(in VectorSingle normal, mut VectorSingle outT1, mut Vec
 }
 
 Aabb3D AabbUnion(in Aabb3D a, in Aabb3D b){
-    return Aabb3D(Min(VectorSingle(a.lowerBound), VectorSingle(b.lowerBound)), Max(VectorSingle(a.upperBound), VectorSingle(b.upperBound)));
+    return Aabb3D(
+        VectorSingle(Min(a.lowerBound.x, b.lowerBound.x), Min(a.lowerBound.y, b.lowerBound.y), Min(a.lowerBound.z, b.lowerBound.z), 0.0f),
+        VectorSingle(Max(a.upperBound.x, b.upperBound.x), Max(a.upperBound.y, b.upperBound.y), Max(a.upperBound.z, b.upperBound.z), 0.0f)
+    );
 }
 
 b8 AabbOverlaps(in Aabb3D a, in Aabb3D b){
-    const VectorSingle minA = VectorSingle(a.lowerBound);
-    const VectorSingle maxA = VectorSingle(a.upperBound);
-    const VectorSingle minB = VectorSingle(b.lowerBound);
-    const VectorSingle maxB = VectorSingle(b.upperBound);
-    return (VectorMoveMask(VectorAndInt(VectorLessOrEqual(minA, maxB), VectorLessOrEqual(minB, maxA))) & 7u) == 7u;
+    return
+        a.lowerBound.x <= b.upperBound.x
+        && b.lowerBound.x <= a.upperBound.x
+        && a.lowerBound.y <= b.upperBound.y
+        && b.lowerBound.y <= a.upperBound.y
+        && a.lowerBound.z <= b.upperBound.z
+        && b.lowerBound.z <= a.upperBound.z
+    ;
 }
 
 b8 AabbContains(in Aabb3D outerBox, in Aabb3D innerBox){
-    const VectorSingle oMin = VectorSingle(outerBox.lowerBound);
-    const VectorSingle oMax = VectorSingle(outerBox.upperBound);
-    const VectorSingle iMin = VectorSingle(innerBox.lowerBound);
-    const VectorSingle iMax = VectorSingle(innerBox.upperBound);
-    return (VectorMoveMask(VectorAndInt(VectorLessOrEqual(oMin, iMin), VectorGreaterOrEqual(oMax, iMax))) & 7u) == 7u;
+    return
+        outerBox.lowerBound.x <= innerBox.lowerBound.x
+        && outerBox.upperBound.x >= innerBox.upperBound.x
+        && outerBox.lowerBound.y <= innerBox.lowerBound.y
+        && outerBox.upperBound.y >= innerBox.upperBound.y
+        && outerBox.lowerBound.z <= innerBox.lowerBound.z
+        && outerBox.upperBound.z >= innerBox.upperBound.z
+    ;
 }
 
 f32 AabbPerimeter(in Aabb3D box){

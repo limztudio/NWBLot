@@ -92,6 +92,9 @@ extern const u32 s_GpuSolverFlagWarmStart;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP")]
 extern const u32 s_GpuSolverFlagSerialLoop;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FIRST_SUBSTEP")]
+extern const u32 s_GpuSolverFlagFirstSubstep;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_PUSH_CONSTANTS_BYTES")]
 extern const u32 s_GpuPushConstantsBytes;
 
@@ -151,6 +154,15 @@ extern const u32 s_GpuIslandMaxJoints;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_WORKGROUP_SIZE")]
 extern const u32 s_GpuIslandWorkgroupSize;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_BODIES")]
+extern const u32 s_GpuLargeIslandMaxBodies;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_CONTACTS")]
+extern const u32 s_GpuLargeIslandMaxContacts;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_WORKGROUP_SIZE")]
+extern const u32 s_GpuLargeIslandWorkgroupSize;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SPHERE")]
 extern const u32 s_ShaderPhysicsShapeTypeSphere;
@@ -266,9 +278,7 @@ class GpuPhysicsBodySim{
 class GpuPhysicsShapeProxy{
     public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x4 aabbMinPad(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMaxPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotationOrMeta(0.0f, 0.0f, 0.0f, 1.0f);
     public u32x4 bodyIndexTypeShape(s_GpuInvalidIndex, 0u, s_GpuInvalidIndex, 0u);
     public u32x4 filterData(0u, 0u, 0u, 0u);
 }
@@ -290,7 +300,6 @@ class GpuPhysicsNarrowphaseManifold{
 class GpuPhysicsContactPoint{
     public f32x4 rABaseSep(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rBRelVel(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 impulsesMass(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 [layout(16)]
@@ -335,6 +344,8 @@ class GpuPhysicsContactConstraint{
     public f32x4 tangentMassFriction(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 tangentVelRollMaxLever(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rollingImpulsePad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normalImpulses(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normalMasses(0.0f, 0.0f, 0.0f, 0.0f);
     public Array<GpuPhysicsContactPoint, s_MaxManifoldPoints> points;
 }
 
@@ -398,21 +409,22 @@ static_assert(offset_of<GpuPhysicsBodyOut>(rotation) == 16u, "BodyOut.rotation o
 static_assert(offset_of<GpuPhysicsBodyOut>(linearVelocityFlags) == 32u, "BodyOut.linearVelocityFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyOut>(angularVelocityPad) == 48u, "BodyOut.angularVelocityPad offset mismatch");
 static_assert(offset_of<GpuPhysicsShapeProxy>(localCenterRadius) == 0u, "ShapeProxy.localCenterRadius offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(aabbMinPad) == 48u, "ShapeProxy.aabbMinPad offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(bodyIndexTypeShape) == 80u, "ShapeProxy.bodyIndexTypeShape offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(filterData) == 96u, "ShapeProxy.filterData offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(localRotationOrMeta) == 32u, "ShapeProxy.localRotationOrMeta offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(bodyIndexTypeShape) == 48u, "ShapeProxy.bodyIndexTypeShape offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(filterData) == 64u, "ShapeProxy.filterData offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo) == 0u, "Manifold.pairInfo offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(normalPad) == 16u, "Manifold.normalPad offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature) == 32u, "Manifold.anchorAFeature offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorBSeparation) == 96u, "Manifold.anchorBSeparation offset mismatch");
 static_assert(offset_of<GpuPhysicsContactPoint>(rABaseSep) == 0u, "ContactPoint.rABaseSep offset mismatch");
 static_assert(offset_of<GpuPhysicsContactPoint>(rBRelVel) == 16u, "ContactPoint.rBRelVel offset mismatch");
-static_assert(offset_of<GpuPhysicsContactPoint>(impulsesMass) == 32u, "ContactPoint.impulsesMass offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags) == 0u, "ContactConstraint.indicesCountFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(softnessTangent00) == 80u, "ContactConstraint.softnessTangent00 offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(tangentVelRollMaxLever) == 112u, "ContactConstraint.tangentVelRollMaxLever offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(rollingImpulsePad) == 128u, "ContactConstraint.rollingImpulsePad offset mismatch");
-static_assert(offset_of<GpuPhysicsContactConstraint>(points) == 144u, "ContactConstraint.points offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(normalImpulses) == 144u, "ContactConstraint.normalImpulses offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(normalMasses) == 160u, "ContactConstraint.normalMasses offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(points) == 176u, "ContactConstraint.points offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(frictionTwistRollX) == 0u, "ContactImpulseOut.frictionTwistRollX offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(rollYZMaxApproach) == 16u, "ContactImpulseOut.rollYZMaxApproach offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(normalImpulses) == 32u, "ContactImpulseOut.normalImpulses offset mismatch");

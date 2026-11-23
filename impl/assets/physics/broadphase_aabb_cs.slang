@@ -159,7 +159,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint4 bodyMeta = sp.bodyIndexTypeShape;
         const float4 localCenterRadius = sp.localCenterRadius;
         const float4 localExtentOrP1 = sp.localExtentOrP1;
-        const float4 localRotation = sp.localRotation;
+        const float4 localRotationOrMeta = sp.localRotationOrMeta;
 
         const uint bodySlotIdx = bodyMeta.x;
         const NwbPhysicsGpuBodyPose bodyPose = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][bodySlotIdx];
@@ -188,7 +188,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             maxOut = max(p0, p1) + float3(r, r, r);
         }
         else{
-            const float4 worldQ = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotation));
+            const float4 worldQ = ((bodyMeta.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u && localRotationOrMeta.w < 0.999999f)
+                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotationOrMeta))
+                : bodyQ;
             const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
             float3 axisX;
             float3 axisY;

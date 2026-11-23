@@ -48,6 +48,17 @@ class TreeNode{
     }
 }
 
+b8 TreeNodeOverlapsAabb(in TreeNode node, in f32 qMinX, in f32 qMinY, in f32 qMinZ, in f32 qMaxX, in f32 qMaxY, in f32 qMaxZ){
+    return
+        node.aabbMinUser.x <= qMaxX
+        && qMinX <= node.aabbMaxCategory.x
+        && node.aabbMinUser.y <= qMaxY
+        && qMinY <= node.aabbMaxCategory.y
+        && node.aabbMinUser.z <= qMaxZ
+        && qMinZ <= node.aabbMaxCategory.z
+    ;
+}
+
 class DynamicTree{
     private Vector<TreeNode> m_nodes;
     private Vector<u32> m_moveIndices;
@@ -211,19 +222,20 @@ class DynamicTree{
             return;
         if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
             return;
-        const VectorSingle qMin = VectorSingle(queryBox.lowerBound);
-        const VectorSingle qMax = VectorSingle(queryBox.upperBound);
-        if(
-            (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(rootNode.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(rootNode.aabbMaxCategory, 0.0f)))) & 7u)
-            != 7u
-        )
+        const f32 qMinX = queryBox.lowerBound.x;
+        const f32 qMinY = queryBox.lowerBound.y;
+        const f32 qMinZ = queryBox.lowerBound.z;
+        const f32 qMaxX = queryBox.upperBound.x;
+        const f32 qMaxY = queryBox.upperBound.y;
+        const f32 qMaxZ = queryBox.upperBound.z;
+        if(!TreeNodeOverlapsAabb(rootNode, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ))
             return;
         if(rootNode.isLeaf()){
             callback(this.m_root, rootNode.userData());
             return;
         }
 
-        Array<u32, 256u> fixedStack;
+        Array<u32, 64u> fixedStack;
         fixedStack[0u] = this.m_root;
         u32 fixedCount = 1u;
         while(fixedCount > 0u){
@@ -235,13 +247,13 @@ class DynamicTree{
                 if(
                     (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
                     && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                    && (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(c1.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(c1.aabbMaxCategory, 0.0f)))) & 7u) == 7u
+                    && TreeNodeOverlapsAabb(c1, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
                 ){
                     if(c1.isLeaf()){
                         if(!callback(node.child1, c1.userData()))
                             return;
                     }
-                    else if(fixedCount < 256u){
+                    else if(fixedCount < 64u){
                         fixedStack[fixedCount] = node.child1;
                         ++fixedCount;
                     }
@@ -252,15 +264,153 @@ class DynamicTree{
                 if(
                     (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
                     && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                    && (VectorMoveMask(VectorAndInt(VectorLessOrEqual(VectorSingle(c2.aabbMinUser, 0.0f), qMax), VectorLessOrEqual(qMin, VectorSingle(c2.aabbMaxCategory, 0.0f)))) & 7u) == 7u
+                    && TreeNodeOverlapsAabb(c2, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
                 ){
                     if(c2.isLeaf()){
                         if(!callback(node.child2, c2.userData()))
                             return;
                     }
-                    else if(fixedCount < 256u){
+                    else if(fixedCount < 64u){
                         fixedStack[fixedCount] = node.child2;
                         ++fixedCount;
+                    }
+                }
+            }
+        }
+    }
+
+    public void queryAabbFilteredScratch<Callback>(
+        in Aabb3D queryBox,
+        in u32 maskBits,
+        in u8 requiredNodeFlags,
+        in Callback callback,
+        mut Vector<u32> stackScratch
+    )const{
+        if(this.m_root == s_NullIndex || maskBits == 0u)
+            return;
+
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+        const f32 qMinX = queryBox.lowerBound.x;
+        const f32 qMinY = queryBox.lowerBound.y;
+        const f32 qMinZ = queryBox.lowerBound.z;
+        const f32 qMaxX = queryBox.upperBound.x;
+        const f32 qMaxY = queryBox.upperBound.y;
+        const f32 qMaxZ = queryBox.upperBound.z;
+        if(!TreeNodeOverlapsAabb(rootNode, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ))
+            return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData());
+            return;
+        }
+
+        stackScratch.clear();
+        stackScratch.push_back(this.m_root);
+        while(!stackScratch.empty()){
+            const u32 nodeId = stackScratch.back();
+            stackScratch.pop_back();
+            in TreeNode node = this.m_nodes[nodeId];
+            if(node.child1 != s_NullIndex){
+                in TreeNode c1 = this.m_nodes[node.child1];
+                if(
+                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
+                    && TreeNodeOverlapsAabb(c1, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
+                ){
+                    if(c1.isLeaf()){
+                        if(!callback(node.child1, c1.userData()))
+                            return;
+                    }
+                    else{
+                        stackScratch.push_back(node.child1);
+                    }
+                }
+            }
+            if(node.child2 != s_NullIndex){
+                in TreeNode c2 = this.m_nodes[node.child2];
+                if(
+                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
+                    && TreeNodeOverlapsAabb(c2, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
+                ){
+                    if(c2.isLeaf()){
+                        if(!callback(node.child2, c2.userData()))
+                            return;
+                    }
+                    else{
+                        stackScratch.push_back(node.child2);
+                    }
+                }
+            }
+        }
+    }
+
+    public void queryAabbFilteredMovedScratch<Callback>(
+        in Aabb3D queryBox,
+        in u32 maskBits,
+        in u8 requiredNodeFlags,
+        in Callback callback,
+        mut Vector<u32> stackScratch
+    )const{
+        if(this.m_root == s_NullIndex || maskBits == 0u)
+            return;
+
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+        const f32 qMinX = queryBox.lowerBound.x;
+        const f32 qMinY = queryBox.lowerBound.y;
+        const f32 qMinZ = queryBox.lowerBound.z;
+        const f32 qMaxX = queryBox.upperBound.x;
+        const f32 qMaxY = queryBox.upperBound.y;
+        const f32 qMaxZ = queryBox.upperBound.z;
+        if(!TreeNodeOverlapsAabb(rootNode, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ))
+            return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData(), rootNode.moved);
+            return;
+        }
+
+        stackScratch.clear();
+        stackScratch.push_back(this.m_root);
+        while(!stackScratch.empty()){
+            const u32 nodeId = stackScratch.back();
+            stackScratch.pop_back();
+            in TreeNode node = this.m_nodes[nodeId];
+            if(node.child1 != s_NullIndex){
+                in TreeNode c1 = this.m_nodes[node.child1];
+                if(
+                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
+                    && TreeNodeOverlapsAabb(c1, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
+                ){
+                    if(c1.isLeaf()){
+                        if(!callback(node.child1, c1.userData(), c1.moved))
+                            return;
+                    }
+                    else{
+                        stackScratch.push_back(node.child1);
+                    }
+                }
+            }
+            if(node.child2 != s_NullIndex){
+                in TreeNode c2 = this.m_nodes[node.child2];
+                if(
+                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
+                    && TreeNodeOverlapsAabb(c2, qMinX, qMinY, qMinZ, qMaxX, qMaxY, qMaxZ)
+                ){
+                    if(c2.isLeaf()){
+                        if(!callback(node.child2, c2.userData(), c2.moved))
+                            return;
+                    }
+                    else{
+                        stackScratch.push_back(node.child2);
                     }
                 }
             }

@@ -58,9 +58,7 @@ struct NwbPhysicsGpuBodySim{
 struct NwbPhysicsGpuShapeProxy{
     float4 localCenterRadius;
     float4 localExtentOrP1;
-    float4 localRotation;
-    float4 aabbMinPad;
-    float4 aabbMaxPad;
+    float4 localRotationOrMeta;
     uint4 bodyIndexTypeShape;
     uint4 filterData;
 };
@@ -79,7 +77,6 @@ struct NwbPhysicsGpuNarrowphaseManifold{
 struct NwbPhysicsGpuContactPoint{
     float4 rABaseSep;
     float4 rBRelVel;
-    float4 impulsesMass;
 };
 
 struct NwbPhysicsGpuBodyOut{
@@ -119,6 +116,8 @@ struct NwbPhysicsGpuContactConstraint{
     float4 tangentMassFriction;
     float4 tangentVelRollMaxLever;
     float4 rollingImpulsePad;
+    float4 normalImpulses;
+    float4 normalMasses;
     NwbPhysicsGpuContactPoint points[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
 };
 

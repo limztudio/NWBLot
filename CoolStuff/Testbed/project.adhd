@@ -113,7 +113,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
     public void paintUiLayer(mut UiPaintContext context)override{
         if(this.m_showPhysicsDebug)
-            PaintPhysicsDebugOverlay(this.m_world, context, this.m_physicsDebugOptions, this.m_physicsDebugLines, this.m_physicsScreenLines);
+            PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_world, context, this.m_physicsScreenLines);
         this.drawUiControls(context);
         this.m_uiPreview.paint(context);
     }
@@ -304,7 +304,6 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_pendingBackendSwitch = false;
     private b8 m_showPhysicsDebug = false;
     private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
-    private Vector<PhysicsDebugLine> m_physicsDebugLines;
     private Vector<PaintLineSegment> m_physicsScreenLines;
     private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
     private String m_cachedPhysicsLine;

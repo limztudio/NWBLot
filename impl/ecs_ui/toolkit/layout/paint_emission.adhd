@@ -631,12 +631,14 @@ void EmitPaintLineBatch(
 
     const f32 halfW = 0.5f * thickness;
     const u32 firstBatchIndex = cast<u32>(indices.size());
+    const usize maxVertsSafe = cast<usize>(u32.max - s_PaintQuadVertexCount);
+    const usize maxIndicesSafe = cast<usize>(u32.max - s_PaintQuadIndexCount);
     u32 emittedIndices = 0u;
 
     for(usize li = 0u; li < lines.size(); ++li){
         in PaintLineSegment seg = lines[li];
         in Color color = seg.color;
-        if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+        if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
             ReportPaintLineInvalidColor();
             continue;
         }
@@ -644,7 +646,14 @@ void EmitPaintLineBatch(
             continue;
         in Point start = seg.start;
         in Point end = seg.end;
-        if(!IsFinite(start.x) || !IsFinite(start.y) || !IsFinite(end.x) || !IsFinite(end.y))
+        if(!IsFinite(VectorSingle(start.x, start.y, end.x, end.y)))
+            continue;
+
+        const f32 segMinX = Min(start.x, end.x);
+        const f32 segMaxX = Max(start.x, end.x);
+        const f32 segMinY = Min(start.y, end.y);
+        const f32 segMaxY = Max(start.y, end.y);
+        if(segMaxX + halfW <= clip.x || segMaxY + halfW <= clip.y || segMinX - halfW >= clipEndX || segMinY - halfW >= clipEndY)
             continue;
 
         const f32 dx = end.x - start.x;
@@ -653,19 +662,19 @@ void EmitPaintLineBatch(
         if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
             continue;
 
-        const f32 invLen = 1.0f / Sqrt(lenSq);
-        const f32 nx = -dy * invLen * halfW;
-        const f32 ny = dx * invLen * halfW;
+        const f32 scale = Rsqrt(VectorSingle(lenSq)).x * halfW;
+        const f32 nx = -dy * scale;
+        const f32 ny = dx * scale;
         const f32 absNx = Abs(nx);
         const f32 absNy = Abs(ny);
-        const f32 minX = Min(start.x, end.x) - absNx;
-        const f32 maxX = Max(start.x, end.x) + absNx;
-        const f32 minY = Min(start.y, end.y) - absNy;
-        const f32 maxY = Max(start.y, end.y) + absNy;
+        const f32 minX = segMinX - absNx;
+        const f32 maxX = segMaxX + absNx;
+        const f32 minY = segMinY - absNy;
+        const f32 maxY = segMaxY + absNy;
         if(maxX <= clip.x || maxY <= clip.y || minX >= clipEndX || minY >= clipEndY)
             continue;
 
-        if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+        if(vertices.size() > maxVertsSafe || indices.size() > maxIndicesSafe){
             assert(false);
             break;
         }

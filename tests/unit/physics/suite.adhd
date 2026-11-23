@@ -379,11 +379,11 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsBodyState>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsBodySim>(), 144u);
     EXPECT_EQ(size_of<GpuPhysicsBodyOut>(), 64u);
-    EXPECT_EQ(size_of<GpuPhysicsShapeProxy>(), 112u);
+    EXPECT_EQ(size_of<GpuPhysicsShapeProxy>(), 80u);
     EXPECT_EQ(size_of<GpuPhysicsBroadphasePair>(), 16u);
     EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 160u);
-    EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 48u);
-    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 336u);
+    EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 32u);
+    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 304u);
     EXPECT_EQ(size_of<GpuPhysicsContactImpulseOut>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 272u);
     EXPECT_EQ(size_of<GpuPhysicsJointImpulseOut>(), 48u);
@@ -393,7 +393,9 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 144u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(normalImpulses), 144u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(normalMasses), 160u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 176u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(qA0), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffsetMaxTorque), 160u);
@@ -4142,7 +4144,7 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         cc.rollingImpulse = f32x3u(1.0f, 2.0f, 3.0f);
         cc.points[0u].normalImpulse = 0.0f;
         cc.points[0u].totalNormalImpulse = 0.0f;
-        SolveContactConstraintCached(trWorld.m_solverSets[s_AwakeSetIndex].states, cc, cache, 60.0f, true);
+        SolveContactConstraintCached(trWorld.m_solverSets[s_AwakeSetIndex].states, cc, cache, 60.0f, true, false);
         EXPECT_NEAR(cc.rollingImpulse.x, 0.0f, 1.0e-6f);
         EXPECT_NEAR(cc.rollingImpulse.y, 0.0f, 1.0e-6f);
         EXPECT_NEAR(cc.rollingImpulse.z, 0.0f, 1.0e-6f);

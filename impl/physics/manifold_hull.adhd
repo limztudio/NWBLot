@@ -719,21 +719,18 @@ b8 EvalBoxSatEdgeRow(
     const VectorSingle rbVec = hbShift1 * aShift2 + hbShift2 * aShift1;
     const VectorSingle rawSep = Abs(projVec) - (raVec + rbVec);
     const f32 skipCeiling = Min(0.0f, Min(bestSep + 5.0e-4f, maxDistance) + totalR);
-    const VectorSingle needEval = VectorAndInt(
-        VectorGreaterOrEqual(lenSqVec, VectorSingle(1.0e-5f)),
-        VectorGreater(rawSep, VectorSingle(skipCeiling))
-    );
-    if((VectorMoveMask(needEval) & 0x7u) == 0u)
+    const b8 needX = (lenSqVec.x >= 1.0e-5f) && (rawSep.x > skipCeiling);
+    const b8 needY = (lenSqVec.y >= 1.0e-5f) && (rawSep.y > skipCeiling);
+    const b8 needZ = (lenSqVec.z >= 1.0e-5f) && (rawSep.z > skipCeiling);
+    if(!needX && !needY && !needZ)
         return true;
 
-    const VectorSingle invLenVec = Rsqrt(Max(lenSqVec, VectorSingle(1.0e-5f)));
-    const VectorSingle sepVec = rawSep * invLenVec - VectorSingle(totalR);
-
-    if(lenSqVec.x >= 1.0e-5f){
-        if(sepVec.x > maxDistance)
+    if(needX){
+        const f32 sepX = rawSep.x * Rsqrt(VectorSingle(lenSqVec.x)).x - totalR;
+        if(sepX > maxDistance)
             return false;
-        if(sepVec.x > bestSep + 5.0e-4f){
-            bestSep = sepVec.x;
+        if(sepX > bestSep + 5.0e-4f){
+            bestSep = sepX;
             bestAxis = rowBaseAxis;
             if(projVec.x >= 0.0f)
                 bestSign = 1.0f;
@@ -741,11 +738,12 @@ b8 EvalBoxSatEdgeRow(
                 bestSign = -1.0f;
         }
     }
-    if(lenSqVec.y >= 1.0e-5f){
-        if(sepVec.y > maxDistance)
+    if(needY){
+        const f32 sepY = rawSep.y * Rsqrt(VectorSingle(lenSqVec.y)).x - totalR;
+        if(sepY > maxDistance)
             return false;
-        if(sepVec.y > bestSep + 5.0e-4f){
-            bestSep = sepVec.y;
+        if(sepY > bestSep + 5.0e-4f){
+            bestSep = sepY;
             bestAxis = rowBaseAxis + 1;
             if(projVec.y >= 0.0f)
                 bestSign = 1.0f;
@@ -753,11 +751,12 @@ b8 EvalBoxSatEdgeRow(
                 bestSign = -1.0f;
         }
     }
-    if(lenSqVec.z >= 1.0e-5f){
-        if(sepVec.z > maxDistance)
+    if(needZ){
+        const f32 sepZ = rawSep.z * Rsqrt(VectorSingle(lenSqVec.z)).x - totalR;
+        if(sepZ > maxDistance)
             return false;
-        if(sepVec.z > bestSep + 5.0e-4f){
-            bestSep = sepVec.z;
+        if(sepZ > bestSep + 5.0e-4f){
+            bestSep = sepZ;
             bestAxis = rowBaseAxis + 2;
             if(projVec.z >= 0.0f)
                 bestSign = 1.0f;
@@ -2106,7 +2105,7 @@ Manifold CollideMeshes(
                     const VectorSingle nAtoB = -worldOut;
                     const VectorSingle wProbe = TransformPoint(xfB, probeB);
                     const VectorSingle wSurf = TransformPoint(xfB, closePt);
-                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeB, 0.0f)).x);
+                    const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - probeB, 0.0f)).x);
                     const f32 sep = -(dist + totalR);
                     const VectorSingle wA = wProbe + nAtoB * rA;
                     const VectorSingle wB = wSurf - nAtoB * rB;
@@ -2136,7 +2135,7 @@ Manifold CollideMeshes(
                     const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle wProbe = TransformPoint(xfA, probeA);
                     const VectorSingle wSurf = TransformPoint(xfA, closePt);
-                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeA, 0.0f)).x);
+                    const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - probeA, 0.0f)).x);
                     const f32 sep = -(dist + totalR);
                     const VectorSingle wA = wSurf + nAtoB * rA;
                     const VectorSingle wB = wProbe - nAtoB * rB;

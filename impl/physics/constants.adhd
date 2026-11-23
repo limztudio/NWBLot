@@ -65,6 +65,12 @@ extern const u32 s_GpuJointIslandMaxContacts;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_JOINTS")]
 extern const u32 s_GpuJointIslandMaxJoints;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_BODIES")]
+extern const u32 s_GpuLargeContactIslandMaxBodies;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_CONTACTS")]
+extern const u32 s_GpuLargeContactIslandMaxContacts;
+
 const f32 s_MinCapsuleLength = 0.005f;
 const f32 s_SpeculativeDistance = 0.02f;
 const f32 s_MaxSweptSpeculativeDistance = 1.0f;

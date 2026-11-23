@@ -17,6 +17,7 @@ class PhysicsSystem{
     private HashMap<EntityID, EcsEntityPhysicsRecord> m_entityRecords;
     private HashMap<EntityID, EcsJointSyncRecord> m_entityJoints;
     private Vector<EcsBodyTransformSnapshot> m_bodyTransformSnapshots;
+    private Vector<u32> m_bodyTransformSnapshotMeta;
     private Vector<EcsSlotOwner> m_bodyIndexToEntity;
     private Vector<EcsSlotOwner> m_shapeIndexToEntity;
     private Vector<EcsSlotOwner> m_jointIndexToEntity;
@@ -35,6 +36,7 @@ class PhysicsSystem{
     private f32 m_interpolationAlpha = 1.0f;
     private WorldStepStats m_lastStepStats;
     private f64 m_lastStepMs = 0.0;
+    private b8 m_useDirectWorldEvents = false;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
@@ -63,6 +65,7 @@ class PhysicsSystem{
     }
 
     private void clearFrameEvents(){
+        this.m_useDirectWorldEvents = false;
         this.m_frameBodyMoveEvents.clear();
         this.m_frameContactBeginEvents.clear();
         this.m_frameContactEndEvents.clear();
@@ -128,13 +131,47 @@ class PhysicsSystem{
     public in WorldStepStats lastStepStats()const{ return this.m_lastStepStats; }
     public f64 lastStepMs()const{ return this.m_lastStepMs; }
     public f32 interpolationAlpha()const{ return this.m_interpolationAlpha; }
-    public Span<BodyMoveEvent> bodyMoveEvents()const{ return this.m_frameBodyMoveEvents; }
-    public Span<ContactBeginTouchEvent> contactBeginEvents()const{ return this.m_frameContactBeginEvents; }
-    public Span<ContactEndTouchEvent> contactEndEvents()const{ return this.m_frameContactEndEvents; }
-    public Span<ContactHitEvent> contactHitEvents()const{ return this.m_frameContactHitEvents; }
-    public Span<SensorBeginTouchEvent> sensorBeginEvents()const{ return this.m_frameSensorBeginEvents; }
-    public Span<SensorEndTouchEvent> sensorEndEvents()const{ return this.m_frameSensorEndEvents; }
-    public Span<JointBreakEvent> jointBreakEvents()const{ return this.m_frameJointBreakEvents; }
+    public Span<BodyMoveEvent> bodyMoveEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.bodyMoveEvents();
+        return this.m_frameBodyMoveEvents;
+    }
+
+    public Span<ContactBeginTouchEvent> contactBeginEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.contactBeginEvents();
+        return this.m_frameContactBeginEvents;
+    }
+
+    public Span<ContactEndTouchEvent> contactEndEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.contactEndEvents();
+        return this.m_frameContactEndEvents;
+    }
+
+    public Span<ContactHitEvent> contactHitEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.contactHitEvents();
+        return this.m_frameContactHitEvents;
+    }
+
+    public Span<SensorBeginTouchEvent> sensorBeginEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.sensorBeginEvents();
+        return this.m_frameSensorBeginEvents;
+    }
+
+    public Span<SensorEndTouchEvent> sensorEndEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.sensorEndEvents();
+        return this.m_frameSensorEndEvents;
+    }
+
+    public Span<JointBreakEvent> jointBreakEvents()const{
+        if(this.m_useDirectWorldEvents)
+            return this.m_physicsWorld.jointBreakEvents();
+        return this.m_frameJointBreakEvents;
+    }
 
     public void setAssetManager(mut AssetManager assetManager){
         this.m_assetManager = Optional<mut AssetManager>(assetManager);
@@ -198,9 +235,9 @@ class PhysicsSystem{
         const BodyId bodyId = found.value().bodyId;
         if(!bodyId.valid())
             return MakeUnexpected(Failure());
-        if(bodyId.index < cast<u32>(this.m_bodyTransformSnapshots.size())){
-            in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyId.index];
-            if(snap.valid && snap.generation == bodyId.generation){
+        if(bodyId.index < cast<u32>(this.m_bodyTransformSnapshots.size()) && bodyId.index < cast<u32>(this.m_bodyTransformSnapshotMeta.size())){
+            if(EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyId.index], bodyId.generation)){
+                in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyId.index];
                 const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
                 VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
                 VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
@@ -431,6 +468,7 @@ class PhysicsSystem{
             this.m_syncedRigidBodyTags,
             this.m_syncedColliderTags,
             this.m_bodyTransformSnapshots,
+            this.m_bodyTransformSnapshotMeta,
             this.m_syncScratch,
             hasAnyPhysicsParents,
             hasDrivenKinematic
@@ -455,7 +493,7 @@ class PhysicsSystem{
         }
 
         if(plannedSteps > 1u && hasDrivenKinematic)
-            SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntities, hasAnyPhysicsParents, this.m_world, this.m_syncScratch.kinematicTargets);
+            SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, this.m_world, this.m_syncScratch.kinematicTargets);
 
         mut CpuTaskScheduler scheduler = this.m_world.taskScheduler();
         u32 stepsExecuted = 0u;
@@ -466,10 +504,10 @@ class PhysicsSystem{
                 this.m_accumulator = 0.0f;
 
             if(stepsExecuted + 1u == plannedSteps)
-                PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.m_frameBodyMoveEvents, this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_syncScratch.snapshotBodyStamps, this.m_syncScratch.snapshotStamp, this.m_bodyTransformSnapshots);
+                PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.bodyMoveEvents(), this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_syncScratch.snapshotBodyStamps, this.m_syncScratch.snapshotStamp, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
             if(hasDrivenKinematic){
                 if(plannedSteps <= 1u)
-                    ApplyKinematicTargetsFromEcs(this.m_syncScratch.drivenKinematicEntities, fixedDt, hasAnyPhysicsParents, this.m_world, this.m_physicsWorld);
+                    ApplyKinematicTargetsFromEcs(this.m_syncScratch.drivenKinematicEntries, fixedDt, hasAnyPhysicsParents, this.m_world, this.m_physicsWorld);
                 else
                     ApplyInterpolatedKinematicTargets(this.m_syncScratch.kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
             }
@@ -478,14 +516,42 @@ class PhysicsSystem{
             StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
             this.m_lastStepMs = DurationInMS<f64>(TimerNow(), stepStart);
 
-            this.appendLastStepEvents();
+            if(plannedSteps == 1u)
+                this.m_useDirectWorldEvents = true;
+            else
+                this.appendLastStepEvents();
             this.m_lastStepStats = this.m_physicsWorld.lastStepStats();
             ++stepsExecuted;
         }
 
         if(stepsExecuted > 0u){
-            CommitCurrEcsBodyTransformSnapshots(this.m_physicsWorld, this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_bodyTransformSnapshots);
-            WriteBackPhysicsTransformsToEcs(this.m_physicsWorld, this.m_world, this.m_frameBodyMoveEvents, this.m_bodyIndexToEntity, hasAnyPhysicsParents, this.m_syncScratch);
+            if(stepsExecuted == 1u){
+                WriteBackPhysicsTransformsToEcs(
+                    this.m_physicsWorld,
+                    this.bodyMoveEvents(),
+                    this.m_bodyIndexToEntity,
+                    hasAnyPhysicsParents,
+                    true,
+                    this.m_world,
+                    this.m_syncScratch,
+                    this.m_bodyTransformSnapshots,
+                    this.m_bodyTransformSnapshotMeta
+                );
+            }
+            else{
+                CommitCurrEcsBodyTransformSnapshots(this.m_physicsWorld, this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
+                WriteBackPhysicsTransformsToEcs(
+                    this.m_physicsWorld,
+                    this.bodyMoveEvents(),
+                    this.m_bodyIndexToEntity,
+                    hasAnyPhysicsParents,
+                    false,
+                    this.m_world,
+                    this.m_syncScratch,
+                    this.m_bodyTransformSnapshots,
+                    this.m_bodyTransformSnapshotMeta
+                );
+            }
         }
         else{
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);

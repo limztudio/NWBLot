@@ -50,10 +50,6 @@ class CpuBucketSolverScratch{
     public Vector<u32> brokenJointSlotIndices;
 
     public void clear(){
-        this.localConstraints.clear();
-        this.localCaches.clear();
-        this.localJoints.clear();
-        this.localJointCaches.clear();
         this.hitEvents.clear();
         this.hitSlots.clear();
         this.breakEvents.clear();
@@ -123,7 +119,9 @@ class PhysicsWorldCpuScratch{
     public Vector<usize> bulletHitIndices;
     public Vector<u32> parFreeBodyIndices;
     public Vector<u32> parFlatContactIds;
+    public Vector<u8> parFlatContactPoints;
     public Vector<u32> parCompContactIds;
+    public Vector<u32> parCompPointCounts;
     public Vector<CpuBucketSolverScratch> parBucketScratch;
     public usize parUsedBucketCount = 0u;
     public b8 parAllAwakeDynamic = false;
@@ -192,7 +190,9 @@ class PhysicsWorldCpuScratch{
         this.bulletHitIndices.clear();
         this.parFreeBodyIndices.clear();
         this.parFlatContactIds.clear();
+        this.parFlatContactPoints.clear();
         this.parCompContactIds.clear();
+        this.parCompPointCounts.clear();
         for(usize b = 0u; b < this.parBucketScratch.size(); ++b)
             this.parBucketScratch[b].clear();
         this.parUsedBucketCount = 0u;

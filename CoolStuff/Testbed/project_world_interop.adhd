@@ -752,11 +752,51 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     return LoadImageSource(pool, context.assetManager, textureRef);
 }
 
+class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
+    private in PhysicsDebugScreenProjector m_projector;
+    private mut Vector<PaintLineSegment> m_outLines;
+    private u32 m_maxLines;
+
+    public TestbedProjectedDebugLineSink(
+        in borrow PhysicsDebugScreenProjector projector,
+        in u32 maxLines,
+        mut Vector<PaintLineSegment> outLines
+    ){
+        this.m_projector = projector;
+        this.m_maxLines = maxLines;
+        this.m_outLines = outLines;
+    }
+
+    public void clear()override{
+        this.m_outLines.clear();
+    }
+
+    public void reserve(in usize capacity)override{
+        this.m_outLines.reserve(capacity);
+    }
+
+    public b8 full()const override{
+        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
+    }
+
+    public void emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
+        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
+            return;
+        VectorSingle seg(0.0f);
+        if(this.m_projector.projectSegment(p0, p1, seg)){
+            PaintLineSegment batchLine;
+            batchLine.start = Point(seg.x, seg.y);
+            batchLine.end = Point(seg.z, seg.w);
+            batchLine.color = Color(color.x, color.y, color.z, color.w);
+            this.m_outLines.push_back(batchLine);
+        }
+    }
+}
+
 void PaintPhysicsDebugOverlay(
+    in PhysicsDebugDrawOptions options,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
-    in PhysicsDebugDrawOptions options,
-    mut Vector<PhysicsDebugLine> debugLines,
     mut Vector<PaintLineSegment> screenLines
 ){
     mut World world = worldHandle.deref();
@@ -778,23 +818,8 @@ void PaintPhysicsDebugOverlay(
     if(!projector.valid())
         return;
 
-    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), options, projector, debugLines);
-    if(debugLines.empty())
-        return;
-
-    screenLines.clear();
-    screenLines.reserve(debugLines.size());
-    for(usize li = 0u; li < debugLines.size(); ++li){
-        in PhysicsDebugLine line = debugLines[li];
-        VectorSingle seg(0.0f);
-        if(projector.projectSegment(VectorSingle(line.start), VectorSingle(line.end), seg)){
-            PaintLineSegment batchLine;
-            batchLine.start = Point(seg.x, seg.y);
-            batchLine.end = Point(seg.z, seg.w);
-            batchLine.color = Color(line.color.x, line.color.y, line.color.z, line.color.w);
-            screenLines.push_back(batchLine);
-        }
-    }
+    TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
+    BuildPhysicsDebugLinesToSink(physicsSystem.value().physicsWorld(), options, projector, sink);
     if(!screenLines.empty())
         context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), 1.5f);
 }

@@ -177,9 +177,12 @@ b8 MeshletConeCullScaleSafe(in VectorSingle scale){
     if(scale.x <= 0.0f || scale.y <= 0.0f || scale.z <= 0.0f)
         return false;
 
-    f32 minScale = Min(scale.x, Min(scale.y, scale.z));
-    f32 maxScale = Max(scale.x, Max(scale.y, scale.z));
-    f32 tolerance = Max(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
+    const VectorSingle zeroW(scale, 0.0f);
+    const f32 minScale = -Vector3MaxComponent(-zeroW).x;
+    const f32 maxScale = Vector3MaxComponent(zeroW).x;
+    const VectorSingle one(1.0f);
+    const VectorSingle maxVec(maxScale);
+    const f32 tolerance = VectorSelect(one, maxVec, VectorGreater(maxVec, one)).x * s_MeshletConeCullUniformScaleEpsilon;
     return (maxScale - minScale) <= tolerance;
 }
 

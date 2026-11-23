@@ -181,7 +181,7 @@ SdfAtlasPageBindingRecord<TFont> MakeSdfAtlasPageGroupBinding<TFont>(
 }
 
 b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
-    if(!IsFinite(physicalSize) || physicalSize <= 0.0f)
+    if(!IsFinite(VectorSingle(physicalSize)) || physicalSize <= 0.0f)
         return false;
     const VectorSingle sizeRange = VectorSingle(s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale, s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale) * cast<f32>(bakePpem);
     return physicalSize >= sizeRange.x && physicalSize <= sizeRange.y;

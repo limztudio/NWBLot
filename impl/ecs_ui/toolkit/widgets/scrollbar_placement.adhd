@@ -104,7 +104,7 @@ b8 SameScrollViewportPlacementGeometry(in ScrollViewportPlacement first, in Scro
 }
 
 Expected<f64> TrySetScrollOffset(in f64 offset){
-    if(!IsFinite(offset) || offset < 0.0)
+    if(!IsFinite(VectorDouble(offset)) || offset < 0.0)
         return MakeUnexpected(Failure());
     return offset;
 }
@@ -116,7 +116,7 @@ void ApplySkinPaletteToScrollbarStyle(in UiSkinPalette palette, mut ScrollbarSty
 }
 
 Expected<f64> TryEnsureScrollVisible(in f64 currentOffset, in f64 start, in f64 end, in f64 viewportHeight){
-    if(!IsFinite(start) || start < 0.0 || !IsFinite(end) || end < start || !IsFinite(viewportHeight) || viewportHeight < 0.0)
+    if(!IsFinite(VectorDouble(start, end, viewportHeight, 0.0)) || start < 0.0 || end < start || viewportHeight < 0.0)
         return MakeUnexpected(Failure());
     f64 candidate = currentOffset;
     if(end - start > viewportHeight || start < candidate)
@@ -127,19 +127,19 @@ Expected<f64> TryEnsureScrollVisible(in f64 currentOffset, in f64 start, in f64 
 }
 
 Expected<f64> TryScrollByOffset(in f64 currentOffset, in f64 delta, in f64 contentHeight, in f64 viewportHeight){
-    if(!IsFinite(delta) || !IsFinite(contentHeight) || contentHeight < 0.0 || !IsFinite(viewportHeight) || viewportHeight < 0.0)
+    if(!IsFinite(VectorDouble(delta, contentHeight, viewportHeight, 0.0)) || contentHeight < 0.0 || viewportHeight < 0.0)
         return MakeUnexpected(Failure());
-    const f64 maxOffset = Max(0.0, contentHeight - viewportHeight);
-    const f64 base = Min(currentOffset, maxOffset);
+    const f64 maxOffset = UiSimdMaxF64(0.0, contentHeight - viewportHeight);
+    const f64 base = UiSimdMinF64(currentOffset, maxOffset);
     if(delta >= 0.0)
-        return base + Min(delta, maxOffset - base);
-    return Max(0.0, base + delta);
+        return base + UiSimdMinF64(delta, maxOffset - base);
+    return UiSimdMaxF64(0.0, base + delta);
 }
 
 Expected<f64> TryClampScrollOffset(in f64 currentOffset, in f64 contentHeight, in f64 viewportHeight){
-    if(!IsFinite(contentHeight) || contentHeight < 0.0 || !IsFinite(viewportHeight) || viewportHeight < 0.0)
+    if(!IsFinite(VectorDouble(contentHeight, viewportHeight, 0.0, 0.0)) || contentHeight < 0.0 || viewportHeight < 0.0)
         return MakeUnexpected(Failure());
-    return Min(currentOffset, Max(0.0, contentHeight - viewportHeight));
+    return UiSimdMinF64(currentOffset, UiSimdMaxF64(0.0, contentHeight - viewportHeight));
 }
 
 

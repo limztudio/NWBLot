@@ -43,7 +43,7 @@ class TextAreaEditActions : IEditActionSink{
 
 
 b8 IsValidTextAreaWheelLines(in f32 wheelLines){
-    return IsFinite(wheelLines) && wheelLines > 0.0f;
+    return IsFinite(VectorSingle(wheelLines)) && wheelLines > 0.0f;
 }
 
 f32 ResolveTextAreaBaseLineHeight(in b8 linesEmpty, in f32 fontSize, in f32 firstLineHeight){

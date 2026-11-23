@@ -848,8 +848,9 @@ void UiPopupSmokeScene::observeState(){
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, s_UiPopupSmokeOutsideKey, this.m_outsideEdit.placement.bounds);
     const Rect first = StoreRect(VectorSingle(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f) + VectorSingle(8.0f, 36.0f, -16.0f, 32.0f));
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, s_UiPopupSmokeFirstKey, first);
-    LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, s_UiPopupSmokeSecondKey, Rect(first.x, first.y + 40.0f, first.width, first.height));
-    LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, "check", Rect(first.x, first.y + 80.0f, first.width, first.height));
+    const VectorSingle stackedY = VectorSingle(first.y, first.y, 0.0f, 0.0f) + VectorSingle(40.0f, 80.0f, 0.0f, 0.0f);
+    LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, s_UiPopupSmokeSecondKey, Rect(first.x, stackedY.x, first.width, first.height));
+    LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, "check", Rect(first.x, stackedY.y, first.width, first.height));
     LogSmokeRect(s_UiPopupSmokeTag, this.m_sequence, "edit", this.m_popupEdit.placement.bounds);
 }
 

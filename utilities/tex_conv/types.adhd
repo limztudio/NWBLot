@@ -149,12 +149,16 @@ Expected<f32> TryResolveTexConvPixelAlpha(
         alpha = constantAlpha;
     else if(mode == AlphaSourceMode::Image)
         alpha = maskAlpha;
-    if(!IsFinite(alpha)){
+    if(!IsFinite(VectorSingle(alpha))){
         error("tex_conv: alpha input contains a non-finite value.");
         return MakeUnexpected(Failure());
     }
-    if(mode != AlphaSourceMode::Original)
-        return Clamp(alpha, 0.0f, 1.0f);
+    if(mode != AlphaSourceMode::Original){
+        const VectorSingle va(alpha);
+        const VectorSingle zero(0.0f);
+        const VectorSingle one(1.0f);
+        return VectorSelect(VectorSelect(va, one, VectorGreater(va, one)), zero, VectorLess(va, zero)).x;
+    }
     if(alpha < 0.0f || alpha > 1.0f){
         error("tex_conv: original alpha input must be in [0, 1].");
         return MakeUnexpected(Failure());
@@ -196,19 +200,7 @@ b8 ValidateTexConvPlaneResolution(
 VectorSingle SrgbToLinearRgb(in VectorSingle rgb){
     const VectorSingle linearPart = rgb * VectorSingle(1.0f / s_SrgbLinearSegmentScale);
     const VectorSingle nonlinearPart = Pow((rgb + VectorSingle(s_SrgbOffset)) * VectorSingle(1.0f / s_SrgbOffsetScale), VectorSingle(s_SrgbDecodeExponent));
-    f32 x = nonlinearPart.x;
-    if(rgb.x <= s_SrgbLinearThreshold)
-        x = linearPart.x;
-    f32 y = nonlinearPart.y;
-    if(rgb.y <= s_SrgbLinearThreshold)
-        y = linearPart.y;
-    f32 z = nonlinearPart.z;
-    if(rgb.z <= s_SrgbLinearThreshold)
-        z = linearPart.z;
-    f32 w = nonlinearPart.w;
-    if(rgb.w <= s_SrgbLinearThreshold)
-        w = linearPart.w;
-    return VectorSingle(x, y, z, w);
+    return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorSingle(s_SrgbLinearThreshold)));
 }
 
 Expected<VectorSingle> TryPrepareTexConvLinearPixel(

@@ -385,9 +385,11 @@ f64 StressFpsMeasurementSeconds(in b8 timingEnabled){
 
 u32 ParseStressM4PixelCaptureFreezeFrame(){
     const Expected<f32> configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
-    if(!configuredFrame.has_value() || !IsFinite(configuredFrame.value()) || configuredFrame.value() < 1.0f)
+    if(!configuredFrame.has_value() || !IsFinite(VectorSingle(configuredFrame.value())) || configuredFrame.value() < 1.0f)
         return 0u;
-    return cast<u32>(Min(configuredFrame.value(), s_StressMaxM4FreezeFrame));
+    const VectorSingle cfgVec(configuredFrame.value());
+    const VectorSingle maxVec(s_StressMaxM4FreezeFrame);
+    return cast<u32>(VectorSelect(maxVec, cfgVec, VectorLess(cfgVec, maxVec)).x);
 }
 
 u32 ResolveStressM4PixelCaptureFreezeFrame(){

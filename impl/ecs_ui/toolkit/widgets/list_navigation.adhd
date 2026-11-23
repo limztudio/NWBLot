@@ -126,7 +126,7 @@ void ApplyListCandidateSelection(
 }
 
 u64 ComputeListHostPageRows(in f32 viewportHeight, in f32 rowHeight, in u64 rowCount){
-    const f64 page = Floor(cast<f64>(viewportHeight) / cast<f64>(rowHeight));
+    const f64 page = VectorDoubleFloor(VectorDouble(cast<f64>(viewportHeight) / cast<f64>(rowHeight))).x;
     if(page >= cast<f64>(rowCount))
         return Max(cast<u64>(1u), rowCount);
     return Max(cast<u64>(1u), cast<u64>(page));
@@ -144,7 +144,7 @@ f64 ComputeListExpandedScrollOffset(
     const f64 firstRow = cast<f64>(candidateFirstRow);
     const f64 within = (candidateOffset + clippedTop) - (firstRow * cast<f64>(oldRowHeight));
     const f64 offset = ((firstRow * cast<f64>(newRowHeight)) + within) - clippedTop;
-    return Max(0.0, offset);
+    return UiSimdMaxF64(0.0, offset);
 }
 
 f64 ComputeListRescaledScrollOffset(
@@ -155,20 +155,20 @@ f64 ComputeListRescaledScrollOffset(
     in f32 newRowHeight
 ){
     const f64 clippedTop = cast<f64>(contentClipY) - cast<f64>(viewportY);
-    const f64 anchor = Max(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
-    return Max(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
+    const f64 anchor = UiSimdMaxF64(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
+    return UiSimdMaxF64(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
 }
 
 Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
     const f64 travel = cast<f64>(gesture.referenceRectangle.height) - cast<f64>(gesture.targetRectangle.height);
-    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
+    if(!IsFinite(VectorDouble(cast<f64>(travel), cast<f64>(gesture.maximum), 0.0, 0.0)) || travel <= 0.0 || gesture.maximum < 0.0)
         return MakeUnexpected(Failure());
     const f64 start = cast<f64>(gesture.targetRectangle.y) - cast<f64>(gesture.referenceRectangle.y);
     const f64 delta = cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y);
     const f64 fractionValue = (start + delta) / travel;
     f64 fraction = 0.0;
     if(fractionValue > 0.0)
-        fraction = Min(1.0, fractionValue);
+        fraction = UiSimdMinF64(1.0, fractionValue);
     return fraction * gesture.maximum;
 }
 
@@ -212,7 +212,7 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
 }
 
 Rect ResolveListProbeRect(in UiSkinRegion background, in Insets padding, in f32 scrollbarWidth, in f32 rowHeight){
-    const f32 minimumWidth = Max(s_StyleMinimumFieldWidth, background.minimumWidth);
+    const f32 minimumWidth = UiSimdMax(s_StyleMinimumFieldWidth, background.minimumWidth);
     const f32 paddedWidth = padding.left + padding.right + scrollbarWidth + rowHeight;
     const f32 paddedHeight = rowHeight + padding.top + padding.bottom;
     const VectorSingle size = Max(VectorSingle(minimumWidth, background.minimumHeight, minimumWidth, background.minimumHeight), VectorSingle(paddedWidth, paddedHeight, paddedWidth, paddedHeight));
@@ -228,7 +228,7 @@ Point ResolveListIntrinsicSize(in UiSkinRegion background, in Insets padding, in
 }
 
 f32 ResolveListRowBaseHeight(in SelectableMetrics metrics, in f32 textHeight){
-    return Max(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
+    return UiSimdMax(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
 }
 
 void CommitListReconcileState(

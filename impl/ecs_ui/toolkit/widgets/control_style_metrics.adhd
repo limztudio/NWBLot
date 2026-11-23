@@ -149,7 +149,7 @@ class ControlStyleMetrics{
         const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(skinRegion.value(), referenceDensity);
         if(!minimum.has_value())
             return false;
-        inOutIndicatorExtent = Max(inOutIndicatorExtent, Max(minimum.value().x, minimum.value().y));
+        inOutIndicatorExtent = UiSimdMax(inOutIndicatorExtent, UiSimdMax(minimum.value().x, minimum.value().y));
         return true;
     }
 
@@ -164,15 +164,15 @@ class ControlStyleMetrics{
         const Optional<in UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
         const Optional<in UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
         const f32 referenceDensity = skin.referenceDensity();
-        if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !IsFinite(referenceDensity) || referenceDensity <= 0.0f)
+        if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !IsFinite(VectorSingle(referenceDensity)) || referenceDensity <= 0.0f)
             return MakeUnexpected(Failure());
         const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
         const Expected<Point> checkedMinimum = TryResolveSkinRegionMinimumSize(checked.value(), referenceDensity);
         if(!normalMinimum.has_value() || !checkedMinimum.has_value())
             return MakeUnexpected(Failure());
         f32 indicatorExtent = inOutStyle.indicatorExtent;
-        indicatorExtent = Max(indicatorExtent, Max(normalMinimum.value().x, normalMinimum.value().y));
-        indicatorExtent = Max(indicatorExtent, Max(checkedMinimum.value().x, checkedMinimum.value().y));
+        indicatorExtent = UiSimdMax(indicatorExtent, UiSimdMax(normalMinimum.value().x, normalMinimum.value().y));
+        indicatorExtent = UiSimdMax(indicatorExtent, UiSimdMax(checkedMinimum.value().x, checkedMinimum.value().y));
         if(
             !this.accumulateRadioIndicator(skin, inOutStyle.hover, referenceDensity, indicatorExtent)
             || !this.accumulateRadioIndicator(skin, inOutStyle.pressed, referenceDensity, indicatorExtent)
@@ -209,7 +209,7 @@ class ControlStyleMetrics{
         mut SliderStyle inOutStyle
     )const{
         const f32 referenceDensity = skin.referenceDensity();
-        if(!IsFinite(referenceDensity) || referenceDensity <= 0.0f)
+        if(!IsFinite(VectorSingle(referenceDensity)) || referenceDensity <= 0.0f)
             return MakeUnexpected(Failure());
         const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
         const Optional<in UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
@@ -219,7 +219,7 @@ class ControlStyleMetrics{
         const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
         if(!trackMinimum.has_value() || !normalMinimum.has_value())
             return MakeUnexpected(Failure());
-        inOutStyle.trackHeight = Max(inOutStyle.trackHeight, trackMinimum.value().y);
+        inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().y);
         const VectorSingle extent = Max(VectorSingle(inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y, inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y), VectorSingle(normalMinimum.value().x, normalMinimum.value().y, normalMinimum.value().x, normalMinimum.value().y));
         Point thumbExtent = Point(extent.x, extent.y);
         if(
@@ -246,7 +246,7 @@ class ControlStyleMetrics{
         in ProgressOptions options,
         mut ProgressStyle inOutStyle
     )const{
-        if(!IsFinite(fraction))
+        if(!IsFinite(VectorDouble(fraction)))
             return MakeUnexpected(Failure());
         const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
         const Optional<in UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);

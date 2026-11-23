@@ -54,34 +54,28 @@ PaintClipEntry ComputeIntersectedPaintClipEntry(in PaintClipEntry parent, in Rec
     PaintClipEntry next;
     if(parent.rect.width < 0.0f || parent.rect.height < 0.0f || clip.width < 0.0f || clip.height < 0.0f)
         return next;
-    const f32 clipRight = clip.x + clip.width;
-    const f32 clipBottom = clip.y + clip.height;
-    if(!IsFinite(clip.x) || !IsFinite(clip.y) || !IsFinite(clipRight) || !IsFinite(clipBottom))
+    const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd = VectorSingle(clip.width, clip.height, 0.0f, 0.0f) + clipOrigin;
+    if(!IsFinite(VectorSingle(clip.x, clip.y, clipEnd.x, clipEnd.y)))
         return next;
-    if(validateParent && (!IsFinite(parent.right) || !IsFinite(parent.bottom)))
+    if(validateParent && !IsFinite(VectorSingle(parent.right, parent.bottom, 0.0f, 0.0f)))
         return next;
-    f32 x0 = clip.x;
-    if(parent.rect.x > x0)
-        x0 = parent.rect.x;
-    f32 y0 = clip.y;
-    if(parent.rect.y > y0)
-        y0 = parent.rect.y;
-    f32 x1 = clipRight;
-    if(parent.right < x1)
-        x1 = parent.right;
-    f32 y1 = clipBottom;
-    if(parent.bottom < y1)
-        y1 = parent.bottom;
-    f32 w = x1 - x0;
-    f32 h = y1 - y0;
-    if(!(w > 0.0f))
-        w = 0.0f;
-    if(!(h > 0.0f))
-        h = 0.0f;
-    if(IsFinite(w) && IsFinite(h)){
+    const VectorSingle parentBounds(parent.rect.x, parent.rect.y, parent.right, parent.bottom);
+    const VectorSingle curBounds(clip.x, clip.y, clipEnd.x, clipEnd.y);
+    const VectorSingle maxOrigin = VectorSelect(curBounds, parentBounds, VectorGreater(parentBounds, curBounds));
+    const VectorSingle minEnd = VectorSelect(curBounds, parentBounds, VectorLess(parentBounds, curBounds));
+    const VectorSingle zeroVec(0.0f);
+    const VectorSingle rawSize(minEnd.z - maxOrigin.x, minEnd.w - maxOrigin.y, 0.0f, 0.0f);
+    const VectorSingle clampedSize = VectorSelect(zeroVec, rawSize, VectorGreater(rawSize, zeroVec));
+    const f32 x0 = maxOrigin.x;
+    const f32 y0 = maxOrigin.y;
+    const f32 w = clampedSize.x;
+    const f32 h = clampedSize.y;
+    if(IsFinite(VectorSingle(w, h, 0.0f, 0.0f))){
         next.rect = Rect(x0, y0, w, h);
-        next.right = x0 + w;
-        next.bottom = y0 + h;
+        const VectorSingle outEnd = VectorSingle(x0, y0, 0.0f, 0.0f) + VectorSingle(w, h, 0.0f, 0.0f);
+        next.right = outEnd.x;
+        next.bottom = outEnd.y;
     }
     return next;
 }
@@ -181,37 +175,33 @@ void EmitPaintQuadImpl(
         ReportPaintQuadRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintQuadInvalidColor();
         return;
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f))
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    if(!clipValidated && (!IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom)))
+    if(!clipValidated && !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH) || color.a <= 0.0f)
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 visW = visSize.x;
+    const f32 visH = visSize.y;
+    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy) || color.a <= 0.0f)
         return;
-    const f32 visEndX = x0 + visW;
-    const f32 visEndY = y0 + visH;
-    if(!IsFinite(visEndX) || !IsFinite(visEndY))
+    const VectorSingle visEnd = clippedOrigin + visSize;
+    const f32 visEndX = visEnd.x;
+    const f32 visEndY = visEnd.y;
+    if(!IsFinite(visEnd.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
@@ -222,22 +212,25 @@ void EmitPaintQuadImpl(
     f32 right = 0.0f;
     f32 bottom = 0.0f;
     if(material != PaintMaterial::Solid && (uv.width != 0.0f || uv.height != 0.0f || uv.x != 0.0f || uv.y != 0.0f)){
-        if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectRight && visEndY == rectBottom){
+        if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectEnd.x && visEndY == rectEnd.y){
             left = uv.x;
             top = uv.y;
             right = uv.x + uv.width;
             bottom = uv.y + uv.height;
         }
         else{
-            left = (x0 - rectangle.x) / rectangle.width * uv.width + uv.x;
-            top = (y0 - rectangle.y) / rectangle.height * uv.height + uv.y;
-            right = (visEndX - rectangle.x) / rectangle.width * uv.width + uv.x;
-            bottom = (visEndY - rectangle.y) / rectangle.height * uv.height + uv.y;
+            const VectorSingle uvEdges = ((VectorSingle(x0, y0, visEndX, visEndY) - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y)) / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height)) * VectorSingle(uv.width, uv.height, uv.width, uv.height) + VectorSingle(uv.x, uv.y, uv.x, uv.y);
+            left = uvEdges.x;
+            top = uvEdges.y;
+            right = uvEdges.z;
+            bottom = uvEdges.w;
         }
     }
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 0.0f) * color.a;
+        premultiplied = Color(premul.x, premul.y, premul.z, color.a);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
     vertices.push_back(Vertex(Point(x0, y0), Point(left, top), premultiplied));
@@ -347,25 +340,22 @@ void EmitPaintOpaqueWhiteRectValidated(
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f))
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH))
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 x1 = clippedEnd.x;
+    const f32 y1 = clippedEnd.y;
+    const f32 visW = visSize.x;
+    const f32 visH = visSize.y;
+    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
@@ -425,39 +415,38 @@ void EmitPaintSolidQuadValidated(
         ReportPaintQuadRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintQuadInvalidColor();
         return;
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || color.a <= 0.0f)
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH))
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 x1 = clippedEnd.x;
+    const f32 y1 = clippedEnd.y;
+    const f32 visW = visSize.x;
+    const f32 visH = visSize.y;
+    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
         return;
     }
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
     vertices.push_back(Vertex(Point(x0, y0), Point(0.0f, 0.0f), premultiplied));
@@ -513,35 +502,41 @@ void EmitPaintLine(
         ReportPaintLineRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintLineInvalidColor();
         return;
     }
-    if(!(clip.width > 0.0f) || !(clip.height > 0.0f) || color.a <= 0.0f || !IsFinite(thickness) || thickness <= 0.0f)
+    if(!(clip.width > 0.0f) || !(clip.height > 0.0f) || color.a <= 0.0f || !IsFinite(VectorSingle(thickness)) || thickness <= 0.0f)
         return;
-    const f32 clipEndX = clip.x + clip.width;
-    const f32 clipEndY = clip.y + clip.height;
-    if(!IsFinite(clipEndX) || !IsFinite(clipEndY))
+    const VectorSingle clipEnd = VectorSingle(clip.x, clip.y, 0.0f, 0.0f) + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    const f32 clipEndX = clipEnd.x;
+    const f32 clipEndY = clipEnd.y;
+    if(!IsFinite(clipEnd))
         return;
-    if(!IsFinite(start.x) || !IsFinite(start.y) || !IsFinite(end.x) || !IsFinite(end.y))
+    if(!IsFinite(VectorSingle(start.x, start.y, end.x, end.y)))
         return;
 
-    const f32 dx = end.x - start.x;
-    const f32 dy = end.y - start.y;
+    const VectorSingle startVec(start.x, start.y, 0.0f, 0.0f);
+    const VectorSingle endVec(end.x, end.y, 0.0f, 0.0f);
+    const VectorSingle delta = endVec - startVec;
+    const f32 dx = delta.x;
+    const f32 dy = delta.y;
     const f32 lenSq = dx * dx + dy * dy;
-    if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq <= 1.0e-8f)
         return;
 
     const f32 halfW = 0.5f * thickness;
-    const f32 invLen = 1.0f / Sqrt(lenSq);
-    const f32 nx = -dy * invLen * halfW;
-    const f32 ny = dx * invLen * halfW;
-    const f32 absNx = Abs(nx);
-    const f32 absNy = Abs(ny);
-    const f32 minX = Min(start.x, end.x) - absNx;
-    const f32 maxX = Max(start.x, end.x) + absNx;
-    const f32 minY = Min(start.y, end.y) - absNy;
-    const f32 maxY = Max(start.y, end.y) + absNy;
+    const f32 invLen = 1.0f / VectorSqrt(VectorSingle(lenSq)).x;
+    const VectorSingle normal = (VectorSingle(-dy, dx, 0.0f, 0.0f) * invLen) * halfW;
+    const f32 nx = normal.x;
+    const f32 ny = normal.y;
+    const VectorSingle absNormal = VectorAbs(normal);
+    const VectorSingle minBounds = VectorSelect(endVec, startVec, VectorLess(startVec, endVec)) - absNormal;
+    const VectorSingle maxBounds = VectorSelect(endVec, startVec, VectorGreater(startVec, endVec)) + absNormal;
+    const f32 minX = minBounds.x;
+    const f32 maxX = maxBounds.x;
+    const f32 minY = minBounds.y;
+    const f32 maxY = maxBounds.y;
     if(maxX <= clip.x || maxY <= clip.y || minX >= clipEndX || minY >= clipEndY)
         return;
 
@@ -551,8 +546,10 @@ void EmitPaintLine(
     }
 
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 0.0f) * color.a;
+        premultiplied = Color(premul.x, premul.y, premul.z, color.a);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
     vertices.push_back(Vertex(Point(start.x + nx, start.y + ny), Point(0.0f, 0.0f), premultiplied));

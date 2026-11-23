@@ -401,7 +401,7 @@ b8 CreateComplexGiScene(mut World world, in b8 coverageViewEnabled){
             VectorSingle(shade, shade, shade, 1.0f),
             yawDegrees
         );
-        if(z < -1.8f && Abs(x) < 0.72f)
+        if(z < -1.8f && VectorAbs(VectorSingle(x)).x < 0.72f)
             continue;
         if(x > -1.12f && x < 1.12f && z > -1.20f && z < 0.18f)
             continue;

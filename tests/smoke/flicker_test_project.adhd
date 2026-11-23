@@ -155,8 +155,11 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
     public b8 onUpdate(in f32 delta)override{
         f32 safeDelta = 0.0f;
-        if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        if(IsFinite(VectorSingle(delta))){
+            const VectorSingle deltaVec(delta);
+            const VectorSingle zeroVec(0.0f);
+            safeDelta = VectorSelect(zeroVec, deltaVec, VectorGreater(deltaVec, zeroVec)).x;
+        }
         this.m_fpsProbe.recordFrame(safeDelta);
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();

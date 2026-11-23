@@ -9,7 +9,11 @@
 
 
 u32 PackMeshletConeCutoffUnorm8(in f32 value){
-    const VectorSingle scaled = VectorSingle(Clamp(value, 0.0f, 1.0f)) * s_MeshletUnorm8Max;
+    const VectorSingle vv(value);
+    const VectorSingle zero(0.0f);
+    const VectorSingle one(1.0f);
+    const VectorSingle clamped = VectorSelect(zero, VectorSelect(vv, one, VectorGreater(vv, one)), VectorGreater(vv, zero));
+    const VectorSingle scaled = clamped * s_MeshletUnorm8Max;
     return cast<u32>(scaled.x);
 }
 
@@ -17,11 +21,18 @@ f32 ConservativePackedMeshletConeCutoff(in VectorSingle axis, in f32 cutoff, in 
     VectorSingle normalizedAxis = unpackedAxis;
     if(LengthSq(axis.xyz) > s_MeshletConeAxisLengthSquaredEpsilon)
         normalizedAxis = Normalize(axis.xyz);
-    const f32 axisDot = Clamp(Dot(normalizedAxis.xyz, unpackedAxis.xyz), -1.0f, 1.0f);
-    const f32 safeCutoff = Clamp(cutoff, 0.0f, 1.0f);
+    const VectorSingle negOne(-1.0f);
+    const VectorSingle zero(0.0f);
+    const VectorSingle one(1.0f);
+    const VectorSingle dVec = Vector3Dot(normalizedAxis, unpackedAxis);
+    const VectorSingle dotClamped = VectorSelect(negOne, VectorSelect(dVec, one, VectorGreater(dVec, one)), VectorGreater(dVec, negOne));
+    const VectorSingle cVec(cutoff);
+    const VectorSingle cutClamped = VectorSelect(zero, VectorSelect(cVec, one, VectorGreater(cVec, one)), VectorGreater(cVec, zero));
+    const f32 axisDot = dotClamped.x;
+    const f32 safeCutoff = cutClamped.x;
     const VectorSingle anglePair(safeCutoff, axisDot, safeCutoff, axisDot);
-    const VectorSingle oneMinusSquare = VectorSingle(1.0f) - anglePair * anglePair;
-    const VectorSingle clampedSquare = Max(oneMinusSquare, VectorSingle(0.0f));
+    const VectorSingle oneMinusSquare = one - anglePair * anglePair;
+    const VectorSingle clampedSquare = Max(oneMinusSquare, zero);
     const VectorSingle sinPair = Sqrt(clampedSquare);
     const VectorSingle productTerms = VectorSingle(safeCutoff, sinPair.x, safeCutoff, sinPair.x) * VectorSingle(axisDot, sinPair.y, axisDot, sinPair.y);
     const VectorSingle difference = productTerms.xxxx - productTerms.yyyy;
@@ -37,10 +48,10 @@ u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutof
 
 u32 PackMeshletConeOct16(in VectorSingle axis){
     const VectorSingle maskedAxis(axis, 0.0f);
-    const VectorSingle magnitude(Abs(axis.x), Abs(axis.y), Abs(axis.z), 0.0f);
+    const VectorSingle magnitude = Abs(maskedAxis);
     const VectorSingle magnitudeSum = (magnitude.xxxx + magnitude.yyyy) + magnitude.zzzz;
     const f32 l1Length = magnitudeSum.x;
-    if(!IsFinite(l1Length) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
+    if(!IsFinite(magnitudeSum) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
         return s_MeshletConeAxisFallback;
 
     const VectorSingle invL1 = VectorSingle(1.0f) / VectorSingle(l1Length);
@@ -65,7 +76,7 @@ VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
     const VectorSingle octZ = VectorSingle(1.0f) - sum;
     const VectorSingle folded = FoldOctahedralAxis(VectorSingle(octXY.x, octXY.y, octZ.x, 0.0f));
     const f32 lengthSquared = LengthSq(folded.xyz);
-    if(IsFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
+    if(IsFinite(VectorSingle(lengthSquared)) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
         const VectorSingle normalized = folded * Rsqrt(VectorSingle(lengthSquared));
         if(IsFinite(normalized.xyz))
             return VectorSingle(normalized, 0.0f);

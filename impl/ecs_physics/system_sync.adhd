@@ -95,12 +95,12 @@ u32 NextEcsPhysicsStamp(mut Vector<u32> stamps, mut u32 stamp){
 }
 
 b8 EcsVec4NearlyEqual(in VectorSingle a, in VectorSingle b, in f32 eps){
-    return Abs(a.x - b.x) <= eps && Abs(a.y - b.y) <= eps && Abs(a.z - b.z) <= eps && Abs(a.w - b.w) <= eps;
+    return Vector4LessOrEqual(Abs(a - b), VectorSingle(eps));
 }
 
 b8 EcsTransformsNearlyEqual(in Transform3D a, in Transform3D b){
     const b8 posEq = EcsVec4NearlyEqual(VectorSingle(a.position), VectorSingle(b.position), 1.0e-5f);
-    const f32 qDot = Abs(a.rotation.x * b.rotation.x + a.rotation.y * b.rotation.y + a.rotation.z * b.rotation.z + a.rotation.w * b.rotation.w);
+    const f32 qDot = Abs(Vector4Dot(VectorSingle(a.rotation), VectorSingle(b.rotation))).x;
     return posEq && qDot >= 0.99999f;
 }
 
@@ -217,7 +217,7 @@ f32x4 ResolveEntityWorldScale(in World world, in EntityID entity){
     f32x4 accScale = world.getComponent<TransformComponent>(chain[rootIdx]).scale;
     for(isize ci = cast<isize>(rootIdx) - 1; ci >= 0; --ci){
         const f32x4 cScale = world.getComponent<TransformComponent>(chain[cast<usize>(ci)]).scale;
-        accScale = f32x4(accScale.x * cScale.x, accScale.y * cScale.y, accScale.z * cScale.z, 0.0f);
+        accScale = f32x4(VectorSingle(accScale) * VectorSingle(cScale), 0.0f);
     }
     return accScale;
 }
@@ -270,30 +270,29 @@ EcsWorldPose ResolveEntityWorldPose(in World world, in EntityID entity){
         if(!childParent.inheritScale)
             pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
 
-        const VectorSingle scaledLocalPos(childXf.position.x * pScale.x, childXf.position.y * pScale.y, childXf.position.z * pScale.z, 0.0f);
+        const VectorSingle scaledLocalPos = VectorSingle(childXf.position) * pScale;
         const VectorSingle pRot = SafeNormalizeQuat(VectorSingle(pose.transform.rotation));
         const VectorSingle cRot = SafeNormalizeQuat(VectorSingle(childXf.rotation));
-        pose.transform.position = f32x4(VectorSingle(pose.transform.position) + Vector3Rotate(scaledLocalPos, pRot), 0.0f);
+        pose.transform.position = f32x4(VectorSingle(pose.transform.position) + Vector3Rotate(VectorSingle(scaledLocalPos, 0.0f), pRot), 0.0f);
         pose.transform.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(pRot, cRot)));
-        pose.scale = f32x4(pScale.x * childXf.scale.x, pScale.y * childXf.scale.y, pScale.z * childXf.scale.z, 0.0f);
+        pose.scale = f32x4(pScale * VectorSingle(childXf.scale), 0.0f);
     }
     return pose;
 }
 
 MassData BuildCustomMassData(in RigidBodyComponent rb, in VectorSingle scale){
     MassData md;
-    const VectorSingle scaledCom(rb.customCenterOfMass.x * scale.x, rb.customCenterOfMass.y * scale.y, rb.customCenterOfMass.z * scale.z, 0.0f);
-    md.setCenterMass(scaledCom, Max(rb.customMass, 1.0e-5f));
-    const f32 ixx = Max(rb.customInertiaDiag.x, 0.0f);
-    const f32 iyy = Max(rb.customInertiaDiag.y, 0.0f);
-    const f32 izz = Max(rb.customInertiaDiag.z, 0.0f);
+    const VectorSingle scaledCom = VectorSingle(rb.customCenterOfMass) * scale;
+    md.setCenterMass(VectorSingle(scaledCom, 0.0f), SimdMax(rb.customMass, 1.0e-5f));
+    const VectorSingle rawDiag = VectorSingle(rb.customInertiaDiag);
+    const VectorSingle diagI = VectorSelect(VectorSingle(0.0f), rawDiag, VectorGreater(rawDiag, VectorSingle(0.0f)));
     const f32 ixy = rb.customInertiaOffDiag.x;
     const f32 ixz = rb.customInertiaOffDiag.y;
     const f32 iyz = rb.customInertiaOffDiag.z;
     md.inertia = Mat3(
-        VectorSingle(ixx, ixy, ixz, 0.0f),
-        VectorSingle(ixy, iyy, iyz, 0.0f),
-        VectorSingle(ixz, iyz, izz, 0.0f)
+        VectorSingle(diagI.x, ixy, ixz, 0.0f),
+        VectorSingle(ixy, diagI.y, iyz, 0.0f),
+        VectorSingle(ixz, iyz, diagI.z, 0.0f)
     );
     return md;
 }
@@ -410,8 +409,8 @@ void ResolvePhysicsConfigSettings(
                 return;
             found = true;
 
-            if(IsFinite(cfg.fixedDeltaTime) && cfg.fixedDeltaTime > 0.0f)
-                outFixedDt = Max(cfg.fixedDeltaTime, 1.0f / 240.0f);
+            if(IsFinite(VectorSingle(cfg.fixedDeltaTime)) && cfg.fixedDeltaTime > 0.0f)
+                outFixedDt = SimdMax(cfg.fixedDeltaTime, 1.0f / 240.0f);
             outSubSteps = Max(cfg.subStepCount, 1u);
             outMaxSubSteps = Max(cfg.maxSubStepsPerFrame, 1u);
             outPaused = cfg.paused;
@@ -473,10 +472,10 @@ ColliderShapeEntry BuildPrimaryColliderEntry(in ColliderComponent col){
 
 ShapeDef BuildShapeDefFromEntry(in ColliderShapeEntry entry, in b8 updateBodyMass){
     ShapeDef sd;
-    sd.density = Max(entry.density, 0.0f);
-    sd.material.friction = Max(entry.friction, 0.0f);
-    sd.material.restitution = Max(entry.restitution, 0.0f);
-    sd.material.rollingResistance = Max(entry.rollingResistance, 0.0f);
+    sd.density = SimdMax(entry.density, 0.0f);
+    sd.material.friction = SimdMax(entry.friction, 0.0f);
+    sd.material.restitution = SimdMax(entry.restitution, 0.0f);
+    sd.material.rollingResistance = SimdMax(entry.rollingResistance, 0.0f);
     sd.material.tangentSpeed = entry.tangentSpeed;
     sd.filter.categoryBits = entry.categoryBits;
     sd.filter.maskBits = entry.maskBits;
@@ -493,41 +492,24 @@ ShapeDef BuildShapeDefFromEntry(in ColliderShapeEntry entry, in b8 updateBodyMas
 }
 
 VectorSingle ResolveSignedColliderScale(in VectorSingle rawScale){
-    f32 rsx = rawScale.x;
-    if(Abs(rsx) < 1.0e-4f){
-        if(rsx < 0.0f)
-            rsx = -1.0e-4f;
-        else
-            rsx = 1.0e-4f;
-    }
-    f32 rsy = rawScale.y;
-    if(Abs(rsy) < 1.0e-4f){
-        if(rsy < 0.0f)
-            rsy = -1.0e-4f;
-        else
-            rsy = 1.0e-4f;
-    }
-    f32 rsz = rawScale.z;
-    if(Abs(rsz) < 1.0e-4f){
-        if(rsz < 0.0f)
-            rsz = -1.0e-4f;
-        else
-            rsz = 1.0e-4f;
-    }
-    return VectorSingle(rsx, rsy, rsz, 0.0f);
+    const VectorSingle minEps(1.0e-4f);
+    const VectorSingle negEps(-1.0e-4f);
+    const VectorSingle zero(0.0f);
+    const VectorSingle signedFallback = VectorSelect(minEps, negEps, VectorLess(rawScale, zero));
+    return VectorSingle(VectorSelect(rawScale, signedFallback, VectorLess(Abs(rawScale), minEps)), 0.0f);
 }
 
 SphereShape BuildEcsSphereShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
-    const f32 maxS = Max(Abs(signedScale.x), Max(Abs(signedScale.y), Abs(signedScale.z)));
-    const VectorSingle offset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    const f32 maxS = Vector3MaxComponent(Abs(VectorSingle(signedScale, 0.0f))).x;
+    const VectorSingle offset = VectorSingle(entry.center) * signedScale;
     SphereShape sp;
-    sp.centerRadius = f32x4(offset, Max(entry.radius * maxS, 1.0e-3f));
+    sp.centerRadius = f32x4(VectorSingle(offset, 0.0f), SimdMax(entry.radius * maxS, 1.0e-3f));
     return sp;
 }
 
 CapsuleShape BuildEcsCapsuleShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
     const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
-    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    const b8 hasRot = Vector3MaxComponent(Abs(VectorSingle(localRot, 0.0f))).x > 1.0e-5f;
     VectorSingle c1 = VectorSingle(entry.center);
     VectorSingle c2 = VectorSingle(entry.center2);
     if(hasRot){
@@ -538,33 +520,29 @@ CapsuleShape BuildEcsCapsuleShape(in ColliderShapeEntry entry, in VectorSingle s
 
     const VectorSingle axisDir = SafeNormalizeVec3(VectorSingle(c2 - c1, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     VectorSingle refAxis(1.0f, 0.0f, 0.0f, 0.0f);
-    if(Abs(Vector3Dot(axisDir, refAxis).x) > 0.9f)
+    if(Abs(Vector3Dot(axisDir, refAxis)).x > 0.9f)
         refAxis = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     const VectorSingle t1 = SafeNormalizeVec3(Cross(refAxis, axisDir), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     const VectorSingle t2 = SafeNormalizeVec3(Cross(axisDir, t1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-    const f32 sx = Abs(signedScale.x);
-    const f32 sy = Abs(signedScale.y);
-    const f32 sz = Abs(signedScale.z);
-    const f32 rScale1 = Vector3Length(VectorSingle(t1.x * sx, t1.y * sy, t1.z * sz, 0.0f)).x;
-    const f32 rScale2 = Vector3Length(VectorSingle(t2.x * sx, t2.y * sy, t2.z * sz, 0.0f)).x;
-    const f32 perpScale = Max(rScale1, rScale2);
+    const VectorSingle absScale = Abs(VectorSingle(signedScale, 0.0f));
+    const f32 rScale1 = Vector3Length(VectorSingle(t1 * absScale, 0.0f)).x;
+    const f32 rScale2 = Vector3Length(VectorSingle(t2 * absScale, 0.0f)).x;
+    const f32 perpScale = SimdMax(rScale1, rScale2);
 
-    const VectorSingle p1(c1.x * signedScale.x, c1.y * signedScale.y, c1.z * signedScale.z, 0.0f);
-    const VectorSingle p2(c2.x * signedScale.x, c2.y * signedScale.y, c2.z * signedScale.z, 0.0f);
+    const VectorSingle p1 = VectorSingle(c1 * signedScale, 0.0f);
+    const VectorSingle p2 = VectorSingle(c2 * signedScale, 0.0f);
     CapsuleShape cap;
-    cap.center1Radius = f32x4(p1, Max(entry.radius * perpScale, 1.0e-3f));
+    cap.center1Radius = f32x4(p1, SimdMax(entry.radius * perpScale, 1.0e-3f));
     cap.center2 = f32x4(p2, 0.0f);
     return cap;
 }
 
 Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in VectorSingle signedScale){
-    const f32 sx = Abs(signedScale.x);
-    const f32 sy = Abs(signedScale.y);
-    const f32 sz = Abs(signedScale.z);
-    const f32 maxS = Max(sx, Max(sy, sz));
+    const VectorSingle absScale = Abs(VectorSingle(signedScale, 0.0f));
+    const f32 maxS = Vector3MaxComponent(absScale).x;
     const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
-    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
-    const VectorSingle scaledOffset(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    const b8 hasRot = Vector3MaxComponent(Abs(VectorSingle(localRot, 0.0f))).x > 1.0e-5f;
+    const VectorSingle scaledOffset = VectorSingle(entry.center) * signedScale;
 
     if(!entry.isBox){
         Vector<f32x4> scaledPts;
@@ -573,38 +551,39 @@ Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in VectorSing
             VectorSingle rPt = VectorSingle(entry.hullPoints[vi]);
             if(hasRot)
                 rPt = Vector3Rotate(rPt, localRot);
-            scaledPts[vi] = f32x4((rPt.x + entry.center.x) * signedScale.x, (rPt.y + entry.center.y) * signedScale.y, (rPt.z + entry.center.z) * signedScale.z, 0.0f);
+            scaledPts[vi] = f32x4((rPt + VectorSingle(entry.center)) * signedScale, 0.0f);
         }
-        return BuildConvexHull(Span<f32x4>(scaledPts.data(), scaledPts.size()), Max(entry.skinRadius * maxS, 0.0f));
+        return BuildConvexHull(Span<f32x4>(scaledPts.data(), scaledPts.size()), SimdMax(entry.skinRadius * maxS, 0.0f));
     }
 
-    const b8 nonUniform = (Abs(sx - sy) > 1.0e-5f || Abs(sy - sz) > 1.0e-5f);
+    const VectorSingle diffScale = Abs(VectorSingle(absScale.x - absScale.y, absScale.y - absScale.z, 0.0f, 0.0f));
+    const b8 nonUniform = diffScale.x > 1.0e-5f || diffScale.y > 1.0e-5f;
     const b8 isMirrored = (signedScale.x * signedScale.y * signedScale.z) < 0.0f;
     if(hasRot && (nonUniform || isMirrored)){
-        const f32 ehx = Max(entry.halfExtents.x, 1.0e-3f);
-        const f32 ehy = Max(entry.halfExtents.y, 1.0e-3f);
-        const f32 ehz = Max(entry.halfExtents.z, 1.0e-3f);
+        const VectorSingle rawExt = VectorSingle(entry.halfExtents);
+        const VectorSingle minExt(1.0e-3f);
+        const VectorSingle clampExt = VectorSelect(minExt, rawExt, VectorGreater(rawExt, minExt));
         Array<f32x4, 8u> corners;
         for(u32 ci = 0u; ci < 8u; ++ci){
-            f32 cx = ehx;
+            f32 cx = clampExt.x;
             if((ci & 1u) == 0u)
-                cx = -ehx;
-            f32 cy = ehy;
+                cx = -clampExt.x;
+            f32 cy = clampExt.y;
             if((ci & 2u) == 0u)
-                cy = -ehy;
-            f32 cz = ehz;
+                cy = -clampExt.y;
+            f32 cz = clampExt.z;
             if((ci & 4u) == 0u)
-                cz = -ehz;
+                cz = -clampExt.z;
             const VectorSingle rotC = Vector3Rotate(VectorSingle(cx, cy, cz, 0.0f), localRot);
-            corners[ci] = f32x4((rotC.x + entry.center.x) * signedScale.x, (rotC.y + entry.center.y) * signedScale.y, (rotC.z + entry.center.z) * signedScale.z, 0.0f);
+            corners[ci] = f32x4((rotC + VectorSingle(entry.center)) * signedScale, 0.0f);
         }
-        return BuildConvexHull(Span<f32x4>(corners.data(), corners.size()), Max(entry.skinRadius * maxS, 0.0f));
+        return BuildConvexHull(Span<f32x4>(corners.data(), corners.size()), SimdMax(entry.skinRadius * maxS, 0.0f));
     }
 
-    const f32 hx = Max(entry.halfExtents.x * sx, 1.0e-3f);
-    const f32 hy = Max(entry.halfExtents.y * sy, 1.0e-3f);
-    const f32 hz = Max(entry.halfExtents.z * sz, 1.0e-3f);
-    Expected<HullShape> boxHull = MakeBoxHull(hx, hy, hz, Max(entry.skinRadius * maxS, 0.0f));
+    const VectorSingle scaledExt = VectorSingle(entry.halfExtents) * absScale;
+    const VectorSingle minExt(1.0e-3f);
+    const VectorSingle clampExt = VectorSelect(minExt, scaledExt, VectorGreater(scaledExt, minExt));
+    Expected<HullShape> boxHull = MakeBoxHull(clampExt.x, clampExt.y, clampExt.z, SimdMax(entry.skinRadius * maxS, 0.0f));
     if(!boxHull.has_value())
         return boxHull;
 
@@ -663,9 +642,9 @@ b8 ApplyEcsColliderPropertiesInPlace(
     }
 
     SurfaceMaterial mat;
-    mat.friction = Max(entry.friction, 0.0f);
-    mat.restitution = Max(entry.restitution, 0.0f);
-    mat.rollingResistance = Max(entry.rollingResistance, 0.0f);
+    mat.friction = SimdMax(entry.friction, 0.0f);
+    mat.restitution = SimdMax(entry.restitution, 0.0f);
+    mat.rollingResistance = SimdMax(entry.rollingResistance, 0.0f);
     mat.tangentSpeed = entry.tangentSpeed;
     physicsWorld.setShapeMaterial(shapeId, mat);
 
@@ -676,7 +655,7 @@ b8 ApplyEcsColliderPropertiesInPlace(
     physicsWorld.setShapeFilter(shapeId, flt);
 
     physicsWorld.setShapeSensor(shapeId, entry.isSensor);
-    physicsWorld.setShapeDensity(shapeId, Max(entry.density, 0.0f), false);
+    physicsWorld.setShapeDensity(shapeId, SimdMax(entry.density, 0.0f), false);
     physicsWorld.setShapeEnableContactEvents(shapeId, entry.enableContactEvents);
     physicsWorld.setShapeEnableHitEvents(shapeId, entry.enableHitEvents);
     physicsWorld.setShapeEnableSensorEvents(shapeId, entry.enableSensorEvents);
@@ -695,13 +674,10 @@ Expected<ShapeId> AttachEcsColliderEntry(
 ){
     const ShapeDef sd = BuildShapeDefFromEntry(entry, updateBodyMass);
     const VectorSingle signedScale = ResolveSignedColliderScale(scale);
-    const f32 sx = Abs(signedScale.x);
-    const f32 sy = Abs(signedScale.y);
-    const f32 sz = Abs(signedScale.z);
-    const f32 maxS = Max(sx, Max(sy, sz));
+    const f32 maxS = Vector3MaxComponent(Abs(VectorSingle(signedScale, 0.0f))).x;
     const b8 isMirrored = (signedScale.x * signedScale.y * signedScale.z) < 0.0f;
     const VectorSingle localRot = SafeNormalizeQuat(VectorSingle(entry.localRotation));
-    const b8 hasRot = (Abs(localRot.x) > 1.0e-5f || Abs(localRot.y) > 1.0e-5f || Abs(localRot.z) > 1.0e-5f);
+    const b8 hasRot = Vector3MaxComponent(Abs(VectorSingle(localRot, 0.0f))).x > 1.0e-5f;
 
     if(entry.shapeType == ShapeType::Sphere){
         return physicsWorld.createSphereShape(bodyId, sd, BuildEcsSphereShape(entry, signedScale));
@@ -731,8 +707,8 @@ Expected<ShapeId> AttachEcsColliderEntry(
                 VectorSingle rPt = Vec3FromU(p);
                 if(hasRot)
                     rPt = Vector3Rotate(rPt, localRot);
-                rPt = rPt + VectorSingle(entry.center);
-                transformedVerts[vi] = f32x4(rPt.x * signedScale.x, rPt.y * signedScale.y, rPt.z * signedScale.z, 0.0f);
+                rPt = (rPt + VectorSingle(entry.center)) * signedScale;
+                transformedVerts[vi] = f32x4(rPt, 0.0f);
             }
         }
         else{
@@ -742,8 +718,8 @@ Expected<ShapeId> AttachEcsColliderEntry(
                 VectorSingle rPt(v.x, v.y, v.z, 0.0f);
                 if(hasRot)
                     rPt = Vector3Rotate(rPt, localRot);
-                rPt = rPt + VectorSingle(entry.center);
-                transformedVerts[vi] = f32x4(rPt.x * signedScale.x, rPt.y * signedScale.y, rPt.z * signedScale.z, 0.0f);
+                rPt = (rPt + VectorSingle(entry.center)) * signedScale;
+                transformedVerts[vi] = f32x4(rPt, 0.0f);
             }
             decodedIndices = entry.meshIndices;
         }
@@ -759,7 +735,7 @@ Expected<ShapeId> AttachEcsColliderEntry(
         const Expected<MeshShape> meshRes = MakeMeshShape(
             Span<f32x4>(transformedVerts.data(), transformedVerts.size()),
             Span<u32>(decodedIndices.data(), decodedIndices.size()),
-            Max(entry.skinRadius * maxS, 0.0f)
+            SimdMax(entry.skinRadius * maxS, 0.0f)
         );
         if(!meshRes.has_value())
             return MakeUnexpected(Failure());
@@ -1627,9 +1603,10 @@ void SyncEcsEntitiesToPhysicsWorld(
             else if(entB.valid() && worldForJoints.alive(entB) && worldForJoints.hasComponent<TransformComponent>(entB))
                 scaleB = worldForJoints.getComponent<TransformComponent>(entB).scale;
 
-            const f32x4 scaledAnchorA(jc.localAnchorA.x * scaleA.x, jc.localAnchorA.y * scaleA.y, jc.localAnchorA.z * scaleA.z, 0.0f);
-            const f32x4 scaledAnchorB(jc.localAnchorB.x * scaleB.x, jc.localAnchorB.y * scaleB.y, jc.localAnchorB.z * scaleB.z, 0.0f);
-            const f32x4 scaledOffset(jc.linearOffset.x * scaleA.x, jc.linearOffset.y * scaleA.y, jc.linearOffset.z * scaleA.z, 0.0f);
+            const VectorSingle scaleAVec(scaleA);
+            const f32x4 scaledAnchorA(VectorSingle(jc.localAnchorA) * scaleAVec, 0.0f);
+            const f32x4 scaledAnchorB(VectorSingle(jc.localAnchorB) * VectorSingle(scaleB), 0.0f);
+            const f32x4 scaledOffset(VectorSingle(jc.linearOffset) * scaleAVec, 0.0f);
 
             EcsJointStructuralSnapshot curStruct;
             curStruct.type = jc.type;
@@ -1785,9 +1762,9 @@ void ApplyInterpolatedKinematicTargets(
     in f32 fixedDt,
     mut PhysicsWorld physicsWorld
 ){
-    if(!IsFinite(fixedDt) || fixedDt <= 0.0f || plannedSteps == 0u)
+    if(!IsFinite(VectorSingle(fixedDt)) || fixedDt <= 0.0f || plannedSteps == 0u)
         return;
-    const f32 frac = Clamp(cast<f32>(stepIdx + 1u) / cast<f32>(plannedSteps), 0.0f, 1.0f);
+    const f32 frac = SimdClamp(cast<f32>(stepIdx + 1u) / cast<f32>(plannedSteps), 0.0f, 1.0f);
     const VectorSingle tVec(frac);
     for(usize i = 0u; i < targets.size(); ++i){
         in EcsKinematicInterpolationTarget entry = targets[i];
@@ -1802,7 +1779,7 @@ void ApplyInterpolatedKinematicTargets(
 }
 
 void ApplyKinematicTargetsFromEcs(mut World world, mut PhysicsWorld physicsWorld, in f32 fixedDt, in b8 hasAnyPhysicsParents){
-    if(!IsFinite(fixedDt) || fixedDt <= 0.0f)
+    if(!IsFinite(VectorSingle(fixedDt)) || fixedDt <= 0.0f)
         return;
 
     in World worldRef = world;
@@ -1998,18 +1975,13 @@ void WriteBackPhysicsTransformsToEcs(
                     if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
                         const EcsWorldPose parentPose = ResolveEntityWorldPose(world, pp.parent);
                         const Transform3D localXf = RelativeTransform(parentPose.transform, physXf);
-                        f32 lx = localXf.position.x;
-                        f32 ly = localXf.position.y;
-                        f32 lz = localXf.position.z;
+                        VectorSingle locPos = VectorSingle(localXf.position);
                         if(pp.inheritScale){
-                            if(Abs(parentPose.scale.x) > 1.0e-5f)
-                                lx /= parentPose.scale.x;
-                            if(Abs(parentPose.scale.y) > 1.0e-5f)
-                                ly /= parentPose.scale.y;
-                            if(Abs(parentPose.scale.z) > 1.0e-5f)
-                                lz /= parentPose.scale.z;
+                            const VectorSingle pScale = VectorSingle(parentPose.scale);
+                            const VectorSingle safeDiv = VectorSelect(VectorSingle(1.0f), pScale, VectorGreater(Abs(pScale), VectorSingle(1.0e-5f)));
+                            locPos = locPos / safeDiv;
                         }
-                        xf.position = f32x4(lx, ly, lz, 0.0f);
+                        xf.position = f32x4(VectorSingle(locPos, 0.0f));
                         xf.rotation = localXf.rotation;
                     }
                     else{

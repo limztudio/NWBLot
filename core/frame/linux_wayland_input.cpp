@@ -372,7 +372,7 @@ i32 WaylandFrameInput::pollTimeoutForKeyRepeat(const i32 timeoutMs)const noexcep
         return timeoutMs;
 
     const f64 secondsUntilRepeat = DurationInSeconds<f64>(m_nextRepeatTime, TimerNow());
-    const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(secondsUntilRepeat), VectorDoubleReplicate(static_cast<f64>(s_MillisecondsInSecond))))));
+    const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(VectorDoubleGetX(VectorDoubleCeiling(VectorDoubleMultiply(VectorDoubleReplicate(secondsUntilRepeat), VectorDoubleReplicate(static_cast<f64>(s_MillisecondsInSecond))))));
     return timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
 }
 

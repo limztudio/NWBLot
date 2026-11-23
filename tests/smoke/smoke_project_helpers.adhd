@@ -91,8 +91,11 @@ class YawSpinController{
 
         if(this.m_manualControl)
             this.m_yaw += manualAxis * manualYawSpeed * safeDelta;
-        else
-            this.m_yaw += Min(safeDelta, maxSpinDelta) * spinSpeed;
+        else{
+            const VectorSingle safeVec(safeDelta);
+            const VectorSingle maxVec(maxSpinDelta);
+            this.m_yaw += VectorSelect(maxVec, safeVec, VectorLess(safeVec, maxVec)).x * spinSpeed;
+        }
     }
 
     public f32 yaw()const{ return this.m_yaw; }
@@ -149,9 +152,11 @@ f32 ReadSmokeFrozenYawFromEnvironment(in StringView variableName){
 
 u32 ParseRendererBaselineCaptureFreezeFrame(){
     const Expected<f32> configuredFrame = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-    if(!configuredFrame.has_value() || !IsFinite(configuredFrame.value()) || configuredFrame.value() < 1.0f)
+    if(!configuredFrame.has_value() || !IsFinite(VectorSingle(configuredFrame.value())) || configuredFrame.value() < 1.0f)
         return 0u;
-    return cast<u32>(Min(configuredFrame.value(), s_MaxBaselineFreezeFrame));
+    const VectorSingle cfgVec(configuredFrame.value());
+    const VectorSingle maxVec(s_MaxBaselineFreezeFrame);
+    return cast<u32>(VectorSelect(maxVec, cfgVec, VectorLess(cfgVec, maxVec)).x);
 }
 
 u32 RendererBaselineCaptureFreezeFrame(){
@@ -160,7 +165,7 @@ u32 RendererBaselineCaptureFreezeFrame(){
 
 f32 ParseRendererBaselineFixedDelta(){
     const Expected<f32> configuredDelta = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS");
-    if(!configuredDelta.has_value() || !IsFinite(configuredDelta.value()) || configuredDelta.value() <= 0.0f || configuredDelta.value() > 1.0f)
+    if(!configuredDelta.has_value() || !IsFinite(VectorSingle(configuredDelta.value())) || configuredDelta.value() <= 0.0f || configuredDelta.value() > 1.0f)
         return 0.0f;
     return configuredDelta.value();
 }
@@ -178,9 +183,11 @@ f32 RendererBaselineDelta(in f32 frameDelta){
 
 f32 SafeRendererBaselineDelta(in f32 frameDelta){
     const f32 delta = RendererBaselineDelta(frameDelta);
-    if(!IsFinite(delta))
+    if(!IsFinite(VectorSingle(delta)))
         return 0.0f;
-    return Max(delta, 0.0f);
+    const VectorSingle deltaVec(delta);
+    const VectorSingle zeroVec(0.0f);
+    return VectorSelect(zeroVec, deltaVec, VectorGreater(deltaVec, zeroVec)).x;
 }
 
 void SuspendSmokeCapture(mut GraphicsRuntime graphics, mut b8 paused, in StringView projectName, in u32 frameCount, in StringView frameUnit){
@@ -193,7 +200,7 @@ void SuspendSmokeCapture(mut GraphicsRuntime graphics, mut b8 paused, in StringV
 
 VectorSingle CalculateSmokeYawDisplay(in VectorSingle yaw, in VectorSingle turn){
     const f32 turnScalar = turn.x;
-    f32 wrapped = FMod(yaw.x, turnScalar);
+    f32 wrapped = VectorMod(yaw, turn).x;
     if(wrapped < 0.0f)
         wrapped += turnScalar;
     const f32 degrees = wrapped * (s_DegreesPerTurn / turnScalar);

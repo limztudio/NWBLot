@@ -18,6 +18,44 @@ void AdvanceRevision(mut u64 inOutRevision){
     AdvanceNonWrappingRevision(inOutRevision);
 }
 
+f32 UiSimdMin(in f32 a, in f32 b){
+    const VectorSingle va(a);
+    const VectorSingle vb(b);
+    return VectorSelect(vb, va, VectorLess(va, vb)).x;
+}
+
+f32 UiSimdMax(in f32 a, in f32 b){
+    const VectorSingle va(a);
+    const VectorSingle vb(b);
+    return VectorSelect(vb, va, VectorGreater(va, vb)).x;
+}
+
+f32 UiSimdClamp(in f32 v, in f32 lo, in f32 hi){
+    const VectorSingle vv(v);
+    const VectorSingle vlo(lo);
+    const VectorSingle vhi(hi);
+    return VectorSelect(vlo, VectorSelect(vv, vhi, VectorGreater(vv, vhi)), VectorGreater(vv, vlo)).x;
+}
+
+f64 UiSimdMinF64(in f64 a, in f64 b){
+    const VectorDouble va(a);
+    const VectorDouble vb(b);
+    return VectorDoubleSelect(vb, va, VectorDoubleLess(va, vb)).x;
+}
+
+f64 UiSimdMaxF64(in f64 a, in f64 b){
+    const VectorDouble va(a);
+    const VectorDouble vb(b);
+    return VectorDoubleSelect(vb, va, VectorDoubleGreater(va, vb)).x;
+}
+
+f64 UiSimdClampF64(in f64 v, in f64 lo, in f64 hi){
+    const VectorDouble vv(v);
+    const VectorDouble vlo(lo);
+    const VectorDouble vhi(hi);
+    return VectorDoubleSelect(vlo, VectorDoubleSelect(vv, vhi, VectorDoubleGreater(vv, vhi)), VectorDoubleGreater(vv, vlo)).x;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -504,7 +504,7 @@ void VerifyUiListBuilderTests_DistantTallRowGrowsBeforePaintingAndPreservesItsPi
     const Expected<Rect> visual = self.m_text.measure(layout.value(), self.m_paint.displayMetrics());
     ASSERT_TRUE(visual.has_value());
     EXPECT_GE(grownHeight + 0.0001f, visual.value().height + metrics.value().padding.top + metrics.value().padding.bottom);
-    const u64 provisionalBound = cast<u64>(Ceil(placement.viewport.height / initialHeight)) + 1u;
+    const u64 provisionalBound = cast<u64>(VectorCeiling(VectorSingle(placement.viewport.height / initialHeight)).x) + 1u;
     EXPECT_LE(self.m_source.textCalls.value(), provisionalBound);
     EXPECT_LE(self.m_source.keyCalls.value(), provisionalBound * 2u + 2u);
     EXPECT_LE(self.m_source.lookupCalls.value(), provisionalBound + 2u);
@@ -603,7 +603,9 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
             ASSERT_TRUE(layout.has_value());
             const Expected<Rect> visual = self.m_text.measure(layout.value(), display);
             ASSERT_TRUE(visual.has_value());
-            expected = Max(expected, visual.value().height + metrics.value().padding.top + metrics.value().padding.bottom);
+            const VectorSingle curExpected(expected);
+            const VectorSingle rowHeight(visual.value().height + metrics.value().padding.top + metrics.value().padding.bottom);
+            expected = VectorSelect(rowHeight, curExpected, VectorGreater(curExpected, rowHeight)).x;
         }
         EXPECT_FLOAT_EQ(refreshed, expected);
         EXPECT_LE(source.textCalls.value(), 8u);

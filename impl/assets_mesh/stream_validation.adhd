@@ -48,7 +48,7 @@ b8 IsValidMeshTangentVector(in VectorSingle tangent){
 }
 
 b8 IsValidMeshletBoundsSphere(in MeshletBounds bounds){
-    return IsFinite(bounds.sphere.x) && IsFinite(bounds.sphere.y) && IsFinite(bounds.sphere.z) && IsFinite(bounds.sphere.w) && bounds.sphere.w >= 0.0f;
+    return IsFinite(VectorSingle(bounds.sphere.x, bounds.sphere.y, bounds.sphere.z, bounds.sphere.w)) && bounds.sphere.w >= 0.0f;
 }
 
 b8 HasValidMeshletConeFlags(in MeshletBounds bounds){
@@ -252,7 +252,7 @@ b8 ValidateMeshStreams(
 
     for(usize i = 0u; i < positions.size(); ++i){
         const f32x3u pos = positions[i];
-        if(IsFinite(pos.x) && IsFinite(pos.y) && IsFinite(pos.z))
+        if(IsFinite(VectorSingle(pos.x, pos.y, pos.z, 0.0f)))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_PositionsStreamLabelText, i, s_NonFiniteDataReasonText);
@@ -275,7 +275,7 @@ b8 ValidateMeshStreams(
     }
     for(usize i = 0u; i < uv0.size(); ++i){
         const f32x2u uv = uv0[i];
-        if(IsFinite(uv.x) && IsFinite(uv.y))
+        if(IsFinite(VectorSingle(uv.x, uv.y, 0.0f, 0.0f)))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_Uv0StreamLabelText, i, s_NonFiniteDataReasonText);

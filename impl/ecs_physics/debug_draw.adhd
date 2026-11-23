@@ -62,7 +62,7 @@ class PhysicsDebugScreenProjector{
         this.m_camPos = f32x4(basis[3u], 0.0f);
         this.m_projX = projection.projectionParams.x;
         this.m_projY = projection.projectionParams.y;
-        this.m_zMin = Max(projection.nearPlane, 0.01f);
+        this.m_zMin = SimdMax(projection.nearPlane, 0.01f);
         this.m_halfWidth = 0.5f * viewportWidth;
         this.m_halfHeight = 0.5f * viewportHeight;
     }
@@ -88,38 +88,34 @@ class PhysicsDebugScreenProjector{
 
         if(v0.z < this.m_zMin){
             const f32 denom = v1.z - v0.z;
-            if(Abs(denom) <= 1.0e-8f)
+            if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
                 return MakeUnexpected(Failure());
-            const f32 t = Clamp((this.m_zMin - v0.z) / denom, 0.0f, 1.0f);
+            const f32 t = SimdClamp((this.m_zMin - v0.z) / denom, 0.0f, 1.0f);
             v0 = v0 + (v1 - v0) * t;
         }
         else if(v1.z < this.m_zMin){
             const f32 denom = v0.z - v1.z;
-            if(Abs(denom) <= 1.0e-8f)
+            if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
                 return MakeUnexpected(Failure());
-            const f32 t = Clamp((this.m_zMin - v1.z) / denom, 0.0f, 1.0f);
+            const f32 t = SimdClamp((this.m_zMin - v1.z) / denom, 0.0f, 1.0f);
             v1 = v1 + (v0 - v1) * t;
         }
 
-        const f32 invZ0 = 1.0f / v0.z;
-        const f32 invZ1 = 1.0f / v1.z;
-        const f32 ndcX0 = v0.x * this.m_projX * invZ0;
-        const f32 ndcY0 = v0.y * this.m_projY * invZ0;
-        const f32 ndcX1 = v1.x * this.m_projX * invZ1;
-        const f32 ndcY1 = v1.y * this.m_projY * invZ1;
-        if(!IsFinite(VectorSingle(ndcX0, ndcY0, ndcX1, ndcY1)))
+        const VectorSingle invZ = VectorSingle(1.0f) / VectorSingle(v0.z, v0.z, v1.z, v1.z);
+        const VectorSingle ndc = VectorSingle(v0.x, v0.y, v1.x, v1.y) * VectorSingle(this.m_projX, this.m_projY, this.m_projX, this.m_projY) * invZ;
+        if(!IsFinite(ndc))
             return MakeUnexpected(Failure());
 
+        const f32 ndcX0 = ndc.x;
+        const f32 ndcY0 = ndc.y;
+        const f32 ndcX1 = ndc.z;
+        const f32 ndcY1 = ndc.w;
         if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
             return MakeUnexpected(Failure());
         if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
             return MakeUnexpected(Failure());
 
-        const f32 sx0 = (1.0f + ndcX0) * this.m_halfWidth;
-        const f32 sy0 = (1.0f - ndcY0) * this.m_halfHeight;
-        const f32 sx1 = (1.0f + ndcX1) * this.m_halfWidth;
-        const f32 sy1 = (1.0f - ndcY1) * this.m_halfHeight;
-        return VectorSingle(sx0, sy0, sx1, sy1);
+        return (VectorSingle(1.0f) + ndc * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f)) * VectorSingle(this.m_halfWidth, this.m_halfHeight, this.m_halfWidth, this.m_halfHeight);
     }
 }
 
@@ -156,8 +152,9 @@ void AppendPhysicsDebugCircle(
         return;
     const u32 segments = 12u;
     const f32 step = (2.0f * s_PI) / cast<f32>(segments);
-    const f32 dc = Cos(step);
-    const f32 ds = Sin(step);
+    const VectorSingle stepVec(step);
+    const f32 dc = Cos(stepVec).x;
+    const f32 ds = Sin(stepVec).x;
     const VectorSingle uR = axisU * radius;
     const VectorSingle vR = axisV * radius;
     const VectorSingle firstPt = center + uR;
@@ -183,7 +180,7 @@ void ComputePhysicsDebugBasis(
 ){
     const VectorSingle axis = SafeNormalizeVec3(rawAxis, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     VectorSingle refAxis(1.0f, 0.0f, 0.0f, 0.0f);
-    if(Abs(Vector3Dot(axis, refAxis).x) > 0.9f)
+    if(Abs(Vector3Dot(axis, refAxis)).x > 0.9f)
         refAxis = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     outU = SafeNormalizeVec3(Cross(refAxis, axis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     outV = SafeNormalizeVec3(Cross(axis, outU), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
@@ -204,10 +201,13 @@ void AppendPhysicsDebugArc(
         return;
     const u32 segments = 8u;
     const f32 step = (endAngle - startAngle) / cast<f32>(segments);
-    const f32 dc = Cos(step);
-    const f32 ds = Sin(step);
-    f32 c = Cos(startAngle);
-    f32 s = Sin(startAngle);
+    const VectorSingle angles(startAngle, step, startAngle, step);
+    const VectorSingle cosAngles = Cos(angles);
+    const VectorSingle sinAngles = Sin(angles);
+    const f32 dc = cosAngles.y;
+    const f32 ds = sinAngles.y;
+    f32 c = cosAngles.x;
+    f32 s = sinAngles.x;
     const VectorSingle uR = axisU * radius;
     const VectorSingle vR = axisV * radius;
     VectorSingle prev = center + uR * c + vR * s;
@@ -510,9 +510,9 @@ void BuildPhysicsDebugLines(
                 AppendPhysicsDebugLine(options.maxLines, aA, aA + axisA * 0.25f, jointColor, outLines);
                 AppendPhysicsDebugLine(options.maxLines, aB, aB + axisB * 0.25f, jointColor, outLines);
                 if(j.enableLimit() && j.swingLimit > 0.0f){
-                    const f32 angle = Min(j.swingLimit, s_PI * 0.45f);
-                    const f32 coneDist = Cos(angle) * 0.25f;
-                    const f32 coneRad = Sin(angle) * 0.25f;
+                    const VectorSingle angleVec(SimdMin(j.swingLimit, s_PI * 0.45f));
+                    const f32 coneDist = Cos(angleVec).x * 0.25f;
+                    const f32 coneRad = Sin(angleVec).x * 0.25f;
                     const VectorSingle coneCenter = aA + axisA * coneDist;
                     AppendPhysicsDebugCircle(options.maxLines, coneCenter, jU, jV, coneRad, jointColor, outLines);
                     AppendPhysicsDebugLine(options.maxLines, aA, coneCenter + jU * coneRad, jointColor, outLines);
@@ -523,8 +523,11 @@ void BuildPhysicsDebugLines(
                 AppendPhysicsDebugLine(options.maxLines, aA - axisA * 0.2f, aA + axisA * 0.2f, jointColor, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, aA, jU, jV, 0.15f, jointColor, outLines);
                 if(j.enableLimit() && j.lowerLimit() <= j.upperLimit()){
-                    const VectorSingle lowDir = jU * Cos(j.lowerLimit()) + jV * Sin(j.lowerLimit());
-                    const VectorSingle highDir = jU * Cos(j.upperLimit()) + jV * Sin(j.upperLimit());
+                    const VectorSingle limits(j.lowerLimit(), j.upperLimit(), 0.0f, 0.0f);
+                    const VectorSingle cosLimits = Cos(limits);
+                    const VectorSingle sinLimits = Sin(limits);
+                    const VectorSingle lowDir = jU * cosLimits.x + jV * sinLimits.x;
+                    const VectorSingle highDir = jU * cosLimits.y + jV * sinLimits.y;
                     AppendPhysicsDebugLine(options.maxLines, aA, aA + lowDir * 0.18f, jointColor, outLines);
                     AppendPhysicsDebugLine(options.maxLines, aA, aA + highDir * 0.18f, jointColor, outLines);
                 }

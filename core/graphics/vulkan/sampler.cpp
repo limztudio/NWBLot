@@ -8,6 +8,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +92,11 @@ Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
     }
 
     SamplerDesc normalizedDesc = d;
-    normalizedDesc.maxAnisotropy = Clamp(normalizedDesc.maxAnisotropy, 1.0f, Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.0f));
+    const SIMDVectorSingle one = VectorSplatOne();
+    const SIMDVectorSingle limit = VectorReplicate(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy);
+    const SIMDVectorSingle maxLimit = VectorSelect(one, limit, VectorGreater(limit, one));
+    const SIMDVectorSingle anisotropy = VectorReplicate(normalizedDesc.maxAnisotropy);
+    normalizedDesc.maxAnisotropy = VectorGetX(VectorSelect(one, VectorSelect(anisotropy, maxLimit, VectorGreater(anisotropy, maxLimit)), VectorGreater(anisotropy, one)));
 
     SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!sampler)

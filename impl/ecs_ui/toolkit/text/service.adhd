@@ -339,7 +339,7 @@ class TextService : NoCopy{
             in PlacedGlyph glyph = glyphs[index];
             const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
             if(atlas.has_value()){
-                if(!IsFinite(glyph.position.x) || !IsFinite(glyph.position.y))
+                if(!IsFinite(VectorSingle(glyph.position.x, glyph.position.y, 0.0f, 0.0f)))
                     return false;
                 in BakedFontAtlas baked = atlas.value();
                 in FontAtlasGlyph record = baked.glyph(glyph.glyphId);
@@ -469,7 +469,7 @@ Rect MakeCachedCoverageGlyphBounds(in i32 bearingX, in i32 bearingY, in Rect pix
 }
 
 b8 IsValidTextPaintOriginAndColor(in Point topLeft, in Color color){
-    return IsFinite(topLeft.x) && IsFinite(topLeft.y) && IsValidPaintColor(color);
+    return IsFinite(VectorSingle(topLeft.x, topLeft.y, 0.0f, 0.0f)) && IsValidPaintColor(color);
 }
 
 Point MakeDisplayPixelScalePoint(in DisplayMetrics metrics){

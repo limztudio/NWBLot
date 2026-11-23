@@ -195,7 +195,7 @@ void AppendBoxFace(mut HullShape hull, in VectorSingle normal, in f32 offset, in
 }
 
 Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32 radius){
-    if(!IsFinite(halfX) || !IsFinite(halfY) || !IsFinite(halfZ) || !IsFinite(radius))
+    if(!IsFinite(VectorSingle(halfX, halfY, halfZ, radius)))
         return MakeUnexpected(Failure());
     if(halfX <= 0.0f || halfY <= 0.0f || halfZ <= 0.0f || radius < 0.0f)
         return MakeUnexpected(Failure());
@@ -263,7 +263,7 @@ Expected<HullShape> MakeCubeHull(in f32 halfExtent){
 }
 
 Expected<SphereShape> MakeSphereShape(in VectorSingle center, in f32 radius){
-    if(!IsValidPositionVec3(center) || !IsFinite(radius) || radius <= 0.0f)
+    if(!IsValidPositionVec3(center) || !IsFinite(VectorSingle(radius)) || radius <= 0.0f)
         return MakeUnexpected(Failure());
     SphereShape s;
     s.centerRadius = f32x4(center, radius);
@@ -271,10 +271,10 @@ Expected<SphereShape> MakeSphereShape(in VectorSingle center, in f32 radius){
 }
 
 Expected<CapsuleShape> MakeCapsuleShape(in VectorSingle center1, in VectorSingle center2, in f32 radius){
-    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(radius) || radius <= 0.0f)
+    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(VectorSingle(radius)) || radius <= 0.0f)
         return MakeUnexpected(Failure());
     const f32 lenSq = Vector3LengthSq(VectorSingle(center2 - center1, 0.0f)).x;
-    if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
         return MakeUnexpected(Failure());
     CapsuleShape c;
     c.center1Radius = f32x4(center1, radius);
@@ -285,7 +285,7 @@ Expected<CapsuleShape> MakeCapsuleShape(in VectorSingle center1, in VectorSingle
 MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
     MassData outMass;
     const f32 r = sphere.radius();
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
     const f32 volume = (4.0f / 3.0f) * s_PI * r * r * r;
@@ -293,18 +293,16 @@ MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
     const f32 iCenter = 0.4f * mass * r * r;
 
     const VectorSingle c = sphere.center();
-    const f32 xx = iCenter + mass * (c.y * c.y + c.z * c.z);
-    const f32 yy = iCenter + mass * (c.x * c.x + c.z * c.z);
-    const f32 zz = iCenter + mass * (c.x * c.x + c.y * c.y);
-    const f32 xy = -mass * c.x * c.y;
-    const f32 xz = -mass * c.x * c.z;
-    const f32 yz = -mass * c.y * c.z;
+    const VectorSingle cYzx(c.y, c.z, c.x, 0.0f);
+    const VectorSingle cZxy(c.z, c.x, c.y, 0.0f);
+    const VectorSingle diag = VectorSingle(iCenter) + (cYzx * cYzx + cZxy * cZxy) * mass;
+    const VectorSingle off = (c * cZxy) * (-mass);
 
     outMass.setCenterMass(c, mass);
     outMass.inertia = Mat3(
-        VectorSingle(xx, xy, xz, 0.0f),
-        VectorSingle(xy, yy, yz, 0.0f),
-        VectorSingle(xz, yz, zz, 0.0f)
+        VectorSingle(diag.x, off.y, off.x, 0.0f),
+        VectorSingle(off.y, diag.y, off.z, 0.0f),
+        VectorSingle(off.x, off.z, diag.z, 0.0f)
     );
     return outMass;
 }
@@ -312,7 +310,7 @@ MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
 MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     MassData outMass;
     const f32 r = capsule.radius();
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
     const VectorSingle p1 = capsule.center1();
@@ -338,49 +336,49 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     const VectorSingle axis = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const f32 deltaI = iAxis - iPerp;
 
-    const f32 c00 = iPerp + deltaI * axis.x * axis.x + totalMass * (c.y * c.y + c.z * c.z);
-    const f32 c11 = iPerp + deltaI * axis.y * axis.y + totalMass * (c.x * c.x + c.z * c.z);
-    const f32 c22 = iPerp + deltaI * axis.z * axis.z + totalMass * (c.x * c.x + c.y * c.y);
-    const f32 c01 = deltaI * axis.x * axis.y - totalMass * c.x * c.y;
-    const f32 c02 = deltaI * axis.x * axis.z - totalMass * c.x * c.z;
-    const f32 c12 = deltaI * axis.y * axis.z - totalMass * c.y * c.z;
+    const VectorSingle axisZxy(axis.z, axis.x, axis.y, 0.0f);
+    const VectorSingle cYzx(c.y, c.z, c.x, 0.0f);
+    const VectorSingle cZxy(c.z, c.x, c.y, 0.0f);
+    const VectorSingle diag = VectorSingle(iPerp) + ((axis * deltaI) * axis) + (cYzx * cYzx + cZxy * cZxy) * totalMass;
+    const VectorSingle off = ((axis * deltaI) * axisZxy) - ((c * totalMass) * cZxy);
 
     outMass.setCenterMass(c, totalMass);
     outMass.inertia = Mat3(
-        VectorSingle(c00, c01, c02, 0.0f),
-        VectorSingle(c01, c11, c12, 0.0f),
-        VectorSingle(c02, c12, c22, 0.0f)
+        VectorSingle(diag.x, off.y, off.x, 0.0f),
+        VectorSingle(off.y, diag.y, off.z, 0.0f),
+        VectorSingle(off.x, off.z, diag.z, 0.0f)
     );
     return outMass;
 }
 
 MassData ComputeHullMass(in HullShape hull, in f32 density){
     MassData outMass;
-    if(!IsFinite(density) || density <= 0.0f || hull.faceTopologies.empty() || hull.vertices.empty())
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || hull.faceTopologies.empty() || hull.vertices.empty())
         return outMass;
 
     if(hull.isBox()){
-        const f32 r = hull.radius();
-        const VectorSingle ext = hull.halfExtents();
-        const f32 hx = ext.x + r;
-        const f32 hy = ext.y + r;
-        const f32 hz = ext.z + r;
-        const f32 mass = density * (8.0f * hx * hy * hz);
-        const f32 ix = (1.0f / 3.0f) * mass * (hy * hy + hz * hz);
-        const f32 iy = (1.0f / 3.0f) * mass * (hx * hx + hz * hz);
-        const f32 iz = (1.0f / 3.0f) * mass * (hx * hx + hy * hy);
+        const VectorSingle h = hull.halfExtents() + VectorSingle(hull.radius());
+        const f32 mass = density * (8.0f * h.x * h.y * h.z);
+        const VectorSingle hSq = h * h;
+        const VectorSingle hYzxSq(hSq.y, hSq.z, hSq.x, 0.0f);
+        const VectorSingle hZxySq(hSq.z, hSq.x, hSq.y, 0.0f);
+        const VectorSingle diagI = (hYzxSq + hZxySq) * ((1.0f / 3.0f) * mass);
         const Mat3 localI(
-            VectorSingle(ix, 0.0f, 0.0f, 0.0f),
-            VectorSingle(0.0f, iy, 0.0f, 0.0f),
-            VectorSingle(0.0f, 0.0f, iz, 0.0f)
+            VectorSingle(diagI.x, 0.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, diagI.y, 0.0f, 0.0f),
+            VectorSingle(0.0f, 0.0f, diagI.z, 0.0f)
         );
         const Mat3 rotI = RotateSymmetricMat3(SafeNormalizeQuat(VectorSingle(hull.boxRotation)), localI);
         const VectorSingle c = hull.centroid();
+        const VectorSingle cYzx(c.y, c.z, c.x, 0.0f);
+        const VectorSingle cZxy(c.z, c.x, c.y, 0.0f);
+        const VectorSingle shiftDiag = (cYzx * cYzx + cZxy * cZxy) * mass;
+        const VectorSingle shiftOff = (c * cZxy) * (-mass);
         outMass.setCenterMass(c, mass);
         outMass.inertia = Mat3(
-            VectorSingle(rotI.row0.x + mass * (c.y * c.y + c.z * c.z), rotI.row0.y - mass * c.x * c.y, rotI.row0.z - mass * c.x * c.z, 0.0f),
-            VectorSingle(rotI.row1.x - mass * c.x * c.y, rotI.row1.y + mass * (c.x * c.x + c.z * c.z), rotI.row1.z - mass * c.y * c.z, 0.0f),
-            VectorSingle(rotI.row2.x - mass * c.x * c.z, rotI.row2.y - mass * c.y * c.z, rotI.row2.z + mass * (c.x * c.x + c.y * c.y), 0.0f)
+            VectorSingle(rotI.row0) + VectorSingle(shiftDiag.x, shiftOff.y, shiftOff.x, 0.0f),
+            VectorSingle(rotI.row1) + VectorSingle(shiftOff.y, shiftDiag.y, shiftOff.z, 0.0f),
+            VectorSingle(rotI.row2) + VectorSingle(shiftOff.x, shiftOff.z, shiftDiag.z, 0.0f)
         );
         return outMass;
     }
@@ -388,12 +386,8 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     const VectorSingle refPoint = Vec3FromU(hull.vertices[0u]);
     f32 volume6 = 0.0f;
     VectorSingle comAccum = VectorSingle(0.0f);
-    f32 ixx = 0.0f;
-    f32 iyy = 0.0f;
-    f32 izz = 0.0f;
-    f32 ixy = 0.0f;
-    f32 ixz = 0.0f;
-    f32 iyz = 0.0f;
+    VectorSingle iAxisAccum = VectorSingle(0.0f);
+    VectorSingle iOffAccum = VectorSingle(0.0f);
 
     for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
         in HullFaceTopology face = hull.faceTopologies[fIdx];
@@ -410,16 +404,20 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
             volume6 += det;
             comAccum = comAccum + (v0 + vPrev + vCurr) * (0.25f * det);
 
-            const f32 intx = v0.x * v0.x + vPrev.x * vPrev.x + vCurr.x * vCurr.x + v0.x * vPrev.x + vPrev.x * vCurr.x + vCurr.x * v0.x;
-            const f32 inty = v0.y * v0.y + vPrev.y * vPrev.y + vCurr.y * vCurr.y + v0.y * vPrev.y + vPrev.y * vCurr.y + vCurr.y * v0.y;
-            const f32 intz = v0.z * v0.z + vPrev.z * vPrev.z + vCurr.z * vCurr.z + v0.z * vPrev.z + vPrev.z * vCurr.z + vCurr.z * v0.z;
+            const VectorSingle intAxis = v0 * v0 + vPrev * vPrev + vCurr * vCurr + v0 * vPrev + vPrev * vCurr + vCurr * v0;
+            const VectorSingle v0Zxy(v0.z, v0.x, v0.y, 0.0f);
+            const VectorSingle vPrevZxy(vPrev.z, vPrev.x, vPrev.y, 0.0f);
+            const VectorSingle vCurrZxy(vCurr.z, vCurr.x, vCurr.y, 0.0f);
+            const VectorSingle intOff =
+                2.0f * (v0 * v0Zxy + vPrev * vPrevZxy + vCurr * vCurrZxy)
+                + v0 * vPrevZxy + vPrev * v0Zxy
+                + vPrev * vCurrZxy + vCurr * vPrevZxy
+                + vCurr * v0Zxy + v0 * vCurrZxy;
             const f32 scale = det / 60.0f;
-            ixx += scale * (inty + intz);
-            iyy += scale * (intx + intz);
-            izz += scale * (intx + inty);
-            ixy -= scale * (2.0f * v0.x * v0.y + 2.0f * vPrev.x * vPrev.y + 2.0f * vCurr.x * vCurr.y + v0.x * vPrev.y + vPrev.x * v0.y + vPrev.x * vCurr.y + vCurr.x * vPrev.y + vCurr.x * v0.y + v0.x * vCurr.y) * 0.5f;
-            ixz -= scale * (2.0f * v0.x * v0.z + 2.0f * vPrev.x * vPrev.z + 2.0f * vCurr.x * vCurr.z + v0.x * vPrev.z + vPrev.x * v0.z + vPrev.x * vCurr.z + vCurr.x * vPrev.z + vCurr.x * v0.z + v0.x * vCurr.z) * 0.5f;
-            iyz -= scale * (2.0f * v0.y * v0.z + 2.0f * vPrev.y * vPrev.z + 2.0f * vCurr.y * vCurr.z + v0.y * vPrev.z + vPrev.y * v0.z + vPrev.y * vCurr.z + vCurr.y * vPrev.z + vCurr.y * v0.z + v0.y * vCurr.z) * 0.5f;
+            const VectorSingle intAxisYzx(intAxis.y, intAxis.z, intAxis.x, 0.0f);
+            const VectorSingle intAxisZxy(intAxis.z, intAxis.x, intAxis.y, 0.0f);
+            iAxisAccum = iAxisAccum + (intAxisYzx + intAxisZxy) * scale;
+            iOffAccum = iOffAccum - intOff * (scale * 0.5f);
 
             vPrev = vCurr;
         }
@@ -432,18 +430,21 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     const VectorSingle localCom = comAccum / volume6;
     const VectorSingle worldCom = refPoint + localCom;
 
-    const f32 rxx = density * ixx - mass * (localCom.y * localCom.y + localCom.z * localCom.z);
-    const f32 ryy = density * iyy - mass * (localCom.x * localCom.x + localCom.z * localCom.z);
-    const f32 rzz = density * izz - mass * (localCom.x * localCom.x + localCom.y * localCom.y);
-    const f32 rxy = density * ixy + mass * localCom.x * localCom.y;
-    const f32 rxz = density * ixz + mass * localCom.x * localCom.z;
-    const f32 ryz = density * iyz + mass * localCom.y * localCom.z;
+    const VectorSingle comYzx(localCom.y, localCom.z, localCom.x, 0.0f);
+    const VectorSingle comZxy(localCom.z, localCom.x, localCom.y, 0.0f);
+    const VectorSingle rDiag = iAxisAccum * density - (comYzx * comYzx + comZxy * comZxy) * mass;
+    const VectorSingle rOff = iOffAccum * density + (localCom * comZxy) * mass;
+
+    const VectorSingle worldYzx(worldCom.y, worldCom.z, worldCom.x, 0.0f);
+    const VectorSingle worldZxy(worldCom.z, worldCom.x, worldCom.y, 0.0f);
+    const VectorSingle shiftDiag = (worldYzx * worldYzx + worldZxy * worldZxy) * mass;
+    const VectorSingle shiftOff = (worldCom * worldZxy) * (-mass);
 
     outMass.setCenterMass(worldCom, mass);
     outMass.inertia = Mat3(
-        VectorSingle(rxx + mass * (worldCom.y * worldCom.y + worldCom.z * worldCom.z), rxy - mass * worldCom.x * worldCom.y, rxz - mass * worldCom.x * worldCom.z, 0.0f),
-        VectorSingle(rxy - mass * worldCom.x * worldCom.y, ryy + mass * (worldCom.x * worldCom.x + worldCom.z * worldCom.z), ryz - mass * worldCom.y * worldCom.z, 0.0f),
-        VectorSingle(rxz - mass * worldCom.x * worldCom.z, ryz - mass * worldCom.y * worldCom.z, rzz + mass * (worldCom.x * worldCom.x + worldCom.y * worldCom.y), 0.0f)
+        VectorSingle(rDiag.x + shiftDiag.x, rOff.y + shiftOff.y, rOff.x + shiftOff.x, 0.0f),
+        VectorSingle(rOff.y + shiftOff.y, rDiag.y + shiftDiag.y, rOff.z + shiftOff.z, 0.0f),
+        VectorSingle(rOff.x + shiftOff.x, rOff.z + shiftOff.z, rDiag.z + shiftDiag.z, 0.0f)
     );
     return outMass;
 }
@@ -548,7 +549,7 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
 }
 
 Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){
-    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(radius) || radius < 0.0f)
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(VectorSingle(radius)) || radius < 0.0f)
         return MakeUnexpected(Failure());
 
     for(usize i = 0u; i < vertices.size(); ++i){

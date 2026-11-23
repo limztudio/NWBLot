@@ -812,9 +812,13 @@ UiSliderSmokeScene::UiSliderSmokeScene(){
 b8 UiSliderSmokeScene::paint(mut UiPaintContext context){
     context.ui.style().fontSize = 14.0f;
     context.ui.style().gap = 8.0f;
-    const f32 leftWidth = Max(280.0f, (context.display.logicalWidth - 96.0f) * 0.5f);
+    const VectorSingle minLeft(280.0f);
+    const VectorSingle calcLeft((context.display.logicalWidth - 96.0f) * 0.5f);
+    const f32 leftWidth = VectorSelect(calcLeft, minLeft, VectorGreater(minLeft, calcLeft)).x;
     const f32 right = 24.0f + leftWidth + 32.0f;
-    const f32 rightWidth = Max(240.0f, context.display.logicalWidth - right - 24.0f);
+    const VectorSingle minRight(240.0f);
+    const VectorSingle calcRight(context.display.logicalWidth - right - 24.0f);
+    const f32 rightWidth = VectorSelect(calcRight, minRight, VectorGreater(minRight, calcRight)).x;
     if(
         !this.paintMain(context.ui, Rect(24.0f, 24.0f, leftWidth, 220.0f))
         || !this.paintOther(context.ui, Rect(right, 24.0f, rightWidth, 180.0f))

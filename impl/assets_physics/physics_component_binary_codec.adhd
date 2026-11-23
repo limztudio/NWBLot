@@ -54,7 +54,7 @@ class PhysicsComponentBinaryCodec{
         if(c.linearDamping < 0.0f || c.angularDamping < 0.0f || c.sleepThreshold < 0.0f)
             return false;
         if(c.useCustomMass){
-            if(!IsFinite(c.customMass) || c.customMass <= 0.0f)
+            if(!IsFinite(VectorSingle(c.customMass)) || c.customMass <= 0.0f)
                 return false;
             if(!IsFinite(VectorSingle(c.customCenterOfMass))
                 || !IsFinite(VectorSingle(c.customInertiaDiag))
@@ -102,8 +102,8 @@ class PhysicsComponentBinaryCodec{
         if(shapeType == ShapeType::Capsule){
             if(!IsValidPositionVec3(center2))
                 return false;
-            const f32 lenSq = Vector3LengthSq(center2 - center).x;
-            if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+            const VectorSingle lenSq = Vector3LengthSq(center2 - center);
+            if(!IsFinite(lenSq) || lenSq.x < s_MinCapsuleLength * s_MinCapsuleLength)
                 return false;
         }
         if(shapeType == ShapeType::Hull){

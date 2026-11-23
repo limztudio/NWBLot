@@ -105,8 +105,8 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
     const f64 contentX = insetRect.x;
     const f64 contentY = insetRect.y;
     const f64 contentW = insetRect.z;
-    const f64 indicatorExtentScalar = Min(cast<f64>(metrics.indicatorExtent), contentW);
-    const f64 labelOffset = Min(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
+    const f64 indicatorExtentScalar = UiSimdMinF64(cast<f64>(metrics.indicatorExtent), contentW);
+    const f64 labelOffset = UiSimdMinF64(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
     const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
     for(u32 index = 0u; index < candidate.count; ++index){

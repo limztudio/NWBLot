@@ -35,7 +35,7 @@ Expected<MatrixSingle> TryInvertFbxJointMatrix(in MatrixSingle matrix){
     if(!IsFiniteFbxMatrix4x4(matrix))
         return MakeUnexpected(Failure());
     const f32 determinant = Dot(matrix[0u].xyz, Cross(matrix[1u].xyz, matrix[2u].xyz));
-    if(!IsFinite(determinant) || !(Abs(determinant) > s_InvertibleJointDeterminantEpsilon))
+    if(!IsFinite(VectorSingle(determinant)) || !(Abs(VectorSingle(determinant)).x > s_InvertibleJointDeterminantEpsilon))
         return MakeUnexpected(Failure());
     const MatrixSingle inverted = Inverse(matrix);
     if(!IsFiniteFbxMatrix4x4(inverted))
@@ -115,7 +115,7 @@ MatrixSingle ConvertJointMatrix(in MatrixDouble matrix){
 }
 
 Expected<MatrixSingle> TryConvertFbxInverseBindMatrix(in MatrixDouble inverseBindDouble, in f64 determinant){
-    if(!FiniteUfbxMatrix(inverseBindDouble) || !IsFinite(determinant) || Abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
+    if(!FiniteUfbxMatrix(inverseBindDouble) || !IsFinite(VectorDouble(determinant)) || Abs(VectorDouble(determinant)).x <= s_InvertibleMatrixDeterminantEpsilon){
         error("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible");
         return MakeUnexpected(Failure());
     }
@@ -143,7 +143,7 @@ Expected<MatrixSingle> TryConvertFbxBindPoseMatrix(in MatrixDouble bindPoseDoubl
 b8 NearlyEqualFbxJointMatrices(in MatrixSingle lhs, in MatrixSingle rhs){
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
         const VectorSingle diff = Abs(lhs[rowIndex] - rhs[rowIndex]);
-        if(!IsFinite(diff) || Max(Max(diff.x, diff.y), Max(diff.z, diff.w)) > s_JointMatrixRowEpsilon)
+        if(!IsFinite(diff) || !Vector4LessOrEqual(diff, VectorSingle(s_JointMatrixRowEpsilon)))
             return false;
     }
     return true;

@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "simplemath.h"
 #include "span.h"
 #include "simd/vector_arithmetic.h"
 
@@ -22,16 +21,20 @@ struct OnlineF64Statistics{
 
 [[nodiscard]] inline OnlineF64Statistics ComputeOnlineF64Statistics(const Span<const f64> samples)noexcept{
     OnlineF64Statistics result;
-    result.minimum = samples.front();
-    result.maximum = result.minimum;
+    SIMDVectorDouble average = VectorDoubleZero();
+    SIMDVectorDouble minimum = VectorDoubleReplicate(samples.front());
+    SIMDVectorDouble maximum = minimum;
     for(const f64 sample : samples){
         ++result.count;
-        const SIMDVectorDouble average = VectorDoubleReplicate(result.average);
-        const SIMDVectorDouble change = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(sample), average), VectorDoubleReplicate(static_cast<f64>(result.count)));
-        result.average = VectorDoubleGetX(VectorDoubleAdd(average, change));
-        result.minimum = Min(result.minimum, sample);
-        result.maximum = Max(result.maximum, sample);
+        const SIMDVectorDouble sampleVec = VectorDoubleReplicate(sample);
+        const SIMDVectorDouble change = VectorDoubleDivide(VectorDoubleSubtract(sampleVec, average), VectorDoubleReplicate(static_cast<f64>(result.count)));
+        average = VectorDoubleAdd(average, change);
+        minimum = VectorDoubleSelect(sampleVec, minimum, VectorDoubleLess(minimum, sampleVec));
+        maximum = VectorDoubleSelect(sampleVec, maximum, VectorDoubleGreater(maximum, sampleVec));
     }
+    result.average = VectorDoubleGetX(average);
+    result.minimum = VectorDoubleGetX(minimum);
+    result.maximum = VectorDoubleGetX(maximum);
     return result;
 }
 

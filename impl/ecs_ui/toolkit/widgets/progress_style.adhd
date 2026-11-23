@@ -79,12 +79,12 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
 Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
     if(
         !IsValidLayoutSize(options.width)
-        || !IsFinite(options.height)
+        || !IsFinite(VectorDouble(cast<f64>(options.height)))
         || options.height < 0.0f
         || !IsBoundedUiPadding(style.padding)
         || !IsValidUiColor(style.trackTint)
         || !IsValidUiColor(style.fillTint)
-        || !IsFinite(density)
+        || !IsFinite(VectorDouble(cast<f64>(density)))
         || density <= 0.0f
     )
         return MakeUnexpected(Failure());
@@ -103,8 +103,8 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
     const VectorDouble inner = (leading + trailing) + fillSize;
     const VectorDouble size = Max(VectorDouble(cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y), cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y)), inner);
     const f64 width = size.x;
-    const f64 height = Max(cast<f64>(options.height), size.y);
-    if(!IsFinite(width) || width > s_UiMaxFloatF64 || !IsFinite(height) || height > s_UiMaxFloatF64)
+    const f64 height = UiSimdMaxF64(cast<f64>(options.height), size.y);
+    if(!IsFinite(VectorDouble(width, height, 0.0, 0.0)) || width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
     if(!IsValidProgressMetrics(candidate))
@@ -113,7 +113,7 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
 }
 
 Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
-    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !IsFinite(fraction))
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !IsFinite(VectorDouble(fraction)))
         return MakeUnexpected(Failure());
     ProgressPlacement candidate;
     candidate.bounds = bounds;
@@ -125,7 +125,7 @@ Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in Progr
     if(!content.has_value())
         return MakeUnexpected(Failure());
     candidate.content = content.value();
-    const f64 normalized = Clamp(fraction, 0.0, 1.0);
+    const f64 normalized = UiSimdClampF64(fraction, 0.0, 1.0);
     candidate.fillReveal = candidate.content;
     candidate.fillCanvas = candidate.content;
     if(normalized == 0.0){
@@ -144,7 +144,7 @@ Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in Progr
         candidate.fillReveal = fillReveal.value();
         f64 canvasW = 0.0;
         if(candidate.fillReveal.width != 0.0f)
-            canvasW = Min(contentW, Max(cast<f64>(candidate.fillReveal.width), cast<f64>(metrics.fillMinimum.x)));
+            canvasW = UiSimdMinF64(contentW, UiSimdMaxF64(cast<f64>(candidate.fillReveal.width), cast<f64>(metrics.fillMinimum.x)));
         const Expected<Rect> fillCanvas = TryMakeUiRect(contentX, contentY, canvasW, contentH, UiRectPrecision::EmptyPaint);
         if(!fillCanvas.has_value())
             return MakeUnexpected(Failure());

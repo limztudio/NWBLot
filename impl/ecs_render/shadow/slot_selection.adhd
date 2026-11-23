@@ -25,12 +25,16 @@ f32 ShadowSlotImportance(in VectorSingle colorIntensity, in VectorSingle params,
 
     const VectorSingle delta = lightPosition - cameraPosition;
     const f32 distanceSquared = LengthSq(delta.xyz);
-    const f32 range = Max(params.x, 0.0f);
+    const VectorSingle vZero(0.0f);
+    const VectorSingle vOne(1.0f);
+    const VectorSingle vRangeRaw(params.x);
+    const f32 range = VectorSelect(vRangeRaw, vZero, VectorLess(vRangeRaw, vZero)).x;
     const f32 rangeSquared = range * range;
     f32 coverageSquared = 1.0f;
     if(distanceSquared > s_ShadowImportanceDistanceSquaredEpsilon)
         coverageSquared = rangeSquared / distanceSquared;
-    return radiantImportance * Min(coverageSquared, 1.0f);
+    const VectorSingle vCov(coverageSquared);
+    return radiantImportance * VectorSelect(vOne, vCov, VectorLess(vCov, vOne)).x;
 }
 
 SceneLightGpuData BuildUnassignedSceneLightGpuData(

@@ -42,13 +42,13 @@ class ImageFrameRecord<TImage>{
 
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
-    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(density) || density <= 0.0f)
+    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(VectorSingle(density)) || density <= 0.0f)
         return MakeUnexpected(Failure());
     const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
     if(!sliceExtents.has_value())
         return MakeUnexpected(Failure());
-    const f64 pixelW = Max(cast<f64>(region.rectangle.width), sliceExtents.value().x);
-    const f64 pixelH = Max(cast<f64>(region.rectangle.height), sliceExtents.value().y);
+    const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.value().x);
+    const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.value().y);
     const f64 densityF64 = cast<f64>(density);
     const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64));
     if(!minimum.has_value())

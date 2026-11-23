@@ -164,8 +164,10 @@ u32 ResolveRayTracingCsgInstanceMask(in b8 transparent){
 
 void InflateSwShadowSceneBounds(mut VectorSingle inOutBoundsMin, mut VectorSingle inOutBoundsMax){
     const VectorSingle extent = inOutBoundsMax - inOutBoundsMin;
-    const f32 maxExtent = Max(extent.x, Max(extent.y, extent.z));
-    const f32 padding = Max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const f32 maxExtent = Vector3MaxComponent(VectorSingle(extent, 0.0f)).x;
+    const VectorSingle minPad(s_SwShadowSceneBoundsMinPadding);
+    const VectorSingle relPad(maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const f32 padding = VectorSelect(minPad, relPad, VectorLess(minPad, relPad)).x;
     const VectorSingle paddingVector(padding, padding, padding, 0.0f);
     inOutBoundsMin = inOutBoundsMin - paddingVector;
     inOutBoundsMax = inOutBoundsMax + paddingVector;

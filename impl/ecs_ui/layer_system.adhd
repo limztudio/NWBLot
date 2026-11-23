@@ -200,7 +200,7 @@ class UiLayerPaintGuard : NoCopy{
 
 
 b8 IsValidUiDisplayScale(in f32 scaleX, in f32 scaleY){
-    return IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f;
+    return IsFinite(VectorSingle(scaleX, scaleY, 0.0f, 0.0f)) && scaleX > 0.0f && scaleY > 0.0f;
 }
 
 b8 ShouldSuppressControlCharInput(in b8 hasControlModifier, in b8 hasAltModifier){

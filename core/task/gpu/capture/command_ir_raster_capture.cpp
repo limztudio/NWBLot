@@ -102,8 +102,7 @@ b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuS
         || (state.indexResource.valid() && state.indexResource.generation != task.generation)
         || (state.indexResource.valid() && state.indexFormat != Format::R16_UINT && state.indexFormat != Format::R32_UINT)
         || (!state.indexResource.valid() && (state.indexOffset != 0u || state.indexFormat != Format::UNKNOWN))
-        || !IsFinite(state.blendConstantColor.r) || !IsFinite(state.blendConstantColor.g)
-        || !IsFinite(state.blendConstantColor.b) || !IsFinite(state.blendConstantColor.a)
+        || !GpuCommandIrDetail::IsBlendConstantColorFinite(state.blendConstantColor)
     )
         return false;
     if(state.framebufferOwner){

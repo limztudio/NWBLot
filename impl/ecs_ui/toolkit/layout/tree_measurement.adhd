@@ -29,7 +29,7 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
             for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
                 const Point measured = boxes[cast<usize>(child)].measuredSize;
                 extentX += cast<f64>(measured.x);
-                extentY = Max(extentY, cast<f64>(measured.y));
+                extentY = UiSimdMaxF64(extentY, cast<f64>(measured.y));
                 ++childCount;
             }
             if(childCount > 1u)
@@ -38,7 +38,7 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
         else if(description.direction == LayoutDirection::Column){
             for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
                 const Point measured = boxes[cast<usize>(child)].measuredSize;
-                extentX = Max(extentX, cast<f64>(measured.x));
+                extentX = UiSimdMaxF64(extentX, cast<f64>(measured.x));
                 extentY += cast<f64>(measured.y);
                 ++childCount;
             }
@@ -46,15 +46,24 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
                 extentY += cast<f64>(description.gap) * cast<f64>(childCount - 1u);
         }
         else{
+            VectorDouble extentVec(extentX, extentY, 0.0, 0.0);
             for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
                 const Point measured = boxes[cast<usize>(child)].measuredSize;
-                extentX = Max(extentX, cast<f64>(measured.x));
-                extentY = Max(extentY, cast<f64>(measured.y));
+                const VectorDouble measuredVec(cast<f64>(measured.x), cast<f64>(measured.y), 0.0, 0.0);
+                extentVec = VectorDoubleSelect(extentVec, measuredVec, VectorDoubleGreater(measuredVec, extentVec));
             }
+            extentX = extentVec.x;
+            extentY = extentVec.y;
         }
     }
-    const f64 width = (Max(extentX, cast<f64>(description.intrinsicSize.x)) + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
-    const f64 height = (Max(extentY, cast<f64>(description.intrinsicSize.y)) + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
+    const VectorDouble intrinsic(cast<f64>(description.intrinsicSize.x), cast<f64>(description.intrinsicSize.y), 0.0, 0.0);
+    const VectorDouble extent(extentX, extentY, 0.0, 0.0);
+    const VectorDouble baseExtent = VectorDoubleSelect(extent, intrinsic, VectorDoubleGreater(intrinsic, extent));
+    const VectorDouble leadingPad(cast<f64>(description.padding.left), cast<f64>(description.padding.top), 0.0, 0.0);
+    const VectorDouble trailingPad(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), 0.0, 0.0);
+    const VectorDouble size = (baseExtent + leadingPad) + trailingPad;
+    const f64 width = size.x;
+    const f64 height = size.y;
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     f32 resolvedWidth = cast<f32>(width);

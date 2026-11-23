@@ -75,11 +75,11 @@ b8 ValidCsgShapeParameterByteCounts(in u32 parameterByteSize, in usize defaultPa
 }
 
 b8 ValidCsgFinitePositiveScalar(in f32 value){
-    return IsFinite(value) && value > 0.0f;
+    return IsFinite(VectorSingle(value)) && value > 0.0f;
 }
 
 b8 ValidCsgFiniteNonNegativeScalar(in f32 value){
-    return IsFinite(value) && value >= 0.0f;
+    return IsFinite(VectorSingle(value)) && value >= 0.0f;
 }
 
 b8 ValidCsgFiniteVector3(in VectorSingle value){

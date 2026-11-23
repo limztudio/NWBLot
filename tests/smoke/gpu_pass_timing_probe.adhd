@@ -47,8 +47,11 @@ class GpuPassTimingProbe{
 
     public void recordFrame(in f32 delta, in TimingView gpuTiming){
         f64 safeDelta = 0.0;
-        if(IsFinite(delta))
-            safeDelta = Max(cast<f64>(delta), 0.0);
+        if(IsFinite(VectorSingle(delta))){
+            const VectorDouble deltaVec(cast<f64>(delta));
+            const VectorDouble zeroVec(0.0);
+            safeDelta = VectorDoubleSelect(zeroVec, deltaVec, VectorDoubleGreater(deltaVec, zeroVec)).x;
+        }
         if(safeDelta <= 0.0)
             return;
 
@@ -87,8 +90,11 @@ class GpuPassTimingProbe{
                 this.m_scopes[i].interval.maxSeconds = stats.seconds;
             }
             else{
-                this.m_scopes[i].interval.minSeconds = Min(this.m_scopes[i].interval.minSeconds, stats.seconds);
-                this.m_scopes[i].interval.maxSeconds = Max(this.m_scopes[i].interval.maxSeconds, stats.seconds);
+                const VectorDouble minPrev(this.m_scopes[i].interval.minSeconds);
+                const VectorDouble maxPrev(this.m_scopes[i].interval.maxSeconds);
+                const VectorDouble cur(stats.seconds);
+                this.m_scopes[i].interval.minSeconds = VectorDoubleSelect(cur, minPrev, VectorDoubleLess(minPrev, cur)).x;
+                this.m_scopes[i].interval.maxSeconds = VectorDoubleSelect(cur, maxPrev, VectorDoubleGreater(maxPrev, cur)).x;
             }
             this.m_scopes[i].interval.sumSeconds += stats.seconds;
             this.m_scopes[i].interval.samples += stats.sampleCount;

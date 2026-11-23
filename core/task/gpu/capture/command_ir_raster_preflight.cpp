@@ -27,13 +27,11 @@ namespace __hidden_gpu_command_ir_raster_preflight{
 }
 
 [[nodiscard]] static b8 ViewportIsValid(const Viewport& viewport)noexcept{
+    const SIMDVectorSingle xyBounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+    const SIMDVectorSingle zBounds = VectorSet(viewport.minZ, viewport.maxZ, 0.0f, 0.0f);
     return
-        IsFinite(viewport.minX)
-        && IsFinite(viewport.maxX)
-        && IsFinite(viewport.minY)
-        && IsFinite(viewport.maxY)
-        && IsFinite(viewport.minZ)
-        && IsFinite(viewport.maxZ)
+        VectorIsFinite(xyBounds, VectorComponentMask::s_XYZW)
+        && VectorIsFinite(zBounds, VectorComponentMask::s_XY)
         && viewport.maxX > viewport.minX
         && viewport.maxY >= viewport.minY
         && viewport.minZ >= 0.0f
@@ -98,7 +96,7 @@ template<typename GetVertexBindingFn>
                 return GpuCommandIrReplayError::InvalidRasterState;
             if(hasScissor ? !scissor.validScissor() : !ImplicitScissorIsValid(viewport))
                 return GpuCommandIrReplayError::InvalidRasterState;
-            if(!IsFinite(blendConstantColor.r) || !IsFinite(blendConstantColor.g) || !IsFinite(blendConstantColor.b) || !IsFinite(blendConstantColor.a))
+            if(!GpuCommandIrDetail::IsBlendConstantColorFinite(blendConstantColor))
                 return GpuCommandIrReplayError::InvalidRasterState;
         }
         else if(!hasScissor && !ImplicitScissorIsValid(viewport))
@@ -120,7 +118,7 @@ template<typename GetVertexBindingFn>
                 return GpuCommandIrReplayError::InvalidRasterState;
             if(hasScissor ? !scissor.validScissor() : !ImplicitScissorIsValid(viewport))
                 return GpuCommandIrReplayError::InvalidRasterState;
-            if(!IsFinite(blendConstantColor.r) || !IsFinite(blendConstantColor.g) || !IsFinite(blendConstantColor.b) || !IsFinite(blendConstantColor.a))
+            if(!GpuCommandIrDetail::IsBlendConstantColorFinite(blendConstantColor))
                 return GpuCommandIrReplayError::InvalidRasterState;
         }
         else if(!hasScissor && !ImplicitScissorIsValid(viewport))

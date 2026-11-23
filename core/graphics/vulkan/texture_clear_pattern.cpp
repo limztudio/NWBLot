@@ -420,7 +420,10 @@ Expected<TextureClearPattern<s_TextureClearDepthPatternBytes>> BuildTextureDepth
     }
     case Format::D32:
     case Format::D32S8:{
-        const f32 packed = Saturate(depth);
+        const SIMDVectorSingle depthVec = VectorReplicate(depth);
+        const SIMDVectorSingle clampedLow = VectorSelect(depthVec, VectorZero(), VectorLess(depthVec, VectorZero()));
+        const SIMDVectorSingle one = VectorSplatOne();
+        const f32 packed = VectorGetX(VectorSelect(clampedLow, one, VectorGreater(clampedLow, one)));
         WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;

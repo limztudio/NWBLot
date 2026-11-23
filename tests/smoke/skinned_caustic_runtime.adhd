@@ -115,8 +115,11 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
 
     public b8 onUpdate(in f32 delta)override{
         f32 safeDelta = 0.0f;
-        if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        if(IsFinite(VectorSingle(delta))){
+            const VectorSingle deltaVec(delta);
+            const VectorSingle zeroVec(0.0f);
+            safeDelta = VectorSelect(zeroVec, deltaVec, VectorGreater(deltaVec, zeroVec)).x;
+        }
         this.m_fpsProbe.recordFrame(safeDelta);
         this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
         if(this.m_transition.enabled()){
@@ -125,7 +128,9 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
             this.m_transition.updateTransitionState(SmokeWorldRef(this.m_world), this.m_animationTime);
         }
         else{
-            const f32 animationStep = Min(safeDelta, s_SkinnedCausticMaxAnimationDelta) * s_SkinnedCausticPoseAnimationSpeed;
+            const VectorSingle safeVec(safeDelta);
+            const VectorSingle maxVec(s_SkinnedCausticMaxAnimationDelta);
+            const f32 animationStep = VectorSelect(maxVec, safeVec, VectorLess(safeVec, maxVec)).x * s_SkinnedCausticPoseAnimationSpeed;
             this.m_animationTime += cast<f64>(animationStep);
         }
         this.animatePoses();
@@ -209,7 +214,7 @@ Expected<NotNullUniquePtr<World>> CreateSkinnedCausticWorld(mut ProjectRuntimeCo
 }
 
 MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f32 jointIndex, in f32 timeSeconds){
-    const f32 angle = Sin(timeSeconds * s_SkinnedCausticPoseAnimationSpeed + jointIndex * 0.7f) * s_SkinnedCausticPoseAnimationAngle;
+    const f32 angle = VectorSin(VectorSingle(timeSeconds * s_SkinnedCausticPoseAnimationSpeed + jointIndex * 0.7f)).x * s_SkinnedCausticPoseAnimationAngle;
     const VectorSingle rotationAngles = VectorSingle(0.4f, 1.0f, 0.25f, 0.0f) * angle;
     const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
     const MatrixSingle animated = Mul(bindJoint, rotation);

@@ -1827,23 +1827,23 @@ class PhysicsGpuDispatcher{
             if(s.alive() && !s.isSensor()){
                 if(s.type == ShapeType::Sphere){
                     const SphereShape sphere = s.sphereShape();
-                    maxRadius = Max(maxRadius, Vector3Length(VectorSingle(sphere.center() - localCenter, 0.0f)).x);
+                    maxRadius = SimdMax(maxRadius, Vector3Length(VectorSingle(sphere.center() - localCenter, 0.0f)).x);
                 }
                 else if(s.type == ShapeType::Capsule){
                     const CapsuleShape capsule = s.capsuleShape();
                     const f32 d1 = Vector3Length(VectorSingle(capsule.center1() - localCenter, 0.0f)).x;
                     const f32 d2 = Vector3Length(VectorSingle(capsule.center2Vec() - localCenter, 0.0f)).x;
-                    maxRadius = Max(maxRadius, Max(d1, d2));
+                    maxRadius = SimdMax(maxRadius, SimdMax(d1, d2));
                 }
                 else if(s.type == ShapeType::Hull){
                     in HullShape hull = world.m_hullShapes[s.geometryIndex];
                     if(hull.isBox()){
                         const f32 d = Vector3Length(VectorSingle(hull.centroid() - localCenter, 0.0f)).x + Vector3Length(VectorSingle(hull.halfExtents(), 0.0f)).x;
-                        maxRadius = Max(maxRadius, d);
+                        maxRadius = SimdMax(maxRadius, d);
                     }
                     else{
                         for(usize vi = 0u; vi < hull.vertices.size(); ++vi)
-                            maxRadius = Max(maxRadius, Vector3Length(VectorSingle(Vec3FromU(hull.vertices[vi]) - localCenter, 0.0f)).x);
+                            maxRadius = SimdMax(maxRadius, Vector3Length(VectorSingle(Vec3FromU(hull.vertices[vi]) - localCenter, 0.0f)).x);
                     }
                 }
                 else if(s.type == ShapeType::Mesh){
@@ -1864,7 +1864,7 @@ class PhysicsGpuDispatcher{
                                 if(cz != 0u)
                                     z = maxP.z;
                                 const f32 d = Vector3Length(VectorSingle(VectorSingle(x, y, z, 0.0f) - localCenter, 0.0f)).x;
-                                maxRadius = Max(maxRadius, d);
+                                maxRadius = SimdMax(maxRadius, d);
                             }
                         }
                     }
@@ -1905,7 +1905,7 @@ class PhysicsGpuDispatcher{
             if(qDeltaA.w < 0.0f)
                 qDeltaA = -qDeltaA;
             const f32 sinHalfA = Vector3Length(VectorSingle(qDeltaA.x, qDeltaA.y, qDeltaA.z, 0.0f)).x;
-            const f32 angDispA = 2.0f * ATan2(sinHalfA, Clamp(qDeltaA.w, -1.0f, 1.0f)) * simInit.maxExtent();
+            const f32 angDispA = 2.0f * ATan2(VectorSingle(sinHalfA), VectorSingle(SimdClamp(qDeltaA.w, -1.0f, 1.0f))).x * simInit.maxExtent();
             if(Vector3LengthSq(dispA).x <= s_LinearSlop * s_LinearSlop && angDispA <= s_LinearSlop)
                 continue;
 
@@ -2242,7 +2242,7 @@ class PhysicsGpuDispatcher{
                         const VectorSingle ctxN = VectorSingle(ctx.normal);
                         if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
                             candidateN = SafeNormalizeVec3(ctxN, candidateN);
-                        if(IsFinite(ctx.restitution) && ctx.restitution >= 0.0f)
+                        if(IsFinite(VectorSingle(ctx.restitution)) && ctx.restitution >= 0.0f)
                             candidateRest = ctx.restitution;
                     }
                 }
@@ -2592,12 +2592,12 @@ class PhysicsGpuDispatcher{
                         if(worldRef.m_def.enableContinuous && dt > 0.0f && shapeBody.type == BodyType::Dynamic){
                             in BodySim shapeSim = awakeSet.sims[idx];
                             in BodyState shapeState = awakeSet.states[idx];
-                            const f32 gravBoost = baseGrav * Abs(shapeSim.gravityScale);
+                            const f32 gravBoost = baseGrav * Abs(VectorSingle(shapeSim.gravityScale)).x;
                             const f32 speed = Vector3Length(VectorSingle(shapeState.linearVelocity, 0.0f)).x;
                             f32 maxSweep = s_MaxSweptSpeculativeDistance;
                             if((shapeBody.flags & cast<u32>(BodyFlags::IsBullet)) != 0u)
                                 maxSweep = s_MaxBulletSweepDistance;
-                            sweepMargin = Clamp((speed + gravBoost) * dt * 1.5f + s_MaxAabbMargin, s_MaxAabbMargin, maxSweep);
+                            sweepMargin = SimdClamp((speed + gravBoost) * dt * 1.5f + s_MaxAabbMargin, s_MaxAabbMargin, maxSweep);
                         }
                         outSweeps[idx] = sweepMargin;
                         u32 cnt = 0u;
@@ -2646,9 +2646,9 @@ class PhysicsGpuDispatcher{
                                 if(shape.alive()){
                                     const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, worldRef.m_hullShapes, worldRef.m_hullLocalAabbs, worldRef.m_meshShapes);
                                     const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
-                                    const f32 shapeExtent = Max(localSpan.x, Max(localSpan.y, localSpan.z)) * 0.5f;
+                                    const f32 shapeExtent = Vector3MaxComponent(VectorSingle(localSpan, 0.0f)).x * 0.5f;
                                     if(shapeExtent <= 10.0f){
-                                        locAcc += Max(shapeExtent, 0.25f);
+                                        locAcc += SimdMax(shapeExtent, 0.25f);
                                         ++locCnt;
                                     }
                                     if(locCpx == 0u){
@@ -2693,12 +2693,12 @@ class PhysicsGpuDispatcher{
                     if(world.m_def.enableContinuous && dt > 0.0f && shapeBody.type == BodyType::Dynamic){
                         in BodySim shapeSim = awakeSet.sims[idx];
                         in BodyState shapeState = awakeSet.states[idx];
-                        const f32 gravBoost = baseGrav * Abs(shapeSim.gravityScale);
+                        const f32 gravBoost = baseGrav * Abs(VectorSingle(shapeSim.gravityScale)).x;
                         const f32 speed = Vector3Length(VectorSingle(shapeState.linearVelocity, 0.0f)).x;
                         f32 maxSweep = s_MaxSweptSpeculativeDistance;
                         if((shapeBody.flags & cast<u32>(BodyFlags::IsBullet)) != 0u)
                             maxSweep = s_MaxBulletSweepDistance;
-                        sweepMargin = Clamp((speed + gravBoost) * dt * 1.5f + s_MaxAabbMargin, s_MaxAabbMargin, maxSweep);
+                        sweepMargin = SimdClamp((speed + gravBoost) * dt * 1.5f + s_MaxAabbMargin, s_MaxAabbMargin, maxSweep);
                     }
 
                     u32 sId = shapeBody.headShapeId;
@@ -2708,9 +2708,9 @@ class PhysicsGpuDispatcher{
                         if(shape.alive()){
                             const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes);
                             const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
-                            const f32 shapeExtent = Max(localSpan.x, Max(localSpan.y, localSpan.z)) * 0.5f;
+                            const f32 shapeExtent = Vector3MaxComponent(VectorSingle(localSpan, 0.0f)).x * 0.5f;
                             if(shapeExtent <= 10.0f){
-                                awakeExtentAccum += Max(shapeExtent, 0.25f);
+                                awakeExtentAccum += SimdMax(shapeExtent, 0.25f);
                                 ++awakeExtentCount;
                             }
                             if(!awakeHasComplex){
@@ -2766,9 +2766,9 @@ class PhysicsGpuDispatcher{
                         if(shape.alive()){
                             const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes);
                             const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
-                            const f32 shapeExtent = Max(localSpan.x, Max(localSpan.y, localSpan.z)) * 0.5f;
+                            const f32 shapeExtent = Vector3MaxComponent(VectorSingle(localSpan, 0.0f)).x * 0.5f;
                             if(shapeExtent <= 10.0f){
-                                this.m_cachedNonAwakeExtentAccum += Max(shapeExtent, 0.25f);
+                                this.m_cachedNonAwakeExtentAccum += SimdMax(shapeExtent, 0.25f);
                                 ++this.m_cachedNonAwakeExtentCount;
                             }
                             if(!this.m_cachedNonAwakeHasComplex){
@@ -2804,7 +2804,7 @@ class PhysicsGpuDispatcher{
 
             f32 cellSize = 2.0f;
             if(cellExtentCount > 0u)
-                cellSize = Clamp((cellExtentAccum / cast<f32>(cellExtentCount)) * 2.0f, 0.5f, 4.0f);
+                cellSize = SimdClamp((cellExtentAccum / cast<f32>(cellExtentCount)) * 2.0f, 0.5f, 4.0f);
             const f32 invCellSize = 1.0f / cellSize;
 
             const u32 totalSimCount = awakeCount + cast<u32>(this.m_cachedNonAwakeSims.size());
@@ -3237,7 +3237,7 @@ class PhysicsGpuDispatcher{
 
         const f32 h = dt / cast<f32>(subStepCount);
         const f32 invH = 1.0f / h;
-        const f32 jointDefaultHertz = Max(world.m_def.contactHertz, 30.0f);
+        const f32 jointDefaultHertz = SimdMax(world.m_def.contactHertz, 30.0f);
 
         const u32 currentAwakeCount = world.awakeBodyCount();
         if(currentAwakeCount == 0u){
@@ -4065,7 +4065,7 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
     in u32 dataMeta
 ){
     GpuPhysicsShapeProxy outProxy;
-    const f32 margin = Max(s_MaxAabbMargin, sweepMargin);
+    const f32 margin = SimdMax(s_MaxAabbMargin, sweepMargin);
     u32 filterW = 0u;
     u32 metaW = 0u;
     if(shape.type == ShapeType::Sphere){

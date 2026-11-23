@@ -24,9 +24,11 @@ enum<u8> UiLayerPresentation{
 
 class UiFrameDelta{
     public void add(in f32 deltaSeconds){
-        if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)
+        if(!IsFinite(VectorSingle(deltaSeconds)) || deltaSeconds < 0.0f)
             return;
-        this.m_pendingSeconds = Min(s_MaxUiFrameDeltaSeconds, this.m_pendingSeconds + cast<f64>(deltaSeconds));
+        const VectorDouble candSec(this.m_pendingSeconds + cast<f64>(deltaSeconds));
+        const VectorDouble maxSec(s_MaxUiFrameDeltaSeconds);
+        this.m_pendingSeconds = VectorDoubleSelect(maxSec, candSec, VectorDoubleLess(candSec, maxSec)).x;
     }
 
     public f32 consume(){

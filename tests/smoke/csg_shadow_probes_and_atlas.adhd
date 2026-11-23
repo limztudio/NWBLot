@@ -643,8 +643,9 @@ class CsgShadowAtlas{
                 groupIndex = 6u;
             this.addCaster(box, cutter, groupIndex, slot >= 2u, hole, mode, opaqueMaterial, world);
             if(slot == 4u){
-                const SmokeBoxBounds shiftedBox = SmokeBoxBounds(f32x3u(box.minimum.x, box.minimum.y, box.minimum.z - 0.5f), f32x3u(box.maximum.x, box.maximum.y, box.maximum.z - 0.5f));
-                const SmokeBoxBounds shiftedCutter = SmokeBoxBounds(f32x3u(cutter.minimum.x, cutter.minimum.y, cutter.minimum.z - 0.5f), f32x3u(cutter.maximum.x, cutter.maximum.y, cutter.maximum.z - 0.5f));
+                const VectorSingle shiftedZ = VectorSingle(box.minimum.z, box.maximum.z, cutter.minimum.z, cutter.maximum.z) - VectorSingle(0.5f);
+                const SmokeBoxBounds shiftedBox = SmokeBoxBounds(f32x3u(box.minimum.x, box.minimum.y, shiftedZ.x), f32x3u(box.maximum.x, box.maximum.y, shiftedZ.y));
+                const SmokeBoxBounds shiftedCutter = SmokeBoxBounds(f32x3u(cutter.minimum.x, cutter.minimum.y, shiftedZ.z), f32x3u(cutter.maximum.x, cutter.maximum.y, shiftedZ.w));
                 this.addCaster(shiftedBox, shiftedCutter, 5u, true, false, mode, opaqueMaterial, world);
             }
         }

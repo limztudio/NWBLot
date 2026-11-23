@@ -344,12 +344,16 @@ b8 VerifyAvboitIntegrationSliceValues(
     for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
         const f32 expected = expectedPixels[pixel];
         const f32 actual = observedPixels[pixel];
-        b8 mismatch = !IsFinite(actual);
+        b8 mismatch = !IsFinite(VectorSingle(actual));
         if(!mismatch){
             if(extinctionFixed[pixel] == 0u)
                 mismatch = actual != 1.0f;
-            else
-                mismatch = Abs(actual - expected) > Max(0.0000002f, expected * 0.002f);
+            else{
+                const VectorSingle minTol(0.0000002f);
+                const VectorSingle relTol(expected * 0.002f);
+                const f32 tolerance = VectorSelect(relTol, minTol, VectorGreater(minTol, relTol)).x;
+                mismatch = VectorAbs(VectorSingle(actual - expected)).x > tolerance;
+            }
         }
         if(mismatch){
             error(
@@ -488,7 +492,7 @@ b8 CompareIntegrationSlice(in StagingTextureMapping mapping, in AvboitIntegratio
         const usize offset = (pixel / s_AvboitIntegrationProbeWidth) * mapping.rowPitch + (pixel % s_AvboitIntegrationProbeWidth) * size_of<u16>();
         const u16 halfBits = cast<u16>(cast<u32>(bytes[offset]) | (cast<u32>(bytes[offset + 1u]) << 8u));
         const f32 exponent = -cast<f32>(extinctionFixed[pixel]) / cast<f32>(s_AvboitIntegrationProbeFixedScale);
-        expectedPixels[pixel] = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
+        expectedPixels[pixel] = ConvertHalfToFloat(ConvertFloatToHalf(VectorExp(VectorSingle(exponent)).x));
         observedPixels[pixel] = ConvertHalfToFloat(halfBits);
     }
     return VerifyAvboitIntegrationSliceValues(phaseState, phase, slice, Span<f32>(observedPixels), Span<f32>(expectedPixels), extinctionFixed);

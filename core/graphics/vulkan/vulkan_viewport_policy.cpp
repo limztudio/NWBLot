@@ -48,11 +48,15 @@ b8 VulkanViewportPolicy::IsImplicitScissorValid(const Viewport& viewport)noexcep
 
     const SIMDVectorSingle flooredBounds = VectorFloor(viewportBounds);
     const SIMDVectorSingle ceiledBounds = VectorCeiling(viewportBounds);
-    const f64 minX = static_cast<f64>(VectorGetX(flooredBounds));
-    const f64 maxX = static_cast<f64>(VectorGetY(ceiledBounds));
-    const f64 minY = static_cast<f64>(VectorGetZ(flooredBounds));
-    const f64 maxY = static_cast<f64>(VectorGetW(ceiledBounds));
-    return minX >= 0.0 && minY >= 0.0 && maxX >= minX && maxY >= minY && maxX <= static_cast<f64>(Limit<i32>::s_Max) && maxY <= static_cast<f64>(Limit<i32>::s_Max);
+    const SIMDVectorDouble clampedBounds = ConvertVectorSingleToDouble(VectorSelect(flooredBounds, ceiledBounds, s_SIMDSelect0101));
+    const SIMDVectorDouble minBounds = VectorDoubleSwizzle<0u, 2u, 0u, 2u>(clampedBounds);
+    const SIMDVectorDouble maxBounds = VectorDoubleSwizzle<1u, 3u, 1u, 3u>(clampedBounds);
+    const SIMDVectorDouble maxLimit = VectorDoubleReplicate(static_cast<f64>(Limit<i32>::s_Max));
+    return
+        VectorDouble4GreaterOrEqual(minBounds, VectorDoubleZero())
+        && VectorDouble4GreaterOrEqual(maxBounds, minBounds)
+        && VectorDouble4LessOrEqual(maxBounds, maxLimit)
+    ;
 }
 
 Expected<VkRect2D> VulkanViewportPolicy::BuildImplicitScissor(const Viewport& viewport)noexcept{

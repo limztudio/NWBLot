@@ -18,7 +18,7 @@ b8 IsValidSceneLightRotation(in VectorSingle rotation){
     if(!IsFinite(rotation))
         return false;
     const f32 rotationLengthSquared = LengthSq(rotation);
-    return IsFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
+    return IsFinite(VectorSingle(rotationLengthSquared)) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
 }
 
 b8 TryBuildSceneLightVectors(
@@ -46,7 +46,7 @@ b8 TryBuildSceneLightVectors(
     case LightType::Point:{
         if(!IsFinite(position.xyz))
             return false;
-        if(!IsFinite(light.range) || light.range <= 0.0f)
+        if(!IsFinite(VectorSingle(light.range)) || light.range <= 0.0f)
             return false;
 
         outPosition = VectorSingle(position, 1.0f);
@@ -58,7 +58,7 @@ b8 TryBuildSceneLightVectors(
             return false;
         if(!IsFinite(position.xyz))
             return false;
-        if(!IsFinite(light.range) || light.range <= 0.0f)
+        if(!IsFinite(VectorSingle(light.range)) || light.range <= 0.0f)
             return false;
         if(!IsValidLightCone(light.innerConeCos, light.outerConeCos))
             return false;

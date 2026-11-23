@@ -53,7 +53,7 @@ f64 RelativeTriangleVolume(in VectorDouble a, in VectorDouble b, in VectorDouble
 
 b8 AreAllMeshPositionsFinite(in Span<f32x3u> positions){
     for(in f32x3u position : positions){
-        if(!IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z))
+        if(!IsFinite(VectorSingle(position.x, position.y, position.z, 0.0f)))
             return false;
     }
     return true;

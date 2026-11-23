@@ -412,7 +412,11 @@ b8 RunPhysicsGpuParitySmoke(
         const f32 ang = cast<f32>(ji) * (2.0f * s_PI / 26.0f);
         BodyDef leafDef;
         leafDef.type = BodyType::Dynamic;
-        leafDef.position = f32x4(Cos(ang) * 1.5f, 3.0f, 6.0f + Sin(ang) * 1.5f, 0.0f);
+        VectorSingle sinAng(0.0f);
+        VectorSingle cosAng(0.0f);
+        VectorSinCos(sinAng, cosAng, VectorSingle(ang));
+        const VectorSingle leafPos = VectorSingle(cosAng.x, 0.0f, sinAng.x, 0.0f) * VectorSingle(1.5f) + VectorSingle(0.0f, 3.0f, 6.0f, 0.0f);
+        leafDef.position = f32x4(leafPos, 0.0f);
         leafDef.enableSleep = false;
         const BodyId leaf = physWorld.createBody(leafDef).value();
         if(!physWorld.createSphereShape(leaf, sd, hubSph.value()).has_value())

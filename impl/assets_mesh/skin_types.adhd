@@ -57,10 +57,10 @@ b8 ValidSkinInfluenceWeights(in VectorSingle weights){
         || weights.w < 0.0f
     )
         return false;
-    const f32 sum = Dot(weights, VectorSingle(1.0f));
+    const VectorSingle sum = Vector4Dot(weights, VectorSingle(1.0f));
     if(!IsFinite(sum))
         return false;
-    const VectorSingle difference = VectorSingle(sum) - VectorSingle(1.0f);
+    const VectorSingle difference = sum - VectorSingle(1.0f);
     return Abs(difference).x <= s_SkinWeightSumEpsilon;
 }
 
@@ -127,7 +127,7 @@ b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointC
 }
 
 b8 IsFiniteSkinJointRow(in VectorSingle row){
-    return IsFinite(row.x) && IsFinite(row.y) && IsFinite(row.z) && IsFinite(row.w);
+    return IsFinite(row);
 }
 
 b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
@@ -139,15 +139,10 @@ b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
     )
         return false;
     const VectorSingle row3Diff = Abs(matrix[3u] - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-    if(
-        row3Diff.x > s_SkinValidationEpsilon
-        || row3Diff.y > s_SkinValidationEpsilon
-        || row3Diff.z > s_SkinValidationEpsilon
-        || row3Diff.w > s_SkinValidationEpsilon
-    )
+    if(!Vector4LessOrEqual(row3Diff, VectorSingle(s_SkinValidationEpsilon)))
         return false;
     const f32 determinant = Dot(matrix[0u].xyz, Cross(matrix[1u].xyz, matrix[2u].xyz));
-    if(!IsFinite(determinant))
+    if(!IsFinite(VectorSingle(determinant)))
         return false;
     return Abs(VectorSingle(determinant)).x > s_SkinValidationEpsilon;
 }

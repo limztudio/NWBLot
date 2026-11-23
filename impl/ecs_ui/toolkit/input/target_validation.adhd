@@ -67,10 +67,11 @@ Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
 b8 HasValidHitTargetControlProperties(in HitTarget target){
     if(
         (!target.control.empty() && !target.control.valid())
-        || !IsFinite(target.scrollStep) || target.scrollStep < 0.0
-        || !IsFinite(target.scrollStepX) || target.scrollStepX < 0.0
-        || !IsFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
-        || !IsFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
+        || !IsFinite(VectorDouble(target.scrollStep, target.scrollStepX, target.gestureMaximum, target.gestureMaximumX))
+        || target.scrollStep < 0.0
+        || target.scrollStepX < 0.0
+        || target.gestureMaximum < 0.0 || target.pageRows == 0u
+        || target.gestureMaximumX < 0.0
         || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
         || (target.horizontalNavigation && !target.navigable)
         || (target.focusOnCommit && (!target.focusable || target.owner.valid()))

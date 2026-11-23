@@ -338,11 +338,17 @@ namespace WireStepStatus{
     };
 };
 
+template<typename ColorT>
+[[nodiscard]] inline b8 IsBlendConstantColorFinite(const ColorT& color)noexcept{
+    return VectorIsFinite(VectorSet(color.r, color.g, color.b, color.a), VectorComponentMask::s_XYZW);
+}
+
 [[nodiscard]] inline b8 IsRasterViewportValid(const Viewport& viewport)noexcept{
+    const SIMDVectorSingle xyBounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+    const SIMDVectorSingle zBounds = VectorSet(viewport.minZ, viewport.maxZ, 0.0f, 0.0f);
     return
-        IsFinite(viewport.minX) && IsFinite(viewport.maxX)
-        && IsFinite(viewport.minY) && IsFinite(viewport.maxY)
-        && IsFinite(viewport.minZ) && IsFinite(viewport.maxZ)
+        VectorIsFinite(xyBounds, VectorComponentMask::s_XYZW)
+        && VectorIsFinite(zBounds, VectorComponentMask::s_XY)
         && viewport.minX < viewport.maxX && viewport.minY < viewport.maxY
         && viewport.minZ < viewport.maxZ && viewport.minZ >= 0.f && viewport.maxZ <= 1.f
     ;
@@ -391,8 +397,7 @@ namespace WireStepStatus{
     const b8 hasIndex = record.indexResourceIndex != Limit<u32>::s_Max;
     if(
         !IsWireGraphicsViewportValid(record)
-        || !IsFinite(record.blendConstantColor.r) || !IsFinite(record.blendConstantColor.g)
-        || !IsFinite(record.blendConstantColor.b) || !IsFinite(record.blendConstantColor.a)
+        || !IsBlendConstantColorFinite(record.blendConstantColor)
         || (hasScissor ? (record.scissor.minX >= record.scissor.maxX || record.scissor.minY >= record.scissor.maxY) : (record.scissor.minX != 0 || record.scissor.maxX != 0 || record.scissor.minY != 0 || record.scissor.maxY != 0))
         || (hasIndex ? (indexFormat != Format::R16_UINT && indexFormat != Format::R32_UINT) : (indexFormat != Format::UNKNOWN || record.indexOffset != 0u))
     ){

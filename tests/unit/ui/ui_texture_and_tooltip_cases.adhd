@@ -99,10 +99,16 @@ Expected<UiTextureImagePaintSample> SampleUiTextureImage(in DrawSnapshot snapsho
                 candidate.color = first.color;
                 candidate.layer = command.layer;
             }
-            originX = Min(originX, first.position.x);
-            originY = Min(originY, first.position.y);
-            cornerX = Max(cornerX, opposite.position.x);
-            cornerY = Max(cornerY, opposite.position.y);
+            const VectorSingle curOrigin(originX, originY, 0.0f, 0.0f);
+            const VectorSingle firstPos(first.position.x, first.position.y, 0.0f, 0.0f);
+            const VectorSingle nextOrigin = VectorSelect(firstPos, curOrigin, VectorLess(curOrigin, firstPos));
+            const VectorSingle curCorner(cornerX, cornerY, 0.0f, 0.0f);
+            const VectorSingle oppPos(opposite.position.x, opposite.position.y, 0.0f, 0.0f);
+            const VectorSingle nextCorner = VectorSelect(oppPos, curCorner, VectorGreater(curCorner, oppPos));
+            originX = nextOrigin.x;
+            originY = nextOrigin.y;
+            cornerX = nextCorner.x;
+            cornerY = nextCorner.y;
             ++candidate.quads;
         }
     }

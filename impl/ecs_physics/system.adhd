@@ -201,7 +201,7 @@ class PhysicsSystem{
         if(bodyId.index < cast<u32>(this.m_bodyTransformSnapshots.size())){
             in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyId.index];
             if(snap.valid && snap.generation == bodyId.generation){
-                const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
+                const f32 alpha = SimdClamp(this.m_interpolationAlpha, 0.0f, 1.0f);
                 VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
                 VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
                 if(Vector4Dot(q0, q1).x < 0.0f)
@@ -429,12 +429,12 @@ class PhysicsSystem{
             hasDrivenKinematic
         );
 
-        if(paused || !IsFinite(delta) || delta <= 0.0f){
+        if(paused || !IsFinite(VectorSingle(delta)) || delta <= 0.0f){
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
             return Expected<void, CpuTaskAdmissionError>();
         }
 
-        const f32 clampedDelta = Min(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
+        const f32 clampedDelta = SimdMin(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
         this.m_accumulator += clampedDelta;
 
         u32 plannedSteps = 0u;
@@ -483,7 +483,7 @@ class PhysicsSystem{
         else{
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
         }
-        this.m_interpolationAlpha = Clamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
+        this.m_interpolationAlpha = SimdClamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
 
         return Expected<void, CpuTaskAdmissionError>();
     }

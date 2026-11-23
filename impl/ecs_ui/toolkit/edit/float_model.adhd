@@ -30,7 +30,7 @@ class FloatEditModel : NoCopy{
     [cpp_unwind] public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
 
     [cpp_unwind] public b8 setValue(in f64 value){
-        if(!IsFinite(value) || !this.canonicalize(value).has_value())
+        if(!IsFinite(VectorDouble(value)) || !this.canonicalize(value).has_value())
             return false;
         this.m_value = value;
         this.m_draft.advance();

@@ -42,7 +42,7 @@ Path RepoRootOf(in StringView sourceFile){
 
 
 b8 NearlyEqual(in f32 lhs, in f32 rhs, in f32 epsilon){
-    return Abs(lhs - rhs) <= epsilon;
+    return VectorAbs(VectorSingle(lhs - rhs)).x <= epsilon;
 }
 
 b8 NearlyEqual(in f32 lhs, in f32 rhs){
@@ -59,7 +59,7 @@ b8 NearlyEqual3(in VectorSingle value, in f32 x, in f32 y, in f32 z){
 }
 
 b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z, in f32 epsilon){
-    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon);
+    return NearlyEqual3(VectorSingle(value.x, value.y, value.z, 0.0f), x, y, z, epsilon);
 }
 
 b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z){

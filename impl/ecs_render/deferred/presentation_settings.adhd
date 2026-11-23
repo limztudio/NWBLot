@@ -73,7 +73,7 @@ class DeferredLightingPushConstants{
 
 
 b8 ValidatePresentationSettings(in PresentationSettings settings){
-    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Reinhard) && IsFinite(settings.exposure) && settings.exposure >= 0.0f && IsFinite(settings.shoulder) && settings.shoulder > 0.0f;
+    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Reinhard) && IsFinite(VectorSingle(settings.exposure, settings.shoulder, 0.0f, 0.0f)) && settings.exposure >= 0.0f && settings.shoulder > 0.0f;
 }
 
 DeferredCompositePushConstants ResolveDeferredCompositePushConstants(

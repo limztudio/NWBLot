@@ -213,8 +213,9 @@ void ExpectClippedPaintTextQuad(in DrawSnapshot snapshot){
 
 Rect ComputePlacedGlyphOutlineRect(in PlacedGlyph glyph, in Point origin){
     Rect rect = Rect();
-    rect.x = origin.x + glyph.position.x + glyph.ink.x;
-    rect.y = origin.y + glyph.position.y + glyph.ink.y;
+    const VectorSingle rectPos = VectorSingle(origin.x, origin.y, 0.0f, 0.0f) + VectorSingle(glyph.position.x, glyph.position.y, 0.0f, 0.0f) + VectorSingle(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f);
+    rect.x = rectPos.x;
+    rect.y = rectPos.y;
     rect.width = glyph.ink.width;
     rect.height = glyph.ink.height;
     return rect;

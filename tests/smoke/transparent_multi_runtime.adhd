@@ -172,7 +172,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_sceneYaw.update(
             safeDelta,
             this.m_frozenAngle,
-            IsFinite(this.m_frozenAngle),
+            IsFinite(VectorSingle(this.m_frozenAngle)),
             this.m_arrowYawInput,
             s_TransparentManualYawSpeed,
             this.m_rotationSpeed,
@@ -275,7 +275,7 @@ f32 ParseTransparentMultiRotationSpeed(){
     if(!parsed.has_value())
         return DefaultTransparentMultiRotationSpeed();
     const f32 speed = parsed.value();
-    if(IsFinite(speed) && speed >= 0.0f)
+    if(IsFinite(VectorSingle(speed)) && speed >= 0.0f)
         return speed;
     return DefaultTransparentMultiRotationSpeed();
 }
@@ -285,7 +285,7 @@ f32 ParseTransparentMultiFrozenAngle(){
     if(!parsed.has_value())
         return bit_cast<f32>(s_TransparentMultiQuietNaNBits);
     const f32 angle = parsed.value();
-    if(IsFinite(angle))
+    if(IsFinite(VectorSingle(angle)))
         return angle;
     return bit_cast<f32>(s_TransparentMultiQuietNaNBits);
 }

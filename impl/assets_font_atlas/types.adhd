@@ -36,7 +36,7 @@ b8 IsAllowedFontAtlasGlyphField(in StringView field, in b8 hasBitmap){
 }
 
 b8 IsValidFontAtlasMetrics(in f32 ascenderUnits, in f32 descenderUnits, in f32 lineGapUnits){
-    return IsFinite(ascenderUnits) && IsFinite(descenderUnits) && IsFinite(lineGapUnits) && ascenderUnits > descenderUnits && lineGapUnits >= 0.0f;
+    return IsFinite(VectorSingle(ascenderUnits, descenderUnits, lineGapUnits, 0.0f)) && ascenderUnits > descenderUnits && lineGapUnits >= 0.0f;
 }
 
 b8 IsValidFontAtlasGlyphGroupRect(in FontAtlasGlyph glyph, in u32 groupWidth, in u32 groupHeight, in u32 groupChannelCount, in u32 guardTexels){

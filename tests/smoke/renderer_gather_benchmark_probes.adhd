@@ -81,7 +81,7 @@ class RendererCompilerStatisticsProbe : IRenderPass{
         }
         const Array<f64, 12u> durations = CompileDurations(sample.compile);
         for(usize i = 0u; i < durations.size(); ++i){
-            if(!IsFinite(durations[i]) || durations[i] < 0.0)
+            if(!IsFinite(VectorDouble(durations[i])) || durations[i] < 0.0)
                 return "invalid_duration";
         }
         return "valid";

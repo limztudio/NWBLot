@@ -266,8 +266,9 @@ b8 PublishUiNestedPopupDeclaration(mut UiNestedPopupContextTests self, in UiNest
     if(!self.m_context.addTarget(popup.owner, barrier))
         return false;
     HitTarget action = HitTarget();
-    action.rectangle.x = popup.scope.bounds.x + 4.0f;
-    action.rectangle.y = popup.scope.bounds.y + 4.0f;
+    const VectorSingle actionOrigin = VectorSingle(popup.scope.bounds.x, popup.scope.bounds.y, 0.0f, 0.0f) + VectorSingle(4.0f, 4.0f, 0.0f, 0.0f);
+    action.rectangle.x = actionOrigin.x;
+    action.rectangle.y = actionOrigin.y;
     action.rectangle.width = 24.0f;
     action.rectangle.height = 18.0f;
     action.clip = popup.scope.bounds;

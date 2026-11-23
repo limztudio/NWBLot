@@ -129,7 +129,7 @@ Expected<u32> TryParseMaterialBoolToken(in StringView token){
 
 Expected<f32> ParseMaterialParameterF32Token(in StringView token){
     const Expected<f64> parsed = ParseF64(token);
-    if(!parsed.has_value() || !IsFinite(parsed.value()))
+    if(!parsed.has_value() || !IsFinite(VectorDouble(parsed.value())))
         return MakeUnexpected(Failure());
     if(parsed.value() < cast<f64>(f32.min) || parsed.value() > cast<f64>(f32.max))
         return MakeUnexpected(Failure());

@@ -15,7 +15,7 @@ b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
 TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
     if(
         request.text.size() > s_TextMaxBytes
-        || !IsFinite(request.fontSize)
+        || !IsFinite(VectorSingle(request.fontSize))
         || request.fontSize < 1.0f / s_TextFixedPointScale
         || request.fontSize > s_TextMaxFontSize
         || request.scriptTag == 0u
@@ -72,11 +72,11 @@ b8 ClusterHasMissingGlyph(in Span<RawShapedGlyph> glyphs, in usize begin, in usi
 }
 
 b8 FitsTextCoordinate(in f64 value){
-    return IsFinite(value) && value >= -s_TextMaxCoordinateF64 && value <= s_TextMaxCoordinateF64;
+    return IsFinite(VectorDouble(cast<f64>(value))) && value >= -s_TextMaxCoordinateF64 && value <= s_TextMaxCoordinateF64;
 }
 
 b8 IsValidTextFontSize(in f32 fontSize){
-    return IsFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
+    return IsFinite(VectorSingle(fontSize)) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
 }
 
 b8 SameShapeRequest(in ShapeRequest lhs, in ShapeRequest rhs){
@@ -153,12 +153,15 @@ GlyphCoverageBounds ComputeOutlineCoverageBounds(in i64 xMin, in i64 yMin, in i6
     const VectorDouble candidate(origin.x, origin.y, extent.x, extent.y);
     if(!IsFinite(candidate) || extent.x < 0.0 || extent.y < 0.0)
         return GlyphCoverageBounds();
-    if(Abs(origin.x) > s_TextMaxCoordinateF64 || Abs(origin.y) > s_TextMaxCoordinateF64 || extent.x > s_TextMaxCoordinateF64 || extent.y > s_TextMaxCoordinateF64)
+    const VectorDouble mag = VectorDoubleAbs(candidate);
+    if(mag.x > s_TextMaxCoordinateF64 || mag.y > s_TextMaxCoordinateF64 || mag.z > s_TextMaxCoordinateF64 || mag.w > s_TextMaxCoordinateF64)
         return GlyphCoverageBounds();
-    if(Abs(origin.x + extent.x) > s_TextMaxCoordinateF64 || Abs(origin.y + extent.y) > s_TextMaxCoordinateF64)
+    const VectorDouble endMag = VectorDoubleAbs(origin + extent);
+    if(endMag.x > s_TextMaxCoordinateF64 || endMag.y > s_TextMaxCoordinateF64)
         return GlyphCoverageBounds();
     const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), cast<f32>(extent.x), cast<f32>(extent.y));
-    if(!IsFinite(rounded.x + rounded.z) || !IsFinite(rounded.y + rounded.w))
+    const VectorSingle roundedEnds = rounded + rounded.zwxy;
+    if(!IsFinite(roundedEnds.xy))
         return GlyphCoverageBounds();
     return GlyphCoverageBounds(Rect(rounded.x, rounded.y, rounded.z, rounded.w), true);
 }

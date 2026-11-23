@@ -66,11 +66,11 @@ Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in
     )
         return MakeUnexpected(SkinInfluenceWeightFailure::NegativeWeight);
 
-    const f32 totalWeight = Dot(weightVec, VectorSingle(1.0f));
-    if(!IsFinite(totalWeight) || !(totalWeight > s_SkinValidationEpsilon))
+    const VectorSingle totalWeight = Vector4Dot(weightVec, VectorSingle(1.0f));
+    if(!IsFinite(totalWeight) || !(totalWeight.x > s_SkinValidationEpsilon))
         return MakeUnexpected(SkinInfluenceWeightFailure::ZeroTotalWeight);
 
-    const VectorSingle normalizedWeights = weightVec / VectorSingle(totalWeight);
+    const VectorSingle normalizedWeights = weightVec / totalWeight;
     if(!ValidSkinInfluenceWeights(normalizedWeights))
         return MakeUnexpected(SkinInfluenceWeightFailure::InvalidNormalized);
 

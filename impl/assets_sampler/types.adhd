@@ -134,9 +134,8 @@ b8 IsValidSamplerScalarParameters(
         && borderColorG == 0.0f
         && borderColorB == 0.0f
         && borderColorA == 0.0f
-        && IsFinite(maxAnisotropy)
+        && IsFinite(VectorSingle(maxAnisotropy, mipBias, 0.0f, 0.0f))
         && maxAnisotropy >= 1.0f
-        && IsFinite(mipBias)
     ;
 }
 

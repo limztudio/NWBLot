@@ -52,7 +52,8 @@ b8 ReadPhysicsOptionalU32Field(
                 return;
             }
             const f64 num = fieldVal.toDouble();
-            if(!IsFinite(num) || num < 0.0 || num > 4294967295.0 || Floor(num) != num){
+            const VectorDouble numVec(num);
+            if(!IsFinite(numVec) || num < 0.0 || num > 4294967295.0 || VectorDoubleFloor(numVec).x != num){
                 error("{} '{}': field '{}' must be a u32 integer", prefix, PathToString(file), field);
                 ok = false;
                 return;
@@ -187,7 +188,8 @@ b8 ReadPhysicsU32ArrayField(
                     return;
                 }
                 const f64 num = item.toDouble();
-                if(!IsFinite(num) || num < 0.0 || num > 4294967295.0 || Floor(num) != num){
+                const VectorDouble numVec(num);
+                if(!IsFinite(numVec) || num < 0.0 || num > 4294967295.0 || VectorDoubleFloor(numVec).x != num){
                     error("{} '{}': field '{}' entries must be u32 integers", prefix, PathToString(file), field);
                     ok = false;
                     return;
@@ -217,7 +219,8 @@ b8 ReadPhysicsOptionalU64Field(
                 return;
             }
             const f64 num = fieldVal.toDouble();
-            if(!IsFinite(num) || num < 0.0 || num > 9007199254740991.0 || Floor(num) != num){
+            const VectorDouble numVec(num);
+            if(!IsFinite(numVec) || num < 0.0 || num > 9007199254740991.0 || VectorDoubleFloor(numVec).x != num){
                 error("{} '{}': field '{}' must be a u64 integer", prefix, PathToString(file), field);
                 ok = false;
                 return;

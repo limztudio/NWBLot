@@ -5,24 +5,34 @@
 #pragma once
 
 
-#include "simplemath.h"
-#include "simd/vector_arithmetic.h"
+#include "simd/vector_rounding.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline f32 QuantizeUNormScalar(const f32 value, const f32 maxValue)noexcept{
-    const SIMDVectorSingle scaledLanes = VectorMultiply(VectorReplicate(Saturate(value)), VectorReplicate(maxValue));
-    const f32 scaled = VectorGetX(scaledLanes);
-    return Min(Floor(VectorGetX(VectorAdd(VectorReplicate(scaled), VectorReplicate(0.5f)))), maxValue);
+    const SIMDVectorSingle valueVec = VectorReplicate(value);
+    const SIMDVectorSingle maxVec = VectorReplicate(maxValue);
+    const SIMDVectorSingle zero = VectorZero();
+    const SIMDVectorSingle one = VectorSplatOne();
+    const SIMDVectorSingle clampedLow = VectorSelect(valueVec, zero, VectorLess(valueVec, zero));
+    const SIMDVectorSingle saturated = VectorSelect(clampedLow, one, VectorGreater(clampedLow, one));
+    const SIMDVectorSingle scaled = VectorMultiply(saturated, maxVec);
+    const SIMDVectorSingle rounded = VectorFloor(VectorAdd(scaled, VectorReplicate(s_RoundHalfBias)));
+    return VectorGetX(VectorSelect(maxVec, rounded, VectorLess(rounded, maxVec)));
 }
 
 [[nodiscard]] inline f32 QuantizeSNormScalar(const f32 value, const f32 maxValue)noexcept{
-    const f32 clamped = Clamp(value, -1.0f, 1.0f);
-    const f32 scaled = VectorGetX(VectorMultiply(VectorReplicate(clamped), VectorReplicate(maxValue)));
-    const f32 magnitude = Floor(VectorGetX(VectorAdd(VectorReplicate(Abs(scaled)), VectorReplicate(0.5f))));
-    return scaled >= 0.0f ? magnitude : VectorGetX(VectorNegate(VectorReplicate(magnitude)));
+    const SIMDVectorSingle valueVec = VectorReplicate(value);
+    const SIMDVectorSingle maxVec = VectorReplicate(maxValue);
+    const SIMDVectorSingle negOne = VectorReplicate(-1.0f);
+    const SIMDVectorSingle one = VectorSplatOne();
+    const SIMDVectorSingle clampedHigh = VectorSelect(valueVec, one, VectorGreater(valueVec, one));
+    const SIMDVectorSingle clamped = VectorSelect(negOne, clampedHigh, VectorGreater(valueVec, negOne));
+    const SIMDVectorSingle scaled = VectorMultiply(clamped, maxVec);
+    const SIMDVectorSingle magnitude = VectorFloor(VectorAdd(VectorAbs(scaled), VectorReplicate(s_RoundHalfBias)));
+    return VectorGetX(VectorSelect(VectorNegate(magnitude), magnitude, VectorGreaterOrEqual(scaled, VectorZero())));
 }
 
 

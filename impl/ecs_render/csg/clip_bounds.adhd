@@ -104,10 +104,10 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
         return outWorkBounds;
     }
     if(
-        !IsFinite(receiverBounds.minBounds.x) || !IsFinite(receiverBounds.minBounds.y) || !IsFinite(receiverBounds.minBounds.z)
-        || !IsFinite(receiverBounds.maxBounds.x) || !IsFinite(receiverBounds.maxBounds.y) || !IsFinite(receiverBounds.maxBounds.z)
-        || !IsFinite(cutterMinBounds.x) || !IsFinite(cutterMinBounds.y) || !IsFinite(cutterMinBounds.z)
-        || !IsFinite(cutterMaxBounds.x) || !IsFinite(cutterMaxBounds.y) || !IsFinite(cutterMaxBounds.z)
+        !IsFinite(VectorSingle(receiverBounds.minBounds.x, receiverBounds.minBounds.y, receiverBounds.minBounds.z, 0.0f))
+        || !IsFinite(VectorSingle(receiverBounds.maxBounds.x, receiverBounds.maxBounds.y, receiverBounds.maxBounds.z, 0.0f))
+        || !IsFinite(cutterMinBounds.xyz)
+        || !IsFinite(cutterMaxBounds.xyz)
         || receiverBounds.minBounds.x > receiverBounds.maxBounds.x
         || receiverBounds.minBounds.y > receiverBounds.maxBounds.y
         || receiverBounds.minBounds.z > receiverBounds.maxBounds.z
@@ -148,7 +148,7 @@ Expected<MatrixSingle> TryInvertCsgReceiverLocalToWorld(in b8 hasTransform, in M
     if(!hasTransform)
         return MatrixIdentity();
     const VectorSingle determinant = MatrixDeterminant(localToWorld);
-    if(!IsFinite(determinant) || Abs(determinant.x) <= 0.0f)
+    if(!IsFinite(determinant) || Abs(determinant).x <= 0.0f)
         return MakeUnexpected(Failure());
     return Inverse(localToWorld);
 }

@@ -153,7 +153,7 @@ class ListMeasureKey{
 
 
 b8 IsValidListOptions(in ListOptions options){
-    return options.enabled && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
+    return options.enabled && IsFinite(VectorSingle(options.wheelRows)) && options.wheelRows > 0.0f;
 }
 
 b8 IsReverseListControlAction(in ControlActionKind kind){
@@ -161,9 +161,9 @@ b8 IsReverseListControlAction(in ControlActionKind kind){
 }
 
 Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum){
-    if(!IsFinite(delta) || !IsFinite(step) || step <= 0.0 || !IsFinite(maximum) || maximum < 0.0)
+    if(!IsFinite(VectorDouble(delta, step, maximum, 0.0)) || step <= 0.0 || maximum < 0.0)
         return MakeUnexpected(Failure());
-    f64 candidateValue = Min(current, maximum);
+    f64 candidateValue = UiSimdMinF64(current, maximum);
     if(delta > 0.0){
         const f64 distanceInSteps = candidateValue / step;
         if(delta >= distanceInSteps)
@@ -181,8 +181,8 @@ Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 ste
     }
     f64 candidate = 0.0;
     if(candidateValue > 0.0)
-        candidate = Min(maximum, candidateValue);
-    if(!IsFinite(candidate))
+        candidate = UiSimdMinF64(maximum, candidateValue);
+    if(!IsFinite(VectorDouble(candidate)))
         return MakeUnexpected(Failure());
     return candidate;
 }

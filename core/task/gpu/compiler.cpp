@@ -302,7 +302,7 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.prologueBarrierCount = outCompiledGraph.m_prologueBarriers.size();
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
     outCompiledGraph.buildPlanStatistics(graph, scratchArena);
-    if(IsFinite(options.declarationSeconds)){
+    if(VectorDoubleIsFinite(VectorDoubleReplicate(options.declarationSeconds), VectorDoubleComponentMask::s_DoubleXYZW)){
         statistics.declarationSeconds = options.declarationSeconds >= 0.0 ? options.declarationSeconds : 0.0;
     }
     else

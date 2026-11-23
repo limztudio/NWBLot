@@ -77,9 +77,9 @@ Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in Disp
     const VectorSingle pixelScale(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
     if(!IsValidTextFontSize(fontSize) || !IsFinite(pixelScale.xy) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
         return MakeUnexpected(Failure());
-    const f32 physicalSize = fontSize * Max(display.pixelScaleX, display.pixelScaleY);
-    const f32 rasterPpem = Ceil(physicalSize);
-    if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+    const f32 physicalSize = fontSize * UiSimdMax(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = VectorCeiling(VectorSingle(physicalSize)).x;
+    if(!IsFinite(VectorSingle(rasterPpem)) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
         return MakeUnexpected(Failure());
     outMetrics.physicalSize = physicalSize;
     outMetrics.rasterPpem = rasterPpem;
@@ -107,7 +107,7 @@ Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in
     const VectorSingle roundedSize(roundedWidth, roundedHeight, roundedWidth, roundedHeight);
     if(!IsFinite(roundedSize.xy) || roundedWidth < 0.0f || roundedHeight < 0.0f)
         return MakeUnexpected(Failure());
-    if(!IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight))
+    if(!IsFinite(VectorSingle(x + roundedWidth, y + roundedHeight, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     return Rect(x, y, roundedWidth, roundedHeight);
 }

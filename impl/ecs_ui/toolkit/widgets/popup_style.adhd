@@ -68,20 +68,19 @@ class ContextMenuResult{
 
 b8 IsValidPopupOptions(in PopupOptions options, in DisplayMetrics display){
     return IsValidUiRect(options.anchor)
-        && IsFinite(options.size.x)
-        && IsFinite(options.size.y)
+        && IsFinite(VectorSingle(options.size.x, options.size.y, 0.0f, 0.0f))
         && options.size.x > 0.0f
         && options.size.y > 0.0f
         && options.side <= PopupPlacementSide::Center
-        && IsFinite(options.gap)
+        && IsFinite(VectorSingle(options.gap))
         && options.gap >= 0.0f
-        && IsFinite(display.logicalWidth)
+        && IsFinite(VectorSingle(display.logicalWidth))
         && display.logicalWidth > 0.0f
-        && IsFinite(display.logicalHeight)
+        && IsFinite(VectorSingle(display.logicalHeight))
         && display.logicalHeight > 0.0f
-        && IsFinite(display.pixelScaleX)
+        && IsFinite(VectorSingle(display.pixelScaleX))
         && display.pixelScaleX > 0.0f
-        && IsFinite(display.pixelScaleY)
+        && IsFinite(VectorSingle(display.pixelScaleY))
         && display.pixelScaleY > 0.0f;
 }
 
@@ -108,8 +107,11 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
     PopupPlacement outPlacement;
     if(!IsValidPopupOptions(options, display))
         return MakeUnexpected(Failure());
-    const f32 width = Min(options.size.x, display.logicalWidth);
-    const f32 height = Min(options.size.y, display.logicalHeight);
+    const VectorSingle optSize(options.size.x, options.size.y, 0.0f, 0.0f);
+    const VectorSingle dispSize(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f);
+    const VectorSingle clampedSize = VectorSelect(dispSize, optSize, VectorLess(optSize, dispSize));
+    const f32 width = clampedSize.x;
+    const f32 height = clampedSize.y;
     PopupPlacementSide side = options.side;
     if(side != PopupPlacementSide::Center){
         const b8 vertical = side == PopupPlacementSide::Below || side == PopupPlacementSide::Above;
@@ -125,8 +127,8 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
         }
         const f64 forwardDist = (displayExtent - anchorOrigin - anchorExtent) - cast<f64>(options.gap);
         const f64 backwardDist = anchorOrigin - cast<f64>(options.gap);
-        const f64 forwardRoom = Clamp(forwardDist, 0.0, displayExtent);
-        const f64 backwardRoom = Clamp(backwardDist, 0.0, displayExtent);
+        const f64 forwardRoom = UiSimdClampF64(forwardDist, 0.0, displayExtent);
+        const f64 backwardRoom = UiSimdClampF64(backwardDist, 0.0, displayExtent);
         const b8 forward = side == PopupPlacementSide::Below || side == PopupPlacementSide::Right;
         f64 preferredRoom = backwardRoom;
         f64 oppositeRoom = forwardRoom;
@@ -164,9 +166,9 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
     const VectorDouble maximum = VectorDouble(cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight), cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight)) - VectorDouble(cast<f64>(width), cast<f64>(height), cast<f64>(width), cast<f64>(height));
     const f64 maxX = maximum.x;
     const f64 maxY = maximum.y;
-    const f32 x = cast<f32>(Clamp(originX, 0.0, maxX));
-    const f32 y = cast<f32>(Clamp(originY, 0.0, maxY));
-    if(!IsFinite(x + width) || !IsFinite(y + height))
+    const f32 x = cast<f32>(UiSimdClampF64(originX, 0.0, maxX));
+    const f32 y = cast<f32>(UiSimdClampF64(originY, 0.0, maxY));
+    if(!IsFinite(VectorSingle(x + width, y + height, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     outPlacement.bounds = Rect(x, y, width, height);
     outPlacement.viewport = Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
@@ -176,21 +178,22 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
 
 b8 IsValidContextMenuDeclarationOptions(in ContextMenuOptions options, in usize currentMenuCount, in usize maxPopups){
     return
-        IsFinite(options.size.x) && IsFinite(options.size.y)
+        IsFinite(VectorSingle(options.size.x, options.size.y, 0.0f, 0.0f))
         && options.size.x > 0.0f && options.size.y > 0.0f
-        && IsFinite(options.wheelRows) && options.wheelRows > 0.0f
+        && IsFinite(VectorSingle(options.wheelRows)) && options.wheelRows > 0.0f
         && currentMenuCount < maxPopups
     ;
 }
 
 b8 IsContextMenuAnchorVisible(in Rect anchorRect, in Rect clip, in b8 anchorEnabled){
+    const VectorSingle ends = VectorSingle(anchorRect.x, anchorRect.y, clip.x, clip.y) + VectorSingle(anchorRect.width, anchorRect.height, clip.width, clip.height);
     return
         anchorEnabled
         && clip.width > 0.0f && clip.height > 0.0f
-        && anchorRect.x < clip.x + clip.width
-        && anchorRect.y < clip.y + clip.height
-        && anchorRect.x + anchorRect.width > clip.x
-        && anchorRect.y + anchorRect.height > clip.y
+        && anchorRect.x < ends.z
+        && anchorRect.y < ends.w
+        && ends.x > clip.x
+        && ends.y > clip.y
     ;
 }
 

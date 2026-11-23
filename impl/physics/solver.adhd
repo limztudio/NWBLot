@@ -342,7 +342,7 @@ void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
         if(body.type == BodyType::Dynamic && dt > 0.0f && world.m_def.enableContinuous){
             disp = ApplyLinearLocks(VectorSingle(state.linearVelocity) * dt + gravity * (0.5f * sim.gravityScale * dt * dt), body.flags);
             const f32 dispLenSq = Vector3LengthSq(VectorSingle(disp, 0.0f)).x;
-            const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
+            const f32 fastThresh = SimdMax(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
             isFast = dispLenSq > fastThresh * fastThresh;
             const b8 isBullet = (body.flags & bulletBit) != 0u;
             if(isBullet || isFast){
@@ -350,7 +350,7 @@ void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
                 if(isBullet)
                     maxDist = s_MaxBulletSweepDistance;
                 if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
-                    disp = disp * (maxDist / Sqrt(dispLenSq));
+                    disp = disp * (maxDist / Sqrt(VectorSingle(dispLenSq)).x);
                 enlarge = true;
             }
         }
@@ -405,7 +405,7 @@ Manifold SweepContactPairAfterMiss(
     VectorSingle sweptDispA = dispA;
     VectorSingle sweptDispB = dispB;
     if(relDispLenSq > maxSweepDist * maxSweepDist){
-        const f32 sweepScale = maxSweepDist / Sqrt(relDispLenSq);
+        const f32 sweepScale = maxSweepDist / Sqrt(VectorSingle(relDispLenSq)).x;
         sweptDispA = dispA * sweepScale;
         sweptDispB = dispB * sweepScale;
     }
@@ -467,8 +467,9 @@ Manifold SweepContactPairAfterMiss(
 
     const VectorSingle relShift = VectorSingle(sweptDispB - sweptDispA, 0.0f) * hitFrac;
     const f32 sepDelta = Vector3Dot(relShift, SafeNormalizeVec3(hitM.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f))).x;
+    const VectorSingle sepDeltaVec(0.0f, 0.0f, 0.0f, sepDelta);
     for(u32 p = 0u; p < hitPointCount; ++p){
-        const f32 adjustedSep = hitM.points[p].separation() - sepDelta;
+        const f32 adjustedSep = (VectorSingle(hitM.points[p].pointSeparation) - sepDeltaVec).w;
         const VectorSingle wA = VectorSingle(xfA.position) + hitM.points[p].anchorA();
         const VectorSingle wB = VectorSingle(xfB.position) + hitM.points[p].anchorB();
         hitM.points[p].pointSeparation = f32x4((wA + wB) * 0.5f, adjustedSep);
@@ -610,13 +611,13 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
                 const VectorSingle ctxN = VectorSingle(ctx.normal);
                 if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
                     newM.setNormal(SafeNormalizeVec3(ctxN, newM.normal()));
-                if(IsFinite(ctx.friction) && ctx.friction >= 0.0f)
+                if(IsFinite(VectorSingle(ctx.friction)) && ctx.friction >= 0.0f)
                     c.friction = ctx.friction;
-                if(IsFinite(ctx.restitution) && ctx.restitution >= 0.0f)
+                if(IsFinite(VectorSingle(ctx.restitution)) && ctx.restitution >= 0.0f)
                     c.restitution = ctx.restitution;
-                if(IsFinite(ctx.rollingResistance) && ctx.rollingResistance >= 0.0f)
+                if(IsFinite(VectorSingle(ctx.rollingResistance)) && ctx.rollingResistance >= 0.0f)
                     c.rollingResistance = ctx.rollingResistance;
-                if(IsFinite(ctx.tangentSpeed))
+                if(IsFinite(VectorSingle(ctx.tangentSpeed)))
                     c.tangentSpeed = ctx.tangentSpeed;
             }
         }
@@ -1193,7 +1194,7 @@ void IntegrateBodyVelocitiesRange(
     u32 outFlags = stateFlags;
     const f32 speedSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
     if(speedSq > maxLinearVelocity * maxLinearVelocity && speedSq > s_NormalizeEpsilonSq){
-        v = v * (maxLinearVelocity / Sqrt(speedSq));
+        v = v * (maxLinearVelocity / Sqrt(VectorSingle(speedSq)).x);
         outFlags |= cast<u32>(BodyFlags::IsSpeedCapped);
     }
 
@@ -1215,7 +1216,7 @@ void IntegrateBodyPositionsAt(mut Vector<BodyState> states, in f32 h, in usize i
         const f32 wLenSq = Vector3LengthSq(VectorSingle(w, 0.0f)).x;
         const f32 maxAngSpeed = s_MaxRotation / h;
         if(wLenSq > maxAngSpeed * maxAngSpeed && wLenSq > s_NormalizeEpsilonSq)
-            w = w * (maxAngSpeed / Sqrt(wLenSq));
+            w = w * (maxAngSpeed / Sqrt(VectorSingle(wLenSq)).x);
     }
     state.setDeltaPosition(state.deltaPosition() + v * h);
     state.deltaRotation = f32x4(IntegrateDeltaQuaternion(VectorSingle(state.deltaRotation), w, h));
@@ -1260,7 +1261,7 @@ void FinalizeAwakeBodyAt(mut PhysicsWorld world, in f32 dt, in usize idx){
 
     const VectorSingle v = VectorSingle(state.linearVelocity);
     const VectorSingle w = VectorSingle(state.angularVelocity);
-    const f32 minExt = Max(sim.localCenterMinExtent.w, 1.0e-3f);
+    const f32 minExt = SimdMax(sim.localCenterMinExtent.w, 1.0e-3f);
     const f32 linSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
     const f32 angSq = Vector3LengthSq(VectorSingle(w, 0.0f)).x * minExt * minExt;
     const f32 thresh = body.sleepThreshold;
@@ -1291,7 +1292,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     if(qDeltaA.w < 0.0f)
         qDeltaA = -qDeltaA;
     const f32 sinHalfA = Vector3Length(VectorSingle(qDeltaA.x, qDeltaA.y, qDeltaA.z, 0.0f)).x;
-    const f32 angDispA = 2.0f * ATan2(sinHalfA, Clamp(qDeltaA.w, -1.0f, 1.0f)) * simInit.maxExtent();
+    const f32 angDispA = 2.0f * ATan2(VectorSingle(sinHalfA), VectorSingle(SimdClamp(qDeltaA.w, -1.0f, 1.0f))).x * simInit.maxExtent();
     if(Vector3LengthSq(dispA).x <= s_LinearSlop * s_LinearSlop && angDispA <= s_LinearSlop)
         return;
 
@@ -1430,7 +1431,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                                     const VectorSingle ctxN = VectorSingle(ctx.normal);
                                     if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
                                         candidateN = SafeNormalizeVec3(ctxN, candidateN);
-                                    if(IsFinite(ctx.restitution) && ctx.restitution >= 0.0f)
+                                    if(IsFinite(VectorSingle(ctx.restitution)) && ctx.restitution >= 0.0f)
                                         candidateRest = ctx.restitution;
                                 }
                             }
@@ -1689,7 +1690,7 @@ u8 EvaluateAwakeBodyFinalize(
             const VectorSingle gravity = VectorSingle(worldRef.m_def.gravity);
             const VectorSingle nextDisp = ApplyLinearLocks(VectorSingle(state.linearVelocity) * dt + gravity * (0.5f * sim.gravityScale * dt * dt), body.flags);
             const f32 nextDispSq = Vector3LengthSq(VectorSingle(nextDisp, 0.0f)).x;
-            const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
+            const f32 fastThresh = SimdMax(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
             if((body.flags & bulletBit) != 0u){
                 if(nextDispSq > s_LinearSlop * s_LinearSlop)
                     keepEnlarged = true;
@@ -2226,8 +2227,8 @@ void EmitJointBreakEventIfNeeded(
 ){
     if(joint.breakForce <= 0.0f && joint.breakTorque <= 0.0f)
         return;
-    const f32 peakForce = Max(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
-    const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
+    const f32 peakForce = SimdMax(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
+    const f32 peakTorque = SimdMax(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
     const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
     const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
     if(brokeForce || brokeTorque){
@@ -2247,8 +2248,8 @@ u8 StoreJointImpulsesFast(in JointConstraint jc, in f32 invH, mut Joint joint){
     StoreJointConstraintImpulses(jc, invH, joint);
     if(joint.breakForce <= 0.0f && joint.breakTorque <= 0.0f)
         return 1u;
-    const f32 peakForce = Max(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
-    const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
+    const f32 peakForce = SimdMax(Vector3Length(joint.lastConstraintForce()).x, jc.maxLinearImpulseMag() * invH);
+    const f32 peakTorque = SimdMax(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
     const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
     const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
     if(brokeForce || brokeTorque)
@@ -2542,7 +2543,7 @@ void BuildSolverWorkPartition(
         totalWork += score;
     }
 
-    const f32 frac = Clamp(gpuWorkloadFraction, 0.0f, 1.0f);
+    const f32 frac = SimdClamp(gpuWorkloadFraction, 0.0f, 1.0f);
     if(!allowCpuSplit || frac >= 1.0f){
         for(usize ci = 0u; ci < components.size(); ++ci)
             components[ci].assignGpu = true;
@@ -4089,7 +4090,7 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     mut Vector<u32> activeJointIds = world.m_cpuScratch.activeJointIds;
     CollectActiveAwakeJointIds(world, world.m_cpuScratch.jointVisitStamps, world.m_cpuScratch.jointVisitStamp, activeJointIds);
     mut Vector<JointConstraint> jointConstraints = world.m_cpuScratch.jointConstraints;
-    const f32 jointDefaultHertz = Max(world.m_def.contactHertz, 30.0f);
+    const f32 jointDefaultHertz = SimdMax(world.m_def.contactHertz, 30.0f);
     PrepareJointConstraintsCpu(world, activeJointIds, jointDefaultHertz, h, cpuScheduler, jointConstraints);
 
     mut Vector<u32> awakeIndices = world.m_cpuScratch.awakeIndices;

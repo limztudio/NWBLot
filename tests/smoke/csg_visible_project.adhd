@@ -153,8 +153,11 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks, ISmokeCapturePredicate{
 
     public b8 onUpdate(in f32 delta)override{
         f32 safeDelta = 0.0f;
-        if(IsFinite(delta))
-            safeDelta = Max(delta, 0.0f);
+        if(IsFinite(VectorSingle(delta))){
+            const VectorSingle deltaVec(delta);
+            const VectorSingle zeroVec(0.0f);
+            safeDelta = VectorSelect(zeroVec, deltaVec, VectorGreater(deltaVec, zeroVec)).x;
+        }
         this.m_fpsProbe.recordFrame(safeDelta);
         if(this.m_temporalEnabled){
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
@@ -165,8 +168,11 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks, ISmokeCapturePredicate{
                 this.m_animationTime = 0.0f;
             this.updateTemporalCapture();
         }
-        else
-            this.m_animationTime = Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed + this.m_animationTime;
+        else{
+            const VectorSingle safeVec(safeDelta);
+            const VectorSingle maxVec(s_MaxAnimationDelta);
+            this.m_animationTime = VectorSelect(maxVec, safeVec, VectorLess(safeVec, maxVec)).x * s_CubeRotationSpeed + this.m_animationTime;
+        }
 
         this.m_scene.update(this.m_animationTime, SmokeWorldRef(this.m_world));
         f32 tickDelta = safeDelta;

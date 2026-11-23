@@ -14,7 +14,7 @@ VectorSingle RotateSceneVector3(in VectorSingle value, in VectorSingle rotationQ
 
 VectorSingle NormalizeSceneVector3Or(in VectorSingle value, in VectorSingle fallback, in f32 lengthSquaredEpsilon){
     const f32 lenSq = LengthSq(value.xyz);
-    if(!IsFinite(lenSq) || !(lenSq > lengthSquaredEpsilon))
+    if(!IsFinite(VectorSingle(lenSq)) || !(lenSq > lengthSquaredEpsilon))
         return fallback;
     const VectorSingle scaled = value * Rsqrt(VectorSingle(lenSq));
     return VectorSingle(scaled, 0.0f);

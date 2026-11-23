@@ -129,7 +129,7 @@ class StressCsgScene{
     public b8 update(in f32 yaw, mut World world){
         if(!this.m_enabled)
             return true;
-        if(!IsFinite(yaw)){
+        if(!IsFinite(VectorSingle(yaw))){
             error("StressTestSmokeProject: nonfinite CSG cutter yaw");
             return false;
         }

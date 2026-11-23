@@ -234,13 +234,13 @@ class PresentationFpsProbe{
     public PresentationFpsProbe(in f64 warmupSeconds){
         this.m_warmupSeconds = warmupSeconds;
         this.m_measurementSeconds = 0.0;
-        this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0;
+        this.m_invalid = !IsFinite(VectorDouble(warmupSeconds)) || warmupSeconds < 0.0;
     }
 
     public PresentationFpsProbe(in f64 warmupSeconds, in f64 measurementSeconds){
         this.m_warmupSeconds = warmupSeconds;
         this.m_measurementSeconds = measurementSeconds;
-        this.m_invalid = !IsFinite(warmupSeconds) || warmupSeconds < 0.0 || !IsFinite(measurementSeconds) || measurementSeconds < 0.0;
+        this.m_invalid = !IsFinite(VectorDouble(warmupSeconds, measurementSeconds, 0.0, 0.0)) || warmupSeconds < 0.0 || measurementSeconds < 0.0;
     }
 
     public PresentationFpsStatus observe(in u64 successfulPresentations, in Timer now){
@@ -322,8 +322,11 @@ class FpsProbe{
 
     public void recordFrame(in f32 delta){
         f64 safeDelta = 0.0;
-        if(IsFinite(delta))
-            safeDelta = Max(cast<f64>(delta), 0.0);
+        if(IsFinite(VectorSingle(delta))){
+            const VectorDouble deltaVec(cast<f64>(delta));
+            const VectorDouble zeroVec(0.0);
+            safeDelta = VectorDoubleSelect(zeroVec, deltaVec, VectorDoubleGreater(deltaVec, zeroVec)).x;
+        }
         if(safeDelta <= 0.0)
             return;
 

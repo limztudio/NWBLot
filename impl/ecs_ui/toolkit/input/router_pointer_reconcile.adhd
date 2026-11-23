@@ -66,10 +66,14 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
         in HitTarget target = targets[index];
         if(!target.enabled)
             continue;
-        const f32 x0 = Max(target.rectangle.x, target.clip.x);
-        const f32 y0 = Max(target.rectangle.y, target.clip.y);
-        const f32 x1 = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
-        const f32 y1 = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
+        const VectorSingle rectRect(target.rectangle.x, target.rectangle.y, target.rectangle.x + target.rectangle.width, target.rectangle.y + target.rectangle.height);
+        const VectorSingle clipRect(target.clip.x, target.clip.y, target.clip.x + target.clip.width, target.clip.y + target.clip.height);
+        const VectorSingle maxBounds = VectorSelect(clipRect, rectRect, VectorGreater(rectRect, clipRect));
+        const VectorSingle minBounds = VectorSelect(clipRect, rectRect, VectorLess(rectRect, clipRect));
+        const f32 x0 = maxBounds.x;
+        const f32 y0 = maxBounds.y;
+        const f32 x1 = minBounds.z;
+        const f32 y1 = minBounds.w;
         if(!(x1 > x0) || !(y1 > y0))
             continue;
         outIndex.scratchTargetIndices.push_back(cast<u32>(index));
@@ -82,10 +86,10 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
             hasVisible = true;
         }
         else{
-            minX = Min(minX, x0);
-            minY = Min(minY, y0);
-            maxX = Max(maxX, x1);
-            maxY = Max(maxY, y1);
+            minX = UiSimdMin(minX, x0);
+            minY = UiSimdMin(minY, y0);
+            maxX = UiSimdMax(maxX, x1);
+            maxY = UiSimdMax(maxY, y1);
         }
     }
 
@@ -102,13 +106,15 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
         return;
     }
 
-    const f32 spanX = maxX - minX;
-    const f32 spanY = maxY - minY;
-    if(!IsFinite(spanX) || !IsFinite(spanY) || spanX <= 0.0f || spanY <= 0.0f)
+    const VectorSingle span = VectorSingle(maxX, maxY, 0.0f, 0.0f) - VectorSingle(minX, minY, 0.0f, 0.0f);
+    const f32 spanX = span.x;
+    const f32 spanY = span.y;
+    if(!IsFinite(span) || spanX <= 0.0f || spanY <= 0.0f)
         return;
-    const f32 invCellWidth = cast<f32>(s_InputSpatialGridDim) / spanX;
-    const f32 invCellHeight = cast<f32>(s_InputSpatialGridDim) / spanY;
-    if(!IsFinite(invCellWidth) || !IsFinite(invCellHeight) || invCellWidth <= 0.0f || invCellHeight <= 0.0f)
+    const VectorSingle invCell = VectorSingle(cast<f32>(s_InputSpatialGridDim)) / VectorSingle(spanX, spanY, 1.0f, 1.0f);
+    const f32 invCellWidth = invCell.x;
+    const f32 invCellHeight = invCell.y;
+    if(!IsFinite(invCell) || invCellWidth <= 0.0f || invCellHeight <= 0.0f)
         return;
 
     Array<u32, s_InputSpatialGridCells> cellCounts;
@@ -120,10 +126,11 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
     for(usize visibleIndex = 0u; visibleIndex < visibleCount; ++visibleIndex){
         const u32 targetIndex = outIndex.scratchTargetIndices[visibleIndex];
         in Rect clipped = outIndex.scratchClippedRects[visibleIndex];
-        const usize cx0 = ClampTargetSpatialCellCoord((clipped.x - minX) * invCellWidth);
-        const usize cy0 = ClampTargetSpatialCellCoord((clipped.y - minY) * invCellHeight);
-        const usize cx1 = ClampTargetSpatialCellCoord((clipped.width - minX) * invCellWidth);
-        const usize cy1 = ClampTargetSpatialCellCoord((clipped.height - minY) * invCellHeight);
+        const VectorSingle cellCoords = (VectorSingle(clipped.x, clipped.y, clipped.width, clipped.height) - VectorSingle(minX, minY, minX, minY)) * VectorSingle(invCellWidth, invCellHeight, invCellWidth, invCellHeight);
+        const usize cx0 = ClampTargetSpatialCellCoord(cellCoords.x);
+        const usize cy0 = ClampTargetSpatialCellCoord(cellCoords.y);
+        const usize cx1 = ClampTargetSpatialCellCoord(cellCoords.z);
+        const usize cy1 = ClampTargetSpatialCellCoord(cellCoords.w);
         if((cx1 - cx0 + 1u) * (cy1 - cy0 + 1u) > s_InputSpatialGridMaxCellsPerTarget){
             outIndex.overflowTargets.push_back(targetIndex);
             continue;
@@ -209,7 +216,7 @@ Expected<usize> FindRouterHitTargetIndex(
     in Span<PopupRecord> popups,
     in Point position
 ){
-    if(!IsFinite(position.x) || !IsFinite(position.y))
+    if(!IsFinite(VectorSingle(position.x, position.y, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     b8 hasFound = false;
     usize foundIndex = 0u;
@@ -238,15 +245,16 @@ Expected<usize> FindRouterHitTargetIndexIndexed(
     in TargetSpatialIndex spatial,
     in Point position
 ){
-    if(!IsFinite(position.x) || !IsFinite(position.y))
+    if(!IsFinite(VectorSingle(position.x, position.y, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     if(!spatial.active)
         return FindRouterHitTargetIndex(targets, lookup, popups, position);
     if(position.x < spatial.minX || position.y < spatial.minY || position.x > spatial.maxX || position.y > spatial.maxY)
         return MakeUnexpected(Failure());
 
-    const usize cx = ClampTargetSpatialCellCoord((position.x - spatial.minX) * spatial.invCellWidth);
-    const usize cy = ClampTargetSpatialCellCoord((position.y - spatial.minY) * spatial.invCellHeight);
+    const VectorSingle cellCoords = (VectorSingle(position.x, position.y, 0.0f, 0.0f) - VectorSingle(spatial.minX, spatial.minY, 0.0f, 0.0f)) * VectorSingle(spatial.invCellWidth, spatial.invCellHeight, 0.0f, 0.0f);
+    const usize cx = ClampTargetSpatialCellCoord(cellCoords.x);
+    const usize cy = ClampTargetSpatialCellCoord(cellCoords.y);
     const usize cell = cy * s_InputSpatialGridDim + cx;
     b8 hasFound = false;
     usize foundIndex = 0u;

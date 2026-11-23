@@ -263,11 +263,11 @@ void VerifyUiSliderBehaviorTests_AutomaticStepsRemainFiniteAcrossOppositeExtreme
     self.m_options.maximum = f64.max;
     ASSERT_TRUE(self.set(0.0));
     ASSERT_TRUE(ApplySliderControlAction(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
-    EXPECT_TRUE(IsFinite(self.m_state.value()));
+    EXPECT_TRUE(IsFinite(VectorDouble(self.m_state.value())));
     EXPECT_GT(self.m_state.value(), 0.0);
     EXPECT_NEAR(self.m_state.value() / f64.max, 0.02, 1.0e-15);
     ASSERT_TRUE(ApplySliderControlAction(self.m_options, self.key(ControlActionKind::PageUp), self.m_state, self.m_result));
-    EXPECT_TRUE(IsFinite(self.m_state.value()));
+    EXPECT_TRUE(IsFinite(VectorDouble(self.m_state.value())));
     EXPECT_NEAR(self.m_state.value() / f64.max, 0.22, 1.0e-15);
 }
 
@@ -1228,7 +1228,7 @@ void VerifyUiSliderMathTests_OppositeExtremeBoundsNormalizeAndInterpolateWithout
     EXPECT_DOUBLE_EQ(value.value(), 0.75);
     value = InterpolateFiniteRange(minimum, maximum, 0.25);
     ASSERT_TRUE(value.has_value());
-    EXPECT_TRUE(IsFinite(value.value()));
+    EXPECT_TRUE(IsFinite(VectorDouble(value.value())));
     EXPECT_DOUBLE_EQ(value.value() / maximum, -0.5);
     value = InterpolateFiniteRange(minimum, maximum, 0.75);
     ASSERT_TRUE(value.has_value());
@@ -1251,7 +1251,7 @@ void VerifyUiSliderMathTests_SameSignExtremeBoundsUseABoundedDifference(){
         }
         const auto value = InterpolateFiniteRange(minimum, upper, 0.5);
         ASSERT_TRUE(value.has_value());
-        EXPECT_TRUE(IsFinite(value.value()));
+        EXPECT_TRUE(IsFinite(VectorDouble(value.value())));
         EXPECT_GE(value.value(), minimum);
         EXPECT_LE(value.value(), upper);
         const auto normalized = NormalizeFiniteRange(minimum, upper, value.value());

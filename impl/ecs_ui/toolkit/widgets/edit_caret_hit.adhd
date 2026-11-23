@@ -33,7 +33,7 @@ f32 ComputeEditScalarFraction(in StringView text, in usize begin, in usize end, 
 }
 
 Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in u32 lineIndex, in Point point){
-    if(stops.empty() || cast<usize>(lineIndex) >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
+    if(stops.empty() || cast<usize>(lineIndex) >= lines.size() || !IsFinite(VectorSingle(point.x, point.y, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     const EditCaretLine line = lines[lineIndex];
     if(cast<usize>(line.firstStop) > stops.size() || cast<usize>(line.stopCount) > stops.size() - cast<usize>(line.firstStop))
@@ -47,16 +47,16 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
         end = cast<usize>(line.firstStop) + 1u;
     }
     f32 minimumX = stops[first].x;
-    if(!IsFinite(minimumX) || minimumX < 0.0f)
+    if(!IsFinite(VectorSingle(minimumX)) || minimumX < 0.0f)
         return MakeUnexpected(Failure());
     f32 maximumX = minimumX;
     for(usize index = first + 1u; index < end; ++index){
-        if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
+        if(!IsFinite(VectorSingle(stops[index].x)) || stops[index].x < 0.0f)
             return MakeUnexpected(Failure());
-        minimumX = Min(minimumX, stops[index].x);
-        maximumX = Max(maximumX, stops[index].x);
+        minimumX = UiSimdMin(minimumX, stops[index].x);
+        maximumX = UiSimdMax(maximumX, stops[index].x);
     }
-    const f32 queryX = Clamp(point.x, minimumX, maximumX);
+    const f32 queryX = UiSimdClamp(point.x, minimumX, maximumX);
     f64 nearestY = 0.0;
     f32 nearestX = 0.0f;
     b8 haveBest = false;
@@ -66,13 +66,13 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
         if(cast<usize>(stop.lineIndex) >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
             return MakeUnexpected(Failure());
         const EditCaretLine stopLine = lines[stop.lineIndex];
-        if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(stopLine.top + stopLine.height))
+        if(!IsFinite(VectorSingle(stopLine.top, stopLine.height, 0.0f, 0.0f)) || stopLine.height <= 0.0f || !IsFinite(VectorSingle(stopLine.top + stopLine.height)))
             return MakeUnexpected(Failure());
         const f64 lineCenter = cast<f64>(stopLine.top) + (cast<f64>(stopLine.height) * 0.5);
         f64 distanceY = 0.0;
         if(line.stopCount == 0u)
-            distanceY = Abs(cast<f64>(point.y) - lineCenter);
-        const f32 distanceX = Abs(queryX - stop.x);
+            distanceY = VectorDoubleAbs(VectorDouble(cast<f64>(point.y) - lineCenter)).x;
+        const f32 distanceX = Abs(VectorSingle(queryX - stop.x)).x;
         if(!haveBest || distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
             nearestY = distanceY;
             nearestX = distanceX;
@@ -86,17 +86,17 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
 }
 
 Expected<EditCaretHit> TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
-    if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
+    if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !IsFinite(VectorSingle(localPoint.x, localPoint.y, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     usize low = 0u;
     usize high = lines.size();
     while(low < high){
         const usize mid = low + (high - low) / 2u;
         const EditCaretLine line = lines[mid];
-        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
+        if(!IsFinite(VectorSingle(line.top, line.height, 0.0f, 0.0f)) || line.height <= 0.0f)
             return MakeUnexpected(Failure());
         const f32 bottom = line.top + line.height;
-        if(!IsFinite(bottom))
+        if(!IsFinite(VectorSingle(bottom)))
             return MakeUnexpected(Failure());
         if(localPoint.y < bottom)
             high = mid;
@@ -107,7 +107,7 @@ Expected<EditCaretHit> TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, 
     if(low < lines.size())
         lineIndex = cast<u32>(low);
     const EditCaretLine selected = lines[lineIndex];
-    if(!IsFinite(selected.top) || !IsFinite(selected.height) || selected.height <= 0.0f || !IsFinite(selected.top + selected.height))
+    if(!IsFinite(VectorSingle(selected.top, selected.height, 0.0f, 0.0f)) || selected.height <= 0.0f || !IsFinite(VectorSingle(selected.top + selected.height)))
         return MakeUnexpected(Failure());
     const Expected<usize> committedByte = TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint);
     if(!committedByte.has_value())
@@ -185,10 +185,10 @@ Expected<usize> ResolveEditCaretPageTarget(
     const EditCaretLine last = lines[lines.size() - 1u];
     const f64 minimum = cast<f64>(first.top) + (cast<f64>(first.height) * s_RectCenterFractionF64);
     const f64 maximum = cast<f64>(last.top) + (cast<f64>(last.height) * s_RectCenterFractionF64);
-    if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
+    if(!IsFinite(VectorDouble(target, minimum, maximum, 0.0)) || minimum > maximum)
         return MakeUnexpected(Failure());
-    const Point point(preferredX, cast<f32>(Clamp(target, minimum, maximum)));
-    if(!IsFinite(point.y))
+    const Point point(preferredX, cast<f32>(UiSimdClampF64(target, minimum, maximum)));
+    if(!IsFinite(VectorSingle(point.y)))
         return MakeUnexpected(Failure());
     const Expected<usize> result = HitEditCaretGeometry(lines, stops, point);
     if(!result.has_value())

@@ -307,8 +307,8 @@ void PrepareContactConstraintWithCache(
         outConstraint.softness = staticSoftness;
     }
     else if(enableContactSoftening && contactHertz > 0.0f && h > 0.0f){
-        const f32 ratio = Min(invMassA, invMassB) / Max(invMassA, invMassB);
-        const f32 softHertz = contactHertz * (0.5f + 0.5f * Sqrt(ratio));
+        const f32 ratio = SimdMin(invMassA, invMassB) / SimdMax(invMassA, invMassB);
+        const f32 softHertz = contactHertz * (0.5f + 0.5f * Sqrt(VectorSingle(ratio)).x);
         outConstraint.softness = MakeSoftness(softHertz, contactDampingRatio, h);
     }
     else{
@@ -393,7 +393,7 @@ void PrepareContactConstraintWithCache(
         const VectorSingle dv = velB - velA;
         mcp.rBRelVel = f32x4(rB, Vector3Dot(dv, n).x);
 
-        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+        const f32 weight = SimdMax(mcp.normalImpulse, s_MinFrictionWeight);
         sumCenterA = sumCenterA + rA * weight;
         sumCenterB = sumCenterB + rB * weight;
         totalWeight += weight;
@@ -409,9 +409,9 @@ void PrepareContactConstraintWithCache(
     f32 maxLeverArmSq = 0.0f;
     for(u32 i = 0u; i < outConstraint.pointCount; ++i){
         const VectorSingle dA = VectorSingle(outConstraint.points[i].rABaseSep, 0.0f) - centerA;
-        maxLeverArmSq = Max(maxLeverArmSq, Vector3LengthSq(VectorSingle(dA, 0.0f)).x);
+        maxLeverArmSq = SimdMax(maxLeverArmSq, Vector3LengthSq(VectorSingle(dA, 0.0f)).x);
     }
-    const f32 maxLeverArm = Sqrt(maxLeverArmSq);
+    const f32 maxLeverArm = Sqrt(VectorSingle(maxLeverArmSq)).x;
     outConstraint.maxLeverArm = maxLeverArm;
 
     const VectorSingle rt1A = Cross(centerA, t1);
@@ -455,7 +455,7 @@ void PrepareContactConstraintWithCache(
         + Vector3Dot(rt2B, irt2B).x
     ;
     const f32 det = k00 * k11 - k01 * k01;
-    if(IsFinite(det) && Abs(det) > 1.0e-18f){
+    if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
         const f32 invDet = 1.0f / det;
         outConstraint.tangentMass00 = k11 * invDet;
         outConstraint.tangentMass01 = -k01 * invDet;
@@ -776,10 +776,10 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
 
     const f32 baseDeltaPosN = Vector3Dot(VectorSingle(deltaPosB - deltaPosA, 0.0f), n).x;
     VectorSingle rotDeltaNA(0.0f);
-    if(hasA && (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) > 1.0e-12f)
+    if(hasA && Vector3LengthSq(VectorSingle(deltaRotA, 0.0f)).x > 1.0e-12f)
         rotDeltaNA = Vector3InverseRotate(n, deltaRotA) - n;
     VectorSingle rotDeltaNB(0.0f);
-    if(hasB && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) > 1.0e-12f)
+    if(hasB && Vector3LengthSq(VectorSingle(deltaRotB, 0.0f)).x > 1.0e-12f)
         rotDeltaNB = Vector3InverseRotate(n, deltaRotB) - n;
 
     b8 anyApplied = false;
@@ -801,7 +801,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
             bias = currentSep * invH;
         }
         else if(useBias){
-            bias = Max(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
+            bias = SimdMax(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
             massScale = c.softness.massScale;
             impulseScale = c.softness.impulseScale;
         }
@@ -812,7 +812,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         const f32 vn = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x + Vector3Dot(wB, rnB).x - Vector3Dot(wA, rnA).x;
         const f32 oldImpulse = pt.normalImpulse;
         const f32 impulse = -pt.normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
-        const f32 newImpulse = Max(oldImpulse + impulse, 0.0f);
+        const f32 newImpulse = SimdMax(oldImpulse + impulse, 0.0f);
         const f32 delta = newImpulse - oldImpulse;
         pt.normalImpulse = newImpulse;
         if(useBias)
@@ -856,33 +856,25 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         const f32 vt1 = Vector3Dot(dv, t1).x - c.tangentVelocity1;
         const f32 vt2 = Vector3Dot(dv, t2).x;
 
-        const f32 deltaFx = -(c.tangentMass00 * vt1 + c.tangentMass01 * vt2);
-        const f32 deltaFy = -(c.tangentMass01 * vt1 + c.tangentMass11 * vt2);
-
-        f32 newFx = c.frictionImpulse.x + deltaFx;
-        f32 newFy = c.frictionImpulse.y + deltaFy;
+        const VectorSingle tangentImpulseDelta = -(VectorSingle(c.tangentMass00, c.tangentMass01, 0.0f, 0.0f) * vt1 + VectorSingle(c.tangentMass01, c.tangentMass11, 0.0f, 0.0f) * vt2);
+        const VectorSingle oldFriction(c.frictionImpulse.x, c.frictionImpulse.y, 0.0f, 0.0f);
+        VectorSingle newFriction = oldFriction + tangentImpulseDelta;
         const f32 maxF = friction * totalNormalImpulse;
-        const f32 fLenSq = newFx * newFx + newFy * newFy;
-        if(maxF <= 0.0f){
-            newFx = 0.0f;
-            newFy = 0.0f;
-        }
-        else if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f){
-            const f32 invLen = maxF / Sqrt(fLenSq);
-            newFx *= invLen;
-            newFy *= invLen;
-        }
+        const f32 fLenSq = Vector2LengthSq(newFriction).x;
+        if(maxF <= 0.0f)
+            newFriction = VectorSingle(0.0f);
+        else if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f)
+            newFriction = newFriction * (maxF / Sqrt(VectorSingle(fLenSq)).x);
 
-        const f32 appliedFx = newFx - c.frictionImpulse.x;
-        const f32 appliedFy = newFy - c.frictionImpulse.y;
-        c.frictionImpulse = f32x2u(newFx, newFy);
+        const VectorSingle appliedF = newFriction - oldFriction;
+        c.frictionImpulse = f32x2u(newFriction.x, newFriction.y);
 
-        if(appliedFx != 0.0f || appliedFy != 0.0f){
+        if(appliedF.x != 0.0f || appliedF.y != 0.0f){
             anyApplied = true;
-            const VectorSingle p = t1 * appliedFx + t2 * appliedFy;
+            const VectorSingle p = t1 * appliedF.x + t2 * appliedF.y;
             if(dynA){
                 vA = vA - p * c.invMassA;
-                wA = wA - (VectorSingle(cache.irt1A, 0.0f) * appliedFx + VectorSingle(cache.irt2A, 0.0f) * appliedFy);
+                wA = wA - (VectorSingle(cache.irt1A, 0.0f) * appliedF.x + VectorSingle(cache.irt2A, 0.0f) * appliedF.y);
                 if((flagsA & 0x3Fu) != 0u){
                     vA = ApplyLinearLocks(vA, flagsA);
                     wA = ApplyAngularLocks(wA, flagsA);
@@ -890,7 +882,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
             }
             if(dynB){
                 vB = vB + p * c.invMassB;
-                wB = wB + (VectorSingle(cache.irt1B, 0.0f) * appliedFx + VectorSingle(cache.irt2B, 0.0f) * appliedFy);
+                wB = wB + (VectorSingle(cache.irt1B, 0.0f) * appliedF.x + VectorSingle(cache.irt2B, 0.0f) * appliedF.y);
                 if((flagsB & 0x3Fu) != 0u){
                     vB = ApplyLinearLocks(vB, flagsB);
                     wB = ApplyAngularLocks(wB, flagsB);
@@ -905,7 +897,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         const f32 deltaT = -twistMass * dwN;
         const f32 maxT = friction * c.maxLeverArm * totalNormalImpulse;
         const f32 oldT = c.centerBTwistImpulse.w;
-        const f32 newT = Clamp(oldT + deltaT, -maxT, maxT);
+        const f32 newT = SimdClamp(oldT + deltaT, -maxT, maxT);
         const f32 appliedT = newT - oldT;
         c.centerBTwistImpulse.w = newT;
         if(appliedT != 0.0f){
@@ -935,7 +927,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         else{
             const f32 rLenSq = Vector3LengthSq(VectorSingle(newR, 0.0f)).x;
             if(rLenSq > maxR * maxR && rLenSq > 1.0e-18f)
-                newR = newR * (maxR / Sqrt(rLenSq));
+                newR = newR * (maxR / Sqrt(VectorSingle(rLenSq)).x);
         }
         const VectorSingle appliedR = newR - oldR;
         c.rollingImpulse = f32x3u(newR.x, newR.y, newR.z);

@@ -28,7 +28,10 @@ inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjection
 
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
 FOUNDATION_INLINE b8 ScalarNearEqual(T value0, T value1, T epsilon)noexcept{
-    return Abs(value0 - value1) <= epsilon;
+    if constexpr(IsSame_V<T, f32>)
+        return Vector4NearEqual(VectorReplicate(value0), VectorReplicate(value1), VectorReplicate(epsilon));
+    else
+        return VectorDouble4NearEqual(VectorDoubleReplicate(value0), VectorDoubleReplicate(value1), VectorDoubleReplicate(epsilon));
 }
 
 FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{

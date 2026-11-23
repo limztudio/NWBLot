@@ -428,11 +428,8 @@ class PhysicsWorld{
     public b8 setWorldDef(in WorldDef def){
         if(
             !IsFiniteVec3(VectorSingle(def.gravity))
-            || !IsFinite(def.restitutionThreshold)
-            || !IsFinite(def.hitEventThreshold)
-            || !IsFinite(def.contactHertz)
-            || !IsFinite(def.contactDampingRatio)
-            || !IsFinite(def.maxLinearVelocity)
+            || !IsFinite(VectorSingle(def.restitutionThreshold, def.hitEventThreshold, def.contactHertz, def.contactDampingRatio))
+            || !IsFinite(VectorSingle(def.maxLinearVelocity))
             || def.restitutionThreshold < 0.0f
             || def.hitEventThreshold < 0.0f
             || def.contactHertz <= 0.0f
@@ -463,8 +460,8 @@ class PhysicsWorld{
     public void setGpuDispatchThreshold(in u32 threshold){ this.m_gpuDispatchThreshold = threshold; }
     public u32 gpuDispatchThreshold()const{ return this.m_gpuDispatchThreshold; }
     public void setGpuWorkloadFraction(in f32 fraction){
-        if(IsFinite(fraction))
-            this.m_gpuWorkloadFraction = Clamp(fraction, 0.0f, 1.0f);
+        if(IsFinite(VectorSingle(fraction)))
+            this.m_gpuWorkloadFraction = SimdClamp(fraction, 0.0f, 1.0f);
     }
     public f32 gpuWorkloadFraction()const{ return this.m_gpuWorkloadFraction; }
     public void setWarmStarting(in b8 enabled){ this.m_enableWarmStarting = enabled; }
@@ -567,10 +564,7 @@ class PhysicsWorld{
             || !IsFiniteQuat(rotRaw)
             || !IsFiniteVec3(linV)
             || !IsFiniteVec3(angV)
-            || !IsFinite(def.linearDamping)
-            || !IsFinite(def.angularDamping)
-            || !IsFinite(def.gravityScale)
-            || !IsFinite(def.sleepThreshold)
+            || !IsFinite(VectorSingle(def.linearDamping, def.angularDamping, def.gravityScale, def.sleepThreshold))
             || def.linearDamping < 0.0f
             || def.angularDamping < 0.0f
             || def.sleepThreshold < 0.0f
@@ -804,11 +798,8 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId))
             return MakeUnexpected(Failure());
         if(
-            !IsFinite(def.density)
-            || !IsFinite(def.material.friction)
-            || !IsFinite(def.material.restitution)
-            || !IsFinite(def.material.rollingResistance)
-            || !IsFinite(def.material.tangentSpeed)
+            !IsFinite(VectorSingle(def.density, def.material.friction, def.material.restitution, def.material.rollingResistance))
+            || !IsFinite(VectorSingle(def.material.tangentSpeed))
             || def.density < 0.0f
             || def.material.friction < 0.0f
             || def.material.restitution < 0.0f
@@ -905,7 +896,7 @@ class PhysicsWorld{
     }
 
     public Expected<ShapeId> createSphereShape(in BodyId bodyId, in ShapeDef def, in SphereShape sphere){
-        if(!IsValidPositionVec3(sphere.center()) || !IsFinite(sphere.radius()) || sphere.radius() <= 0.0f)
+        if(!IsValidPositionVec3(sphere.center()) || !IsFinite(VectorSingle(sphere.radius())) || sphere.radius() <= 0.0f)
             return MakeUnexpected(Failure());
         return this.attachShapeInternal(bodyId, def, ShapeType::Sphere, sphere, CapsuleShape(), HullShape(), MeshShape());
     }
@@ -913,16 +904,16 @@ class PhysicsWorld{
     public Expected<ShapeId> createCapsuleShape(in BodyId bodyId, in ShapeDef def, in CapsuleShape capsule){
         const VectorSingle c1 = capsule.center1();
         const VectorSingle c2 = capsule.center2Vec();
-        if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(capsule.radius()) || capsule.radius() <= 0.0f)
+        if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(VectorSingle(capsule.radius())) || capsule.radius() <= 0.0f)
             return MakeUnexpected(Failure());
         const f32 lenSq = Vector3LengthSq(VectorSingle(c2 - c1, 0.0f)).x;
-        if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+        if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
             return MakeUnexpected(Failure());
         return this.attachShapeInternal(bodyId, def, ShapeType::Capsule, SphereShape(), capsule, HullShape(), MeshShape());
     }
 
     public Expected<ShapeId> createHullShape(in BodyId bodyId, in ShapeDef def, in HullShape hull){
-        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(hull.radius()) || hull.radius() < 0.0f)
+        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(VectorSingle(hull.radius())) || hull.radius() < 0.0f)
             return MakeUnexpected(Failure());
         for(usize i = 0u; i < hull.vertices.size(); ++i){
             if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
@@ -936,7 +927,7 @@ class PhysicsWorld{
             return MakeUnexpected(Failure());
         if(this.m_bodies[bodyId.index].type == BodyType::Dynamic)
             return MakeUnexpected(Failure());
-        if(mesh.triangles.empty() || mesh.nodes.empty() || !IsFinite(mesh.radius()) || mesh.radius() < 0.0f)
+        if(mesh.triangles.empty() || mesh.nodes.empty() || !IsFinite(VectorSingle(mesh.radius())) || mesh.radius() < 0.0f)
             return MakeUnexpected(Failure());
         return this.attachShapeInternal(bodyId, def, ShapeType::Mesh, SphereShape(), CapsuleShape(), HullShape(), mesh);
     }
@@ -1068,17 +1059,18 @@ class PhysicsWorld{
             sim.setCenter(worldCom);
             sim.setCenter0(worldCom);
 
-            const f32 cxx = r0.x - totalMass * (localCom.y * localCom.y + localCom.z * localCom.z);
-            const f32 cyy = r1.y - totalMass * (localCom.x * localCom.x + localCom.z * localCom.z);
-            const f32 czz = r2.z - totalMass * (localCom.x * localCom.x + localCom.y * localCom.y);
-            const f32 cxy = r0.y + totalMass * localCom.x * localCom.y;
-            const f32 cxz = r0.z + totalMass * localCom.x * localCom.z;
-            const f32 cyz = r1.z + totalMass * localCom.y * localCom.z;
+            const VectorSingle comYzx(localCom.y, localCom.z, localCom.x, 0.0f);
+            const VectorSingle comZxy(localCom.z, localCom.x, localCom.y, 0.0f);
+            const VectorSingle diagSub = (comYzx * comYzx + comZxy * comZxy) * totalMass;
+            const VectorSingle offAdd = (localCom * comZxy) * totalMass;
+            const VectorSingle rawDiag = VectorSingle(r0.x, r1.y, r2.z, 0.0f) - diagSub;
+            const VectorSingle minI(1.0e-6f);
+            const VectorSingle diagI = VectorSelect(minI, rawDiag, VectorGreater(rawDiag, minI));
 
             const Mat3 inertiaMat = Mat3(
-                VectorSingle(Max(cxx, 1.0e-6f), cxy, cxz, 0.0f),
-                VectorSingle(cxy, Max(cyy, 1.0e-6f), cyz, 0.0f),
-                VectorSingle(cxz, cyz, Max(czz, 1.0e-6f), 0.0f)
+                VectorSingle(diagI.x, r0.y + offAdd.y, r0.z + offAdd.x, 0.0f),
+                VectorSingle(r0.y + offAdd.y, diagI.y, r1.z + offAdd.z, 0.0f),
+                VectorSingle(r0.z + offAdd.x, r1.z + offAdd.z, diagI.z, 0.0f)
             );
             sim.invInertiaLocal = InvertSymMat3(SymMat3FromMat3(inertiaMat));
             sim.invInertiaWorld = RotateSymMat3(VectorSingle(sim.transform.rotation), sim.invInertiaLocal);
@@ -1096,7 +1088,7 @@ class PhysicsWorld{
 
         if(minLocal.x <= maxLocal.x){
             const VectorSingle ext = (maxLocal - minLocal) * 0.5f;
-            sim.setMinExtent(Min(ext.x, Min(ext.y, ext.z)));
+            sim.setMinExtent(-Vector3MaxComponent(-ext).x);
             sim.setMaxExtent(Vector3Length(VectorSingle(ext, 0.0f)).x);
         }
 
@@ -1150,7 +1142,7 @@ class PhysicsWorld{
     public b8 setKinematicTarget(in BodyId bodyId, in Transform3D targetTransform, in f32 dt){
         if(
             !this.isValidBody(bodyId)
-            || !IsFinite(dt)
+            || !IsFinite(VectorSingle(dt))
             || dt <= 0.0f
             || !IsValidPositionVec3(VectorSingle(targetTransform.position))
             || !IsFiniteQuat(VectorSingle(targetTransform.rotation))
@@ -1177,7 +1169,7 @@ class PhysicsWorld{
         const f32 sinHalf = Vector3Length(qImag).x;
         VectorSingle angVel(0.0f);
         if(sinHalf > 1.0e-6f){
-            const f32 angle = 2.0f * ATan2(sinHalf, Clamp(qDelta.w, -1.0f, 1.0f));
+            const f32 angle = 2.0f * ATan2(VectorSingle(sinHalf), VectorSingle(SimdClamp(qDelta.w, -1.0f, 1.0f))).x;
             const VectorSingle axis = qImag / sinHalf;
             angVel = ApplyAngularLocks(axis * (angle * invDt), body.flags);
         }
@@ -1387,7 +1379,7 @@ class PhysicsWorld{
         const f32 massVal = massData.mass();
         const VectorSingle massCenter = massData.center();
         if(
-            !IsFinite(massVal)
+            !IsFinite(VectorSingle(massVal))
             || massVal <= 0.0f
             || !IsFiniteVec3(massCenter)
             || !IsFiniteVec3(VectorSingle(massData.inertia.row0))
@@ -1748,10 +1740,7 @@ class PhysicsWorld{
         if(!this.isValidShape(shapeId))
             return false;
         if(
-            !IsFinite(material.friction)
-            || !IsFinite(material.restitution)
-            || !IsFinite(material.rollingResistance)
-            || !IsFinite(material.tangentSpeed)
+            !IsFinite(VectorSingle(material.friction, material.restitution, material.rollingResistance, material.tangentSpeed))
             || material.friction < 0.0f
             || material.restitution < 0.0f
             || material.rollingResistance < 0.0f
@@ -1878,7 +1867,7 @@ class PhysicsWorld{
     }
 
     public b8 setShapeDensity(in ShapeId shapeId, in f32 density, in b8 updateBodyMass){
-        if(!this.isValidShape(shapeId) || !IsFinite(density) || density < 0.0f)
+        if(!this.isValidShape(shapeId) || !IsFinite(VectorSingle(density)) || density < 0.0f)
             return false;
         const u32 shapeIdx = shapeId.index;
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
@@ -1927,7 +1916,7 @@ class PhysicsWorld{
     }
 
     public b8 setSphereShape(in ShapeId shapeId, in SphereShape sphere, in b8 updateBodyMass){
-        if(!this.isValidShape(shapeId) || !IsValidPositionVec3(sphere.center()) || !IsFinite(sphere.radius()) || sphere.radius() <= 0.0f)
+        if(!this.isValidShape(shapeId) || !IsValidPositionVec3(sphere.center()) || !IsFinite(VectorSingle(sphere.radius())) || sphere.radius() <= 0.0f)
             return false;
         const u32 idx = shapeId.index;
         this.releaseShapeGeometry(this.m_shapes[idx]);
@@ -1942,10 +1931,10 @@ class PhysicsWorld{
             return false;
         const VectorSingle c1 = capsule.center1();
         const VectorSingle c2 = capsule.center2Vec();
-        if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(capsule.radius()) || capsule.radius() <= 0.0f)
+        if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(VectorSingle(capsule.radius())) || capsule.radius() <= 0.0f)
             return false;
         const f32 lenSq = Vector3LengthSq(VectorSingle(c2 - c1, 0.0f)).x;
-        if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+        if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
             return false;
         const u32 idx = shapeId.index;
         this.releaseShapeGeometry(this.m_shapes[idx]);
@@ -1958,7 +1947,7 @@ class PhysicsWorld{
     public b8 setHullShape(in ShapeId shapeId, in HullShape hull, in b8 updateBodyMass){
         if(!this.isValidShape(shapeId))
             return false;
-        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(hull.radius()) || hull.radius() < 0.0f)
+        if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(VectorSingle(hull.radius())) || hull.radius() < 0.0f)
             return false;
         for(usize i = 0u; i < hull.vertices.size(); ++i){
             if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
@@ -1979,7 +1968,7 @@ class PhysicsWorld{
         const u32 bodyIdx = this.m_shapes[idx].bodyId;
         if(bodyIdx >= this.m_bodies.size() || this.m_bodies[bodyIdx].type == BodyType::Dynamic)
             return false;
-        if(mesh.triangles.empty() || mesh.nodes.empty() || !IsFinite(mesh.radius()) || mesh.radius() < 0.0f)
+        if(mesh.triangles.empty() || mesh.nodes.empty() || !IsFinite(VectorSingle(mesh.radius())) || mesh.radius() < 0.0f)
             return false;
         this.releaseShapeGeometry(this.m_shapes[idx]);
         this.m_shapes[idx].type = ShapeType::Mesh;
@@ -2103,7 +2092,7 @@ class PhysicsWorld{
     }
 
     public b8 setLinearDamping(in BodyId bodyId, in f32 linearDamping){
-        if(!this.isValidBody(bodyId) || !IsFinite(linearDamping) || linearDamping < 0.0f)
+        if(!this.isValidBody(bodyId) || !IsFinite(VectorSingle(linearDamping)) || linearDamping < 0.0f)
             return false;
         in Body body = this.m_bodies[bodyId.index];
         this.m_solverSets[body.setIndex].sims[body.localIndex].setLinearDamping(linearDamping);
@@ -2111,7 +2100,7 @@ class PhysicsWorld{
     }
 
     public b8 setAngularDamping(in BodyId bodyId, in f32 angularDamping){
-        if(!this.isValidBody(bodyId) || !IsFinite(angularDamping) || angularDamping < 0.0f)
+        if(!this.isValidBody(bodyId) || !IsFinite(VectorSingle(angularDamping)) || angularDamping < 0.0f)
             return false;
         in Body body = this.m_bodies[bodyId.index];
         this.m_solverSets[body.setIndex].sims[body.localIndex].setAngularDamping(angularDamping);
@@ -2119,7 +2108,7 @@ class PhysicsWorld{
     }
 
     public b8 setGravityScale(in BodyId bodyId, in f32 gravityScale){
-        if(!this.isValidBody(bodyId) || !IsFinite(gravityScale))
+        if(!this.isValidBody(bodyId) || !IsFinite(VectorSingle(gravityScale)))
             return false;
         const u32 idx = bodyId.index;
         if(this.m_bodies[idx].type == BodyType::Dynamic && this.m_bodies[idx].setIndex >= 3u)
@@ -2130,7 +2119,7 @@ class PhysicsWorld{
     }
 
     public b8 setSleepThreshold(in BodyId bodyId, in f32 threshold){
-        if(!this.isValidBody(bodyId) || !IsFinite(threshold) || threshold < 0.0f)
+        if(!this.isValidBody(bodyId) || !IsFinite(VectorSingle(threshold)) || threshold < 0.0f)
             return false;
         this.m_bodies[bodyId.index].sleepThreshold = threshold;
         return true;
@@ -2442,23 +2431,11 @@ class PhysicsWorld{
             || !IsFiniteVec3(VectorSingle(def.localAxisA))
             || !IsFiniteVec3(VectorSingle(def.localAxisB))
             || !IsFiniteQuat(VectorSingle(def.referenceRotation))
-            || !IsFinite(def.length)
-            || !IsFinite(def.minLength)
-            || !IsFinite(def.maxLength)
-            || !IsFinite(def.lowerLimit)
-            || !IsFinite(def.upperLimit)
-            || !IsFinite(def.motorSpeed)
-            || !IsFinite(def.maxMotorForce)
-            || !IsFinite(def.hertz)
-            || !IsFinite(def.dampingRatio)
+            || !IsFinite(VectorSingle(def.length, def.minLength, def.maxLength, def.lowerLimit))
+            || !IsFinite(VectorSingle(def.upperLimit, def.motorSpeed, def.maxMotorForce, def.hertz))
+            || !IsFinite(VectorSingle(def.dampingRatio, def.correctionFactor, def.maxTorque, def.swingLimit))
+            || !IsFinite(VectorSingle(def.suspensionHertz, def.suspensionDampingRatio, def.breakForce, def.breakTorque))
             || !IsFiniteVec3(VectorSingle(def.linearOffset))
-            || !IsFinite(def.correctionFactor)
-            || !IsFinite(def.maxTorque)
-            || !IsFinite(def.swingLimit)
-            || !IsFinite(def.suspensionHertz)
-            || !IsFinite(def.suspensionDampingRatio)
-            || !IsFinite(def.breakForce)
-            || !IsFinite(def.breakTorque)
             || def.length < 0.0f
             || def.minLength < 0.0f
             || def.maxLength < def.minLength
@@ -2520,7 +2497,7 @@ class PhysicsWorld{
         joint.hertz = def.hertz;
         joint.dampingRatio = def.dampingRatio;
         joint.setLinearOffset(VectorSingle(def.linearOffset));
-        joint.correctionFactor = Clamp(def.correctionFactor, 0.0f, 1.0f);
+        joint.correctionFactor = SimdClamp(def.correctionFactor, 0.0f, 1.0f);
         joint.maxTorque = def.maxTorque;
         joint.swingLimit = def.swingLimit;
         joint.suspensionHertz = def.suspensionHertz;
@@ -2593,7 +2570,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointMotorSpeed(in JointId jointId, in f32 motorSpeed){
-        if(!this.isValidJoint(jointId) || !IsFinite(motorSpeed))
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(motorSpeed)))
             return false;
         this.m_joints[jointId.index].setMotorSpeed(motorSpeed);
         this.wakeBody(this.makeBodyId(this.m_joints[jointId.index].edges[0u].bodyId));
@@ -2602,7 +2579,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointMaxMotorForce(in JointId jointId, in f32 maxMotorForce){
-        if(!this.isValidJoint(jointId) || !IsFinite(maxMotorForce) || maxMotorForce < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(maxMotorForce)) || maxMotorForce < 0.0f)
             return false;
         this.m_joints[jointId.index].maxMotorForce = maxMotorForce;
         if(maxMotorForce <= 0.0f){
@@ -2641,7 +2618,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointLimits(in JointId jointId, in f32 lowerLimit, in f32 upperLimit){
-        if(!this.isValidJoint(jointId) || !IsFinite(lowerLimit) || !IsFinite(upperLimit) || upperLimit < lowerLimit)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(lowerLimit, upperLimit, 0.0f, 0.0f)) || upperLimit < lowerLimit)
             return false;
         this.m_joints[jointId.index].setLowerLimit(lowerLimit);
         this.m_joints[jointId.index].setUpperLimit(upperLimit);
@@ -2651,7 +2628,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointSwingLimit(in JointId jointId, in f32 swingLimit){
-        if(!this.isValidJoint(jointId) || !IsFinite(swingLimit) || swingLimit < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(swingLimit)) || swingLimit < 0.0f)
             return false;
         this.m_joints[jointId.index].swingLimit = swingLimit;
         if(swingLimit <= 0.0f)
@@ -2662,7 +2639,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointSpring(in JointId jointId, in b8 enableSpring, in f32 hertz, in f32 dampingRatio){
-        if(!this.isValidJoint(jointId) || !IsFinite(hertz) || !IsFinite(dampingRatio) || hertz < 0.0f || dampingRatio < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(hertz, dampingRatio, 0.0f, 0.0f)) || hertz < 0.0f || dampingRatio < 0.0f)
             return false;
         this.m_joints[jointId.index].setFlag(JointFlags::EnableSpring, enableSpring);
         this.m_joints[jointId.index].hertz = hertz;
@@ -2686,7 +2663,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointLength(in JointId jointId, in f32 length){
-        if(!this.isValidJoint(jointId) || !IsFinite(length) || length < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(length)) || length < 0.0f)
             return false;
         this.m_joints[jointId.index].setLength(length);
         this.wakeJointBodies(jointId.index);
@@ -2694,7 +2671,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointLengthRange(in JointId jointId, in f32 minLength, in f32 maxLength){
-        if(!this.isValidJoint(jointId) || !IsFinite(minLength) || !IsFinite(maxLength) || minLength < 0.0f || maxLength < minLength)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(minLength, maxLength, 0.0f, 0.0f)) || minLength < 0.0f || maxLength < minLength)
             return false;
         this.m_joints[jointId.index].setMinLength(minLength);
         this.m_joints[jointId.index].setMaxLength(maxLength);
@@ -2703,7 +2680,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointMaxTorque(in JointId jointId, in f32 maxTorque){
-        if(!this.isValidJoint(jointId) || !IsFinite(maxTorque) || maxTorque < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(maxTorque)) || maxTorque < 0.0f)
             return false;
         this.m_joints[jointId.index].maxTorque = maxTorque;
         if(maxTorque <= 0.0f && this.m_joints[jointId.index].type == JointType::Motor)
@@ -2713,9 +2690,9 @@ class PhysicsWorld{
     }
 
     public b8 setJointCorrectionFactor(in JointId jointId, in f32 correctionFactor){
-        if(!this.isValidJoint(jointId) || !IsFinite(correctionFactor) || correctionFactor < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(correctionFactor)) || correctionFactor < 0.0f)
             return false;
-        this.m_joints[jointId.index].correctionFactor = Clamp(correctionFactor, 0.0f, 1.0f);
+        this.m_joints[jointId.index].correctionFactor = SimdClamp(correctionFactor, 0.0f, 1.0f);
         this.wakeJointBodies(jointId.index);
         return true;
     }
@@ -2729,7 +2706,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointSuspension(in JointId jointId, in f32 hertz, in f32 dampingRatio){
-        if(!this.isValidJoint(jointId) || !IsFinite(hertz) || !IsFinite(dampingRatio) || hertz < 0.0f || dampingRatio < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(hertz, dampingRatio, 0.0f, 0.0f)) || hertz < 0.0f || dampingRatio < 0.0f)
             return false;
         this.m_joints[jointId.index].suspensionHertz = hertz;
         this.m_joints[jointId.index].suspensionDampingRatio = dampingRatio;
@@ -2740,7 +2717,7 @@ class PhysicsWorld{
     }
 
     public b8 setJointBreakThresholds(in JointId jointId, in f32 breakForce, in f32 breakTorque){
-        if(!this.isValidJoint(jointId) || !IsFinite(breakForce) || !IsFinite(breakTorque) || breakForce < 0.0f || breakTorque < 0.0f)
+        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(breakForce, breakTorque, 0.0f, 0.0f)) || breakForce < 0.0f || breakTorque < 0.0f)
             return false;
         this.m_joints[jointId.index].breakForce = breakForce;
         this.m_joints[jointId.index].breakTorque = breakTorque;
@@ -2971,7 +2948,7 @@ class PhysicsWorld{
         else
             axis = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const f32 projSin = Vector3Dot(VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f), axis).x;
-        return 2.0f * ATan2(projSin, qErr.w);
+        return 2.0f * ATan2(VectorSingle(projSin), VectorSingle(qErr.w)).x;
     }
 
     public Expected<f32> tryGetJointTranslation(in JointId jointId)const{
@@ -3563,7 +3540,7 @@ class PhysicsWorld{
             const f32 lenSq = Vector3LengthSq(ab).x;
             VectorSingle closest = a;
             if(lenSq > s_NormalizeEpsilonSq){
-                const f32 t = Clamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+                const f32 t = SimdClamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
                 closest = a + ab * t;
             }
             return Vector3LengthSq(VectorSingle(localPt - closest, 0.0f)).x <= capsule.radius() * capsule.radius();
@@ -3572,7 +3549,7 @@ class PhysicsWorld{
             in MeshShape mesh = this.m_meshShapes[shape.geometryIndex];
             if(mesh.nodes.empty() || mesh.triangles.empty())
                 return false;
-            const f32 r = Max(mesh.radius(), 1.0e-4f);
+            const f32 r = SimdMax(mesh.radius(), 1.0e-4f);
             const f32 rSq = r * r;
             Array<u32, 256u> stack;
             stack[0u] = 0u;
@@ -3770,9 +3747,7 @@ class PhysicsWorld{
         const VectorSingle pos = VectorSingle(def.position);
         if(
             !IsValidPositionVec3(pos)
-            || !IsFinite(def.radius)
-            || !IsFinite(def.falloff)
-            || !IsFinite(def.impulsePerLength)
+            || !IsFinite(VectorSingle(def.radius, def.falloff, def.impulsePerLength, 0.0f))
             || def.radius < 0.0f
             || def.falloff < 0.0f
         )
@@ -3824,7 +3799,7 @@ class PhysicsWorld{
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                     SimplexCache cache;
                     const DistanceOutput distOut = ShapeDistanceProxies(ptProxyRef, ptXfRef, targetProxy, xfB, false, cache);
-                    const f32 surfDist = Max(0.0f, distOut.distance() - targetProxy.radius);
+                    const f32 surfDist = SimdMax(0.0f, distOut.distance() - targetProxy.radius);
                     if(surfDist >= maxR)
                         return true;
 
@@ -3865,7 +3840,7 @@ class PhysicsWorld{
             f32 falloffScale = 1.0f;
             if(dist > def.radius){
                 if(def.falloff > 0.0f)
-                    falloffScale = Clamp(1.0f - (dist - def.radius) / def.falloff, 0.0f, 1.0f);
+                    falloffScale = SimdClamp(1.0f - (dist - def.radius) / def.falloff, 0.0f, 1.0f);
                 else
                     falloffScale = 0.0f;
             }
@@ -3875,7 +3850,7 @@ class PhysicsWorld{
             in Body body = this.m_bodies[bodyIdx];
             in BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
             const VectorSingle dir = SafeNormalizeVec3(sim.center() - pos, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            const f32 charLen = Max(0.1f, sim.maxExtent() * 2.0f);
+            const f32 charLen = SimdMax(0.1f, sim.maxExtent() * 2.0f);
             this.applyLinearImpulseAtPoint(this.makeBodyId(bodyIdx), dir * (def.impulsePerLength * falloffScale * charLen), VectorSingle(bestBodyPoint[bodyIdx]), true);
         }
     }

@@ -18,7 +18,7 @@ class QuickhullFace{
 Expected<Plane3D> ComputeTrianglePlane(in VectorSingle a, in VectorSingle b, in VectorSingle c){
     const VectorSingle raw = Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f));
     const f32 lenSq = Vector3LengthSq(raw).x;
-    if(!IsFinite(lenSq) || lenSq <= 1.0e-12f)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq <= 1.0e-12f)
         return MakeUnexpected(Failure());
     const VectorSingle normal = VectorSingle(raw * Rsqrt(VectorSingle(lenSq)), 0.0f);
     const f32 offset = Vector3Dot(normal, VectorSingle(a, 0.0f)).x;
@@ -119,7 +119,7 @@ b8 TryMergeCoplanarHullFaces(
                     continue;
                 const VectorSingle nNbr = VectorSingle(faces[liveFaces[nbr]].plane.normalOffset, 0.0f);
                 const f32 offNbr = faces[liveFaces[nbr]].plane.normalOffset.w;
-                if(Vector3Dot(nSeed, nNbr).x >= 0.9999f && Abs(offSeed - offNbr) <= 1.0e-4f){
+                if(Vector3Dot(nSeed, nNbr).x >= 0.9999f && Abs(VectorSingle(offSeed - offNbr)).x <= 1.0e-4f){
                     compId[nbr] = cid;
                     bfsQueue.push_back(nbr);
                 }
@@ -183,15 +183,14 @@ b8 TryMergeCoplanarHullFaces(
         for(usize vi = 0u; vi < loop.size(); ++vi){
             const VectorSingle a = VectorSingle(uniquePts[loop[vi]]);
             const VectorSingle b = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
-            newellN = newellN + VectorSingle(
-                (a.y - b.y) * (a.z + b.z),
-                (a.z - b.z) * (a.x + b.x),
-                (a.x - b.x) * (a.y + b.y),
-                0.0f
-            );
+            const VectorSingle aYzx(a.y, a.z, a.x, 0.0f);
+            const VectorSingle bYzx(b.y, b.z, b.x, 0.0f);
+            const VectorSingle aZxy(a.z, a.x, a.y, 0.0f);
+            const VectorSingle bZxy(b.z, b.x, b.y, 0.0f);
+            newellN = newellN + VectorSingle((aYzx - bYzx) * (aZxy + bZxy), 0.0f);
         }
         const f32 nLenSq = Vector3LengthSq(newellN).x;
-        if(!IsFinite(nLenSq) || nLenSq <= 1.0e-12f)
+        if(!IsFinite(VectorSingle(nLenSq)) || nLenSq <= 1.0e-12f)
             return false;
         VectorSingle planeN = newellN * Rsqrt(VectorSingle(nLenSq));
         if(Vector3Dot(planeN, VectorSingle(VectorSingle(uniquePts[loop[0u]]) - interior, 0.0f)).x < 0.0f)
@@ -251,7 +250,7 @@ b8 TryMergeCoplanarHullFaces(
 }
 
 Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
-    if(!IsFinite(radius) || radius < 0.0f || inputPoints.size() < 4u)
+    if(!IsFinite(VectorSingle(radius)) || radius < 0.0f || inputPoints.size() < 4u)
         return MakeUnexpected(Failure());
 
     Vector<f32x4> uniquePts;
@@ -323,7 +322,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     usize fourthIdx = s_NullIndex;
     f32 bestPlaneDist = 1.0e-4f;
     for(usize i = 0u; i < uniquePts.size(); ++i){
-        const f32 dist = Abs(Vector3Dot(triN, VectorSingle(uniquePts[i], 0.0f)).x - triD);
+        const f32 dist = Abs(VectorSingle(Vector3Dot(triN, VectorSingle(uniquePts[i], 0.0f)).x - triD)).x;
         if(dist > bestPlaneDist){
             bestPlaneDist = dist;
             fourthIdx = i;

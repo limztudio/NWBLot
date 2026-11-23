@@ -98,21 +98,12 @@ class DynamicTree{
         if(AabbContains(curAabb, aabb) && AabbContains(hugeAabb, curAabb))
             return false;
 
-        VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
-        VectorSingle lower = VectorSingle(fattened.lowerBound);
-        VectorSingle upper = VectorSingle(fattened.upperBound);
-        if(d.x < 0.0f)
-            lower = VectorSetX(lower, lower.x + d.x);
-        else
-            upper = VectorSetX(upper, upper.x + d.x);
-        if(d.y < 0.0f)
-            lower = VectorSetY(lower, lower.y + d.y);
-        else
-            upper = VectorSetY(upper, upper.y + d.y);
-        if(d.z < 0.0f)
-            lower = VectorSetZ(lower, lower.z + d.z);
-        else
-            upper = VectorSetZ(upper, upper.z + d.z);
+        const VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
+        const VectorSingle dNeg = VectorLess(d, VectorSingle(0.0f));
+        const VectorSingle fattenedLower = VectorSingle(fattened.lowerBound);
+        const VectorSingle fattenedUpper = VectorSingle(fattened.upperBound);
+        const VectorSingle lower = VectorSelect(fattenedLower, fattenedLower + d, dNeg);
+        const VectorSingle upper = VectorSelect(fattenedUpper + d, fattenedUpper, dNeg);
 
         this.removeLeaf(proxyId);
         this.m_nodes[proxyId].setAabb(Aabb3D(lower, upper));

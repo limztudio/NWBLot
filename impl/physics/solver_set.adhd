@@ -669,15 +669,17 @@ Manifold CollideShapePair(
 }
 
 f32 CombineMaterialFriction(in f32 a, in f32 b){
-    return Sqrt(Max(a, 0.0f) * Max(b, 0.0f));
+    const VectorSingle pair(a, b, 0.0f, 0.0f);
+    const VectorSingle clamped = VectorSelect(VectorZero(), pair, VectorGreater(pair, VectorZero()));
+    return Sqrt(VectorSingle(clamped.x * clamped.y)).x;
 }
 
 f32 CombineMaterialRestitution(in f32 a, in f32 b){
-    return Max(a, b);
+    return SimdMax(a, b);
 }
 
 f32 CombineMaterialRollingResistance(in f32 a, in f32 b){
-    return Max(a, b);
+    return SimdMax(a, b);
 }
 
 u32 EncodeContactKey(in u32 contactId, in u32 edgeIndex){

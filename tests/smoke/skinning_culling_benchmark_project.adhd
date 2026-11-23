@@ -205,7 +205,7 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
 
     public b8 onUpdate(in f32 delta)override{
         f32 safeDelta = 1.0f / 60.0f;
-        if(IsFinite(delta) && delta > 0.0f)
+        if(IsFinite(VectorSingle(delta)) && delta > 0.0f)
             safeDelta = delta;
         if(this.m_gpuTimingEnabled)
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());

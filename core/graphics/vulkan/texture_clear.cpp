@@ -6,6 +6,7 @@
 #include "texture_clear_pattern.h"
 
 #include <global/binary.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +26,13 @@ namespace __hidden_texture_clear{
 
 static constexpr TStringView s_RequestedAspectMissingReason = FOUNDATION_TEXT("requested aspect is not present in the texture format");
 static constexpr TStringView s_ClearRectOutsideRenderAreaReason = FOUNDATION_TEXT("clear rect is outside the active render area");
+
+[[nodiscard]] static f32 SaturateDepthClearValue(const f32 depth)noexcept{
+    const SIMDVectorSingle depthVec = VectorReplicate(depth);
+    const SIMDVectorSingle clampedLow = VectorSelect(depthVec, VectorZero(), VectorLess(depthVec, VectorZero()));
+    const SIMDVectorSingle one = VectorSplatOne();
+    return VectorGetX(VectorSelect(clampedLow, one, VectorGreater(clampedLow, one)));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +70,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     }
 
-    const f32 clearDepthValue = clearDepth ? Saturate(depth) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? __hidden_texture_clear::SaturateDepthClearValue(depth) : 0.0f;
 
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = clearDepthValue;
@@ -136,7 +144,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
         return;
     }
-    const f32 clearDepthValue = clearDepth ? Saturate(depth) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? __hidden_texture_clear::SaturateDepthClearValue(depth) : 0.0f;
     if(!m_renderPassActive && desc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedMultisampledClearInactiveReason);
         return;

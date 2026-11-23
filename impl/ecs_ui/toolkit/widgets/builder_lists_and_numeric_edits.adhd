@@ -98,7 +98,7 @@ class NumericEditActions : IEditActionSink{
 
 
 b8 IsValidVirtualListWheelRows(in f32 wheelRows){
-    return IsFinite(wheelRows) && wheelRows > 0.0f;
+    return IsFinite(VectorSingle(wheelRows)) && wheelRows > 0.0f;
 }
 
 b8 NeedsListScrollOffsetRescale(
@@ -163,7 +163,7 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
         if(!measuredEmpty.has_value())
             return false;
         const f32 height = ResolveListRowBaseHeight(metrics.value(), measuredEmpty.value().bounds.height);
-        if(!IsFinite(height) || height <= 0.0f || !this.listMatches(frame))
+        if(!IsFinite(VectorSingle(height)) || height <= 0.0f || !this.listMatches(frame))
             return false;
         state.m_measureKey = key;
         state.m_rowHeight = height;

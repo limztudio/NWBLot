@@ -489,7 +489,7 @@ void VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes(mut Text
         ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
         const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
         ASSERT_TRUE(glyph.coverage.known);
-        const f32 pixelSizeFloat = Ceil(fontSize * 1.375f);
+        const f32 pixelSizeFloat = VectorCeiling(VectorSingle(fontSize * 1.375f)).x;
         const u32 pixelSize = cast<u32>(pixelSizeFloat);
         GlyphBitmap bitmap = GlyphBitmap();
         ASSERT_TRUE(FontFaceRasterize(glyph.face, glyph.glyphId, pixelSize, bitmap));

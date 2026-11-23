@@ -177,7 +177,7 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
 
             const VectorSingle rawCross = Cross(dirA, VectorSingle(bDir[bi]));
             const f32 lenSq = Vector3LengthSq(rawCross).x;
-            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(lenSqA * bDirLenSq[bi], 1.0e-12f);
+            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(lenSqA * bDirLenSq[bi], 1.0e-12f);
             if(lenSq <= normTol)
                 continue;
 
@@ -218,8 +218,8 @@ u32 ClipPolygonAgainstPlane(
             if(prevDist > 0.0f){
                 const f32 denom = prevDist - curDist;
                 f32 t = 0.0f;
-                if(Abs(denom) > 1.0e-12f)
-                    t = Clamp(prevDist / denom, 0.0f, 1.0f);
+                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
                 if(outVerts.size() < s_MaxClipPoints){
                     ClipVertex interp;
                     interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
@@ -234,8 +234,8 @@ u32 ClipPolygonAgainstPlane(
         else if(prevDist <= 0.0f){
             const f32 denom = prevDist - curDist;
             f32 t = 0.0f;
-            if(Abs(denom) > 1.0e-12f)
-                t = Clamp(prevDist / denom, 0.0f, 1.0f);
+            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
             if(outVerts.size() < s_MaxClipPoints){
                 ClipVertex interp;
                 interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
@@ -281,7 +281,7 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         if(i == idx0 || i == idx1)
             continue;
         const VectorSingle c = Cross(e01, VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f));
-        const f32 area = Abs(Vector3Dot(c, refNormal).x);
+        const f32 area = Abs(Vector3Dot(c, refNormal)).x;
         if(area > bestArea2){
             bestArea2 = area;
             idx2 = i;
@@ -301,7 +301,8 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
         const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
         const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
-        const f32 maxAbs = Max(Abs(a0), Max(Abs(a1), Abs(a2)));
+        const VectorSingle absA = Abs(VectorSingle(a0, a1, a2, 0.0f));
+        const f32 maxAbs = Vector3MaxComponent(absA).x;
         if(maxAbs > bestFallbackArea){
             bestFallbackArea = maxAbs;
             fallbackIdx3 = i;
@@ -488,8 +489,8 @@ u32 ClipBoxQuadAgainstPlane(
             if(prevDist > 0.0f){
                 const f32 denom = prevDist - curDist;
                 f32 t = 0.0f;
-                if(Abs(denom) > 1.0e-12f)
-                    t = Clamp(prevDist / denom, 0.0f, 1.0f);
+                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
                 if(outCount < 8u){
                     ClipVertex interp;
                     interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
@@ -507,8 +508,8 @@ u32 ClipBoxQuadAgainstPlane(
         else if(prevDist <= 0.0f){
             const f32 denom = prevDist - curDist;
             f32 t = 0.0f;
-            if(Abs(denom) > 1.0e-12f)
-                t = Clamp(prevDist / denom, 0.0f, 1.0f);
+            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
             if(outCount < 8u){
                 ClipVertex interp;
                 interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
@@ -555,7 +556,7 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
         if(i == idx0 || i == idx1)
             continue;
         const VectorSingle c = Cross(e01, VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f));
-        const f32 area = Abs(Vector3Dot(c, refNormal).x);
+        const f32 area = Abs(Vector3Dot(c, refNormal)).x;
         if(area > bestArea2){
             bestArea2 = area;
             idx2 = i;
@@ -575,7 +576,8 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
         const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
         const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
         const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
-        const f32 maxAbs = Max(Abs(a0), Max(Abs(a1), Abs(a2)));
+        const VectorSingle absA = Abs(VectorSingle(a0, a1, a2, 0.0f));
+        const f32 maxAbs = Vector3MaxComponent(absA).x;
         if(maxAbs > bestFallbackArea){
             bestFallbackArea = maxAbs;
             fallbackIdx3 = i;
@@ -943,12 +945,16 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     if(Vector3Dot(refPrimary, refNormal).x < 0.0f)
         refFaceIdx = cast<u8>(refAxisIdx * 2u + 1u);
 
-    const f32 dIncX = Vector3Dot(incX, refNormal).x;
-    const f32 dIncY = Vector3Dot(incY, refNormal).x;
-    const f32 dIncZ = Vector3Dot(incZ, refNormal).x;
-    const f32 aIncX = Abs(dIncX);
-    const f32 aIncY = Abs(dIncY);
-    const f32 aIncZ = Abs(dIncZ);
+    const VectorSingle incDots(
+        Vector3Dot(incX, refNormal).x,
+        Vector3Dot(incY, refNormal).x,
+        Vector3Dot(incZ, refNormal).x,
+        0.0f
+    );
+    const VectorSingle absInc = Abs(incDots);
+    const f32 aIncX = absInc.x;
+    const f32 aIncY = absInc.y;
+    const f32 aIncZ = absInc.z;
 
     u32 incAxisIdx = 0u;
     f32 incSign = 1.0f;
@@ -958,7 +964,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     f32 incHv = incH[2u];
     if(aIncX >= aIncY && aIncX >= aIncZ){
         incAxisIdx = 0u;
-        if(dIncX > 0.0f)
+        if(incDots.x > 0.0f)
             incSign = -1.0f;
         incU = incY * incSign;
         incV = incZ;
@@ -967,7 +973,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     }
     else if(aIncY >= aIncZ){
         incAxisIdx = 1u;
-        if(dIncY > 0.0f)
+        if(incDots.y > 0.0f)
             incSign = -1.0f;
         incU = incZ * incSign;
         incV = incX;
@@ -976,7 +982,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     }
     else{
         incAxisIdx = 2u;
-        if(dIncZ > 0.0f)
+        if(incDots.z > 0.0f)
             incSign = -1.0f;
         incU = incX * incSign;
         incV = incY;
@@ -1341,10 +1347,10 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                 for(usize fi = 0u; fi < hullPlanesInB.size(); ++fi){
                     const VectorSingle fNLocal = VectorSingle(hullPlanesInB[fi].normalOffset, 0.0f);
                     const f32 fOff = hullPlanesInB[fi].normalOffset.w;
-                    const f32 d0 = Vector3Dot(fNLocal, tv0).x;
-                    const f32 d1 = Vector3Dot(fNLocal, tv1).x;
-                    const f32 d2 = Vector3Dot(fNLocal, tv2).x;
-                    const f32 sepF = Min(d0, Min(d1, d2)) - fOff - totalR;
+                    const VectorSingle d0 = Vector3Dot(fNLocal, tv0);
+                    const VectorSingle d1 = Vector3Dot(fNLocal, tv1);
+                    const VectorSingle d2 = Vector3Dot(fNLocal, tv2);
+                    const f32 sepF = Min(d0, Min(d1, d2)).x - fOff - totalR;
                     if(sepF > maxDistance){
                         separated = true;
                         break;
@@ -1380,7 +1386,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                             dirB = te2;
                         const VectorSingle rawCross = Cross(dirA, dirB);
                         const f32 lenSq = Vector3LengthSq(rawCross).x;
-                        const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(dirALenSq * Vector3LengthSq(dirB).x, 1.0e-12f);
+                        const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(dirALenSq * Vector3LengthSq(dirB).x, 1.0e-12f);
                         if(lenSq <= normTol)
                             continue;
 
@@ -1394,11 +1400,11 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                             if(dv < minA)
                                 minA = dv;
                         }
-                        const f32 dB0 = Vector3Dot(axis, tv0).x;
-                        const f32 dB1 = Vector3Dot(axis, tv1).x;
-                        const f32 dB2 = Vector3Dot(axis, tv2).x;
-                        const f32 minB = Min(dB0, Min(dB1, dB2));
-                        const f32 maxB = Max(dB0, Max(dB1, dB2));
+                        const VectorSingle dB0 = Vector3Dot(axis, tv0);
+                        const VectorSingle dB1 = Vector3Dot(axis, tv1);
+                        const VectorSingle dB2 = Vector3Dot(axis, tv2);
+                        const f32 minB = Min(dB0, Min(dB1, dB2)).x;
+                        const f32 maxB = Max(dB0, Max(dB1, dB2)).x;
 
                         const f32 sepPos = minB - maxA - totalR;
                         const f32 sepNeg = minA - maxB - totalR;
@@ -1608,7 +1614,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
             const VectorSingle supW = TransformPoint(xfA, supLocalA);
             const VectorSingle closeW = TransformPoint(xfB, closePt);
             const f32 depth = Vector3Dot(VectorSingle(closeW - supW, 0.0f), worldOut).x;
-            const f32 sep = -(Max(depth, 0.0f) + totalR);
+            const f32 sep = -(SimdMax(depth, 0.0f) + totalR);
             const VectorSingle wA = supW + nAtoB * hullR;
             const VectorSingle wB = closeW - nAtoB * meshR;
             chosenNormal = nAtoB;
@@ -1724,8 +1730,11 @@ Manifold CollideMeshes(
 
                     {
                         const f32 dA = Vector3Dot(nALocal, av0).x;
-                        const f32 minB = Min(Vector3Dot(nALocal, bv0InA).x, Min(Vector3Dot(nALocal, bv1InA).x, Vector3Dot(nALocal, bv2InA).x));
-                        const f32 maxB = Max(Vector3Dot(nALocal, bv0InA).x, Max(Vector3Dot(nALocal, bv1InA).x, Vector3Dot(nALocal, bv2InA).x));
+                        const VectorSingle b0 = Vector3Dot(nALocal, bv0InA);
+                        const VectorSingle b1 = Vector3Dot(nALocal, bv1InA);
+                        const VectorSingle b2 = Vector3Dot(nALocal, bv2InA);
+                        const f32 minB = Min(b0, Min(b1, b2)).x;
+                        const f32 maxB = Max(b0, Max(b1, b2)).x;
                         const f32 sPos = minB - dA - totalR;
                         const f32 sNeg = dA - maxB - totalR;
                         f32 sTriA = sPos;
@@ -1744,8 +1753,11 @@ Manifold CollideMeshes(
 
                     {
                         const f32 dB = Vector3Dot(nBInA, bv0InA).x;
-                        const f32 minA = Min(Vector3Dot(nBInA, av0).x, Min(Vector3Dot(nBInA, av1).x, Vector3Dot(nBInA, av2).x));
-                        const f32 maxA = Max(Vector3Dot(nBInA, av0).x, Max(Vector3Dot(nBInA, av1).x, Vector3Dot(nBInA, av2).x));
+                        const VectorSingle a0 = Vector3Dot(nBInA, av0);
+                        const VectorSingle a1 = Vector3Dot(nBInA, av1);
+                        const VectorSingle a2 = Vector3Dot(nBInA, av2);
+                        const f32 minA = Min(a0, Min(a1, a2)).x;
+                        const f32 maxA = Max(a0, Max(a1, a2)).x;
                         const f32 sPos = dB - maxA - totalR;
                         const f32 sNeg = minA - dB - totalR;
                         f32 sTriB = sPos;
@@ -1781,20 +1793,20 @@ Manifold CollideMeshes(
                             else if(bk == 2u) dirB = be2;
                             const VectorSingle cr = Cross(dirA, dirB);
                             const f32 lenSq = Vector3LengthSq(cr).x;
-                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(Vector3LengthSq(dirA).x * Vector3LengthSq(dirB).x, 1.0e-12f);
+                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(Vector3LengthSq(dirA).x * Vector3LengthSq(dirB).x, 1.0e-12f);
                             if(lenSq <= normTol)
                                 continue;
                             const VectorSingle axis = cr * Rsqrt(VectorSingle(lenSq));
-                            const f32 dA0 = Vector3Dot(axis, av0).x;
-                            const f32 dA1 = Vector3Dot(axis, av1).x;
-                            const f32 dA2 = Vector3Dot(axis, av2).x;
-                            const f32 minA = Min(dA0, Min(dA1, dA2));
-                            const f32 maxA = Max(dA0, Max(dA1, dA2));
-                            const f32 dB0 = Vector3Dot(axis, bv0InA).x;
-                            const f32 dB1 = Vector3Dot(axis, bv1InA).x;
-                            const f32 dB2 = Vector3Dot(axis, bv2InA).x;
-                            const f32 minB = Min(dB0, Min(dB1, dB2));
-                            const f32 maxB = Max(dB0, Max(dB1, dB2));
+                            const VectorSingle dA0 = Vector3Dot(axis, av0);
+                            const VectorSingle dA1 = Vector3Dot(axis, av1);
+                            const VectorSingle dA2 = Vector3Dot(axis, av2);
+                            const f32 minA = Min(dA0, Min(dA1, dA2)).x;
+                            const f32 maxA = Max(dA0, Max(dA1, dA2)).x;
+                            const VectorSingle dB0 = Vector3Dot(axis, bv0InA);
+                            const VectorSingle dB1 = Vector3Dot(axis, bv1InA);
+                            const VectorSingle dB2 = Vector3Dot(axis, bv2InA);
+                            const f32 minB = Min(dB0, Min(dB1, dB2)).x;
+                            const f32 maxB = Max(dB0, Max(dB1, dB2)).x;
                             const f32 sPos = minB - maxA - totalR;
                             const f32 sNeg = minA - maxB - totalR;
                             f32 sEdge = sPos;

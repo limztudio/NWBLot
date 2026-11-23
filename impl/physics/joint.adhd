@@ -320,8 +320,8 @@ void Solve2DLinearPlaneRows(
     f32 mScale = 1.0f;
     f32 iScale = 0.0f;
     if(useBias){
-        bias1 = Clamp(soft.biasRate * c1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-        bias2 = Clamp(soft.biasRate * c2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+        bias1 = SimdClamp(soft.biasRate * c1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+        bias2 = SimdClamp(soft.biasRate * c2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
         mScale = soft.massScale;
         iScale = soft.impulseScale;
     }
@@ -352,7 +352,7 @@ void Solve2DLinearPlaneRows(
 
     f32 dP1 = 0.0f;
     f32 dP2 = 0.0f;
-    if(IsFinite(det) && Abs(det) > 1.0e-18f){
+    if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
         const f32 invDet = 1.0f / det;
         dP1 = (k11 * rhs1 - k01 * rhs2) * invDet * mScale - iScale * old1;
         dP2 = (-k01 * rhs1 + k00 * rhs2) * invDet * mScale - iScale * old2;
@@ -399,7 +399,7 @@ void Solve3DAngularLockRow(
         bias = thetaErr * soft.biasRate;
         const f32 bLenSq = Vector3LengthSq(bias).x;
         if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-            bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+            bias = bias * (s_MaxJointBiasSpeed / Sqrt(VectorSingle(bLenSq)).x);
         mScale = soft.massScale;
         iScale = soft.impulseScale;
     }
@@ -500,10 +500,12 @@ void PrepareJointConstraint(
 
     const Softness rigidSoft = MakeSoftness(defaultHertz, 1.0f, h);
     outConstraint.angularSoftness = rigidSoft;
-    outConstraint.suspensionSoftness = MakeSoftness(Max(joint.suspensionHertz, 0.0f), Max(joint.suspensionDampingRatio, 0.0f), h);
+    const VectorSingle jointParams(joint.suspensionHertz, joint.suspensionDampingRatio, joint.dampingRatio, 0.0f);
+    const VectorSingle clampedJointParams = VectorSelect(VectorZero(), jointParams, VectorGreater(jointParams, VectorZero()));
+    outConstraint.suspensionSoftness = MakeSoftness(clampedJointParams.x, clampedJointParams.y, h);
     if(joint.enableSpring() && joint.hertz > 0.0f){
         outConstraint.setFlag(JointFlags::EnableSpring, true);
-        outConstraint.linearSoftness = MakeSoftness(joint.hertz, Max(joint.dampingRatio, 0.0f), h);
+        outConstraint.linearSoftness = MakeSoftness(joint.hertz, clampedJointParams.z, h);
     }
     else{
         outConstraint.setFlag(JointFlags::EnableSpring, false);
@@ -531,10 +533,10 @@ void PrepareJointConstraint(
 
         if(joint.enableLimit()){
             const f32 limImp = joint.limitImpulse();
-            outConstraint.lowerLimitImpulse = Max(limImp, 0.0f);
-            outConstraint.upperLimitImpulse = Min(limImp, 0.0f);
+            outConstraint.lowerLimitImpulse = SimdMax(limImp, 0.0f);
+            outConstraint.upperLimitImpulse = SimdMin(limImp, 0.0f);
             if(joint.type == JointType::Spherical && joint.swingLimit > 0.0f)
-                outConstraint.coneOrSuspensionImpulse = Min(joint.coneOrSuspensionImpulse(), 0.0f);
+                outConstraint.coneOrSuspensionImpulse = SimdMin(joint.coneOrSuspensionImpulse(), 0.0f);
         }
         if(joint.type == JointType::Wheel && joint.suspensionHertz > 0.0f)
             outConstraint.coneOrSuspensionImpulse = joint.coneOrSuspensionImpulse();
@@ -710,8 +712,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
     const VectorSingle deltaRotA = VectorSingle(stateA.deltaRotation);
     const VectorSingle deltaRotB = VectorSingle(stateB.deltaRotation);
     const b8 zeroDeltaRot =
-        (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) <= 1.0e-12f
-        && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) <= 1.0e-12f
+        Vector3LengthSq(VectorSingle(deltaRotA, 0.0f)).x <= 1.0e-12f
+        && Vector3LengthSq(VectorSingle(deltaRotB, 0.0f)).x <= 1.0e-12f
     ;
     const b8 exactIdentityDeltaRotA =
         deltaRotA.x == 0.0f && deltaRotA.y == 0.0f && deltaRotA.z == 0.0f && deltaRotA.w == 1.0f;
@@ -757,7 +759,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 f32 mScale = 1.0f;
                 f32 iScale = 0.0f;
                 if(useBias){
-                    bias = Clamp(jc.linearSoftness.biasRate * cErr, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    bias = SimdClamp(jc.linearSoftness.biasRate * cErr, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
                     mScale = jc.linearSoftness.massScale;
                     iScale = jc.linearSoftness.impulseScale;
                 }
@@ -780,9 +782,9 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 cDot = Vector3Dot(dv, u).x;
                 f32 bias = 0.0f;
                 if(useBias)
-                    bias = Clamp(jc.angularSoftness.biasRate * (dist - minLen), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    bias = SimdClamp(jc.angularSoftness.biasRate * (dist - minLen), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
                 const f32 dImp = -effMass * (cDot + bias);
-                const f32 newImp = Max(jc.lowerLimitImpulse + dImp, 0.0f);
+                const f32 newImp = SimdMax(jc.lowerLimitImpulse + dImp, 0.0f);
                 const f32 applied = newImp - jc.lowerLimitImpulse;
                 jc.lowerLimitImpulse = newImp;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, u * applied, flagsA, flagsB, vA, wA, vB, wB);
@@ -797,9 +799,9 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 cDot = Vector3Dot(dv, u).x;
                 f32 bias = 0.0f;
                 if(useBias)
-                    bias = Clamp(jc.angularSoftness.biasRate * (dist - maxLen), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    bias = SimdClamp(jc.angularSoftness.biasRate * (dist - maxLen), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
                 const f32 dImp = -effMass * (cDot + bias);
-                const f32 newImp = Min(jc.upperLimitImpulse + dImp, 0.0f);
+                const f32 newImp = SimdMin(jc.upperLimitImpulse + dImp, 0.0f);
                 const f32 applied = newImp - jc.upperLimitImpulse;
                 jc.upperLimitImpulse = newImp;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, u * applied, flagsA, flagsB, vA, wA, vB, wB);
@@ -822,7 +824,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(VectorSingle(bLenSq)).x);
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -838,7 +840,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             in SymMat3 sumInvI = cache.sumInvI;
 
             if(jc.swingLimit > 0.0f){
-                const f32 swingAngle = ACos(Clamp(Vector3Dot(axisA, axisB).x, -1.0f, 1.0f));
+                const f32 swingAngle = ACos(Clamp(Vector3Dot(axisA, axisB), VectorSingle(-1.0f), VectorSingle(1.0f))).x;
                 if(swingAngle > jc.swingLimit){
                     VectorSingle fallbackU1(0.0f);
                     VectorSingle fallbackU2(0.0f);
@@ -851,8 +853,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                     const f32 wSwing = Vector3Dot(VectorSingle(wB - wA, 0.0f), swingAxis).x;
                     f32 limBias = 0.0f;
                     if(useBias)
-                        limBias = Clamp(jc.angularSoftness.biasRate * (swingAngle - jc.swingLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                    const f32 newCone = Min(jc.coneOrSuspensionImpulse - swingMass * (wSwing + limBias), 0.0f);
+                        limBias = SimdClamp(jc.angularSoftness.biasRate * (swingAngle - jc.swingLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    const f32 newCone = SimdMin(jc.coneOrSuspensionImpulse - swingMass * (wSwing + limBias), 0.0f);
                     const f32 appliedCone = newCone - jc.coneOrSuspensionImpulse;
                     jc.coneOrSuspensionImpulse = newCone;
                     const VectorSingle coneP = swingAxis * appliedCone;
@@ -886,7 +888,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                     qErr = -qErr;
                 const f32 projSin = Vector3Dot(VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f), axisB).x;
                 const VectorSingle qTwist = SafeNormalizeQuat(VectorSingle(axisB * projSin, qErr.w));
-                const f32 twistAngle = 2.0f * ATan2(Vector3Dot(VectorSingle(qTwist.x, qTwist.y, qTwist.z, 0.0f), axisB).x, qTwist.w);
+                const f32 twistAngle = 2.0f * ATan2(Vector3Dot(VectorSingle(qTwist.x, qTwist.y, qTwist.z, 0.0f), axisB), VectorSingle(qTwist.w)).x;
                 const f32 kTwist = Vector3Dot(axisB, MulSymMat3Vec(sumInvI, axisB)).x;
                 f32 twistMass = 0.0f;
                 if(kTwist > 1.0e-12f)
@@ -896,8 +898,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                     const f32 wTwist = Vector3Dot(VectorSingle(wB - wA, 0.0f), axisB).x;
                     f32 limBias = 0.0f;
                     if(useBias)
-                        limBias = Clamp(jc.angularSoftness.biasRate * (twistAngle - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                    const f32 newLow = Max(jc.lowerLimitImpulse - twistMass * (wTwist + limBias), 0.0f);
+                        limBias = SimdClamp(jc.angularSoftness.biasRate * (twistAngle - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    const f32 newLow = SimdMax(jc.lowerLimitImpulse - twistMass * (wTwist + limBias), 0.0f);
                     const f32 appliedLow = newLow - jc.lowerLimitImpulse;
                     jc.lowerLimitImpulse = newLow;
                     const VectorSingle limP = axisB * appliedLow;
@@ -922,8 +924,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                     const f32 wTwist = Vector3Dot(VectorSingle(wB - wA, 0.0f), axisB).x;
                     f32 limBias = 0.0f;
                     if(useBias)
-                        limBias = Clamp(jc.angularSoftness.biasRate * (twistAngle - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                    const f32 newHigh = Min(jc.upperLimitImpulse - twistMass * (wTwist + limBias), 0.0f);
+                        limBias = SimdClamp(jc.angularSoftness.biasRate * (twistAngle - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                    const f32 newHigh = SimdMin(jc.upperLimitImpulse - twistMass * (wTwist + limBias), 0.0f);
                     const f32 appliedHigh = newHigh - jc.upperLimitImpulse;
                     jc.upperLimitImpulse = newHigh;
                     const VectorSingle limP = axisB * appliedHigh;
@@ -958,7 +960,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(VectorSingle(bLenSq)).x);
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -997,7 +999,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed / Sqrt(VectorSingle(bLenSq)).x);
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1032,8 +1034,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         f32 angMScale = 1.0f;
         f32 angIScale = 0.0f;
         if(useBias){
-            angBias1 = Clamp(jc.angularSoftness.biasRate * e1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-            angBias2 = Clamp(jc.angularSoftness.biasRate * e2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+            angBias1 = SimdClamp(jc.angularSoftness.biasRate * e1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+            angBias2 = SimdClamp(jc.angularSoftness.biasRate * e2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
             angMScale = jc.angularSoftness.massScale;
             angIScale = jc.angularSoftness.impulseScale;
         }
@@ -1046,7 +1048,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
 
         f32 dL1 = 0.0f;
         f32 dL2 = 0.0f;
-        if(IsFinite(det) && Abs(det) > 1.0e-18f){
+        if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
             const f32 invDet = 1.0f / det;
             dL1 = (m11 * rhs1 - m01 * rhs2) * invDet * angMScale - angIScale * oldL1;
             dL2 = (-m01 * rhs1 + m00 * rhs2) * invDet * angMScale - angIScale * oldL2;
@@ -1075,7 +1077,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         if(jc.enableMotor() && jc.maxMotorForce > 0.0f && axialMass > 0.0f){
             const f32 wAxis = Vector3Dot(VectorSingle(wB - wA, 0.0f), axisA).x;
             const f32 maxImp = jc.maxMotorForce * h;
-            const f32 newMot = Clamp(jc.motorImpulse - axialMass * (wAxis - jc.motorSpeed), -maxImp, maxImp);
+            const f32 newMot = SimdClamp(jc.motorImpulse - axialMass * (wAxis - jc.motorSpeed), -maxImp, maxImp);
             const f32 appliedMot = newMot - jc.motorImpulse;
             jc.motorImpulse = newMot;
             const VectorSingle motP = axisA * appliedMot;
@@ -1093,14 +1095,14 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             if(qErr.w < 0.0f)
                 qErr = -qErr;
             const f32 projSin = Vector3Dot(VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f), axisA).x;
-            const f32 angle = 2.0f * ATan2(projSin, qErr.w);
+            const f32 angle = 2.0f * ATan2(VectorSingle(projSin), VectorSingle(qErr.w)).x;
 
             if(angle < jc.lowerLimit){
                 const f32 wAxis = Vector3Dot(VectorSingle(wB - wA, 0.0f), axisA).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.angularSoftness.biasRate * (angle - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newLow = Max(jc.lowerLimitImpulse - axialMass * (wAxis + limBias), 0.0f);
+                    limBias = SimdClamp(jc.angularSoftness.biasRate * (angle - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newLow = SimdMax(jc.lowerLimitImpulse - axialMass * (wAxis + limBias), 0.0f);
                 const f32 appliedLow = newLow - jc.lowerLimitImpulse;
                 jc.lowerLimitImpulse = newLow;
                 const VectorSingle limP = axisA * appliedLow;
@@ -1125,8 +1127,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 wAxis = Vector3Dot(VectorSingle(wB - wA, 0.0f), axisA).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.angularSoftness.biasRate * (angle - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newHigh = Min(jc.upperLimitImpulse - axialMass * (wAxis + limBias), 0.0f);
+                    limBias = SimdClamp(jc.angularSoftness.biasRate * (angle - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newHigh = SimdMin(jc.upperLimitImpulse - axialMass * (wAxis + limBias), 0.0f);
                 const f32 appliedHigh = newHigh - jc.upperLimitImpulse;
                 jc.upperLimitImpulse = newHigh;
                 const VectorSingle limP = axisA * appliedHigh;
@@ -1216,7 +1218,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rAEff));
             const f32 vAxis = Vector3Dot(dv, axisA).x;
             const f32 maxImp = jc.maxMotorForce * h;
-            const f32 newMot = Clamp(jc.motorImpulse - axialMass * (vAxis - jc.motorSpeed), -maxImp, maxImp);
+            const f32 newMot = SimdClamp(jc.motorImpulse - axialMass * (vAxis - jc.motorSpeed), -maxImp, maxImp);
             const f32 appliedMot = newMot - jc.motorImpulse;
             jc.motorImpulse = newMot;
             ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, axisA * appliedMot, flagsA, flagsB, vA, wA, vB, wB);
@@ -1229,8 +1231,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 vAxis = Vector3Dot(dv, axisA).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.linearSoftness.biasRate * (trans - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newLow = Max(jc.lowerLimitImpulse - axialMass * (vAxis + limBias), 0.0f);
+                    limBias = SimdClamp(jc.linearSoftness.biasRate * (trans - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newLow = SimdMax(jc.lowerLimitImpulse - axialMass * (vAxis + limBias), 0.0f);
                 const f32 appliedLow = newLow - jc.lowerLimitImpulse;
                 jc.lowerLimitImpulse = newLow;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, axisA * appliedLow, flagsA, flagsB, vA, wA, vB, wB);
@@ -1245,8 +1247,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 vAxis = Vector3Dot(dv, axisA).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.linearSoftness.biasRate * (trans - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newHigh = Min(jc.upperLimitImpulse - axialMass * (vAxis + limBias), 0.0f);
+                    limBias = SimdClamp(jc.linearSoftness.biasRate * (trans - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newHigh = SimdMin(jc.upperLimitImpulse - axialMass * (vAxis + limBias), 0.0f);
                 const f32 appliedHigh = newHigh - jc.upperLimitImpulse;
                 jc.upperLimitImpulse = newHigh;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, axisA * appliedHigh, flagsA, flagsB, vA, wA, vB, wB);
@@ -1276,7 +1278,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const f32 maxP = jc.maxMotorForce * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newP, 0.0f)).x;
             if(lenSq > maxP * maxP && lenSq > s_NormalizeEpsilonSq)
-                newP = newP * (maxP / Sqrt(lenSq));
+                newP = newP * (maxP / Sqrt(VectorSingle(lenSq)).x);
             const VectorSingle appliedP = newP - oldP;
             jc.setLinearImpulse(newP);
             ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, appliedP, flagsA, flagsB, vA, wA, vB, wB);
@@ -1295,7 +1297,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const f32 maxL = jc.maxTorque * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newL, 0.0f)).x;
             if(lenSq > maxL * maxL && lenSq > s_NormalizeEpsilonSq)
-                newL = newL * (maxL / Sqrt(lenSq));
+                newL = newL * (maxL / Sqrt(VectorSingle(lenSq)).x);
             const VectorSingle appliedL = newL - oldL;
             jc.setAngularImpulse(newL);
             wA = wA - MulSymMat3Vec(jc.invIA, appliedL);
@@ -1355,7 +1357,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rAEff));
             const f32 vSusp = Vector3Dot(dv, suspAxis).x;
             const f32 cSusp = Vector3Dot(d, suspAxis).x;
-            const f32 sBias = Clamp(jc.suspensionSoftness.biasRate * cSusp, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+            const f32 sBias = SimdClamp(jc.suspensionSoftness.biasRate * cSusp, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
             const f32 dSusp = -suspMass * jc.suspensionSoftness.massScale * (vSusp + sBias) - jc.suspensionSoftness.impulseScale * jc.coneOrSuspensionImpulse;
             jc.coneOrSuspensionImpulse += dSusp;
             ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, suspAxis * dSusp, flagsA, flagsB, vA, wA, vB, wB);
@@ -1368,8 +1370,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 vSusp = Vector3Dot(dv, suspAxis).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.linearSoftness.biasRate * (trans - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newLow = Max(jc.lowerLimitImpulse - suspMass * (vSusp + limBias), 0.0f);
+                    limBias = SimdClamp(jc.linearSoftness.biasRate * (trans - jc.lowerLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newLow = SimdMax(jc.lowerLimitImpulse - suspMass * (vSusp + limBias), 0.0f);
                 const f32 appliedLow = newLow - jc.lowerLimitImpulse;
                 jc.lowerLimitImpulse = newLow;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, suspAxis * appliedLow, flagsA, flagsB, vA, wA, vB, wB);
@@ -1384,8 +1386,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
                 const f32 vSusp = Vector3Dot(dv, suspAxis).x;
                 f32 limBias = 0.0f;
                 if(useBias)
-                    limBias = Clamp(jc.linearSoftness.biasRate * (trans - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-                const f32 newHigh = Min(jc.upperLimitImpulse - suspMass * (vSusp + limBias), 0.0f);
+                    limBias = SimdClamp(jc.linearSoftness.biasRate * (trans - jc.upperLimit), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+                const f32 newHigh = SimdMin(jc.upperLimitImpulse - suspMass * (vSusp + limBias), 0.0f);
                 const f32 appliedHigh = newHigh - jc.upperLimitImpulse;
                 jc.upperLimitImpulse = newHigh;
                 ApplyLinearImpulsePair(invMassA, invMassB, jc.invIA, jc.invIB, rAEff, rB, suspAxis * appliedHigh, flagsA, flagsB, vA, wA, vB, wB);
@@ -1423,8 +1425,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         f32 angMScale = 1.0f;
         f32 angIScale = 0.0f;
         if(useBias){
-            angBias1 = Clamp(jc.angularSoftness.biasRate * e1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-            angBias2 = Clamp(jc.angularSoftness.biasRate * e2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+            angBias1 = SimdClamp(jc.angularSoftness.biasRate * e1, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
+            angBias2 = SimdClamp(jc.angularSoftness.biasRate * e2, -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
             angMScale = jc.angularSoftness.massScale;
             angIScale = jc.angularSoftness.impulseScale;
         }
@@ -1437,7 +1439,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
 
         f32 dL1 = 0.0f;
         f32 dL2 = 0.0f;
-        if(IsFinite(det) && Abs(det) > 1.0e-18f){
+        if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
             const f32 invDet = 1.0f / det;
             dL1 = (m11 * rhs1 - m01 * rhs2) * invDet * angMScale - angIScale * oldL1;
             dL2 = (-m01 * rhs1 + m00 * rhs2) * invDet * angMScale - angIScale * oldL2;
@@ -1463,7 +1465,7 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
             const f32 axleMass = 1.0f / kAxle;
             const f32 wAxle = Vector3Dot(VectorSingle(wB - wA, 0.0f), axleA).x;
             const f32 maxImp = jc.maxMotorForce * h;
-            const f32 newMot = Clamp(jc.motorImpulse - axleMass * (wAxle - jc.motorSpeed), -maxImp, maxImp);
+            const f32 newMot = SimdClamp(jc.motorImpulse - axleMass * (wAxle - jc.motorSpeed), -maxImp, maxImp);
             const f32 appliedMot = newMot - jc.motorImpulse;
             jc.motorImpulse = newMot;
             const VectorSingle motP = axleA * appliedMot;
@@ -1480,8 +1482,8 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         VectorSingle curLinP(0.0f);
         VectorSingle curAngL(0.0f);
         ComputeJointConstraintTotalImpulses(jc, curLinP, curAngL);
-        jc.setMaxLinearImpulseMag(Max(jc.maxLinearImpulseMag(), Vector3Length(curLinP).x));
-        jc.setMaxAngularImpulseMag(Max(jc.maxAngularImpulseMag(), Vector3Length(curAngL).x));
+        jc.setMaxLinearImpulseMag(SimdMax(jc.maxLinearImpulseMag(), Vector3Length(curLinP).x));
+        jc.setMaxAngularImpulseMag(SimdMax(jc.maxAngularImpulseMag(), Vector3Length(curAngL).x));
     }
 
     if(jc.indexA != s_NullIndex && (flagsA & cast<u32>(BodyFlags::Dynamic)) != 0u){

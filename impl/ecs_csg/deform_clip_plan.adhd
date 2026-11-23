@@ -79,9 +79,10 @@ VectorSingle TransformCsgDeformVertexPosition(in CsgDeformVertex vertex, in Matr
 }
 
 Expected<f32, CsgDeformViabilityReason> TrySnapCsgDeformSignedDistance(in f32 distance, in f32 boundaryEpsilon){
-    if(!IsFinite(distance))
+    const VectorSingle distVec(distance);
+    if(!IsFinite(distVec))
         return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
-    if(Abs(distance) <= boundaryEpsilon)
+    if(Abs(distVec).x <= boundaryEpsilon)
         return s_KeepDistanceZero;
     return distance;
 }
@@ -159,7 +160,9 @@ Expected<f32, CsgDeformViabilityReason> TryValidateCsgDeformPreviewInputs(
         return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
     if(!CsgDeformValidTopology(inputTriangles, inputVertexCount))
         return MakeUnexpected(CsgDeformViabilityReason::InvalidTopology);
-    return Max(options.distanceEpsilon, s_MinEpsilon);
+    const VectorSingle eps(options.distanceEpsilon);
+    const VectorSingle minEps(s_MinEpsilon);
+    return VectorSelect(minEps, eps, VectorGreater(eps, minEps)).x;
 }
 
 u32 FindInitialCsgDeformBoundaryLoopVertex(in Span<CsgDeformCutLoopEdge> edges){

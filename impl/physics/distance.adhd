@@ -319,7 +319,7 @@ void SolveSimplex3(mut Simplex s){
     }
 
     const f32 sum = dABC_A + dABC_B + dABC_C;
-    if(Abs(sum) <= 1.0e-12f){
+    if(Abs(VectorSingle(sum)).x <= 1.0e-12f){
         s.v[0u].setU(1.0f / 3.0f);
         s.v[1u].setU(1.0f / 3.0f);
         s.v[2u].setU(1.0f / 3.0f);
@@ -371,7 +371,7 @@ void SolveSimplex4(mut Simplex s){
     b8 outACD = (oriACD * testACD) < 0.0f;
     b8 outBCD = (oriBCD * testBCD) < 0.0f;
 
-    if(Abs(signDet) <= 1.0e-10f){
+    if(Abs(VectorSingle(signDet)).x <= 1.0e-10f){
         outABC = true;
         outABD = true;
         outACD = true;
@@ -380,7 +380,7 @@ void SolveSimplex4(mut Simplex s){
 
     if(!outABC && !outABD && !outACD && !outBCD){
         const f32 total = dABCD_A + dABCD_B + dABCD_C + dABCD_D;
-        if(Abs(total) > 1.0e-12f){
+        if(Abs(VectorSingle(total)).x > 1.0e-12f){
             const f32 inv = 1.0f / total;
             s.v[0u].setU(dABCD_A * inv);
             s.v[1u].setU(dABCD_B * inv);
@@ -640,7 +640,7 @@ LocalRayHit RayCastSphere(in SphereShape sphere, in Transform3D xf, in VectorSin
     if(discr < 0.0f)
         return hit;
 
-    const f32 t = (-b - Sqrt(discr)) / a;
+    const f32 t = (-b - Sqrt(VectorSingle(discr)).x) / a;
     if(t < 0.0f || t > maxFraction)
         return hit;
 
@@ -667,7 +667,7 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
 
     const VectorSingle m = VectorSingle(origin - a, 0.0f);
 
-    const f32 proj = Clamp(Vector3Dot(m, ab).x / abLenSq, 0.0f, 1.0f);
+    const f32 proj = SimdClamp(Vector3Dot(m, ab).x / abLenSq, 0.0f, 1.0f);
     const VectorSingle closest0 = a + ab * proj;
     if(Vector3LengthSq(VectorSingle(origin - closest0, 0.0f)).x <= r * r){
         hit.pointFraction = f32x4(origin, 0.0f);
@@ -688,10 +688,10 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
     f32 bestT = maxFraction + 1.0f;
     VectorSingle bestNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
 
-    if(Abs(qa) > 1.0e-12f){
+    if(Abs(VectorSingle(qa)).x > 1.0e-12f){
         const f32 discr = qb * qb - qa * qc;
         if(discr >= 0.0f){
-            const f32 t = (-qb - Sqrt(discr)) / qa;
+            const f32 t = (-qb - Sqrt(VectorSingle(discr)).x) / qa;
             if(t >= 0.0f && t <= maxFraction){
                 const f32 axisProj = md + t * nd;
                 if(axisProj >= 0.0f && axisProj <= abLenSq){
@@ -753,7 +753,7 @@ LocalRayHit RayCastHull(in HullShape hull, in Transform3D xf, in VectorSingle or
             shallowestFace = i;
         }
 
-        if(Abs(denominator) <= 1.0e-12f){
+        if(Abs(VectorSingle(denominator)).x <= 1.0e-12f){
             if(numerator < 0.0f)
                 return hit;
         }
@@ -847,7 +847,7 @@ f32 ComputeProxyBoundingRadius(in ShapeProxy proxy, in VectorSingle localCenter)
         if(dSq > maxSq)
             maxSq = dSq;
     }
-    return Sqrt(maxSq) + proxy.radius;
+    return Sqrt(VectorSingle(maxSq)).x + proxy.radius;
 }
 
 Transform3D EvalSweepTransform(in Sweep3D sweep, in f32 t){
@@ -862,8 +862,8 @@ Transform3D EvalSweepTransform(in Sweep3D sweep, in f32 t){
 }
 
 f32 ComputeSweepAngularAngle(in VectorSingle q0, in VectorSingle q1){
-    const f32 d = Abs(Clamp(Vector4Dot(q0, q1).x, -1.0f, 1.0f));
-    return 2.0f * ACos(d);
+    const VectorSingle clampedDot = Clamp(Vector4Dot(q0, q1), VectorSingle(-1.0f), VectorSingle(1.0f));
+    return (ACos(Abs(clampedDot)) * 2.0f).x;
 }
 
 TimeOfImpactOutput ComputeTimeOfImpact(
@@ -913,7 +913,7 @@ TimeOfImpactOutput ComputeTimeOfImpact(
 
         const f32 step = (dist.distance() - targetDist) / approach;
         if(step <= 1.0e-6f){
-            t1 = Min(t1 + 0.01f * tMax, tMax);
+            t1 = SimdMin(t1 + 0.01f * tMax, tMax);
         }
         else{
             t1 += step;
@@ -960,7 +960,7 @@ LocalRayHit RayCastTriangle(
     const VectorSingle d = VectorSingle(translation, 0.0f);
     const VectorSingle h = Cross(d, e2);
     const f32 det = Vector3Dot(e1, h).x;
-    if(Abs(det) <= 1.0e-12f)
+    if(Abs(VectorSingle(det)).x <= 1.0e-12f)
         return hit;
 
     const f32 invDet = 1.0f / det;
@@ -1041,7 +1041,7 @@ b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
         return false;
 
     const VectorSingle boxExt = VectorSingle(meshBox.upperBound) - VectorSingle(meshBox.lowerBound);
-    const f32 rayLen = Max(Vector3Length(boxExt).x * 2.0f, 10.0f);
+    const f32 rayLen = SimdMax(Vector3Length(boxExt).x * 2.0f, 10.0f);
     const VectorSingle rayDir = SafeNormalizeVec3(VectorSingle(1.0f, 0.37139067f, 0.21821789f, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)) * rayLen;
     u32 parityHits = 0u;
     Array<u32, 256u> fixedStack;
@@ -1322,8 +1322,9 @@ LocalRayHit ShapeCastMesh(
             u32 closeTri = 0u;
             if(FindClosestPointOnClosedMesh(mesh, localStartCenter, closePt, closeN, closeTri)){
                 const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfMesh.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle worldIn = -worldOut;
                 best.pointFraction = f32x4(TransformPoint(xfMesh, closePt), 0.0f);
-                best.normalHit = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 1u);
+                best.normalHit = f32x3_u32(worldIn.x, worldIn.y, worldIn.z, 1u);
             }
         }
     }

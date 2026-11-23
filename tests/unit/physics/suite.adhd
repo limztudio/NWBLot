@@ -225,14 +225,18 @@ void VerifyPhysicsEdgeCases_ConstraintGraphOverflowColor23(){
     for(u32 i = 0u; i < satCount; ++i){
         const f32 t = (cast<f32>(i) + 0.5f) / cast<f32>(satCount);
         const f32 y = 1.0f - 2.0f * t;
-        const f32 r = Sqrt(Max(0.0f, 1.0f - y * y));
+        const VectorSingle radSqRaw(1.0f - y * y);
+        const VectorSingle radSq = VectorSelect(radSqRaw, VectorSingle(0.0f), VectorGreater(VectorSingle(0.0f), radSqRaw));
+        const f32 r = VectorSqrt(radSq).x;
         const f32 theta = goldenAngle * cast<f32>(i);
-        const f32 x = Cos(theta) * r;
-        const f32 z = Sin(theta) * r;
+        VectorSingle sinTheta(0.0f);
+        VectorSingle cosTheta(0.0f);
+        VectorSinCos(sinTheta, cosTheta, VectorSingle(theta));
+        const VectorSingle dirXZ = VectorSingle(cosTheta.x, 0.0f, sinTheta.x, 0.0f) * VectorSingle(r) + VectorSingle(0.0f, y, 0.0f, 0.0f);
 
         BodyDef bd;
         bd.type = BodyType::Dynamic;
-        bd.position = f32x4(x * orbitR, y * orbitR, z * orbitR, 0.0f);
+        bd.position = f32x4(dirXZ * VectorSingle(orbitR), 0.0f);
         const BodyId satId = physWorld.createBody(bd).value();
         ASSERT_TRUE(physWorld.createSphereShape(satId, satShapeDef, satSphere).has_value());
         satellites.push_back(satId);
@@ -544,7 +548,7 @@ void VerifyPhysicsEdgeCases_SphereBounceAccuracyAndNoMidAirFreeze(){
     const f32 settledSurfaceY = settledXf.position.y - sphereRadius;
     EXPECT_GT(settledSurfaceY, -0.01f);
     EXPECT_LT(settledSurfaceY, 0.01f);
-    EXPECT_LT(Abs(settledVel.y), 0.05f);
+    EXPECT_LT(VectorAbs(VectorSingle(settledVel.y)).x, 0.05f);
 }
 
 f32 ComputeRigidBodyMechanicalEnergy(
@@ -556,8 +560,8 @@ f32 ComputeRigidBodyMechanicalEnergy(
     const Transform3D xf = physWorld.tryGetBodyTransform(bodyId).value();
     const f32x4 linV = physWorld.tryGetLinearVelocity(bodyId).value();
     const f32x4 angV = physWorld.tryGetAngularVelocity(bodyId).value();
-    const f32 linSq = linV.x * linV.x + linV.y * linV.y + linV.z * linV.z;
-    const f32 angSq = angV.x * angV.x + angV.y * angV.y + angV.z * angV.z;
+    const f32 linSq = Vector3LengthSq(VectorSingle(linV)).x;
+    const f32 angSq = Vector3LengthSq(VectorSingle(angV)).x;
     return mass * 9.81f * xf.position.y + 0.5f * mass * linSq + 0.5f * inertiaScalar * angSq;
 }
 
@@ -628,7 +632,8 @@ void VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk(){
             for(u32 i = 0u; i < 2u; ++i){
                 const Transform3D xf = physWorld.tryGetBodyTransform(spheres[i]).value();
                 EXPECT_TRUE(IsValidPositionVec3(VectorSingle(xf.position)));
-                if(Abs(xf.position.x) < 2.90f && Abs(xf.position.z) < 2.90f)
+                const VectorSingle absPos = VectorAbs(VectorSingle(xf.position));
+                if(absPos.x < 2.90f && absPos.z < 2.90f)
                     EXPECT_GT(xf.position.y - sphereR, -0.02f);
                 totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
             }
@@ -866,7 +871,11 @@ void VerifyPhysicsEdgeCases_BodyMutatorsGyroAndRotationClamp(){
     ASSERT_TRUE(physWorld.createSphereShape(clampBody, sphSd, MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).has_value());
     StepPhysicsWorld(physWorld, 1.0f / 60.0f, 1u, scheduler);
     const f32x4 qStep = physWorld.tryGetBodyTransform(clampBody).value().rotation;
-    const f32 stepAngle = 2.0f * ACos(Clamp(Abs(qStep.w), 0.0f, 1.0f));
+    const VectorSingle absW = VectorAbs(VectorSingle(qStep.w));
+    const VectorSingle zero(0.0f);
+    const VectorSingle one(1.0f);
+    const VectorSingle clampedW = VectorSelect(zero, VectorSelect(absW, one, VectorGreater(absW, one)), VectorGreater(absW, zero));
+    const f32 stepAngle = 2.0f * VectorACos(clampedW).x;
     EXPECT_LE(stepAngle, s_MaxRotation + 0.02f);
 
     EXPECT_TRUE(physWorld.setBodyEnabled(clampBody, false));
@@ -1657,7 +1666,9 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
             ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.cpuColorContactIds, h, scheduler, cpuCons));
             ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.gpuColorContactIds, h, scheduler, gpuCons));
 
-            const f32 jointDefaultHertz = Max(worldSplit.m_def.contactHertz, 30.0f);
+            const VectorSingle contactHertz(worldSplit.m_def.contactHertz);
+            const VectorSingle defaultHertz(30.0f);
+            const f32 jointDefaultHertz = VectorSelect(defaultHertz, contactHertz, VectorGreater(contactHertz, defaultHertz)).x;
             Vector<JointConstraint> cpuJoints;
             for(usize ji = 0u; ji < part.cpuJointIds.size(); ++ji){
                 JointConstraint jc;
@@ -1755,7 +1766,7 @@ void VerifyPhysicsEdgeCases_SphericalConeImpulseAndBreakTorque(){
     const Expected<f32x4> torqueRes = physWorld.tryGetJointConstraintTorque(jId);
     ASSERT_TRUE(torqueRes.has_value());
     const f32 torqueMag = Vector3Length(VectorSingle(torqueRes.value())).x;
-    EXPECT_TRUE(IsFinite(torqueMag));
+    EXPECT_TRUE(IsFinite(VectorSingle(torqueMag)));
     EXPECT_GT(torqueMag, 0.01f);
 
     ASSERT_TRUE(physWorld.setJointBreakThresholds(jId, 0.0f, 0.05f));
@@ -2271,7 +2282,7 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     const f32x4 endVel = pw.tryGetLinearVelocity(ballBody).value();
     EXPECT_GT(endPos.x, 0.3f);
     EXPECT_NEAR(endVel.z, 0.0f, 0.05f);
-    EXPECT_LT(Abs(endVel.y), 0.25f);
+    EXPECT_LT(VectorAbs(VectorSingle(endVel.y)).x, 0.25f);
 }
 
 void VerifyPhysicsEdgeCases_WakeupsEventsGettersPreSolveAndHullMerge(){
@@ -2695,7 +2706,10 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     bipyramidVerts.push_back(f32x4(0.0f, -1.0f, 0.0f, 0.0f));
     for(u32 vi = 0u; vi < 42u; ++vi){
         const f32 ang = (2.0f * s_PI * cast<f32>(vi)) / 42.0f;
-        bipyramidVerts.push_back(f32x4(Cos(ang), 0.0f, Sin(ang), 0.0f));
+        VectorSingle sinAng(0.0f);
+        VectorSingle cosAng(0.0f);
+        VectorSinCos(sinAng, cosAng, VectorSingle(ang));
+        bipyramidVerts.push_back(f32x4(cosAng.x, 0.0f, sinAng.x, 0.0f));
     }
     const Expected<HullShape> largeHull = BuildConvexHull(Span<f32x4>(bipyramidVerts.data(), bipyramidVerts.size()), 0.0f);
     ASSERT_TRUE(largeHull.has_value());
@@ -2760,8 +2774,8 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
         StepPhysicsWorld(jointWorld, 1.0f / 60.0f, 2u, scheduler);
     const Expected<f32> wheelAng = jointWorld.tryGetJointAngle(wjId);
     ASSERT_TRUE(wheelAng.has_value());
-    EXPECT_TRUE(IsFinite(wheelAng.value()));
-    EXPECT_GT(Abs(wheelAng.value()), 0.01f);
+    EXPECT_TRUE(IsFinite(VectorSingle(wheelAng.value())));
+    EXPECT_GT(VectorAbs(VectorSingle(wheelAng.value())).x, 0.01f);
     EXPECT_TRUE(jointWorld.tryGetBodyTransform(jB).value().position.y < -0.5f);
     EXPECT_TRUE(jointWorld.setJointEnableLimit(djId, false));
 

@@ -117,9 +117,9 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
         return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
     }
 
-    public void emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
+    public b8 emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
         if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
-            return;
+            return false;
         const Expected<VectorSingle> segment = this.m_projector.projectSegment(p0, p1);
         if(segment.has_value()){
             const VectorSingle seg = segment.value();
@@ -128,7 +128,9 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
             batchLine.end = Point(seg.z, seg.w);
             batchLine.color = Color(color.x, color.y, color.z, color.w);
             this.m_outLines.push_back(batchLine);
+            return true;
         }
+        return false;
     }
 }
 
@@ -757,6 +759,19 @@ b8 TickProjectWorld(mut NotNullUniquePtr<World> worldHandle, in f32 safeDelta){
         return false;
     }
     return true;
+}
+
+void QueryUiCaptureState(mut NotNullUniquePtr<World> worldHandle, mut b8 outPointerCaptured, mut b8 outKeyboardCaptured){
+    const Optional<mut UiLayerSystem> uiLayerSystem = worldHandle.deref().borrowSystem<UiLayerSystem>();
+    if(uiLayerSystem.has_value()){
+        in UiLayerSystem ui = uiLayerSystem.value();
+        outPointerCaptured = ui.wantsPointer();
+        outKeyboardCaptured = ui.wantsKeyboard();
+    }
+    else{
+        outPointerCaptured = false;
+        outKeyboardCaptured = false;
+    }
 }
 
 b8 WantsUiKeyboard(mut NotNullUniquePtr<World> worldHandle){

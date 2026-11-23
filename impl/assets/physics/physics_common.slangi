@@ -194,6 +194,7 @@ struct NwbPhysicsGpuJointConstraint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuJointImpulseOut, Std430DataLayout> g_NwbPhysicsJointImpulseOutBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuIslandSlice, Std430DataLayout> g_NwbPhysicsIslandSliceBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] globallycoherent RWStructuredBuffer<NwbPhysicsGpuLbvhNode, Std430DataLayout> g_NwbPhysicsLbvhNodeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuLbvhNode, Std430DataLayout> g_NwbPhysicsLbvhNodeReadBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSpatialQuery, Std430DataLayout> g_NwbPhysicsSpatialQueryBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSpatialQueryResult, Std430DataLayout> g_NwbPhysicsSpatialQueryResultBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuRenderTransformBinding, Std430DataLayout> g_NwbPhysicsRenderBindingBuffers[];
@@ -286,25 +287,27 @@ void nwbPhysicsRotateSymMat3(const float4 q, const float4 loc0, const float2 loc
     float3 r1;
     float3 r2;
     nwbPhysicsQuatToAxes(q, r0, r1, r2);
-    const float3 xAxis = float3(r0.x, r1.x, r2.x);
-    const float3 yAxis = float3(r0.y, r1.y, r2.y);
-    const float3 zAxis = float3(r0.z, r1.z, r2.z);
-
-    const float3 c0 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), xAxis);
-    const float3 c1 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), yAxis);
-    const float3 c2 = nwbPhysicsMulSymmetric3(loc0, float4(loc1.x, loc1.y, 0.0f, 0.0f), zAxis);
-
     const float3 lx0 = float3(r0.x, r1.x, r2.x);
     const float3 lx1 = float3(r0.y, r1.y, r2.y);
     const float3 lx2 = float3(r0.z, r1.z, r2.z);
-    const float m00 = dot(lx0, c0);
-    const float m01 = dot(lx0, c1);
-    const float m02 = dot(lx0, c2);
-    const float m11 = dot(lx1, c1);
-    const float m12 = dot(lx1, c2);
-    const float m22 = dot(lx2, c2);
-    outW0 = float4(m00, m01, m02, m11);
-    outW1 = float2(m12, m22);
+
+    if(loc0.y == 0.0f && loc0.z == 0.0f && loc1.x == 0.0f){
+        const float3 diag = float3(loc0.x, loc0.w, loc1.y);
+        const float3 c0 = lx0 * diag;
+        const float3 c1 = lx1 * diag;
+        const float3 c2 = lx2 * diag;
+        outW0 = float4(dot(lx0, c0), dot(lx0, c1), dot(lx0, c2), dot(lx1, c1));
+        outW1 = float2(dot(lx1, c2), dot(lx2, c2));
+        return;
+    }
+
+    const float4 loc1Pad = float4(loc1.x, loc1.y, 0.0f, 0.0f);
+    const float3 c0 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx0);
+    const float3 c1 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx1);
+    const float3 c2 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx2);
+
+    outW0 = float4(dot(lx0, c0), dot(lx0, c1), dot(lx0, c2), dot(lx1, c1));
+    outW1 = float2(dot(lx1, c2), dot(lx2, c2));
 }
 
 bool nwbPhysicsIsNonCollidingBodyPair(const uint tableSlot, const uint tableMask, const uint bodyA, const uint bodyB){

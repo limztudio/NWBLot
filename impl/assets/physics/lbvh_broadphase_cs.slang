@@ -121,9 +121,71 @@ void nwbPhysicsEmitBroadphasePair(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+groupshared uint s_LbvhSortMorton[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
+groupshared uint s_LbvhSortShape[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
+
+void nwbPhysicsLbvhLocalBitonicStep(
+    const uint localTid,
+    const uint blockBase,
+    const uint halfLocal,
+    const uint k,
+    const uint j
+){
+    for(uint p = localTid; p < halfLocal; p += NWB_PHYSICS_WORKGROUP_SIZE){
+        const uint block = p / j;
+        const uint rem = p - block * j;
+        const uint i0 = block * (2u * j) + rem;
+        const uint i1 = i0 + j;
+        const bool ascending = (((blockBase + i0) & k) == 0u);
+        const uint m0 = s_LbvhSortMorton[i0];
+        const uint s0 = s_LbvhSortShape[i0];
+        const uint m1 = s_LbvhSortMorton[i1];
+        const uint s1 = s_LbvhSortShape[i1];
+        const bool greater = (m0 > m1) || (m0 == m1 && s0 > s1);
+        if(greater == ascending){
+            s_LbvhSortMorton[i0] = m1;
+            s_LbvhSortShape[i0] = s1;
+            s_LbvhSortMorton[i1] = m0;
+            s_LbvhSortShape[i1] = s0;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+void nwbPhysicsLbvhTestLeaf(
+    const uint idxA,
+    const uint idxB,
+    const uint itemOffset,
+    const uint4 metaA,
+    const uint4 filterA,
+    const uint shapeSlot,
+    const uint pairSlot,
+    const uint counterSlot,
+    const uint maxPairs,
+    const uint nonCollideSlot,
+    const uint nonCollideMask
+){
+    if(idxB == idxA)
+        return;
+    if(idxB >= itemOffset && idxB <= idxA)
+        return;
+    const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
+    const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
+    if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+        return;
+    if(((metaA.w & metaB.w) & NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT) != 0u && ((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+        return;
+
+    const uint outA = idxA < idxB ? idxA : idxB;
+    const uint outB = idxA < idxB ? idxB : idxA;
+    const uint bodyOutA = idxA < idxB ? metaA.x : metaB.x;
+    const uint bodyOutB = idxA < idxB ? metaB.x : metaA.x;
+    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
+}
+
 [require(spvGroupNonUniform, spvGroupNonUniformBallot)]
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint tid = dispatchThreadID.x;
     const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
     const uint itemCount = g_NwbPhysicsPushConstants.itemCount;
@@ -168,6 +230,53 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         else{
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 0u] = 0xffffffffu;
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 1u] = NWB_PHYSICS_INVALID_INDEX;
+        }
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_BITONIC_SORT_LOCAL){
+        const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE;
+        if(blockBase >= itemCount)
+            return;
+        const uint localN = min(itemCount - blockBase, NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE);
+        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            s_LbvhSortMorton[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u];
+            s_LbvhSortShape[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u];
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        const uint halfLocal = localN >> 1u;
+        for(uint k = 2u; k <= localN; k <<= 1u){
+            for(uint j = k >> 1u; j >= 1u; j >>= 1u)
+                nwbPhysicsLbvhLocalBitonicStep(groupThreadID.x, blockBase, halfLocal, k, j);
+        }
+
+        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u] = s_LbvhSortMorton[i];
+            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u] = s_LbvhSortShape[i];
+        }
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_BITONIC_MERGE_LOCAL){
+        const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE;
+        if(blockBase >= itemCount)
+            return;
+        const uint localN = min(itemCount - blockBase, NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE);
+        const uint k = g_NwbPhysicsPushConstants.flags;
+        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            s_LbvhSortMorton[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u];
+            s_LbvhSortShape[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u];
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        const uint halfLocal = localN >> 1u;
+        for(uint j = localN >> 1u; j >= 1u; j >>= 1u)
+            nwbPhysicsLbvhLocalBitonicStep(groupThreadID.x, blockBase, halfLocal, k, j);
+
+        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u] = s_LbvhSortMorton[i];
+            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u] = s_LbvhSortShape[i];
         }
         return;
     }
@@ -259,8 +368,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         uint cur = (itemCount - 1u) + tid;
         uint parent = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][cur].parentMeta.x;
+        bool firstLevel = true;
         while(parent != NWB_PHYSICS_INVALID_INDEX){
-            DeviceMemoryBarrier();
+            if(!firstLevel)
+                DeviceMemoryBarrier();
+            firstLevel = false;
             uint prevVisits = 0u;
             InterlockedAdd(g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].parentMeta.z, 1u, prevVisits);
             if(prevVisits == 0u)
@@ -295,7 +407,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         uint4 metaA = uint4(0u, 0u, 0u, 0u);
         uint4 filterA = uint4(0u, 0u, 0u, 0u);
 
-        uint stack[64];
+        uint stack[32];
         stack[0] = 0u;
         uint sp = 0u;
         if(active){
@@ -305,7 +417,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             metaA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxA].bodyIndexTypeShape;
             filterA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxA].filterData;
 
-            const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][0u];
+            const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][0u];
             if(nwbPhysicsAabbOverlaps(minA, maxA, root.minLeft.xyz, root.maxRight.xyz))
                 stack[sp++] = 0u;
         }
@@ -314,53 +426,37 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         bool stackOverflow = false;
         while(sp > 0u){
             const uint nodeIdx = stack[--sp];
-            const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][nodeIdx];
-            if(nodeIdx >= leafStart){
-                const uint idxB = asuint(node.minLeft.w);
-                if(idxB == idxA)
-                    continue;
-                if(!nwbPhysicsAabbOverlaps(minA, maxA, node.minLeft.xyz, node.maxRight.xyz))
-                    continue;
-
-                const NwbPhysicsGpuShapeProxy spB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
-                const uint4 metaB = spB.bodyIndexTypeShape;
-                if((metaB.w & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) != 0u && idxB <= idxA)
-                    continue;
-
-                const uint4 filterB = spB.filterData;
-                if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
-                    continue;
-                if(((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
-                    continue;
-
-                const uint outA = idxA < idxB ? idxA : idxB;
-                const uint outB = idxA < idxB ? idxB : idxA;
-                const uint bodyOutA = idxA < idxB ? metaA.x : metaB.x;
-                const uint bodyOutB = idxA < idxB ? metaB.x : metaA.x;
-                nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
-            }
-            else{
-                const uint leftIdx = asuint(node.minLeft.w);
-                const uint rightIdx = asuint(node.maxRight.w);
-                const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftIdx];
-                const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightIdx];
-                const bool hitL = nwbPhysicsAabbOverlaps(minA, maxA, lNode.minLeft.xyz, lNode.maxRight.xyz);
-                const bool hitR = nwbPhysicsAabbOverlaps(minA, maxA, rNode.minLeft.xyz, rNode.maxRight.xyz);
-                if(hitL){
-                    if(sp < 64u)
-                        stack[sp++] = leftIdx;
-                    else
-                        stackOverflow = true;
+            const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][nodeIdx];
+            const uint leftIdx = asuint(node.minLeft.w);
+            const uint rightIdx = asuint(node.maxRight.w);
+            const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][leftIdx];
+            const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rightIdx];
+            const bool hitL = nwbPhysicsAabbOverlaps(minA, maxA, lNode.minLeft.xyz, lNode.maxRight.xyz);
+            const bool hitR = nwbPhysicsAabbOverlaps(minA, maxA, rNode.minLeft.xyz, rNode.maxRight.xyz);
+            if(hitL){
+                if(leftIdx >= leafStart){
+                    nwbPhysicsLbvhTestLeaf(idxA, asuint(lNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
                 }
-                if(hitR){
-                    if(sp < 64u)
-                        stack[sp++] = rightIdx;
-                    else
-                        stackOverflow = true;
+                else if(sp < 32u){
+                    stack[sp++] = leftIdx;
                 }
-                if(stackOverflow)
-                    break;
+                else{
+                    stackOverflow = true;
+                }
             }
+            if(hitR){
+                if(rightIdx >= leafStart){
+                    nwbPhysicsLbvhTestLeaf(idxA, asuint(rNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
+                }
+                else if(sp < 32u){
+                    stack[sp++] = rightIdx;
+                }
+                else{
+                    stackOverflow = true;
+                }
+            }
+            if(stackOverflow)
+                break;
         }
         if(stackOverflow){
             uint prevC = 0u;
@@ -372,3 +468,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

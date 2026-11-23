@@ -105,8 +105,27 @@ class HeightfieldShape{
     public void setHeight(in u32 col, in u32 row, in f32 rawHeight){
         if(col >= this.cols || row >= this.rows)
             return;
-        this.heights[cast<usize>(row) * cast<usize>(this.cols) + cast<usize>(col)] = rawHeight;
-        this.updateHeightRange();
+        const usize idx = cast<usize>(row) * cast<usize>(this.cols) + cast<usize>(col);
+        const f32 oldRaw = this.heights[idx];
+        this.heights[idx] = rawHeight;
+        const b8 oldFinite = IsFinite(oldRaw);
+        const b8 newFinite = IsFinite(rawHeight);
+        if(!oldFinite || !newFinite){
+            this.updateHeightRange();
+            return;
+        }
+        const f32 oldY = this.originMaxY.y + oldRaw * this.scaleMinMaxY.y;
+        const f32 newY = this.originMaxY.y + rawHeight * this.scaleMinMaxY.y;
+        const f32 loY = this.scaleMinMaxY.w;
+        const f32 hiY = this.originMaxY.w;
+        if((Abs(oldY - loY) <= 1.0e-5f && newY > loY) || (Abs(oldY - hiY) <= 1.0e-5f && newY < hiY)){
+            this.updateHeightRange();
+            return;
+        }
+        if(newY < loY)
+            this.scaleMinMaxY.w = newY;
+        if(newY > hiY)
+            this.originMaxY.w = newY;
     }
 
     public Aabb3D computeLocalAabb()const{
@@ -368,6 +387,51 @@ LocalRayHit RayCastHeightfieldDetailed(
     return best;
 }
 
+void EvalClosestHeightfieldCell(
+    in HeightfieldShape hf,
+    in u32 cx,
+    in u32 cz,
+    in u32 cellCols,
+    in VectorSingle localPoint,
+    mut f32 bestDistSq,
+    mut VectorSingle bestCp,
+    mut VectorSingle bestN,
+    mut u32 bestCell
+){
+    if(hf.isCellHole(cx, cz))
+        return;
+    VectorSingle a0(0.0f);
+    VectorSingle a1(0.0f);
+    VectorSingle a2(0.0f);
+    VectorSingle b0(0.0f);
+    VectorSingle b1(0.0f);
+    VectorSingle b2(0.0f);
+    hf.cellTriangles(cx, cz, a0, a1, a2, b0, b1, b2);
+
+    Array<f32x4, 6u> verts;
+    verts[0u] = f32x4(a0, 0.0f);
+    verts[1u] = f32x4(a1, 0.0f);
+    verts[2u] = f32x4(a2, 0.0f);
+    verts[3u] = f32x4(b0, 0.0f);
+    verts[4u] = f32x4(b1, 0.0f);
+    verts[5u] = f32x4(b2, 0.0f);
+    for(usize ti = 0u; ti < 2u; ++ti){
+        const VectorSingle v0 = VectorSingle(verts[ti * 3u]);
+        const VectorSingle v1 = VectorSingle(verts[ti * 3u + 1u]);
+        const VectorSingle v2 = VectorSingle(verts[ti * 3u + 2u]);
+        const VectorSingle cp = ClosestPointOnTriangleLocal(localPoint, v0, v1, v2);
+        const VectorSingle diff = VectorSingle(localPoint - cp, 0.0f);
+        const f32 dSq = Vector3LengthSq(diff).x;
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestCp = cp;
+            bestCell = cz * cellCols + cx;
+            const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), VectorSingle(v2 - v0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            bestN = SafeNormalizeVec3(diff, triN);
+        }
+    }
+}
+
 b8 ClosestPointOnHeightfield(
     in HeightfieldShape hf,
     in VectorSingle localPoint,
@@ -400,48 +464,34 @@ b8 ClosestPointOnHeightfield(
             if(minRingDx * minRingDx > bestDistSq)
                 break;
         }
+        if(ring == 0){
+            EvalClosestHeightfieldCell(hf, cast<u32>(centerCx), cast<u32>(centerCz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+            continue;
+        }
         const isize xStart = Max(cast<isize>(0), centerCx - ring);
         const isize xEnd = Min(cast<isize>(cellCols) - 1, centerCx + ring);
-        const isize zStart = Max(cast<isize>(0), centerCz - ring);
-        const isize zEnd = Min(cast<isize>(cellRows) - 1, centerCz + ring);
+        const isize zInnerStart = Max(cast<isize>(0), centerCz - ring + 1);
+        const isize zInnerEnd = Min(cast<isize>(cellRows) - 1, centerCz + ring - 1);
 
-        for(isize cz = zStart; cz <= zEnd; ++cz){
-            for(isize cx = xStart; cx <= xEnd; ++cx){
-                if(ring > 0 && cx != centerCx - ring && cx != centerCx + ring && cz != centerCz - ring && cz != centerCz + ring)
-                    continue;
-                if(hf.isCellHole(cast<u32>(cx), cast<u32>(cz)))
-                    continue;
-                VectorSingle a0(0.0f);
-                VectorSingle a1(0.0f);
-                VectorSingle a2(0.0f);
-                VectorSingle b0(0.0f);
-                VectorSingle b1(0.0f);
-                VectorSingle b2(0.0f);
-                hf.cellTriangles(cast<u32>(cx), cast<u32>(cz), a0, a1, a2, b0, b1, b2);
-
-                Array<f32x4, 6u> verts;
-                verts[0u] = f32x4(a0, 0.0f);
-                verts[1u] = f32x4(a1, 0.0f);
-                verts[2u] = f32x4(a2, 0.0f);
-                verts[3u] = f32x4(b0, 0.0f);
-                verts[4u] = f32x4(b1, 0.0f);
-                verts[5u] = f32x4(b2, 0.0f);
-                for(usize ti = 0u; ti < 2u; ++ti){
-                    const VectorSingle v0 = VectorSingle(verts[ti * 3u]);
-                    const VectorSingle v1 = VectorSingle(verts[ti * 3u + 1u]);
-                    const VectorSingle v2 = VectorSingle(verts[ti * 3u + 2u]);
-                    const VectorSingle cp = ClosestPointOnTriangleLocal(localPoint, v0, v1, v2);
-                    const VectorSingle diff = VectorSingle(localPoint - cp, 0.0f);
-                    const f32 dSq = Vector3LengthSq(diff).x;
-                    if(dSq < bestDistSq){
-                        bestDistSq = dSq;
-                        bestCp = cp;
-                        bestCell = cast<u32>(cz) * cellCols + cast<u32>(cx);
-                        const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), VectorSingle(v2 - v0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                        bestN = SafeNormalizeVec3(diff, triN);
-                    }
-                }
-            }
+        if(centerCz - ring >= 0){
+            const u32 cz = cast<u32>(centerCz - ring);
+            for(isize cx = xStart; cx <= xEnd; ++cx)
+                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+        }
+        if(centerCz + ring < cast<isize>(cellRows)){
+            const u32 cz = cast<u32>(centerCz + ring);
+            for(isize cx = xStart; cx <= xEnd; ++cx)
+                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+        }
+        if(centerCx - ring >= 0){
+            const u32 cx = cast<u32>(centerCx - ring);
+            for(isize cz = zInnerStart; cz <= zInnerEnd; ++cz)
+                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+        }
+        if(centerCx + ring < cast<isize>(cellCols)){
+            const u32 cx = cast<u32>(centerCx + ring);
+            for(isize cz = zInnerStart; cz <= zInnerEnd; ++cz)
+                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
         }
     }
 
@@ -501,6 +551,81 @@ void ComputeHeightfieldOverlappedCells(
     outAnyOverlap = true;
 }
 
+void EvalHeightfieldShapeCastCell(
+    in HeightfieldShape hf,
+    in u32 cx,
+    in u32 cz,
+    in f32 minY,
+    in f32 maxY,
+    in ShapeProxyView queryProxy,
+    in Transform3D xfQuery,
+    in VectorSingle translation,
+    in Transform3D xfHf,
+    mut f32 curMax,
+    mut LocalRayHit best,
+    mut u32 outCellIndex,
+    mut f32x2u outBarycentrics,
+    mut u32 bestKey
+){
+    const usize w = cast<usize>(hf.cols);
+    const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+    const usize r1 = r0 + w;
+    const f32 raw00 = hf.heights[r0];
+    const f32 raw10 = hf.heights[r0 + 1u];
+    const f32 raw01 = hf.heights[r1];
+    const f32 raw11 = hf.heights[r1 + 1u];
+    if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
+        return;
+
+    const f32 oy = hf.originMaxY.y;
+    const f32 sy = hf.scaleMinMaxY.y;
+    const f32 h00 = oy + raw00 * sy;
+    const f32 h10 = oy + raw10 * sy;
+    const f32 h01 = oy + raw01 * sy;
+    const f32 h11 = oy + raw11 * sy;
+    const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hf.thickness;
+    const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hf.thickness;
+    if(cellHiY < minY || cellLoY > maxY)
+        return;
+
+    const f32 x0 = hf.originMaxY.x + cast<f32>(cx) * hf.scaleMinMaxY.x;
+    const f32 x1 = x0 + hf.scaleMinMaxY.x;
+    const f32 z0 = hf.originMaxY.z + cast<f32>(cz) * hf.scaleMinMaxY.z;
+    const f32 z1 = z0 + hf.scaleMinMaxY.z;
+    const f32x3u v00(x0, h00, z0);
+    const f32x3u v10(x1, h10, z0);
+    const f32x3u v01(x0, h01, z1);
+    const f32x3u v11(x1, h11, z1);
+    const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+    for(usize ti = 0u; ti < 2u; ++ti){
+        Array<f32x3u, 3u> triPts;
+        if(ti == 0u){
+            triPts[0u] = v00;
+            triPts[1u] = v01;
+            triPts[2u] = v10;
+        }
+        else{
+            triPts[0u] = v10;
+            triPts[1u] = v01;
+            triPts[2u] = v11;
+        }
+        const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
+        const LocalRayHit triHit = ShapeCastProxyViews(queryProxy, xfQuery, translation, triView, xfHf, VectorSingle(0.0f), curMax);
+        if(triHit.hit()){
+            const f32 frac = triHit.fraction();
+            const u32 candKey = cellIdx * 2u + cast<u32>(ti);
+            if((!best.hit() && frac <= curMax) || frac < curMax || (best.hit() && frac == curMax && candKey < bestKey)){
+                curMax = frac;
+                best = triHit;
+                outCellIndex = cellIdx;
+                bestKey = candKey;
+                const VectorSingle localHit = InverseTransformPoint(xfHf, triHit.point());
+                outBarycentrics = ComputeTriangleBarycentrics(localHit, Vec3FromU(triPts[0u]), Vec3FromU(triPts[1u]), Vec3FromU(triPts[2u]));
+            }
+        }
+    }
+}
+
 LocalRayHit ShapeCastHeightfieldViewDetailed(
     in ShapeProxyView queryProxy,
     in Transform3D xfQuery,
@@ -548,40 +673,104 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
         return best;
 
     f32 curMax = maxFraction;
-    for(u32 cz = minCz; cz <= maxCz; ++cz){
-        for(u32 cx = minCx; cx <= maxCx; ++cx){
-            if(hf.isCellHole(cx, cz))
-                continue;
-            VectorSingle a0(0.0f);
-            VectorSingle a1(0.0f);
-            VectorSingle a2(0.0f);
-            VectorSingle b0(0.0f);
-            VectorSingle b1(0.0f);
-            VectorSingle b2(0.0f);
-            hf.cellTriangles(cx, cz, a0, a1, a2, b0, b1, b2);
-            Array<f32x4, 6u> verts;
-            verts[0u] = f32x4(a0, 0.0f);
-            verts[1u] = f32x4(a1, 0.0f);
-            verts[2u] = f32x4(a2, 0.0f);
-            verts[3u] = f32x4(b0, 0.0f);
-            verts[4u] = f32x4(b1, 0.0f);
-            verts[5u] = f32x4(b2, 0.0f);
-            const u32 cellIdx = cz * (hf.cols - 1u) + cx;
-            for(usize ti = 0u; ti < 2u; ++ti){
-                Array<f32x3u, 3u> triPts;
-                triPts[0u] = PackVec3U(VectorSingle(verts[ti * 3u]));
-                triPts[1u] = PackVec3U(VectorSingle(verts[ti * 3u + 1u]));
-                triPts[2u] = PackVec3U(VectorSingle(verts[ti * 3u + 2u]));
-                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
-                const LocalRayHit triHit = ShapeCastProxyViews(queryProxy, xfQuery, translation, triView, xfHf, VectorSingle(0.0f), curMax);
-                if(triHit.hit() && ((!best.hit() && triHit.fraction() <= curMax) || triHit.fraction() < curMax)){
-                    curMax = triHit.fraction();
-                    best = triHit;
-                    outCellIndex = cellIdx;
-                    const VectorSingle localHit = InverseTransformPoint(xfHf, triHit.point());
-                    outBarycentrics = ComputeTriangleBarycentrics(localHit, VectorSingle(verts[ti * 3u]), VectorSingle(verts[ti * 3u + 1u]), VectorSingle(verts[ti * 3u + 2u]));
-                }
+    u32 bestKey = s_NullIndex;
+    const u32 nCols = maxCx - minCx + 1u;
+    const u32 nRows = maxCz - minCz + 1u;
+    const f32 sx = hf.cellSizeX();
+    const f32 sz = hf.cellSizeZ();
+    const VectorSingle center0 = (minQ + maxQ) * 0.5f;
+    const VectorSingle halfExt = (maxQ - minQ) * 0.5f + pad;
+
+    if(nCols * nRows <= 16u || (Abs(localTrans.x) <= 1.0e-6f && Abs(localTrans.z) <= 1.0e-6f)){
+        const f32 boxLoY = sweepBox.lowerBound.y;
+        const f32 boxHiY = sweepBox.upperBound.y;
+        for(u32 cz = minCz; cz <= maxCz; ++cz){
+            for(u32 cx = minCx; cx <= maxCx; ++cx)
+                EvalHeightfieldShapeCastCell(hf, cx, cz, boxLoY, boxHiY, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+        }
+        return best;
+    }
+
+    const u32 cellCols = hf.cols - 1u;
+    const u32 cellRows = hf.rows - 1u;
+    if(Abs(localTrans.x) * sz >= Abs(localTrans.z) * sx){
+        const b8 forwardX = (localTrans.x >= 0.0f);
+        const f32 ox = hf.originMaxY.x;
+        const f32 invDx = 1.0f / localTrans.x;
+        for(u32 step = 0u; step < nCols; ++step){
+            u32 cx = minCx + step;
+            if(!forwardX)
+                cx = maxCx - step;
+            const f32 colX0 = ox + cast<f32>(cx) * sx;
+            const f32 colX1 = colX0 + sx;
+            f32 t0 = 0.0f;
+            f32 t1 = curMax;
+            if(forwardX){
+                t0 = (colX0 - (center0.x + halfExt.x)) * invDx;
+                t1 = (colX1 - (center0.x - halfExt.x)) * invDx;
             }
+            else{
+                t0 = (colX1 - (center0.x - halfExt.x)) * invDx;
+                t1 = (colX0 - (center0.x + halfExt.x)) * invDx;
+            }
+            const f32 tEnter = Max(0.0f, t0);
+            if(tEnter > curMax)
+                break;
+            const f32 tExit = Min(curMax, t1);
+            if(tExit < tEnter)
+                continue;
+            const f32 zA = center0.z + localTrans.z * tEnter;
+            const f32 zB = center0.z + localTrans.z * tExit;
+            const f32 zLo = Min(zA, zB) - halfExt.z;
+            const f32 zHi = Max(zA, zB) + halfExt.z;
+            const u32 colCz0 = Max(minCz, cast<u32>(Clamp((zLo - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows - 1u))));
+            const u32 colCz1 = Min(maxCz, cast<u32>(Clamp((zHi - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows - 1u))));
+            const f32 yA = center0.y + localTrans.y * tEnter;
+            const f32 yB = center0.y + localTrans.y * tExit;
+            const f32 yLo = Min(yA, yB) - halfExt.y;
+            const f32 yHi = Max(yA, yB) + halfExt.y;
+            for(u32 cz = colCz0; cz <= colCz1; ++cz)
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+        }
+    }
+    else{
+        const b8 forwardZ = (localTrans.z >= 0.0f);
+        const f32 oz = hf.originMaxY.z;
+        const f32 invDz = 1.0f / localTrans.z;
+        for(u32 step = 0u; step < nRows; ++step){
+            u32 cz = minCz + step;
+            if(!forwardZ)
+                cz = maxCz - step;
+            const f32 rowZ0 = oz + cast<f32>(cz) * sz;
+            const f32 rowZ1 = rowZ0 + sz;
+            f32 t0 = 0.0f;
+            f32 t1 = curMax;
+            if(forwardZ){
+                t0 = (rowZ0 - (center0.z + halfExt.z)) * invDz;
+                t1 = (rowZ1 - (center0.z - halfExt.z)) * invDz;
+            }
+            else{
+                t0 = (rowZ1 - (center0.z - halfExt.z)) * invDz;
+                t1 = (rowZ0 - (center0.z + halfExt.z)) * invDz;
+            }
+            const f32 tEnter = Max(0.0f, t0);
+            if(tEnter > curMax)
+                break;
+            const f32 tExit = Min(curMax, t1);
+            if(tExit < tEnter)
+                continue;
+            const f32 xA = center0.x + localTrans.x * tEnter;
+            const f32 xB = center0.x + localTrans.x * tExit;
+            const f32 xLo = Min(xA, xB) - halfExt.x;
+            const f32 xHi = Max(xA, xB) + halfExt.x;
+            const u32 rowCx0 = Max(minCx, cast<u32>(Clamp((xLo - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols - 1u))));
+            const u32 rowCx1 = Min(maxCx, cast<u32>(Clamp((xHi - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols - 1u))));
+            const f32 yA = center0.y + localTrans.y * tEnter;
+            const f32 yB = center0.y + localTrans.y * tExit;
+            const f32 yLo = Min(yA, yB) - halfExt.y;
+            const f32 yHi = Max(yA, yB) + halfExt.y;
+            for(u32 cx = rowCx0; cx <= rowCx1; ++cx)
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
     }
     return best;
@@ -605,8 +794,19 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
 
     const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
     const f32 radA = ComputeProxyViewBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
-    const f32 hfRad = Vector3Length((VectorSingle(hfB.computeLocalAabb().upperBound) - VectorSingle(hfB.computeLocalAabb().lowerBound)) * 0.5f).x;
+    const Aabb3D hfLocalBox = hfB.computeLocalAabb();
+    const f32 hfRad = Vector3Length((VectorSingle(hfLocalBox.upperBound) - VectorSingle(hfLocalBox.lowerBound)) * 0.5f).x;
     const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
+    const f32 angBound = angA * radA + angB * hfRad;
+
+    f32 toiTargetPadding = 0.25f * s_LinearSlop;
+    f32 toiTol = 0.5f * s_LinearSlop;
+    if(forSensor){
+        toiTargetPadding = -1.0e-4f;
+        toiTol = 1.0e-5f;
+        if(proxyA.radius + hfB.thickness >= 1.0e-4f)
+            toiTol = 1.0e-4f;
+    }
 
     VectorSingle queryMin(s_MaxF32);
     VectorSingle queryMax(-s_MaxF32);
@@ -644,36 +844,58 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
     if(!anyOverlap)
         return bestOut;
 
+    const usize w = cast<usize>(hfB.cols);
+    const f32 ox = hfB.originMaxY.x;
+    const f32 oy = hfB.originMaxY.y;
+    const f32 oz = hfB.originMaxY.z;
+    const f32 sx = hfB.scaleMinMaxY.x;
+    const f32 sy = hfB.scaleMinMaxY.y;
+    const f32 sz = hfB.scaleMinMaxY.z;
+    const f32 qLoY = queryBox.lowerBound.y;
+    const f32 qHiY = queryBox.upperBound.y;
+
     f32 curMax = tMax;
     for(u32 cz = minCz; cz <= maxCz; ++cz){
+        const f32 z0 = oz + cast<f32>(cz) * sz;
+        const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
-            if(hfB.isCellHole(cx, cz))
+            const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+            const usize r1 = r0 + w;
+            const f32 raw00 = hfB.heights[r0];
+            const f32 raw10 = hfB.heights[r0 + 1u];
+            const f32 raw01 = hfB.heights[r1];
+            const f32 raw11 = hfB.heights[r1 + 1u];
+            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
                 continue;
-            VectorSingle a0(0.0f);
-            VectorSingle a1(0.0f);
-            VectorSingle a2(0.0f);
-            VectorSingle b0(0.0f);
-            VectorSingle b1(0.0f);
-            VectorSingle b2(0.0f);
-            hfB.cellTriangles(cx, cz, a0, a1, a2, b0, b1, b2);
-            Array<f32x4, 6u> verts;
-            verts[0u] = f32x4(a0, 0.0f);
-            verts[1u] = f32x4(a1, 0.0f);
-            verts[2u] = f32x4(a2, 0.0f);
-            verts[3u] = f32x4(b0, 0.0f);
-            verts[4u] = f32x4(b1, 0.0f);
-            verts[5u] = f32x4(b2, 0.0f);
+            const f32 h00 = oy + raw00 * sy;
+            const f32 h10 = oy + raw10 * sy;
+            const f32 h01 = oy + raw01 * sy;
+            const f32 h11 = oy + raw11 * sy;
+            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hfB.thickness;
+            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hfB.thickness;
+            if(cellHiY < qLoY || cellLoY > qHiY)
+                continue;
+
+            const f32 x0 = ox + cast<f32>(cx) * sx;
+            const f32 x1 = x0 + sx;
+            const f32x3u v00(x0, h00, z0);
+            const f32x3u v10(x1, h10, z0);
+            const f32x3u v01(x0, h01, z1);
+            const f32x3u v11(x1, h11, z1);
             for(usize ti = 0u; ti < 2u; ++ti){
                 Array<f32x3u, 3u> triPts;
-                triPts[0u] = PackVec3U(VectorSingle(verts[ti * 3u]));
-                triPts[1u] = PackVec3U(VectorSingle(verts[ti * 3u + 1u]));
-                triPts[2u] = PackVec3U(VectorSingle(verts[ti * 3u + 2u]));
+                if(ti == 0u){
+                    triPts[0u] = v00;
+                    triPts[1u] = v01;
+                    triPts[2u] = v10;
+                }
+                else{
+                    triPts[0u] = v10;
+                    triPts[1u] = v01;
+                    triPts[2u] = v11;
+                }
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
-                TimeOfImpactOutput toi;
-                if(forSensor)
-                    toi = ComputeSensorTimeOfImpactViews(proxyA, sweepA, triView, sweepB, curMax);
-                else
-                    toi = ComputeTimeOfImpactViews(proxyA, sweepA, triView, sweepB, curMax);
+                const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angBound);
                 if(toi.hit()){
                     if(forSensor && toi.initialOverlap())
                         return toi;
@@ -728,10 +950,11 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     const Transform3D localEndXf = RelativeTransform(xfHf, endXf);
     const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
     const f32 radA = ComputeProxyViewBoundingRadius(queryProxy, VectorSingle(0.0f));
+    const f32 angSpeedBound = angA * radA;
     VectorSingle pMin(0.0f);
     VectorSingle pMax(0.0f);
     ComputeProxyViewLocalBounds(queryProxy, pMin, pMax);
-    const f32 margin = queryProxy.radius + hf.thickness + angA * radA + s_SpeculativeDistance;
+    const f32 margin = queryProxy.radius + hf.thickness + angSpeedBound + s_SpeculativeDistance;
     VectorSingle queryMin(s_MaxF32);
     VectorSingle queryMax(-s_MaxF32);
     for(u32 mask = 0u; mask < 8u; ++mask){
@@ -758,38 +981,66 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     if(!anyOverlap)
         return best;
 
+    const usize w = cast<usize>(hf.cols);
+    const f32 ox = hf.originMaxY.x;
+    const f32 oy = hf.originMaxY.y;
+    const f32 oz = hf.originMaxY.z;
+    const f32 sx = hf.cellSizeX();
+    const f32 sy = hf.scaleMinMaxY.y;
+    const f32 sz = hf.cellSizeZ();
+    const f32 qLoY = queryBox.lowerBound.y;
+    const f32 qHiY = queryBox.upperBound.y;
+    const f32 toiTargetPadding = 0.25f * s_LinearSlop;
+    const f32 toiTol = 0.5f * s_LinearSlop;
+
     f32 curMax = maxFraction;
     for(u32 cz = minCz; cz <= maxCz; ++cz){
+        const f32 z0 = oz + cast<f32>(cz) * sz;
+        const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
-            if(hf.isCellHole(cx, cz))
+            const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+            const usize r1 = r0 + w;
+            const f32 raw00 = hf.heights[r0];
+            const f32 raw10 = hf.heights[r0 + 1u];
+            const f32 raw01 = hf.heights[r1];
+            const f32 raw11 = hf.heights[r1 + 1u];
+            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
                 continue;
-            VectorSingle a0(0.0f);
-            VectorSingle a1(0.0f);
-            VectorSingle a2(0.0f);
-            VectorSingle b0(0.0f);
-            VectorSingle b1(0.0f);
-            VectorSingle b2(0.0f);
-            hf.cellTriangles(cx, cz, a0, a1, a2, b0, b1, b2);
-            Array<f32x4, 6u> verts;
-            verts[0u] = f32x4(a0, 0.0f);
-            verts[1u] = f32x4(a1, 0.0f);
-            verts[2u] = f32x4(a2, 0.0f);
-            verts[3u] = f32x4(b0, 0.0f);
-            verts[4u] = f32x4(b1, 0.0f);
-            verts[5u] = f32x4(b2, 0.0f);
+            const f32 h00 = oy + raw00 * sy;
+            const f32 h10 = oy + raw10 * sy;
+            const f32 h01 = oy + raw01 * sy;
+            const f32 h11 = oy + raw11 * sy;
+            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hf.thickness;
+            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hf.thickness;
+            if(cellHiY < qLoY || cellLoY > qHiY)
+                continue;
+
+            const f32 x0 = ox + cast<f32>(cx) * sx;
+            const f32 x1 = x0 + sx;
+            const f32x3u v00(x0, h00, z0);
+            const f32x3u v10(x1, h10, z0);
+            const f32x3u v01(x0, h01, z1);
+            const f32x3u v11(x1, h11, z1);
             const u32 cellIdx = cz * (hf.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
                 Array<f32x3u, 3u> triPts;
-                triPts[0u] = PackVec3U(VectorSingle(verts[ti * 3u]));
-                triPts[1u] = PackVec3U(VectorSingle(verts[ti * 3u + 1u]));
-                triPts[2u] = PackVec3U(VectorSingle(verts[ti * 3u + 2u]));
+                if(ti == 0u){
+                    triPts[0u] = v00;
+                    triPts[1u] = v01;
+                    triPts[2u] = v10;
+                }
+                else{
+                    triPts[0u] = v10;
+                    triPts[1u] = v01;
+                    triPts[2u] = v11;
+                }
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
-                const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(queryProxy, sweepA, triView, sweepB, curMax);
+                const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(queryProxy, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angSpeedBound);
                 if(toi.hit() && (!best.hit() || toi.fraction() < curMax)){
                     curMax = toi.fraction();
                     outCellIndex = cellIdx;
                     const VectorSingle localHit = InverseTransformPoint(xfHf, toi.point());
-                    outBarycentrics = ComputeTriangleBarycentrics(localHit, VectorSingle(verts[ti * 3u]), VectorSingle(verts[ti * 3u + 1u]), VectorSingle(verts[ti * 3u + 2u]));
+                    outBarycentrics = ComputeTriangleBarycentrics(localHit, Vec3FromU(triPts[0u]), Vec3FromU(triPts[1u]), Vec3FromU(triPts[2u]));
                     const VectorSingle n = toi.normal();
                     best.pointFraction = f32x4(toi.point(), curMax);
                     best.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
@@ -842,30 +1093,70 @@ Manifold CollideConvexProxyAndHeightfield(
     if(!anyOverlap)
         return m;
 
+    const b8 isSphereA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u);
+    const b8 isCapsuleA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 2u);
+    VectorSingle sphereCenterB(0.0f);
+    Array<f32x3u, 2u> capPtsInB;
+    if(isSphereA){
+        sphereCenterB = TransformPoint(localXfA, Vec3FromU(proxyA.points[0u]));
+    }
+    else if(isCapsuleA){
+        capPtsInB[0u] = PackVec3U(TransformPoint(localXfA, Vec3FromU(proxyA.points[0u])));
+        capPtsInB[1u] = PackVec3U(TransformPoint(localXfA, Vec3FromU(proxyA.points[1u])));
+    }
+    const ShapeProxyView capViewInB = MakeSpanProxyView(Span<f32x3u>(capPtsInB), proxyA.radius);
+
     const VectorSingle shapeCenterB = TransformPoint(localXfA, ComputeProxyViewCenter(proxyA));
     const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal = -worldUp;
     f32 deepestSep = s_MaxF32;
 
+    const usize w = cast<usize>(hfB.cols);
+    const f32 ox = hfB.originMaxY.x;
+    const f32 oy = hfB.originMaxY.y;
+    const f32 oz = hfB.originMaxY.z;
+    const f32 sx = hfB.scaleMinMaxY.x;
+    const f32 sy = hfB.scaleMinMaxY.y;
+    const f32 sz = hfB.scaleMinMaxY.z;
+    const f32 qLoY = queryBox.lowerBound.y;
+    const f32 qHiY = queryBox.upperBound.y;
+    const f32 sphereLimSq = (totalR + maxDistance) * (totalR + maxDistance);
+
     for(u32 cz = minCz; cz <= maxCz; ++cz){
+        const f32 z0 = oz + cast<f32>(cz) * sz;
+        const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
-            if(hfB.isCellHole(cx, cz))
+            const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+            const usize r1 = r0 + w;
+            const f32 raw00 = hfB.heights[r0];
+            const f32 raw10 = hfB.heights[r0 + 1u];
+            const f32 raw01 = hfB.heights[r1];
+            const f32 raw11 = hfB.heights[r1 + 1u];
+            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
                 continue;
-            VectorSingle a0(0.0f);
-            VectorSingle a1(0.0f);
-            VectorSingle a2(0.0f);
-            VectorSingle b0(0.0f);
-            VectorSingle b1(0.0f);
-            VectorSingle b2(0.0f);
-            hfB.cellTriangles(cx, cz, a0, a1, a2, b0, b1, b2);
+            const f32 h00 = oy + raw00 * sy;
+            const f32 h10 = oy + raw10 * sy;
+            const f32 h01 = oy + raw01 * sy;
+            const f32 h11 = oy + raw11 * sy;
+            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hfB.thickness;
+            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hfB.thickness;
+            if(cellHiY < qLoY || cellLoY > qHiY)
+                continue;
+
+            const f32 x0 = ox + cast<f32>(cx) * sx;
+            const f32 x1 = x0 + sx;
+            const VectorSingle v00(x0, h00, z0, 0.0f);
+            const VectorSingle v10(x1, h10, z0, 0.0f);
+            const VectorSingle v01(x0, h01, z1, 0.0f);
+            const VectorSingle v11(x1, h11, z1, 0.0f);
             Array<f32x4, 6u> verts;
-            verts[0u] = f32x4(a0, 0.0f);
-            verts[1u] = f32x4(a1, 0.0f);
-            verts[2u] = f32x4(a2, 0.0f);
-            verts[3u] = f32x4(b0, 0.0f);
-            verts[4u] = f32x4(b1, 0.0f);
-            verts[5u] = f32x4(b2, 0.0f);
+            verts[0u] = f32x4(v00, 0.0f);
+            verts[1u] = f32x4(v01, 0.0f);
+            verts[2u] = f32x4(v10, 0.0f);
+            verts[3u] = f32x4(v10, 0.0f);
+            verts[4u] = f32x4(v01, 0.0f);
+            verts[5u] = f32x4(v11, 0.0f);
             const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
                 const VectorSingle tv0 = VectorSingle(verts[ti * 3u]);
@@ -878,11 +1169,56 @@ Manifold CollideConvexProxyAndHeightfield(
                 if(Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -totalR - s_LinearSlop)
                     continue;
 
+                if(isSphereA){
+                    const VectorSingle qLocal = ClosestPointOnTriangleLocal(sphereCenterB, tv0, tv1, tv2);
+                    const VectorSingle delta = VectorSingle(sphereCenterB - qLocal, 0.0f);
+                    const f32 distSq = Vector3LengthSq(delta).x;
+                    if(distSq > sphereLimSq)
+                        continue;
+                    VectorSingle localOut = triN;
+                    f32 dist = 0.0f;
+                    if(distSq > 1.0e-12f){
+                        const f32 invDist = Rsqrt(VectorSingle(distSq)).x;
+                        dist = distSq * invDist;
+                        localOut = delta * invDist;
+                    }
+                    if(Vector3Dot(localOut, triN).x <= 0.0f)
+                        continue;
+                    const f32 sep = dist - totalR;
+                    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(localOut, VectorSingle(xfB.rotation)), worldUp);
+                    const VectorSingle nAtoB = -worldOut;
+                    const VectorSingle wCenter = TransformPoint(xfB, sphereCenterB);
+                    const VectorSingle wA = wCenter + nAtoB * proxyA.radius;
+                    const VectorSingle wB = TransformPoint(xfB, qLocal) + worldOut * hfB.thickness;
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = nAtoB;
+                    }
+                    PushMeshCandidateWithTris(
+                        (wA + wB) * 0.5f,
+                        wA - VectorSingle(xfA.position),
+                        wB - VectorSingle(xfB.position),
+                        nAtoB,
+                        sep,
+                        MakeFeatureId(7u, 0u, 7u, cast<u8>(cellIdx & 0xffu)),
+                        s_NullIndex,
+                        cellIdx,
+                        candidates
+                    );
+                    continue;
+                }
+
                 Array<f32x3u, 3u> triPts;
                 triPts[0u] = PackVec3U(tv0);
                 triPts[1u] = PackVec3U(tv1);
                 triPts[2u] = PackVec3U(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
+                if(isCapsuleA){
+                    SimplexCache cache;
+                    const DistanceOutput capGjk = ShapeDistanceLocalProxyViews(capViewInB, triView, false, cache);
+                    if(capGjk.distance() > totalR + maxDistance)
+                        continue;
+                }
                 const Manifold triM = CollideConvexProxyViews(proxyA, xfA, triView, xfB, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
@@ -919,3 +1255,4 @@ Manifold CollideConvexProxyAndHeightfield(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

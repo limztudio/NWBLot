@@ -17,7 +17,7 @@ class PhysicsSystem{
     private Optional<mut AssetManager> m_assetManager;
     private HashMap<EntityID, EcsEntityPhysicsRecord> m_entityRecords;
     private HashMap<EntityID, EcsJointSyncRecord> m_entityJoints;
-    private HashMap<EntityID, RagdollInstance> m_activeRagdolls;
+    private HashMap<EntityID, EcsTrackedRagdoll> m_activeRagdolls;
     private PhysicsEnvironment m_environmentScratch;
     private CollisionLayerMatrix m_collisionLayerMatrix;
     private Vector<EcsBodyTransformSnapshot> m_bodyTransformSnapshots;
@@ -29,6 +29,7 @@ class PhysicsSystem{
     private HashMap<EntityID, Name> m_syncedRigidBodyTags;
     private HashMap<EntityID, Name> m_syncedColliderTags;
     private EcsPhysicsSyncScratch m_syncScratch;
+    private Vector<GpuPhysicsRenderTransformBinding> m_exportBindingsScratch;
     private Vector<BodyMoveEvent> m_frameBodyMoveEvents;
     private Vector<ContactBeginTouchEvent> m_frameContactBeginEvents;
     private Vector<ContactEndTouchEvent> m_frameContactEndEvents;
@@ -439,7 +440,7 @@ class PhysicsSystem{
         const EntityID alive = this.entityForBody(bodyId);
         if(alive.valid())
             return alive;
-        if(!bodyId.valid())
+        if(!bodyId.valid() || this.m_syncScratch.destroyedBodyOwners.empty())
             return s_InvalidEntityId;
         const auto found = this.m_syncScratch.destroyedBodyOwners.find(PackEcsSlotKey(bodyId.index, bodyId.generation));
         if(found == this.m_syncScratch.destroyedBodyOwners.end())
@@ -451,7 +452,7 @@ class PhysicsSystem{
         const EntityID alive = this.entityForShape(shapeId);
         if(alive.valid())
             return alive;
-        if(!shapeId.valid())
+        if(!shapeId.valid() || this.m_syncScratch.destroyedShapeOwners.empty())
             return s_InvalidEntityId;
         const auto found = this.m_syncScratch.destroyedShapeOwners.find(PackEcsSlotKey(shapeId.index, shapeId.generation));
         if(found == this.m_syncScratch.destroyedShapeOwners.end())
@@ -524,6 +525,39 @@ class PhysicsSystem{
             }
         }
         return this.m_physicsWorld.tryGetBodyTransform(bodyId);
+    }
+
+    public Transform3D tryGetInterpolatedBodyTransform(in u32 bodyIdx, in u16 bodyGen)const{
+        if(cast<usize>(bodyIdx) >= this.m_physicsWorld.m_bodies.size())
+            return Transform3D();
+        in Body body = this.m_physicsWorld.m_bodies[bodyIdx];
+        if(
+            !body.alive
+            || body.generation != bodyGen
+            || body.setIndex >= this.m_physicsWorld.m_solverSets.size()
+            || body.localIndex >= this.m_physicsWorld.m_solverSets[body.setIndex].sims.size()
+        )
+            return Transform3D();
+        in Transform3D physicsXf = this.m_physicsWorld.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+        if(
+            this.m_interpolationAlpha < 1.0f - 1.0e-6f
+            && body.setIndex == s_AwakeSetIndex
+            && bodyIdx < cast<u32>(this.m_bodyTransformSnapshots.size())
+            && bodyIdx < cast<u32>(this.m_bodyTransformSnapshotMeta.size())
+            && EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyIdx], bodyGen)
+        ){
+            in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyIdx];
+            const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
+            VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
+            VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
+            if(Vector4Dot(q0, q1).x < 0.0f)
+                q1 = -q1;
+            const VectorSingle tVec(alpha);
+            const VectorSingle pos = Lerp(VectorSingle(snap.prevTransform.position), VectorSingle(snap.currTransform.position), tVec);
+            const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
+            return Transform3D(pos, rot);
+        }
+        return physicsXf;
     }
 
     public void registerNamedEntity(in Name tag, in EntityID entity){
@@ -825,11 +859,8 @@ class PhysicsSystem{
         const BodyId bodyId = found.value().bodyId;
         if(!this.m_physicsWorld.setBodyTransform(bodyId, position, rotation))
             return false;
-        mut EcsEntityPhysicsRecord rec = found.value();
         const Transform3D normXf(position, SafeNormalizeQuat(rotation));
-        rec.syncedBodyPose.transform = normXf;
-        rec.hasBodyPose = true;
-        rec.hasInterpolatedRenderTransform = false;
+        SetBodySyncedPose(bodyId, normXf, this.m_syncScratch.bodySyncedPoses);
         SetBodyTransformSnapshotBoth(bodyId, normXf, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
         ClearStaticBodyPoseCacheIfMatches(bodyId, this.m_syncScratch.staticBodyPoseCache);
         return true;
@@ -890,7 +921,10 @@ class PhysicsSystem{
         this.m_physicsWorld.consumePendingEndEvents(discardCE, discardSE);
         this.m_physicsWorld.consumePendingWakeEvents(discardBW);
         this.clearFrameEvents();
+        this.m_syncScratch.bodySyncedPoses.clear();
+        this.m_syncScratch.staticBodyPoseCache.clear();
         this.m_syncScratch.hasSyncedTopologyVersion = false;
+        this.m_syncScratch.hasRagdollTopology = false;
         this.m_syncScratch.mutationVersionsValid = false;
         return true;
     }
@@ -929,11 +963,10 @@ class PhysicsSystem{
     }
 
     public b8 exportRenderTransforms(mut Vector<GpuPhysicsRenderTransformOut> outTransforms){
-        Vector<GpuPhysicsRenderTransformBinding> bindings;
-        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, bindings);
+        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, this.m_exportBindingsScratch);
         return this.m_gpuDispatcher.exportRenderTransforms(
             this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(bindings.data(), bindings.size()),
+            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
             outTransforms
         );
     }
@@ -943,11 +976,10 @@ class PhysicsSystem{
         in u32 targetUavSlot,
         in u32 instanceStrideFloat4
     ){
-        Vector<GpuPhysicsRenderTransformBinding> bindings;
-        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, bindings);
+        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, this.m_exportBindingsScratch);
         return this.m_gpuDispatcher.exportRenderTransformsToBuffer(
             this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(bindings.data(), bindings.size()),
+            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
             targetBuffer,
             targetUavSlot,
             instanceStrideFloat4
@@ -1000,7 +1032,7 @@ class PhysicsSystem{
             hasAnyPhysicsParents,
             hasDrivenKinematic
         );
-        PruneRemovedEcsRagdolls(this.m_world, this.m_physicsWorld, this.m_activeRagdolls);
+        PruneRemovedEcsRagdolls(this.m_world, this.m_physicsWorld, this.m_activeRagdolls, this.m_syncScratch.deadRagdolls);
 
         if(paused || !IsFinite(delta) || delta <= 0.0f){
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
@@ -1022,8 +1054,12 @@ class PhysicsSystem{
             ++plannedSteps;
         }
 
-        if(plannedSteps > 1u && hasDrivenKinematic)
-            SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, this.m_world, this.m_syncScratch.kinematicTargets);
+        const b8 useCollectedEnv = plannedSteps > 1u;
+        if(useCollectedEnv){
+            if(hasDrivenKinematic)
+                SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, this.m_world, this.m_syncScratch.kinematicTargets);
+            CollectEcsPhysicsEnvironment(this.m_world, this.m_environmentScratch);
+        }
 
         mut CpuTaskScheduler scheduler = this.m_world.taskScheduler();
         u32 stepsExecuted = 0u;
@@ -1042,7 +1078,18 @@ class PhysicsSystem{
                     ApplyInterpolatedKinematicTargets(this.m_syncScratch.kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
             }
 
-            StepEcsPhysicsSubsystemBridges(this.m_world, this.m_physicsWorld, this.m_entityRecords, fixedDt, this.m_environmentScratch, this.m_activeRagdolls);
+            StepEcsPhysicsSubsystemBridges(
+                this.m_world,
+                this.m_physicsWorld,
+                this.m_entityRecords,
+                this.m_bodyIndexToEntity,
+                fixedDt,
+                useCollectedEnv,
+                this.m_environmentScratch,
+                this.m_activeRagdolls,
+                this.m_syncScratch,
+                scheduler
+            );
 
             const Timer stepStart = TimerNow();
             StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
@@ -1069,7 +1116,6 @@ class PhysicsSystem{
                     interpolateTransforms,
                     this.m_interpolationAlpha,
                     this.m_world,
-                    this.m_entityRecords,
                     this.m_syncScratch,
                     this.m_bodyTransformSnapshots,
                     this.m_bodyTransformSnapshotMeta
@@ -1086,7 +1132,6 @@ class PhysicsSystem{
                     interpolateTransforms,
                     this.m_interpolationAlpha,
                     this.m_world,
-                    this.m_entityRecords,
                     this.m_syncScratch,
                     this.m_bodyTransformSnapshots,
                     this.m_bodyTransformSnapshotMeta
@@ -1105,7 +1150,6 @@ class PhysicsSystem{
                     this.m_bodyTransformSnapshots,
                     this.m_bodyTransformSnapshotMeta,
                     this.m_world,
-                    this.m_entityRecords,
                     this.m_syncScratch
                 );
             }

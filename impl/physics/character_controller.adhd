@@ -64,6 +64,17 @@ class CharacterController{
     public Transform3D prevGroundTransform;
     public b8 hasPrevGroundTransform = false;
     public Vector<CharacterContactInfo> activeContacts;
+    private Vector<ShapeOverlapHit> m_scratchRawHits;
+    private Vector<ShapeOverlapHit> m_scratchHits;
+    private f32 m_cachedSlopeAngleRad = -1.0f;
+    private f32 m_minWalkableCos = 0.70710678f;
+
+    private void syncWalkableCos(){
+        if(this.m_cachedSlopeAngleRad != this.def.maxSlopeAngleRad){
+            this.m_cachedSlopeAngleRad = this.def.maxSlopeAngleRad;
+            this.m_minWalkableCos = Cos(Clamp(this.def.maxSlopeAngleRad, 0.0f, 1.56f));
+        }
+    }
 
     public void init(in CharacterControllerDef inDef, in VectorSingle startPosition, in VectorSingle startRotation){
         this.def = inDef;
@@ -91,6 +102,8 @@ class CharacterController{
         this.prevGroundTransform = Transform3D();
         this.hasPrevGroundTransform = false;
         this.activeContacts.clear();
+        this.m_cachedSlopeAngleRad = -1.0f;
+        this.syncWalkableCos();
     }
 
     public VectorSingle upDirection()const{
@@ -106,7 +119,9 @@ class CharacterController{
     }
 
     public b8 isWalkableNormal(in VectorSingle normal)const{
-        const f32 minCos = Cos(Clamp(this.def.maxSlopeAngleRad, 0.0f, 1.56f));
+        f32 minCos = this.m_minWalkableCos;
+        if(this.def.maxSlopeAngleRad != this.m_cachedSlopeAngleRad)
+            minCos = Cos(Clamp(this.def.maxSlopeAngleRad, 0.0f, 1.56f));
         return Vector3Dot(SafeNormalizeVec3(normal, this.upDirection()), this.upDirection()).x >= minCos - 1.0e-4f;
     }
 
@@ -131,15 +146,14 @@ class CharacterController{
         return false;
     }
 
-    private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius, mut Vector<ShapeOverlapHit> outHits)const{
-        Vector<ShapeOverlapHit> rawHits;
+    private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
         const ShapeProxy proxy = this.makeCapsuleProxy(extraRadius);
         const Transform3D xf(testPos, VectorSingle(this.rotation));
-        world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, rawHits);
-        outHits.clear();
-        for(usize i = 0u; i < rawHits.size(); ++i){
-            if(!this.shouldIgnoreShape(world, rawHits[i].shapeId))
-                outHits.push_back(rawHits[i]);
+        world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, this.m_scratchRawHits);
+        this.m_scratchHits.clear();
+        for(usize i = 0u; i < this.m_scratchRawHits.size(); ++i){
+            if(!this.shouldIgnoreShape(world, this.m_scratchRawHits[i].shapeId))
+                this.m_scratchHits.push_back(this.m_scratchRawHits[i]);
         }
     }
 
@@ -193,10 +207,10 @@ class CharacterController{
         const f32 approachSpeed = -Vector3Dot(approachVel, outNormal).x;
         if(approachSpeed <= 0.0f)
             return;
-        const Expected<MassData> massRes = world.tryGetBodyMassData(otherBody);
+        const Expected<f32> massRes = world.tryGetBodyMass(otherBody);
         f32 otherMass = 1.0f;
-        if(massRes.has_value() && massRes.value().mass() > 0.0f)
-            otherMass = massRes.value().mass();
+        if(massRes.has_value() && massRes.value() > 0.0f)
+            otherMass = massRes.value();
         const f32 reducedMass = (this.def.mass * otherMass) / Max(1.0e-4f, this.def.mass + otherMass);
         const f32 desiredImpulse = reducedMass * approachSpeed;
         const f32 maxImpulse = Max(0.0f, this.def.maxStrength) * dt;
@@ -206,29 +220,25 @@ class CharacterController{
     }
 
     public void depenetrate(mut PhysicsWorld world){
-        Vector<ShapeOverlapHit> hits;
         VectorSingle pos = VectorSingle(this.position);
         const f32 depMargin = 1.0e-3f;
         for(u32 iter = 0u; iter < this.def.maxConstraintIterations; ++iter){
-            this.gatherOverlapsAt(world, pos, this.def.skinWidth, hits);
-            if(hits.empty())
+            this.gatherOverlapsAt(world, pos, this.def.skinWidth);
+            const usize hitCount = this.m_scratchHits.size();
+            if(hitCount == 0u)
                 break;
             VectorSingle totalCorr(0.0f);
             f32 maxPen = 0.0f;
-            for(usize i = 0u; i < hits.size(); ++i){
-                in ShapeOverlapHit ov = hits[i];
-                if(!this.def.hitSensors){
-                    const Expected<b8> sensRes = world.tryGetShapeIsSensor(ov.shapeId);
-                    if(sensRes.has_value() && sensRes.value())
-                        continue;
-                }
+            const f32 invHitCount = 1.0f / cast<f32>(hitCount);
+            for(usize i = 0u; i < hitCount; ++i){
+                in ShapeOverlapHit ov = this.m_scratchHits[i];
                 const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), this.upDirection());
                 const f32 depth = ov.penetrationDepth;
                 this.recordContact(world, ov.shapeId, VectorSingle(ov.pointB), outN, depth);
                 if(depth > maxPen)
                     maxPen = depth;
                 if(depth > 1.0e-5f)
-                    totalCorr = totalCorr + outN * ((depth + depMargin) / cast<f32>(hits.size()));
+                    totalCorr = totalCorr + outN * ((depth + depMargin) * invHitCount);
             }
             if(maxPen <= 1.0e-5f || Vector3LengthSq(VectorSingle(totalCorr, 0.0f)).x <= 1.0e-10f)
                 break;
@@ -350,10 +360,9 @@ class CharacterController{
         if(candDistSq <= 1.0e-7f)
             return false;
 
-        Vector<ShapeOverlapHit> overlaps;
-        this.gatherOverlapsAt(world, candidate, 0.0f, overlaps);
-        for(usize i = 0u; i < overlaps.size(); ++i){
-            if(overlaps[i].penetrationDepth > this.def.skinWidth)
+        this.gatherOverlapsAt(world, candidate, 0.0f);
+        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
+            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth)
                 return false;
         }
 
@@ -407,23 +416,22 @@ class CharacterController{
             return;
         }
 
-        Vector<ShapeOverlapHit> overlaps;
-        this.gatherOverlapsAt(world, curPos, this.def.skinWidth, overlaps);
+        this.gatherOverlapsAt(world, curPos, this.def.skinWidth);
         b8 foundAny = false;
         b8 foundWalkable = false;
         f32 bestDot = -2.0f;
         VectorSingle bestN = up;
         VectorSingle bestPt = curPos;
         ShapeId bestShape;
-        for(usize i = 0u; i < overlaps.size(); ++i){
-            const VectorSingle n = SafeNormalizeVec3(-VectorSingle(overlaps[i].normal), up);
+        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
+            const VectorSingle n = SafeNormalizeVec3(-VectorSingle(this.m_scratchHits[i].normal), up);
             const f32 d = Vector3Dot(n, up).x;
             if(!foundAny || d > bestDot){
                 foundAny = true;
                 bestDot = d;
                 bestN = n;
-                bestPt = VectorSingle(overlaps[i].pointB);
-                bestShape = overlaps[i].shapeId;
+                bestPt = VectorSingle(this.m_scratchHits[i].pointB);
+                bestShape = this.m_scratchHits[i].shapeId;
                 foundWalkable = this.isWalkableNormal(n);
             }
         }
@@ -452,6 +460,8 @@ class CharacterController{
     public void update(mut PhysicsWorld world, in f32 dt){
         if(dt <= 0.0f)
             return;
+        world.ensureCpuBroadphaseSynced();
+        this.syncWalkableCos();
         this.activeContacts.clear();
         const VectorSingle up = this.upDirection();
         const b8 wasOnGround = (this.groundState == CharacterGroundState::OnGround);
@@ -526,15 +536,9 @@ class CharacterController{
         const f32 oldH = this.def.halfHeight;
         this.def.radius = newRadius;
         this.def.halfHeight = newHalfHeight;
-        Vector<ShapeOverlapHit> hits;
-        this.gatherOverlapsAt(world, VectorSingle(this.position), 0.0f, hits);
-        for(usize i = 0u; i < hits.size(); ++i){
-            if(!this.def.hitSensors){
-                const Expected<b8> sensRes = world.tryGetShapeIsSensor(hits[i].shapeId);
-                if(sensRes.has_value() && sensRes.value())
-                    continue;
-            }
-            if(hits[i].penetrationDepth > this.def.skinWidth){
+        this.gatherOverlapsAt(world, VectorSingle(this.position), 0.0f);
+        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
+            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
                 this.def.radius = oldR;
                 this.def.halfHeight = oldH;
                 return false;
@@ -546,3 +550,4 @@ class CharacterController{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

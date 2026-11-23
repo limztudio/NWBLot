@@ -666,26 +666,121 @@ Expected<HullShape> BuildConvexHullExact(in Span<f32x4> uniquePts, in f32 radius
     return result;
 }
 
+isize QuantizeDedupAxis(in f32 v){
+    const f32 s = v * 1000.0f;
+    isize q = cast<isize>(s);
+    if(s < cast<f32>(q))
+        --q;
+    return q;
+}
+
+b8 DeduplicateConvexPoints(in Span<f32x4> inputPoints, mut Vector<f32x4> uniquePts){
+    uniquePts.clear();
+    uniquePts.reserve(inputPoints.size());
+    if(inputPoints.size() <= 32u){
+        for(usize i = 0u; i < inputPoints.size(); ++i){
+            const VectorSingle p = VectorSingle(inputPoints[i]);
+            if(!IsValidPositionVec3(p))
+                return false;
+            b8 dup = false;
+            for(usize j = 0u; j < uniquePts.size(); ++j){
+                if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
+                    dup = true;
+                    break;
+                }
+            }
+            if(!dup)
+                uniquePts.push_back(f32x4(p, 0.0f));
+        }
+        return true;
+    }
+
+    HashMap<u64, u32> cellHeads;
+    cellHeads.reserve(inputPoints.size());
+    Vector<u32> bucketNext;
+    bucketNext.reserve(inputPoints.size());
+
+    for(usize i = 0u; i < inputPoints.size(); ++i){
+        const VectorSingle p = VectorSingle(inputPoints[i]);
+        if(!IsValidPositionVec3(p))
+            return false;
+        if(Abs(p.x) > 1.0e8f || Abs(p.y) > 1.0e8f || Abs(p.z) > 1.0e8f){
+            b8 dupHuge = false;
+            for(usize j = 0u; j < uniquePts.size(); ++j){
+                if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
+                    dupHuge = true;
+                    break;
+                }
+            }
+            if(!dupHuge){
+                uniquePts.push_back(f32x4(p, 0.0f));
+                bucketNext.push_back(s_NullIndex);
+            }
+            continue;
+        }
+
+        const isize x0 = QuantizeDedupAxis(p.x - 1.01e-4f);
+        const isize x1 = QuantizeDedupAxis(p.x + 1.01e-4f);
+        const isize y0 = QuantizeDedupAxis(p.y - 1.01e-4f);
+        const isize y1 = QuantizeDedupAxis(p.y + 1.01e-4f);
+        const isize z0 = QuantizeDedupAxis(p.z - 1.01e-4f);
+        const isize z1 = QuantizeDedupAxis(p.z + 1.01e-4f);
+
+        b8 dup = false;
+        for(isize cz = z0; cz <= z1 && !dup; ++cz){
+            for(isize cy = y0; cy <= y1 && !dup; ++cy){
+                for(isize cx = x0; cx <= x1 && !dup; ++cx){
+                    const u64 key =
+                        (cast<u64>(cast<u32>(cx)) * 73856093u)
+                        ^ (cast<u64>(cast<u32>(cy)) * 19349663u)
+                        ^ (cast<u64>(cast<u32>(cz)) * 83492791u)
+                    ;
+                    const auto it = cellHeads.find(key);
+                    if(it == cellHeads.end())
+                        continue;
+                    u32 uIdx = it.value();
+                    while(uIdx != s_NullIndex){
+                        if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[uIdx]), 0.0f)).x <= 1.0e-8f){
+                            dup = true;
+                            break;
+                        }
+                        uIdx = bucketNext[uIdx];
+                    }
+                }
+            }
+        }
+        if(!dup){
+            const u32 newIdx = cast<u32>(uniquePts.size());
+            uniquePts.push_back(f32x4(p, 0.0f));
+            const isize qx = QuantizeDedupAxis(p.x);
+            const isize qy = QuantizeDedupAxis(p.y);
+            const isize qz = QuantizeDedupAxis(p.z);
+            const u64 homeKey =
+                (cast<u64>(cast<u32>(qx)) * 73856093u)
+                ^ (cast<u64>(cast<u32>(qy)) * 19349663u)
+                ^ (cast<u64>(cast<u32>(qz)) * 83492791u)
+            ;
+            const auto homeIt = cellHeads.find(homeKey);
+            if(homeIt == cellHeads.end()){
+                bucketNext.push_back(s_NullIndex);
+                cellHeads.emplace(homeKey, newIdx);
+            }
+            else{
+                bucketNext.push_back(homeIt.value());
+                homeIt.value() = newIdx;
+            }
+        }
+    }
+    return true;
+}
+
 Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     if(!IsFinite(radius) || radius < 0.0f || inputPoints.size() < 4u)
         return MakeUnexpected(Failure());
 
     Vector<f32x4> uniquePts;
-    uniquePts.reserve(inputPoints.size());
-    for(usize i = 0u; i < inputPoints.size(); ++i){
-        const VectorSingle p = VectorSingle(inputPoints[i]);
-        if(!IsValidPositionVec3(p))
-            return MakeUnexpected(Failure());
-        b8 dup = false;
-        for(usize j = 0u; j < uniquePts.size(); ++j){
-            if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
-                dup = true;
-                break;
-            }
-        }
-        if(!dup)
-            uniquePts.push_back(f32x4(p, 0.0f));
-    }
+    if(!DeduplicateConvexPoints(inputPoints, uniquePts))
+        return MakeUnexpected(Failure());
 
     if(uniquePts.size() < 4u)
         return MakeUnexpected(Failure());

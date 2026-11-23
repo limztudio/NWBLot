@@ -11,15 +11,16 @@
 
 
 b8 RigidBodyComponentAsset::loadBinary(in Span<u8> binary){
-    RigidBodyComponentAsset candidate(this.virtualPath());
-    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+    if(!this.checkVirtualPath("RigidBodyComponentAsset::validatePayload"))
         return false;
-    this.component = candidate.component;
-    return true;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
 }
 
 b8 RigidBodyComponentAsset::loadComponentPayload(in Span<u8> payload){
-    const Expected<RigidBodyComponent> result = PhysicsComponentBinaryCodec().deserializeRigidBody(payload);
+    Expected<RigidBodyComponent> result = PhysicsComponentBinaryCodec().deserializeRigidBody(payload);
     if(!result.has_value())
         return false;
     this.component = result.value();
@@ -41,15 +42,16 @@ b8 RigidBodyComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBi
 }
 
 b8 ColliderComponentAsset::loadBinary(in Span<u8> binary){
-    ColliderComponentAsset candidate(this.virtualPath());
-    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+    if(!this.checkVirtualPath("ColliderComponentAsset::validatePayload"))
         return false;
-    this.component = candidate.component;
-    return true;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
 }
 
 b8 ColliderComponentAsset::loadComponentPayload(in Span<u8> payload){
-    const Expected<ColliderComponent> result = PhysicsComponentBinaryCodec().deserializeCollider(payload);
+    Expected<ColliderComponent> result = PhysicsComponentBinaryCodec().deserializeCollider(payload);
     if(!result.has_value())
         return false;
     this.component = result.value();
@@ -71,15 +73,16 @@ b8 ColliderComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBin
 }
 
 b8 JointComponentAsset::loadBinary(in Span<u8> binary){
-    JointComponentAsset candidate(this.virtualPath());
-    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+    if(!this.checkVirtualPath("JointComponentAsset::validatePayload"))
         return false;
-    this.component = candidate.component;
-    return true;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
 }
 
 b8 JointComponentAsset::loadComponentPayload(in Span<u8> payload){
-    const Expected<JointComponent> result = PhysicsComponentBinaryCodec().deserializeJoint(payload);
+    Expected<JointComponent> result = PhysicsComponentBinaryCodec().deserializeJoint(payload);
     if(!result.has_value())
         return false;
     this.component = result.value();
@@ -101,15 +104,16 @@ b8 JointComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary
 }
 
 b8 PhysicsWorldConfigComponentAsset::loadBinary(in Span<u8> binary){
-    PhysicsWorldConfigComponentAsset candidate(this.virtualPath());
-    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+    if(!this.checkVirtualPath("PhysicsWorldConfigComponentAsset::validatePayload"))
         return false;
-    this.component = candidate.component;
-    return true;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
 }
 
 b8 PhysicsWorldConfigComponentAsset::loadComponentPayload(in Span<u8> payload){
-    const Expected<PhysicsWorldConfigComponent> result = PhysicsComponentBinaryCodec().deserializeWorldConfig(payload);
+    Expected<PhysicsWorldConfigComponent> result = PhysicsComponentBinaryCodec().deserializeWorldConfig(payload);
     if(!result.has_value())
         return false;
     this.component = result.value();
@@ -131,15 +135,16 @@ b8 PhysicsWorldConfigComponentAsset::appendValidatedComponentPayload(mut Vector<
 }
 
 b8 PhysicsParentComponentAsset::loadBinary(in Span<u8> binary){
-    PhysicsParentComponentAsset candidate(this.virtualPath());
-    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+    if(!this.checkVirtualPath("PhysicsParentComponentAsset::validatePayload"))
         return false;
-    this.component = candidate.component;
-    return true;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
 }
 
 b8 PhysicsParentComponentAsset::loadComponentPayload(in Span<u8> payload){
-    const Expected<PhysicsParentComponent> result = PhysicsComponentBinaryCodec().deserializePhysicsParent(payload);
+    Expected<PhysicsParentComponent> result = PhysicsComponentBinaryCodec().deserializePhysicsParent(payload);
     if(!result.has_value())
         return false;
     this.component = result.value();

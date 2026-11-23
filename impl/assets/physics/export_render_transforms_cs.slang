@@ -22,8 +22,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.z;
     const uint outSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint strideFloat4 = max(g_NwbPhysicsPushConstants.slots1.x, 3u);
+    const uint bindingOffset = (g_NwbPhysicsPushConstants.slots1.y != NWB_PHYSICS_INVALID_INDEX) ? g_NwbPhysicsPushConstants.slots1.y : 0u;
 
-    const NwbPhysicsGpuRenderTransformBinding b = g_NwbPhysicsRenderBindingBuffers[bindingSlot][tid];
+    const NwbPhysicsGpuRenderTransformBinding b = g_NwbPhysicsRenderBindingBuffers[bindingSlot][bindingOffset + tid];
     const uint bodyIdx = b.bodyDestFlags.x;
     const uint dstIdx = b.bodyDestFlags.y;
     if(bodyIdx >= sourceBodyCount)
@@ -36,11 +37,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     if(sourceMode == NWB_PHYSICS_EXPORT_SOURCE_BODY_OUT){
         const NwbPhysicsGpuBodyOut bo = g_NwbPhysicsBodyOutBuffers[sourceSlot][bodyIdx];
-        const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][bodyIdx];
+        const float3 localCenter = g_NwbPhysicsBodySimBuffers[bodySimSlot][bodyIdx].localCenterMinExtent.xyz;
         rot = bo.rotation;
-        origin = bo.positionSleepTime.xyz - nwbPhysicsQuatRotate(sim.localCenterMinExtent.xyz, rot);
-        linVel = bo.linearVelocityFlags.xyz;
-        sleepTime = bo.positionSleepTime.w;
+        origin = bo.positionSleepTime.xyz - nwbPhysicsQuatRotate(localCenter, rot);
+        if(exportMode != NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER){
+            linVel = bo.linearVelocityFlags.xyz;
+            sleepTime = bo.positionSleepTime.w;
+        }
     }
     else{
         const NwbPhysicsGpuBodyPose bp = g_NwbPhysicsBodyPoseBuffers[sourceSlot][bodyIdx];
@@ -68,3 +71,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

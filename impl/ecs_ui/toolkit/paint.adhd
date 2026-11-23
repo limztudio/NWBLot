@@ -41,14 +41,21 @@ class DrawSnapshot{
     public in Vector<SharedImageSource> textureImages()const{ return this.m_images.textureImages(); }
 }
 
+class PaintTransformStackEntry{
+    public PaintTransform2D xf = PaintTransformIdentity();
+    public f32 cachedScale = 1.0f;
+    public b8 active = false;
+    public b8 scaleValid = true;
+    public b8 axisAlignedPositive = true;
+}
+
 class PaintBuilder : NoCopy{
     private DrawSnapshot m_snapshot;
     private Vector<UiSkinRegion> m_regions;
     private HashMap<Name, usize> m_regionLookup;
     private Vector<PaintClipEntry> m_clips;
     private Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> m_overlays;
-    private Array<PaintTransform2D, s_PaintMaxTransformDepth> m_transforms;
-    private Vector<PaintLineSegment> m_transformedLineScratch;
+    private Array<PaintTransformStackEntry, s_PaintMaxTransformDepth> m_transforms;
     private Vector<Point> m_transformedPointScratch;
     private usize m_overlayDepth = 0u;
     private usize m_transformDepth = 0u;
@@ -90,6 +97,15 @@ class PaintBuilder : NoCopy{
     public void pushClip(in Rect clip){ PushPaintClipValidatedParent(this.m_recording, clip, this.m_clips); }
     public b8 popClip(){ return PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips); }
 
+    private f32 activeTransformScale(){
+        mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+        if(!entry.scaleValid){
+            entry.cachedScale = ResolvePaintTransformScale(entry.xf);
+            entry.scaleValid = true;
+        }
+        return entry.cachedScale;
+    }
+
     [cpp_unwind]
     public void pushTransform(in PaintTransform2D transform){
         assert(this.m_recording);
@@ -99,28 +115,128 @@ class PaintBuilder : NoCopy{
         }
         PaintTransform2D composed = transform;
         if(this.m_transformDepth > 0u)
-            composed = MultiplyPaintTransform(this.m_transforms[this.m_transformDepth - 1u], transform);
-        this.m_transforms[this.m_transformDepth] = composed;
+            composed = MultiplyPaintTransform(this.m_transforms[this.m_transformDepth - 1u].xf, transform);
+        mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth];
+        entry.xf = composed;
+        entry.active = !IsIdentityPaintTransform(composed);
+        entry.axisAlignedPositive = composed.m01 == 0.0f && composed.m10 == 0.0f && composed.m00 > 0.0f && composed.m11 > 0.0f;
+        if(entry.axisAlignedPositive){
+            entry.cachedScale = 0.5f * (composed.m00 + composed.m11);
+            entry.scaleValid = true;
+        }
+        else{
+            entry.scaleValid = false;
+        }
         ++this.m_transformDepth;
-        this.m_hasActiveTransform = !IsIdentityPaintTransform(composed);
+        this.m_hasActiveTransform = entry.active;
     }
     [cpp_unwind]
-    public void pushTranslate(in f32 dx, in f32 dy){ this.pushTransform(MakePaintTranslate(dx, dy)); }
+    public void pushTranslate(in f32 dx, in f32 dy){
+        assert(this.m_recording);
+        if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
+            assert(false);
+            return;
+        }
+        if(this.m_transformDepth == 0u){
+            mut PaintTransformStackEntry entry = this.m_transforms[0u];
+            entry.xf = MakePaintTranslate(dx, dy);
+            entry.cachedScale = 1.0f;
+            entry.scaleValid = true;
+            entry.axisAlignedPositive = true;
+            entry.active = Abs(dx) > 1.0e-6f || Abs(dy) > 1.0e-6f;
+            this.m_transformDepth = 1u;
+            this.m_hasActiveTransform = entry.active;
+            return;
+        }
+        in PaintTransformStackEntry parent = this.m_transforms[this.m_transformDepth - 1u];
+        PaintTransform2D composed = parent.xf;
+        composed.tx = parent.xf.m00 * dx + parent.xf.m01 * dy + parent.xf.tx;
+        composed.ty = parent.xf.m10 * dx + parent.xf.m11 * dy + parent.xf.ty;
+        mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth];
+        entry.xf = composed;
+        entry.cachedScale = parent.cachedScale;
+        entry.scaleValid = parent.scaleValid;
+        entry.axisAlignedPositive = parent.axisAlignedPositive;
+        entry.active = !IsIdentityPaintTransform(composed);
+        ++this.m_transformDepth;
+        this.m_hasActiveTransform = entry.active;
+    }
     [cpp_unwind]
-    public void pushRotate(in f32 radians){ this.pushTransform(MakePaintRotate(radians)); }
+    public void pushRotate(in f32 radians){
+        assert(this.m_recording);
+        if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
+            assert(false);
+            return;
+        }
+        const PaintTransform2D rot = MakePaintRotate(radians);
+        mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth];
+        if(this.m_transformDepth == 0u){
+            entry.xf = rot;
+            entry.cachedScale = 1.0f;
+            entry.scaleValid = true;
+            entry.axisAlignedPositive = rot.m01 == 0.0f && rot.m10 == 0.0f && rot.m00 > 0.0f && rot.m11 > 0.0f;
+        }
+        else{
+            in PaintTransformStackEntry parent = this.m_transforms[this.m_transformDepth - 1u];
+            entry.xf = MultiplyPaintTransform(parent.xf, rot);
+            entry.axisAlignedPositive = entry.xf.m01 == 0.0f && entry.xf.m10 == 0.0f && entry.xf.m00 > 0.0f && entry.xf.m11 > 0.0f;
+            if(entry.axisAlignedPositive){
+                entry.cachedScale = 0.5f * (entry.xf.m00 + entry.xf.m11);
+                entry.scaleValid = true;
+            }
+            else{
+                entry.scaleValid = false;
+            }
+        }
+        entry.active = !IsIdentityPaintTransform(entry.xf);
+        ++this.m_transformDepth;
+        this.m_hasActiveTransform = entry.active;
+    }
     [cpp_unwind]
-    public void pushScale(in f32 sx, in f32 sy){ this.pushTransform(MakePaintScale(sx, sy)); }
+    public void pushScale(in f32 sx, in f32 sy){
+        assert(this.m_recording);
+        if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
+            assert(false);
+            return;
+        }
+        mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth];
+        if(this.m_transformDepth == 0u){
+            entry.xf = MakePaintScale(sx, sy);
+            entry.axisAlignedPositive = sx > 0.0f && sy > 0.0f;
+            entry.cachedScale = 0.5f * (Abs(sx) + Abs(sy));
+            entry.scaleValid = true;
+        }
+        else{
+            in PaintTransformStackEntry parent = this.m_transforms[this.m_transformDepth - 1u];
+            if(parent.axisAlignedPositive){
+                entry.xf = parent.xf;
+                entry.xf.m00 = parent.xf.m00 * sx;
+                entry.xf.m11 = parent.xf.m11 * sy;
+                entry.axisAlignedPositive = sx > 0.0f && sy > 0.0f;
+                entry.cachedScale = 0.5f * (Abs(entry.xf.m00) + Abs(entry.xf.m11));
+                entry.scaleValid = true;
+            }
+            else{
+                entry.xf = MultiplyPaintTransform(parent.xf, MakePaintScale(sx, sy));
+                entry.axisAlignedPositive = entry.xf.m01 == 0.0f && entry.xf.m10 == 0.0f && entry.xf.m00 > 0.0f && entry.xf.m11 > 0.0f;
+                entry.scaleValid = false;
+            }
+        }
+        entry.active = !IsIdentityPaintTransform(entry.xf);
+        ++this.m_transformDepth;
+        this.m_hasActiveTransform = entry.active;
+    }
     public b8 popTransform(){
         if(!this.m_recording || this.m_transformDepth == 0u)
             return false;
         --this.m_transformDepth;
-        this.m_hasActiveTransform = this.m_transformDepth > 0u && !IsIdentityPaintTransform(this.m_transforms[this.m_transformDepth - 1u]);
+        this.m_hasActiveTransform = this.m_transformDepth > 0u && this.m_transforms[this.m_transformDepth - 1u].active;
         return true;
     }
     public PaintTransform2D currentTransform()const{
         if(this.m_transformDepth == 0u)
             return PaintTransformIdentity();
-        return this.m_transforms[this.m_transformDepth - 1u];
+        return this.m_transforms[this.m_transformDepth - 1u].xf;
     }
 
     [cpp_unwind]
@@ -135,15 +251,25 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
                 return;
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 x1 = rectangle.x + rectangle.width;
-            const f32 y1 = rectangle.y + rectangle.height;
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = entry.xf;
+            if(entry.axisAlignedPositive){
+                const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                EmitPaintOpaqueWhiteRectValidated(
+                    this.m_recording, this.m_clips.back(), scaledRect, this.m_layer,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+                return;
+            }
+            const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+            const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+            const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+            const Point p10(p00.x + ex.x, p00.y + ex.y);
+            const Point p01(p00.x + ey.x, p00.y + ey.y);
+            const Point p11(p10.x + ey.x, p10.y + ey.y);
             EmitPaintTransformedQuad(
                 this.m_recording, this.m_clips.back(),
-                ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, y1)),
-                ApplyPaintTransform(xf, Point(rectangle.x, y1)),
+                p00, p10, p11, p01,
                 Rect(0.0f, 0.0f, 0.0f, 0.0f), Color(), PaintMaterial::Solid, this.m_layer,
                 u32.max, u32.max, 0u, u32.max,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -161,15 +287,25 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
                 return;
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 x1 = rectangle.x + rectangle.width;
-            const f32 y1 = rectangle.y + rectangle.height;
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = entry.xf;
+            if(entry.axisAlignedPositive){
+                const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                EmitPaintSolidQuadValidated(
+                    this.m_recording, this.m_clips.back(), scaledRect, color, this.m_layer,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+                return;
+            }
+            const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+            const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+            const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+            const Point p10(p00.x + ex.x, p00.y + ex.y);
+            const Point p01(p00.x + ey.x, p00.y + ey.y);
+            const Point p11(p10.x + ey.x, p10.y + ey.y);
             EmitPaintTransformedQuad(
                 this.m_recording, this.m_clips.back(),
-                ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, y1)),
-                ApplyPaintTransform(xf, Point(rectangle.x, y1)),
+                p00, p10, p11, p01,
                 Rect(0.0f, 0.0f, 0.0f, 0.0f), color, PaintMaterial::Solid, this.m_layer,
                 u32.max, u32.max, 0u, u32.max,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -185,11 +321,12 @@ class PaintBuilder : NoCopy{
     public void drawLine(in Point start, in Point end, in f32 thickness, in Color color){
         assert(this.m_recording);
         if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const f32 scale = this.activeTransformScale();
             EmitPaintLine(
                 this.m_recording, this.m_clips.back(),
                 ApplyPaintTransform(xf, start), ApplyPaintTransform(xf, end),
-                thickness * ResolvePaintTransformScale(xf), color, this.m_layer,
+                thickness * scale, color, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
@@ -203,8 +340,8 @@ class PaintBuilder : NoCopy{
     public void drawLine(in Point start, in Point end, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 scale = ResolvePaintTransformScale(xf);
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const f32 scale = this.activeTransformScale();
             PaintLineStyle scaledStyle = style;
             scaledStyle.thickness = style.thickness * scale;
             scaledStyle.dashLength = style.dashLength * scale;
@@ -227,20 +364,10 @@ class PaintBuilder : NoCopy{
     public void drawLineBatch(in Span<PaintLineSegment> lines, in f32 thickness){
         assert(this.m_recording);
         if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 scale = ResolvePaintTransformScale(xf);
-            this.m_transformedLineScratch.resize(lines.size());
-            for(usize li = 0u; li < lines.size(); ++li){
-                in PaintLineSegment src = lines[li];
-                PaintLineSegment dst = src;
-                dst.start = ApplyPaintTransform(xf, src.start);
-                dst.end = ApplyPaintTransform(xf, src.end);
-                if(src.thickness > 0.0f)
-                    dst.thickness = src.thickness * scale;
-                this.m_transformedLineScratch[li] = dst;
-            }
-            EmitPaintLineBatch(
-                this.m_recording, this.m_clips.back(), Span<PaintLineSegment>(this.m_transformedLineScratch), thickness * scale, this.m_layer,
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const f32 scale = this.activeTransformScale();
+            EmitPaintLineBatchTransformed(
+                this.m_recording, this.m_clips.back(), lines, thickness, xf, scale, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
@@ -254,8 +381,8 @@ class PaintBuilder : NoCopy{
     public void drawPolyline(in Span<Point> points, in b8 closed, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 scale = ResolvePaintTransformScale(xf);
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const f32 scale = this.activeTransformScale();
             this.m_transformedPointScratch.resize(points.size());
             for(usize pi = 0u; pi < points.size(); ++pi)
                 this.m_transformedPointScratch[pi] = ApplyPaintTransform(xf, points[pi]);
@@ -415,15 +542,26 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
                 return;
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u];
-            const f32 x1 = rectangle.x + rectangle.width;
-            const f32 y1 = rectangle.y + rectangle.height;
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = entry.xf;
+            if(entry.axisAlignedPositive){
+                const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                EmitPaintQuadValidated(
+                    this.m_recording, this.m_clips.back(), scaledRect, uv, color, material, this.m_layer,
+                    glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+                return;
+            }
+            const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+            const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+            const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+            const Point p10(p00.x + ex.x, p00.y + ex.y);
+            const Point p01(p00.x + ey.x, p00.y + ey.y);
+            const Point p11(p10.x + ey.x, p10.y + ey.y);
             EmitPaintTransformedQuad(
                 this.m_recording, this.m_clips.back(),
-                ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, rectangle.y)),
-                ApplyPaintTransform(xf, Point(x1, y1)),
-                ApplyPaintTransform(xf, Point(rectangle.x, y1)),
+                p00, p10, p11, p01,
                 uv, color, material, this.m_layer,
                 glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending

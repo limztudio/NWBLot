@@ -400,75 +400,123 @@ Expected<f32x4> DecodePhysicsFloat4Value(
     return f32x4(x, y, z, w);
 }
 
-b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
-    if(e.shapeType == ShapeType::Hull){
-        if(e.convexHullAsset.valid())
+b8 ValidateCookColliderGeometryFields(
+    in Path file,
+    in ShapeType shapeType,
+    in AssetRef<Mesh> meshAsset,
+    in AssetRef<ConvexHullAsset> convexHullAsset,
+    in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+    in b8 isBox,
+    in VectorSingle center,
+    in VectorSingle center2,
+    in VectorSingle halfExtents,
+    in f32 skinRadius,
+    in f32 radius,
+    in f32 cylinderHalfHeight,
+    in f32 topRadius,
+    in VectorSingle planeNormalOffset,
+    in u32 heightfieldCols,
+    in u32 heightfieldRows,
+    in VectorSingle heightfieldScale,
+    in Span<f32x4> hullPoints,
+    in Span<f32x4> meshVertices,
+    in Span<u32> meshIndices,
+    in Span<f32> heightfieldHeights
+){
+    if(shapeType == ShapeType::Hull){
+        if(convexHullAsset.valid())
             return true;
-        if(e.isBox){
-            if(!MakeBoxHull(e.halfExtents.x, e.halfExtents.y, e.halfExtents.z, e.skinRadius).has_value()){
+        if(isBox){
+            if(!MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, skinRadius).has_value()){
                 error("{} '{}': invalid box hull dimensions", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
             return true;
         }
-        if(!BuildConvexHull(Span<f32x4>(e.hullPoints.data(), e.hullPoints.size()), e.skinRadius).has_value()){
+        if(!BuildConvexHull(hullPoints, skinRadius).has_value()){
             error("{} '{}': failed to cook inline convex hull geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Mesh){
-        if(e.meshAsset.valid() || e.collisionMeshAsset.valid())
+    if(shapeType == ShapeType::Mesh){
+        if(meshAsset.valid() || collisionMeshAsset.valid())
             return true;
-        if(!MakeMeshShape(Span<f32x4>(e.meshVertices.data(), e.meshVertices.size()), Span<u32>(e.meshIndices.data(), e.meshIndices.size()), e.skinRadius).has_value()){
+        if(!MakeMeshShape(meshVertices, meshIndices, skinRadius).has_value()){
             error("{} '{}': failed to cook inline triangle mesh geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Cylinder){
-        if(!MakeCylinderShape(VectorSingle(e.center), e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
+    if(shapeType == ShapeType::Cylinder){
+        if(!MakeCylinderShape(center, cylinderHalfHeight, radius, skinRadius).has_value()){
             error("{} '{}': invalid cylinder geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Cone){
-        if(!MakeConeShape(VectorSingle(e.center), e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
+    if(shapeType == ShapeType::Cone){
+        if(!MakeConeShape(center, cylinderHalfHeight, radius, skinRadius).has_value()){
             error("{} '{}': invalid cone geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::TaperedCapsule){
-        if(!MakeTaperedCapsuleShape(VectorSingle(e.center), VectorSingle(e.center2), e.radius, e.topRadius).has_value()){
+    if(shapeType == ShapeType::TaperedCapsule){
+        if(!MakeTaperedCapsuleShape(center, center2, radius, topRadius).has_value()){
             error("{} '{}': invalid tapered capsule geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Plane){
-        if(!MakePlaneShape(VectorSingle(e.planeNormalOffset), e.planeNormalOffset.w, VectorSingle(e.halfExtents)).has_value()){
+    if(shapeType == ShapeType::Plane){
+        if(!MakePlaneShape(planeNormalOffset, planeNormalOffset.w, halfExtents).has_value()){
             error("{} '{}': invalid plane geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Segment){
-        if(!MakeSegmentShape(VectorSingle(e.center), VectorSingle(e.center2), e.radius).has_value()){
+    if(shapeType == ShapeType::Segment){
+        if(!MakeSegmentShape(center, center2, radius).has_value()){
             error("{} '{}': invalid segment geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Heightfield){
-        if(!MakeHeightfieldShape(e.heightfieldCols, e.heightfieldRows, Span<f32>(e.heightfieldHeights.data(), e.heightfieldHeights.size()), VectorSingle(e.heightfieldScale), VectorSingle(e.center)).has_value()){
+    if(shapeType == ShapeType::Heightfield){
+        if(!MakeHeightfieldShape(heightfieldCols, heightfieldRows, heightfieldHeights, heightfieldScale, center).has_value()){
             error("{} '{}': invalid heightfield geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
     return true;
+}
+
+b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
+    return ValidateCookColliderGeometryFields(
+        file,
+        e.shapeType,
+        e.meshAsset,
+        e.convexHullAsset,
+        e.collisionMeshAsset,
+        e.isBox,
+        VectorSingle(e.center),
+        VectorSingle(e.center2),
+        VectorSingle(e.halfExtents),
+        e.skinRadius,
+        e.radius,
+        e.cylinderHalfHeight,
+        e.topRadius,
+        VectorSingle(e.planeNormalOffset),
+        e.heightfieldCols,
+        e.heightfieldRows,
+        VectorSingle(e.heightfieldScale),
+        Span<f32x4>(e.hullPoints.data(), e.hullPoints.size()),
+        Span<f32x4>(e.meshVertices.data(), e.meshVertices.size()),
+        Span<u32>(e.meshIndices.data(), e.meshIndices.size()),
+        Span<f32>(e.heightfieldHeights.data(), e.heightfieldHeights.size())
+    );
 }
 
 b8 ApplyColliderShapeField(
@@ -637,7 +685,7 @@ b8 ApplyColliderShapeField(
     return false;
 }
 
-void CopyShapeEntryToColliderComponent(in ColliderShapeEntry src, mut ColliderComponent dst){
+void CopyShapeScalarFieldsToColliderComponent(in ColliderShapeEntry src, mut ColliderComponent dst){
     dst.shapeType = src.shapeType;
     dst.center = src.center;
     dst.center2 = src.center2;
@@ -661,9 +709,6 @@ void CopyShapeEntryToColliderComponent(in ColliderShapeEntry src, mut ColliderCo
     dst.enableSensorEvents = src.enableSensorEvents;
     dst.enablePreSolveEvents = src.enablePreSolveEvents;
     dst.invokeContactCreation = src.invokeContactCreation;
-    dst.hullPoints = src.hullPoints;
-    dst.meshVertices = src.meshVertices;
-    dst.meshIndices = src.meshIndices;
     dst.meshAsset = src.meshAsset;
     dst.materialAsset = src.materialAsset;
     dst.convexHullAsset = src.convexHullAsset;
@@ -676,10 +721,17 @@ void CopyShapeEntryToColliderComponent(in ColliderShapeEntry src, mut ColliderCo
     dst.cylinderHalfHeight = src.cylinderHalfHeight;
     dst.topRadius = src.topRadius;
     dst.planeNormalOffset = src.planeNormalOffset;
-    dst.heightfieldHeights = src.heightfieldHeights;
     dst.heightfieldRows = src.heightfieldRows;
     dst.heightfieldCols = src.heightfieldCols;
     dst.heightfieldScale = src.heightfieldScale;
+}
+
+void CopyShapeEntryToColliderComponent(in ColliderShapeEntry src, mut ColliderComponent dst){
+    CopyShapeScalarFieldsToColliderComponent(src, dst);
+    dst.hullPoints = src.hullPoints;
+    dst.meshVertices = src.meshVertices;
+    dst.meshIndices = src.meshIndices;
+    dst.heightfieldHeights = src.heightfieldHeights;
 }
 
 b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, mut ColliderShapeEntry outEntry){
@@ -705,6 +757,14 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
         if(!value.forEachMapEntry(lambda[in file, mut entry, mut primaryEntry, mut vecMask, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
             if(key == "entity_tag")
                 return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, "entity_tag", entry.component.entityTag);
+            if(key == "hull_points")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.hullPoints);
+            if(key == "mesh_vertices")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshVertices);
+            if(key == "mesh_indices")
+                return ReadPhysicsU32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshIndices);
+            if(key == "heightfield_heights")
+                return ReadPhysicsF32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.heightfieldHeights);
             if(key == "extra_shapes"){
                 if(!fieldVal.isList()){
                     error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
@@ -729,9 +789,31 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
             return MakeUnexpected(Failure());
     }
 
-    if(!ValidateCookColliderEntryGeometry(file, primaryEntry))
+    CopyShapeScalarFieldsToColliderComponent(primaryEntry, entry.component);
+    if(!ValidateCookColliderGeometryFields(
+        file,
+        entry.component.shapeType,
+        entry.component.meshAsset,
+        entry.component.convexHullAsset,
+        entry.component.collisionMeshAsset,
+        entry.component.isBox,
+        VectorSingle(entry.component.center),
+        VectorSingle(entry.component.center2),
+        VectorSingle(entry.component.halfExtents),
+        entry.component.skinRadius,
+        entry.component.radius,
+        entry.component.cylinderHalfHeight,
+        entry.component.topRadius,
+        VectorSingle(entry.component.planeNormalOffset),
+        entry.component.heightfieldCols,
+        entry.component.heightfieldRows,
+        VectorSingle(entry.component.heightfieldScale),
+        Span<f32x4>(entry.component.hullPoints.data(), entry.component.hullPoints.size()),
+        Span<f32x4>(entry.component.meshVertices.data(), entry.component.meshVertices.size()),
+        Span<u32>(entry.component.meshIndices.data(), entry.component.meshIndices.size()),
+        Span<f32>(entry.component.heightfieldHeights.data(), entry.component.heightfieldHeights.size())
+    ))
         return MakeUnexpected(Failure());
-    CopyShapeEntryToColliderComponent(primaryEntry, entry.component);
     if(!PhysicsComponentBinaryCodec().validateCollider(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
@@ -896,7 +978,7 @@ b8 ApplyJointEntryField(
     return false;
 }
 
-void CopyJointEntryToComponent(in JointEntry src, mut JointComponent dst){
+void CopyJointScalarFieldsToComponent(in JointEntry src, mut JointComponent dst){
     dst.bodyEntityNameA = src.bodyEntityNameA;
     dst.bodyEntityNameB = src.bodyEntityNameB;
     dst.userData = src.userData;
@@ -949,9 +1031,13 @@ void CopyJointEntryToComponent(in JointEntry src, mut JointComponent dst){
     dst.lengthA = src.lengthA;
     dst.lengthB = src.lengthB;
     dst.sixDofAxes = src.sixDofAxes;
-    dst.pathPoints = src.pathPoints;
     dst.pathClosed = src.pathClosed;
     dst.pathLockRotation = src.pathLockRotation;
+}
+
+void CopyJointEntryToComponent(in JointEntry src, mut JointComponent dst){
+    CopyJointScalarFieldsToComponent(src, dst);
+    dst.pathPoints = src.pathPoints;
 }
 
 Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
@@ -964,6 +1050,8 @@ Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtua
     if(value.isMap()){
         u32 rotFieldCount = 0u;
         if(!value.forEachMapEntry(lambda[in file, mut entry, mut primaryEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
+            if(key == "path_points")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, entry.component.pathPoints);
             if(key == "extra_joints"){
                 if(!fieldVal.isList()){
                     error("{} '{}': field 'extra_joints' must be a list of joint maps", s_JointComponentDiagnosticPrefix, PathToString(file));
@@ -991,7 +1079,7 @@ Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtua
             return MakeUnexpected(Failure());
     }
 
-    CopyJointEntryToComponent(primaryEntry, entry.component);
+    CopyJointScalarFieldsToComponent(primaryEntry, entry.component);
     if(!PhysicsComponentBinaryCodec().validateJoint(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;

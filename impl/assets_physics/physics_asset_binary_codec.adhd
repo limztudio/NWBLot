@@ -193,15 +193,19 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializePhysicsMaterial(in SurfaceMaterial mat, mut Vector<u8> outBinary)const{
-        if(!this.validSurfaceMaterial(mat))
-            return false;
+    public b8 serializePhysicsMaterialUnchecked(in SurfaceMaterial mat, mut Vector<u8> outBinary)const{
         PhysicsMaterialHeaderBinary bin;
         bin.fields = this.packSurfaceMaterialFields(mat);
         outBinary.clear();
         outBinary.reserve(size_of<PhysicsMaterialHeaderBinary>());
         AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializePhysicsMaterial(in SurfaceMaterial mat, mut Vector<u8> outBinary)const{
+        if(!this.validSurfaceMaterial(mat))
+            return false;
+        return this.serializePhysicsMaterialUnchecked(mat, outBinary);
     }
 
     public Expected<SurfaceMaterial> deserializePhysicsMaterial(in Span<u8> binary)const{
@@ -250,9 +254,7 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeCollisionLayerMatrix(in CollisionLayerMatrix matrix, mut Vector<u8> outBinary)const{
-        if(!this.validCollisionLayerMatrix(matrix))
-            return false;
+    public b8 serializeCollisionLayerMatrixUnchecked(in CollisionLayerMatrix matrix, mut Vector<u8> outBinary)const{
         CollisionLayerMatrixBinary bin;
         for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
             bin.layerNameHashes[i] = matrix.layerNames[i].hash();
@@ -262,6 +264,12 @@ class PhysicsAssetBinaryCodec{
         outBinary.reserve(size_of<CollisionLayerMatrixBinary>());
         AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeCollisionLayerMatrix(in CollisionLayerMatrix matrix, mut Vector<u8> outBinary)const{
+        if(!this.validCollisionLayerMatrix(matrix))
+            return false;
+        return this.serializeCollisionLayerMatrixUnchecked(matrix, outBinary);
     }
 
     public Expected<CollisionLayerMatrix> deserializeCollisionLayerMatrix(in Span<u8> binary)const{
@@ -344,15 +352,16 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeConvexHull(in HullShape hull, mut Vector<u8> outBinary)const{
-        if(!this.validHullShapeData(hull))
-            return false;
+    public b8 serializeConvexHullUnchecked(in HullShape hull, mut Vector<u8> outBinary)const{
         if(
             hull.vertices.size() > cast<usize>(u32.max)
             || hull.faceTopologies.size() > cast<usize>(u32.max)
             || hull.halfEdges.size() > cast<usize>(u32.max)
         )
             return false;
+
+        static_assert(size_of<Plane3D>() == size_of<ConvexHullPlaneBinary>() && offset_of<Plane3D>(normalOffset) == offset_of<ConvexHullPlaneBinary>(normalOffset));
+        static_assert(size_of<HalfEdge>() == size_of<ConvexHullHalfEdgeBinary>() && offset_of<HalfEdge>(tail) == offset_of<ConvexHullHalfEdgeBinary>(tail) && offset_of<HalfEdge>(face) == offset_of<ConvexHullHalfEdgeBinary>(face) && offset_of<HalfEdge>(next) == offset_of<ConvexHullHalfEdgeBinary>(next) && offset_of<HalfEdge>(twin) == offset_of<ConvexHullHalfEdgeBinary>(twin));
 
         const usize totalBytes =
             size_of<ConvexHullHeaderBinary>()
@@ -381,26 +390,21 @@ class PhysicsAssetBinaryCodec{
             v.z = hull.vertices[i].z;
             AppendPOD(outBinary, v);
         }
-        for(usize i = 0u; i < hull.facePlanes.size(); ++i){
-            ConvexHullPlaneBinary p;
-            p.normalOffset = hull.facePlanes[i].normalOffset;
-            AppendPOD(outBinary, p);
-        }
+        if(!AppendBinaryVectorPayload(outBinary, hull.facePlanes).has_value())
+            return false;
         for(usize i = 0u; i < hull.faceTopologies.size(); ++i){
             ConvexHullFaceTopologyBinary t;
             t.edge = hull.faceTopologies[i].edge;
             t.vertexCount = hull.faceTopologies[i].vertexCount;
             AppendPOD(outBinary, t);
         }
-        for(usize i = 0u; i < hull.halfEdges.size(); ++i){
-            ConvexHullHalfEdgeBinary he;
-            he.tail = hull.halfEdges[i].tail;
-            he.face = hull.halfEdges[i].face;
-            he.next = hull.halfEdges[i].next;
-            he.twin = hull.halfEdges[i].twin;
-            AppendPOD(outBinary, he);
-        }
-        return true;
+        return AppendBinaryVectorPayload(outBinary, hull.halfEdges).has_value();
+    }
+
+    public b8 serializeConvexHull(in HullShape hull, mut Vector<u8> outBinary)const{
+        if(!this.validHullShapeData(hull))
+            return false;
+        return this.serializeConvexHullUnchecked(hull, outBinary);
     }
 
     public Expected<HullShape> deserializeConvexHull(in Span<u8> binary)const{
@@ -438,15 +442,11 @@ class PhysicsAssetBinaryCodec{
             hull.vertices.push_back(f32x3u(vRes.value().x, vRes.value().y, vRes.value().z));
         }
 
-        hull.facePlanes.reserve(hdr.faceCount);
-        for(u32 i = 0u; i < hdr.faceCount; ++i){
-            const Expected<ConvexHullPlaneBinary> pRes = ReadPOD<ConvexHullPlaneBinary>(binary, cursor);
-            if(!pRes.has_value())
-                return MakeUnexpected(Failure());
-            Plane3D pl;
-            pl.normalOffset = pRes.value().normalOffset;
-            hull.facePlanes.push_back(pl);
-        }
+        static_assert(size_of<Plane3D>() == size_of<ConvexHullPlaneBinary>() && offset_of<Plane3D>(normalOffset) == offset_of<ConvexHullPlaneBinary>(normalOffset));
+        static_assert(size_of<HalfEdge>() == size_of<ConvexHullHalfEdgeBinary>() && offset_of<HalfEdge>(tail) == offset_of<ConvexHullHalfEdgeBinary>(tail) && offset_of<HalfEdge>(face) == offset_of<ConvexHullHalfEdgeBinary>(face) && offset_of<HalfEdge>(next) == offset_of<ConvexHullHalfEdgeBinary>(next) && offset_of<HalfEdge>(twin) == offset_of<ConvexHullHalfEdgeBinary>(twin));
+
+        if(!ReadBinaryVectorPayload(binary, hdr.faceCount, cursor, hull.facePlanes).has_value())
+            return MakeUnexpected(Failure());
 
         hull.faceTopologies.reserve(hdr.faceCount);
         for(u32 i = 0u; i < hdr.faceCount; ++i){
@@ -459,18 +459,8 @@ class PhysicsAssetBinaryCodec{
             hull.faceTopologies.push_back(topo);
         }
 
-        hull.halfEdges.reserve(hdr.halfEdgeCount);
-        for(u32 i = 0u; i < hdr.halfEdgeCount; ++i){
-            const Expected<ConvexHullHalfEdgeBinary> eRes = ReadPOD<ConvexHullHalfEdgeBinary>(binary, cursor);
-            if(!eRes.has_value())
-                return MakeUnexpected(Failure());
-            HalfEdge he;
-            he.tail = eRes.value().tail;
-            he.face = eRes.value().face;
-            he.next = eRes.value().next;
-            he.twin = eRes.value().twin;
-            hull.halfEdges.push_back(he);
-        }
+        if(!ReadBinaryVectorPayload(binary, hdr.halfEdgeCount, cursor, hull.halfEdges).has_value())
+            return MakeUnexpected(Failure());
 
         if(!this.validHullShapeData(hull)){
             error("ConvexHullAsset::loadBinary failed: invalid convex hull topology or geometry");
@@ -548,9 +538,7 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeCollisionMesh(in MeshShape mesh, mut Vector<u8> outBinary)const{
-        if(!this.validMeshShapeData(mesh))
-            return false;
+    public b8 serializeCollisionMeshUnchecked(in MeshShape mesh, mut Vector<u8> outBinary)const{
         if(
             mesh.triangles.size() > cast<usize>(u32.max)
             || mesh.nodes.size() > cast<usize>(u32.max)
@@ -559,6 +547,9 @@ class PhysicsAssetBinaryCodec{
             || mesh.triangleUserData.size() > cast<usize>(u32.max)
         )
             return false;
+
+        static_assert(size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>() && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft) && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight));
+        static_assert(size_of<CollisionMeshU16Binary>() == size_of<u16>() && size_of<CollisionMeshU32Binary>() == size_of<u32>());
 
         const usize totalBytes =
             size_of<CollisionMeshHeaderBinary>()
@@ -591,25 +582,18 @@ class PhysicsAssetBinaryCodec{
             tb.normalZero = f32x4(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
             AppendPOD(outBinary, tb);
         }
-        for(usize i = 0u; i < mesh.nodes.size(); ++i){
-            CollisionMeshBvhNodeBinary nb;
-            nb.aabbMinLeft = mesh.nodes[i].aabbMinLeft;
-            nb.aabbMaxRight = mesh.nodes[i].aabbMaxRight;
-            AppendPOD(outBinary, nb);
-        }
+        if(!AppendBinaryVectorPayload(outBinary, mesh.nodes).has_value())
+            return false;
         for(usize i = 0u; i < mesh.materials.size(); ++i)
             AppendPOD(outBinary, this.packSurfaceMaterialFields(mesh.materials[i]));
-        for(usize i = 0u; i < mesh.triangleMaterialIndices.size(); ++i){
-            CollisionMeshU16Binary mIdx;
-            mIdx.value = mesh.triangleMaterialIndices[i];
-            AppendPOD(outBinary, mIdx);
-        }
-        for(usize i = 0u; i < mesh.triangleUserData.size(); ++i){
-            CollisionMeshU32Binary ud;
-            ud.value = mesh.triangleUserData[i];
-            AppendPOD(outBinary, ud);
-        }
-        return true;
+        return AppendBinaryVectorPayload(outBinary, mesh.triangleMaterialIndices).has_value()
+            && AppendBinaryVectorPayload(outBinary, mesh.triangleUserData).has_value();
+    }
+
+    public b8 serializeCollisionMesh(in MeshShape mesh, mut Vector<u8> outBinary)const{
+        if(!this.validMeshShapeData(mesh))
+            return false;
+        return this.serializeCollisionMeshUnchecked(mesh, outBinary);
     }
 
     public Expected<MeshShape> deserializeCollisionMesh(in Span<u8> binary)const{
@@ -656,16 +640,9 @@ class PhysicsAssetBinaryCodec{
             mesh.triangles.push_back(tri);
         }
 
-        mesh.nodes.reserve(hdr.nodeCount);
-        for(u32 i = 0u; i < hdr.nodeCount; ++i){
-            const Expected<CollisionMeshBvhNodeBinary> nbRes = ReadPOD<CollisionMeshBvhNodeBinary>(binary, cursor);
-            if(!nbRes.has_value())
-                return MakeUnexpected(Failure());
-            MeshBvhNode node;
-            node.aabbMinLeft = nbRes.value().aabbMinLeft;
-            node.aabbMaxRight = nbRes.value().aabbMaxRight;
-            mesh.nodes.push_back(node);
-        }
+        static_assert(size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>() && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft) && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight));
+        if(!ReadBinaryVectorPayload(binary, hdr.nodeCount, cursor, mesh.nodes).has_value())
+            return MakeUnexpected(Failure());
 
         mesh.materials.reserve(hdr.materialCount);
         for(u32 i = 0u; i < hdr.materialCount; ++i){
@@ -695,3 +672,4 @@ class PhysicsAssetBinaryCodec{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -197,88 +197,98 @@ void SpatialMat6SetColumn(mut SpatialMat6 m, in u32 colIdx, in SpatialVec col){
 }
 
 SpatialMat6 SpatialTransformInertiaC2P(in Transform3D relP2C, in SpatialMat6 iaChild){
+    const Mat3 rMat = Mat3FromQuaternion(VectorSingle(relP2C.rotation));
+    const Mat3 rT = TransposeMat3(rMat);
+    const Mat3 jr = MulMat3(rMat, MulMat3(iaChild.tl, rT));
+    const Mat3 cr = MulMat3(rMat, MulMat3(iaChild.tr, rT));
+    const Mat3 br = MulMat3(rMat, MulMat3(iaChild.bl, rT));
+    const Mat3 mr = MulMat3(rMat, MulMat3(iaChild.br, rT));
+    const Mat3 sMat = SkewSymmetricMat3(VectorSingle(relP2C.position));
+
     SpatialMat6 outM;
-    for(u32 k = 0u; k < 6u; ++k){
-        SpatialVec e;
-        if(k == 0u) e.ang.x = 1.0f;
-        else if(k == 1u) e.ang.y = 1.0f;
-        else if(k == 2u) e.ang.z = 1.0f;
-        else if(k == 3u) e.lin.x = 1.0f;
-        else if(k == 4u) e.lin.y = 1.0f;
-        else e.lin.z = 1.0f;
-        const SpatialVec mc = SpatialTransformMotionP2C(relP2C, e);
-        const SpatialVec fc = SpatialMulMat6Vec(iaChild, mc);
-        const SpatialVec fp = SpatialTransformForceC2P(relP2C, fc);
-        SpatialMat6SetColumn(outM, k, fp);
-    }
+    outM.br = mr;
+    outM.tr = AddMat3(cr, MulMat3(sMat, mr));
+    outM.bl = SubMat3(br, MulMat3(mr, sMat));
+    outM.tl = AddMat3(SubMat3(jr, MulMat3(cr, sMat)), MulMat3(sMat, outM.bl));
     return outM;
 }
 
 SpatialVec SolveSpatial6x6(in SpatialMat6 mat, in SpatialVec rhs){
-    Array<f32, 42u> aug;
-    for(usize r = 0u; r < 42u; ++r)
-        aug[r] = 0.0f;
+    Array<f32, 36u> a;
+    a[0u * 6u + 0u] = mat.tl.row0.x;
+    a[1u * 6u + 0u] = 0.5f * (mat.tl.row1.x + mat.tl.row0.y);
+    a[1u * 6u + 1u] = mat.tl.row1.y;
+    a[2u * 6u + 0u] = 0.5f * (mat.tl.row2.x + mat.tl.row0.z);
+    a[2u * 6u + 1u] = 0.5f * (mat.tl.row2.y + mat.tl.row1.z);
+    a[2u * 6u + 2u] = mat.tl.row2.z;
 
-    aug[0u * 7u + 0u] = mat.tl.row0.x; aug[0u * 7u + 1u] = mat.tl.row0.y; aug[0u * 7u + 2u] = mat.tl.row0.z;
-    aug[0u * 7u + 3u] = mat.tr.row0.x; aug[0u * 7u + 4u] = mat.tr.row0.y; aug[0u * 7u + 5u] = mat.tr.row0.z;
-    aug[0u * 7u + 6u] = rhs.ang.x;
+    a[3u * 6u + 0u] = 0.5f * (mat.bl.row0.x + mat.tr.row0.x);
+    a[3u * 6u + 1u] = 0.5f * (mat.bl.row0.y + mat.tr.row1.x);
+    a[3u * 6u + 2u] = 0.5f * (mat.bl.row0.z + mat.tr.row2.x);
+    a[3u * 6u + 3u] = mat.br.row0.x;
 
-    aug[1u * 7u + 0u] = mat.tl.row1.x; aug[1u * 7u + 1u] = mat.tl.row1.y; aug[1u * 7u + 2u] = mat.tl.row1.z;
-    aug[1u * 7u + 3u] = mat.tr.row1.x; aug[1u * 7u + 4u] = mat.tr.row1.y; aug[1u * 7u + 5u] = mat.tr.row1.z;
-    aug[1u * 7u + 6u] = rhs.ang.y;
+    a[4u * 6u + 0u] = 0.5f * (mat.bl.row1.x + mat.tr.row0.y);
+    a[4u * 6u + 1u] = 0.5f * (mat.bl.row1.y + mat.tr.row1.y);
+    a[4u * 6u + 2u] = 0.5f * (mat.bl.row1.z + mat.tr.row2.y);
+    a[4u * 6u + 3u] = 0.5f * (mat.br.row1.x + mat.br.row0.y);
+    a[4u * 6u + 4u] = mat.br.row1.y;
 
-    aug[2u * 7u + 0u] = mat.tl.row2.x; aug[2u * 7u + 1u] = mat.tl.row2.y; aug[2u * 7u + 2u] = mat.tl.row2.z;
-    aug[2u * 7u + 3u] = mat.tr.row2.x; aug[2u * 7u + 4u] = mat.tr.row2.y; aug[2u * 7u + 5u] = mat.tr.row2.z;
-    aug[2u * 7u + 6u] = rhs.ang.z;
+    a[5u * 6u + 0u] = 0.5f * (mat.bl.row2.x + mat.tr.row0.z);
+    a[5u * 6u + 1u] = 0.5f * (mat.bl.row2.y + mat.tr.row1.z);
+    a[5u * 6u + 2u] = 0.5f * (mat.bl.row2.z + mat.tr.row2.z);
+    a[5u * 6u + 3u] = 0.5f * (mat.br.row2.x + mat.br.row0.z);
+    a[5u * 6u + 4u] = 0.5f * (mat.br.row2.y + mat.br.row1.z);
+    a[5u * 6u + 5u] = mat.br.row2.z;
 
-    aug[3u * 7u + 0u] = mat.bl.row0.x; aug[3u * 7u + 1u] = mat.bl.row0.y; aug[3u * 7u + 2u] = mat.bl.row0.z;
-    aug[3u * 7u + 3u] = mat.br.row0.x; aug[3u * 7u + 4u] = mat.br.row0.y; aug[3u * 7u + 5u] = mat.br.row0.z;
-    aug[3u * 7u + 6u] = rhs.lin.x;
-
-    aug[4u * 7u + 0u] = mat.bl.row1.x; aug[4u * 7u + 1u] = mat.bl.row1.y; aug[4u * 7u + 2u] = mat.bl.row1.z;
-    aug[4u * 7u + 3u] = mat.br.row1.x; aug[4u * 7u + 4u] = mat.br.row1.y; aug[4u * 7u + 5u] = mat.br.row1.z;
-    aug[4u * 7u + 6u] = rhs.lin.y;
-
-    aug[5u * 7u + 0u] = mat.bl.row2.x; aug[5u * 7u + 1u] = mat.bl.row2.y; aug[5u * 7u + 2u] = mat.bl.row2.z;
-    aug[5u * 7u + 3u] = mat.br.row2.x; aug[5u * 7u + 4u] = mat.br.row2.y; aug[5u * 7u + 5u] = mat.br.row2.z;
-    aug[5u * 7u + 6u] = rhs.lin.z;
-
-    for(usize col = 0u; col < 6u; ++col){
-        usize piv = col;
-        f32 bestVal = Abs(aug[col * 7u + col]);
-        for(usize row = col + 1u; row < 6u; ++row){
-            const f32 v = Abs(aug[row * 7u + col]);
-            if(v > bestVal){
-                bestVal = v;
-                piv = row;
-            }
+    Array<f32, 36u> l;
+    Array<f32, 6u> d;
+    for(usize i = 0u; i < 6u; ++i){
+        f32 diag = a[i * 6u + i];
+        for(usize k = 0u; k < i; ++k){
+            const f32 lik = l[i * 6u + k];
+            diag -= lik * lik * d[k];
         }
-        if(bestVal < 1.0e-12f)
+        if(Abs(diag) < 1.0e-12f)
             return SpatialVec();
-        if(piv != col){
-            for(usize j = col; j < 7u; ++j){
-                const f32 tmp = aug[col * 7u + j];
-                aug[col * 7u + j] = aug[piv * 7u + j];
-                aug[piv * 7u + j] = tmp;
-            }
-        }
-        const f32 invPiv = 1.0f / aug[col * 7u + col];
-        for(usize j = col; j < 7u; ++j)
-            aug[col * 7u + j] *= invPiv;
-        for(usize row = 0u; row < 6u; ++row){
-            if(row == col)
-                continue;
-            const f32 f = aug[row * 7u + col];
-            if(f != 0.0f){
-                for(usize j = col; j < 7u; ++j)
-                    aug[row * 7u + j] -= f * aug[col * 7u + j];
-            }
+        d[i] = diag;
+        const f32 invD = 1.0f / diag;
+        l[i * 6u + i] = 1.0f;
+        for(usize j = i + 1u; j < 6u; ++j){
+            f32 s = a[j * 6u + i];
+            for(usize k = 0u; k < i; ++k)
+                s -= l[j * 6u + k] * l[i * 6u + k] * d[k];
+            l[j * 6u + i] = s * invD;
         }
     }
 
+    Array<f32, 6u> b;
+    b[0u] = rhs.ang.x;
+    b[1u] = rhs.ang.y;
+    b[2u] = rhs.ang.z;
+    b[3u] = rhs.lin.x;
+    b[4u] = rhs.lin.y;
+    b[5u] = rhs.lin.z;
+
+    Array<f32, 6u> y;
+    for(usize i = 0u; i < 6u; ++i){
+        f32 s = b[i];
+        for(usize k = 0u; k < i; ++k)
+            s -= l[i * 6u + k] * y[k];
+        y[i] = s;
+    }
+
+    Array<f32, 6u> x;
+    for(usize rev = 0u; rev < 6u; ++rev){
+        const usize i = 5u - rev;
+        f32 s = y[i] / d[i];
+        for(usize j = i + 1u; j < 6u; ++j)
+            s -= l[j * 6u + i] * x[j];
+        x[i] = s;
+    }
+
     SpatialVec sol;
-    sol.ang = f32x4(aug[0u * 7u + 6u], aug[1u * 7u + 6u], aug[2u * 7u + 6u], 0.0f);
-    sol.lin = f32x4(aug[3u * 7u + 6u], aug[4u * 7u + 6u], aug[5u * 7u + 6u], 0.0f);
+    sol.ang = f32x4(x[0u], x[1u], x[2u], 0.0f);
+    sol.lin = f32x4(x[3u], x[4u], x[5u], 0.0f);
     return sol;
 }
 
@@ -326,12 +336,24 @@ class Articulation{
     public SpatialVec baseVelocity;
     public b8 fixedBase = true;
     public u32 subSteps = 4u;
+    private Vector<SpatialMat6> m_linkSpatialInertia;
+    private Vector<SpatialVec> m_linkJointSubspace;
+    private Vector<Transform3D> m_relP2C;
+    private Vector<SpatialVec> m_biasC;
+    private Vector<SpatialMat6> m_iaList;
+    private Vector<SpatialVec> m_pAList;
+    private Vector<SpatialVec> m_uSubVec;
+    private Vector<f32> m_dScalar;
+    private Vector<f32> m_uTau;
+    private Vector<SpatialVec> m_accel;
 
     public b8 init(in Transform3D rootTransform, in b8 isFixedBase, in Span<ArticulationLinkDef> links){
         if(links.empty())
             return false;
         this.linkDefs.clear();
         this.linkStates.clear();
+        this.m_linkSpatialInertia.clear();
+        this.m_linkJointSubspace.clear();
         this.baseTransform = rootTransform;
         this.baseVelocity = SpatialVec();
         this.fixedBase = isFixedBase;
@@ -351,7 +373,22 @@ class Articulation{
             d.jointAxisLocal = f32x4(SafeNormalizeVec3(VectorSingle(d.jointAxisLocal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)), 0.0f);
             this.linkDefs.push_back(d);
             this.linkStates.push_back(ArticulationLinkState());
+            this.m_linkSpatialInertia.push_back(SpatialInertiaMatrix(d.mass, VectorSingle(d.comLocal), VectorSingle(d.inertiaDiag)));
+            this.m_linkJointSubspace.push_back(SpatialVec());
         }
+        for(usize i = 1u; i < this.linkDefs.size(); ++i)
+            this.m_linkJointSubspace[i] = this.computeJointSubspaceInChild(i);
+
+        const usize n = this.linkDefs.size();
+        this.m_relP2C.resize(n);
+        this.m_biasC.resize(n);
+        this.m_iaList.resize(n);
+        this.m_pAList.resize(n);
+        this.m_uSubVec.resize(n);
+        this.m_dScalar.resize(n, 0.0f);
+        this.m_uTau.resize(n, 0.0f);
+        this.m_accel.resize(n);
+
         this.computeForwardKinematics();
         return true;
     }
@@ -403,29 +440,45 @@ class Articulation{
         if(n == 0u)
             return;
 
+        if(this.m_linkSpatialInertia.size() != n || this.m_linkJointSubspace.size() != n){
+            this.m_linkSpatialInertia.resize(n);
+            this.m_linkJointSubspace.resize(n);
+            for(usize i = 0u; i < n; ++i){
+                in ArticulationLinkDef d = this.linkDefs[i];
+                this.m_linkSpatialInertia[i] = SpatialInertiaMatrix(d.mass, VectorSingle(d.comLocal), VectorSingle(d.inertiaDiag));
+                if(i == 0u)
+                    this.m_linkJointSubspace[i] = SpatialVec();
+                else
+                    this.m_linkJointSubspace[i] = this.computeJointSubspaceInChild(i);
+            }
+        }
+        if(this.m_relP2C.size() < n){
+            this.m_relP2C.resize(n);
+            this.m_biasC.resize(n);
+            this.m_iaList.resize(n);
+            this.m_pAList.resize(n);
+            this.m_uSubVec.resize(n);
+            this.m_dScalar.resize(n, 0.0f);
+            this.m_uTau.resize(n, 0.0f);
+            this.m_accel.resize(n);
+        }
+
         this.computeForwardKinematics();
 
-        Vector<Transform3D> relP2C;
-        relP2C.resize(n);
-        Vector<SpatialVec> jointS;
-        jointS.resize(n);
-        Vector<SpatialVec> biasC;
-        biasC.resize(n);
-        Vector<SpatialMat6> iaList;
-        iaList.resize(n);
-        Vector<SpatialVec> pAList;
-        pAList.resize(n);
-        Vector<SpatialVec> uSubVec;
-        uSubVec.resize(n);
-        Vector<f32> dScalar;
-        dScalar.resize(n, 0.0f);
-        Vector<f32> uTau;
-        uTau.resize(n, 0.0f);
+        mut Vector<Transform3D> relP2C = this.m_relP2C;
+        in Vector<SpatialVec> jointS = this.m_linkJointSubspace;
+        mut Vector<SpatialVec> biasC = this.m_biasC;
+        mut Vector<SpatialMat6> iaList = this.m_iaList;
+        mut Vector<SpatialVec> pAList = this.m_pAList;
+        mut Vector<SpatialVec> uSubVec = this.m_uSubVec;
+        mut Vector<f32> dScalar = this.m_dScalar;
+        mut Vector<f32> uTau = this.m_uTau;
+        mut Vector<SpatialVec> accel = this.m_accel;
 
         for(usize i = 0u; i < n; ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
             mut ArticulationLinkState s = this.linkStates[i];
-            const SpatialMat6 iBody = SpatialInertiaMatrix(d.mass, VectorSingle(d.comLocal), VectorSingle(d.inertiaDiag));
+            in SpatialMat6 iBody = this.m_linkSpatialInertia[i];
             iaList[i] = iBody;
 
             if(i == 0u){
@@ -437,7 +490,6 @@ class Articulation{
             }
             else{
                 relP2C[i] = RelativeTransform(this.linkStates[d.parentIndex].worldTransform, s.worldTransform);
-                jointS[i] = this.computeJointSubspaceInChild(i);
                 const SpatialVec vJ = SpatialScale(jointS[i], s.qd);
                 const SpatialVec vPar = SpatialTransformMotionP2C(relP2C[i], this.linkStates[d.parentIndex].spatialVelocity);
                 s.spatialVelocity = SpatialAdd(vPar, vJ);
@@ -498,8 +550,6 @@ class Articulation{
             pAList[pIdx] = SpatialAdd(pAList[pIdx], SpatialTransformForceC2P(relP2C[i], pFull));
         }
 
-        Vector<SpatialVec> accel;
-        accel.resize(n);
         if(this.fixedBase)
             accel[0u] = SpatialVec();
         else
@@ -536,11 +586,7 @@ class Articulation{
             const usize n = this.linkDefs.size();
 
             if(!this.fixedBase){
-                const SpatialMat6 rootIA = SpatialInertiaMatrix(this.linkDefs[0u].mass, VectorSingle(this.linkDefs[0u].comLocal), VectorSingle(this.linkDefs[0u].inertiaDiag));
-                const VectorSingle wG0 = Vector3InverseRotate(gravityW, VectorSingle(this.linkStates[0u].worldTransform.rotation));
-                const SpatialVec gF0 = SpatialVecMake(Cross(VectorSingle(this.linkDefs[0u].comLocal), wG0 * this.linkDefs[0u].mass), wG0 * this.linkDefs[0u].mass);
-                const SpatialVec rhs0 = SpatialSub(SpatialAdd(this.linkStates[0u].externalForce, gF0), SpatialCrossForce(this.baseVelocity, SpatialMulMat6Vec(rootIA, this.baseVelocity)));
-                const SpatialVec a0 = SolveSpatial6x6(rootIA, rhs0);
+                in SpatialVec a0 = this.m_accel[0u];
                 this.baseVelocity.ang = f32x4(VectorSingle(this.baseVelocity.ang) + VectorSingle(a0.ang) * subDt, 0.0f);
                 this.baseVelocity.lin = f32x4(VectorSingle(this.baseVelocity.lin) + VectorSingle(a0.lin) * subDt, 0.0f);
                 const VectorSingle wWorld = Vector3Rotate(VectorSingle(this.baseVelocity.ang), VectorSingle(this.baseTransform.rotation));
@@ -590,3 +636,4 @@ class Articulation{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

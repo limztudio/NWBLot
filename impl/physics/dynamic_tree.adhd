@@ -259,6 +259,36 @@ class DynamicTree{
         this.m_nodeCount = inNodeCount;
     }
 
+    public void beginRestore(in usize nodeCount, in usize moveIndexCount, in u32 inRoot, in u32 inFreeList, in u32 inNodeCount){
+        this.m_nodes.resize(nodeCount);
+        this.m_moveIndices.resize(moveIndexCount);
+        this.m_root = inRoot;
+        this.m_freeList = inFreeList;
+        this.m_nodeCount = inNodeCount;
+    }
+
+    public void setRestoredNode(in usize idx, in TreeNode node){
+        this.m_nodes[idx] = node;
+    }
+
+    public void setRestoredMoveIndex(in usize idx, in u32 moveIdx){
+        this.m_moveIndices[idx] = moveIdx;
+    }
+
+    public void swapState(mut DynamicTree other){
+        this.m_nodes.swap(other.m_nodes);
+        this.m_moveIndices.swap(other.m_moveIndices);
+        const u32 tmpRoot = this.m_root;
+        this.m_root = other.m_root;
+        other.m_root = tmpRoot;
+        const u32 tmpFree = this.m_freeList;
+        this.m_freeList = other.m_freeList;
+        other.m_freeList = tmpFree;
+        const u32 tmpCount = this.m_nodeCount;
+        this.m_nodeCount = other.m_nodeCount;
+        other.m_nodeCount = tmpCount;
+    }
+
     public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u32 maskBits, in u8 requiredNodeFlags, in Callback callback)const{
         if(this.m_root == s_NullIndex || maskBits == 0u)
             return;

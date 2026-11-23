@@ -63,6 +63,7 @@ class Body{
     public u32 bodyMoveIndex = s_NullIndex;
     public u32 id = s_NullIndex;
     public u32 flags = 0u;
+    public SymMat3 inertiaLocal;
     public BodyType type = BodyType::Static;
     public u16 generation = 0u;
     public b8 alive = false;

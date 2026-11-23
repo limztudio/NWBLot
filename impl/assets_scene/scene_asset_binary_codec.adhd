@@ -113,6 +113,8 @@ class SceneAssetBinaryCodec{
             error("SceneAssetCodec::serialize failed: scene payload byte size overflows");
             return false;
         }
+        static_assert(size_of<NameHash>() == s_NameHashBinaryBytes);
+        static_assert(size_of<SceneAssetEntryBinary>() == s_SceneAssetEntryBinaryBytes && offset_of<SceneAssetEntryBinary>(nicknameHash) == 0u && offset_of<SceneAssetEntryBinary>(assetHash) == 64u);
         outBinary.clear();
         outBinary.reserve(reserveBytes);
         AppendPOD(outBinary, this.makeSceneHeader(cast<u64>(subsystems.size()), cast<u64>(entities.size()), cast<u64>(scratchAssetEntries.size())));
@@ -120,9 +122,7 @@ class SceneAssetBinaryCodec{
             AppendPOD(outBinary, subsystem.name().hash());
         for(in AssetRef<TEntity> entity : entities)
             AppendPOD(outBinary, entity.name().hash());
-        for(in SceneAssetEntryBinary entry : scratchAssetEntries)
-            AppendPOD(outBinary, entry);
-        return true;
+        return AppendBinaryVectorPayload(outBinary, scratchAssetEntries).has_value();
     }
 
     public Expected<NameHash> deserializeProject(in Span<u8> binary)const{
@@ -146,71 +146,12 @@ class SceneAssetBinaryCodec{
         return header.startSceneHash;
     }
 
-    private b8 readNameHashes(
-        in Span<u8> binary,
-        in u64 count64,
-        in StringView failureContext,
-        in StringView label,
-        mut usize inOutCursor,
-        mut Vector<NameHash> outHashes
-    )const{
-        outHashes.clear();
-        if(count64 > cast<u64>(usize.max / s_NameHashBinaryBytes)){
-            error("{} failed: '{}' payload byte size overflows", failureContext, label);
-            return false;
-        }
-        const usize count = cast<usize>(count64);
-        const usize byteCount = count * s_NameHashBinaryBytes;
-        if(!CanReadBytes(binary, inOutCursor, byteCount) || !CanStoreValueCount(outHashes, count)){
-            error("{} failed: malformed '{}' payload", failureContext, label);
-            return false;
-        }
-        outHashes.reserve(count);
-        for(usize i = 0u; i < count; ++i){
-            const Expected<NameHash> itemResult = ReadPOD<NameHash>(binary, inOutCursor);
-            if(!itemResult.has_value()){
-                error("{} failed: malformed '{}' payload", failureContext, label);
-                return false;
-            }
-            outHashes.push_back(itemResult.value());
-        }
-        return true;
-    }
-
-    private b8 readAssetEntries(
-        in Span<u8> binary,
-        in u64 count64,
-        mut usize inOutCursor,
-        mut Vector<SceneAssetEntryBinary> outEntries
-    )const{
-        outEntries.clear();
-        if(count64 > cast<u64>(usize.max / s_SceneAssetEntryBinaryBytes)){
-            error("SceneAsset::loadBinary failed: 'assets' payload byte size overflows");
-            return false;
-        }
-        const usize count = cast<usize>(count64);
-        const usize byteCount = count * s_SceneAssetEntryBinaryBytes;
-        if(!CanReadBytes(binary, inOutCursor, byteCount) || !CanStoreValueCount(outEntries, count)){
-            error("SceneAsset::loadBinary failed: malformed 'assets' payload");
-            return false;
-        }
-        outEntries.reserve(count);
-        for(usize i = 0u; i < count; ++i){
-            const Expected<SceneAssetEntryBinary> itemResult = ReadPOD<SceneAssetEntryBinary>(binary, inOutCursor);
-            if(!itemResult.has_value()){
-                error("SceneAsset::loadBinary failed: malformed 'assets' payload");
-                return false;
-            }
-            outEntries.push_back(itemResult.value());
-        }
-        return true;
-    }
-
     public b8 deserializeEntity<TComponent>(
         in Span<u8> binary,
         mut Vector<AssetRef<TComponent>> outComponents,
         mut Name outEntityName
     )const{
+        static_assert(size_of<NameHash>() == s_NameHashBinaryBytes);
         usize cursor = 0u;
         const Expected<EntityHeaderBinary> headerResult = ReadPOD<EntityHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
@@ -224,14 +165,32 @@ class SceneAssetBinaryCodec{
         }
         if(!this.validateEntityHeader(header))
             return false;
-        Vector<NameHash> componentHashes;
-        if(!this.readNameHashes(binary, header.componentCount, "EntityAsset::loadBinary", "components", cursor, componentHashes))
+        if(header.componentCount > cast<u64>(usize.max / s_NameHashBinaryBytes)){
+            error("EntityAsset::loadBinary failed: 'components' payload byte size overflows");
             return false;
-        if(cursor != binary.size()){
+        }
+        const usize componentCount = cast<usize>(header.componentCount);
+        const usize componentBytes = componentCount * s_NameHashBinaryBytes;
+        if(!CanReadBytes(binary, cursor, componentBytes) || !CanStoreValueCount(outComponents, componentCount)){
+            error("EntityAsset::loadBinary failed: malformed 'components' payload");
+            return false;
+        }
+        if(cursor + componentBytes != binary.size()){
             error("EntityAsset::loadBinary failed: trailing bytes detected");
             return false;
         }
-        AssignAssetRefsFromHashes(componentHashes, outComponents);
+        outComponents.clear();
+        outComponents.reserve(componentCount);
+        for(usize i = 0u; i < componentCount; ++i){
+            const Expected<NameHash> itemResult = ReadPOD<NameHash>(binary, cursor);
+            if(!itemResult.has_value()){
+                error("EntityAsset::loadBinary failed: malformed 'components' payload");
+                return false;
+            }
+            AssetRef<TComponent> ref;
+            ref.virtualPath = Name(itemResult.value());
+            outComponents.push_back(ref);
+        }
         if(header.entityNameHash == s_NameNone.hash())
             outEntityName = s_NameNone;
         else
@@ -253,6 +212,8 @@ class SceneAssetBinaryCodec{
         mut Vector<AssetRef<TEntity>> outEntities,
         mut HashMap<Name, AssetRef<TAsset>> outAssets
     )const{
+        static_assert(size_of<NameHash>() == s_NameHashBinaryBytes);
+        static_assert(size_of<SceneAssetEntryBinary>() == s_SceneAssetEntryBinaryBytes && offset_of<SceneAssetEntryBinary>(nicknameHash) == 0u && offset_of<SceneAssetEntryBinary>(assetHash) == 64u);
         usize cursor = 0u;
         const Expected<SceneHeaderBinary> headerResult = ReadPOD<SceneHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
@@ -266,22 +227,87 @@ class SceneAssetBinaryCodec{
         }
         if(!this.validateSceneHeader(header))
             return false;
-        Vector<NameHash> subsystemHashes;
-        Vector<NameHash> entityHashes;
-        Vector<SceneAssetEntryBinary> assetEntries;
-        if(!this.readNameHashes(binary, header.subsystemCount, "SceneAsset::loadBinary", "subsystems", cursor, subsystemHashes))
+        if(header.subsystemCount > cast<u64>(usize.max / s_NameHashBinaryBytes)){
+            error("SceneAsset::loadBinary failed: 'subsystems' payload byte size overflows");
             return false;
-        if(!this.readNameHashes(binary, header.entityCount, "SceneAsset::loadBinary", "entities", cursor, entityHashes))
+        }
+        const usize subsystemCount = cast<usize>(header.subsystemCount);
+        const usize subsystemBytes = subsystemCount * s_NameHashBinaryBytes;
+        if(!CanReadBytes(binary, cursor, subsystemBytes) || !CanStoreValueCount(outSubsystems, subsystemCount)){
+            error("SceneAsset::loadBinary failed: malformed 'subsystems' payload");
             return false;
-        if(!this.readAssetEntries(binary, header.assetCount, cursor, assetEntries))
+        }
+        if(header.entityCount > cast<u64>(usize.max / s_NameHashBinaryBytes)){
+            error("SceneAsset::loadBinary failed: 'entities' payload byte size overflows");
             return false;
-        if(cursor != binary.size()){
+        }
+        const usize entityCount = cast<usize>(header.entityCount);
+        const usize entityBytes = entityCount * s_NameHashBinaryBytes;
+        if(!CanReadBytes(binary, cursor + subsystemBytes, entityBytes) || !CanStoreValueCount(outEntities, entityCount)){
+            error("SceneAsset::loadBinary failed: malformed 'entities' payload");
+            return false;
+        }
+        if(header.assetCount > cast<u64>(usize.max / s_SceneAssetEntryBinaryBytes)){
+            error("SceneAsset::loadBinary failed: 'assets' payload byte size overflows");
+            return false;
+        }
+        const usize assetCount = cast<usize>(header.assetCount);
+        const usize assetBytes = assetCount * s_SceneAssetEntryBinaryBytes;
+        if(!CanReadBytes(binary, cursor + subsystemBytes + entityBytes, assetBytes)){
+            error("SceneAsset::loadBinary failed: malformed 'assets' payload");
+            return false;
+        }
+        if(cursor + subsystemBytes + entityBytes + assetBytes != binary.size()){
             error("SceneAsset::loadBinary failed: trailing bytes detected");
             return false;
         }
-        AssignAssetRefsFromHashes(subsystemHashes, outSubsystems);
-        AssignAssetRefsFromHashes(entityHashes, outEntities);
-        return UnpackSceneAssetEntriesBinary(assetEntries, outAssets);
+
+        outSubsystems.clear();
+        outSubsystems.reserve(subsystemCount);
+        for(usize i = 0u; i < subsystemCount; ++i){
+            const Expected<NameHash> itemResult = ReadPOD<NameHash>(binary, cursor);
+            if(!itemResult.has_value()){
+                error("SceneAsset::loadBinary failed: malformed 'subsystems' payload");
+                return false;
+            }
+            AssetRef<TSubsystem> ref;
+            ref.virtualPath = Name(itemResult.value());
+            outSubsystems.push_back(ref);
+        }
+
+        outEntities.clear();
+        outEntities.reserve(entityCount);
+        for(usize i = 0u; i < entityCount; ++i){
+            const Expected<NameHash> itemResult = ReadPOD<NameHash>(binary, cursor);
+            if(!itemResult.has_value()){
+                error("SceneAsset::loadBinary failed: malformed 'entities' payload");
+                return false;
+            }
+            AssetRef<TEntity> ref;
+            ref.virtualPath = Name(itemResult.value());
+            outEntities.push_back(ref);
+        }
+
+        outAssets.clear();
+        outAssets.reserve(assetCount);
+        for(usize i = 0u; i < assetCount; ++i){
+            const Expected<SceneAssetEntryBinary> entryResult = ReadPOD<SceneAssetEntryBinary>(binary, cursor);
+            if(!entryResult.has_value()){
+                error("SceneAsset::loadBinary failed: malformed 'assets' payload");
+                return false;
+            }
+            const SceneAssetEntryBinary entry = entryResult.value();
+            const Name nickname(entry.nicknameHash);
+            AssetRef<TAsset> ref;
+            ref.virtualPath = Name(entry.assetHash);
+            if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
+                return false;
+            if(!outAssets.try_emplace(nickname, ref).second){
+                error("SceneAsset::loadBinary failed: duplicate asset nickname at index {}", i);
+                return false;
+            }
+        }
+        return true;
     }
 }
 

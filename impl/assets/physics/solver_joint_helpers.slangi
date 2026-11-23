@@ -110,26 +110,21 @@ void nwbPhysicsComputePointEffectiveMass(
     const float3 mBVec = float3(invMassB, invMassB, invMassB);
     const float3 sumM = (((flagsA & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(mAVec, flagsA) : mAVec)
         + (((flagsB & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(mBVec, flagsB) : mBVec);
-    const float3 axX = cross(rA, float3(1.0f, 0.0f, 0.0f));
-    const float3 axY = cross(rA, float3(0.0f, 1.0f, 0.0f));
-    const float3 axZ = cross(rA, float3(0.0f, 0.0f, 1.0f));
-    const float3 bxX = cross(rB, float3(1.0f, 0.0f, 0.0f));
-    const float3 bxY = cross(rB, float3(0.0f, 1.0f, 0.0f));
-    const float3 bxZ = cross(rB, float3(0.0f, 0.0f, 1.0f));
 
-    const float3 iaX = nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, axX);
-    const float3 iaY = nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, axY);
-    const float3 iaZ = nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, axZ);
-    const float3 ibX = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, bxX);
-    const float3 ibY = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, bxY);
-    const float3 ibZ = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, bxZ);
+    const float3 aX = float3(invIA0.y * rA.z - invIA0.z * rA.y, invIA1.y * rA.z - invIA1.z * rA.y, invIA1.z * rA.z - invIA2.z * rA.y);
+    const float3 aY = float3(invIA0.z * rA.x - invIA0.x * rA.z, invIA1.z * rA.x - invIA0.y * rA.z, invIA2.z * rA.x - invIA0.z * rA.z);
+    const float3 aZ = float3(invIA0.x * rA.y - invIA0.y * rA.x, invIA0.y * rA.y - invIA1.y * rA.x, invIA0.z * rA.y - invIA1.z * rA.x);
 
-    const float s00 = sumM.x + dot(axX, iaX) + dot(bxX, ibX);
-    const float s01 = dot(axX, iaY) + dot(bxX, ibY);
-    const float s02 = dot(axX, iaZ) + dot(bxX, ibZ);
-    const float s11 = sumM.y + dot(axY, iaY) + dot(bxY, ibY);
-    const float s12 = dot(axY, iaZ) + dot(bxY, ibZ);
-    const float s22 = sumM.z + dot(axZ, iaZ) + dot(bxZ, ibZ);
+    const float3 bX = float3(invIB0.y * rB.z - invIB0.z * rB.y, invIB1.y * rB.z - invIB1.z * rB.y, invIB1.z * rB.z - invIB2.z * rB.y);
+    const float3 bY = float3(invIB0.z * rB.x - invIB0.x * rB.z, invIB1.z * rB.x - invIB0.y * rB.z, invIB2.z * rB.x - invIB0.z * rB.z);
+    const float3 bZ = float3(invIB0.x * rB.y - invIB0.y * rB.x, invIB0.y * rB.y - invIB1.y * rB.x, invIB0.z * rB.y - invIB1.z * rB.x);
+
+    const float s00 = sumM.x + (rA.z * aX.y - rA.y * aX.z) + (rB.z * bX.y - rB.y * bX.z);
+    const float s01 = (rA.z * aY.y - rA.y * aY.z) + (rB.z * bY.y - rB.y * bY.z);
+    const float s02 = (rA.z * aZ.y - rA.y * aZ.z) + (rB.z * bZ.y - rB.y * bZ.z);
+    const float s11 = sumM.y + (rA.x * aY.z - rA.z * aY.x) + (rB.x * bY.z - rB.z * bY.x);
+    const float s12 = (rA.x * aZ.z - rA.z * aZ.x) + (rB.x * bZ.z - rB.z * bZ.x);
+    const float s22 = sumM.z + (rA.y * aZ.x - rA.x * aZ.y) + (rB.y * bZ.x - rB.x * bZ.y);
 
     const float3 sym0 = float3(s00, s01, s02);
     const float3 sym1 = float3(s01, s11, s12);
@@ -302,11 +297,61 @@ void nwbPhysicsSolve3DAngularLockRow(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS
+#define NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS NWB_PHYSICS_ISLAND_MAX_JOINTS
+#endif
+
+#ifdef NWB_PHYSICS_USE_LDS_JOINT_IMPULSES
+groupshared uint g_NwbPhysicsLdsJointOffset;
+groupshared float4 g_NwbPhysicsLdsJointLinImp[NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS];
+groupshared float4 g_NwbPhysicsLdsJointAngImp[NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS];
+groupshared float4 g_NwbPhysicsLdsJointLimImp[NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS];
+
+void nwbPhysicsLoadInitialIslandJointsToLds(
+    const uint tid,
+    const uint jointOffset,
+    const uint jointCount,
+    const uint jointSlot,
+    const bool warmStart
+){
+    if(tid == 0u)
+        g_NwbPhysicsLdsJointOffset = jointOffset;
+    for(uint k = tid; k < jointCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE){
+        const uint jointIdx = jointOffset + k;
+        if(warmStart){
+            g_NwbPhysicsLdsJointLinImp[k] = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse;
+            g_NwbPhysicsLdsJointAngImp[k] = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse;
+            g_NwbPhysicsLdsJointLimImp[k] = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses;
+        }
+        else{
+            g_NwbPhysicsLdsJointLinImp[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            g_NwbPhysicsLdsJointAngImp[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            g_NwbPhysicsLdsJointLimImp[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        }
+    }
+}
+
+void nwbPhysicsClearIslandJointWarmStartLds(const uint tid, const uint jointCount){
+    for(uint k = tid; k < jointCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE){
+        g_NwbPhysicsLdsJointLinImp[k].xyz = float3(0.0f, 0.0f, 0.0f);
+        g_NwbPhysicsLdsJointAngImp[k].xyz = float3(0.0f, 0.0f, 0.0f);
+        g_NwbPhysicsLdsJointLimImp[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+}
+#endif
+
 void nwbPhysicsExportJointImpulses(const uint jointIdx, const uint jointSlot, const uint outSlot){
     NwbPhysicsGpuJointImpulseOut outImp;
+#ifdef NWB_PHYSICS_USE_LDS_JOINT_IMPULSES
+    const uint ldsIdx = jointIdx - g_NwbPhysicsLdsJointOffset;
+    outImp.linearImpulseMax = g_NwbPhysicsLdsJointLinImp[ldsIdx];
+    outImp.angularImpulseMax = g_NwbPhysicsLdsJointAngImp[ldsIdx];
+    outImp.limitImpulses = g_NwbPhysicsLdsJointLimImp[ldsIdx];
+#else
     outImp.linearImpulseMax = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse;
     outImp.angularImpulseMax = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse;
     outImp.limitImpulses = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses;
+#endif
     g_NwbPhysicsJointImpulseOutBuffers[outSlot][jointIdx] = outImp;
 }
 
@@ -327,9 +372,16 @@ void nwbPhysicsSolveSingleJoint(
     }
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START && (flags & NWB_PHYSICS_SOLVER_FLAG_WARM_START) == 0u){
+#ifdef NWB_PHYSICS_USE_LDS_JOINT_IMPULSES
+        const uint ldsIdx = jointIdx - g_NwbPhysicsLdsJointOffset;
+        g_NwbPhysicsLdsJointLinImp[ldsIdx].xyz = float3(0.0f, 0.0f, 0.0f);
+        g_NwbPhysicsLdsJointAngImp[ldsIdx].xyz = float3(0.0f, 0.0f, 0.0f);
+        g_NwbPhysicsLdsJointLimImp[ldsIdx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#else
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse.xyz = float3(0.0f, 0.0f, 0.0f);
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse.xyz = float3(0.0f, 0.0f, 0.0f);
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#endif
         return;
     }
 
@@ -346,9 +398,16 @@ void nwbPhysicsSolveSingleJoint(
     if(jType == NWB_PHYSICS_JOINT_TYPE_MOTOR && (!enableMotor || (mode != NWB_PHYSICS_SOLVER_MODE_WARM_START && (!useBias || h <= 0.0f))))
         return;
 
+#ifdef NWB_PHYSICS_USE_LDS_JOINT_IMPULSES
+    const uint ldsIdx = jointIdx - g_NwbPhysicsLdsJointOffset;
+    float4 linearImpulse = g_NwbPhysicsLdsJointLinImp[ldsIdx];
+    float4 angularImpulse = g_NwbPhysicsLdsJointAngImp[ldsIdx];
+    float4 limitImpulses = g_NwbPhysicsLdsJointLimImp[ldsIdx];
+#else
     float4 linearImpulse = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse;
     float4 angularImpulse = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse;
     float4 limitImpulses = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses;
+#endif
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START){
         if(all(linearImpulse.xyz == float3(0.0f, 0.0f, 0.0f)) && all(angularImpulse.xyz == float3(0.0f, 0.0f, 0.0f)) && all(limitImpulses == float4(0.0f, 0.0f, 0.0f, 0.0f)))
@@ -364,15 +423,13 @@ void nwbPhysicsSolveSingleJoint(
         uint flagsB;
         nwbPhysicsLoadBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
 
-        float invMassA;
         float4 rawIA0;
         float4 rawIA1;
-        nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, invMassA, rawIA0, rawIA1);
+        nwbPhysicsLoadBodyInvInertiaOnly(bodySimSlot, indexA, flagsA, rawIA0, rawIA1);
 
-        float invMassB;
         float4 rawIB0;
         float4 rawIB1;
-        nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, rawIB0, rawIB1);
+        nwbPhysicsLoadBodyInvInertiaOnly(bodySimSlot, indexB, flagsB, rawIB0, rawIB1);
 
         const float3 invIA0 = float3(rawIA0.x, rawIA0.y, rawIA0.z);
         const float3 invIA1 = float3(rawIA0.y, rawIA0.w, rawIA1.x);
@@ -385,8 +442,8 @@ void nwbPhysicsSolveSingleJoint(
         const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
         const float3 rA0 = rA0InvMassA.xyz;
         const float3 rB0 = rB0InvMassB.xyz;
-        invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
-        invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
+        const float invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
+        const float invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
 
         if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
             const float3 baseDelta = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor.xyz;
@@ -476,15 +533,13 @@ void nwbPhysicsSolveSingleJoint(
     uint flagsB;
     nwbPhysicsLoadBodyState(bodyStateSlot, indexB, vB, wB, deltaPosB, deltaRotB, flagsB);
 
-    float invMassA;
     float4 rawIA0;
     float4 rawIA1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, invMassA, rawIA0, rawIA1);
+    nwbPhysicsLoadBodyInvInertiaOnly(bodySimSlot, indexA, flagsA, rawIA0, rawIA1);
 
-    float invMassB;
     float4 rawIB0;
     float4 rawIB1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, rawIB0, rawIB1);
+    nwbPhysicsLoadBodyInvInertiaOnly(bodySimSlot, indexB, flagsB, rawIB0, rawIB1);
 
     const float3 invIA0 = float3(rawIA0.x, rawIA0.y, rawIA0.z);
     const float3 invIA1 = float3(rawIA0.y, rawIA0.w, rawIA1.x);
@@ -497,8 +552,8 @@ void nwbPhysicsSolveSingleJoint(
     const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
     const float3 rA0 = rA0InvMassA.xyz;
     const float3 rB0 = rB0InvMassB.xyz;
-    invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
-    invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
+    const float invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
+    const float invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
     const float4 baseCenterDeltaMaxMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor;
 
     const bool hasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
@@ -1305,6 +1360,13 @@ void nwbPhysicsSolveSingleJoint(
         angularImpulse.w = max(angularImpulse.w, length(totalAngL));
     }
 
+#ifdef NWB_PHYSICS_USE_LDS_JOINT_IMPULSES
+    g_NwbPhysicsLdsJointLinImp[ldsIdx] = linearImpulse;
+    if(isBreakable || writeAng)
+        g_NwbPhysicsLdsJointAngImp[ldsIdx] = angularImpulse;
+    if(writeLim)
+        g_NwbPhysicsLdsJointLimImp[ldsIdx] = limitImpulses;
+#else
     if(isBreakable){
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse = linearImpulse;
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse = angularImpulse;
@@ -1316,6 +1378,7 @@ void nwbPhysicsSolveSingleJoint(
     }
     if(writeLim)
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses = limitImpulses;
+#endif
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
 }

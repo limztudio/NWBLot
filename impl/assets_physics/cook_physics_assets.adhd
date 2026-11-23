@@ -129,28 +129,28 @@ class CollisionMeshCookEntry{
 b8 SerializePhysicsMaterialAsset(in PhysicsMaterialAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializePhysicsMaterial(asset.material, outBinary);
+    return PhysicsAssetBinaryCodec().serializePhysicsMaterialUnchecked(asset.material, outBinary);
 }
 
 [asset_writer]
 b8 SerializeCollisionLayerMatrixAsset(in CollisionLayerMatrixAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrix(asset.matrix, outBinary);
+    return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrixUnchecked(asset.matrix, outBinary);
 }
 
 [asset_writer]
 b8 SerializeConvexHullAsset(in ConvexHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeConvexHull(asset.hull, outBinary);
+    return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hull, outBinary);
 }
 
 [asset_writer]
 b8 SerializeCollisionMeshAsset(in CollisionMeshAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeCollisionMesh(asset.mesh, outBinary);
+    return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.mesh, outBinary);
 }
 
 
@@ -351,7 +351,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
         entry.hull = boxHull;
     }
     else{
-        const Expected<HullShape> built = BuildConvexHull(Span<f32x4>(points.data(), points.size()), skinRadius);
+        Expected<HullShape> built = BuildConvexHull(Span<f32x4>(points.data(), points.size()), skinRadius);
         if(!built.has_value()){
             error("{} '{}': degenerate or invalid convex hull points", s_ConvexHullDiagnosticPrefix, PathToString(file));
             return MakeUnexpected(Failure());
@@ -359,9 +359,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
         entry.hull = built.value();
     }
 
-    ConvexHullAsset asset(entry.virtualPath);
-    asset.setHull(entry.hull);
-    if(!asset.validatePayload())
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateConvexHull(entry.hull, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -447,7 +445,7 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
         }
     }
 
-    const Expected<MeshShape> built = MakeMeshShapeWithMaterials(
+    Expected<MeshShape> built = MakeMeshShapeWithMaterials(
         Span<f32x4>(vertices.data(), vertices.size()),
         Span<u32>(indices.data(), indices.size()),
         skinRadius,
@@ -462,9 +460,7 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
     }
     entry.mesh = built.value();
 
-    CollisionMeshAsset asset(entry.virtualPath);
-    asset.setMesh(entry.mesh);
-    if(!asset.validatePayload())
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCollisionMesh(entry.mesh, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -531,3 +527,4 @@ Expected<CollisionMeshAsset> BuildCollisionMeshAsset(in CollisionMeshCookEntry e
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -178,8 +178,10 @@ class ActiveSceneSubsystems{
     }
 
     public AssetRef<T> findSceneAsset<T>(in Name nickname)const{
+        if(nickname == s_NameNone)
+            return AssetRef<T>();
         const auto found = this.m_contents.assets.find(nickname);
-        if(nickname == s_NameNone || found == this.m_contents.assets.end())
+        if(found == this.m_contents.assets.end())
             return AssetRef<T>();
         return AssetRef<T>(found.value().name());
     }

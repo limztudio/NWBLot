@@ -133,7 +133,12 @@ b8 SceneAsset::loadBinary(in Span<u8> binary){
     if(!SceneAssetBinaryCodec().deserializeScene(binary, candidate.m_subsystems, candidate.m_entities, candidate.m_assets))
         return false;
     DeduplicateSubsystemRefs(candidate.m_subsystems);
-    if(!candidate.validatePayload())
+    if(
+        !candidate.checkVirtualPath("SceneAsset::validatePayload")
+        || !ValidateSceneAssetSubsystemCount(candidate.m_subsystems.size())
+        || !ValidateUniqueAssetRefs(Span<SubsystemRef>(candidate.m_subsystems), "SceneAsset::validatePayload", "subsystem")
+        || !ValidateUniqueAssetRefs(Span<EntityRef>(candidate.m_entities), "SceneAsset::validatePayload", "entity")
+    )
         return false;
     this = candidate;
     return true;
@@ -309,6 +314,7 @@ b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetMana
     next.assets = sceneAsset.assets();
 
     HashSet<NameHash> seen;
+    seen.reserve(sceneAsset.subsystems().size());
     Vector<SubsystemRef> pending;
     pending.reserve(sceneAsset.subsystems().size());
     for(in SubsystemRef subsystem : sceneAsset.subsystems())
@@ -394,6 +400,7 @@ b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedS
         return false;
     outInstantiated.entities.reserve(this.m_contents.entities.size());
     outInstantiated.names.reserve(this.m_contents.entities.size());
+    outInstantiated.namedEntities.reserve(this.m_contents.entities.size());
     for(in LoadedSceneEntity entity : this.m_contents.entities){
         const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
         if(!createdId.valid())
@@ -414,8 +421,13 @@ Expected<InstantiatedSceneEntities> ActiveSceneSubsystems::instantiateEntitiesWi
 }
 
 b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
-    InstantiatedSceneEntities instantiated;
-    return this.instantiateEntities(world, instantiated);
+    if(!ValidateSceneEntityInstantiationReady(this.valid()))
+        return false;
+    for(in LoadedSceneEntity entity : this.m_contents.entities){
+        if(!InstantiateSceneLoadedEntity(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world))
+            return false;
+    }
+    return true;
 }
 
 

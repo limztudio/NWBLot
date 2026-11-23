@@ -32,6 +32,9 @@ extern const u32 s_GpuShapeFlagAwakeBody;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_FAST_OR_BULLET")]
 extern const u32 s_GpuShapeFlagFastOrBullet;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT")]
+extern const u32 s_GpuShapeFlagHasNonCollideJoint;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS")]
 extern const u32 s_GpuBroadphaseModeUpdateAabbs;
 
@@ -49,6 +52,9 @@ extern const u32 s_GpuBroadphaseModeGridEmitPairs;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_INDIRECT")]
 extern const u32 s_GpuBroadphaseModeFinalizeIndirect;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_LARGE_PAIRS")]
+extern const u32 s_GpuBroadphaseModeGridEmitLargePairs;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_CONTACTS")]
 extern const u32 s_GpuNarrowphaseModeContacts;
@@ -274,6 +280,15 @@ extern const u32 s_GpuLbvhModeRefitAabbs;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_QUERY_PAIRS")]
 extern const u32 s_GpuLbvhModeQueryPairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_SORT_LOCAL")]
+extern const u32 s_GpuLbvhModeBitonicSortLocal;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_MERGE_LOCAL")]
+extern const u32 s_GpuLbvhModeBitonicMergeLocal;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE")]
+extern const u32 s_GpuLbvhLocalSortSize;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_LBVH_NODE_BYTES")]
 extern const u32 s_GpuLbvhNodeBytes;

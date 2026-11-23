@@ -23,11 +23,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint poseOffset = g_NwbPhysicsPushConstants.slots1.x;
 
+    NwbPhysicsGpuBodyOut bo;
+    NwbPhysicsGpuBodySim sim;
     if(mode == NWB_PHYSICS_RESIDENT_MODE_INTEGRATE_SUBSTEP){
         const uint subStepCount = max(g_NwbPhysicsPushConstants.flags, 1u);
         const float dt = g_NwbPhysicsPushConstants.deltaTime;
         const float h = dt / float(subStepCount);
-        nwbPhysicsSolveFreeBodyToOut(
+        bo = nwbPhysicsSolveFreeBodyAndReturnOut(
             bodySimSlot,
             bodyStateSlot,
             bodyOutSlot,
@@ -36,23 +38,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             subStepCount,
             h,
             g_NwbPhysicsPushConstants.maxLinearVelocity,
-            g_NwbPhysicsPushConstants.gravitySpeculative.xyz
+            g_NwbPhysicsPushConstants.gravitySpeculative.xyz,
+            sim
         );
     }
-
-    const NwbPhysicsGpuBodyOut bo = g_NwbPhysicsBodyOutBuffers[bodyOutSlot][idx];
-    NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
-    sim.positionInvMass.xyz = bo.positionSleepTime.xyz;
-    sim.rotation = bo.rotation;
-    sim.forceLinearDamping.xyz = float3(0.0f, 0.0f, 0.0f);
-    sim.torqueAngularDamping.xyz = float3(0.0f, 0.0f, 0.0f);
+    else{
+        bo = g_NwbPhysicsBodyOutBuffers[bodyOutSlot][idx];
+        sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
+    }
 
     float4 wI0 = sim.invInertiaWorld0;
     float2 wI1 = sim.invInertiaWorld1.xy;
-    nwbPhysicsRotateSymMat3(bo.rotation, sim.invInertiaLocal0, sim.invInertiaLocal1.xy, wI0, wI1);
-    sim.invInertiaWorld0 = wI0;
-    sim.invInertiaWorld1 = float4(wI1.x, wI1.y, sim.invInertiaWorld1.z, bo.positionSleepTime.w);
-    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx] = sim;
+    if(any(bo.rotation != sim.rotation))
+        nwbPhysicsRotateSymMat3(bo.rotation, sim.invInertiaLocal0, sim.invInertiaLocal1.xy, wI0, wI1);
+
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].positionInvMass.xyz = bo.positionSleepTime.xyz;
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].rotation = bo.rotation;
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].forceLinearDamping.xyz = float3(0.0f, 0.0f, 0.0f);
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].torqueAngularDamping.xyz = float3(0.0f, 0.0f, 0.0f);
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld0 = wI0;
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld1 = float4(wI1.x, wI1.y, sim.invInertiaWorld1.z, bo.positionSleepTime.w);
 
     NwbPhysicsGpuBodyState nextState;
     nextState.linearVelocityPad = float4(bo.linearVelocityFlags.xyz, bo.linearVelocityFlags.w);
@@ -73,3 +78,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

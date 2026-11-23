@@ -450,190 +450,112 @@ class PhysicsComponentBinaryCodec{
         return bytes;
     }
 
-    private JointEntry jointComponentPrimaryEntry(in JointComponent j)const{
-        JointEntry e;
-        e.bodyEntityA = j.bodyEntityA;
-        e.bodyEntityB = j.bodyEntityB;
-        e.bodyEntityNameA = j.bodyEntityNameA;
-        e.bodyEntityNameB = j.bodyEntityNameB;
-        e.userData = j.userData;
-        e.type = j.type;
-        e.localAnchorA = j.localAnchorA;
-        e.localAnchorB = j.localAnchorB;
-        e.localAxisA = j.localAxisA;
-        e.localAxisB = j.localAxisB;
-        e.referenceRotation = j.referenceRotation;
-        e.useReferenceRotation = j.useReferenceRotation;
-        e.length = j.length;
-        e.minLength = j.minLength;
-        e.maxLength = j.maxLength;
-        e.enableLimit = j.enableLimit;
-        e.lowerLimit = j.lowerLimit;
-        e.upperLimit = j.upperLimit;
-        e.enableMotor = j.enableMotor;
-        e.motorSpeed = j.motorSpeed;
-        e.maxMotorForce = j.maxMotorForce;
-        e.enableSpring = j.enableSpring;
-        e.hertz = j.hertz;
-        e.dampingRatio = j.dampingRatio;
-        e.linearOffset = j.linearOffset;
-        e.correctionFactor = j.correctionFactor;
-        e.maxTorque = j.maxTorque;
-        e.swingLimit = j.swingLimit;
-        e.suspensionHertz = j.suspensionHertz;
-        e.suspensionDampingRatio = j.suspensionDampingRatio;
-        e.breakForce = j.breakForce;
-        e.breakTorque = j.breakTorque;
-        e.collideConnected = j.collideConnected;
-        e.enabled = j.enabled;
-        e.enableProjection = j.enableProjection;
-        e.projectionLinearTolerance = j.projectionLinearTolerance;
-        e.projectionAngularTolerance = j.projectionAngularTolerance;
-        e.invMassScaleA = j.invMassScaleA;
-        e.invMassScaleB = j.invMassScaleB;
-        e.invInertiaScaleA = j.invInertiaScaleA;
-        e.invInertiaScaleB = j.invInertiaScaleB;
-        e.limitRestitution = j.limitRestitution;
-        e.limitHertz = j.limitHertz;
-        e.limitDampingRatio = j.limitDampingRatio;
-        e.swingLimitY = j.swingLimitY;
-        e.springTarget = j.springTarget;
-        e.steeringAngle = j.steeringAngle;
-        e.suspensionRestLength = j.suspensionRestLength;
-        e.ratio = j.ratio;
-        e.groundAnchorA = j.groundAnchorA;
-        e.groundAnchorB = j.groundAnchorB;
-        e.lengthA = j.lengthA;
-        e.lengthB = j.lengthB;
-        e.sixDofAxes = j.sixDofAxes;
-        e.pathPoints = j.pathPoints;
-        e.pathClosed = j.pathClosed;
-        e.pathLockRotation = j.pathLockRotation;
-        return e;
-    }
-
-    private void assignPrimaryEntryToJointComponent(in JointEntry e, mut JointComponent outJoint)const{
-        outJoint.bodyEntityA = e.bodyEntityA;
-        outJoint.bodyEntityB = e.bodyEntityB;
-        outJoint.bodyEntityNameA = e.bodyEntityNameA;
-        outJoint.bodyEntityNameB = e.bodyEntityNameB;
-        outJoint.userData = e.userData;
-        outJoint.type = e.type;
-        outJoint.localAnchorA = e.localAnchorA;
-        outJoint.localAnchorB = e.localAnchorB;
-        outJoint.localAxisA = e.localAxisA;
-        outJoint.localAxisB = e.localAxisB;
-        outJoint.referenceRotation = e.referenceRotation;
-        outJoint.useReferenceRotation = e.useReferenceRotation;
-        outJoint.length = e.length;
-        outJoint.minLength = e.minLength;
-        outJoint.maxLength = e.maxLength;
-        outJoint.enableLimit = e.enableLimit;
-        outJoint.lowerLimit = e.lowerLimit;
-        outJoint.upperLimit = e.upperLimit;
-        outJoint.enableMotor = e.enableMotor;
-        outJoint.motorSpeed = e.motorSpeed;
-        outJoint.maxMotorForce = e.maxMotorForce;
-        outJoint.enableSpring = e.enableSpring;
-        outJoint.hertz = e.hertz;
-        outJoint.dampingRatio = e.dampingRatio;
-        outJoint.linearOffset = e.linearOffset;
-        outJoint.correctionFactor = e.correctionFactor;
-        outJoint.maxTorque = e.maxTorque;
-        outJoint.swingLimit = e.swingLimit;
-        outJoint.suspensionHertz = e.suspensionHertz;
-        outJoint.suspensionDampingRatio = e.suspensionDampingRatio;
-        outJoint.breakForce = e.breakForce;
-        outJoint.breakTorque = e.breakTorque;
-        outJoint.collideConnected = e.collideConnected;
-        outJoint.enabled = e.enabled;
-        outJoint.enableProjection = e.enableProjection;
-        outJoint.projectionLinearTolerance = e.projectionLinearTolerance;
-        outJoint.projectionAngularTolerance = e.projectionAngularTolerance;
-        outJoint.invMassScaleA = e.invMassScaleA;
-        outJoint.invMassScaleB = e.invMassScaleB;
-        outJoint.invInertiaScaleA = e.invInertiaScaleA;
-        outJoint.invInertiaScaleB = e.invInertiaScaleB;
-        outJoint.limitRestitution = e.limitRestitution;
-        outJoint.limitHertz = e.limitHertz;
-        outJoint.limitDampingRatio = e.limitDampingRatio;
-        outJoint.swingLimitY = e.swingLimitY;
-        outJoint.springTarget = e.springTarget;
-        outJoint.steeringAngle = e.steeringAngle;
-        outJoint.suspensionRestLength = e.suspensionRestLength;
-        outJoint.ratio = e.ratio;
-        outJoint.groundAnchorA = e.groundAnchorA;
-        outJoint.groundAnchorB = e.groundAnchorB;
-        outJoint.lengthA = e.lengthA;
-        outJoint.lengthB = e.lengthB;
-        outJoint.sixDofAxes = e.sixDofAxes;
-        outJoint.pathPoints = e.pathPoints;
-        outJoint.pathClosed = e.pathClosed;
-        outJoint.pathLockRotation = e.pathLockRotation;
-    }
-
-    private b8 validJointEntry(in JointEntry j)const{
-        if(cast<u8>(j.type) >= cast<u8>(JointType::kCount))
+    private b8 validJointEntryFields(
+        in JointType type,
+        in VectorSingle localAnchorA,
+        in VectorSingle localAnchorB,
+        in VectorSingle localAxisA,
+        in VectorSingle localAxisB,
+        in VectorSingle referenceRotation,
+        in f32 length,
+        in f32 minLength,
+        in f32 maxLength,
+        in f32 lowerLimit,
+        in f32 upperLimit,
+        in f32 motorSpeed,
+        in f32 maxMotorForce,
+        in f32 hertz,
+        in f32 dampingRatio,
+        in VectorSingle linearOffset,
+        in f32 correctionFactor,
+        in f32 maxTorque,
+        in f32 swingLimit,
+        in f32 suspensionHertz,
+        in f32 suspensionDampingRatio,
+        in f32 breakForce,
+        in f32 breakTorque,
+        in f32 projectionLinearTolerance,
+        in f32 projectionAngularTolerance,
+        in f32 invMassScaleA,
+        in f32 invMassScaleB,
+        in f32 invInertiaScaleA,
+        in f32 invInertiaScaleB,
+        in f32 limitRestitution,
+        in f32 limitHertz,
+        in f32 limitDampingRatio,
+        in f32 swingLimitY,
+        in f32 springTarget,
+        in f32 steeringAngle,
+        in f32 suspensionRestLength,
+        in f32 ratio,
+        in VectorSingle groundAnchorA,
+        in VectorSingle groundAnchorB,
+        in f32 lengthA,
+        in f32 lengthB,
+        in Span<SixDofAxisConfig> sixDofAxes,
+        in Span<f32x4> pathPoints
+    )const{
+        if(cast<u8>(type) >= cast<u8>(JointType::kCount) || sixDofAxes.size() != 6u)
             return false;
-        if(!IsFinite(VectorSingle(j.localAnchorA)) || !IsFinite(VectorSingle(j.localAnchorB)) || !IsFinite(VectorSingle(j.localAxisA)) || !IsFinite(VectorSingle(j.localAxisB)))
+        if(!IsFinite(localAnchorA) || !IsFinite(localAnchorB) || !IsFinite(localAxisA) || !IsFinite(localAxisB))
             return false;
-        if(!IsFinite(VectorSingle(j.referenceRotation)) || LengthSq(VectorSingle(j.referenceRotation)) <= s_NormalizeEpsilonSq)
+        if(!IsFinite(referenceRotation) || LengthSq(referenceRotation) <= s_NormalizeEpsilonSq)
             return false;
-        if(!IsFinite(VectorSingle(j.linearOffset)) || !IsFinite(VectorSingle(j.groundAnchorA)) || !IsFinite(VectorSingle(j.groundAnchorB)))
+        if(!IsFinite(linearOffset) || !IsFinite(groundAnchorA) || !IsFinite(groundAnchorB))
             return false;
-        if(!IsFinite(VectorSingle(j.length, j.minLength, j.maxLength, j.lowerLimit)))
+        if(!IsFinite(VectorSingle(length, minLength, maxLength, lowerLimit)))
             return false;
-        if(!IsFinite(VectorSingle(j.upperLimit, j.motorSpeed, j.maxMotorForce, j.hertz)))
+        if(!IsFinite(VectorSingle(upperLimit, motorSpeed, maxMotorForce, hertz)))
             return false;
-        if(!IsFinite(VectorSingle(j.dampingRatio, j.correctionFactor, j.maxTorque, j.swingLimit)))
+        if(!IsFinite(VectorSingle(dampingRatio, correctionFactor, maxTorque, swingLimit)))
             return false;
-        if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
+        if(!IsFinite(VectorSingle(suspensionHertz, suspensionDampingRatio, breakForce, breakTorque)))
             return false;
-        if(!IsFinite(VectorSingle(j.projectionLinearTolerance, j.projectionAngularTolerance, j.invMassScaleA, j.invMassScaleB)))
+        if(!IsFinite(VectorSingle(projectionLinearTolerance, projectionAngularTolerance, invMassScaleA, invMassScaleB)))
             return false;
-        if(!IsFinite(VectorSingle(j.invInertiaScaleA, j.invInertiaScaleB, j.limitRestitution, j.limitHertz)))
+        if(!IsFinite(VectorSingle(invInertiaScaleA, invInertiaScaleB, limitRestitution, limitHertz)))
             return false;
-        if(!IsFinite(VectorSingle(j.limitDampingRatio, j.swingLimitY, j.springTarget, j.steeringAngle)))
+        if(!IsFinite(VectorSingle(limitDampingRatio, swingLimitY, springTarget, steeringAngle)))
             return false;
-        if(!IsFinite(VectorSingle(j.suspensionRestLength, j.ratio, j.lengthA, j.lengthB)))
+        if(!IsFinite(VectorSingle(suspensionRestLength, ratio, lengthA, lengthB)))
             return false;
-        if(!(j.lowerLimit <= j.upperLimit
-            && j.length >= 0.0f
-            && j.minLength >= 0.0f
-            && j.maxLength >= j.minLength
-            && j.maxMotorForce >= 0.0f
-            && j.hertz >= 0.0f
-            && j.dampingRatio >= 0.0f
-            && j.correctionFactor >= 0.0f
-            && j.correctionFactor <= 1.0f
-            && j.maxTorque >= 0.0f
-            && j.swingLimit >= 0.0f
-            && j.swingLimitY >= 0.0f
-            && j.suspensionHertz >= 0.0f
-            && j.suspensionDampingRatio >= 0.0f
-            && j.suspensionRestLength >= 0.0f
-            && j.breakForce >= 0.0f
-            && j.breakTorque >= 0.0f
-            && j.projectionLinearTolerance >= 0.0f
-            && j.projectionAngularTolerance >= 0.0f
-            && j.invMassScaleA >= 0.0f
-            && j.invMassScaleB >= 0.0f
-            && j.invInertiaScaleA >= 0.0f
-            && j.invInertiaScaleB >= 0.0f
-            && j.limitRestitution >= 0.0f
-            && j.limitRestitution <= 1.0f
-            && j.limitHertz >= 0.0f
-            && j.limitDampingRatio >= 0.0f
-            && j.lengthA >= 0.0f
-            && j.lengthB >= 0.0f
+        if(!(lowerLimit <= upperLimit
+            && length >= 0.0f
+            && minLength >= 0.0f
+            && maxLength >= minLength
+            && maxMotorForce >= 0.0f
+            && hertz >= 0.0f
+            && dampingRatio >= 0.0f
+            && correctionFactor >= 0.0f
+            && correctionFactor <= 1.0f
+            && maxTorque >= 0.0f
+            && swingLimit >= 0.0f
+            && swingLimitY >= 0.0f
+            && suspensionHertz >= 0.0f
+            && suspensionDampingRatio >= 0.0f
+            && suspensionRestLength >= 0.0f
+            && breakForce >= 0.0f
+            && breakTorque >= 0.0f
+            && projectionLinearTolerance >= 0.0f
+            && projectionAngularTolerance >= 0.0f
+            && invMassScaleA >= 0.0f
+            && invMassScaleB >= 0.0f
+            && invInertiaScaleA >= 0.0f
+            && invInertiaScaleB >= 0.0f
+            && limitRestitution >= 0.0f
+            && limitRestitution <= 1.0f
+            && limitHertz >= 0.0f
+            && limitDampingRatio >= 0.0f
+            && lengthA >= 0.0f
+            && lengthB >= 0.0f
         ))
             return false;
-        if((j.type == JointType::Gear || j.type == JointType::RackAndPinion) && Abs(j.ratio) <= 1.0e-7f)
+        if((type == JointType::Gear || type == JointType::RackAndPinion) && Abs(ratio) <= 1.0e-7f)
             return false;
-        if(j.type == JointType::Pulley && j.ratio <= 0.0f)
+        if(type == JointType::Pulley && ratio <= 0.0f)
             return false;
         for(usize k = 0u; k < 6u; ++k){
-            in SixDofAxisConfig cfg = j.sixDofAxes[k];
+            in SixDofAxisConfig cfg = sixDofAxes[k];
             if(cast<u8>(cfg.motion) >= cast<u8>(JointMotion::kCount))
                 return false;
             if(!IsFinite(VectorSingle(cfg.lowerLimit, cfg.upperLimit, cfg.motorTargetVelocity, cfg.motorTargetPosition)))
@@ -643,17 +565,109 @@ class PhysicsComponentBinaryCodec{
             if(cfg.upperLimit < cfg.lowerLimit || cfg.maxMotorForce < 0.0f || cfg.springHertz < 0.0f || cfg.springDampingRatio < 0.0f)
                 return false;
         }
-        for(usize pi = 0u; pi < j.pathPoints.size(); ++pi){
-            if(!IsValidPositionVec3(VectorSingle(j.pathPoints[pi])))
+        for(usize pi = 0u; pi < pathPoints.size(); ++pi){
+            if(!IsValidPositionVec3(VectorSingle(pathPoints[pi])))
                 return false;
         }
-        if(j.type == JointType::Path && j.pathPoints.size() < 2u)
+        if(type == JointType::Path && pathPoints.size() < 2u)
             return false;
         return true;
     }
 
+    private b8 validJointEntry(in JointEntry j)const{
+        return this.validJointEntryFields(
+            j.type,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            VectorSingle(j.linearOffset),
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.lengthA,
+            j.lengthB,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
+        );
+    }
+
     private b8 validJointData(in JointComponent j)const{
-        if(!this.validJointEntry(this.jointComponentPrimaryEntry(j)))
+        if(!this.validJointEntryFields(
+            j.type,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            VectorSingle(j.linearOffset),
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.lengthA,
+            j.lengthB,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
+        ))
             return false;
         for(usize i = 0u; i < j.extraJoints.size(); ++i){
             if(!this.validJointEntry(j.extraJoints[i]))
@@ -662,34 +676,60 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 hasExtendedJointEntry(in JointEntry j)const{
-        if(cast<u8>(j.type) > cast<u8>(JointType::Wheel))
+    private b8 hasExtendedJointEntryFields(
+        in JointType type,
+        in b8 enabled,
+        in b8 enableProjection,
+        in b8 pathClosed,
+        in b8 pathLockRotation,
+        in f32 projectionLinearTolerance,
+        in f32 projectionAngularTolerance,
+        in f32 invMassScaleA,
+        in f32 invMassScaleB,
+        in f32 invInertiaScaleA,
+        in f32 invInertiaScaleB,
+        in f32 limitRestitution,
+        in f32 limitHertz,
+        in f32 limitDampingRatio,
+        in f32 swingLimitY,
+        in f32 springTarget,
+        in f32 steeringAngle,
+        in f32 suspensionRestLength,
+        in f32 ratio,
+        in f32 lengthA,
+        in f32 lengthB,
+        in VectorSingle groundAnchorA,
+        in VectorSingle groundAnchorB,
+        in Span<SixDofAxisConfig> sixDofAxes,
+        in Span<f32x4> pathPoints
+    )const{
+        if(cast<u8>(type) > cast<u8>(JointType::Wheel))
             return true;
-        if(!j.enabled || j.enableProjection || j.pathClosed || j.pathLockRotation || !j.pathPoints.empty())
+        if(!enabled || enableProjection || pathClosed || pathLockRotation || !pathPoints.empty())
             return true;
-        if(j.projectionLinearTolerance != 0.1f
-            || j.projectionAngularTolerance != 0.1f
-            || j.invMassScaleA != 1.0f
-            || j.invMassScaleB != 1.0f
-            || j.invInertiaScaleA != 1.0f
-            || j.invInertiaScaleB != 1.0f
-            || j.limitRestitution != 0.0f
-            || j.limitHertz != 0.0f
-            || j.limitDampingRatio != 1.0f
-            || j.swingLimitY != 0.0f
-            || j.springTarget != 0.0f
-            || j.steeringAngle != 0.0f
-            || j.suspensionRestLength != 0.0f
-            || j.ratio != 1.0f
-            || j.lengthA != 0.0f
-            || j.lengthB != 0.0f)
+        if(projectionLinearTolerance != 0.1f
+            || projectionAngularTolerance != 0.1f
+            || invMassScaleA != 1.0f
+            || invMassScaleB != 1.0f
+            || invInertiaScaleA != 1.0f
+            || invInertiaScaleB != 1.0f
+            || limitRestitution != 0.0f
+            || limitHertz != 0.0f
+            || limitDampingRatio != 1.0f
+            || swingLimitY != 0.0f
+            || springTarget != 0.0f
+            || steeringAngle != 0.0f
+            || suspensionRestLength != 0.0f
+            || ratio != 1.0f
+            || lengthA != 0.0f
+            || lengthB != 0.0f)
             return true;
-        if(j.groundAnchorA.x != 0.0f || j.groundAnchorA.y != 0.0f || j.groundAnchorA.z != 0.0f)
+        if(groundAnchorA.x != 0.0f || groundAnchorA.y != 0.0f || groundAnchorA.z != 0.0f)
             return true;
-        if(j.groundAnchorB.x != 0.0f || j.groundAnchorB.y != 0.0f || j.groundAnchorB.z != 0.0f)
+        if(groundAnchorB.x != 0.0f || groundAnchorB.y != 0.0f || groundAnchorB.z != 0.0f)
             return true;
-        for(usize k = 0u; k < 6u; ++k){
-            in SixDofAxisConfig cfg = j.sixDofAxes[k];
+        for(usize k = 0u; k < sixDofAxes.size(); ++k){
+            in SixDofAxisConfig cfg = sixDofAxes[k];
             if(cfg.motion != JointMotion::Locked
                 || cfg.lowerLimit != 0.0f
                 || cfg.upperLimit != 0.0f
@@ -703,6 +743,36 @@ class PhysicsComponentBinaryCodec{
                 return true;
         }
         return false;
+    }
+
+    private b8 hasExtendedJointEntry(in JointEntry j)const{
+        return this.hasExtendedJointEntryFields(
+            j.type,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
+        );
     }
 
     private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
@@ -1432,15 +1502,74 @@ class PhysicsComponentBinaryCodec{
         return c;
     }
 
-    private usize jointEntrySerializedBytes(in JointEntry j, in b8 useV3)const{
+    private usize jointEntrySerializedBytes(in usize pathPointCount, in b8 useV3)const{
         usize bytes = size_of<JointComponentPayloadBinary>();
         if(useV3)
-            bytes += size_of<JointEntryExtV3Binary>() + j.pathPoints.size() * size_of<PhysicsVec4Binary>();
+            bytes += size_of<JointEntryExtV3Binary>() + pathPointCount * size_of<PhysicsVec4Binary>();
         return bytes;
     }
 
-    private b8 appendJointEntryValidated(in JointEntry j, in b8 useV3, in u32 extraJointCount, mut Vector<u8> outBinary)const{
-        if(j.pathPoints.size() > cast<usize>(u32.max))
+    private b8 appendJointEntryFieldsValidated(
+        in JointType type,
+        in b8 useReferenceRotation,
+        in b8 enableLimit,
+        in b8 enableMotor,
+        in b8 enableSpring,
+        in b8 collideConnected,
+        in b8 enabled,
+        in b8 enableProjection,
+        in b8 pathClosed,
+        in b8 pathLockRotation,
+        in VectorSingle localAnchorA,
+        in VectorSingle localAnchorB,
+        in VectorSingle localAxisA,
+        in VectorSingle localAxisB,
+        in VectorSingle referenceRotation,
+        in VectorSingle linearOffset,
+        in VectorSingle groundAnchorA,
+        in VectorSingle groundAnchorB,
+        in f32 length,
+        in f32 minLength,
+        in f32 maxLength,
+        in f32 lowerLimit,
+        in f32 upperLimit,
+        in f32 motorSpeed,
+        in f32 maxMotorForce,
+        in f32 hertz,
+        in f32 dampingRatio,
+        in f32 correctionFactor,
+        in f32 maxTorque,
+        in f32 swingLimit,
+        in f32 suspensionHertz,
+        in f32 suspensionDampingRatio,
+        in f32 breakForce,
+        in f32 breakTorque,
+        in f32 projectionLinearTolerance,
+        in f32 projectionAngularTolerance,
+        in f32 invMassScaleA,
+        in f32 invMassScaleB,
+        in f32 invInertiaScaleA,
+        in f32 invInertiaScaleB,
+        in f32 limitRestitution,
+        in f32 limitHertz,
+        in f32 limitDampingRatio,
+        in f32 swingLimitY,
+        in f32 springTarget,
+        in f32 steeringAngle,
+        in f32 suspensionRestLength,
+        in f32 ratio,
+        in f32 lengthA,
+        in f32 lengthB,
+        in Name bodyEntityNameA,
+        in Name bodyEntityNameB,
+        in u64 userData,
+        in Span<SixDofAxisConfig> sixDofAxes,
+        in Span<f32x4> pathPoints,
+        in b8 useV3,
+        in u32 extraJointCount,
+        mut Vector<u8> outBinary
+    )const{
+        if(pathPoints.size() > cast<usize>(u32.max) || sixDofAxes.size() != 6u)
             return false;
         static_assert(size_of<JointEntryExtV3Binary>() == 304u && size_of<PhysicsWorldConfigExtV3Binary>() == 16u);
         JointComponentPayloadBinary bin;
@@ -1448,72 +1577,72 @@ class PhysicsComponentBinaryCodec{
             bin.version = s_PhysicsComponentBinaryVersionV3;
         else
             bin.version = s_PhysicsComponentBinaryVersion;
-        bin.jointType = cast<u8>(j.type);
+        bin.jointType = cast<u8>(type);
         u8 flags = 0u;
-        if(j.useReferenceRotation) flags |= s_JointFlagUseRefRotation;
-        if(j.enableLimit) flags |= s_JointFlagEnableLimit;
-        if(j.enableMotor) flags |= s_JointFlagEnableMotor;
-        if(j.enableSpring) flags |= s_JointFlagEnableSpring;
-        if(j.collideConnected) flags |= s_JointFlagCollideConnected;
+        if(useReferenceRotation) flags |= s_JointFlagUseRefRotation;
+        if(enableLimit) flags |= s_JointFlagEnableLimit;
+        if(enableMotor) flags |= s_JointFlagEnableMotor;
+        if(enableSpring) flags |= s_JointFlagEnableSpring;
+        if(collideConnected) flags |= s_JointFlagCollideConnected;
         bin.flags = flags;
-        bin.localAnchorA = j.localAnchorA;
-        bin.localAnchorB = j.localAnchorB;
-        bin.localAxisA = j.localAxisA;
-        bin.localAxisB = j.localAxisB;
-        bin.referenceRotation = j.referenceRotation;
-        bin.linearOffset = j.linearOffset;
-        bin.length = j.length;
-        bin.minLength = j.minLength;
-        bin.maxLength = j.maxLength;
-        bin.lowerLimit = j.lowerLimit;
-        bin.upperLimit = j.upperLimit;
-        bin.motorSpeed = j.motorSpeed;
-        bin.maxMotorForce = j.maxMotorForce;
-        bin.hertz = j.hertz;
-        bin.dampingRatio = j.dampingRatio;
-        bin.correctionFactor = j.correctionFactor;
-        bin.maxTorque = j.maxTorque;
-        bin.swingLimit = j.swingLimit;
-        bin.suspensionHertz = j.suspensionHertz;
-        bin.suspensionDampingRatio = j.suspensionDampingRatio;
-        bin.breakForce = j.breakForce;
-        bin.breakTorque = j.breakTorque;
-        bin.bodyEntityNameAHash = j.bodyEntityNameA.hash();
-        bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
-        bin.userData = j.userData;
+        bin.localAnchorA = f32x4(localAnchorA);
+        bin.localAnchorB = f32x4(localAnchorB);
+        bin.localAxisA = f32x4(localAxisA);
+        bin.localAxisB = f32x4(localAxisB);
+        bin.referenceRotation = f32x4(referenceRotation);
+        bin.linearOffset = f32x4(linearOffset);
+        bin.length = length;
+        bin.minLength = minLength;
+        bin.maxLength = maxLength;
+        bin.lowerLimit = lowerLimit;
+        bin.upperLimit = upperLimit;
+        bin.motorSpeed = motorSpeed;
+        bin.maxMotorForce = maxMotorForce;
+        bin.hertz = hertz;
+        bin.dampingRatio = dampingRatio;
+        bin.correctionFactor = correctionFactor;
+        bin.maxTorque = maxTorque;
+        bin.swingLimit = swingLimit;
+        bin.suspensionHertz = suspensionHertz;
+        bin.suspensionDampingRatio = suspensionDampingRatio;
+        bin.breakForce = breakForce;
+        bin.breakTorque = breakTorque;
+        bin.bodyEntityNameAHash = bodyEntityNameA.hash();
+        bin.bodyEntityNameBHash = bodyEntityNameB.hash();
+        bin.userData = userData;
         AppendPOD(outBinary, bin);
         if(!useV3)
             return true;
 
         JointEntryExtV3Binary ext;
-        ext.groundAnchorA = j.groundAnchorA;
-        ext.groundAnchorB = j.groundAnchorB;
-        ext.projectionLinearTolerance = j.projectionLinearTolerance;
-        ext.projectionAngularTolerance = j.projectionAngularTolerance;
-        ext.invMassScaleA = j.invMassScaleA;
-        ext.invMassScaleB = j.invMassScaleB;
-        ext.invInertiaScaleA = j.invInertiaScaleA;
-        ext.invInertiaScaleB = j.invInertiaScaleB;
-        ext.limitRestitution = j.limitRestitution;
-        ext.limitHertz = j.limitHertz;
-        ext.limitDampingRatio = j.limitDampingRatio;
-        ext.swingLimitY = j.swingLimitY;
-        ext.springTarget = j.springTarget;
-        ext.steeringAngle = j.steeringAngle;
-        ext.suspensionRestLength = j.suspensionRestLength;
-        ext.ratio = j.ratio;
-        ext.lengthA = j.lengthA;
-        ext.lengthB = j.lengthB;
-        ext.pathPointCount = cast<u32>(j.pathPoints.size());
+        ext.groundAnchorA = f32x4(groundAnchorA);
+        ext.groundAnchorB = f32x4(groundAnchorB);
+        ext.projectionLinearTolerance = projectionLinearTolerance;
+        ext.projectionAngularTolerance = projectionAngularTolerance;
+        ext.invMassScaleA = invMassScaleA;
+        ext.invMassScaleB = invMassScaleB;
+        ext.invInertiaScaleA = invInertiaScaleA;
+        ext.invInertiaScaleB = invInertiaScaleB;
+        ext.limitRestitution = limitRestitution;
+        ext.limitHertz = limitHertz;
+        ext.limitDampingRatio = limitDampingRatio;
+        ext.swingLimitY = swingLimitY;
+        ext.springTarget = springTarget;
+        ext.steeringAngle = steeringAngle;
+        ext.suspensionRestLength = suspensionRestLength;
+        ext.ratio = ratio;
+        ext.lengthA = lengthA;
+        ext.lengthB = lengthB;
+        ext.pathPointCount = cast<u32>(pathPoints.size());
         ext.extraJointCount = extraJointCount;
         u8 extFlags = 0u;
-        if(j.enabled) extFlags |= s_JointExtV3FlagEnabled;
-        if(j.enableProjection) extFlags |= s_JointExtV3FlagEnableProjection;
-        if(j.pathClosed) extFlags |= s_JointExtV3FlagPathClosed;
-        if(j.pathLockRotation) extFlags |= s_JointExtV3FlagPathLockRotation;
+        if(enabled) extFlags |= s_JointExtV3FlagEnabled;
+        if(enableProjection) extFlags |= s_JointExtV3FlagEnableProjection;
+        if(pathClosed) extFlags |= s_JointExtV3FlagPathClosed;
+        if(pathLockRotation) extFlags |= s_JointExtV3FlagPathLockRotation;
         ext.extFlags = extFlags;
         for(usize k = 0u; k < 6u; ++k){
-            in SixDofAxisConfig cfg = j.sixDofAxes[k];
+            in SixDofAxisConfig cfg = sixDofAxes[k];
             ext.sixDofMotions[k] = cast<u8>(cfg.motion);
             u8 axisFlags = 0u;
             if(cfg.enableMotor) axisFlags |= s_SixDofAxisFlagEnableMotor;
@@ -1529,14 +1658,131 @@ class PhysicsComponentBinaryCodec{
             ext.sixDofParams[pBase + 6u] = cfg.springDampingRatio;
         }
         AppendPOD(outBinary, ext);
-        return AppendBinaryVectorPayload(outBinary, j.pathPoints).has_value();
+        return AppendBinaryVectorPayload(outBinary, pathPoints).has_value();
     }
 
-    private b8 deserializeJointEntry(
+    private b8 appendJointEntryValidated(in JointEntry j, in b8 useV3, in u32 extraJointCount, mut Vector<u8> outBinary)const{
+        return this.appendJointEntryFieldsValidated(
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            VectorSingle(j.linearOffset),
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size()),
+            useV3,
+            extraJointCount,
+            outBinary
+        );
+    }
+
+    private b8 deserializeJointEntryFields(
         in Span<u8> payload,
         mut usize inOutCursor,
         in b8 allowExtraJoints,
-        mut JointEntry outEntry,
+        mut JointType outType,
+        mut b8 outUseReferenceRotation,
+        mut b8 outEnableLimit,
+        mut b8 outEnableMotor,
+        mut b8 outEnableSpring,
+        mut b8 outCollideConnected,
+        mut b8 outEnabled,
+        mut b8 outEnableProjection,
+        mut b8 outPathClosed,
+        mut b8 outPathLockRotation,
+        mut VectorSingle outLocalAnchorA,
+        mut VectorSingle outLocalAnchorB,
+        mut VectorSingle outLocalAxisA,
+        mut VectorSingle outLocalAxisB,
+        mut VectorSingle outReferenceRotation,
+        mut VectorSingle outLinearOffset,
+        mut VectorSingle outGroundAnchorA,
+        mut VectorSingle outGroundAnchorB,
+        mut f32 outLength,
+        mut f32 outMinLength,
+        mut f32 outMaxLength,
+        mut f32 outLowerLimit,
+        mut f32 outUpperLimit,
+        mut f32 outMotorSpeed,
+        mut f32 outMaxMotorForce,
+        mut f32 outHertz,
+        mut f32 outDampingRatio,
+        mut f32 outCorrectionFactor,
+        mut f32 outMaxTorque,
+        mut f32 outSwingLimit,
+        mut f32 outSuspensionHertz,
+        mut f32 outSuspensionDampingRatio,
+        mut f32 outBreakForce,
+        mut f32 outBreakTorque,
+        mut f32 outProjectionLinearTolerance,
+        mut f32 outProjectionAngularTolerance,
+        mut f32 outInvMassScaleA,
+        mut f32 outInvMassScaleB,
+        mut f32 outInvInertiaScaleA,
+        mut f32 outInvInertiaScaleB,
+        mut f32 outLimitRestitution,
+        mut f32 outLimitHertz,
+        mut f32 outLimitDampingRatio,
+        mut f32 outSwingLimitY,
+        mut f32 outSpringTarget,
+        mut f32 outSteeringAngle,
+        mut f32 outSuspensionRestLength,
+        mut f32 outRatio,
+        mut f32 outLengthA,
+        mut f32 outLengthB,
+        mut Name outBodyEntityNameA,
+        mut Name outBodyEntityNameB,
+        mut u64 outUserData,
+        mut Array<SixDofAxisConfig, 6u> outSixDofAxes,
+        mut Vector<f32x4> outPathPoints,
         mut u32 outExtraJointCount
     )const{
         outExtraJointCount = 0u;
@@ -1550,44 +1796,45 @@ class PhysicsComponentBinaryCodec{
         if(bin.version == s_PhysicsComponentBinaryVersion && (!allowExtraJoints || bin.jointType > cast<u8>(JointType::Wheel)))
             return false;
 
-        outEntry = JointEntry();
-        outEntry.type = cast<JointType>(bin.jointType);
-        outEntry.useReferenceRotation = (bin.flags & s_JointFlagUseRefRotation) != 0u;
-        outEntry.enableLimit = (bin.flags & s_JointFlagEnableLimit) != 0u;
-        outEntry.enableMotor = (bin.flags & s_JointFlagEnableMotor) != 0u;
-        outEntry.enableSpring = (bin.flags & s_JointFlagEnableSpring) != 0u;
-        outEntry.collideConnected = (bin.flags & s_JointFlagCollideConnected) != 0u;
-        outEntry.localAnchorA = bin.localAnchorA;
-        outEntry.localAnchorB = bin.localAnchorB;
-        outEntry.localAxisA = bin.localAxisA;
-        outEntry.localAxisB = bin.localAxisB;
-        outEntry.referenceRotation = bin.referenceRotation;
-        outEntry.linearOffset = bin.linearOffset;
-        outEntry.length = bin.length;
-        outEntry.minLength = bin.minLength;
-        outEntry.maxLength = bin.maxLength;
-        outEntry.lowerLimit = bin.lowerLimit;
-        outEntry.upperLimit = bin.upperLimit;
-        outEntry.motorSpeed = bin.motorSpeed;
-        outEntry.maxMotorForce = bin.maxMotorForce;
-        outEntry.hertz = bin.hertz;
-        outEntry.dampingRatio = bin.dampingRatio;
-        outEntry.correctionFactor = bin.correctionFactor;
-        outEntry.maxTorque = bin.maxTorque;
-        outEntry.swingLimit = bin.swingLimit;
-        outEntry.suspensionHertz = bin.suspensionHertz;
-        outEntry.suspensionDampingRatio = bin.suspensionDampingRatio;
-        outEntry.breakForce = bin.breakForce;
-        outEntry.breakTorque = bin.breakTorque;
+        outType = cast<JointType>(bin.jointType);
+        outUseReferenceRotation = (bin.flags & s_JointFlagUseRefRotation) != 0u;
+        outEnableLimit = (bin.flags & s_JointFlagEnableLimit) != 0u;
+        outEnableMotor = (bin.flags & s_JointFlagEnableMotor) != 0u;
+        outEnableSpring = (bin.flags & s_JointFlagEnableSpring) != 0u;
+        outCollideConnected = (bin.flags & s_JointFlagCollideConnected) != 0u;
+        outLocalAnchorA = VectorSingle(bin.localAnchorA);
+        outLocalAnchorB = VectorSingle(bin.localAnchorB);
+        outLocalAxisA = VectorSingle(bin.localAxisA);
+        outLocalAxisB = VectorSingle(bin.localAxisB);
+        outReferenceRotation = VectorSingle(bin.referenceRotation);
+        outLinearOffset = VectorSingle(bin.linearOffset);
+        outGroundAnchorA = VectorSingle(0.0f);
+        outGroundAnchorB = VectorSingle(0.0f);
+        outLength = bin.length;
+        outMinLength = bin.minLength;
+        outMaxLength = bin.maxLength;
+        outLowerLimit = bin.lowerLimit;
+        outUpperLimit = bin.upperLimit;
+        outMotorSpeed = bin.motorSpeed;
+        outMaxMotorForce = bin.maxMotorForce;
+        outHertz = bin.hertz;
+        outDampingRatio = bin.dampingRatio;
+        outCorrectionFactor = bin.correctionFactor;
+        outMaxTorque = bin.maxTorque;
+        outSwingLimit = bin.swingLimit;
+        outSuspensionHertz = bin.suspensionHertz;
+        outSuspensionDampingRatio = bin.suspensionDampingRatio;
+        outBreakForce = bin.breakForce;
+        outBreakTorque = bin.breakTorque;
         if(bin.bodyEntityNameAHash == s_NameNone.hash())
-            outEntry.bodyEntityNameA = s_NameNone;
+            outBodyEntityNameA = s_NameNone;
         else
-            outEntry.bodyEntityNameA = Name(bin.bodyEntityNameAHash);
+            outBodyEntityNameA = Name(bin.bodyEntityNameAHash);
         if(bin.bodyEntityNameBHash == s_NameNone.hash())
-            outEntry.bodyEntityNameB = s_NameNone;
+            outBodyEntityNameB = s_NameNone;
         else
-            outEntry.bodyEntityNameB = Name(bin.bodyEntityNameBHash);
-        outEntry.userData = bin.userData;
+            outBodyEntityNameB = Name(bin.bodyEntityNameBHash);
+        outUserData = bin.userData;
 
         if(bin.version == s_PhysicsComponentBinaryVersionV3){
             const Expected<JointEntryExtV3Binary> extRes = ReadPOD<JointEntryExtV3Binary>(payload, inOutCursor);
@@ -1604,49 +1851,182 @@ class PhysicsComponentBinaryCodec{
             if(pathBytes > cast<u64>(payload.size() - inOutCursor))
                 return false;
 
-            outEntry.groundAnchorA = ext.groundAnchorA;
-            outEntry.groundAnchorB = ext.groundAnchorB;
-            outEntry.projectionLinearTolerance = ext.projectionLinearTolerance;
-            outEntry.projectionAngularTolerance = ext.projectionAngularTolerance;
-            outEntry.invMassScaleA = ext.invMassScaleA;
-            outEntry.invMassScaleB = ext.invMassScaleB;
-            outEntry.invInertiaScaleA = ext.invInertiaScaleA;
-            outEntry.invInertiaScaleB = ext.invInertiaScaleB;
-            outEntry.limitRestitution = ext.limitRestitution;
-            outEntry.limitHertz = ext.limitHertz;
-            outEntry.limitDampingRatio = ext.limitDampingRatio;
-            outEntry.swingLimitY = ext.swingLimitY;
-            outEntry.springTarget = ext.springTarget;
-            outEntry.steeringAngle = ext.steeringAngle;
-            outEntry.suspensionRestLength = ext.suspensionRestLength;
-            outEntry.ratio = ext.ratio;
-            outEntry.lengthA = ext.lengthA;
-            outEntry.lengthB = ext.lengthB;
-            outEntry.enabled = (ext.extFlags & s_JointExtV3FlagEnabled) != 0u;
-            outEntry.enableProjection = (ext.extFlags & s_JointExtV3FlagEnableProjection) != 0u;
-            outEntry.pathClosed = (ext.extFlags & s_JointExtV3FlagPathClosed) != 0u;
-            outEntry.pathLockRotation = (ext.extFlags & s_JointExtV3FlagPathLockRotation) != 0u;
+            outGroundAnchorA = VectorSingle(ext.groundAnchorA);
+            outGroundAnchorB = VectorSingle(ext.groundAnchorB);
+            outProjectionLinearTolerance = ext.projectionLinearTolerance;
+            outProjectionAngularTolerance = ext.projectionAngularTolerance;
+            outInvMassScaleA = ext.invMassScaleA;
+            outInvMassScaleB = ext.invMassScaleB;
+            outInvInertiaScaleA = ext.invInertiaScaleA;
+            outInvInertiaScaleB = ext.invInertiaScaleB;
+            outLimitRestitution = ext.limitRestitution;
+            outLimitHertz = ext.limitHertz;
+            outLimitDampingRatio = ext.limitDampingRatio;
+            outSwingLimitY = ext.swingLimitY;
+            outSpringTarget = ext.springTarget;
+            outSteeringAngle = ext.steeringAngle;
+            outSuspensionRestLength = ext.suspensionRestLength;
+            outRatio = ext.ratio;
+            outLengthA = ext.lengthA;
+            outLengthB = ext.lengthB;
+            outEnabled = (ext.extFlags & s_JointExtV3FlagEnabled) != 0u;
+            outEnableProjection = (ext.extFlags & s_JointExtV3FlagEnableProjection) != 0u;
+            outPathClosed = (ext.extFlags & s_JointExtV3FlagPathClosed) != 0u;
+            outPathLockRotation = (ext.extFlags & s_JointExtV3FlagPathLockRotation) != 0u;
             outExtraJointCount = ext.extraJointCount;
 
             for(usize k = 0u; k < 6u; ++k){
                 if(ext.sixDofMotions[k] >= cast<u8>(JointMotion::kCount) || (ext.sixDofFlags[k] & 0xfcu) != 0u)
                     return false;
-                outEntry.sixDofAxes[k].motion = cast<JointMotion>(ext.sixDofMotions[k]);
-                outEntry.sixDofAxes[k].enableMotor = (ext.sixDofFlags[k] & s_SixDofAxisFlagEnableMotor) != 0u;
-                outEntry.sixDofAxes[k].enableSpring = (ext.sixDofFlags[k] & s_SixDofAxisFlagEnableSpring) != 0u;
+                outSixDofAxes[k].motion = cast<JointMotion>(ext.sixDofMotions[k]);
+                outSixDofAxes[k].enableMotor = (ext.sixDofFlags[k] & s_SixDofAxisFlagEnableMotor) != 0u;
+                outSixDofAxes[k].enableSpring = (ext.sixDofFlags[k] & s_SixDofAxisFlagEnableSpring) != 0u;
                 const usize pBase = k * 7u;
-                outEntry.sixDofAxes[k].lowerLimit = ext.sixDofParams[pBase + 0u];
-                outEntry.sixDofAxes[k].upperLimit = ext.sixDofParams[pBase + 1u];
-                outEntry.sixDofAxes[k].motorTargetVelocity = ext.sixDofParams[pBase + 2u];
-                outEntry.sixDofAxes[k].motorTargetPosition = ext.sixDofParams[pBase + 3u];
-                outEntry.sixDofAxes[k].maxMotorForce = ext.sixDofParams[pBase + 4u];
-                outEntry.sixDofAxes[k].springHertz = ext.sixDofParams[pBase + 5u];
-                outEntry.sixDofAxes[k].springDampingRatio = ext.sixDofParams[pBase + 6u];
+                outSixDofAxes[k].lowerLimit = ext.sixDofParams[pBase + 0u];
+                outSixDofAxes[k].upperLimit = ext.sixDofParams[pBase + 1u];
+                outSixDofAxes[k].motorTargetVelocity = ext.sixDofParams[pBase + 2u];
+                outSixDofAxes[k].motorTargetPosition = ext.sixDofParams[pBase + 3u];
+                outSixDofAxes[k].maxMotorForce = ext.sixDofParams[pBase + 4u];
+                outSixDofAxes[k].springHertz = ext.sixDofParams[pBase + 5u];
+                outSixDofAxes[k].springDampingRatio = ext.sixDofParams[pBase + 6u];
             }
-            if(!ReadBinaryVectorPayload(payload, ext.pathPointCount, inOutCursor, outEntry.pathPoints).has_value())
+            if(!ReadBinaryVectorPayload(payload, ext.pathPointCount, inOutCursor, outPathPoints).has_value())
                 return false;
         }
-        return this.validJointEntry(outEntry);
+        return this.validJointEntryFields(
+            outType,
+            outLocalAnchorA,
+            outLocalAnchorB,
+            outLocalAxisA,
+            outLocalAxisB,
+            outReferenceRotation,
+            outLength,
+            outMinLength,
+            outMaxLength,
+            outLowerLimit,
+            outUpperLimit,
+            outMotorSpeed,
+            outMaxMotorForce,
+            outHertz,
+            outDampingRatio,
+            outLinearOffset,
+            outCorrectionFactor,
+            outMaxTorque,
+            outSwingLimit,
+            outSuspensionHertz,
+            outSuspensionDampingRatio,
+            outBreakForce,
+            outBreakTorque,
+            outProjectionLinearTolerance,
+            outProjectionAngularTolerance,
+            outInvMassScaleA,
+            outInvMassScaleB,
+            outInvInertiaScaleA,
+            outInvInertiaScaleB,
+            outLimitRestitution,
+            outLimitHertz,
+            outLimitDampingRatio,
+            outSwingLimitY,
+            outSpringTarget,
+            outSteeringAngle,
+            outSuspensionRestLength,
+            outRatio,
+            outGroundAnchorA,
+            outGroundAnchorB,
+            outLengthA,
+            outLengthB,
+            Span<SixDofAxisConfig>(outSixDofAxes.data(), outSixDofAxes.size()),
+            Span<f32x4>(outPathPoints.data(), outPathPoints.size())
+        );
+    }
+
+    private b8 deserializeJointEntry(
+        in Span<u8> payload,
+        mut usize inOutCursor,
+        in b8 allowExtraJoints,
+        mut JointEntry outEntry,
+        mut u32 outExtraJointCount
+    )const{
+        outEntry = JointEntry();
+        VectorSingle localAnchorA(0.0f);
+        VectorSingle localAnchorB(0.0f);
+        VectorSingle localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle linearOffset(0.0f);
+        VectorSingle groundAnchorA(0.0f);
+        VectorSingle groundAnchorB(0.0f);
+        if(!this.deserializeJointEntryFields(
+            payload,
+            inOutCursor,
+            allowExtraJoints,
+            outEntry.type,
+            outEntry.useReferenceRotation,
+            outEntry.enableLimit,
+            outEntry.enableMotor,
+            outEntry.enableSpring,
+            outEntry.collideConnected,
+            outEntry.enabled,
+            outEntry.enableProjection,
+            outEntry.pathClosed,
+            outEntry.pathLockRotation,
+            localAnchorA,
+            localAnchorB,
+            localAxisA,
+            localAxisB,
+            referenceRotation,
+            linearOffset,
+            groundAnchorA,
+            groundAnchorB,
+            outEntry.length,
+            outEntry.minLength,
+            outEntry.maxLength,
+            outEntry.lowerLimit,
+            outEntry.upperLimit,
+            outEntry.motorSpeed,
+            outEntry.maxMotorForce,
+            outEntry.hertz,
+            outEntry.dampingRatio,
+            outEntry.correctionFactor,
+            outEntry.maxTorque,
+            outEntry.swingLimit,
+            outEntry.suspensionHertz,
+            outEntry.suspensionDampingRatio,
+            outEntry.breakForce,
+            outEntry.breakTorque,
+            outEntry.projectionLinearTolerance,
+            outEntry.projectionAngularTolerance,
+            outEntry.invMassScaleA,
+            outEntry.invMassScaleB,
+            outEntry.invInertiaScaleA,
+            outEntry.invInertiaScaleB,
+            outEntry.limitRestitution,
+            outEntry.limitHertz,
+            outEntry.limitDampingRatio,
+            outEntry.swingLimitY,
+            outEntry.springTarget,
+            outEntry.steeringAngle,
+            outEntry.suspensionRestLength,
+            outEntry.ratio,
+            outEntry.lengthA,
+            outEntry.lengthB,
+            outEntry.bodyEntityNameA,
+            outEntry.bodyEntityNameB,
+            outEntry.userData,
+            outEntry.sixDofAxes,
+            outEntry.pathPoints,
+            outExtraJointCount
+        ))
+            return false;
+        outEntry.localAnchorA = f32x4(localAnchorA);
+        outEntry.localAnchorB = f32x4(localAnchorB);
+        outEntry.localAxisA = f32x4(localAxisA);
+        outEntry.localAxisB = f32x4(localAxisB);
+        outEntry.referenceRotation = f32x4(referenceRotation);
+        outEntry.linearOffset = f32x4(linearOffset);
+        outEntry.groundAnchorA = f32x4(groundAnchorA);
+        outEntry.groundAnchorB = f32x4(groundAnchorB);
+        return true;
     }
 
     public b8 validateJoint(in JointComponent j, in Name virtualPath)const{
@@ -1659,12 +2039,39 @@ class PhysicsComponentBinaryCodec{
     public b8 appendJointValidated(in JointComponent j, mut Vector<u8> outBinary)const{
         if(j.extraJoints.size() > cast<usize>(u32.max))
             return false;
-        const JointEntry primary = this.jointComponentPrimaryEntry(j);
-        const b8 useV3 = !j.extraJoints.empty() || this.hasExtendedJointEntry(primary);
-        usize totalBytes = this.jointEntrySerializedBytes(primary, useV3);
+        const Span<SixDofAxisConfig> primarySixDof(j.sixDofAxes.data(), j.sixDofAxes.size());
+        const Span<f32x4> primaryPathPoints(j.pathPoints.data(), j.pathPoints.size());
+        const b8 useV3 = !j.extraJoints.empty() || this.hasExtendedJointEntryFields(
+            j.type,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            primarySixDof,
+            primaryPathPoints
+        );
+        usize totalBytes = this.jointEntrySerializedBytes(primaryPathPoints.size(), useV3);
         if(useV3){
             for(usize i = 0u; i < j.extraJoints.size(); ++i){
-                const usize eb = this.jointEntrySerializedBytes(j.extraJoints[i], true);
+                const usize eb = this.jointEntrySerializedBytes(j.extraJoints[i].pathPoints.size(), true);
                 if(eb > usize.max - totalBytes)
                     return false;
                 totalBytes += eb;
@@ -1673,7 +2080,66 @@ class PhysicsComponentBinaryCodec{
         if(!CanAppendBytes(outBinary, totalBytes))
             return false;
         outBinary.reserve(outBinary.size() + totalBytes);
-        if(!this.appendJointEntryValidated(primary, useV3, cast<u32>(j.extraJoints.size()), outBinary))
+        if(!this.appendJointEntryFieldsValidated(
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            VectorSingle(j.linearOffset),
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            primarySixDof,
+            primaryPathPoints,
+            useV3,
+            cast<u32>(j.extraJoints.size()),
+            outBinary
+        ))
             return false;
         if(useV3){
             for(usize i = 0u; i < j.extraJoints.size(); ++i){
@@ -1697,20 +2163,94 @@ class PhysicsComponentBinaryCodec{
 
     public Expected<JointComponent> deserializeJoint(in Span<u8> payload)const{
         usize cursor = 0u;
-        JointEntry primary;
+        JointComponent j;
         u32 extraCount = 0u;
-        if(!this.deserializeJointEntry(payload, cursor, true, primary, extraCount)){
+        VectorSingle localAnchorA(0.0f);
+        VectorSingle localAnchorB(0.0f);
+        VectorSingle localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle linearOffset(0.0f);
+        VectorSingle groundAnchorA(0.0f);
+        VectorSingle groundAnchorB(0.0f);
+        if(!this.deserializeJointEntryFields(
+            payload,
+            cursor,
+            true,
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            localAnchorA,
+            localAnchorB,
+            localAxisA,
+            localAxisB,
+            referenceRotation,
+            linearOffset,
+            groundAnchorA,
+            groundAnchorB,
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            j.sixDofAxes,
+            j.pathPoints,
+            extraCount
+        )){
             error("JointComponentAsset::loadComponentPayload failed: invalid payload header or parameters");
             return MakeUnexpected(Failure());
         }
+        j.localAnchorA = f32x4(localAnchorA);
+        j.localAnchorB = f32x4(localAnchorB);
+        j.localAxisA = f32x4(localAxisA);
+        j.localAxisB = f32x4(localAxisB);
+        j.referenceRotation = f32x4(referenceRotation);
+        j.linearOffset = f32x4(linearOffset);
+        j.groundAnchorA = f32x4(groundAnchorA);
+        j.groundAnchorB = f32x4(groundAnchorB);
         const u64 minExtraBytes = cast<u64>(extraCount) * cast<u64>(size_of<JointComponentPayloadBinary>() + size_of<JointEntryExtV3Binary>());
         if(minExtraBytes > cast<u64>(payload.size() - cursor)){
             error("JointComponentAsset::loadComponentPayload failed: truncated extra joints");
             return MakeUnexpected(Failure());
         }
 
-        JointComponent j;
-        this.assignPrimaryEntryToJointComponent(primary, j);
         j.extraJoints.resize(extraCount);
         for(u32 i = 0u; i < extraCount; ++i){
             u32 dummyExtra = 0u;
@@ -1724,10 +2264,6 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         j.dirty = true;
-        if(!this.validJointData(j)){
-            error("JointComponentAsset::loadComponentPayload failed: invalid joint parameters");
-            return MakeUnexpected(Failure());
-        }
         return j;
     }
 

@@ -1031,7 +1031,37 @@ void ResetContactConstraintSubStepImpulses(mut ContactConstraint c){
         c.points[i].normalImpulse = 0.0f;
 }
 
-void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConstraint c, mut ContactConstraintStepCache cache, in f32 invH, in b8 useBias, in b8 reuseCachedSep){
+void ResolveKinematicSubstepDelta(
+    in Span<u32> movingKinSlots,
+    in Span<BodyState> movingKinStates,
+    in u32 kinStride,
+    in u32 kinStage,
+    in u32 awakeIdx,
+    mut VectorSingle outDeltaPos,
+    mut VectorSingle outDeltaRot
+){
+    if(movingKinSlots.empty() || awakeIdx >= cast<u32>(movingKinSlots.size()))
+        return;
+    const u32 slot = movingKinSlots[awakeIdx];
+    if(slot == s_NullIndex)
+        return;
+    in BodyState ks = movingKinStates[cast<usize>(slot) * cast<usize>(kinStride) + cast<usize>(kinStage)];
+    outDeltaPos = VectorSingle(ks.deltaPositionFlags, 0.0f);
+    outDeltaRot = VectorSingle(ks.deltaRotation);
+}
+
+void SolveContactConstraintCachedWithKinematics(
+    mut Vector<BodyState> states,
+    mut ContactConstraint c,
+    mut ContactConstraintStepCache cache,
+    in f32 invH,
+    in b8 useBias,
+    in b8 reuseCachedSep,
+    in Span<u32> movingKinSlots,
+    in Span<BodyState> movingKinStates,
+    in u32 kinStride,
+    in u32 kinStage
+){
     if(c.pointCount == 0u)
         return;
 
@@ -1040,6 +1070,7 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
 
     const b8 hasA = (c.indexA != s_NullIndex);
     const b8 hasB = (c.indexB != s_NullIndex);
+    const u32 dynBit = cast<u32>(BodyFlags::Dynamic);
     u32 flagsA = 0u;
     u32 flagsB = 0u;
     VectorSingle deltaPosA(0.0f);
@@ -1059,6 +1090,8 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         if(!reuseCachedSep){
             deltaPosA = VectorSingle(stateA.deltaPositionFlags, 0.0f);
             deltaRotA = VectorSingle(stateA.deltaRotation);
+            if((flagsA & dynBit) == 0u && !movingKinSlots.empty())
+                ResolveKinematicSubstepDelta(movingKinSlots, movingKinStates, kinStride, kinStage, c.indexA, deltaPosA, deltaRotA);
         }
     }
     if(hasB){
@@ -1069,10 +1102,11 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         if(!reuseCachedSep){
             deltaPosB = VectorSingle(stateB.deltaPositionFlags, 0.0f);
             deltaRotB = VectorSingle(stateB.deltaRotation);
+            if((flagsB & dynBit) == 0u && !movingKinSlots.empty())
+                ResolveKinematicSubstepDelta(movingKinSlots, movingKinStates, kinStride, kinStage, c.indexB, deltaPosB, deltaRotB);
         }
     }
 
-    const u32 dynBit = cast<u32>(BodyFlags::Dynamic);
     const b8 dynA = hasA && ((flagsA & dynBit) != 0u);
     const b8 dynB = hasB && ((flagsB & dynBit) != 0u);
     const b8 lockedA = (flagsA & 0x3Fu) != 0u;
@@ -1318,6 +1352,10 @@ void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConst
         states[c.indexB].linearVelocity = f32x4(vB, 0.0f);
         states[c.indexB].angularVelocity = f32x4(wB, 0.0f);
     }
+}
+
+void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConstraint c, mut ContactConstraintStepCache cache, in f32 invH, in b8 useBias, in b8 reuseCachedSep){
+    SolveContactConstraintCachedWithKinematics(states, c, cache, invH, useBias, reuseCachedSep, Span<u32>(), Span<BodyState>(), 0u, 0u);
 }
 
 void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint c, in f32 invH, in b8 useBias){

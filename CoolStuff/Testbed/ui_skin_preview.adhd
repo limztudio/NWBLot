@@ -599,6 +599,15 @@ class UiWidgetGallery{
     private b8 m_enabled = true;
 }
 
+class UiSkinPreviewGalleryLayout{
+    public Rect gallery;
+    public f32 captionHeightMeasure = 0.0f;
+    public f32 koreanHeightMeasure = 0.0f;
+    public f32 captionHeight = 0.0f;
+    public f32 preferredTop = 0.0f;
+    public b8 valid = false;
+}
+
 class UiSkinPreview{
     public UiSkinPreview(){
         this.m_normal = Label();
@@ -620,36 +629,45 @@ class UiSkinPreview{
         return this.m_widgets.loadAssets(context, sceneSubsystems);
     }
 
-    public Expected<Rect> galleryBounds(mut UiPaintContext context){
+    public UiSkinPreviewGalleryLayout measureGalleryLayout(mut UiPaintContext context){
+        UiSkinPreviewGalleryLayout layout;
         const Expected<Rect> caption = this.m_caption.measure(context.text, context.display);
         const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
         if(!caption.has_value() || !korean.has_value())
-            return MakeUnexpected(Failure());
-        const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption.value().height, korean.value().height);
-        return ResolveWidgetGalleryLayoutBounds(context.display, ResolveSkinGalleryPreferredTop(captionHeight));
+            return layout;
+        layout.captionHeightMeasure = caption.value().height;
+        layout.koreanHeightMeasure = korean.value().height;
+        layout.captionHeight = ResolveSkinGalleryCaptionHeight(layout.captionHeightMeasure, layout.koreanHeightMeasure);
+        layout.preferredTop = ResolveSkinGalleryPreferredTop(layout.captionHeight);
+        layout.gallery = ResolveWidgetGalleryLayoutBounds(context.display, layout.preferredTop);
+        layout.valid = true;
+        return layout;
     }
 
-    public void paint(mut UiPaintContext context){
+    public Expected<Rect> galleryBounds(mut UiPaintContext context){
+        const UiSkinPreviewGalleryLayout layout = this.measureGalleryLayout(context);
+        if(!layout.valid)
+            return MakeUnexpected(Failure());
+        return layout.gallery;
+    }
+
+    public void paintWithLayout(mut UiPaintContext context, in UiSkinPreviewGalleryLayout layout){
         const f32 originX = ResolveSkinGalleryOriginX(context.display.logicalWidth);
         const f32 originY = s_GalleryMargin;
-        const Expected<Rect> caption = this.m_caption.measure(context.text, context.display);
-        const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
         const Expected<Rect> normal = this.m_normal.measure(context.text, context.display);
         const Expected<Rect> hover = this.m_hover.measure(context.text, context.display);
         const Expected<Rect> pressed = this.m_pressed.measure(context.text, context.display);
         const Expected<Rect> disabled = this.m_disabled.measure(context.text, context.display);
         const Expected<Rect> edit = this.m_edit.measure(context.text, context.display);
-        if(!caption.has_value() || !korean.has_value() || !normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
+        if(!layout.valid || !normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
             error("Testbed: custom UI label measurement failed");
             return;
         }
-        const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption.value().height, korean.value().height);
-        const f32 preferredTop = ResolveSkinGalleryPreferredTop(captionHeight);
-        const Rect gallery = ResolveWidgetGalleryLayoutBounds(context.display, preferredTop);
+        in Rect gallery = layout.gallery;
         this.m_widgets.paint(context, gallery);
-        if(gallery.y < preferredTop || originX < s_MinimumGalleryX)
+        if(gallery.y < layout.preferredTop || originX < s_MinimumGalleryX)
             return;
-        if(!DrawSkinGallery(context.paint, originX, originY, captionHeight)){
+        if(!DrawSkinGallery(context.paint, originX, originY, layout.captionHeight)){
             error("Testbed: default UI skin is missing a gallery region");
             return;
         }
@@ -662,8 +680,8 @@ class UiSkinPreview{
             + VectorSingle(s_ButtonTopY, s_ButtonTopY, s_ButtonBottomY, s_ButtonBottomY)
             + buttonOffsets;
         const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, edit.value().height);
-        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y, s_CaptionWidth, caption.value().height))
-            && this.m_korean.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y + caption.value().height, s_CaptionWidth, korean.value().height));
+        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y, s_CaptionWidth, layout.captionHeightMeasure))
+            && this.m_korean.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y + layout.captionHeightMeasure, s_CaptionWidth, layout.koreanHeightMeasure));
         if(!captionPainted){
             error("Testbed: custom UI caption shaping or rasterization failed");
             return;
@@ -676,6 +694,11 @@ class UiSkinPreview{
             || !this.m_edit.paint(context.text, context.paint, Rect(textCoords.z, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
         )
             error("Testbed: custom UI label shaping or rasterization failed");
+    }
+
+    public void paint(mut UiPaintContext context){
+        const UiSkinPreviewGalleryLayout layout = this.measureGalleryLayout(context);
+        this.paintWithLayout(context, layout);
     }
 
     private Label m_normal;

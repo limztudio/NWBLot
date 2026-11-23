@@ -160,7 +160,24 @@ b8 ValidateUniqueAssetRefs<TAsset>(
     in StringView contextPrefix,
     in StringView contextLabel
 ){
-    HashMap<NameHash, u8> seen;
+    if(references.size() <= 16u){
+        for(usize i = 0u; i < references.size(); ++i){
+            const AssetRef<TAsset> entry = references[i];
+            if(!entry.valid()){
+                error("{} failed: {} entry {} is empty", contextPrefix, contextLabel, i);
+                return false;
+            }
+            const NameHash hash = entry.name().hash();
+            for(usize j = 0u; j < i; ++j){
+                if(references[j].name().hash() == hash){
+                    error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    HashSet<NameHash> seen;
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
         const AssetRef<TAsset> entry = references[i];
@@ -168,12 +185,10 @@ b8 ValidateUniqueAssetRefs<TAsset>(
             error("{} failed: {} entry {} is empty", contextPrefix, contextLabel, i);
             return false;
         }
-        const NameHash hash = entry.name().hash();
-        if(seen.contains(hash)){
+        if(!seen.insert(entry.name().hash()).second){
             error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
             return false;
         }
-        seen[hash] = 1u;
     }
     return true;
 }

@@ -28,6 +28,15 @@ class RagdollBoneDef{
     public Array<SixDofAxisConfig, 6u> sixDofAxes;
 }
 
+f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
+    const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
+    if(inRes.has_value()){
+        in Mat3 inMat = inRes.value();
+        return Max(0.05f, Max(inMat.row0.x, Max(inMat.row1.y, inMat.row2.z)));
+    }
+    return 0.5f;
+}
+
 class RagdollInstance{
     public Vector<BodyId> boneBodies;
     public Vector<JointId> joints;
@@ -35,6 +44,19 @@ class RagdollInstance{
     public Vector<f32> maxMotorTorques;
     public Vector<f32> motorHertzes;
     public Vector<f32> motorDampings;
+    private Vector<f32> m_boneMaxInertias;
+
+    public void refreshBoneInertias(in PhysicsWorld world){
+        const usize n = this.boneBodies.size();
+        this.m_boneMaxInertias.resize(n, 0.5f);
+        for(usize i = 0u; i < n; ++i){
+            const BodyId bodyId = this.boneBodies[i];
+            if(world.isValidBody(bodyId))
+                this.m_boneMaxInertias[i] = ExtractBoneMaxInertia(world, bodyId);
+            else
+                this.m_boneMaxInertias[i] = 0.5f;
+        }
+    }
 
     public b8 create(mut PhysicsWorld world, in Span<RagdollBoneDef> bones){
         this.destroy(world);
@@ -46,6 +68,7 @@ class RagdollInstance{
         this.maxMotorTorques.reserve(bones.size());
         this.motorHertzes.reserve(bones.size());
         this.motorDampings.reserve(bones.size());
+        this.m_boneMaxInertias.reserve(bones.size());
 
         for(usize i = 0u; i < bones.size(); ++i){
             in RagdollBoneDef bDef = bones[i];
@@ -72,6 +95,7 @@ class RagdollInstance{
             this.maxMotorTorques.push_back(Max(0.0f, bDef.motorMaxTorque));
             this.motorHertzes.push_back(Max(0.0f, bDef.motorHertz));
             this.motorDampings.push_back(Max(0.0f, bDef.motorDamping));
+            this.m_boneMaxInertias.push_back(ExtractBoneMaxInertia(world, bodyId));
         }
 
         for(usize i = 0u; i < bones.size(); ++i){
@@ -146,6 +170,7 @@ class RagdollInstance{
         this.maxMotorTorques.clear();
         this.motorHertzes.clear();
         this.motorDampings.clear();
+        this.m_boneMaxInertias.clear();
     }
 
     public b8 isValid(in PhysicsWorld world)const{
@@ -199,6 +224,8 @@ class RagdollInstance{
     public void driveToPose(mut PhysicsWorld world, in Span<Transform3D> targetWorldTransforms, in f32 strengthMultiplier, in f32 dt){
         if(dt <= 0.0f)
             return;
+        if(this.m_boneMaxInertias.size() != this.boneBodies.size())
+            this.refreshBoneInertias(world);
         const usize count = Min(this.boneBodies.size(), targetWorldTransforms.size());
         const f32 gainScale = Max(0.0f, strengthMultiplier);
         for(usize i = 0u; i < count; ++i){
@@ -229,18 +256,12 @@ class RagdollInstance{
             const f32 omegaN = 2.0f * s_PI * hertz;
             const f32 kp = omegaN * omegaN;
             const f32 kd = 2.0f * this.motorDampings[i] * omegaN;
-
-            const Expected<MassData> massRes = world.tryGetBodyMassData(bodyId);
-            f32 effInertia = 0.5f;
-            if(massRes.has_value()){
-                const Mat3 inMat = massRes.value().inertia;
-                effInertia = Max(0.05f, Max(inMat.row0.x, Max(inMat.row1.y, inMat.row2.z)));
-            }
+            const f32 effInertia = this.m_boneMaxInertias[i];
 
             VectorSingle torque = (rotErr * kp - VectorSingle(avRes.value()) * kd) * effInertia;
             const f32 tMagSq = Vector3LengthSq(VectorSingle(torque, 0.0f)).x;
             if(tMagSq > maxTorque * maxTorque && tMagSq > 1.0e-10f)
-                torque = torque * (maxTorque / SqrtFast(tMagSq));
+                torque = torque * (maxTorque * Rsqrt(tMagSq));
             world.applyTorque(bodyId, torque, true);
         }
     }
@@ -261,3 +282,4 @@ class RagdollInstance{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

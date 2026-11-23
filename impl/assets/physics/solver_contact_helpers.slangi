@@ -156,7 +156,8 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
     g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx] = outImp;
 #else
     const float4 normImp = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalImpulses;
-    const float4 totalImp = g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].totalNormalImpulses;
+    const uint totalImpSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
+    const float4 totalImp = g_NwbPhysicsFloat4Buffers[totalImpSlot][constraintIdx];
     const float4 rollMeta = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].rollingImpulsePad;
     const float remainingNormal = normImp.x + normImp.y + normImp.z + normImp.w;
     const bool anyRestitution = (rollMeta.w != 0.0f);
@@ -171,22 +172,20 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
             maxApproachIdx = i;
         }
     }
-    float4 frictionTwistRollX;
-    float4 rollYZMaxApproach;
     if(anyRestitution && remainingNormal <= 0.0f){
-        frictionTwistRollX = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, asfloat(maxApproachIdx));
+        outImp.frictionTwistRollX = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        outImp.rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, asfloat(maxApproachIdx));
     }
     else{
         const float2 ft = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw;
         const float twist = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerBTwistImpulse.w;
         const float3 roll = hasRolling ? rollMeta.xyz : float3(0.0f, 0.0f, 0.0f);
-        frictionTwistRollX = float4(ft.x, ft.y, twist, roll.x);
-        rollYZMaxApproach = float4(roll.y, roll.z, maxApproach, asfloat(maxApproachIdx));
+        outImp.frictionTwistRollX = float4(ft.x, ft.y, twist, roll.x);
+        outImp.rollYZMaxApproach = float4(roll.y, roll.z, maxApproach, asfloat(maxApproachIdx));
     }
-    g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].frictionTwistRollX = frictionTwistRollX;
-    g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].rollYZMaxApproach = rollYZMaxApproach;
-    g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].normalImpulses = normImp;
+    outImp.normalImpulses = normImp;
+    outImp.totalNormalImpulses = totalImp;
+    g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx] = outImp;
 #endif
 }
 
@@ -402,8 +401,8 @@ void nwbPhysicsRestitutionContact(
     const float4 ldsTotalImp = g_NwbPhysicsLdsContactTotalNormImp[ldsIdx];
 #else
     float4 normImp = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalImpulses;
-    const uint outSlot = g_NwbPhysicsPushConstants.slots1.y;
-    const float4 globalTotalImp = g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].totalNormalImpulses;
+    const uint totalImpSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
+    const float4 globalTotalImp = g_NwbPhysicsFloat4Buffers[totalImpSlot][constraintIdx];
 #endif
 
     float restThresh = NWB_PHYSICS_RESTITUTION_THRESHOLD;
@@ -544,11 +543,11 @@ void nwbPhysicsSolveContactVelocity(
     bool totalImpDirty = false;
 #else
     float4 normImp = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalImpulses;
-    const uint outSlot = g_NwbPhysicsPushConstants.slots1.y;
+    const uint totalImpSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
     const bool isFirstSubstep = (flags & NWB_PHYSICS_SOLVER_FLAG_FIRST_SUBSTEP) != 0u;
     float4 totalImp = float4(0.0f, 0.0f, 0.0f, 0.0f);
     if(useBias && !isFirstSubstep)
-        totalImp = g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].totalNormalImpulses;
+        totalImp = g_NwbPhysicsFloat4Buffers[totalImpSlot][constraintIdx];
     bool normImpDirty = false;
     bool totalImpDirty = useBias && isFirstSubstep;
 #endif
@@ -627,7 +626,7 @@ void nwbPhysicsSolveContactVelocity(
     if(normImpDirty)
         g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalImpulses = normImp;
     if(useBias && totalImpDirty)
-        g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx].totalNormalImpulses = totalImp;
+        g_NwbPhysicsFloat4Buffers[totalImpSlot][constraintIdx] = totalImp;
     const float4 tmf = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction;
     const float2 oldF = tmf.zw;
     const bool needFriction = (friction > 0.0f && totalNormalImpulse > 0.0f) || any(oldF != float2(0.0f, 0.0f));

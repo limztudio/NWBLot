@@ -8,31 +8,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class EcsTrackedRagdoll{
+    public Vector<BodyId> boneBodies;
+    public Vector<JointId> joints;
+}
+
+void DestroyTrackedRagdoll(mut EcsTrackedRagdoll tracked, mut PhysicsWorld physicsWorld){
+    for(usize i = 0u; i < tracked.joints.size(); ++i){
+        if(physicsWorld.isValidJoint(tracked.joints[i]))
+            physicsWorld.destroyJoint(tracked.joints[i]);
+    }
+    for(usize i = 0u; i < tracked.boneBodies.size(); ++i){
+        if(physicsWorld.isValidBody(tracked.boneBodies[i]))
+            physicsWorld.destroyBody(tracked.boneBodies[i]);
+    }
+    tracked.joints.clear();
+    tracked.boneBodies.clear();
+}
+
 void PruneRemovedEcsRagdolls(
     mut World world,
     mut PhysicsWorld physicsWorld,
-    mut HashMap<EntityID, RagdollInstance> activeRagdolls
+    mut HashMap<EntityID, EcsTrackedRagdoll> activeRagdolls,
+    mut Vector<EntityID> scratchRemove
 ){
     if(activeRagdolls.empty())
         return;
 
-    Vector<EntityID> toRemove;
+    scratchRemove.clear();
     for(in auto kv : activeRagdolls){
         const EntityID ent = kv.first;
         if(!ent.valid() || !world.alive(ent)){
-            toRemove.push_back(ent);
+            scratchRemove.push_back(ent);
             continue;
         }
         const Optional<mut RagdollComponent> rcOpt = world.borrowComponent<RagdollComponent>(ent);
         if(!rcOpt.has_value() || !rcOpt.value().enabled)
-            toRemove.push_back(ent);
+            scratchRemove.push_back(ent);
     }
 
-    for(usize i = 0u; i < toRemove.size(); ++i){
-        const EntityID ent = toRemove[i];
+    for(usize i = 0u; i < scratchRemove.size(); ++i){
+        const EntityID ent = scratchRemove[i];
         const auto it = activeRagdolls.find(ent);
         if(it != activeRagdolls.end()){
-            it.value().destroy(physicsWorld);
+            DestroyTrackedRagdoll(it.value(), physicsWorld);
             activeRagdolls.erase(ent);
         }
         if(ent.valid() && world.alive(ent)){
@@ -45,24 +64,51 @@ void PruneRemovedEcsRagdolls(
     }
 }
 
+void CollectEcsPhysicsEnvironment(
+    mut World world,
+    mut PhysicsEnvironment envScratch
+){
+    envScratch.fluids.clear();
+    envScratch.forceFields.clear();
+    const auto fluidView = world.view<FluidVolumeComponent>();
+    const usize fluidCount = fluidView.candidateCount();
+    if(fluidCount > 0u){
+        envScratch.fluids.reserve(fluidCount);
+        for(in auto row : fluidView){
+            if(Get<1>(row).enabled)
+                envScratch.fluids.push_back(Get<1>(row).volume);
+        }
+    }
+    const auto fieldView = world.view<ForceFieldComponent>();
+    const usize fieldCount = fieldView.candidateCount();
+    if(fieldCount > 0u){
+        envScratch.forceFields.reserve(fieldCount);
+        for(in auto row : fieldView){
+            if(Get<1>(row).enabled)
+                envScratch.forceFields.push_back(Get<1>(row).field);
+        }
+    }
+}
+
 void StepEcsPhysicsSubsystemBridges(
     mut World world,
     mut PhysicsWorld physicsWorld,
     in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    in Vector<EcsSlotOwner> bodyIndexToEntity,
     in f32 dt,
+    in b8 useCollectedEnv,
     mut PhysicsEnvironment envScratch,
-    mut HashMap<EntityID, RagdollInstance> activeRagdolls
+    mut HashMap<EntityID, EcsTrackedRagdoll> activeRagdolls,
+    mut EcsPhysicsSyncScratch scratch,
+    mut CpuTaskScheduler scheduler
 ){
-    PruneRemovedEcsRagdolls(world, physicsWorld, activeRagdolls);
-
-    if(world.view<CharacterControllerComponent>().candidateCount() > 0u){
-        mut World worldForChar = world;
-        mut PhysicsWorld physMut = physicsWorld;
-        world.view<CharacterControllerComponent>().each(
-            lambda[in dt, mut worldForChar, mut physMut](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+    const auto charView = world.view<CharacterControllerComponent>();
+    if(charView.candidateCount() > 0u){
+        charView.each(
+            lambda[in dt, mut world, mut physicsWorld](in EntityID entity, mut CharacterControllerComponent cc) -> void{
                 if(!cc.enabled)
                     return;
-                const Optional<mut TransformComponent> xfOpt = worldForChar.borrowComponent<TransformComponent>(entity);
+                const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
                 if(!cc.initialized || cc.dirty){
                     VectorSingle startPos(0.0f);
                     VectorSingle startRot(0.0f, 0.0f, 0.0f, 1.0f);
@@ -82,7 +128,7 @@ void StepEcsPhysicsSubsystemBridges(
                     cc.controller.rotation = f32x4(SafeNormalizeQuat(VectorSingle(xf.rotation)));
                     cc.syncFromTransform = false;
                 }
-                cc.controller.update(physMut, dt);
+                cc.controller.update(physicsWorld, dt);
                 if(xfOpt.has_value()){
                     mut TransformComponent xf = xfOpt.value();
                     xf.position = cc.controller.position;
@@ -92,103 +138,128 @@ void StepEcsPhysicsSubsystemBridges(
         );
     }
 
-    if(world.view<VehicleComponent>().candidateCount() > 0u){
+    const auto vehicleView = world.view<VehicleComponent>();
+    if(vehicleView.candidateCount() > 0u){
+        const u32 ownerCount = cast<u32>(bodyIndexToEntity.size());
         in HashMap<EntityID, EcsEntityPhysicsRecord> recordsRef = entityRecords;
-        mut PhysicsWorld physMut = physicsWorld;
-        world.view<VehicleComponent>().each(
-            lambda[in dt, in recordsRef, mut physMut](in EntityID entity, mut VehicleComponent vc) -> void{
+        in Vector<EcsSlotOwner> ownersRef = bodyIndexToEntity;
+        vehicleView.each(
+            lambda[in dt, in ownerCount, in recordsRef, in ownersRef, mut world, mut physicsWorld, mut scheduler](
+                in EntityID entity,
+                mut VehicleComponent vc
+            ) -> void{
                 if(!vc.enabled)
                     return;
-                const auto recIt = recordsRef.find(entity);
-                if(recIt == recordsRef.end())
-                    return;
-                const BodyId chassisId = recIt.value().bodyId;
-                if(!chassisId.valid() || !physMut.isValidBody(chassisId))
+                BodyId chassisId = vc.controller.chassisBodyId;
+                b8 chassisValid = chassisId.valid()
+                    && chassisId.index < ownerCount
+                    && ownersRef[chassisId.index].entity == entity
+                    && ownersRef[chassisId.index].generation == chassisId.generation
+                    && physicsWorld.isValidBody(chassisId);
+                if(!chassisValid){
+                    const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
+                    if(rbOpt.has_value()){
+                        chassisId = rbOpt.value().runtimeBodyId;
+                        chassisValid = chassisId.valid() && physicsWorld.isValidBody(chassisId);
+                    }
+                    if(!chassisValid){
+                        const auto recIt = recordsRef.find(entity);
+                        if(recIt == recordsRef.end())
+                            return;
+                        chassisId = recIt.value().bodyId;
+                        chassisValid = chassisId.valid() && physicsWorld.isValidBody(chassisId);
+                    }
+                }
+                if(!chassisValid)
                     return;
                 if(!vc.initialized || vc.dirty || !(vc.controller.chassisBodyId == chassisId)){
                     vc.controller.init(chassisId, vc.engine, Span<VehicleWheelDef>(vc.wheels.data(), vc.wheels.size()));
                     vc.initialized = true;
                     vc.dirty = false;
                 }
-                vc.controller.step(physMut, vc.input, dt);
+                vc.controller.stepWithScheduler(physicsWorld, vc.input, dt, scheduler);
             }
         );
     }
 
-    if(world.view<RagdollComponent>().candidateCount() > 0u){
-        mut PhysicsWorld physMut = physicsWorld;
-        mut HashMap<EntityID, RagdollInstance> trackedRagdolls = activeRagdolls;
-        world.view<RagdollComponent>().each(
-            lambda[mut physMut, mut trackedRagdolls](in EntityID entity, mut RagdollComponent rc) -> void{
+    const auto ragdollView = world.view<RagdollComponent>();
+    if(ragdollView.candidateCount() > 0u){
+        const b8 checkTopology = !scratch.hasRagdollTopology || (physicsWorld.m_topologyVersion != scratch.lastRagdollTopologyVersion);
+        ragdollView.each(
+            lambda[in checkTopology, mut physicsWorld, mut activeRagdolls](in EntityID entity, mut RagdollComponent rc) -> void{
                 if(!rc.enabled)
                     return;
-                if(!rc.initialized || rc.dirty || !rc.instance.isValid(physMut)){
-                    const auto prevIt = trackedRagdolls.find(entity);
-                    if(prevIt != trackedRagdolls.end()){
-                        prevIt.value().destroy(physMut);
-                        trackedRagdolls.erase(entity);
+                const b8 needsRecreate = !rc.initialized || rc.dirty || (checkTopology && !rc.instance.isValid(physicsWorld));
+                if(needsRecreate){
+                    const auto prevIt = activeRagdolls.find(entity);
+                    if(prevIt != activeRagdolls.end()){
+                        DestroyTrackedRagdoll(prevIt.value(), physicsWorld);
+                        activeRagdolls.erase(entity);
                     }
-                    else if(rc.instance.isValid(physMut)){
-                        rc.instance.destroy(physMut);
+                    else if(rc.instance.isValid(physicsWorld)){
+                        rc.instance.destroy(physicsWorld);
                     }
                     rc.instance = RagdollInstance();
-                    if(rc.instance.create(physMut, Span<RagdollBoneDef>(rc.bones.data(), rc.bones.size()))){
+                    if(rc.instance.create(physicsWorld, Span<RagdollBoneDef>(rc.bones.data(), rc.bones.size()))){
                         rc.initialized = true;
                         rc.dirty = false;
                         rc.syncedKinematic = rc.kinematic;
                         if(rc.kinematic)
-                            rc.instance.setKinematic(physMut, true);
-                        trackedRagdolls.insert_or_assign(entity, rc.instance);
+                            rc.instance.setKinematic(physicsWorld, true);
+                        EcsTrackedRagdoll tracked;
+                        tracked.boneBodies = rc.instance.boneBodies;
+                        tracked.joints = rc.instance.joints;
+                        activeRagdolls.insert_or_assign(entity, tracked);
                     }
                     else{
                         rc.initialized = false;
                     }
                 }
                 else if(rc.kinematic != rc.syncedKinematic){
-                    rc.instance.setKinematic(physMut, rc.kinematic);
+                    rc.instance.setKinematic(physicsWorld, rc.kinematic);
                     rc.syncedKinematic = rc.kinematic;
                 }
             }
         );
+        scratch.lastRagdollTopologyVersion = physicsWorld.m_topologyVersion;
+        scratch.hasRagdollTopology = true;
     }
 
-    const b8 hasFluids = world.view<FluidVolumeComponent>().candidateCount() > 0u;
-    const b8 hasFields = world.view<ForceFieldComponent>().candidateCount() > 0u;
-    if(hasFluids || hasFields){
-        envScratch.fluids.clear();
-        envScratch.forceFields.clear();
-        if(hasFluids){
-            mut Vector<FluidVolume> volumes = envScratch.fluids;
-            world.view<FluidVolumeComponent>().each(
-                lambda[mut volumes](in EntityID entity, in FluidVolumeComponent fvc) -> void{
-                    if(fvc.enabled)
-                        volumes.push_back(fvc.volume);
-                }
-            );
-        }
-        if(hasFields){
-            mut Vector<ForceField> fields = envScratch.forceFields;
-            world.view<ForceFieldComponent>().each(
-                lambda[mut fields](in EntityID entity, in ForceFieldComponent ffc) -> void{
-                    if(ffc.enabled)
-                        fields.push_back(ffc.field);
-                }
-            );
-        }
+    if(useCollectedEnv){
         if(!envScratch.fluids.empty() || !envScratch.forceFields.empty())
-            envScratch.step(physicsWorld, dt);
+            envScratch.stepWithScheduler(physicsWorld, dt, scheduler);
+    }
+    else{
+        const auto fluidView = world.view<FluidVolumeComponent>();
+        const auto fieldView = world.view<ForceFieldComponent>();
+        const b8 hasFluids = fluidView.candidateCount() > 0u;
+        const b8 hasFields = fieldView.candidateCount() > 0u;
+        if((hasFluids || hasFields) && dt > 0.0f){
+            envScratch.elapsedTimeSec += dt;
+            if(hasFluids){
+                for(in auto row : fluidView){
+                    if(Get<1>(row).enabled)
+                        ApplyFluidVolumeWithScheduler(physicsWorld, Get<1>(row).volume, dt, scheduler);
+                }
+            }
+            if(hasFields){
+                for(in auto row : fieldView){
+                    if(Get<1>(row).enabled)
+                        ApplyForceFieldWithScheduler(physicsWorld, Get<1>(row).field, envScratch.elapsedTimeSec, dt, scheduler);
+                }
+            }
+        }
     }
 
-    if(world.view<ArticulationComponent>().candidateCount() > 0u){
-        mut World worldForArt = world;
-        mut PhysicsWorld physMut = physicsWorld;
-        world.view<ArticulationComponent>().each(
-            lambda[in dt, mut worldForArt, mut physMut](in EntityID entity, mut ArticulationComponent ac) -> void{
+    const auto artView = world.view<ArticulationComponent>();
+    if(artView.candidateCount() > 0u){
+        artView.each(
+            lambda[in dt, mut world, mut physicsWorld](in EntityID entity, mut ArticulationComponent ac) -> void{
                 if(!ac.enabled)
                     return;
                 if(!ac.initialized || ac.dirty){
                     Transform3D rootXf;
-                    const Optional<mut TransformComponent> xfOpt = worldForArt.borrowComponent<TransformComponent>(entity);
+                    const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
                     if(xfOpt.has_value()){
                         in TransformComponent xf = xfOpt.value();
                         rootXf = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
@@ -202,17 +273,17 @@ void StepEcsPhysicsSubsystemBridges(
                     }
                 }
                 if(ac.initialized)
-                    ac.articulation.step(physMut, dt);
+                    ac.articulation.step(physicsWorld, dt);
             }
         );
     }
 
-    if(world.view<SoftBodyComponent>().candidateCount() > 0u){
-        mut PhysicsWorld physMut = physicsWorld;
-        world.view<SoftBodyComponent>().each(
-            lambda[in dt, mut physMut](in EntityID entity, mut SoftBodyComponent sb) -> void{
+    const auto softView = world.view<SoftBodyComponent>();
+    if(softView.candidateCount() > 0u){
+        softView.each(
+            lambda[in dt, mut physicsWorld, mut scheduler](in EntityID entity, mut SoftBodyComponent sb) -> void{
                 if(sb.enabled)
-                    sb.softBody.step(physMut, dt);
+                    sb.softBody.stepWithScheduler(physicsWorld, dt, scheduler);
             }
         );
     }
@@ -225,28 +296,36 @@ void CollectEcsGpuRenderTransformBindings(
     mut Vector<GpuPhysicsRenderTransformBinding> outBindings
 ){
     outBindings.clear();
-    if(world.view<GpuRenderTransformExportComponent>().candidateCount() == 0u)
+    const auto exportView = world.view<GpuRenderTransformExportComponent>();
+    const usize candidateCount = exportView.candidateCount();
+    if(candidateCount == 0u)
         return;
 
-    in HashMap<EntityID, EcsEntityPhysicsRecord> recordsRef = entityRecords;
-    in PhysicsWorld physRef = physicsWorld;
-    world.view<GpuRenderTransformExportComponent>().each(
-        lambda[in recordsRef, in physRef, mut outBindings](in EntityID entity, in GpuRenderTransformExportComponent ex) -> void{
-            if(!ex.enabled)
-                return;
-            const auto recIt = recordsRef.find(entity);
-            if(recIt == recordsRef.end())
-                return;
-            const BodyId bodyId = recIt.value().bodyId;
-            if(!bodyId.valid() || !physRef.isValidBody(bodyId))
-                return;
-            GpuPhysicsRenderTransformBinding binding;
-            binding.bodyDestFlags = u32x4(bodyId.index, ex.instanceIndex, entity.index(), ex.flags);
-            binding.scalePad = f32x4(ex.localScale.x, ex.localScale.y, ex.localScale.z, 0.0f);
-            outBindings.push_back(binding);
+    outBindings.reserve(candidateCount);
+    for(in auto row : exportView){
+        const EntityID entity = Get<0>(row);
+        if(!Get<1>(row).enabled)
+            continue;
+        BodyId bodyId;
+        const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
+        if(rbOpt.has_value()){
+            bodyId = rbOpt.value().runtimeBodyId;
         }
-    );
+        else{
+            const auto recIt = entityRecords.find(entity);
+            if(recIt == entityRecords.end())
+                continue;
+            bodyId = recIt.value().bodyId;
+        }
+        if(!bodyId.valid() || !physicsWorld.isValidBody(bodyId))
+            continue;
+        GpuPhysicsRenderTransformBinding binding;
+        binding.bodyDestFlags = u32x4(bodyId.index, Get<1>(row).instanceIndex, entity.index(), Get<1>(row).flags);
+        binding.scalePad = f32x4(Get<1>(row).localScale.x, Get<1>(row).localScale.y, Get<1>(row).localScale.z, 0.0f);
+        outBindings.push_back(binding);
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

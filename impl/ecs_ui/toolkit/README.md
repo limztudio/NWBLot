@@ -19,6 +19,8 @@ as a scissor, using the display's pixel scales to convert positions and scissors
 
 `PaintBuilder` also draws individual lines, line batches, and open or closed polylines. `PaintLineStyle` supplies thickness, cap and join styles, dash lengths and offset, and optional antialiasing. `pushTransform()`, `pushTranslate()`, `pushRotate()`, and `pushScale()` compose a 2D transform stack; balance each push with `popTransform()` before freezing. Transformed clip rectangles use their axis-aligned bounds. An overlay starts with its own transform scope, which must be balanced before `endOverlay()` restores the parent scope.
 
+The builder also supports stroked rectangles; filled and stroked rounded rectangles, circles, and ellipses; arcs; filled convex polygons; quadratic and cubic Bézier curves; and four-corner rectangle gradients. These primitives use the current transform and rectangular clip. Arcs take start and sweep angles in radians.
+
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
 
 ```cpp

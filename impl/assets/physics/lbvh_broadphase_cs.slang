@@ -78,8 +78,8 @@ bool nwbPhysicsIsComplexPair(const uint4 metaA, const uint4 metaB){
     const uint typeB = metaB.y;
     const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaA.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaB.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    return (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH)
-        || (typeB == NWB_PHYSICS_SHAPE_TYPE_MESH)
+    return (typeA >= NWB_PHYSICS_SHAPE_TYPE_MESH)
+        || (typeB >= NWB_PHYSICS_SHAPE_TYPE_MESH)
         || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA)
         || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
 }

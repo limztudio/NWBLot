@@ -77,6 +77,7 @@ class ColliderShapeEntry{
     public u32 categoryBits = 0x00000001u;
     public u32 maskBits = u32.max;
     public i32 groupIndex = 0;
+    public Name collisionLayer = s_NameNone;
     public u64 userData = 0u;
     public b8 isBox = true;
     public b8 isSensor = false;
@@ -92,6 +93,7 @@ class ColliderShapeEntry{
     public AssetRef<PhysicsMaterialAsset> materialAsset;
     public AssetRef<ConvexHullAsset> convexHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
+    public AssetRef<HeightfieldAsset> heightfieldAsset;
     public f32 staticFriction = -1.0f;
     public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
@@ -134,6 +136,7 @@ class ColliderComponent{
     public u32 categoryBits = 0x00000001u;
     public u32 maskBits = u32.max;
     public i32 groupIndex = 0;
+    public Name collisionLayer = s_NameNone;
     public u64 userData = 0u;
     public Name entityTag = s_NameNone;
     public b8 isBox = true;
@@ -150,6 +153,7 @@ class ColliderComponent{
     public AssetRef<PhysicsMaterialAsset> materialAsset;
     public AssetRef<ConvexHullAsset> convexHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
+    public AssetRef<HeightfieldAsset> heightfieldAsset;
     public f32 staticFriction = -1.0f;
     public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);

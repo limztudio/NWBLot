@@ -1643,23 +1643,25 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             ApplyLinearImpulsePair(invMassA, invMassB, invIAMat, invIBMat, rA, rB, dP, flagsA, flagsB, vA, wA, vB, wB);
         }
 
-        VectorSingle angImp = jc.angularImpulse();
-        Solve3DAngularLockRow(
-            invIAMat,
-            invIBMat,
-            kAngInvMat,
-            qA,
-            qB,
-            VectorSingle(jc.referenceRotation),
-            jc.angularSoftness,
-            useBias,
-            flagsA,
-            flagsB,
-            angImp,
-            wA,
-            wB
-        );
-        jc.setAngularImpulse(angImp);
+        if(!jc.isSpring() || useBias){
+            VectorSingle angImp = jc.angularImpulse();
+            Solve3DAngularLockRow(
+                invIAMat,
+                invIBMat,
+                kAngInvMat,
+                qA,
+                qB,
+                VectorSingle(jc.referenceRotation),
+                jc.angularSoftness,
+                useBias,
+                flagsA,
+                flagsB,
+                angImp,
+                wA,
+                wB
+            );
+            jc.setAngularImpulse(angImp);
+        }
     }
     else if(jc.type == JointType::Revolute){
         const MatrixSingle kInv = ResolveJointPointEffectiveMass(cache, jc, invMassA, invMassB, invIAMat, invIBMat, rA, rB, flagsA, flagsB, zeroDeltaRot);

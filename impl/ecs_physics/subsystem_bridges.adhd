@@ -12,6 +12,7 @@ class EcsTrackedRagdoll{
     public Vector<BodyId> boneBodies;
     public Vector<ShapeId> boneShapes;
     public Vector<JointId> joints;
+    public Vector<b8> syncedKinematicMask;
     public b8 syncedKinematic = false;
 }
 
@@ -152,6 +153,12 @@ FluidVolume BuildWorldTransformedFluidVolume(in FluidVolume src, in Transform3D 
         const VectorSingle worldPt = VectorSingle(xf.position) + Vector3Rotate(scaledLocalPt, rot);
         dst.surfaceNormalOffset = f32x4(worldN, Vector3Dot(worldN, worldPt).x);
     }
+    else if(src.shape == FluidVolumeShape::Sphere){
+        const VectorSingle scaledCenter(src.surfaceNormalOffset.x * worldScale.x, src.surfaceNormalOffset.y * worldScale.y, src.surfaceNormalOffset.z * worldScale.z, 0.0f);
+        const VectorSingle worldCenter = VectorSingle(xf.position) + Vector3Rotate(scaledCenter, rot);
+        const f32 scaledRadius = SimdMax(0.0f, src.surfaceNormalOffset.w) * Vector3MaxComponent(Abs(worldScale)).x;
+        dst.surfaceNormalOffset = f32x4(worldCenter, scaledRadius);
+    }
     else{
         dst.bounds = TransformAabbByPoseAndScale(src.bounds, VectorSingle(xf.position), VectorSingle(xf.rotation), worldScale);
     }
@@ -163,12 +170,14 @@ ForceField BuildWorldTransformedForceField(in ForceField src, in Transform3D xf,
     const VectorSingle rot = SafeNormalizeQuat(VectorSingle(xf.rotation));
     if(src.useBounds)
         dst.bounds = TransformAabbByPoseAndScale(src.bounds, VectorSingle(xf.position), VectorSingle(xf.rotation), worldScale);
-    if(src.type == ForceFieldType::PointGravity){
+    if(src.type == ForceFieldType::PointGravity || src.type == ForceFieldType::Vortex){
         const VectorSingle scaledOrigin(src.originOrDirection.x * worldScale.x, src.originOrDirection.y * worldScale.y, src.originOrDirection.z * worldScale.z, 0.0f);
         dst.originOrDirection = f32x4(VectorSingle(xf.position) + Vector3Rotate(scaledOrigin, rot), 0.0f);
         const f32 maxS = Vector3MaxComponent(Abs(worldScale)).x;
         dst.radius = src.radius * maxS;
         dst.minDistance = src.minDistance * maxS;
+        if(src.type == ForceFieldType::Vortex)
+            dst.axis = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(src.axis), rot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
     }
     else{
         dst.originOrDirection = f32x4(Vector3Rotate(VectorSingle(src.originOrDirection), rot), 0.0f);
@@ -216,22 +225,23 @@ void ResolveArticulationProxyBodies(
             return;
     }
     for(usize i = 0u; i < ac.proxyEntityNames.size(); ++i){
+        BodyId resolvedBody;
         const Name targetName = ac.proxyEntityNames[i];
-        if(targetName == s_NameNone)
-            continue;
-        const auto nameIt = namedEntities.find(targetName);
-        if(nameIt == namedEntities.end())
-            continue;
-        const auto recIt = entityRecords.find(nameIt.value());
-        if(recIt == entityRecords.end())
-            continue;
-        const BodyId bId = recIt.value().bodyId;
-        if(!bId.valid() || !physicsWorld.isValidBody(bId))
-            continue;
+        if(targetName != s_NameNone){
+            const auto nameIt = namedEntities.find(targetName);
+            if(nameIt != namedEntities.end()){
+                const auto recIt = entityRecords.find(nameIt.value());
+                if(recIt != entityRecords.end()){
+                    const BodyId bId = recIt.value().bodyId;
+                    if(bId.valid() && physicsWorld.isValidBody(bId))
+                        resolvedBody = bId;
+                }
+            }
+        }
         if(i < ac.links.size())
-            ac.links[i].proxyBodyId = bId;
+            ac.links[i].proxyBodyId = resolvedBody;
         if(ac.initialized && i < ac.articulation.linkDefs.size())
-            ac.articulation.linkDefs[i].proxyBodyId = bId;
+            ac.articulation.linkDefs[i].proxyBodyId = resolvedBody;
     }
     EcsArticulationProxySyncState syncState;
     syncState.syncedProxyTopologyVersion = physicsWorld.m_topologyVersion;
@@ -320,6 +330,40 @@ void CollectEcsPhysicsEnvironment(
     }
 }
 
+CharacterControllerDef BuildScaledCharacterControllerDef(in CharacterControllerDef src, in VectorSingle worldScale){
+    CharacterControllerDef outDef = src;
+    const VectorSingle absScale = Max(Abs(worldScale), VectorSingle(1.0e-4f));
+    const f32 radialScale = SimdMax(absScale.x, absScale.z);
+    outDef.radius = src.radius * radialScale;
+    outDef.halfHeight = src.halfHeight * absScale.y;
+    return outDef;
+}
+
+void BuildRagdollWorldTargetPose(
+    in Span<Transform3D> localPose,
+    in EcsWorldPose rootPose,
+    in b8 hasRootPose,
+    mut Vector<Transform3D> outWorldPose
+){
+    if(!hasRootPose){
+        outWorldPose.resize(localPose.size());
+        for(usize i = 0u; i < localPose.size(); ++i)
+            outWorldPose[i] = localPose[i];
+        return;
+    }
+    const VectorSingle signedScale = ResolveSignedColliderScale(VectorSingle(rootPose.scale));
+    const VectorSingle rootPos(rootPose.transform.position);
+    const VectorSingle rootRot = SafeNormalizeQuat(VectorSingle(rootPose.transform.rotation));
+    outWorldPose.resize(localPose.size());
+    for(usize i = 0u; i < localPose.size(); ++i){
+        in Transform3D src = localPose[i];
+        const VectorSingle scaledLocal = VectorSingle(src.position) * signedScale;
+        const VectorSingle wPos = TransformPointValues(rootPos, rootRot, scaledLocal);
+        const VectorSingle wRot = SafeNormalizeQuat(QuaternionMultiply(rootRot, SafeNormalizeQuat(VectorSingle(src.rotation))));
+        outWorldPose[i] = Transform3D(wPos, wRot);
+    }
+}
+
 void StepEcsPhysicsSubsystemBridges(
     mut World world,
     mut PhysicsWorld physicsWorld,
@@ -347,26 +391,25 @@ void StepEcsPhysicsSubsystemBridges(
                 const auto syncIt = scratch.characterSyncStates.find(entity);
                 if(syncIt != scratch.characterSyncStates.end())
                     syncState = syncIt.value();
-                const u64 curTopoVer = physicsWorld.m_topologyVersion;
-                if(!cc.def.ignoreBodyId.valid()){
-                    if(!syncState.ownBodyChecked || syncState.ownBodyCheckedTopologyVersion != curTopoVer){
-                        const BodyId ownBodyId = ResolveEntityOwnPhysicsBody(entity, world, charRecordsRef, physicsWorld);
-                        if(ownBodyId.valid())
-                            cc.def.ignoreBodyId = ownBodyId;
-                        syncState.ownBodyChecked = true;
-                        syncState.ownBodyCheckedTopologyVersion = curTopoVer;
-                    }
+                if(!cc.def.ignoreBodyId.valid() || !physicsWorld.isValidBody(cc.def.ignoreBodyId)){
+                    cc.def.ignoreBodyId = BodyId();
+                    const BodyId ownBodyId = ResolveEntityOwnPhysicsBody(entity, world, charRecordsRef, physicsWorld);
+                    if(ownBodyId.valid())
+                        cc.def.ignoreBodyId = ownBodyId;
                 }
-                if(!cc.initialized || cc.dirty){
+                if(!cc.initialized){
                     EcsWorldPose worldPose;
                     const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, worldPose);
                     VectorSingle startPos(0.0f);
                     VectorSingle startRot(0.0f, 0.0f, 0.0f, 1.0f);
+                    VectorSingle worldScale(1.0f, 1.0f, 1.0f, 0.0f);
                     if(hasXf){
                         startPos = VectorSingle(worldPose.transform.position);
                         startRot = SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation));
+                        worldScale = VectorSingle(worldPose.scale);
                     }
-                    cc.controller.init(cc.def, startPos, startRot);
+                    const CharacterControllerDef effDef = BuildScaledCharacterControllerDef(cc.def, worldScale);
+                    cc.controller.init(effDef, startPos, startRot);
                     cc.initialized = true;
                     cc.dirty = false;
                     cc.syncFromTransform = false;
@@ -377,8 +420,15 @@ void StepEcsPhysicsSubsystemBridges(
                     syncState.hasPrevSnapshot = true;
                 }
                 else{
-                    if(!cc.controller.def.ignoreBodyId.valid() && cc.def.ignoreBodyId.valid())
-                        cc.controller.def.ignoreBodyId = cc.def.ignoreBodyId;
+                    if(cc.dirty){
+                        EcsWorldPose scalePose;
+                        VectorSingle worldScale(1.0f, 1.0f, 1.0f, 0.0f);
+                        if(ResolveEcsSubsystemWorldPose(entity, world, scalePose))
+                            worldScale = VectorSingle(scalePose.scale);
+                        cc.controller.applyDefInPlace(BuildScaledCharacterControllerDef(cc.def, worldScale));
+                        cc.dirty = false;
+                    }
+                    cc.controller.def.ignoreBodyId = cc.def.ignoreBodyId;
                     if(cc.syncFromTransform){
                         EcsWorldPose worldPose;
                         if(ResolveEcsSubsystemWorldPose(entity, world, worldPose)){
@@ -428,9 +478,10 @@ void StepEcsPhysicsSubsystemBridges(
     if(vehicleView.candidateCount() > 0u){
         const u32 ownerCount = cast<u32>(bodyIndexToEntity.size());
         in HashMap<EntityID, EcsEntityPhysicsRecord> recordsRef = entityRecords;
+        in HashMap<Name, EntityID> vehNamedRef = namedEntities;
         in Vector<EcsSlotOwner> ownersRef = bodyIndexToEntity;
         vehicleView.each(
-            lambda[in dt, in ownerCount, in recordsRef, in ownersRef, mut world, mut physicsWorld, mut scheduler](
+            lambda[in dt, in ownerCount, in recordsRef, in vehNamedRef, in ownersRef, mut world, mut physicsWorld, mut scheduler](
                 in EntityID entity,
                 mut VehicleComponent vc
             ) -> void{
@@ -459,11 +510,56 @@ void StepEcsPhysicsSubsystemBridges(
                 if(!chassisValid)
                     return;
                 if(!vc.initialized || vc.dirty || !(vc.controller.chassisBodyId == chassisId)){
-                    vc.controller.init(chassisId, vc.engine, Span<VehicleWheelDef>(vc.wheels.data(), vc.wheels.size()));
+                    EcsWorldPose worldPose;
+                    const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, worldPose);
+                    if(hasXf){
+                        const VectorSingle signedScale = ResolveSignedColliderScale(VectorSingle(worldPose.scale));
+                        const VectorSingle absScale = Abs(signedScale);
+                        if(!EcsVec4NearlyEqual(signedScale, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), 1.0e-5f)){
+                            const f32 radialScale = SimdMax(absScale.x, absScale.z);
+                            VehicleEngineDef scaledEng = vc.engine;
+                            scaledEng.trackWidth *= absScale.x;
+                            scaledEng.wheelbase *= absScale.z;
+                            Vector<VehicleWheelDef> scaledWheels;
+                            scaledWheels.resize(vc.wheels.size());
+                            for(usize wi = 0u; wi < vc.wheels.size(); ++wi){
+                                VehicleWheelDef w = vc.wheels[wi];
+                                w.attachmentPoint = f32x4(VectorSingle(w.attachmentPoint) * signedScale, 0.0f);
+                                w.wheelRadius = SimdMax(w.wheelRadius * radialScale, 1.0e-3f);
+                                w.wheelWidth = SimdMax(w.wheelWidth * radialScale, 1.0e-3f);
+                                w.suspensionRestLength = SimdMax(w.suspensionRestLength * absScale.y, 0.0f);
+                                w.suspensionMaxTravel = SimdMax(w.suspensionMaxTravel * absScale.y, 0.0f);
+                                scaledWheels[wi] = w;
+                            }
+                            vc.controller.init(chassisId, scaledEng, Span<VehicleWheelDef>(scaledWheels.data(), scaledWheels.size()));
+                        }
+                        else{
+                            vc.controller.init(chassisId, vc.engine, Span<VehicleWheelDef>(vc.wheels.data(), vc.wheels.size()));
+                        }
+                    }
+                    else{
+                        vc.controller.init(chassisId, vc.engine, Span<VehicleWheelDef>(vc.wheels.data(), vc.wheels.size()));
+                    }
+                    vc.controller.queryFilter = vc.queryFilter;
                     vc.initialized = true;
                     vc.dirty = false;
                 }
+                else{
+                    vc.controller.queryFilter = vc.queryFilter;
+                }
                 vc.controller.stepWithScheduler(physicsWorld, vc.input, dt, scheduler);
+                const usize wheelSyncCount = Min(vc.wheelEntityNames.size(), vc.controller.wheelStates.size());
+                for(usize wi = 0u; wi < wheelSyncCount; ++wi){
+                    const Name wName = vc.wheelEntityNames[wi];
+                    if(wName == s_NameNone)
+                        continue;
+                    const auto wIt = vehNamedRef.find(wName);
+                    if(wIt != vehNamedRef.end()){
+                        const EntityID wEnt = wIt.value();
+                        if(wEnt.valid() && world.alive(wEnt) && world.hasComponent<TransformComponent>(wEnt))
+                            WriteWorldPoseBackToEntityTransform(wEnt, vc.controller.wheelStates[wi].worldTransform, world);
+                    }
+                }
             }
         );
     }
@@ -472,7 +568,7 @@ void StepEcsPhysicsSubsystemBridges(
     if(ragdollView.candidateCount() > 0u){
         const b8 checkTopology = !scratch.hasRagdollTopology || (physicsWorld.m_topologyVersion != scratch.lastRagdollTopologyVersion);
         ragdollView.each(
-            lambda[in checkTopology, in dt, mut world, mut physicsWorld, mut activeRagdolls, mut bodyIndexToEntity, mut shapeIndexToEntity, mut jointIndexToEntity](in EntityID entity, mut RagdollComponent rc) -> void{
+            lambda[in checkTopology, in dt, mut world, mut physicsWorld, mut activeRagdolls, mut bodyIndexToEntity, mut shapeIndexToEntity, mut jointIndexToEntity, mut scratch](in EntityID entity, mut RagdollComponent rc) -> void{
                 if(!rc.enabled)
                     return;
                 const b8 needsRecreate = !rc.initialized || rc.dirty || (checkTopology && !rc.instance.isValid(physicsWorld));
@@ -495,13 +591,22 @@ void StepEcsPhysicsSubsystemBridges(
                     if(ResolveEcsSubsystemWorldPose(entity, world, rootPose)){
                         Vector<RagdollBoneDef> worldBones;
                         worldBones.resize(rc.bones.size());
+                        const VectorSingle signedScale = ResolveSignedColliderScale(VectorSingle(rootPose.scale));
+                        const VectorSingle absScale = Abs(signedScale);
+                        const f32 maxS = Vector3MaxComponent(absScale).x;
+                        const VectorSingle rootPos(rootPose.transform.position);
                         const VectorSingle rootQ = SafeNormalizeQuat(VectorSingle(rootPose.transform.rotation));
                         for(usize bi = 0u; bi < rc.bones.size(); ++bi){
                             RagdollBoneDef bd = rc.bones[bi];
-                            bd.bodyDef.position = f32x4(TransformPointValues(VectorSingle(rootPose.transform.position), VectorSingle(rootPose.transform.rotation), VectorSingle(bd.bodyDef.position)), 0.0f);
+                            bd.bodyDef.position = f32x4(TransformPointValues(rootPos, rootQ, VectorSingle(bd.bodyDef.position) * signedScale), 0.0f);
                             bd.bodyDef.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(rootQ, SafeNormalizeQuat(VectorSingle(bd.bodyDef.rotation)))));
-                            bd.jointAnchorWorld = f32x4(TransformPointValues(VectorSingle(rootPose.transform.position), VectorSingle(rootPose.transform.rotation), VectorSingle(bd.jointAnchorWorld)), 0.0f);
+                            bd.jointAnchorWorld = f32x4(TransformPointValues(rootPos, rootQ, VectorSingle(bd.jointAnchorWorld) * signedScale), 0.0f);
                             bd.jointAxisWorld = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(bd.jointAxisWorld), rootQ), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                            bd.boxHalfExtents = f32x4(Max(VectorSingle(bd.boxHalfExtents) * absScale, VectorSingle(0.01f)), 0.0f);
+                            const VectorSingle c1 = bd.capsule.center1() * signedScale;
+                            const VectorSingle c2 = bd.capsule.center2Vec() * signedScale;
+                            bd.capsule.center1Radius = f32x4(c1, SimdMax(bd.capsule.radius() * maxS, 1.0e-3f));
+                            bd.capsule.center2 = f32x4(c2, 0.0f);
                             worldBones[bi] = bd;
                         }
                         createdOk = rc.instance.create(physicsWorld, Span<RagdollBoneDef>(worldBones.data(), worldBones.size()));
@@ -512,10 +617,15 @@ void StepEcsPhysicsSubsystemBridges(
                     if(createdOk){
                         rc.initialized = true;
                         rc.dirty = false;
-                        if(rc.kinematic)
+                        if(rc.kinematic){
                             rc.instance.setKinematic(physicsWorld, true);
+                        }
+                        else if(!rc.boneKinematicMask.empty()){
+                            rc.instance.setKinematicMask(rc.boneKinematicMask, physicsWorld);
+                        }
                         EcsTrackedRagdoll tracked;
                         tracked.syncedKinematic = rc.kinematic;
+                        tracked.syncedKinematicMask = rc.boneKinematicMask;
                         RegisterTrackedRagdollSlots(entity, rc.instance, physicsWorld, bodyIndexToEntity, shapeIndexToEntity, jointIndexToEntity, tracked);
                         activeRagdolls.insert_or_assign(entity, tracked);
                     }
@@ -525,13 +635,54 @@ void StepEcsPhysicsSubsystemBridges(
                 }
                 else{
                     const auto trackedIt = activeRagdolls.find(entity);
-                    if(trackedIt != activeRagdolls.end() && rc.kinematic != trackedIt.value().syncedKinematic){
-                        rc.instance.setKinematic(physicsWorld, rc.kinematic);
-                        trackedIt.value().syncedKinematic = rc.kinematic;
+                    if(trackedIt != activeRagdolls.end()){
+                        mut EcsTrackedRagdoll tr = trackedIt.value();
+                        b8 maskChanged = !rc.kinematic && (tr.syncedKinematicMask.size() != rc.boneKinematicMask.size());
+                        if(!maskChanged && !rc.kinematic){
+                            for(usize mi = 0u; mi < rc.boneKinematicMask.size(); ++mi){
+                                if(rc.boneKinematicMask[mi] != tr.syncedKinematicMask[mi]){
+                                    maskChanged = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if(rc.kinematic != tr.syncedKinematic || maskChanged){
+                            if(rc.kinematic)
+                                rc.instance.setKinematic(physicsWorld, true);
+                            else if(!rc.boneKinematicMask.empty())
+                                rc.instance.setKinematicMask(rc.boneKinematicMask, physicsWorld);
+                            else
+                                rc.instance.setKinematic(physicsWorld, false);
+                            tr.syncedKinematic = rc.kinematic;
+                            tr.syncedKinematicMask = rc.boneKinematicMask;
+                        }
                     }
                 }
-                if(rc.initialized && rc.driveToPose && !rc.kinematic && !rc.targetPose.empty() && dt > 0.0f)
-                    rc.instance.driveToPose(physicsWorld, Span<Transform3D>(rc.targetPose.data(), rc.targetPose.size()), rc.driveStrengthMultiplier, dt);
+                if(rc.initialized && !rc.targetPose.empty()){
+                    EcsWorldPose pose;
+                    const b8 hasPose = ResolveEcsSubsystemWorldPose(entity, world, pose);
+                    BuildRagdollWorldTargetPose(Span<Transform3D>(rc.targetPose.data(), rc.targetPose.size()), pose, hasPose, scratch.ragdollWorldTargetPoseScratch);
+                    if(rc.kinematic){
+                        rc.instance.setPose(physicsWorld, Span<Transform3D>(scratch.ragdollWorldTargetPoseScratch.data(), scratch.ragdollWorldTargetPoseScratch.size()), true);
+                    }
+                    else{
+                        const usize maskCount = Min(Min(rc.boneKinematicMask.size(), rc.instance.boneBodies.size()), scratch.ragdollWorldTargetPoseScratch.size());
+                        const VectorSingle zeroVec(0.0f);
+                        for(usize bi = 0u; bi < maskCount; ++bi){
+                            if(!rc.boneKinematicMask[bi])
+                                continue;
+                            const BodyId bId = rc.instance.boneBodies[bi];
+                            if(!physicsWorld.isValidBody(bId))
+                                continue;
+                            in Transform3D bXf = scratch.ragdollWorldTargetPoseScratch[bi];
+                            physicsWorld.setBodyTransform(bId, VectorSingle(bXf.position), VectorSingle(bXf.rotation));
+                            physicsWorld.setLinearVelocity(bId, zeroVec);
+                            physicsWorld.setAngularVelocity(bId, zeroVec);
+                        }
+                        if(rc.driveToPose && dt > 0.0f)
+                            rc.instance.driveToPose(physicsWorld, Span<Transform3D>(scratch.ragdollWorldTargetPoseScratch.data(), scratch.ragdollWorldTargetPoseScratch.size()), rc.driveStrengthMultiplier, dt);
+                    }
+                }
             }
         );
         scratch.lastRagdollTopologyVersion = physicsWorld.m_topologyVersion;
@@ -548,31 +699,35 @@ void StepEcsPhysicsSubsystemBridges(
         const b8 hasFluids = fluidView.candidateCount() > 0u;
         const b8 hasFields = fieldView.candidateCount() > 0u;
         if(hasFluids || hasFields){
-            b8 anyActiveEnv = false;
+            f32 activeTimeSec = envScratch.elapsedTimeSec;
+            b8 advancedEnvTime = false;
             if(hasFluids){
                 fluidView.each(
-                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut anyActiveEnv](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut activeTimeSec, mut advancedEnvTime](in EntityID ent, in FluidVolumeComponent fvc) -> void{
                         if(!fvc.enabled || !fvc.volume.enabled)
                             return;
-                        anyActiveEnv = true;
+                        if(!advancedEnvTime){
+                            envScratch.elapsedTimeSec += dt;
+                            activeTimeSec = envScratch.elapsedTimeSec;
+                            advancedEnvTime = true;
+                        }
                         EcsWorldPose pose;
                         if(ResolveEcsSubsystemWorldPose(ent, world, pose))
-                            ApplyFluidVolumeWithScheduler(physicsWorld, BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), dt, scheduler);
+                            ApplyFluidVolumeWithScheduler(physicsWorld, BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), activeTimeSec, dt, scheduler);
                         else
-                            ApplyFluidVolumeWithScheduler(physicsWorld, fvc.volume, dt, scheduler);
+                            ApplyFluidVolumeWithScheduler(physicsWorld, fvc.volume, activeTimeSec, dt, scheduler);
                     }
                 );
             }
             if(hasFields){
-                f32 activeTimeSec = envScratch.elapsedTimeSec;
                 fieldView.each(
-                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut activeTimeSec, mut anyActiveEnv](in EntityID ent, in ForceFieldComponent ffc) -> void{
+                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut activeTimeSec, mut advancedEnvTime](in EntityID ent, in ForceFieldComponent ffc) -> void{
                         if(!ffc.enabled || !ffc.field.enabled)
                             return;
-                        if(!anyActiveEnv){
+                        if(!advancedEnvTime){
                             envScratch.elapsedTimeSec += dt;
                             activeTimeSec = envScratch.elapsedTimeSec;
-                            anyActiveEnv = true;
+                            advancedEnvTime = true;
                         }
                         EcsWorldPose pose;
                         if(ResolveEcsSubsystemWorldPose(ent, world, pose))
@@ -581,11 +736,6 @@ void StepEcsPhysicsSubsystemBridges(
                             ApplyForceFieldWithScheduler(physicsWorld, ffc.field, activeTimeSec, dt, scheduler);
                     }
                 );
-                if(!anyActiveEnv && hasFluids)
-                    envScratch.elapsedTimeSec += dt;
-            }
-            else if(anyActiveEnv){
-                envScratch.elapsedTimeSec += dt;
             }
         }
     }
@@ -607,6 +757,11 @@ void StepEcsPhysicsSubsystemBridges(
                     if(hasXf)
                         rootXf = rootPose.transform;
                     if(ac.articulation.init(rootXf, ac.isFixedBase, Span<ArticulationLinkDef>(ac.links.data(), ac.links.size()))){
+                        ac.articulation.subSteps = Max(ac.subSteps, 1u);
+                        ac.articulation.enableContactCoupling = ac.enableContactCoupling;
+                        ac.articulation.contactRestitution = ac.contactRestitution;
+                        ac.articulation.contactFriction = ac.contactFriction;
+                        ac.articulation.contactFilter = ac.contactFilter;
                         ac.initialized = true;
                         ac.dirty = false;
                     }
@@ -626,6 +781,11 @@ void StepEcsPhysicsSubsystemBridges(
                     }
                 }
                 if(ac.initialized){
+                    ac.articulation.subSteps = Max(ac.subSteps, 1u);
+                    ac.articulation.enableContactCoupling = ac.enableContactCoupling;
+                    ac.articulation.contactRestitution = ac.contactRestitution;
+                    ac.articulation.contactFriction = ac.contactFriction;
+                    ac.articulation.contactFilter = ac.contactFilter;
                     ac.articulation.step(physicsWorld, dt);
                     if(!ac.isFixedBase && world.hasComponent<TransformComponent>(entity))
                         WriteWorldPoseBackToEntityTransform(entity, ac.articulation.baseTransform, world);
@@ -650,26 +810,185 @@ void StepEcsPhysicsSubsystemBridges(
 
     const auto softView = world.view<SoftBodyComponent>();
     if(softView.candidateCount() > 0u){
+        in HashMap<Name, EntityID> softNamedRef = namedEntities;
+        in HashMap<EntityID, EcsEntityPhysicsRecord> softRecordsRef = entityRecords;
+        Vector<ForceField> activeSoftFields;
+        if(useCollectedEnv){
+            activeSoftFields = envScratch.forceFields;
+        }
+        else{
+            const auto ffSoftView = world.view<ForceFieldComponent>();
+            if(ffSoftView.candidateCount() > 0u){
+                activeSoftFields.reserve(ffSoftView.candidateCount());
+                ffSoftView.each(
+                    lambda[mut world, mut activeSoftFields](in EntityID fEnt, in ForceFieldComponent ffc) -> void{
+                        if(!ffc.enabled || !ffc.field.enabled)
+                            return;
+                        EcsWorldPose fPose;
+                        if(ResolveEcsSubsystemWorldPose(fEnt, world, fPose))
+                            activeSoftFields.push_back(BuildWorldTransformedForceField(ffc.field, fPose.transform, VectorSingle(fPose.scale)));
+                        else
+                            activeSoftFields.push_back(ffc.field);
+                    }
+                );
+            }
+        }
+        in Vector<ForceField> softFieldsRef = activeSoftFields;
+        const VectorSingle softGravityW = physicsWorld.gravity();
+        const f32 softEnvTimeSec = envScratch.elapsedTimeSec;
         softView.each(
-            lambda[in dt, mut physicsWorld, mut scheduler](in EntityID entity, mut SoftBodyComponent sb) -> void{
-                if(sb.enabled)
-                    sb.softBody.stepWithScheduler(physicsWorld, dt, scheduler);
+            lambda[in dt, in softEnvTimeSec, in softGravityW, in softNamedRef, in softRecordsRef, in softFieldsRef, mut world, mut physicsWorld, mut scratch, mut scheduler](in EntityID entity, mut SoftBodyComponent sb) -> void{
+                if(!sb.enabled)
+                    return;
+                EcsSoftBodySyncState syncState;
+                const auto sIt = scratch.softBodySyncStates.find(entity);
+                if(sIt != scratch.softBodySyncStates.end())
+                    syncState = sIt.value();
+                if(!syncState.transformApplied){
+                    EcsWorldPose worldPose;
+                    if(ResolveEcsSubsystemWorldPose(entity, world, worldPose)){
+                        const VectorSingle signedScale = ResolveSignedColliderScale(VectorSingle(worldPose.scale));
+                        const VectorSingle absScale = Abs(signedScale);
+                        const VectorSingle pos(worldPose.transform.position);
+                        const VectorSingle rot = SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation));
+                        const b8 nonIdentityPose =
+                            !EcsVec4NearlyEqual(pos, VectorSingle(0.0f), 1.0e-5f)
+                            || !EcsVec4NearlyEqual(absScale, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), 1.0e-5f)
+                            || Abs(VectorSingle(1.0f) - Abs(VectorSingle(rot.w, rot.w, rot.w, 0.0f))).x > 1.0e-5f
+                            || signedScale.x < 0.0f || signedScale.y < 0.0f || signedScale.z < 0.0f;
+                        if(nonIdentityPose){
+                            const usize pCount = sb.softBody.particles.size();
+                            const f32 maxS = Vector3MaxComponent(absScale).x;
+                            const f32 volScale = absScale.x * absScale.y * absScale.z;
+                            for(usize di = 0u; di < sb.softBody.distanceConstraints.size(); ++di){
+                                mut SoftBodyDistanceConstraint dc = sb.softBody.distanceConstraints[di];
+                                if(dc.p0 < pCount && dc.p1 < pCount){
+                                    const VectorSingle p0Old = VectorSingle(sb.softBody.particles[dc.p0].position);
+                                    const VectorSingle p1Old = VectorSingle(sb.softBody.particles[dc.p1].position);
+                                    const f32 oldLen = Vector3Length(p1Old - p0Old).x;
+                                    if(oldLen > 1.0e-5f){
+                                        const VectorSingle p0New = TransformPointValues(pos, rot, p0Old * signedScale);
+                                        const VectorSingle p1New = TransformPointValues(pos, rot, p1Old * signedScale);
+                                        dc.restLength *= Vector3Length(p1New - p0New).x / oldLen;
+                                    }
+                                    else{
+                                        dc.restLength *= maxS;
+                                    }
+                                }
+                                else{
+                                    dc.restLength *= maxS;
+                                }
+                            }
+                            for(usize bi = 0u; bi < sb.softBody.bendingConstraints.size(); ++bi){
+                                mut SoftBodyBendingConstraint bc = sb.softBody.bendingConstraints[bi];
+                                if(bc.p0 < pCount && bc.p1 < pCount){
+                                    const VectorSingle p0Old = VectorSingle(sb.softBody.particles[bc.p0].position);
+                                    const VectorSingle p1Old = VectorSingle(sb.softBody.particles[bc.p1].position);
+                                    const f32 oldLen = Vector3Length(p1Old - p0Old).x;
+                                    if(oldLen > 1.0e-5f){
+                                        const VectorSingle p0New = TransformPointValues(pos, rot, p0Old * signedScale);
+                                        const VectorSingle p1New = TransformPointValues(pos, rot, p1Old * signedScale);
+                                        bc.restLength *= Vector3Length(p1New - p0New).x / oldLen;
+                                    }
+                                    else{
+                                        bc.restLength *= maxS;
+                                    }
+                                }
+                                else{
+                                    bc.restLength *= maxS;
+                                }
+                            }
+                            for(usize vi = 0u; vi < sb.softBody.volumeConstraints.size(); ++vi)
+                                sb.softBody.volumeConstraints[vi].restVolume *= volScale;
+                            for(usize bsi = 0u; bsi < sb.softBody.backstopConstraints.size(); ++bsi){
+                                mut SoftBodyBackstopConstraint bs = sb.softBody.backstopConstraints[bsi];
+                                bs.center = f32x4(TransformPointValues(pos, rot, VectorSingle(bs.center) * signedScale), 0.0f);
+                                bs.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(bs.normal), rot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                                bs.maxDistance *= maxS;
+                                bs.backstopRadius *= maxS;
+                            }
+                            for(usize pi = 0u; pi < pCount; ++pi){
+                                mut SoftBodyParticle pt = sb.softBody.particles[pi];
+                                pt.position = f32x4(TransformPointValues(pos, rot, VectorSingle(pt.position) * signedScale), 0.0f);
+                                pt.prevPosition = f32x4(TransformPointValues(pos, rot, VectorSingle(pt.prevPosition) * signedScale), 0.0f);
+                            }
+                            sb.softBody.particleRadius = SimdMax(sb.softBody.particleRadius * maxS, 1.0e-4f);
+                            if(sb.softBody.selfCollisionRadius > 0.0f)
+                                sb.softBody.selfCollisionRadius = SimdMax(sb.softBody.selfCollisionRadius * maxS, 1.0e-4f);
+                        }
+                    }
+                    syncState.transformApplied = true;
+                    scratch.softBodySyncStates.insert_or_assign(entity, syncState);
+                }
+                for(usize ai = 0u; ai < sb.softBody.attachments.size(); ++ai){
+                    mut SoftBodyAttachment att = sb.softBody.attachments[ai];
+                    if(ai < sb.attachmentBodyEntityNames.size() && sb.attachmentBodyEntityNames[ai] != s_NameNone){
+                        BodyId resolvedBody;
+                        const auto nIt = softNamedRef.find(sb.attachmentBodyEntityNames[ai]);
+                        if(nIt != softNamedRef.end()){
+                            const auto rIt = softRecordsRef.find(nIt.value());
+                            if(rIt != softRecordsRef.end() && rIt.value().bodyId.valid() && physicsWorld.isValidBody(rIt.value().bodyId))
+                                resolvedBody = rIt.value().bodyId;
+                        }
+                        att.bodyId = resolvedBody;
+                    }
+                    else if(att.bodyId.valid() && !physicsWorld.isValidBody(att.bodyId)){
+                        att.bodyId = BodyId();
+                    }
+                }
+                for(usize fi = 0u; fi < softFieldsRef.size(); ++fi)
+                    sb.softBody.applyForceField(softFieldsRef[fi], softGravityW, softEnvTimeSec, dt);
+                sb.softBody.stepWithScheduler(physicsWorld, dt, scheduler);
             }
         );
+        if(!scratch.softBodySyncStates.empty()){
+            scratch.deadRagdolls.clear();
+            for(in auto kv : scratch.softBodySyncStates){
+                const EntityID ent = kv.first;
+                if(!world.alive(ent) || !world.hasComponent<SoftBodyComponent>(ent))
+                    scratch.deadRagdolls.push_back(ent);
+            }
+            for(usize i = 0u; i < scratch.deadRagdolls.size(); ++i)
+                scratch.softBodySyncStates.erase(scratch.deadRagdolls[i]);
+            scratch.deadRagdolls.clear();
+        }
+    }
+    else if(!scratch.softBodySyncStates.empty()){
+        scratch.softBodySyncStates.clear();
     }
 }
 
-void WriteBackEcsRagdollRootPoses(mut World world, in PhysicsWorld physicsWorld){
+void WriteBackEcsRagdollRootPoses(in PhysicsWorld physicsWorld, in HashMap<Name, EntityID> namedEntities, mut World world){
     const auto ragdollView = world.view<RagdollComponent>();
     if(ragdollView.candidateCount() == 0u)
         return;
     ragdollView.each(
-        lambda[in physicsWorld, mut world](in EntityID entity, in RagdollComponent rc) -> void{
-            if(!rc.enabled || !rc.initialized || rc.kinematic || rc.instance.boneBodies.empty())
+        lambda[in physicsWorld, in namedEntities, mut world](in EntityID entity, in RagdollComponent rc) -> void{
+            if(!rc.enabled || !rc.initialized || rc.instance.boneBodies.empty())
                 return;
-            const Expected<Transform3D> rootXf = physicsWorld.tryGetBodyTransform(rc.instance.boneBodies[0u]);
-            if(rootXf.has_value())
-                WriteWorldPoseBackToEntityTransform(entity, rootXf.value(), world);
+            const b8 rootKinematic = rc.kinematic || (!rc.boneKinematicMask.empty() && rc.boneKinematicMask[0u]);
+            if(!rootKinematic){
+                const Expected<Transform3D> rootXf = physicsWorld.tryGetBodyTransform(rc.instance.boneBodies[0u]);
+                if(rootXf.has_value())
+                    WriteWorldPoseBackToEntityTransform(entity, rootXf.value(), world);
+            }
+            const usize boneCount = Min(rc.instance.boneBodies.size(), rc.boneEntityNames.size());
+            for(usize bi = 0u; bi < boneCount; ++bi){
+                const Name boneName = rc.boneEntityNames[bi];
+                if(boneName == s_NameNone)
+                    continue;
+                const auto bIt = namedEntities.find(boneName);
+                if(bIt == namedEntities.end())
+                    continue;
+                const EntityID boneEnt = bIt.value();
+                if(!boneEnt.valid() || !world.alive(boneEnt) || !world.hasComponent<TransformComponent>(boneEnt))
+                    continue;
+                if(boneEnt == entity && rootKinematic)
+                    continue;
+                const Expected<Transform3D> boneXf = physicsWorld.tryGetBodyTransform(rc.instance.boneBodies[bi]);
+                if(boneXf.has_value())
+                    WriteWorldPoseBackToEntityTransform(boneEnt, boneXf.value(), world);
+            }
         }
     );
 }
@@ -737,7 +1056,7 @@ void CollectEcsGpuRenderTransformBindings(
         }
         else{
             const auto recIt = entityRecords.find(entity);
-            if(recIt == entityRecords.end())
+            if(recIt == entityRecords.end() || recIt.value().attachedToParentBody)
                 continue;
             bodyId = recIt.value().bodyId;
         }

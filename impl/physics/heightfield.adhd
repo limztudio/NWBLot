@@ -911,6 +911,7 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
             const f32x3u v10(x1, h10, z0);
             const f32x3u v01(x0, h01, z1);
             const f32x3u v11(x1, h11, z1);
+            const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
                 Array<f32x3u, 3u> triPts;
                 if(ti == 0u){
@@ -926,14 +927,16 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
                 const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angBound);
                 if(toi.hit()){
-                    if(forSensor && toi.initialOverlap())
-                        return toi;
-                    if(!toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < curMax){
-                        curMax = toi.fraction();
-                        bestOut = toi;
+                    TimeOfImpactOutput taggedToi = toi;
+                    taggedToi.hitTriangleIndex = cellIdx;
+                    if(forSensor && taggedToi.initialOverlap())
+                        return taggedToi;
+                    if(!taggedToi.initialOverlap() && taggedToi.fraction() > 0.0f && taggedToi.fraction() < curMax){
+                        curMax = taggedToi.fraction();
+                        bestOut = taggedToi;
                     }
                     else if(!bestOut.hit()){
-                        bestOut = toi;
+                        bestOut = taggedToi;
                     }
                 }
             }
@@ -1090,6 +1093,200 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     return best;
 }
 
+b8 LoadHeightfieldCellVertices(
+    in HeightfieldShape hf,
+    in u32 cx,
+    in u32 cz,
+    mut VectorSingle outV00,
+    mut VectorSingle outV10,
+    mut VectorSingle outV01,
+    mut VectorSingle outV11
+){
+    if(cx + 1u >= hf.cols || cz + 1u >= hf.rows)
+        return false;
+    const usize w = cast<usize>(hf.cols);
+    const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+    const usize r1 = r0 + w;
+    const VectorSingle rawHeights(hf.heights[r0], hf.heights[r0 + 1u], hf.heights[r1], hf.heights[r1 + 1u]);
+    if(!IsFinite(rawHeights))
+        return false;
+    const VectorSingle hVec = VectorSingle(hf.originMaxY.y) + rawHeights * hf.scaleMinMaxY.y;
+    const f32 x0 = hf.originMaxY.x + cast<f32>(cx) * hf.scaleMinMaxY.x;
+    const f32 x1 = x0 + hf.scaleMinMaxY.x;
+    const f32 z0 = hf.originMaxY.z + cast<f32>(cz) * hf.scaleMinMaxY.z;
+    const f32 z1 = z0 + hf.scaleMinMaxY.z;
+    outV00 = VectorSingle(x0, hVec.x, z0, 0.0f);
+    outV10 = VectorSingle(x1, hVec.y, z0, 0.0f);
+    outV01 = VectorSingle(x0, hVec.z, z1, 0.0f);
+    outV11 = VectorSingle(x1, hVec.w, z1, 0.0f);
+    return true;
+}
+
+VectorSingle ComputeHeightfieldTriNormal(in VectorSingle p0, in VectorSingle p1, in VectorSingle p2){
+    return SafeNormalizeVec3(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(p2 - p0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+}
+
+b8 IsHeightfieldDihedralSmooth(in VectorSingle nA, in VectorSingle edgePt, in VectorSingle oppPtB, in VectorSingle nB){
+    return Vector3Dot(nA, nB).x >= 0.999f || Vector3Dot(nA, VectorSingle(oppPtB - edgePt, 0.0f)).x > 1.0e-5f;
+}
+
+b8 IsHeightfieldGridVertexSmooth(in HeightfieldShape hf, in u32 vx, in u32 vz){
+    if(vx == 0u || vx + 1u >= hf.cols || vz == 0u || vz + 1u >= hf.rows)
+        return false;
+    VectorSingle nw00(0.0f); VectorSingle nw10(0.0f); VectorSingle nw01(0.0f); VectorSingle nw11(0.0f);
+    VectorSingle ne00(0.0f); VectorSingle ne10(0.0f); VectorSingle ne01(0.0f); VectorSingle ne11(0.0f);
+    VectorSingle sw00(0.0f); VectorSingle sw10(0.0f); VectorSingle sw01(0.0f); VectorSingle sw11(0.0f);
+    VectorSingle se00(0.0f); VectorSingle se10(0.0f); VectorSingle se01(0.0f); VectorSingle se11(0.0f);
+    if(!LoadHeightfieldCellVertices(hf, vx - 1u, vz - 1u, nw00, nw10, nw01, nw11))
+        return false;
+    if(!LoadHeightfieldCellVertices(hf, vx, vz - 1u, ne00, ne10, ne01, ne11))
+        return false;
+    if(!LoadHeightfieldCellVertices(hf, vx - 1u, vz, sw00, sw10, sw01, sw11))
+        return false;
+    if(!LoadHeightfieldCellVertices(hf, vx, vz, se00, se10, se01, se11))
+        return false;
+
+    const VectorSingle nNW1 = ComputeHeightfieldTriNormal(nw10, nw01, nw11);
+    const VectorSingle nNE0 = ComputeHeightfieldTriNormal(ne00, ne01, ne10);
+    const VectorSingle nNE1 = ComputeHeightfieldTriNormal(ne10, ne01, ne11);
+    const VectorSingle nSW0 = ComputeHeightfieldTriNormal(sw00, sw01, sw10);
+    const VectorSingle nSW1 = ComputeHeightfieldTriNormal(sw10, sw01, sw11);
+    const VectorSingle nSE0 = ComputeHeightfieldTriNormal(se00, se01, se10);
+
+    return IsHeightfieldDihedralSmooth(nNW1, nw11, ne10, nNE0)
+        && IsHeightfieldDihedralSmooth(nNE0, nw11, ne11, nNE1)
+        && IsHeightfieldDihedralSmooth(nNE1, nw11, se10, nSE0)
+        && IsHeightfieldDihedralSmooth(nSE0, nw11, sw11, nSW1)
+        && IsHeightfieldDihedralSmooth(nSW1, nw11, sw00, nSW0)
+        && IsHeightfieldDihedralSmooth(nSW0, nw11, nw01, nNW1);
+}
+
+u8 ComputeHeightfieldTriangleEdgeFlags(
+    in HeightfieldShape hf,
+    in u32 cx,
+    in u32 cz,
+    in usize ti,
+    in VectorSingle v00,
+    in VectorSingle v10,
+    in VectorSingle v01,
+    in VectorSingle v11,
+    in VectorSingle triN
+){
+    u8 flags = 0u;
+    VectorSingle nb00(0.0f);
+    VectorSingle nb10(0.0f);
+    VectorSingle nb01(0.0f);
+    VectorSingle nb11(0.0f);
+    if(ti == 0u){
+        if(cx > 0u && LoadHeightfieldCellVertices(hf, cx - 1u, cz, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
+            if(IsHeightfieldDihedralSmooth(triN, v00, nb01, nbN))
+                flags |= 0x01u;
+        }
+        const VectorSingle diagN = ComputeHeightfieldTriNormal(v10, v01, v11);
+        if(IsHeightfieldDihedralSmooth(triN, v01, v11, diagN))
+            flags |= 0x02u;
+        if(cz > 0u && LoadHeightfieldCellVertices(hf, cx, cz - 1u, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
+            if(IsHeightfieldDihedralSmooth(triN, v10, nb10, nbN))
+                flags |= 0x04u;
+        }
+        if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx, cz))
+            flags |= 0x08u;
+        if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
+            flags |= 0x10u;
+        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+            flags |= 0x20u;
+    }
+    else{
+        const VectorSingle diagN = ComputeHeightfieldTriNormal(v00, v01, v10);
+        if(IsHeightfieldDihedralSmooth(triN, v10, v00, diagN))
+            flags |= 0x01u;
+        if(cz + 2u < hf.rows && LoadHeightfieldCellVertices(hf, cx, cz + 1u, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
+            if(IsHeightfieldDihedralSmooth(triN, v01, nb01, nbN))
+                flags |= 0x02u;
+        }
+        if(cx + 2u < hf.cols && LoadHeightfieldCellVertices(hf, cx + 1u, cz, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
+            if(IsHeightfieldDihedralSmooth(triN, v11, nb10, nbN))
+                flags |= 0x04u;
+        }
+        if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+            flags |= 0x08u;
+        if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
+            flags |= 0x10u;
+        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz + 1u))
+            flags |= 0x20u;
+    }
+    return flags;
+}
+
+void PushHeightfieldSmoothedPoint(
+    in VectorSingle candNInit,
+    in VectorSingle candPtInit,
+    in VectorSingle candAncAInit,
+    in VectorSingle candAncBInit,
+    in f32 sepInit,
+    in VectorSingle posA,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle worldUp,
+    in f32 hfThickness,
+    in f32 maxDistance,
+    in VectorSingle tv0,
+    in VectorSingle tv1,
+    in VectorSingle tv2,
+    in VectorSingle triN,
+    in VectorSingle triWorldN,
+    in u8 edgeFlags,
+    in u32 cellIdx,
+    in u8 ptIndex,
+    mut f32 inoutDeepestSep,
+    mut VectorSingle inoutChosenNormal,
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates
+){
+    VectorSingle candN = candNInit;
+    VectorSingle candPt = candPtInit;
+    VectorSingle candAncA = candAncAInit;
+    VectorSingle candAncB = candAncBInit;
+    f32 sep = sepInit;
+    if(edgeFlags != 0u){
+        const VectorSingle worldPtA = posA + candAncA;
+        const VectorSingle worldPtB = posB + candAncB;
+        const VectorSingle rawHfToA = Vector3InverseRotate(-candN, rotB);
+        const VectorSingle localTriPtB = InverseTransformPointValues(posB, rotB, worldPtB) - rawHfToA * hfThickness;
+        VectorSingle smoothedHfToA = rawHfToA;
+        if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlags, localTriPtB, rawHfToA, smoothedHfToA)){
+            const VectorSingle localPtA = InverseTransformPointValues(posB, rotB, worldPtA);
+            const f32 signedPlane = Vector3Dot(triN, VectorSingle(localPtA - tv0, 0.0f)).x - hfThickness;
+            if(signedPlane > maxDistance)
+                return;
+            sep = signedPlane;
+            candN = SafeNormalizeVec3(Vector3Rotate(-smoothedHfToA, rotB), -worldUp);
+            candAncB = (worldPtA + candN * sep) - posB;
+            candPt = (worldPtA + posB + candAncB) * 0.5f;
+        }
+    }
+    if(Vector3Dot(candN, triWorldN).x >= 0.0f)
+        return;
+    if(sep < inoutDeepestSep){
+        inoutDeepestSep = sep;
+        inoutChosenNormal = candN;
+    }
+    PushMeshCandidateWithTris(
+        candPt,
+        candAncA,
+        candAncB,
+        candN,
+        sep,
+        MakeFeatureId(7u, ptIndex, 7u, cast<u8>(cellIdx & 0xffu)),
+        s_NullIndex,
+        cellIdx,
+        candidates
+    );
+}
+
 Manifold CollideConvexProxyAndHeightfield(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
@@ -1201,26 +1398,34 @@ Manifold CollideConvexProxyAndHeightfield(
                 const VectorSingle triMax = Max(tv0, Max(tv1, tv2));
                 if(!AabbOverlapsValues(triMin, triMax, qMin, qMax))
                     continue;
-                const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(tv1 - tv0, 0.0f), VectorSingle(tv2 - tv0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle triN = ComputeHeightfieldTriNormal(tv0, tv1, tv2);
                 if(Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -cullR - s_LinearSlop)
                     continue;
+                const u8 edgeFlags = ComputeHeightfieldTriangleEdgeFlags(hfB, cx, cz, ti, v00, v10, v01, v11, triN);
 
                 if(isSphereA){
-                    const VectorSingle qLocal = ClosestPointOnTriangleLocal(sphereCenterB, tv0, tv1, tv2);
+                    VectorSingle qLocal = ClosestPointOnTriangleLocal(sphereCenterB, tv0, tv1, tv2);
                     const VectorSingle delta = VectorSingle(sphereCenterB - qLocal, 0.0f);
                     const f32 distSq = Vector3LengthSq(delta).x;
                     if(distSq > sphereLimSq)
                         continue;
                     VectorSingle localOut = triN;
-                    f32 dist = 0.0f;
                     if(distSq > 1.0e-12f){
                         const f32 invDist = Rsqrt(VectorSingle(distSq)).x;
-                        dist = distSq * invDist;
                         localOut = delta * invDist;
                     }
                     if(Vector3Dot(localOut, triN).x <= 0.0f)
                         continue;
-                    const f32 sep = dist - totalR;
+                    f32 sep = SqrtFast(distSq) - totalR;
+                    VectorSingle smoothedOut = localOut;
+                    if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlags, qLocal, localOut, smoothedOut)){
+                        const f32 signedPlane = Vector3Dot(triN, VectorSingle(sphereCenterB - tv0, 0.0f)).x;
+                        if(signedPlane - totalR > maxDistance)
+                            continue;
+                        sep = signedPlane - totalR;
+                        localOut = smoothedOut;
+                        qLocal = sphereCenterB - triN * signedPlane;
+                    }
                     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(localOut, rotB), worldUp);
                     const VectorSingle nAtoB = -worldOut;
                     const VectorSingle wCenter = TransformPointValues(posB, rotB, sphereCenterB);
@@ -1249,6 +1454,7 @@ Manifold CollideConvexProxyAndHeightfield(
                 triPts[1u] = f32x3u(tv1);
                 triPts[2u] = f32x3u(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), worldUp);
                 if(isCapsuleA){
                     SimplexCache cache;
                     Simplex gjkSimplex;
@@ -1261,26 +1467,31 @@ Manifold CollideConvexProxyAndHeightfield(
                     if(localTriM.pointCount() == 0u)
                         continue;
                     const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(localTriM.normal(), rotB), worldUp);
-                    const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), worldUp);
-                    if(Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
-                        continue;
                     for(u32 pi = 0u; pi < localTriM.pointCount(); ++pi){
-                        const f32 sep = localTriM.points[pi].separation();
-                        if(sep < deepestSep){
-                            deepestSep = sep;
-                            chosenNormal = nAtoB;
-                        }
                         const VectorSingle wA = TransformPointValues(posB, rotB, localTriM.points[pi].anchorA());
                         const VectorSingle wB = TransformPointValues(posB, rotB, localTriM.points[pi].anchorB());
-                        PushMeshCandidateWithTris(
+                        PushHeightfieldSmoothedPoint(
+                            nAtoB,
                             (wA + wB) * 0.5f,
                             wA - posA,
                             wB - posB,
-                            nAtoB,
-                            sep,
-                            MakeFeatureId(7u, cast<u8>(pi), 7u, cast<u8>(cellIdx & 0xffu)),
-                            s_NullIndex,
+                            localTriM.points[pi].separation(),
+                            posA,
+                            posB,
+                            rotB,
+                            worldUp,
+                            hfB.thickness,
+                            maxDistance,
+                            tv0,
+                            tv1,
+                            tv2,
+                            triN,
+                            triWorldN,
+                            edgeFlags,
                             cellIdx,
+                            cast<u8>(pi),
+                            deepestSep,
+                            chosenNormal,
                             candidates
                         );
                     }
@@ -1290,8 +1501,104 @@ Manifold CollideConvexProxyAndHeightfield(
                 if(triM.pointCount() == 0u)
                     continue;
                 const VectorSingle nAtoB = triM.normal();
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), worldUp);
-                if(Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
+                for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
+                    PushHeightfieldSmoothedPoint(
+                        nAtoB,
+                        triM.points[pi].point(),
+                        triM.points[pi].anchorA(),
+                        triM.points[pi].anchorB(),
+                        triM.points[pi].separation(),
+                        posA,
+                        posB,
+                        rotB,
+                        worldUp,
+                        hfB.thickness,
+                        maxDistance,
+                        tv0,
+                        tv1,
+                        tv2,
+                        triN,
+                        triWorldN,
+                        edgeFlags,
+                        cellIdx,
+                        cast<u8>(pi),
+                        deepestSep,
+                        chosenNormal,
+                        candidates
+                    );
+                }
+            }
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
+    return m;
+}
+
+Manifold CollideHeightfieldAndMesh(
+    in HeightfieldShape hfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold m;
+    if(!hfA.isValid() || meshB.nodes.empty() || meshB.triangles.empty())
+        return m;
+
+    VectorSingle relPos(0.0f);
+    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPos, relRot);
+    const Aabb3D bBox = meshB.localAabb();
+    VectorSingle qMin(0.0f);
+    VectorSingle qMax(0.0f);
+    TransformLocalAabbValuesToWorld(VectorSingle(bBox.lowerBound), VectorSingle(bBox.upperBound), hfA.thickness + meshB.radius() + maxDistance, relPos, relRot, qMin, qMax);
+    const Aabb3D queryBox(qMin, qMax);
+
+    u32 minCx = 0u; u32 maxCx = 0u; u32 minCz = 0u; u32 maxCz = 0u;
+    b8 anyOverlap = false;
+    ComputeHeightfieldOverlappedCells(hfA, queryBox, minCx, maxCx, minCz, maxCz, anyOverlap);
+    if(!anyOverlap)
+        return m;
+
+    const VectorSingle worldUpA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal = -worldUpA;
+    f32 deepestSep = s_MaxF32;
+
+    for(u32 cz = minCz; cz <= maxCz; ++cz){
+        for(u32 cx = minCx; cx <= maxCx; ++cx){
+            VectorSingle v00(0.0f); VectorSingle v10(0.0f); VectorSingle v01(0.0f); VectorSingle v11(0.0f);
+            if(!LoadHeightfieldCellVertices(hfA, cx, cz, v00, v10, v01, v11))
+                continue;
+            const f32 cellLoY = SimdMin(SimdMin(v00.y, v10.y), SimdMin(v01.y, v11.y)) - hfA.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(v00.y, v10.y), SimdMax(v01.y, v11.y)) + hfA.thickness;
+            if(cellHiY < qMin.y || cellLoY > qMax.y)
+                continue;
+            const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
+            for(usize ti = 0u; ti < 2u; ++ti){
+                Array<f32x3u, 3u> triPts;
+                if(ti == 0u){
+                    triPts[0u] = f32x3u(v00); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v10);
+                }
+                else{
+                    triPts[0u] = f32x3u(v10); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v11);
+                }
+                const VectorSingle tv0(triPts[0u].x, triPts[0u].y, triPts[0u].z, 0.0f);
+                const VectorSingle tv1(triPts[1u].x, triPts[1u].y, triPts[1u].z, 0.0f);
+                const VectorSingle tv2(triPts[2u].x, triPts[2u].y, triPts[2u].z, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), qMin, qMax))
+                    continue;
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(ComputeHeightfieldTriNormal(tv0, tv1, tv2), rotA), worldUpA);
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfA.thickness);
+                const Manifold triM = CollideConvexProxyAndMesh(triView, posA, rotA, meshB, posB, rotB, maxDistance);
+                if(triM.pointCount() == 0u)
+                    continue;
+                const VectorSingle nAtoB = triM.normal();
+                if(Vector3Dot(nAtoB, triWorldN).x <= 0.0f)
                     continue;
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
                     const f32 sep = triM.points[pi].separation();
@@ -1305,9 +1612,100 @@ Manifold CollideConvexProxyAndHeightfield(
                         triM.points[pi].anchorB(),
                         nAtoB,
                         sep,
-                        MakeFeatureId(7u, cast<u8>(pi), 7u, cast<u8>(cellIdx & 0xffu)),
-                        s_NullIndex,
+                        triM.pointId(pi),
                         cellIdx,
+                        triM.materialTriangleB,
+                        candidates
+                    );
+                }
+            }
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
+    return m;
+}
+
+Manifold CollideHeightfields(
+    in HeightfieldShape hfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HeightfieldShape hfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold m;
+    if(!hfA.isValid() || !hfB.isValid())
+        return m;
+
+    VectorSingle relPos(0.0f);
+    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPos, relRot);
+    const Aabb3D bBox = hfB.computeLocalAabb();
+    VectorSingle qMin(0.0f);
+    VectorSingle qMax(0.0f);
+    TransformLocalAabbValuesToWorld(VectorSingle(bBox.lowerBound), VectorSingle(bBox.upperBound), hfA.thickness + hfB.thickness + maxDistance, relPos, relRot, qMin, qMax);
+    const Aabb3D queryBox(qMin, qMax);
+
+    u32 minCx = 0u; u32 maxCx = 0u; u32 minCz = 0u; u32 maxCz = 0u;
+    b8 anyOverlap = false;
+    ComputeHeightfieldOverlappedCells(hfA, queryBox, minCx, maxCx, minCz, maxCz, anyOverlap);
+    if(!anyOverlap)
+        return m;
+
+    const VectorSingle worldUpA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal = -worldUpA;
+    f32 deepestSep = s_MaxF32;
+
+    for(u32 cz = minCz; cz <= maxCz; ++cz){
+        for(u32 cx = minCx; cx <= maxCx; ++cx){
+            VectorSingle v00(0.0f); VectorSingle v10(0.0f); VectorSingle v01(0.0f); VectorSingle v11(0.0f);
+            if(!LoadHeightfieldCellVertices(hfA, cx, cz, v00, v10, v01, v11))
+                continue;
+            const f32 cellLoY = SimdMin(SimdMin(v00.y, v10.y), SimdMin(v01.y, v11.y)) - hfA.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(v00.y, v10.y), SimdMax(v01.y, v11.y)) + hfA.thickness;
+            if(cellHiY < qMin.y || cellLoY > qMax.y)
+                continue;
+            const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
+            for(usize ti = 0u; ti < 2u; ++ti){
+                Array<f32x3u, 3u> triPts;
+                if(ti == 0u){
+                    triPts[0u] = f32x3u(v00); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v10);
+                }
+                else{
+                    triPts[0u] = f32x3u(v10); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v11);
+                }
+                const VectorSingle tv0(triPts[0u].x, triPts[0u].y, triPts[0u].z, 0.0f);
+                const VectorSingle tv1(triPts[1u].x, triPts[1u].y, triPts[1u].z, 0.0f);
+                const VectorSingle tv2(triPts[2u].x, triPts[2u].y, triPts[2u].z, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), qMin, qMax))
+                    continue;
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(ComputeHeightfieldTriNormal(tv0, tv1, tv2), rotA), worldUpA);
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfA.thickness);
+                const Manifold triM = CollideConvexProxyAndHeightfield(triView, posA, rotA, hfB, posB, rotB, maxDistance);
+                if(triM.pointCount() == 0u)
+                    continue;
+                const VectorSingle nAtoB = triM.normal();
+                if(Vector3Dot(nAtoB, triWorldN).x <= 0.0f)
+                    continue;
+                for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
+                    const f32 sep = triM.points[pi].separation();
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = nAtoB;
+                    }
+                    PushMeshCandidateWithTris(
+                        triM.points[pi].point(),
+                        triM.points[pi].anchorA(),
+                        triM.points[pi].anchorB(),
+                        nAtoB,
+                        sep,
+                        triM.pointId(pi),
+                        cellIdx,
+                        triM.materialTriangleB,
                         candidates
                     );
                 }

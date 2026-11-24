@@ -20,6 +20,7 @@ flag<u32> ContactFlags{
     HasSurfaceVelocity = 0x00000200u,
     HasAnisotropicFriction = 0x00000400u,
     DynamicMaterial = 0x00000800u,
+    HasCustomSolverScale = 0x00001000u,
 }
 
 flag<u8> ShapeFlags{
@@ -369,6 +370,11 @@ class Contact{
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
+    public f32 invMassScaleA = 1.0f;
+    public f32 invMassScaleB = 1.0f;
+    public f32 invInertiaScaleA = 1.0f;
+    public f32 invInertiaScaleB = 1.0f;
+    public f32 maxNormalImpulse = s_MaxF32;
     public u32 flags = 0u;
 }
 
@@ -887,25 +893,77 @@ Manifold CollideShapePairRaw(
     in Vector<HeightfieldShape> heightfieldShapes
 ){
     if(shapeA.type == ShapeType::Plane){
-        if(shapeB.type == ShapeType::Plane || shapeB.type == ShapeType::Mesh || shapeB.type == ShapeType::Heightfield)
+        const PlaneShape planeA = shapeA.planeShape();
+        if(shapeB.type == ShapeType::Plane){
+            if(planeA.isFiniteExtent()){
+                Array<f32x3u, 4u> quadPtsA;
+                const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
+                return CollideConvexProxyVsPlane(pPlaneA, posA, rotA, shapeB.planeShape(), posB, rotB, maxDistance);
+            }
+            const PlaneShape planeB = shapeB.planeShape();
+            if(planeB.isFiniteExtent()){
+                Array<f32x3u, 4u> quadPtsB;
+                const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
+                return FlipManifoldNormalAndAnchors(CollideConvexProxyVsPlane(pPlaneB, posB, rotB, planeA, posA, rotA, maxDistance));
+            }
             return Manifold();
+        }
+        if(shapeB.type == ShapeType::Mesh){
+            if(planeA.isFiniteExtent() && shapeB.geometryIndex < meshShapes.size()){
+                Array<f32x3u, 4u> quadPtsA;
+                const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
+                return CollideConvexProxyAndMesh(pPlaneA, posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+            }
+            return Manifold();
+        }
+        if(shapeB.type == ShapeType::Heightfield){
+            if(planeA.isFiniteExtent() && shapeB.geometryIndex < heightfieldShapes.size()){
+                Array<f32x3u, 4u> quadPtsA;
+                const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
+                return CollideConvexProxyAndHeightfield(pPlaneA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+            }
+            return Manifold();
+        }
         Array<f32x3u, 2u> ptsB;
         const ShapeProxyView pB = MakeShapeProxyViewFromShape(shapeB, hullShapes, ptsB);
-        return FlipManifoldNormalAndAnchors(CollideConvexProxyVsPlane(pB, posB, rotB, shapeA.planeShape(), posA, rotA, maxDistance));
+        return FlipManifoldNormalAndAnchors(CollideConvexProxyVsPlane(pB, posB, rotB, planeA, posA, rotA, maxDistance));
     }
     if(shapeB.type == ShapeType::Plane){
-        if(shapeA.type == ShapeType::Mesh || shapeA.type == ShapeType::Heightfield)
+        const PlaneShape planeB = shapeB.planeShape();
+        if(shapeA.type == ShapeType::Mesh){
+            if(planeB.isFiniteExtent() && shapeA.geometryIndex < meshShapes.size()){
+                Array<f32x3u, 4u> quadPtsB;
+                const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
+                return FlipManifoldNormalAndAnchors(CollideConvexProxyAndMesh(pPlaneB, posB, rotB, meshShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+            }
             return Manifold();
+        }
+        if(shapeA.type == ShapeType::Heightfield){
+            if(planeB.isFiniteExtent() && shapeA.geometryIndex < heightfieldShapes.size()){
+                Array<f32x3u, 4u> quadPtsB;
+                const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
+                return FlipManifoldNormalAndAnchors(CollideConvexProxyAndHeightfield(pPlaneB, posB, rotB, heightfieldShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+            }
+            return Manifold();
+        }
         Array<f32x3u, 2u> ptsA;
         const ShapeProxyView pA = MakeShapeProxyViewFromShape(shapeA, hullShapes, ptsA);
-        return CollideConvexProxyVsPlane(pA, posA, rotA, shapeB.planeShape(), posB, rotB, maxDistance);
+        return CollideConvexProxyVsPlane(pA, posA, rotA, planeB, posB, rotB, maxDistance);
     }
 
     if(shapeA.type == ShapeType::Heightfield){
         if(shapeA.geometryIndex >= heightfieldShapes.size())
             return Manifold();
-        if(shapeB.type == ShapeType::Heightfield || shapeB.type == ShapeType::Mesh)
+        if(shapeB.type == ShapeType::Heightfield){
+            if(shapeB.geometryIndex < heightfieldShapes.size())
+                return CollideHeightfields(heightfieldShapes[shapeA.geometryIndex], posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
             return Manifold();
+        }
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideHeightfieldAndMesh(heightfieldShapes[shapeA.geometryIndex], posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+            return Manifold();
+        }
         Array<f32x3u, 2u> ptsB;
         const ShapeProxyView pB = MakeShapeProxyViewFromShape(shapeB, hullShapes, ptsB);
         return FlipManifoldNormalAndAnchors(CollideConvexProxyAndHeightfield(pB, posB, rotB, heightfieldShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
@@ -913,8 +971,11 @@ Manifold CollideShapePairRaw(
     if(shapeB.type == ShapeType::Heightfield){
         if(shapeB.geometryIndex >= heightfieldShapes.size())
             return Manifold();
-        if(shapeA.type == ShapeType::Mesh)
+        if(shapeA.type == ShapeType::Mesh){
+            if(shapeA.geometryIndex < meshShapes.size())
+                return FlipManifoldNormalAndAnchors(CollideHeightfieldAndMesh(heightfieldShapes[shapeB.geometryIndex], posB, rotB, meshShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
             return Manifold();
+        }
         Array<f32x3u, 2u> ptsA;
         const ShapeProxyView pA = MakeShapeProxyViewFromShape(shapeA, hullShapes, ptsA);
         return CollideConvexProxyAndHeightfield(pA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);

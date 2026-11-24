@@ -117,7 +117,6 @@ class CharacterControllerComponentAsset : IComponent{
         dst = this.component;
         dst.dirty = true;
         dst.initialized = false;
-        dst.syncFromTransform = false;
         dst.def.ignoreBodyId = BodyId();
         dst.def.ignoreShapeId = ShapeId();
     }
@@ -285,6 +284,8 @@ class ColliderShapeEntryHeaderBinary{
     public NameHash materialAssetHash;
     public NameHash convexHullAssetHash;
     public NameHash collisionMeshAssetHash;
+    public NameHash heightfieldAssetHash;
+    public NameHash collisionLayerHash;
     public u64 userData = 0u;
     public i32 groupIndex = 0;
     public u32 categoryBits = 1u;

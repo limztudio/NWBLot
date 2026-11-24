@@ -100,6 +100,20 @@ class CollisionMeshHeaderBinary{
 }
 
 [serialize]
+class HeightfieldHeaderBinary{
+    public f32x4 originMaxY(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scaleMinMaxY(1.0f, 1.0f, 1.0f, 0.0f);
+    public u32 magic = s_HeightfieldMagic;
+    public u32 version = s_HeightfieldVersion;
+    public u32 cols = 0u;
+    public u32 rows = 0u;
+    public u32 materialCount = 0u;
+    public u32 cellMaterialCount = 0u;
+    public f32 thickness = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
 class CollisionMeshTriangleBinary{
     public f32x4 v0Zero(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 v1Zero(0.0f, 0.0f, 0.0f, 0.0f);
@@ -667,6 +681,159 @@ class PhysicsAssetBinaryCodec{
             return MakeUnexpected(Failure());
         }
         return mesh;
+    }
+
+    public b8 validHeightfieldShapeData(in HeightfieldShape hf)const{
+        if(!hf.isValid())
+            return false;
+        if(!IsValidPositionVec3(hf.origin()))
+            return false;
+        for(usize i = 0u; i < hf.heights.size(); ++i){
+            const f32 h = hf.heights[i];
+            if(!IsFinite(VectorSingle(h))){
+                if(h == h)
+                    return false;
+            }
+            else if(Abs(VectorSingle(hf.originMaxY.y + h * hf.scaleMinMaxY.y)).x > s_HugeCoordinate){
+                return false;
+            }
+        }
+        for(usize i = 0u; i < hf.materials.size(); ++i){
+            if(!this.validSurfaceMaterial(hf.materials[i]))
+                return false;
+        }
+        if(!hf.cellMaterialIndices.empty()){
+            if(hf.materials.empty())
+                return false;
+            const usize expectedCells = cast<usize>(hf.rows - 1u) * cast<usize>(hf.cols - 1u);
+            if(hf.cellMaterialIndices.size() != expectedCells)
+                return false;
+            const usize matCount = hf.materials.size();
+            for(usize i = 0u; i < hf.cellMaterialIndices.size(); ++i){
+                if(cast<usize>(hf.cellMaterialIndices[i]) >= matCount)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 validateHeightfield(in HeightfieldShape hf, in Name virtualPath)const{
+        if(this.validHeightfieldShapeData(hf))
+            return true;
+        error("HeightfieldAsset::validatePayload failed: invalid heightfield for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeHeightfieldUnchecked(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
+        if(
+            hf.cols < 2u
+            || hf.rows < 2u
+            || hf.heights.size() > cast<usize>(u32.max)
+            || hf.materials.size() > cast<usize>(u32.max)
+            || hf.cellMaterialIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        static_assert(
+            size_of<HeightfieldHeaderBinary>() == 64u
+            && size_of<f32>() == size_of<u32>()
+            && size_of<CollisionMeshU16Binary>() == size_of<u16>()
+        );
+
+        const usize totalBytes =
+            size_of<HeightfieldHeaderBinary>()
+            + hf.heights.size() * size_of<f32>()
+            + hf.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + hf.cellMaterialIndices.size() * size_of<CollisionMeshU16Binary>();
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        HeightfieldHeaderBinary hdr;
+        hdr.originMaxY = hf.originMaxY;
+        hdr.scaleMinMaxY = hf.scaleMinMaxY;
+        hdr.cols = hf.cols;
+        hdr.rows = hf.rows;
+        hdr.materialCount = cast<u32>(hf.materials.size());
+        hdr.cellMaterialCount = cast<u32>(hf.cellMaterialIndices.size());
+        hdr.thickness = hf.thickness;
+        AppendPOD(outBinary, hdr);
+
+        if(!AppendBinaryVectorPayload(outBinary, hf.heights).has_value())
+            return false;
+        for(usize i = 0u; i < hf.materials.size(); ++i)
+            AppendPOD(outBinary, this.packSurfaceMaterialFields(hf.materials[i]));
+        return AppendBinaryVectorPayload(outBinary, hf.cellMaterialIndices).has_value();
+    }
+
+    public b8 serializeHeightfield(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
+        if(!this.validHeightfieldShapeData(hf))
+            return false;
+        return this.serializeHeightfieldUnchecked(hf, outBinary);
+    }
+
+    public Expected<HeightfieldShape> deserializeHeightfield(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<HeightfieldHeaderBinary> hdrRes = ReadPOD<HeightfieldHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("HeightfieldAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in HeightfieldHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_HeightfieldMagic || hdr.version != s_HeightfieldVersion || hdr.reserved0 != 0u){
+            error("HeightfieldAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        if(hdr.cols < 2u || hdr.rows < 2u){
+            error("HeightfieldAsset::loadBinary failed: invalid grid dimensions");
+            return MakeUnexpected(Failure());
+        }
+
+        const u64 heightCount = cast<u64>(hdr.cols) * cast<u64>(hdr.rows);
+        if(heightCount > cast<u64>(u32.max)){
+            error("HeightfieldAsset::loadBinary failed: height count overflow");
+            return MakeUnexpected(Failure());
+        }
+        const u64 expectedDataBytes =
+            heightCount * cast<u64>(size_of<f32>())
+            + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
+            + cast<u64>(hdr.cellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>());
+        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+            error("HeightfieldAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        HeightfieldShape hf;
+        hf.cols = hdr.cols;
+        hf.rows = hdr.rows;
+        hf.originMaxY = hdr.originMaxY;
+        hf.scaleMinMaxY = hdr.scaleMinMaxY;
+        hf.thickness = hdr.thickness;
+
+        if(!ReadBinaryVectorPayload(binary, cast<u32>(heightCount), cursor, hf.heights).has_value())
+            return MakeUnexpected(Failure());
+
+        hf.materials.reserve(hdr.materialCount);
+        for(u32 i = 0u; i < hdr.materialCount; ++i){
+            const Expected<PhysicsSurfaceMaterialBinary> matFieldsRes = ReadPOD<PhysicsSurfaceMaterialBinary>(binary, cursor);
+            if(!matFieldsRes.has_value())
+                return MakeUnexpected(Failure());
+            const Expected<SurfaceMaterial> matRes = this.unpackSurfaceMaterialFields(matFieldsRes.value());
+            if(!matRes.has_value())
+                return MakeUnexpected(Failure());
+            hf.materials.push_back(matRes.value());
+        }
+
+        if(!ReadBinaryVectorPayload(binary, hdr.cellMaterialCount, cursor, hf.cellMaterialIndices).has_value())
+            return MakeUnexpected(Failure());
+
+        hf.updateHeightRange();
+        if(!this.validHeightfieldShapeData(hf)){
+            error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
+            return MakeUnexpected(Failure());
+        }
+        return hf;
     }
 }
 

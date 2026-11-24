@@ -13,6 +13,7 @@ const StringView s_PhysicsMaterialDiagnosticPrefix = "PhysicsMaterial meta";
 const StringView s_CollisionLayerMatrixDiagnosticPrefix = "CollisionLayerMatrix meta";
 const StringView s_ConvexHullDiagnosticPrefix = "ConvexHull meta";
 const StringView s_CollisionMeshDiagnosticPrefix = "CollisionMesh meta";
+const StringView s_HeightfieldDiagnosticPrefix = "Heightfield meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,6 +37,11 @@ class ConvexHullCookEntry{
 class CollisionMeshCookEntry{
     public Name virtualPath = s_NameNone;
     public MeshShape mesh;
+}
+
+class HeightfieldCookEntry{
+    public Name virtualPath = s_NameNone;
+    public HeightfieldShape heightfield;
 }
 
 
@@ -68,6 +74,13 @@ b8 SerializeCollisionMeshAsset(in CollisionMeshAsset asset, mut Vector<u8> outBi
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.mesh, outBinary);
+}
+
+[asset_writer]
+b8 SerializeHeightfieldAsset(in HeightfieldAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeHeightfieldUnchecked(asset.heightfield, outBinary);
 }
 
 
@@ -324,24 +337,8 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
             }
             return true;
         }
-        if(key == "materials"){
-            if(!fieldVal.isList()){
-                error("{} '{}': field 'materials' must be a list of material maps", s_CollisionMeshDiagnosticPrefix, PathToString(file));
-                return false;
-            }
-            const Span<MetascriptValue> items = fieldVal.listView();
-            materials.clear();
-            materials.resize(items.size());
-            for(usize i = 0u; i < items.size(); ++i){
-                if(!items[i].isMap()){
-                    error("{} '{}': 'materials[{}]' must be a map", s_CollisionMeshDiagnosticPrefix, PathToString(file), i);
-                    return false;
-                }
-                if(!ParseSurfaceMaterialMap(file, items[i], s_CollisionMeshDiagnosticPrefix, materials[i]))
-                    return false;
-            }
-            return true;
-        }
+        if(key == "materials")
+            return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_CollisionMeshDiagnosticPrefix, "materials", materials);
         if(key == "triangle_material_indices")
             return ReadPhysicsU16ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triMaterialIndices);
         if(key == "triangle_user_data")
@@ -378,6 +375,58 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
     entry.mesh = built.value();
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCollisionMesh(entry.mesh, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    HeightfieldCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_HeightfieldDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_HeightfieldDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    u32 cols = 0u;
+    u32 rows = 0u;
+    Vector<f32> heights;
+    VectorSingle scale(1.0f, 1.0f, 1.0f, 0.0f);
+    VectorSingle origin(0.0f);
+    f32 thickness = 0.0f;
+    Vector<SurfaceMaterial> materials;
+    Vector<u16> cellMaterialIndices;
+
+    if(!value.forEachMapEntry(lambda[in file, mut cols, mut rows, mut heights, mut scale, mut origin, mut thickness, mut materials, mut cellMaterialIndices](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "cols") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cols);
+        if(key == "rows") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rows);
+        if(key == "heights") return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heights);
+        if(key == "scale") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, scale);
+        if(key == "origin") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, origin);
+        if(key == "thickness") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, thickness);
+        if(key == "materials")
+            return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_HeightfieldDiagnosticPrefix, "materials", materials);
+        if(key == "cell_material_indices")
+            return ReadPhysicsU16ArrayValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cellMaterialIndices);
+        error("{} '{}': unsupported asset field '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), key);
+        return false;
+    }))
+        return MakeUnexpected(Failure());
+
+    if(!IsFinite(VectorSingle(thickness)) || thickness < 0.0f){
+        error("{} '{}': invalid 'thickness'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    Expected<HeightfieldShape> built = MakeHeightfieldShape(cols, rows, Span<f32>(heights.data(), heights.size()), scale, origin);
+    if(!built.has_value()){
+        error("{} '{}': failed to construct heightfield", s_HeightfieldDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    mut HeightfieldShape hf = built.value();
+    hf.thickness = thickness;
+    hf.materials = materials;
+    hf.cellMaterialIndices = cellMaterialIndices;
+    hf.updateHeightRange();
+    entry.heightfield = hf;
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateHeightfield(entry.heightfield, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -437,6 +486,20 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Path root, in
 Expected<CollisionMeshAsset> BuildCollisionMeshAsset(in CollisionMeshCookEntry entry){
     CollisionMeshAsset asset(entry.virtualPath);
     asset.setMesh(entry.mesh);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<HeightfieldCookEntry>(root, virtualRoot, file, document, s_HeightfieldDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<HeightfieldCookEntry>{
+        return ParseHeightfieldCookMetadata(path, file, value);
+    });
+}
+
+Expected<HeightfieldAsset> BuildHeightfieldAsset(in HeightfieldCookEntry entry){
+    HeightfieldAsset asset(entry.virtualPath);
+    asset.setHeightfield(entry.heightfield);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

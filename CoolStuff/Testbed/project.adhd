@@ -58,11 +58,25 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             this.m_physicsSceneMode = this.m_pendingSceneMode;
             DestroyPhysicsSceneEntities(this.m_world, this.m_physicsConfigEntity, this.m_physicsEntities);
             if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress){
+                ReleaseTestbedGrab(this.m_grabState);
+                this.m_physicsSnapshotBytes.clear();
+                ClearPhysicsAccumulator(this.m_world);
                 SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, false);
                 CreateStressPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
                 [essential] info("ProjectTestbed: switched physics scene to stress (240 dynamic bodies, 36 joints)");
             }
+            else if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase){
+                ReleaseTestbedGrab(this.m_grabState);
+                this.m_physicsSnapshotBytes.clear();
+                ClearPhysicsAccumulator(this.m_world);
+                SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, false);
+                CreateShowcasePhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
+                [essential] info("ProjectTestbed: switched physics scene to showcase (all 7 subsystems + shapes + joints)");
+            }
             else{
+                ReleaseTestbedGrab(this.m_grabState);
+                this.m_physicsSnapshotBytes.clear();
+                ClearPhysicsAccumulator(this.m_world);
                 SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, true);
                 CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
                 [essential] info("ProjectTestbed: switched physics scene to default");
@@ -77,33 +91,62 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(this.m_pendingPauseToggle){
             this.m_pendingPauseToggle = false;
             this.m_physicsPaused = !this.m_physicsPaused;
+            ClearPhysicsAccumulator(this.m_world);
             SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, this.m_physicsPaused);
         }
 
         const f32 safeDelta = FlyCameraMotion().sanitizeDelta(delta);
         this.m_hudStepTimer += safeDelta;
         this.updateMainCamera(safeDelta);
-        b8 steppedPaused = false;
-        f32 tickDelta = safeDelta;
+
+        if(this.m_pendingGrabBegin){
+            this.m_pendingGrabBegin = false;
+            if(!this.m_physicsPaused)
+                BeginTestbedGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+        }
+        if(this.m_pendingGrabEnd){
+            this.m_pendingGrabEnd = false;
+            ReleaseTestbedGrab(this.m_grabState);
+        }
+        if(this.m_grabState.active){
+            if(this.m_physicsPaused)
+                ReleaseTestbedGrab(this.m_grabState);
+            else
+                UpdateTestbedGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, safeDelta * this.m_physicsTimeScale, this.m_grabState);
+        }
+        if(this.m_pendingShoot){
+            this.m_pendingShoot = false;
+            ShootTestbedProjectile(this.m_world, this.m_physicsEntities);
+            SyncWorldModelRuntimes(this.m_world);
+        }
+        if(this.m_pendingExplosion){
+            this.m_pendingExplosion = false;
+            TriggerTestbedExplosion(this.m_world);
+        }
+
+        f32 tickDelta = safeDelta * this.m_physicsTimeScale;
         if(this.m_physicsPaused && this.m_physicsStepOnce){
             this.m_physicsStepOnce = false;
-            SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, false);
-            tickDelta = 1.0f / 60.0f;
-            steppedPaused = true;
+            RequestPhysicsSingleStep(this.m_world);
+            tickDelta = 0.0f;
         }
-        const b8 ticked = TickProjectWorld(this.m_world, tickDelta);
-        if(steppedPaused)
-            SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, true);
-        return ticked;
+        return TickProjectWorld(this.m_world, tickDelta);
     }
 
     public void windowFocusUpdate(in b8 focused)override{
-        if(!focused)
+        if(!focused){
             this.m_cameraInput.clear();
+            this.m_pendingGrabBegin = false;
+            this.m_pendingGrabEnd = false;
+            ReleaseTestbedGrab(this.m_grabState);
+        }
     }
 
     public void pointerCaptureLost()override{
         this.m_cameraInput.pointerCaptureLost();
+        this.m_pendingGrabBegin = false;
+        this.m_pendingGrabEnd = false;
+        ReleaseTestbedGrab(this.m_grabState);
     }
 
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
@@ -116,28 +159,54 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(action == s_InputActionPress || action == s_InputActionRepeat)
             this.m_cameraInput.setKeyState(key, true);
 
+        if(action == s_InputActionPress){
+            if(key == cast<i32>(Key::F))
+                this.m_pendingShoot = true;
+            else if(key == cast<i32>(Key::G))
+                this.m_pendingExplosion = true;
+            else if(key == cast<i32>(Key::F1)){
+                this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+                this.m_uiWindow.initialized = false;
+            }
+        }
+
         return false;
     }
 
     public b8 mousePosUpdate(in f64 xpos, in f64 ypos)override{
+        if(IsFinite(VectorDouble(xpos, ypos, 0.0, 0.0).xy)){
+            this.m_lastPointerX = cast<f32>(xpos);
+            this.m_lastPointerY = cast<f32>(ypos);
+        }
         this.m_cameraInput.updatePointer(xpos, ypos, WantsUiPointer(this.m_world));
         return false;
     }
 
     public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 mods)override{
+        const b8 wantsPointer = WantsUiPointer(this.m_world);
         this.m_cameraInput.updateButton(
-            WantsUiPointer(this.m_world),
+            wantsPointer,
             button == cast<i32>(MouseButton::Right),
             action == s_InputActionPress,
             action == s_InputActionReleaseBase
         );
+        if(button == cast<i32>(MouseButton::Left)){
+            if(action == s_InputActionPress && !wantsPointer)
+                this.m_pendingGrabBegin = true;
+            else if(action == s_InputActionReleaseBase){
+                this.m_pendingGrabBegin = false;
+                this.m_pendingGrabEnd = true;
+            }
+        }
         return false;
     }
 
     public void paintUiLayer(mut UiPaintContext context)override{
-        if(this.m_showPhysicsDebug){
+        this.m_lastViewportW = context.display.logicalWidth;
+        this.m_lastViewportH = context.display.logicalHeight;
+        if(this.m_showPhysicsDebug || this.m_grabState.active){
             const b8 prevTruncated = this.m_lastDebugDrawStats.truncated;
-            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_world, context, this.m_physicsDebugScratch, this.m_physicsScreenLines);
+            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_showPhysicsDebug, this.m_grabState, this.m_world, context, this.m_physicsDebugScratch, this.m_physicsScreenLines);
             if(this.m_lastDebugDrawStats.truncated != prevTruncated)
                 this.m_uiWindow.initialized = false;
         }
@@ -207,15 +276,38 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         DestroyInitialProjectWorld(this.m_context, this.m_world);
     }
 
+    private b8 appendCentisMsText(mut CompactString str, in f32 ms)const{
+        f32 clamped = 0.0f;
+        if(IsFinite(VectorSingle(ms)) && ms > 0.0f)
+            clamped = SimdMin(ms, 99999.0f);
+        const u64 centis = cast<u64>(cast<f64>(clamped) * 100.0 + 0.5);
+        const u64 whole = centis / 100u;
+        const u64 frac = centis % 100u;
+        b8 ok = true;
+        AppendUnsignedU64Text(str, whole);
+        ok = str.append(".") && ok;
+        if(frac < 10u)
+            ok = str.append("0") && ok;
+        AppendUnsignedU64Text(str, frac);
+        return ok;
+    }
+
     private void drawUiControls(mut UiPaintContext context, in UiSkinPreviewGalleryLayout galleryLayout){
         WindowOptions options = WindowOptions();
         Rect overviewBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
         if(this.m_uiWindow.bounds.width > 0.0f && this.m_uiWindow.bounds.height > 0.0f)
             overviewBounds = this.m_uiWindow.bounds;
+        if(!galleryLayout.valid)
+            return;
+        if(!CanShowTestbedOverviewWindow(galleryLayout.gallery, overviewBounds)){
+            overviewBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
+            this.m_uiWindow.bounds = overviewBounds;
+            this.m_uiWindow.initialized = false;
+            if(!CanShowTestbedOverviewWindow(galleryLayout.gallery, overviewBounds))
+                return;
+        }
         options.initialBounds = overviewBounds;
         options.contentHeightFirstUse = true;
-        if(!galleryLayout.valid || !CanShowTestbedOverviewWindow(galleryLayout.gallery, overviewBounds))
-            return;
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
             SeparatorOptions separator = SeparatorOptions();
             separator.thickness = 1.0f;
@@ -283,6 +375,15 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                     hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
                 AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
                 hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
+
+                hudLinesOk = this.m_cachedPhaseLine.assign("Phases: BP ") && hudLinesOk;
+                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.broadphaseMs) && hudLinesOk;
+                hudLinesOk = this.m_cachedPhaseLine.append(" NP ") && hudLinesOk;
+                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.narrowphaseMs) && hudLinesOk;
+                hudLinesOk = this.m_cachedPhaseLine.append(" S ") && hudLinesOk;
+                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.solveMs) && hudLinesOk;
+                hudLinesOk = this.m_cachedPhaseLine.append(" CCD ") && hudLinesOk;
+                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.ccdMs) && hudLinesOk;
             }
             this.m_cachedHudStats = stats;
             this.m_hasCachedHudStats = hudLinesOk;
@@ -304,11 +405,18 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
                 this.m_pendingSceneSwitch = true;
             }
-            StringView stressSceneLabel = "Stress (240)";
+            StringView stressSceneLabel = "Stress";
             if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress)
-                stressSceneLabel = "[Stress (240)]";
+                stressSceneLabel = "[Stress]";
             if(context.ui.button("scene_stress", stressSceneLabel, btnOpts)){
                 this.m_pendingSceneMode = TestbedPhysicsSceneMode::Stress;
+                this.m_pendingSceneSwitch = true;
+            }
+            StringView showcaseSceneLabel = "Showcase";
+            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase)
+                showcaseSceneLabel = "[Showcase]";
+            if(context.ui.button("scene_showcase", showcaseSceneLabel, btnOpts)){
+                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Showcase;
                 this.m_pendingSceneSwitch = true;
             }
             StringView debugLabel = "Debug: Off";
@@ -341,6 +449,23 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::GpuFull;
                 this.m_pendingBackendSwitch = true;
             }
+            StringView timeLabel = "Time: 1x";
+            if(this.m_physicsTimeScale < 0.35f)
+                timeLabel = "Time: 0.25x";
+            else if(this.m_physicsTimeScale < 0.75f)
+                timeLabel = "Time: 0.5x";
+            else if(this.m_physicsTimeScale > 1.5f)
+                timeLabel = "Time: 2x";
+            if(context.ui.button("physics_time_scale", timeLabel, btnOpts)){
+                if(this.m_physicsTimeScale > 1.5f)
+                    this.m_physicsTimeScale = 1.0f;
+                else if(this.m_physicsTimeScale > 0.75f)
+                    this.m_physicsTimeScale = 0.5f;
+                else if(this.m_physicsTimeScale > 0.35f)
+                    this.m_physicsTimeScale = 0.25f;
+                else
+                    this.m_physicsTimeScale = 2.0f;
+            }
             declared = context.ui.endContainer() && declared;
             declared = context.ui.beginRow("physics_sim_row") && declared;
             StringView pauseLabel = "Pause";
@@ -353,8 +478,22 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                     this.m_pendingPauseToggle = true;
                 this.m_physicsStepOnce = true;
             }
+            if(context.ui.button("physics_snap_capture", "Snap", btnOpts)){
+                if(!CaptureTestbedPhysicsSnapshot(this.m_world, this.m_physicsSnapshotBytes))
+                    this.m_physicsSnapshotBytes.clear();
+            }
+            WidgetOptions loadBtnOpts = btnOpts;
+            loadBtnOpts.enabled = !this.m_physicsSnapshotBytes.empty();
+            if(context.ui.button("physics_snap_restore", "Load", loadBtnOpts)){
+                if(RestoreTestbedPhysicsSnapshot(this.m_world, Span<u8>(this.m_physicsSnapshotBytes.data(), this.m_physicsSnapshotBytes.size()))){
+                    ReleaseTestbedGrab(this.m_grabState);
+                    this.m_physicsStepOnce = false;
+                    this.m_hasCachedHudStats = false;
+                }
+            }
             declared = context.ui.endContainer() && declared;
             if(this.m_showPhysicsDebug){
+                declared = context.ui.label("physics_debug_phases", this.m_cachedPhaseLine.view()) && declared;
                 if(this.m_lastDebugDrawStats.truncated)
                     declared = context.ui.label("physics_debug_trunc", "Debug draw truncated at maxLines limit") && declared;
                 declared = context.ui.beginRow("physics_debug_filter_row") && declared;
@@ -445,6 +584,11 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                     this.m_physicsDebugOptions.useInterpolatedTransforms = !this.m_physicsDebugOptions.useInterpolatedTransforms;
                     SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
                 }
+                StringView inertiaLabel = "Inertia: Off";
+                if(this.m_physicsDebugOptions.drawInertiaTensors)
+                    inertiaLabel = "Inertia: On";
+                if(context.ui.button("physics_debug_inertia", inertiaLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawInertiaTensors = !this.m_physicsDebugOptions.drawInertiaTensors;
                 declared = context.ui.endContainer() && declared;
             }
             [essential] assert(declared);
@@ -472,6 +616,17 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_pendingPauseToggle = false;
     private b8 m_physicsPaused = false;
     private b8 m_physicsStepOnce = false;
+    private f32 m_physicsTimeScale = 1.0f;
+    private b8 m_pendingShoot = false;
+    private b8 m_pendingExplosion = false;
+    private b8 m_pendingGrabBegin = false;
+    private b8 m_pendingGrabEnd = false;
+    private f32 m_lastViewportW = 0.0f;
+    private f32 m_lastViewportH = 0.0f;
+    private f32 m_lastPointerX = 0.0f;
+    private f32 m_lastPointerY = 0.0f;
+    private TestbedGrabState m_grabState = TestbedGrabState();
+    private Vector<u8> m_physicsSnapshotBytes;
     private InstantiatedSceneEntities m_startupSceneEntities = InstantiatedSceneEntities();
     private b8 m_showPhysicsDebug = false;
     private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
@@ -481,6 +636,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
     private CompactString m_cachedPhysicsLine;
     private CompactString m_cachedSplitLine;
+    private CompactString m_cachedPhaseLine;
     private i64 m_cachedStepCentis = -1;
     private f32 m_hudStepTimer = 0.0f;
     private b8 m_hasCachedHudStats = false;

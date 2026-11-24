@@ -314,8 +314,8 @@ class TextService : NoCopy{
     [cpp_unwind]
     public b8 paint(mut PaintBuilder paint, in TextLayout layout, in Point topLeft, in Color color){
         const DisplayMetrics display = paint.displayMetrics();
-        const Expected<TextRasterMetrics> rasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);
-        if(layout.lines().empty() || !rasterMetrics.has_value() || !IsValidTextPaintOriginAndColor(topLeft, color))
+        const Expected<TextRasterMetrics> baseRasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);
+        if(layout.lines().empty() || !baseRasterMetrics.has_value() || !IsValidTextPaintOriginAndColor(topLeft, color))
             return false;
         const Rect clip = paint.currentClip();
         const TextGlyphIntersection clipStatus = TryValidateTextClipRect(clip);
@@ -326,8 +326,57 @@ class TextService : NoCopy{
         in Vector<PlacedGlyph> glyphs = layout.glyphs();
         if(glyphs.empty())
             return true;
-        const TextRasterMetrics raster = rasterMetrics.value();
-        const Point deviceScale = MakeDisplayPixelScalePoint(display);
+
+        const b8 hasTransform = paint.hasActiveTransform();
+        PaintTransform2D xf = PaintTransformIdentity();
+        Rect localCullClip = clip;
+        b8 hasLocalCullClip = true;
+        TextRasterMetrics raster = baseRasterMetrics.value();
+        Point deviceScale = MakeDisplayPixelScalePoint(display);
+        if(hasTransform){
+            xf = paint.currentTransform();
+            const f32 det = xf.m00 * xf.m11 - xf.m01 * xf.m10;
+            if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-12f)
+                return true;
+            const f32 invDet = 1.0f / det;
+            PaintTransform2D invXf;
+            invXf.m00 = xf.m11 * invDet;
+            invXf.m01 = -xf.m01 * invDet;
+            invXf.m10 = -xf.m10 * invDet;
+            invXf.m11 = xf.m00 * invDet;
+            invXf.tx = -(invXf.m00 * xf.tx + invXf.m01 * xf.ty);
+            invXf.ty = -(invXf.m10 * xf.tx + invXf.m11 * xf.ty);
+            if(IsFinite(VectorSingle(invXf.m00, invXf.m01, invXf.m10, invXf.m11)) && IsFinite(VectorSingle(invXf.tx, invXf.ty, 0.0f, 0.0f).xy)){
+                localCullClip = ComputeTransformedPaintRectBounds(invXf, clip);
+                const TextGlyphIntersection localClipStatus = TryValidateTextClipRect(localCullClip);
+                if(localClipStatus == TextGlyphIntersection::Invisible)
+                    return true;
+                hasLocalCullClip = (localClipStatus == TextGlyphIntersection::Visible);
+            }
+            else{
+                hasLocalCullClip = false;
+            }
+
+            const f32 xfScale = paint.currentTransformScale();
+            const f32 baseMaxScale = UiSimdMax(display.pixelScaleX, display.pixelScaleY);
+            const f32 basePhysical = layout.fontSize() * baseMaxScale;
+            if(IsFinite(VectorSingle(xfScale)) && xfScale > 0.0f && basePhysical > 0.0f){
+                const f32 minXfScale = 1.0f / basePhysical;
+                const f32 maxXfScale = (s_TextMaxRasterPpemF32 - 0.25f) / basePhysical;
+                if(minXfScale <= maxXfScale){
+                    const f32 effectiveScale = UiSimdClamp(xfScale, minXfScale, maxXfScale);
+                    DisplayMetrics effectiveDisplay = display;
+                    effectiveDisplay.pixelScaleX = display.pixelScaleX * effectiveScale;
+                    effectiveDisplay.pixelScaleY = display.pixelScaleY * effectiveScale;
+                    const Expected<TextRasterMetrics> scaledRaster = TryResolveTextRasterMetrics(layout.fontSize(), effectiveDisplay);
+                    if(scaledRaster.has_value()){
+                        raster = scaledRaster.value();
+                        deviceScale = MakeDisplayPixelScalePoint(effectiveDisplay);
+                    }
+                }
+            }
+        }
+
         this.m_preparedGlyphs.clear();
         this.m_preparedGlyphs.reserve(glyphs.size());
         this.m_coverageCandidateSlots.clear();
@@ -347,13 +396,33 @@ class TextService : NoCopy{
                 VectorDouble rawRectangle(0.0);
                 if(!TryLoadGlyphAtlasRectangle(glyph.position, topLeft, layout.fontSize(), baked.unitsPerEm(), record, rawRectangle))
                     return false;
-                const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle, clip);
-                if(candidateStatus == TextGlyphIntersection::Invalid)
-                    return false;
-                if(candidateStatus == TextGlyphIntersection::Invisible)
-                    continue;
+                const Rect localRect = ToTextGlyphAtlasRect(rawRectangle);
+                if(hasTransform){
+                    if(HasPositivePreparedGlyphExtent(localRect)){
+                        const TextGlyphIntersection xfStatus = TryIntersectTextRects(ComputeTransformedPaintRectBounds(xf, localRect), clip);
+                        if(xfStatus == TextGlyphIntersection::Invalid)
+                            return false;
+                        if(xfStatus == TextGlyphIntersection::Invisible)
+                            continue;
+                    }
+                    else{
+                        const Point xfOrigin = ApplyPaintTransform(xf, Point(localRect.x, localRect.y));
+                        const TextGlyphIntersection xfStatus = TryIntersectTextBounds(xfOrigin.x, xfOrigin.y, xfOrigin.x, xfOrigin.y, clip);
+                        if(xfStatus == TextGlyphIntersection::Invalid)
+                            return false;
+                        if(xfStatus == TextGlyphIntersection::Invisible)
+                            continue;
+                    }
+                }
+                else{
+                    const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle, clip);
+                    if(candidateStatus == TextGlyphIntersection::Invalid)
+                        return false;
+                    if(candidateStatus == TextGlyphIntersection::Invisible)
+                        continue;
+                }
                 ResolvedGlyphDraw item;
-                item.rectangle = ToTextGlyphAtlasRect(rawRectangle);
+                item.rectangle = localRect;
                 if(HasPositivePreparedGlyphExtent(item.rectangle)){
                     in SharedSdfAtlasPage sdfPage = baked.page(record.group);
                     in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
@@ -373,7 +442,11 @@ class TextService : NoCopy{
                 this.m_preparedGlyphs.push_back(item);
             }
             else{
-                const TextGlyphIntersection status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, clip, deviceScale);
+                TextGlyphIntersection status = TextGlyphIntersection::Visible;
+                if(!hasTransform)
+                    status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, clip, deviceScale);
+                else if(hasLocalCullClip)
+                    status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, localCullClip, deviceScale);
                 if(status == TextGlyphIntersection::Invalid)
                     return false;
                 if(status == TextGlyphIntersection::Visible){
@@ -409,7 +482,10 @@ class TextService : NoCopy{
                 const Expected<Rect> rectangle = CoverageRectangle(glyph, lastCovRecord, raster.rasterScale, topLeft, deviceScale);
                 if(!rectangle.has_value())
                     return false;
-                const TextGlyphIntersection status = TryIntersectTextRects(rectangle.value(), clip);
+                Rect cullRect = rectangle.value();
+                if(hasTransform)
+                    cullRect = ComputeTransformedPaintRectBounds(xf, rectangle.value());
+                const TextGlyphIntersection status = TryIntersectTextRects(cullRect, clip);
                 if(status == TextGlyphIntersection::Invalid)
                     return false;
                 if(status == TextGlyphIntersection::Invisible){

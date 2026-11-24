@@ -25,6 +25,7 @@ class PhysicsDebugDrawOptions{
     public b8 drawIslands = false;
     public b8 drawVelocities = false;
     public b8 drawBodyOriginVsCom = false;
+    public b8 drawInertiaTensors = false;
     public b8 drawJointForces = false;
     public b8 drawContactDetails = false;
     public b8 drawSubsystems = false;
@@ -1162,6 +1163,155 @@ void ResolveDebugBodyTransformValues(
     outRot = VectorSingle(simXf.rotation);
 }
 
+void ComputePhysicsDebugSixDofBasis(
+    in Joint j,
+    in VectorSingle qA,
+    mut VectorSingle outE0,
+    mut VectorSingle outE1,
+    mut VectorSingle outE2
+){
+    const VectorSingle axA = j.localAxisA();
+    const VectorSingle axB = j.localAxisB();
+    const VectorSingle defUp(0.0f, 1.0f, 0.0f, 0.0f);
+    const b8 isDefA = Vector3LessOrEqual(Abs(axA - defUp), VectorSingle(1.0e-5f));
+    const b8 isDefB = Vector3LessOrEqual(Abs(axB - defUp), VectorSingle(1.0e-5f));
+    if(isDefA && isDefB){
+        ExtractScaledBasisAxes(qA, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), outE0, outE1, outE2);
+        return;
+    }
+    const VectorSingle b0 = SafeNormalizeVec3(axA, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle rawB1 = VectorSingle(axB - b0 * Vector3Dot(axB, b0).x, 0.0f);
+    VectorSingle b1(0.0f);
+    VectorSingle b2(0.0f);
+    if(Vector3LengthSq(rawB1).x > 1.0e-8f){
+        b1 = SafeNormalizeVec3(rawB1, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        b2 = SafeNormalizeVec3(Cross(b0, b1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    }
+    else{
+        ComputeTangentBasis(b0, b1, b2);
+    }
+    outE0 = SafeNormalizeVec3(Vector3Rotate(b0, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    outE1 = SafeNormalizeVec3(Vector3Rotate(b1, qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    outE2 = SafeNormalizeVec3(Vector3Rotate(b2, qA), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+}
+
+b8 ComputeBodyInertiaEllipsoidAxes(
+    in SymMat3 invI,
+    in f32 invMass,
+    in VectorSingle bodyRot,
+    mut VectorSingle outEx,
+    mut VectorSingle outEy,
+    mut VectorSingle outEz,
+    mut f32 outMaxSemiAxis
+){
+    if(invMass <= 1.0e-8f || !IsFinite(VectorSingle(invMass)))
+        return false;
+    const f32 i00 = invI.m00;
+    const f32 i01 = invI.m01;
+    const f32 i02 = invI.m02;
+    const f32 i11 = invI.m11;
+    const f32 i12 = invI.m12;
+    const f32 i22 = invI.m22;
+    if(!IsFinite(VectorSingle(i00, i01, i02, i11)) || !IsFinite(VectorSingle(i12, i22, 0.0f, 0.0f).xy))
+        return false;
+
+    const f32 c00 = i11 * i22 - i12 * i12;
+    const f32 c11 = i00 * i22 - i02 * i02;
+    const f32 c22 = i00 * i11 - i01 * i01;
+    const f32 c01 = i02 * i12 - i01 * i22;
+    const f32 c02 = i01 * i12 - i02 * i11;
+    const f32 c12 = i01 * i02 - i00 * i12;
+    const f32 det = i00 * c00 + i01 * c01 + i02 * c02;
+
+    Array<f32, 9u> a;
+    for(usize k = 0u; k < 9u; ++k)
+        a[k] = 0.0f;
+
+    if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
+        const f32 invDet = 1.0f / det;
+        a[0u] = c00 * invDet;
+        a[1u] = c01 * invDet;
+        a[2u] = c02 * invDet;
+        a[3u] = a[1u];
+        a[4u] = c11 * invDet;
+        a[5u] = c12 * invDet;
+        a[6u] = a[2u];
+        a[7u] = a[5u];
+        a[8u] = c22 * invDet;
+    }
+    else if(i00 > 1.0e-8f && i11 > 1.0e-8f && i22 > 1.0e-8f){
+        a[0u] = 1.0f / i00;
+        a[4u] = 1.0f / i11;
+        a[8u] = 1.0f / i22;
+    }
+    else{
+        return false;
+    }
+
+    Array<f32x4, 3u> eigVecs;
+    eigVecs[0u] = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    eigVecs[1u] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    eigVecs[2u] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+
+    Array<u32, 3u> pairP;
+    pairP[0u] = 0u; pairP[1u] = 0u; pairP[2u] = 1u;
+    Array<u32, 3u> pairQ;
+    pairQ[0u] = 1u; pairQ[1u] = 2u; pairQ[2u] = 2u;
+    Array<u32, 3u> pairR;
+    pairR[0u] = 2u; pairR[1u] = 1u; pairR[2u] = 0u;
+
+    for(u32 sweep = 0u; sweep < 6u; ++sweep){
+        for(u32 pi = 0u; pi < 3u; ++pi){
+            const u32 p = pairP[pi];
+            const u32 q = pairQ[pi];
+            const u32 r = pairR[pi];
+            const f32 apq = a[p * 3u + q];
+            if(Abs(VectorSingle(apq)).x <= 1.0e-9f)
+                continue;
+            const f32 app = a[p * 3u + p];
+            const f32 aqq = a[q * 3u + q];
+            const f32 tau = (aqq - app) / (2.0f * apq);
+            f32 signTau = 1.0f;
+            if(tau < 0.0f)
+                signTau = -1.0f;
+            const f32 t = signTau / (Abs(VectorSingle(tau)).x + Sqrt(VectorSingle(1.0f + tau * tau)).x);
+            const f32 c = Rsqrt(VectorSingle(1.0f + t * t)).x;
+            const f32 s = t * c;
+            a[p * 3u + p] = app - t * apq;
+            a[q * 3u + q] = aqq + t * apq;
+            a[p * 3u + q] = 0.0f;
+            a[q * 3u + p] = 0.0f;
+            const f32 apr = a[p * 3u + r];
+            const f32 aqr = a[q * 3u + r];
+            const f32 newApr = c * apr - s * aqr;
+            const f32 newAqr = s * apr + c * aqr;
+            a[p * 3u + r] = newApr;
+            a[r * 3u + p] = newApr;
+            a[q * 3u + r] = newAqr;
+            a[r * 3u + q] = newAqr;
+            const VectorSingle vp = VectorSingle(eigVecs[p]);
+            const VectorSingle vq = VectorSingle(eigVecs[q]);
+            eigVecs[p] = f32x4(vp * c - vq * s, 0.0f);
+            eigVecs[q] = f32x4(vp * s + vq * c, 0.0f);
+        }
+    }
+
+    const f32 ix = a[0u];
+    const f32 iy = a[4u];
+    const f32 iz = a[8u];
+    if(!IsFinite(VectorSingle(ix, iy, iz, 0.0f).xyz) || ix <= 0.0f || iy <= 0.0f || iz <= 0.0f)
+        return false;
+
+    const VectorSingle inertiaTerms = Max(VectorSingle(iy + iz - ix, ix + iz - iy, ix + iy - iz, 0.0f), VectorSingle(0.0f));
+    const VectorSingle semiAxes = Clamp(Sqrt(inertiaTerms * (1.5f * invMass)), VectorSingle(0.02f), VectorSingle(50.0f));
+    const VectorSingle qBody = SafeNormalizeQuat(bodyRot);
+    outEx = SafeNormalizeVec3(Vector3Rotate(VectorSingle(eigVecs[0u]), qBody), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)) * semiAxes.x;
+    outEy = SafeNormalizeVec3(Vector3Rotate(VectorSingle(eigVecs[1u]), qBody), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)) * semiAxes.y;
+    outEz = SafeNormalizeVec3(Vector3Rotate(VectorSingle(eigVecs[2u]), qBody), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)) * semiAxes.z;
+    outMaxSemiAxis = SimdMax(semiAxes.x, SimdMax(semiAxes.y, semiAxes.z));
+    return true;
+}
+
 void AppendPhysicsDebugCapsuleShape<TSink : IPhysicsDebugLineSink>(
     in VectorSingle p0,
     in VectorSingle p1,
@@ -1173,24 +1323,68 @@ void AppendPhysicsDebugCapsuleShape<TSink : IPhysicsDebugLineSink>(
 ){
     if(IsPhysicsDebugPhaseFull(sink, budget))
         return;
-    const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle delta = VectorSingle(p1 - p0, 0.0f);
+    const f32 segLen = Vector3Length(delta).x;
+    const f32 radDiff = Abs(VectorSingle(r0 - r1)).x;
+    if(segLen <= 1.0e-5f || (radDiff > 1.0e-5f && radDiff >= segLen - 1.0e-5f)){
+        VectorSingle sphereC = p0;
+        f32 sphereR = r0;
+        if(r1 > r0){
+            sphereC = p1;
+            sphereR = r1;
+        }
+        if(sphereR > 1.0e-5f){
+            AppendPhysicsDebugCircleAxes(sphereC, VectorSingle(sphereR, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, sphereR, 0.0f, 0.0f), color, sink, budget);
+            AppendPhysicsDebugCircleAxes(sphereC, VectorSingle(0.0f, sphereR, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, sphereR, 0.0f), color, sink, budget);
+            AppendPhysicsDebugCircleAxes(sphereC, VectorSingle(sphereR, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, sphereR, 0.0f), color, sink, budget);
+        }
+        return;
+    }
+
+    const VectorSingle axis = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     VectorSingle u(0.0f);
     VectorSingle v(0.0f);
     ComputePhysicsDebugBasisFromUnitAxis(axis, u, v);
-    const VectorSingle u0 = u * r0;
-    const VectorSingle u1 = u * r1;
-    const VectorSingle v0 = v * r0;
-    const VectorSingle v1 = v * r1;
-    AppendPhysicsDebugCircleAxes(p0, u0, v0, color, sink, budget);
-    AppendPhysicsDebugCircleAxes(p1, u1, v1, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p0, u0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p0, v0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p1, u1, axis * r1, 0.0f, s_Pi, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p1, v1, axis * r1, 0.0f, s_Pi, color, sink, budget);
-    AppendPhysicsDebugLine(p0 + u0, p1 + u1, color, sink, budget);
-    AppendPhysicsDebugLine(p0 - u0, p1 - u1, color, sink, budget);
-    AppendPhysicsDebugLine(p0 + v0, p1 + v1, color, sink, budget);
-    AppendPhysicsDebugLine(p0 - v0, p1 - v1, color, sink, budget);
+
+    if(radDiff <= 1.0e-5f){
+        const VectorSingle u0 = u * r0;
+        const VectorSingle u1 = u * r1;
+        const VectorSingle v0 = v * r0;
+        const VectorSingle v1 = v * r1;
+        AppendPhysicsDebugCircleAxes(p0, u0, v0, color, sink, budget);
+        AppendPhysicsDebugCircleAxes(p1, u1, v1, color, sink, budget);
+        AppendPhysicsDebugArcAxes(p0, u0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
+        AppendPhysicsDebugArcAxes(p0, v0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
+        AppendPhysicsDebugArcAxes(p1, u1, axis * r1, 0.0f, s_Pi, color, sink, budget);
+        AppendPhysicsDebugArcAxes(p1, v1, axis * r1, 0.0f, s_Pi, color, sink, budget);
+        AppendPhysicsDebugLine(p0 + u0, p1 + u1, color, sink, budget);
+        AppendPhysicsDebugLine(p0 - u0, p1 - u1, color, sink, budget);
+        AppendPhysicsDebugLine(p0 + v0, p1 + v1, color, sink, budget);
+        AppendPhysicsDebugLine(p0 - v0, p1 - v1, color, sink, budget);
+        return;
+    }
+
+    const f32 sinAlpha = (r0 - r1) / segLen;
+    const f32 cosAlpha = Sqrt(VectorSingle(SimdMax(0.0f, 1.0f - sinAlpha * sinAlpha))).x;
+    const f32 alpha = ATan2(VectorSingle(sinAlpha), VectorSingle(cosAlpha)).x;
+    const VectorSingle t0 = p0 + axis * (r0 * sinAlpha);
+    const VectorSingle t1 = p1 + axis * (r1 * sinAlpha);
+    const f32 rt0 = r0 * cosAlpha;
+    const f32 rt1 = r1 * cosAlpha;
+    const VectorSingle u0 = u * rt0;
+    const VectorSingle v0 = v * rt0;
+    const VectorSingle u1 = u * rt1;
+    const VectorSingle v1 = v * rt1;
+    AppendPhysicsDebugCircleAxes(t0, u0, v0, color, sink, budget);
+    AppendPhysicsDebugCircleAxes(t1, u1, v1, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p0, u * r0, -axis * r0, -alpha, s_Pi + alpha, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p0, v * r0, -axis * r0, -alpha, s_Pi + alpha, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p1, u * r1, axis * r1, alpha, s_Pi - alpha, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p1, v * r1, axis * r1, alpha, s_Pi - alpha, color, sink, budget);
+    AppendPhysicsDebugLine(t0 + u0, t1 + u1, color, sink, budget);
+    AppendPhysicsDebugLine(t0 - u0, t1 - u1, color, sink, budget);
+    AppendPhysicsDebugLine(t0 + v0, t1 + v1, color, sink, budget);
+    AppendPhysicsDebugLine(t0 - v0, t1 - v1, color, sink, budget);
 }
 
 void AppendPhysicsDebugBroadPhaseTrees<TSink : IPhysicsDebugLineSink>(
@@ -1312,8 +1506,12 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
         estimatedLines += world.m_shapes.size() * 24u;
     if(options.drawAabbs || options.drawFatAabbs)
         estimatedLines += world.m_shapes.size() * 12u;
-    if(options.drawBodyAxes || options.drawBodyOriginVsCom || options.drawVelocities)
-        estimatedLines += world.m_bodies.size() * 5u;
+    if(options.drawBodyAxes || options.drawBodyOriginVsCom || options.drawVelocities || options.drawInertiaTensors){
+        usize bodyMul = 5u;
+        if(options.drawInertiaTensors)
+            bodyMul = 41u;
+        estimatedLines += world.m_bodies.size() * bodyMul;
+    }
     if(options.drawContacts)
         estimatedLines += world.m_contacts.size() * 6u;
     if(options.drawJoints)
@@ -1341,6 +1539,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
     const VectorSingle disabledJointColor(0.55f, 0.42f, 0.30f, 0.55f);
 
     if(options.drawShapes || options.drawAabbs || options.drawFatAabbs || options.drawMeshBvh){
+        const b8 computeInterpAabb = options.useInterpolatedTransforms && physicsSystemOpt.has_value();
         for(usize si = 0u; si < world.m_shapes.size(); ++si){
             in Shape shape = world.m_shapes[si];
             if(!shape.alive() || shape.bodyId >= world.m_bodies.size())
@@ -1348,7 +1547,21 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             in Body body = world.m_bodies[shape.bodyId];
             if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex) || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
                 continue;
-            if(useProjector && !options.useInterpolatedTransforms && !projector.isAabbVisible(shape.aabb))
+
+            VectorSingle bodyPos(0.0f);
+            VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
+            b8 hasBodyPose = false;
+            Aabb3D cullAabb = shape.aabb;
+            if(computeInterpAabb){
+                ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
+                hasBodyPose = true;
+                VectorSingle interpMin(0.0f);
+                VectorSingle interpMax(0.0f);
+                ComputeShapeWorldAabbValues(shape, bodyPos, bodyRot, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, interpMin, interpMax);
+                cullAabb = Aabb3D(interpMin, interpMax);
+            }
+
+            if(useProjector && !projector.isAabbVisible(cullAabb))
                 continue;
             if(IsPhysicsDebugPhaseFull(sink, budget)){
                 budget.noteOverflow();
@@ -1356,16 +1569,15 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
 
             if(options.drawAabbs)
-                AppendPhysicsDebugAabbEdges(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), aabbColor, sink, budget);
+                AppendPhysicsDebugAabbEdges(VectorSingle(cullAabb.lowerBound), VectorSingle(cullAabb.upperBound), aabbColor, sink, budget);
             if(options.drawFatAabbs && shape.proxyKey != s_NullIndex){
                 const Aabb3D fBox = world.m_broadPhase.fatAabb(shape.proxyKey);
                 AppendPhysicsDebugAabbEdges(VectorSingle(fBox.lowerBound), VectorSingle(fBox.upperBound), fatAabbColor, sink, budget);
             }
             if(!options.drawShapes){
                 if(options.drawMeshBvh && shape.type == ShapeType::Mesh && cast<usize>(shape.geometryIndex) < world.m_meshShapes.size()){
-                    VectorSingle bodyPos(0.0f);
-                    VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
-                    ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
+                    if(!hasBodyPose)
+                        ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
                     VectorSingle xfPos(0.0f);
                     VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
                     shape.worldTransformValues(bodyPos, bodyRot, xfPos, xfRot);
@@ -1376,9 +1588,8 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 continue;
             }
 
-            VectorSingle bodyPos(0.0f);
-            VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
-            ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
+            if(!hasBodyPose)
+                ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
             VectorSingle xfPos(0.0f);
             VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
             shape.worldTransformValues(bodyPos, bodyRot, xfPos, xfRot);
@@ -1442,6 +1653,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 ExtractScaledBasisAxes(xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
                 const f32 hh = cyl.halfHeight();
                 const f32 r = cyl.radius();
+                const f32 cr = cyl.convexRadius();
                 const VectorSingle exR = ex * r;
                 const VectorSingle ezR = ez * r;
                 const VectorSingle top = c + ey * hh;
@@ -1452,6 +1664,30 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugLine(top - exR, bot - exR, color, sink, budget);
                 AppendPhysicsDebugLine(top + ezR, bot + ezR, color, sink, budget);
                 AppendPhysicsDebugLine(top - ezR, bot - ezR, color, sink, budget);
+                if(cr > 1.0e-4f && !IsPhysicsDebugPhaseFull(sink, budget)){
+                    const VectorSingle skinColor(color.x, color.y, color.z, color.w * 0.45f);
+                    const f32 rOut = r + cr;
+                    const VectorSingle exOut = ex * rOut;
+                    const VectorSingle ezOut = ez * rOut;
+                    const VectorSingle eyCr = ey * cr;
+                    AppendPhysicsDebugCircleAxes(top + eyCr, exR, ezR, skinColor, sink, budget);
+                    AppendPhysicsDebugCircleAxes(bot - eyCr, exR, ezR, skinColor, sink, budget);
+                    AppendPhysicsDebugCircleAxes(top, exOut, ezOut, skinColor, sink, budget);
+                    AppendPhysicsDebugCircleAxes(bot, exOut, ezOut, skinColor, sink, budget);
+                    AppendPhysicsDebugLine(top + exOut, bot + exOut, skinColor, sink, budget);
+                    AppendPhysicsDebugLine(top - exOut, bot - exOut, skinColor, sink, budget);
+                    AppendPhysicsDebugLine(top + ezOut, bot + ezOut, skinColor, sink, budget);
+                    AppendPhysicsDebugLine(top - ezOut, bot - ezOut, skinColor, sink, budget);
+                    const f32 halfPi = 0.5f * s_Pi;
+                    AppendPhysicsDebugArcAxes(top + exR, ex * cr, eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(top - exR, -ex * cr, eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(top + ezR, ez * cr, eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(top - ezR, -ez * cr, eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(bot + exR, ex * cr, -eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(bot - exR, -ex * cr, -eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(bot + ezR, ez * cr, -eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(bot - ezR, -ez * cr, -eyCr, 0.0f, halfPi, skinColor, sink, budget);
+                }
             }
             else if(shape.type == ShapeType::Cone){
                 const ConeShape cone = shape.coneShape();
@@ -1462,6 +1698,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 ExtractScaledBasisAxes(xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
                 const f32 hh = cone.halfHeight();
                 const f32 r = cone.radius();
+                const f32 cr = cone.convexRadius();
                 const VectorSingle exR = ex * r;
                 const VectorSingle ezR = ez * r;
                 const VectorSingle baseC = c - ey * hh;
@@ -1471,6 +1708,42 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugLine(baseC - exR, apex, color, sink, budget);
                 AppendPhysicsDebugLine(baseC + ezR, apex, color, sink, budget);
                 AppendPhysicsDebugLine(baseC - ezR, apex, color, sink, budget);
+                if(cr > 1.0e-4f && !IsPhysicsDebugPhaseFull(sink, budget)){
+                    const VectorSingle skinColor(color.x, color.y, color.z, color.w * 0.45f);
+                    const f32 height = 2.0f * hh;
+                    const f32 slantLenSq = r * r + height * height;
+                    f32 nSlopeR = 1.0f;
+                    f32 nSlopeY = 0.0f;
+                    f32 coneAlpha = 0.0f;
+                    if(slantLenSq > 1.0e-8f){
+                        const f32 invSlantLen = Rsqrt(VectorSingle(slantLenSq)).x;
+                        nSlopeR = height * invSlantLen;
+                        nSlopeY = r * invSlantLen;
+                        coneAlpha = ATan2(VectorSingle(nSlopeY), VectorSingle(nSlopeR)).x;
+                    }
+                    const VectorSingle eyCr = ey * cr;
+                    const VectorSingle baseRingC = baseC + ey * (nSlopeY * cr);
+                    const f32 baseRingR = r + nSlopeR * cr;
+                    const VectorSingle apexRingC = apex + ey * (nSlopeY * cr);
+                    const f32 apexRingR = nSlopeR * cr;
+                    AppendPhysicsDebugCircleAxes(baseC - eyCr, exR, ezR, skinColor, sink, budget);
+                    AppendPhysicsDebugCircleAxes(baseRingC, ex * baseRingR, ez * baseRingR, skinColor, sink, budget);
+                    AppendPhysicsDebugCircleAxes(apexRingC, ex * apexRingR, ez * apexRingR, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(apex, ex * cr, eyCr, coneAlpha, s_Pi - coneAlpha, skinColor, sink, budget);
+                    AppendPhysicsDebugArcAxes(apex, ez * cr, eyCr, coneAlpha, s_Pi - coneAlpha, skinColor, sink, budget);
+
+                    Array<f32x4, 4u> dirs;
+                    dirs[0u] = f32x4(ex, 0.0f);
+                    dirs[1u] = f32x4(-ex, 0.0f);
+                    dirs[2u] = f32x4(ez, 0.0f);
+                    dirs[3u] = f32x4(-ez, 0.0f);
+                    for(usize di = 0u; di < 4u; ++di){
+                        const VectorSingle d = VectorSingle(dirs[di]);
+                        const VectorSingle off = (d * nSlopeR + ey * nSlopeY) * cr;
+                        AppendPhysicsDebugLine(baseC + d * r + off, apex + off, skinColor, sink, budget);
+                        AppendPhysicsDebugArcAxes(baseC + d * r, d * cr, eyCr, -0.5f * s_Pi, coneAlpha, skinColor, sink, budget);
+                    }
+                }
             }
             else if(shape.type == ShapeType::TaperedCapsule){
                 const TaperedCapsuleShape tc = shape.taperedCapsuleShape();
@@ -1484,7 +1757,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 const VectorSingle originPt = TransformDebugPoint(xfPos, xfRot, localN * pl.offset());
                 VectorSingle localU(0.0f);
                 VectorSingle localV(0.0f);
-                ComputePhysicsDebugBasisFromUnitAxis(localN, localU, localV);
+                ComputeTangentBasisFromUnitNormal(localN, localU, localV);
                 const VectorSingle u = Vector3Rotate(localU, planeRot);
                 const VectorSingle v = Vector3Rotate(localV, planeRot);
                 f32 hx = 4.0f;
@@ -1510,14 +1783,8 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 const VectorSingle p0 = TransformPointValues(xfPos, xfRot, seg.point1());
                 const VectorSingle p1 = TransformPointValues(xfPos, xfRot, seg.point2());
                 AppendPhysicsDebugLine(p0, p1, color, sink, budget);
-                if(seg.radius() > 1.0e-4f){
-                    const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                    VectorSingle u(0.0f);
-                    VectorSingle v(0.0f);
-                    ComputePhysicsDebugBasisFromUnitAxis(axis, u, v);
-                    AppendPhysicsDebugCircle(p0, u, v, seg.radius(), color, sink, budget);
-                    AppendPhysicsDebugCircle(p1, u, v, seg.radius(), color, sink, budget);
-                }
+                if(seg.radius() > 1.0e-4f)
+                    AppendPhysicsDebugCapsuleShape(p0, p1, seg.radius(), seg.radius(), color, sink, budget);
             }
             else if(shape.type == ShapeType::Heightfield){
                 if(cast<usize>(shape.geometryIndex) >= world.m_heightfieldShapes.size())
@@ -1549,28 +1816,68 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                             break;
                         }
                         const f32 h0 = hf.heights[rowOff + cast<usize>(cx)];
+                        const u32 nx = Min(cx + stepX, hf.cols - 1u);
+                        const f32 hx = hf.heights[rowOff + cast<usize>(nx)];
+                        const f32 hz = hf.heights[nextRowOff + cast<usize>(cx)];
                         if(IsFinite(VectorSingle(h0))){
                             const VectorSingle cellColOff = colStepW * cast<f32>(cx);
                             const VectorSingle w0 = rowBaseW + cellColOff + upW * h0;
-                            const u32 nx = Min(cx + stepX, hf.cols - 1u);
-                            if(nx > cx){
-                                const f32 hx = hf.heights[rowOff + cast<usize>(nx)];
-                                if(IsFinite(VectorSingle(hx)))
-                                    AppendPhysicsDebugLine(w0, rowBaseW + colStepW * cast<f32>(nx) + upW * hx, color, sink, budget);
+                            if(nx > cx && IsFinite(VectorSingle(hx))){
+                                const VectorSingle wx = rowBaseW + colStepW * cast<f32>(nx) + upW * hx;
+                                AppendPhysicsDebugLine(w0, wx, color, sink, budget);
                             }
-                            if(nz > rz){
-                                const f32 hz = hf.heights[nextRowOff + cast<usize>(cx)];
-                                if(IsFinite(VectorSingle(hz)))
-                                    AppendPhysicsDebugLine(w0, nextRowBaseW + cellColOff + upW * hz, color, sink, budget);
+                            if(nz > rz && IsFinite(VectorSingle(hz))){
+                                const VectorSingle wz = nextRowBaseW + cellColOff + upW * hz;
+                                AppendPhysicsDebugLine(w0, wz, color, sink, budget);
+                            }
+                            if(nx > cx && nz > rz){
+                                const f32 h11 = hf.heights[nextRowOff + cast<usize>(nx)];
+                                const b8 singleCell = (nx == cx + 1u) && (nz == rz + 1u);
+                                b8 hole = !IsFinite(VectorSingle(hx, hz, h11, 0.0f).xyz);
+                                if(singleCell)
+                                    hole = hole || hf.isCellHole(cx, rz);
+                                if(!hole){
+                                    const VectorSingle wx = rowBaseW + colStepW * cast<f32>(nx) + upW * hx;
+                                    const VectorSingle wz = nextRowBaseW + cellColOff + upW * hz;
+                                    AppendPhysicsDebugLine(wx, wz, color, sink, budget);
+                                }
                             }
                         }
                         if(cx + 1u >= hf.cols)
                             break;
-                        cx = Min(cx + stepX, hf.cols - 1u);
+                        cx = nx;
                     }
                     if(IsPhysicsDebugPhaseFull(sink, budget) || rz + 1u >= hf.rows)
                         break;
                     rz = nz;
+                }
+                if(hf.thickness > 1.0e-4f && !IsPhysicsDebugPhaseFull(sink, budget)){
+                    const VectorSingle thickCol(color.x, color.y, color.z, color.w * 0.45f);
+                    const f32 bottomY = hf.minY() - hf.thickness;
+                    const f32 endColF = cast<f32>(hf.cols - 1u) * hf.scaleMinMaxY.x;
+                    const f32 endRowF = cast<f32>(hf.rows - 1u) * hf.scaleMinMaxY.z;
+                    const VectorSingle b00 = TransformPointValues(xfPos, xfRot, VectorSingle(hf.originMaxY.x, bottomY, hf.originMaxY.z, 0.0f));
+                    const VectorSingle b10 = TransformPointValues(xfPos, xfRot, VectorSingle(hf.originMaxY.x + endColF, bottomY, hf.originMaxY.z, 0.0f));
+                    const VectorSingle b01 = TransformPointValues(xfPos, xfRot, VectorSingle(hf.originMaxY.x, bottomY, hf.originMaxY.z + endRowF, 0.0f));
+                    const VectorSingle b11 = TransformPointValues(xfPos, xfRot, VectorSingle(hf.originMaxY.x + endColF, bottomY, hf.originMaxY.z + endRowF, 0.0f));
+                    AppendPhysicsDebugLine(b00, b10, thickCol, sink, budget);
+                    AppendPhysicsDebugLine(b10, b11, thickCol, sink, budget);
+                    AppendPhysicsDebugLine(b11, b01, thickCol, sink, budget);
+                    AppendPhysicsDebugLine(b01, b00, thickCol, sink, budget);
+                    const usize lastCol = cast<usize>(hf.cols - 1u);
+                    const usize lastRowOff = cast<usize>(hf.rows - 1u) * cast<usize>(hf.cols);
+                    const f32 cH00 = hf.heights[0u];
+                    const f32 cH10 = hf.heights[lastCol];
+                    const f32 cH01 = hf.heights[lastRowOff];
+                    const f32 cH11 = hf.heights[lastRowOff + lastCol];
+                    if(IsFinite(VectorSingle(cH00)))
+                        AppendPhysicsDebugLine(originW + upW * cH00, b00, thickCol, sink, budget);
+                    if(IsFinite(VectorSingle(cH10)))
+                        AppendPhysicsDebugLine(originW + colStepW * cast<f32>(lastCol) + upW * cH10, b10, thickCol, sink, budget);
+                    if(IsFinite(VectorSingle(cH01)))
+                        AppendPhysicsDebugLine(originW + rowStepW * cast<f32>(hf.rows - 1u) + upW * cH01, b01, thickCol, sink, budget);
+                    if(IsFinite(VectorSingle(cH11)))
+                        AppendPhysicsDebugLine(originW + colStepW * cast<f32>(lastCol) + rowStepW * cast<f32>(hf.rows - 1u) + upW * cH11, b11, thickCol, sink, budget);
                 }
             }
         }
@@ -1582,7 +1889,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
     if(options.drawIslands && !(IsPhysicsDebugPhaseFull(sink, budget) && budget.dropped() > 0u))
         AppendPhysicsDebugIslands(world, projector, useProjector, sink, budget);
 
-    if((options.drawBodyAxes || options.drawBodyOriginVsCom || options.drawVelocities) && !(IsPhysicsDebugPhaseFull(sink, budget) && budget.dropped() > 0u)){
+    if((options.drawBodyAxes || options.drawBodyOriginVsCom || options.drawVelocities || options.drawInertiaTensors) && !(IsPhysicsDebugPhaseFull(sink, budget) && budget.dropped() > 0u)){
         for(usize bi = 0u; bi < world.m_bodies.size(); ++bi){
             in Body body = world.m_bodies[bi];
             if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex) || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
@@ -1593,7 +1900,38 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             ResolveDebugBodyTransformValues(world, physicsSystemOpt, cast<u32>(bi), body, bodyPos, bodyRot);
             const VectorSingle origin = bodyPos;
             const VectorSingle c = TransformDebugPoint(bodyPos, bodyRot, sim.localCenter());
-            if(useProjector && !projector.isSphereVisible(c, 0.35f))
+            f32 bodyCullRadius = 0.35f;
+            const b8 hasOriginOffset = options.drawBodyOriginVsCom && Vector3LengthSq(VectorSingle(c - origin, 0.0f)).x > 1.0e-6f;
+            if(hasOriginOffset)
+                bodyCullRadius = SimdMax(bodyCullRadius, Vector3Length(VectorSingle(c - origin, 0.0f)).x + 0.1f);
+            VectorSingle linVelArrow(0.0f);
+            VectorSingle angVelArrow(0.0f);
+            b8 drawLinVel = false;
+            b8 drawAngVel = false;
+            if(options.drawVelocities && body.setIndex == s_AwakeSetIndex && body.localIndex < world.m_solverSets[body.setIndex].states.size()){
+                in BodyState st = world.m_solverSets[body.setIndex].states[body.localIndex];
+                const VectorSingle linV = VectorSingle(st.linearVelocity);
+                const VectorSingle angV = VectorSingle(st.angularVelocity);
+                if(Vector3LengthSq(VectorSingle(linV, 0.0f)).x > 1.0e-5f){
+                    linVelArrow = ClampDebugVectorLength(linV * 0.2f, 3.0f);
+                    bodyCullRadius = SimdMax(bodyCullRadius, Vector3Length(VectorSingle(linVelArrow, 0.0f)).x + 0.1f);
+                    drawLinVel = true;
+                }
+                if(Vector3LengthSq(VectorSingle(angV, 0.0f)).x > 1.0e-5f){
+                    angVelArrow = ClampDebugVectorLength(angV * 0.15f, 2.0f);
+                    bodyCullRadius = SimdMax(bodyCullRadius, Vector3Length(VectorSingle(angVelArrow, 0.0f)).x + 0.1f);
+                    drawAngVel = true;
+                }
+            }
+            VectorSingle inEx(0.0f);
+            VectorSingle inEy(0.0f);
+            VectorSingle inEz(0.0f);
+            f32 inMaxR = 0.0f;
+            const b8 drawInertia = options.drawInertiaTensors && ComputeBodyInertiaEllipsoidAxes(sim.invInertiaLocal, sim.centerInvMass.w, bodyRot, inEx, inEy, inEz, inMaxR);
+            if(drawInertia)
+                bodyCullRadius = SimdMax(bodyCullRadius, inMaxR + 0.05f);
+
+            if(useProjector && !projector.isSphereVisible(c, bodyCullRadius))
                 continue;
             if(IsPhysicsDebugPhaseFull(sink, budget)){
                 budget.noteOverflow();
@@ -1609,20 +1947,21 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugLine(c, c + ay, VectorSingle(0.20f, 0.95f, 0.25f, 0.90f), sink, budget);
                 AppendPhysicsDebugLine(c, c + az, VectorSingle(0.25f, 0.45f, 0.98f, 0.90f), sink, budget);
             }
-            if(options.drawBodyOriginVsCom && Vector3LengthSq(VectorSingle(c - origin, 0.0f)).x > 1.0e-6f){
+            if(hasOriginOffset){
                 const VectorSingle comLinkColor(0.95f, 0.70f, 0.25f, 0.90f);
                 AppendPhysicsDebugLine(origin, c, comLinkColor, sink, budget);
                 AppendPhysicsDebugLine(origin - VectorSingle(0.06f, 0.0f, 0.0f, 0.0f), origin + VectorSingle(0.06f, 0.0f, 0.0f, 0.0f), comLinkColor, sink, budget);
                 AppendPhysicsDebugLine(origin - VectorSingle(0.0f, 0.06f, 0.0f, 0.0f), origin + VectorSingle(0.0f, 0.06f, 0.0f, 0.0f), comLinkColor, sink, budget);
             }
-            if(options.drawVelocities && body.setIndex == s_AwakeSetIndex && body.localIndex < world.m_solverSets[body.setIndex].states.size()){
-                in BodyState st = world.m_solverSets[body.setIndex].states[body.localIndex];
-                const VectorSingle linV = VectorSingle(st.linearVelocity);
-                const VectorSingle angV = VectorSingle(st.angularVelocity);
-                if(Vector3LengthSq(VectorSingle(linV, 0.0f)).x > 1.0e-5f)
-                    AppendPhysicsDebugLine(c, c + ClampDebugVectorLength(linV * 0.2f, 3.0f), VectorSingle(0.20f, 0.95f, 0.95f, 0.95f), sink, budget);
-                if(Vector3LengthSq(VectorSingle(angV, 0.0f)).x > 1.0e-5f)
-                    AppendPhysicsDebugLine(c, c + ClampDebugVectorLength(angV * 0.15f, 2.0f), VectorSingle(0.95f, 0.35f, 0.95f, 0.95f), sink, budget);
+            if(drawLinVel)
+                AppendPhysicsDebugLine(c, c + linVelArrow, VectorSingle(0.20f, 0.95f, 0.95f, 0.95f), sink, budget);
+            if(drawAngVel)
+                AppendPhysicsDebugLine(c, c + angVelArrow, VectorSingle(0.95f, 0.35f, 0.95f, 0.95f), sink, budget);
+            if(drawInertia){
+                const VectorSingle inertiaColor(0.98f, 0.78f, 0.20f, 0.85f);
+                AppendPhysicsDebugCircleAxes(c, inEx, inEy, inertiaColor, sink, budget);
+                AppendPhysicsDebugCircleAxes(c, inEy, inEz, inertiaColor, sink, budget);
+                AppendPhysicsDebugCircleAxes(c, inEx, inEz, inertiaColor, sink, budget);
             }
         }
     }
@@ -1665,7 +2004,15 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 if(options.drawContactDetails){
                     if(hasFrictionImpulse){
                         if(!hasContactBasis){
-                            ComputePhysicsDebugBasisFromUnitAxis(n, tU, tV);
+                            ComputeTangentBasisFromUnitNormal(n, tU, tV);
+                            if((c.flags & cast<u32>(ContactFlags::HasAnisotropicFriction)) != 0u){
+                                const VectorSingle dir(c.frictionDirection.x, c.frictionDirection.y, c.frictionDirection.z, 0.0f);
+                                const VectorSingle proj = VectorSingle(dir - n * Vector3Dot(dir, n).x, 0.0f);
+                                if(Vector3LengthSq(proj).x > 1.0e-10f){
+                                    tU = SafeNormalizeVec3(proj, tU);
+                                    tV = SafeNormalizeVec3(Cross(n, tU), tV);
+                                }
+                            }
                             hasContactBasis = true;
                         }
                         const VectorSingle frictionVec = ClampDebugVectorLength((tU * c.manifold.frictionImpulse.x + tV * c.manifold.frictionImpulse.y) * 0.05f, 0.5f);
@@ -1729,6 +2076,9 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             VectorSingle sixLinLo(0.0f);
             VectorSingle sixLinHi(0.0f);
             b8 hasSixLinLimit = false;
+            VectorSingle sixU(1.0f, 0.0f, 0.0f, 0.0f);
+            VectorSingle sixV(0.0f, 1.0f, 0.0f, 0.0f);
+            VectorSingle sixW(0.0f, 0.0f, 1.0f, 0.0f);
 
             if(j.type == JointType::Distance){
                 preAxisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -1770,18 +2120,21 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 scratch.pathWorldScratch.clear();
                 scratch.pathWorldScratch.reserve(ex.pathPoints.size());
                 for(usize pi = 0u; pi < ex.pathPoints.size(); ++pi)
-                    scratch.pathWorldScratch.push_back(f32x4(TransformPointValues(posA, rotA, VectorSingle(ex.pathPoints[pi])), 0.0f));
+                    scratch.pathWorldScratch.push_back(f32x4(aA + Vector3Rotate(VectorSingle(ex.pathPoints[pi]), qA), 0.0f));
             }
-            else if(j.type == JointType::SixDof && j.extraDataIndex < world.m_jointExtraData.size()){
-                in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
-                for(u32 ax = 0u; ax < 3u; ++ax){
-                    if(ex.sixDofAxes[ax].motion == JointMotion::Limited){
-                        hasSixLinLimit = true;
-                        const f32 l = SimdClamp(ex.sixDofAxes[ax].lowerLimit, -10.0f, 10.0f);
-                        const f32 h = SimdClamp(ex.sixDofAxes[ax].upperLimit, -10.0f, 10.0f);
-                        if(ax == 0u){ sixLinLo = VectorSetX(sixLinLo, l); sixLinHi = VectorSetX(sixLinHi, h); }
-                        else if(ax == 1u){ sixLinLo = VectorSetY(sixLinLo, l); sixLinHi = VectorSetY(sixLinHi, h); }
-                        else{ sixLinLo = VectorSetZ(sixLinLo, l); sixLinHi = VectorSetZ(sixLinHi, h); }
+            else if(j.type == JointType::SixDof){
+                ComputePhysicsDebugSixDofBasis(j, qA, sixU, sixV, sixW);
+                if(j.extraDataIndex < world.m_jointExtraData.size()){
+                    in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
+                    for(u32 ax = 0u; ax < 3u; ++ax){
+                        if(ex.sixDofAxes[ax].motion == JointMotion::Limited){
+                            hasSixLinLimit = true;
+                            const f32 l = SimdClamp(ex.sixDofAxes[ax].lowerLimit, -10.0f, 10.0f);
+                            const f32 h = SimdClamp(ex.sixDofAxes[ax].upperLimit, -10.0f, 10.0f);
+                            if(ax == 0u){ sixLinLo = VectorSetX(sixLinLo, l); sixLinHi = VectorSetX(sixLinHi, h); }
+                            else if(ax == 1u){ sixLinLo = VectorSetY(sixLinLo, l); sixLinHi = VectorSetY(sixLinHi, h); }
+                            else{ sixLinLo = VectorSetZ(sixLinLo, l); sixLinHi = VectorSetZ(sixLinHi, h); }
+                        }
                     }
                 }
             }
@@ -1818,10 +2171,10 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                     }
                 }
                 else if(j.type == JointType::SixDof && hasSixLinLimit){
-                    const VectorSingle boxCenterW = aA + Vector3Rotate((sixLinLo + sixLinHi) * 0.5f, qA);
-                    VectorSingle sx(0.0f); VectorSingle sy(0.0f); VectorSingle sz(0.0f);
-                    ExtractScaledBasisAxes(qA, Max((sixLinHi - sixLinLo) * 0.5f, VectorSingle(0.02f)), sx, sy, sz);
-                    const VectorSingle absExtent = Abs(sx) + Abs(sy) + Abs(sz);
+                    const VectorSingle localCenter = (sixLinLo + sixLinHi) * 0.5f;
+                    const VectorSingle boxExt = Max((sixLinHi - sixLinLo) * 0.5f, VectorSingle(0.02f));
+                    const VectorSingle boxCenterW = aA + sixU * localCenter.x + sixV * localCenter.y + sixW * localCenter.z;
+                    const VectorSingle absExtent = Abs(sixU * boxExt.x) + Abs(sixV * boxExt.y) + Abs(sixW * boxExt.z);
                     jLo = Min(jLo, boxCenterW - absExtent);
                     jHi = Max(jHi, boxCenterW + absExtent);
                 }
@@ -1986,25 +2339,21 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugCircle(aB, wU, wV, 0.18f, activeJointColor, sink, budget);
             }
             else if(j.type == JointType::SixDof){
-                VectorSingle ux(0.0f);
-                VectorSingle uy(0.0f);
-                VectorSingle uz(0.0f);
-                ExtractScaledBasisAxes(qA, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ux, uy, uz);
-                AppendPhysicsDebugLine(aA, aA + ux * 0.18f, VectorSingle(0.95f, 0.30f, 0.30f, 0.95f), sink, budget);
-                AppendPhysicsDebugLine(aA, aA + uy * 0.18f, VectorSingle(0.30f, 0.95f, 0.30f, 0.95f), sink, budget);
-                AppendPhysicsDebugLine(aA, aA + uz * 0.18f, VectorSingle(0.30f, 0.55f, 0.98f, 0.95f), sink, budget);
+                AppendPhysicsDebugLine(aA, aA + sixU * 0.18f, VectorSingle(0.95f, 0.30f, 0.30f, 0.95f), sink, budget);
+                AppendPhysicsDebugLine(aA, aA + sixV * 0.18f, VectorSingle(0.30f, 0.95f, 0.30f, 0.95f), sink, budget);
+                AppendPhysicsDebugLine(aA, aA + sixW * 0.18f, VectorSingle(0.30f, 0.55f, 0.98f, 0.95f), sink, budget);
                 if(j.extraDataIndex < world.m_jointExtraData.size()){
                     in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
                     if(hasSixLinLimit){
                         const VectorSingle localCenter = (sixLinLo + sixLinHi) * 0.5f;
                         const VectorSingle boxExt = Max((sixLinHi - sixLinLo) * 0.5f, VectorSingle(0.02f));
-                        const VectorSingle boxCenterW = aA + ux * localCenter.x + uy * localCenter.y + uz * localCenter.z;
-                        AppendPhysicsDebugOrientedBoxEdges(boxCenterW, ux * boxExt.x, uy * boxExt.y, uz * boxExt.z, activeJointColor, sink, budget);
+                        const VectorSingle boxCenterW = aA + sixU * localCenter.x + sixV * localCenter.y + sixW * localCenter.z;
+                        AppendPhysicsDebugOrientedBoxEdges(boxCenterW, sixU * boxExt.x, sixV * boxExt.y, sixW * boxExt.z, activeJointColor, sink, budget);
                     }
                     Array<f32x4, 3u> unitAxes;
-                    unitAxes[0u] = f32x4(ux, 0.0f);
-                    unitAxes[1u] = f32x4(uy, 0.0f);
-                    unitAxes[2u] = f32x4(uz, 0.0f);
+                    unitAxes[0u] = f32x4(sixU, 0.0f);
+                    unitAxes[1u] = f32x4(sixV, 0.0f);
+                    unitAxes[2u] = f32x4(sixW, 0.0f);
                     for(u32 angIdx = 0u; angIdx < 3u; ++angIdx){
                         in SixDofAxisConfig acfg = ex.sixDofAxes[3u + angIdx];
                         const VectorSingle pU(unitAxes[(angIdx + 1u) % 3u]);
@@ -2048,11 +2397,21 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
             else if(j.type == JointType::RackAndPinion){
                 const VectorSingle qB = SafeNormalizeQuat(rotB);
-                const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                VectorSingle uA(0.0f); VectorSingle vA(0.0f); ComputePhysicsDebugBasisFromUnitAxis(axisA, uA, vA);
-                AppendPhysicsDebugCircle(aA, uA, vA, 0.15f, activeJointColor, sink, budget);
-                AppendPhysicsDebugLine(aB - axisB * 0.35f, aB + axisB * 0.35f, activeJointColor, sink, budget);
+                const VectorSingle rackAxis = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                const VectorSingle pinionAxis = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+                VectorSingle rU(0.0f);
+                VectorSingle rV(0.0f);
+                ComputeTangentBasisFromUnitNormal(rackAxis, rU, rV);
+                AppendPhysicsDebugLine(aA - rackAxis * 0.35f, aA + rackAxis * 0.35f, activeJointColor, sink, budget);
+                AppendPhysicsDebugLine(aA - rU * 0.06f, aA + rU * 0.06f, activeJointColor, sink, budget);
+                AppendPhysicsDebugLine(aA - rackAxis * 0.25f - rU * 0.04f, aA - rackAxis * 0.25f + rU * 0.04f, activeJointColor, sink, budget);
+                AppendPhysicsDebugLine(aA + rackAxis * 0.25f - rU * 0.04f, aA + rackAxis * 0.25f + rU * 0.04f, activeJointColor, sink, budget);
+                VectorSingle uB(0.0f);
+                VectorSingle vB(0.0f);
+                ComputeTangentBasisFromUnitNormal(pinionAxis, uB, vB);
+                const f32 pinionRadius = SimdClamp(Abs(VectorSingle(j.ratio)).x, 0.06f, 0.40f);
+                AppendPhysicsDebugCircle(aB, uB, vB, pinionRadius, activeJointColor, sink, budget);
+                AppendPhysicsDebugLine(aB - pinionAxis * 0.2f, aB + pinionAxis * 0.2f, activeJointColor, sink, budget);
             }
             else if(j.type == JointType::Path && j.extraDataIndex < world.m_jointExtraData.size()){
                 in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
@@ -2126,7 +2485,15 @@ void AppendEcsCharacterDebugLineItem<TSink : IPhysicsDebugLineSink>(
     const VectorSingle up = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), SafeNormalizeQuat(VectorSingle(cc.controller.rotation))), fallbackUp);
     const f32 r = cc.controller.def.radius;
     const f32 hh = cc.controller.def.halfHeight;
-    if(useProjector && !projector.isSphereVisible(pos, r + hh + 0.1f))
+    const VectorSingle vel = VectorSingle(cc.controller.linearVelocity);
+    const b8 hasVel = Vector3LengthSq(VectorSingle(vel, 0.0f)).x > 1.0e-5f;
+    f32 cullR = r + hh + 0.1f;
+    VectorSingle velArrow(0.0f);
+    if(hasVel){
+        velArrow = ClampDebugVectorLength(vel * 0.25f, 2.0f);
+        cullR = SimdMax(cullR, Vector3Length(VectorSingle(velArrow, 0.0f)).x + 0.1f);
+    }
+    if(useProjector && !projector.isSphereVisible(pos, cullR))
         return;
     if(IsPhysicsDebugPhaseFull(sink, budget)){
         budget.noteOverflow();
@@ -2138,6 +2505,8 @@ void AppendEcsCharacterDebugLineItem<TSink : IPhysicsDebugLineSink>(
         const VectorSingle gn = SafeNormalizeVec3(VectorSingle(cc.controller.groundNormal), up);
         AppendPhysicsDebugLine(gp, gp + gn * 0.35f, groundCol, sink, budget);
     }
+    if(hasVel && !IsPhysicsDebugPhaseFull(sink, budget))
+        AppendPhysicsDebugLine(pos, pos + velArrow, VectorSingle(0.20f, 0.95f, 0.95f, 0.95f), sink, budget);
 }
 
 void AppendEcsVehicleDebugLineItem<TSink : IPhysicsDebugLineSink>(
@@ -2164,13 +2533,14 @@ void AppendEcsVehicleDebugLineItem<TSink : IPhysicsDebugLineSink>(
     ResolveDebugBodyTransformValues(physicsWorld, physicsSystemOpt, chIdx, chBody, chassisPos, chassisRot);
     const VectorSingle chassisQ = SafeNormalizeQuat(chassisRot);
     const usize wCount = Min(vc.controller.wheelDefs.size(), vc.controller.wheelStates.size());
+    const VectorSingle wheelContactCol(0.25f, 0.98f, 0.45f, 0.95f);
     for(usize wi = 0u; wi < wCount; ++wi){
         in VehicleWheelDef wd = vc.controller.wheelDefs[wi];
         in VehicleWheelState ws = vc.controller.wheelStates[wi];
         const VectorSingle attachW = TransformPointValues(chassisPos, chassisRot, VectorSingle(wd.attachmentPoint));
         const VectorSingle sDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wd.suspensionDirection), chassisQ), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
         const VectorSingle wheelPos = attachW + sDirW * ws.suspensionLength;
-        if(useProjector && !projector.isSphereVisible((attachW + wheelPos) * 0.5f, wd.wheelRadius + Abs(VectorSingle(ws.suspensionLength)).x * 0.5f + 0.1f))
+        if(useProjector && !projector.isSphereVisible((attachW + wheelPos) * 0.5f, wd.wheelRadius + Abs(VectorSingle(ws.suspensionLength)).x * 0.5f + 0.35f))
             continue;
         if(IsPhysicsDebugPhaseFull(sink, budget)){
             budget.noteOverflow();
@@ -2190,31 +2560,99 @@ void AppendEcsVehicleDebugLineItem<TSink : IPhysicsDebugLineSink>(
         }
         const VectorSingle wUp = VectorSingle(Cross(wAxle, wFwd), 0.0f);
         AppendPhysicsDebugCircle(wheelPos, wFwd, wUp, wd.wheelRadius, wheelCol, sink, budget);
+        if(ws.groundBodyId.valid() && !IsPhysicsDebugPhaseFull(sink, budget)){
+            const VectorSingle cp = VectorSingle(ws.contactPoint);
+            const VectorSingle cn = SafeNormalizeVec3(VectorSingle(ws.contactNormal), -sDirW);
+            const f32 cSz = 0.04f;
+            AppendPhysicsDebugLine(cp - VectorSingle(cSz, 0.0f, 0.0f, 0.0f), cp + VectorSingle(cSz, 0.0f, 0.0f, 0.0f), wheelContactCol, sink, budget);
+            AppendPhysicsDebugLine(cp - VectorSingle(0.0f, 0.0f, cSz, 0.0f), cp + VectorSingle(0.0f, 0.0f, cSz, 0.0f), wheelContactCol, sink, budget);
+            AppendPhysicsDebugLine(cp, cp + cn * 0.25f, wheelContactCol, sink, budget);
+        }
+    }
+}
+
+void AppendEcsRagdollDebugLineItem<TSink : IPhysicsDebugLineSink>(
+    in RagdollComponent rc,
+    in PhysicsWorld physicsWorld,
+    in PhysicsDebugScreenProjector projector,
+    in b8 useProjector,
+    in Optional<in PhysicsSystem> physicsSystemOpt,
+    in VectorSingle boneCol,
+    in VectorSingle jointCol,
+    mut TSink sink,
+    mut PhysicsDebugPhaseBudget budget
+){
+    if(!rc.enabled || !rc.initialized || rc.instance.boneBodies.empty())
+        return;
+    const usize boneCount = rc.instance.boneBodies.size();
+    for(usize bi = 0u; bi < boneCount; ++bi){
+        const BodyId bId = rc.instance.boneBodies[bi];
+        if(!bId.valid() || bId.index >= physicsWorld.m_bodies.size())
+            continue;
+        in Body body = physicsWorld.m_bodies[bId.index];
+        if(!body.alive || body.generation != bId.generation || body.setIndex >= physicsWorld.m_solverSets.size() || body.localIndex >= physicsWorld.m_solverSets[body.setIndex].sims.size())
+            continue;
+        VectorSingle bPos(0.0f);
+        VectorSingle bRot(0.0f, 0.0f, 0.0f, 1.0f);
+        ResolveDebugBodyTransformValues(physicsWorld, physicsSystemOpt, bId.index, body, bPos, bRot);
+
+        b8 hasParent = false;
+        VectorSingle pPos = bPos;
+        if(bi < rc.instance.parentIndices.size()){
+            const u32 pIdx = rc.instance.parentIndices[bi];
+            if(pIdx != s_NullIndex && cast<usize>(pIdx) < boneCount){
+                const BodyId pId = rc.instance.boneBodies[pIdx];
+                if(pId.valid() && pId.index < physicsWorld.m_bodies.size()){
+                    in Body pBody = physicsWorld.m_bodies[pId.index];
+                    if(pBody.alive && pBody.generation == pId.generation && pBody.setIndex < physicsWorld.m_solverSets.size() && pBody.localIndex < physicsWorld.m_solverSets[pBody.setIndex].sims.size()){
+                        VectorSingle pRot(0.0f, 0.0f, 0.0f, 1.0f);
+                        ResolveDebugBodyTransformValues(physicsWorld, physicsSystemOpt, pId.index, pBody, pPos, pRot);
+                        hasParent = true;
+                    }
+                }
+            }
+        }
+        const f32 cullR = Vector3Length(VectorSingle(bPos - pPos, 0.0f)).x * 0.5f + 0.15f;
+        if(useProjector && !projector.isSphereVisible((bPos + pPos) * 0.5f, cullR))
+            continue;
+        if(IsPhysicsDebugPhaseFull(sink, budget)){
+            budget.noteOverflow();
+            return;
+        }
+        if(hasParent)
+            AppendPhysicsDebugLine(pPos, bPos, boneCol, sink, budget);
+        const f32 mSz = 0.045f;
+        AppendPhysicsDebugLine(bPos - VectorSingle(mSz, 0.0f, 0.0f, 0.0f), bPos + VectorSingle(mSz, 0.0f, 0.0f, 0.0f), jointCol, sink, budget);
+        AppendPhysicsDebugLine(bPos - VectorSingle(0.0f, mSz, 0.0f, 0.0f), bPos + VectorSingle(0.0f, mSz, 0.0f, 0.0f), jointCol, sink, budget);
+        AppendPhysicsDebugLine(bPos - VectorSingle(0.0f, 0.0f, mSz, 0.0f), bPos + VectorSingle(0.0f, 0.0f, mSz, 0.0f), jointCol, sink, budget);
     }
 }
 
 void AppendEcsFluidDebugLineItem<TSink : IPhysicsDebugLineSink>(
-    in FluidVolumeComponent fvc,
+    in FluidVolume vol,
     in PhysicsDebugScreenProjector projector,
     in b8 useProjector,
     in VectorSingle fluidCol,
     mut TSink sink,
     mut PhysicsDebugPhaseBudget budget
 ){
-    if(!fvc.enabled || !fvc.volume.enabled)
+    if(!vol.enabled)
         return;
-    if(fvc.volume.shape == FluidVolumeShape::BoxAabb){
-        if(useProjector && !projector.isAabbVisible(fvc.volume.bounds))
+    VectorSingle flowCenter(0.0f);
+    if(vol.shape == FluidVolumeShape::BoxAabb){
+        if(useProjector && !projector.isAabbVisible(vol.bounds))
             return;
         if(IsPhysicsDebugPhaseFull(sink, budget)){
             budget.noteOverflow();
             return;
         }
-        AppendPhysicsDebugAabbEdges(VectorSingle(fvc.volume.bounds.lowerBound), VectorSingle(fvc.volume.bounds.upperBound), fluidCol, sink, budget);
+        AppendPhysicsDebugAabbEdges(VectorSingle(vol.bounds.lowerBound), VectorSingle(vol.bounds.upperBound), fluidCol, sink, budget);
+        flowCenter = (VectorSingle(vol.bounds.lowerBound) + VectorSingle(vol.bounds.upperBound)) * 0.5f;
     }
     else{
-        const VectorSingle n = SafeNormalizeVec3(VectorSingle(fvc.volume.surfaceNormalOffset, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const VectorSingle p0 = n * fvc.volume.surfaceNormalOffset.w;
+        const VectorSingle n = SafeNormalizeVec3(VectorSingle(vol.surfaceNormalOffset, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle p0 = n * vol.surfaceNormalOffset.w;
+        flowCenter = p0;
         if(useProjector && !projector.isSphereVisible(p0, 6.0f))
             return;
         if(IsPhysicsDebugPhaseFull(sink, budget)){
@@ -2228,28 +2666,31 @@ void AppendEcsFluidDebugLineItem<TSink : IPhysicsDebugLineSink>(
         AppendPhysicsDebugLine(p0 + u * ext + v * ext, p0 - u * ext + v * ext, fluidCol, sink, budget);
         AppendPhysicsDebugLine(p0 - u * ext + v * ext, p0 - u * ext - v * ext, fluidCol, sink, budget);
     }
+    const VectorSingle flowVel = VectorSingle(vol.flowVelocity);
+    if(Vector3LengthSq(VectorSingle(flowVel, 0.0f)).x > 1.0e-5f && !IsPhysicsDebugPhaseFull(sink, budget))
+        AppendPhysicsDebugLine(flowCenter, flowCenter + ClampDebugVectorLength(flowVel * 0.35f, 2.0f), VectorSingle(0.35f, 0.92f, 0.98f, 0.95f), sink, budget);
 }
 
 void AppendEcsForceFieldDebugLineItem<TSink : IPhysicsDebugLineSink>(
-    in ForceFieldComponent ffc,
+    in ForceField field,
     in PhysicsDebugScreenProjector projector,
     in b8 useProjector,
     in VectorSingle fieldCol,
     mut TSink sink,
     mut PhysicsDebugPhaseBudget budget
 ){
-    if(!ffc.enabled || !ffc.field.enabled)
+    if(!field.enabled)
         return;
-    if(ffc.field.useBounds && (!useProjector || projector.isAabbVisible(ffc.field.bounds))){
+    if(field.useBounds && (!useProjector || projector.isAabbVisible(field.bounds))){
         if(IsPhysicsDebugPhaseFull(sink, budget)){
             budget.noteOverflow();
             return;
         }
-        AppendPhysicsDebugAabbEdges(VectorSingle(ffc.field.bounds.lowerBound), VectorSingle(ffc.field.bounds.upperBound), fieldCol, sink, budget);
+        AppendPhysicsDebugAabbEdges(VectorSingle(field.bounds.lowerBound), VectorSingle(field.bounds.upperBound), fieldCol, sink, budget);
     }
-    if(ffc.field.type == ForceFieldType::PointGravity){
-        const VectorSingle c = VectorSingle(ffc.field.originOrDirection);
-        const f32 r = SimdClamp(ffc.field.radius, 0.25f, 25.0f);
+    if(field.type == ForceFieldType::PointGravity){
+        const VectorSingle c = VectorSingle(field.originOrDirection);
+        const f32 r = SimdClamp(field.radius, 0.25f, 25.0f);
         if(!useProjector || projector.isSphereVisible(c, r)){
             if(IsPhysicsDebugPhaseFull(sink, budget)){
                 budget.noteOverflow();
@@ -2260,14 +2701,30 @@ void AppendEcsForceFieldDebugLineItem<TSink : IPhysicsDebugLineSink>(
             AppendPhysicsDebugCircle(c, VectorSingle(1,0,0,0), VectorSingle(0,0,1,0), r, fieldCol, sink, budget);
         }
     }
+    else if(field.type == ForceFieldType::Vortex){
+        const VectorSingle c = VectorSingle(field.originOrDirection);
+        const VectorSingle vAxis = SafeNormalizeVec3(VectorSingle(field.axis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const f32 r = SimdClamp(field.radius, 0.25f, 15.0f);
+        if(!useProjector || projector.isSphereVisible(c, r + 0.5f)){
+            if(IsPhysicsDebugPhaseFull(sink, budget)){
+                budget.noteOverflow();
+                return;
+            }
+            VectorSingle u(0.0f);
+            VectorSingle v(0.0f);
+            ComputeTangentBasisFromUnitNormal(vAxis, u, v);
+            AppendPhysicsDebugLine(c - vAxis * 0.8f, c + vAxis * 0.8f, fieldCol, sink, budget);
+            AppendPhysicsDebugCircle(c, u, v, r, fieldCol, sink, budget);
+        }
+    }
     else{
         VectorSingle baseP(0.0f);
-        if(ffc.field.useBounds)
-            baseP = (VectorSingle(ffc.field.bounds.lowerBound) + VectorSingle(ffc.field.bounds.upperBound)) * 0.5f;
+        if(field.useBounds)
+            baseP = (VectorSingle(field.bounds.lowerBound) + VectorSingle(field.bounds.upperBound)) * 0.5f;
         VectorSingle fallbackDir(0.0f, -1.0f, 0.0f, 0.0f);
-        if(ffc.field.type == ForceFieldType::BoxWind)
+        if(field.type == ForceFieldType::BoxWind)
             fallbackDir = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
-        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(ffc.field.originOrDirection), fallbackDir);
+        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(field.originOrDirection), fallbackDir);
         if(!useProjector || projector.isSphereVisible(baseP, 1.2f)){
             if(IsPhysicsDebugPhaseFull(sink, budget)){
                 budget.noteOverflow();
@@ -2374,6 +2831,20 @@ void AppendEcsSoftBodyDebugLineItem<TSink : IPhysicsDebugLineSink>(
         const VectorSingle aPos = TransformPointValues(bodyPos, bodyRot, VectorSingle(att.localAnchor));
         AppendPhysicsDebugLine(pPos, aPos, attCol, sink, budget);
     }
+    const VectorSingle pinCol(0.25f, 0.95f, 0.95f, 0.95f);
+    const f32 pinSz = 0.04f;
+    for(usize pi = 0u; pi < pCount; ++pi){
+        if(sbc.softBody.particles[pi].invMass > 0.0f)
+            continue;
+        if(IsPhysicsDebugPhaseFull(sink, budget)){
+            budget.noteOverflow();
+            return;
+        }
+        const VectorSingle p = VectorSingle(sbc.softBody.particles[pi].position);
+        AppendPhysicsDebugLine(p - VectorSingle(pinSz, 0.0f, 0.0f, 0.0f), p + VectorSingle(pinSz, 0.0f, 0.0f, 0.0f), pinCol, sink, budget);
+        AppendPhysicsDebugLine(p - VectorSingle(0.0f, pinSz, 0.0f, 0.0f), p + VectorSingle(0.0f, pinSz, 0.0f, 0.0f), pinCol, sink, budget);
+        AppendPhysicsDebugLine(p - VectorSingle(0.0f, 0.0f, pinSz, 0.0f), p + VectorSingle(0.0f, 0.0f, pinSz, 0.0f), pinCol, sink, budget);
+    }
 }
 
 void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
@@ -2388,6 +2859,7 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
         return;
     const usize linkCount = Min(ac.articulation.linkDefs.size(), ac.articulation.linkStates.size());
     const VectorSingle basePos = VectorSingle(ac.articulation.baseTransform.position);
+    const VectorSingle jointAxisCol(0.98f, 0.92f, 0.22f, 0.95f);
     for(usize li = 0u; li < linkCount; ++li){
         in ArticulationLinkDef def = ac.articulation.linkDefs[li];
         in Transform3D linkXf = ac.articulation.linkStates[li].worldTransform;
@@ -2403,12 +2875,55 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
             return;
         }
         AppendPhysicsDebugLine(parentPos, linkPos, boneCol, sink, budget);
+        const VectorSingle linkQ = SafeNormalizeQuat(VectorSingle(linkXf.rotation));
         VectorSingle lx(0.0f); VectorSingle ly(0.0f); VectorSingle lz(0.0f);
-        ExtractScaledBasisAxes(SafeNormalizeQuat(VectorSingle(linkXf.rotation)), VectorSingle(0.12f, 0.12f, 0.12f, 0.0f), lx, ly, lz);
+        ExtractScaledBasisAxes(linkQ, VectorSingle(0.12f, 0.12f, 0.12f, 0.0f), lx, ly, lz);
         AppendPhysicsDebugLine(linkPos, linkPos + lx, VectorSingle(0.95f, 0.25f, 0.25f, 0.95f), sink, budget);
         AppendPhysicsDebugLine(linkPos, linkPos + ly, VectorSingle(0.25f, 0.95f, 0.30f, 0.95f), sink, budget);
         AppendPhysicsDebugLine(linkPos, linkPos + lz, VectorSingle(0.30f, 0.50f, 0.98f, 0.95f), sink, budget);
+        if(def.jointType != ArticulationJointType::Fixed){
+            const VectorSingle jAxisW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(def.jointAxisLocal), linkQ), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+            AppendPhysicsDebugLine(linkPos - jAxisW * 0.22f, linkPos + jAxisW * 0.22f, jointAxisCol, sink, budget);
+        }
     }
+}
+
+void AppendEcsFluidComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
+    in EntityID ent,
+    in FluidVolumeComponent fvc,
+    in PhysicsDebugScreenProjector projector,
+    in b8 useProjector,
+    in VectorSingle fluidCol,
+    mut World ecsWorld,
+    mut TSink sink,
+    mut PhysicsDebugPhaseBudget budget
+){
+    if(!fvc.enabled || !fvc.volume.enabled)
+        return;
+    EcsWorldPose pose;
+    if(ResolveEcsSubsystemWorldPose(ent, ecsWorld, pose))
+        AppendEcsFluidDebugLineItem(BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), projector, useProjector, fluidCol, sink, budget);
+    else
+        AppendEcsFluidDebugLineItem(fvc.volume, projector, useProjector, fluidCol, sink, budget);
+}
+
+void AppendEcsForceFieldComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
+    in EntityID ent,
+    in ForceFieldComponent ffc,
+    in PhysicsDebugScreenProjector projector,
+    in b8 useProjector,
+    in VectorSingle fieldCol,
+    mut World ecsWorld,
+    mut TSink sink,
+    mut PhysicsDebugPhaseBudget budget
+){
+    if(!ffc.enabled || !ffc.field.enabled)
+        return;
+    EcsWorldPose pose;
+    if(ResolveEcsSubsystemWorldPose(ent, ecsWorld, pose))
+        AppendEcsForceFieldDebugLineItem(BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)), projector, useProjector, fieldCol, sink, budget);
+    else
+        AppendEcsForceFieldDebugLineItem(ffc.field, projector, useProjector, fieldCol, sink, budget);
 }
 
 void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
@@ -2447,9 +2962,21 @@ void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
         return;
 
     {
+        const VectorSingle ragBoneCol(0.98f, 0.80f, 0.25f, 0.95f);
+        const VectorSingle ragJointCol(0.98f, 0.40f, 0.25f, 0.95f);
+        for(in auto row : ecsWorld.view<RagdollComponent>()){
+            AppendEcsRagdollDebugLineItem(Get<1>(row), physicsWorld, projector, useProjector, physicsSystemOpt, ragBoneCol, ragJointCol, sink, budget);
+            if(IsPhysicsDebugPhaseFull(sink, budget))
+                break;
+        }
+    }
+    if(IsPhysicsDebugPhaseFull(sink, budget) && budget.dropped() > 0u)
+        return;
+
+    {
         const VectorSingle fluidCol(0.18f, 0.65f, 0.98f, 0.70f);
         for(in auto row : ecsWorld.view<FluidVolumeComponent>()){
-            AppendEcsFluidDebugLineItem(Get<1>(row), projector, useProjector, fluidCol, sink, budget);
+            AppendEcsFluidComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fluidCol, ecsWorld, sink, budget);
             if(IsPhysicsDebugPhaseFull(sink, budget))
                 break;
         }
@@ -2460,7 +2987,7 @@ void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
     {
         const VectorSingle fieldCol(0.75f, 0.35f, 0.98f, 0.80f);
         for(in auto row : ecsWorld.view<ForceFieldComponent>()){
-            AppendEcsForceFieldDebugLineItem(Get<1>(row), projector, useProjector, fieldCol, sink, budget);
+            AppendEcsForceFieldComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fieldCol, ecsWorld, sink, budget);
             if(IsPhysicsDebugPhaseFull(sink, budget))
                 break;
         }

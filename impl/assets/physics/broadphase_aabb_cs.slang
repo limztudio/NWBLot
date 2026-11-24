@@ -46,8 +46,8 @@ bool nwbPhysicsIsComplexPair(const uint4 metaA, const uint4 metaB){
     const uint typeB = metaB.y;
     const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaA.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaB.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    return (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH)
-        || (typeB == NWB_PHYSICS_SHAPE_TYPE_MESH)
+    return (typeA >= NWB_PHYSICS_SHAPE_TYPE_MESH)
+        || (typeB >= NWB_PHYSICS_SHAPE_TYPE_MESH)
         || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA)
         || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
 }
@@ -177,12 +177,58 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             minOut = worldCenter - float3(r, r, r);
             maxOut = worldCenter + float3(r, r, r);
         }
-        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
             const float3 p0 = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
             const float3 p1 = bodyOrigin + nwbPhysicsQuatRotate(localExtentOrP1.xyz, bodyQ);
-            const float r = radius + margin;
+            const float effR = (shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT) ? max(radius, NWB_PHYSICS_LINEAR_SLOP) : radius;
+            const float r = effR + margin;
             minOut = min(p0, p1) - float3(r, r, r);
             maxOut = max(p0, p1) + float3(r, r, r);
+        }
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
+            const float4 deltaRadii = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotationOrMeta;
+            const float3 p0 = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+            const float3 p1 = bodyOrigin + nwbPhysicsQuatRotate(localExtentOrP1.xyz, bodyQ);
+            const float r0 = radius + deltaRadii.x + margin;
+            const float r1 = radius + deltaRadii.y + margin;
+            minOut = min(p0 - float3(r0, r0, r0), p1 - float3(r1, r1, r1));
+            maxOut = max(p0 + float3(r0, r0, r0), p1 + float3(r1, r1, r1));
+        }
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER || shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
+            const float4 localRotQ = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotationOrMeta;
+            const float4 worldQ = (localRotQ.w < 0.999999f)
+                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotQ))
+                : bodyQ;
+            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+            const float3 ax = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), worldQ);
+            const float3 radProj = sqrt(max(float3(0.0f, 0.0f, 0.0f), float3(1.0f, 1.0f, 1.0f) - ax * ax)) * localExtentOrP1.x;
+            const float padR = radius + margin;
+            const float3 padVec = float3(padR, padR, padR);
+            if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER){
+                const float3 ext = abs(ax) * localExtentOrP1.y + radProj + padVec;
+                minOut = worldCenter - ext;
+                maxOut = worldCenter + ext;
+            }
+            else{
+                const float3 tipOff = ax * localExtentOrP1.y;
+                minOut = worldCenter + min(tipOff, -tipOff - radProj) - padVec;
+                maxOut = worldCenter + max(tipOff, -tipOff + radProj) + padVec;
+            }
+        }
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_PLANE){
+            const float4 planeQ = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotationOrMeta;
+            const float4 worldQ = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, planeQ));
+            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+            float3 wt1;
+            float3 wt2;
+            float3 wn;
+            nwbPhysicsQuatToAxes(worldQ, wt1, wt2, wn);
+            const bool isFin = (localExtentOrP1.x > 0.0f) && (localExtentOrP1.z > 0.0f);
+            const float hx = isFin ? localExtentOrP1.x : NWB_PHYSICS_PLANE_HALF_EXTENT_DEFAULT;
+            const float hz = isFin ? localExtentOrP1.z : NWB_PHYSICS_PLANE_HALF_EXTENT_DEFAULT;
+            const float3 ext = abs(wt1) * hx + abs(wt2) * hz + abs(wn) * 0.05f + float3(margin, margin, margin);
+            minOut = worldCenter - ext;
+            maxOut = worldCenter + ext;
         }
         else{
             const float4 localRotQ = ((bodyMeta.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)

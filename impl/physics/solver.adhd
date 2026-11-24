@@ -21,6 +21,7 @@ class PartitionContactRec{
     public u32 color = 0u;
     public u32 dynAwakeIdx = s_NullIndex;
     public u8 hasAwakeKin = 0u;
+    public u8 isCpuOnly = 0u;
 }
 
 class PartitionJointRec{
@@ -1153,6 +1154,169 @@ b8 SweepMeshVsMeshDirected(
     return anyMeshHit;
 }
 
+b8 SweepHeightfieldNonConvexPair(
+    in Shape sA,
+    in Sweep3D effSweepA,
+    in Shape sB,
+    in Sweep3D effSweepB,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes,
+    in f32 maxFrac,
+    in b8 forSensor,
+    mut f32 outBestFrac,
+    mut VectorSingle outBestNormal,
+    mut VectorSingle outBestPoint,
+    mut u32 outTriA,
+    mut u32 outTriB
+){
+    outBestFrac = maxFrac;
+    outBestNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    outBestPoint = VectorSingle(0.0f);
+    outTriA = s_NullIndex;
+    outTriB = s_NullIndex;
+
+    const b8 hfIsA = (sA.type == ShapeType::Heightfield);
+    u32 hfIdx = sB.geometryIndex;
+    if(hfIsA)
+        hfIdx = sA.geometryIndex;
+    if(hfIdx >= heightfieldShapes.size())
+        return false;
+    in HeightfieldShape hf = heightfieldShapes[hfIdx];
+    if(!hf.isValid())
+        return false;
+
+    Sweep3D hfSweep = effSweepB;
+    Sweep3D otherSweep = effSweepA;
+    ShapeType otherType = sA.type;
+    u32 otherGeom = sA.geometryIndex;
+    if(hfIsA){
+        hfSweep = effSweepA;
+        otherSweep = effSweepB;
+        otherType = sB.type;
+        otherGeom = sB.geometryIndex;
+    }
+
+    Aabb3D otherLocalBox;
+    f32 otherRad = 0.0f;
+    if(otherType == ShapeType::Mesh){
+        if(otherGeom >= meshShapes.size())
+            return false;
+        in MeshShape m = meshShapes[otherGeom];
+        if(m.nodes.empty() || m.triangles.empty())
+            return false;
+        otherLocalBox = m.localAabb();
+        otherRad = m.radius();
+    }
+    else if(otherType == ShapeType::Heightfield){
+        if(otherGeom >= heightfieldShapes.size())
+            return false;
+        in HeightfieldShape ohf = heightfieldShapes[otherGeom];
+        if(!ohf.isValid())
+            return false;
+        otherLocalBox = ohf.computeLocalAabb();
+        otherRad = ohf.thickness;
+    }
+    else{
+        return false;
+    }
+
+    VectorSingle qMin(s_MaxF32);
+    VectorSingle qMax(-s_MaxF32);
+    for(usize si = 0u; si < 3u; ++si){
+        const f32 sampleT = 0.5f * cast<f32>(si) * maxFrac;
+        VectorSingle posHf(0.0f);
+        VectorSingle rotHf(0.0f, 0.0f, 0.0f, 1.0f);
+        EvalSweepTransformValues(VectorSingle(hfSweep.c0), VectorSingle(hfSweep.c1), VectorSingle(hfSweep.q0), VectorSingle(hfSweep.q1), VectorSingle(hfSweep.localCenter), sampleT, posHf, rotHf);
+        VectorSingle posOt(0.0f);
+        VectorSingle rotOt(0.0f, 0.0f, 0.0f, 1.0f);
+        EvalSweepTransformValues(VectorSingle(otherSweep.c0), VectorSingle(otherSweep.c1), VectorSingle(otherSweep.q0), VectorSingle(otherSweep.q1), VectorSingle(otherSweep.localCenter), sampleT, posOt, rotOt);
+        VectorSingle relP(0.0f);
+        VectorSingle relR(0.0f, 0.0f, 0.0f, 1.0f);
+        RelativeTransformValues(posHf, rotHf, posOt, rotOt, relP, relR);
+        VectorSingle bMin(0.0f);
+        VectorSingle bMax(0.0f);
+        TransformLocalAabbValuesToWorld(VectorSingle(otherLocalBox.lowerBound), VectorSingle(otherLocalBox.upperBound), hf.thickness + otherRad + s_SpeculativeDistance, relP, relR, bMin, bMax);
+        qMin = Min(qMin, bMin);
+        qMax = Max(qMax, bMax);
+    }
+
+    const Aabb3D queryBox(qMin, qMax);
+    u32 minCx = 0u;
+    u32 maxCx = 0u;
+    u32 minCz = 0u;
+    u32 maxCz = 0u;
+    b8 anyOverlap = false;
+    ComputeHeightfieldOverlappedCells(hf, queryBox, minCx, maxCx, minCz, maxCz, anyOverlap);
+    if(!anyOverlap)
+        return false;
+
+    b8 anyHit = false;
+    f32 curBest = maxFrac;
+    for(u32 cz = minCz; cz <= maxCz; ++cz){
+        for(u32 cx = minCx; cx <= maxCx; ++cx){
+            VectorSingle v00(0.0f);
+            VectorSingle v10(0.0f);
+            VectorSingle v01(0.0f);
+            VectorSingle v11(0.0f);
+            if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
+                continue;
+            const f32 cellLoY = SimdMin(SimdMin(v00.y, v10.y), SimdMin(v01.y, v11.y)) - hf.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(v00.y, v10.y), SimdMax(v01.y, v11.y)) + hf.thickness;
+            if(cellHiY < qMin.y || cellLoY > qMax.y)
+                continue;
+            const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+            for(usize ti = 0u; ti < 2u; ++ti){
+                Array<f32x3u, 3u> triPts;
+                if(ti == 0u){
+                    triPts[0u] = f32x3u(v00);
+                    triPts[1u] = f32x3u(v01);
+                    triPts[2u] = f32x3u(v10);
+                }
+                else{
+                    triPts[0u] = f32x3u(v10);
+                    triPts[1u] = f32x3u(v01);
+                    triPts[2u] = f32x3u(v11);
+                }
+                const VectorSingle tv0(triPts[0u].x, triPts[0u].y, triPts[0u].z, 0.0f);
+                const VectorSingle tv1(triPts[1u].x, triPts[1u].y, triPts[1u].z, 0.0f);
+                const VectorSingle tv2(triPts[2u].x, triPts[2u].y, triPts[2u].z, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), qMin, qMax))
+                    continue;
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
+                TimeOfImpactOutput toi;
+                if(otherType == ShapeType::Mesh){
+                    if(forSensor)
+                        toi = ComputeSensorMeshTimeOfImpactViews(triView, hfSweep, meshShapes[otherGeom], otherSweep, curBest);
+                    else
+                        toi = ComputeMeshTimeOfImpactViews(triView, hfSweep, meshShapes[otherGeom], otherSweep, curBest);
+                }
+                else{
+                    toi = ComputeHeightfieldTimeOfImpactViewsInternal(triView, hfSweep, heightfieldShapes[otherGeom], otherSweep, curBest, forSensor);
+                }
+                if(toi.hit() && !toi.initialOverlap() && toi.fraction() < curBest){
+                    curBest = toi.fraction();
+                    anyHit = true;
+                    outBestFrac = curBest;
+                    outBestPoint = toi.point();
+                    if(hfIsA){
+                        outBestNormal = toi.normal();
+                        outTriA = cellIdx;
+                        outTriB = toi.hitTriangleIndex;
+                    }
+                    else{
+                        outBestNormal = -toi.normal();
+                        outTriA = toi.hitTriangleIndex;
+                        outTriB = cellIdx;
+                    }
+                    if(curBest <= 0.0f)
+                        return true;
+                }
+            }
+        }
+    }
+    return anyHit;
+}
+
 Manifold SweepContactPairAfterMiss(
     in Shape sA,
     in VectorSingle posA,
@@ -1227,88 +1391,199 @@ Manifold SweepContactPairAfterMiss(
         const b8 aNonConv = (sA.type == ShapeType::Mesh || sA.type == ShapeType::Heightfield || sA.type == ShapeType::Plane);
         const b8 bNonConv = (sB.type == ShapeType::Mesh || sB.type == ShapeType::Heightfield || sB.type == ShapeType::Plane);
         if(sA.type == ShapeType::Plane || sB.type == ShapeType::Plane){
-            if(aNonConv && bNonConv)
-                return initialManifold;
-            VectorSingle effConvexPos = effPosA;
-            VectorSingle effConvexRot = effRotA;
-            VectorSingle dispConvex = sweptDispA;
-            PlaneShape pl = sB.planeShape();
-            VectorSingle effPlanePos = effPosB;
-            VectorSingle effPlaneRot = effRotB;
-            VectorSingle dispPlane = sweptDispB;
-            ShapeProxyView convexView = MakeShapeProxyViewFromShape(sA, hullShapes, inlinePtsA);
-            if(sA.type == ShapeType::Plane){
-                effConvexPos = effPosB;
-                effConvexRot = effRotB;
-                dispConvex = sweptDispB;
-                pl = sA.planeShape();
-                effPlanePos = effPosA;
-                effPlaneRot = effRotA;
-                dispPlane = sweptDispA;
-                convexView = MakeShapeProxyViewFromShape(sB, hullShapes, inlinePtsB);
-            }
-            const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), effPlaneRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            const VectorSingle planeOrigin = TransformPointValues(effPlanePos, effPlaneRot, pl.normal() * pl.offset());
-            u8 supIdx = 0xffu;
-            const VectorSingle supLocal = ComputeProxyViewSupport(convexView, Vector3InverseRotate(-worldN, effConvexRot), supIdx);
-            const VectorSingle supW = TransformPointValues(effConvexPos, effConvexRot, supLocal) - worldN * convexView.radius;
-            const VectorSingle relConvDisp = VectorSingle(dispConvex - dispPlane, 0.0f);
-            const f32 sd0 = Vector3Dot(VectorSingle(supW - planeOrigin, 0.0f), worldN).x;
-            const f32 sd1 = Vector3Dot(VectorSingle(supW + relConvDisp - planeOrigin, 0.0f), worldN).x;
-            if(sd1 < sd0 && sd1 <= s_SpeculativeDistance){
-                const f32 tPlane = SimdClamp(sd0 / SimdMax(sd0 - sd1, 1.0e-8f), 0.0f, 1.0f);
-                const VectorSingle supHit = supW + dispConvex * tPlane;
-                const VectorSingle planeHitPos = effPlanePos + dispPlane * tPlane;
-                const VectorSingle planeOriginHit = TransformPointValues(planeHitPos, effPlaneRot, pl.normal() * pl.offset());
-                const VectorSingle projPt = supHit - worldN * Vector3Dot(VectorSingle(supHit - planeOriginHit, 0.0f), worldN).x;
-                if(IsPointWithinPlaneExtent(pl, planeHitPos, effPlaneRot, projPt)){
-                    castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, tPlane);
-                    castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
+            if(aNonConv && bNonConv){
+                if(sA.type == ShapeType::Plane && sA.planeShape().isFiniteExtent() && (sB.type == ShapeType::Mesh || sB.type == ShapeType::Heightfield)){
+                    Array<f32x3u, 4u> quadPts;
+                    const ShapeProxyView quadView = MakeFinitePlaneQuadProxyView(sA.planeShape(), quadPts);
+                    if(sB.type == ShapeType::Mesh){
+                        if(sB.geometryIndex >= meshShapes.size())
+                            return initialManifold;
+                        castHit = ShapeCastMeshView(quadView, effPosA, effRotA, VectorSingle(sweptDispA - sweptDispB, 0.0f), meshShapes[sB.geometryIndex], effPosB, effRotB, 1.0f);
+                    }
+                    else{
+                        if(sB.geometryIndex >= heightfieldShapes.size())
+                            return initialManifold;
+                        u32 dummyCell = s_NullIndex;
+                        f32x2u dummyBary(0.0f, 0.0f);
+                        castHit = ShapeCastHeightfieldViewDetailed(quadView, effPosA, effRotA, VectorSingle(sweptDispA - sweptDispB, 0.0f), heightfieldShapes[sB.geometryIndex], effPosB, effRotB, 1.0f, dummyCell, dummyBary);
+                    }
+                }
+                else if(sB.type == ShapeType::Plane && sB.planeShape().isFiniteExtent() && (sA.type == ShapeType::Mesh || sA.type == ShapeType::Heightfield)){
+                    Array<f32x3u, 4u> quadPts;
+                    const ShapeProxyView quadView = MakeFinitePlaneQuadProxyView(sB.planeShape(), quadPts);
+                    if(sA.type == ShapeType::Mesh){
+                        if(sA.geometryIndex >= meshShapes.size())
+                            return initialManifold;
+                        castHit = ShapeCastMeshView(quadView, effPosB, effRotB, VectorSingle(sweptDispB - sweptDispA, 0.0f), meshShapes[sA.geometryIndex], effPosA, effRotA, 1.0f);
+                    }
+                    else{
+                        if(sA.geometryIndex >= heightfieldShapes.size())
+                            return initialManifold;
+                        u32 dummyCell = s_NullIndex;
+                        f32x2u dummyBary(0.0f, 0.0f);
+                        castHit = ShapeCastHeightfieldViewDetailed(quadView, effPosB, effRotB, VectorSingle(sweptDispB - sweptDispA, 0.0f), heightfieldShapes[sA.geometryIndex], effPosA, effRotA, 1.0f, dummyCell, dummyBary);
+                    }
+                }
+                else if(sA.type == ShapeType::Plane && sB.type == ShapeType::Plane){
+                    Array<f32x3u, 4u> quadPts;
+                    VectorSingle effConvexPos = effPosA;
+                    VectorSingle effConvexRot = effRotA;
+                    VectorSingle dispConvex = sweptDispA;
+                    PlaneShape pl = sB.planeShape();
+                    VectorSingle effPlanePos = effPosB;
+                    VectorSingle effPlaneRot = effRotB;
+                    VectorSingle dispPlane = sweptDispB;
+                    ShapeProxyView convexView;
+                    if(sA.planeShape().isFiniteExtent()){
+                        convexView = MakeFinitePlaneQuadProxyView(sA.planeShape(), quadPts);
+                    }
+                    else if(sB.planeShape().isFiniteExtent()){
+                        effConvexPos = effPosB;
+                        effConvexRot = effRotB;
+                        dispConvex = sweptDispB;
+                        pl = sA.planeShape();
+                        effPlanePos = effPosA;
+                        effPlaneRot = effRotA;
+                        dispPlane = sweptDispA;
+                        convexView = MakeFinitePlaneQuadProxyView(sB.planeShape(), quadPts);
+                    }
+                    else{
+                        return initialManifold;
+                    }
+                    const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), effPlaneRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle planeOrigin = TransformPointValues(effPlanePos, effPlaneRot, pl.normal() * pl.offset());
+                    u8 supIdx = 0xffu;
+                    const VectorSingle supLocal = ComputeProxyViewSupport(convexView, Vector3InverseRotate(-worldN, effConvexRot), supIdx);
+                    const VectorSingle supW = TransformPointValues(effConvexPos, effConvexRot, supLocal);
+                    const VectorSingle relConvDisp = VectorSingle(dispConvex - dispPlane, 0.0f);
+                    const f32 sd0 = Vector3Dot(VectorSingle(supW - planeOrigin, 0.0f), worldN).x;
+                    const f32 sd1 = Vector3Dot(VectorSingle(supW + relConvDisp - planeOrigin, 0.0f), worldN).x;
+                    if(sd1 < sd0 && sd1 <= s_SpeculativeDistance){
+                        const f32 tPlane = SimdClamp(sd0 / SimdMax(sd0 - sd1, 1.0e-8f), 0.0f, 1.0f);
+                        const VectorSingle supHit = supW + dispConvex * tPlane;
+                        const VectorSingle planeHitPos = effPlanePos + dispPlane * tPlane;
+                        const VectorSingle planeOriginHit = TransformPointValues(planeHitPos, effPlaneRot, pl.normal() * pl.offset());
+                        const VectorSingle projPt = supHit - worldN * Vector3Dot(VectorSingle(supHit - planeOriginHit, 0.0f), worldN).x;
+                        if(IsPointWithinPlaneExtent(pl, planeHitPos, effPlaneRot, projPt)){
+                            castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, tPlane);
+                            castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
+                        }
+                        else{
+                            return initialManifold;
+                        }
+                    }
+                    else{
+                        return initialManifold;
+                    }
                 }
                 else{
                     return initialManifold;
                 }
             }
             else{
-                return initialManifold;
+                VectorSingle effConvexPos = effPosA;
+                VectorSingle effConvexRot = effRotA;
+                VectorSingle dispConvex = sweptDispA;
+                PlaneShape pl = sB.planeShape();
+                VectorSingle effPlanePos = effPosB;
+                VectorSingle effPlaneRot = effRotB;
+                VectorSingle dispPlane = sweptDispB;
+                ShapeProxyView convexView = MakeShapeProxyViewFromShape(sA, hullShapes, inlinePtsA);
+                if(sA.type == ShapeType::Plane){
+                    effConvexPos = effPosB;
+                    effConvexRot = effRotB;
+                    dispConvex = sweptDispB;
+                    pl = sA.planeShape();
+                    effPlanePos = effPosA;
+                    effPlaneRot = effRotA;
+                    dispPlane = sweptDispA;
+                    convexView = MakeShapeProxyViewFromShape(sB, hullShapes, inlinePtsB);
+                }
+                const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), effPlaneRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle planeOrigin = TransformPointValues(effPlanePos, effPlaneRot, pl.normal() * pl.offset());
+                u8 supIdx = 0xffu;
+                const VectorSingle supLocal = ComputeProxyViewSupport(convexView, Vector3InverseRotate(-worldN, effConvexRot), supIdx);
+                const VectorSingle supW = TransformPointValues(effConvexPos, effConvexRot, supLocal) - worldN * convexView.radius;
+                const VectorSingle relConvDisp = VectorSingle(dispConvex - dispPlane, 0.0f);
+                const f32 sd0 = Vector3Dot(VectorSingle(supW - planeOrigin, 0.0f), worldN).x;
+                const f32 sd1 = Vector3Dot(VectorSingle(supW + relConvDisp - planeOrigin, 0.0f), worldN).x;
+                if(sd1 < sd0 && sd1 <= s_SpeculativeDistance){
+                    const f32 tPlane = SimdClamp(sd0 / SimdMax(sd0 - sd1, 1.0e-8f), 0.0f, 1.0f);
+                    const VectorSingle supHit = supW + dispConvex * tPlane;
+                    const VectorSingle planeHitPos = effPlanePos + dispPlane * tPlane;
+                    const VectorSingle planeOriginHit = TransformPointValues(planeHitPos, effPlaneRot, pl.normal() * pl.offset());
+                    const VectorSingle projPt = supHit - worldN * Vector3Dot(VectorSingle(supHit - planeOriginHit, 0.0f), worldN).x;
+                    if(IsPointWithinPlaneExtent(pl, planeHitPos, effPlaneRot, projPt)){
+                        castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, tPlane);
+                        castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
+                    }
+                    else{
+                        return initialManifold;
+                    }
+                }
+                else{
+                    return initialManifold;
+                }
             }
         }
         else if(sA.type == ShapeType::Heightfield || sB.type == ShapeType::Heightfield){
-            if(aNonConv && bNonConv)
-                return initialManifold;
-            u32 hfCell = s_NullIndex;
-            f32x2u hfBary(0.0f, 0.0f);
-            if(sB.type == ShapeType::Heightfield){
-                if(sB.geometryIndex >= heightfieldShapes.size())
+            if(aNonConv && bNonConv){
+                Sweep3D sweepA;
+                sweepA.c0 = f32x4(effPosA, 0.0f);
+                sweepA.c1 = f32x4(effPosA + sweptDispA, 0.0f);
+                sweepA.q0 = f32x4(effRotA);
+                sweepA.q1 = f32x4(effRotA);
+                Sweep3D sweepB;
+                sweepB.c0 = f32x4(effPosB, 0.0f);
+                sweepB.c1 = f32x4(effPosB + sweptDispB, 0.0f);
+                sweepB.q0 = f32x4(effRotB);
+                sweepB.q1 = f32x4(effRotB);
+                f32 bestFrac = 1.0f;
+                VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
+                VectorSingle bestPt(0.0f);
+                u32 triA = s_NullIndex;
+                u32 triB = s_NullIndex;
+                if(!SweepHeightfieldNonConvexPair(sA, sweepA, sB, sweepB, meshShapes, heightfieldShapes, 1.0f, false, bestFrac, bestN, bestPt, triA, triB))
                     return initialManifold;
-                castHit = ShapeCastHeightfieldViewDetailed(
-                    MakeShapeProxyViewFromShape(sA, hullShapes, inlinePtsA),
-                    effPosA,
-                    effRotA,
-                    VectorSingle(sweptDispA - sweptDispB, 0.0f),
-                    heightfieldShapes[sB.geometryIndex],
-                    effPosB,
-                    effRotB,
-                    1.0f,
-                    hfCell,
-                    hfBary
-                );
+                hitFrac = bestFrac;
+                castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, bestFrac);
+                castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
             }
             else{
-                if(sA.geometryIndex >= heightfieldShapes.size())
-                    return initialManifold;
-                castHit = ShapeCastHeightfieldViewDetailed(
-                    MakeShapeProxyViewFromShape(sB, hullShapes, inlinePtsB),
-                    effPosB,
-                    effRotB,
-                    VectorSingle(sweptDispB - sweptDispA, 0.0f),
-                    heightfieldShapes[sA.geometryIndex],
-                    effPosA,
-                    effRotA,
-                    1.0f,
-                    hfCell,
-                    hfBary
-                );
+                u32 hfCell = s_NullIndex;
+                f32x2u hfBary(0.0f, 0.0f);
+                if(sB.type == ShapeType::Heightfield){
+                    if(sB.geometryIndex >= heightfieldShapes.size())
+                        return initialManifold;
+                    castHit = ShapeCastHeightfieldViewDetailed(
+                        MakeShapeProxyViewFromShape(sA, hullShapes, inlinePtsA),
+                        effPosA,
+                        effRotA,
+                        VectorSingle(sweptDispA - sweptDispB, 0.0f),
+                        heightfieldShapes[sB.geometryIndex],
+                        effPosB,
+                        effRotB,
+                        1.0f,
+                        hfCell,
+                        hfBary
+                    );
+                }
+                else{
+                    if(sA.geometryIndex >= heightfieldShapes.size())
+                        return initialManifold;
+                    castHit = ShapeCastHeightfieldViewDetailed(
+                        MakeShapeProxyViewFromShape(sB, hullShapes, inlinePtsB),
+                        effPosB,
+                        effRotB,
+                        VectorSingle(sweptDispB - sweptDispA, 0.0f),
+                        heightfieldShapes[sA.geometryIndex],
+                        effPosA,
+                        effRotA,
+                        1.0f,
+                        hfCell,
+                        hfBary
+                    );
+                }
             }
         }
         else if(sA.type == ShapeType::Mesh && sB.type == ShapeType::Mesh){
@@ -1556,6 +1831,11 @@ void PopulatePreSolveContextFromContactAndManifold(in PhysicsWorld world, in Con
     ctx.restitution = c.restitution;
     ctx.rollingResistance = c.rollingResistance;
     ctx.tangentSpeed = c.tangentSpeed;
+    ctx.invMassScaleA = c.invMassScaleA;
+    ctx.invMassScaleB = c.invMassScaleB;
+    ctx.invInertiaScaleA = c.invInertiaScaleA;
+    ctx.invInertiaScaleB = c.invInertiaScaleB;
+    ctx.maxNormalImpulse = c.maxNormalImpulse;
     ctx.enabled = true;
 }
 
@@ -1577,6 +1857,30 @@ void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, mut Contac
         c.rollingResistance = ctx.rollingResistance;
     if(IsFinite(VectorSingle(ctx.tangentSpeed)))
         c.tangentSpeed = ctx.tangentSpeed;
+    c.invMassScaleA = 1.0f;
+    c.invMassScaleB = 1.0f;
+    c.invInertiaScaleA = 1.0f;
+    c.invInertiaScaleB = 1.0f;
+    c.maxNormalImpulse = s_MaxF32;
+    c.flags &= ~cast<u32>(ContactFlags::HasCustomSolverScale);
+    if(IsFinite(VectorSingle(ctx.invMassScaleA)) && ctx.invMassScaleA >= 0.0f)
+        c.invMassScaleA = ctx.invMassScaleA;
+    if(IsFinite(VectorSingle(ctx.invMassScaleB)) && ctx.invMassScaleB >= 0.0f)
+        c.invMassScaleB = ctx.invMassScaleB;
+    if(IsFinite(VectorSingle(ctx.invInertiaScaleA)) && ctx.invInertiaScaleA >= 0.0f)
+        c.invInertiaScaleA = ctx.invInertiaScaleA;
+    if(IsFinite(VectorSingle(ctx.invInertiaScaleB)) && ctx.invInertiaScaleB >= 0.0f)
+        c.invInertiaScaleB = ctx.invInertiaScaleB;
+    if(IsFinite(VectorSingle(ctx.maxNormalImpulse)) && ctx.maxNormalImpulse >= 0.0f)
+        c.maxNormalImpulse = ctx.maxNormalImpulse;
+    if(
+        c.invMassScaleA != 1.0f
+        || c.invMassScaleB != 1.0f
+        || c.invInertiaScaleA != 1.0f
+        || c.invInertiaScaleB != 1.0f
+        || c.maxNormalImpulse < s_MaxF32 * 0.5f
+    )
+        c.flags |= cast<u32>(ContactFlags::HasCustomSolverScale);
     if(ctx.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.surfaceVelocity))){
         c.surfaceVelocity = ctx.surfaceVelocity;
         c.flags |= cast<u32>(ContactFlags::HasSurfaceVelocity);
@@ -1604,6 +1908,8 @@ void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, mut Contac
                 newM.setPointId(keptCount, newM.pointId(p));
                 newM.setPersisted(keptCount, newM.isPersisted(p));
             }
+            if(IsFinite(VectorSingle(ctx.points[p].w)))
+                newM.points[keptCount].pointSeparation.w = ctx.points[p].w;
             ++keptCount;
         }
     }
@@ -1619,6 +1925,14 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
     in Shape sA = world.m_shapes[c.shapeIdA];
     in Shape sB = world.m_shapes[c.shapeIdB];
     if(!isSensor){
+        if((c.flags & cast<u32>(ContactFlags::HasCustomSolverScale)) != 0u){
+            c.invMassScaleA = 1.0f;
+            c.invMassScaleB = 1.0f;
+            c.invInertiaScaleA = 1.0f;
+            c.invInertiaScaleB = 1.0f;
+            c.maxNormalImpulse = s_MaxF32;
+            c.flags &= ~cast<u32>(ContactFlags::HasCustomSolverScale);
+        }
         const u32 prevTriA = c.manifold.materialTriangleA;
         const u32 prevTriB = c.manifold.materialTriangleB;
         const b8 triMatChanged = (newM.materialTriangleA != prevTriA) || (newM.materialTriangleB != prevTriB);
@@ -1824,6 +2138,14 @@ u8 CollideSingleContactNoPreSolveTx(
         c.manifold = newM;
     }
     if(!isSensor){
+        if((c.flags & cast<u32>(ContactFlags::HasCustomSolverScale)) != 0u){
+            c.invMassScaleA = 1.0f;
+            c.invMassScaleB = 1.0f;
+            c.invInertiaScaleA = 1.0f;
+            c.invInertiaScaleB = 1.0f;
+            c.maxNormalImpulse = s_MaxF32;
+            c.flags &= ~cast<u32>(ContactFlags::HasCustomSolverScale);
+        }
         if(
             triMatChanged
             || (c.flags & (cast<u32>(ContactFlags::HasSurfaceVelocity) | cast<u32>(ContactFlags::HasAnisotropicFriction))) != 0u
@@ -2934,6 +3256,8 @@ b8 EvalBulletContinuousCandidateShapeB(
     mut b8 foundToi,
     mut u32 bestShapeIdxA,
     mut u32 bestShapeIdxB,
+    mut u32 bestMaterialTriangleA,
+    mut u32 bestMaterialTriangleB,
     mut VectorSingle bestNormal,
     mut VectorSingle bestPoint,
     mut Sweep3D bestSweepB,
@@ -3000,6 +3324,8 @@ b8 EvalBulletContinuousCandidateShapeB(
                 f32 candidateFrac = 1.0f;
                 VectorSingle candidateN(0.0f, 1.0f, 0.0f, 0.0f);
                 VectorSingle candidatePt(0.0f);
+                u32 candidateTriA = s_NullIndex;
+                u32 candidateTriB = s_NullIndex;
 
                 b8 usedAnalytical = false;
                 if(sA.type == ShapeType::Sphere && !sA.hasLocalTransform() && !sB.hasLocalTransform()){
@@ -3069,16 +3395,70 @@ b8 EvalBulletContinuousCandidateShapeB(
                         effSweepB = ComposeSweepWithLocalTransform(sweepB, VectorSingle(sB.localTransform.position), VectorSingle(sB.localTransform.rotation));
 
                     if(sA.type == ShapeType::Plane){
-                        if(sB.type != ShapeType::Mesh && sB.type != ShapeType::Heightfield && sB.type != ShapeType::Plane && sA.planeShape().isFiniteExtent()){
-                            Array<f32x3u, 2u> inlinePtsB;
-                            const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, inlinePtsB);
-                            const TimeOfImpactOutput toi = ComputePlaneTimeOfImpactViews(proxyB, effSweepB, sA.planeShape(), effSweepA, bestT);
-                            const f32 hitFrac = toi.fraction();
-                            if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
-                                candidateHit = true;
-                                candidateFrac = hitFrac;
-                                candidateN = SafeNormalizeVec3(-toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                                candidatePt = toi.point();
+                        if(sA.planeShape().isFiniteExtent()){
+                            Array<f32x3u, 4u> quadPtsA;
+                            const ShapeProxyView quadViewA = MakeFinitePlaneQuadProxyView(sA.planeShape(), quadPtsA);
+                            if(sB.type == ShapeType::Plane){
+                                f32 bestPlFrac = bestT;
+                                const TimeOfImpactOutput toiAB = ComputePlaneTimeOfImpactViews(quadViewA, effSweepA, sB.planeShape(), effSweepB, bestPlFrac);
+                                const f32 hitFracAB = toiAB.fraction();
+                                if(toiAB.hit() && !toiAB.initialOverlap() && hitFracAB > 1.0e-5f && hitFracAB < bestPlFrac){
+                                    candidateHit = true;
+                                    candidateFrac = hitFracAB;
+                                    bestPlFrac = hitFracAB;
+                                    candidateN = SafeNormalizeVec3(toiAB.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                    candidatePt = toiAB.point();
+                                }
+                                if(sB.planeShape().isFiniteExtent()){
+                                    Array<f32x3u, 4u> quadPtsB;
+                                    const ShapeProxyView quadViewB = MakeFinitePlaneQuadProxyView(sB.planeShape(), quadPtsB);
+                                    const TimeOfImpactOutput toiBA = ComputePlaneTimeOfImpactViews(quadViewB, effSweepB, sA.planeShape(), effSweepA, bestPlFrac);
+                                    const f32 hitFracBA = toiBA.fraction();
+                                    if(toiBA.hit() && !toiBA.initialOverlap() && hitFracBA > 1.0e-5f && hitFracBA < bestPlFrac){
+                                        candidateHit = true;
+                                        candidateFrac = hitFracBA;
+                                        candidateN = SafeNormalizeVec3(-toiBA.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                        candidatePt = toiBA.point();
+                                    }
+                                }
+                            }
+                            else if(sB.type == ShapeType::Heightfield){
+                                if(sB.geometryIndex < worldAlias.m_heightfieldShapes.size()){
+                                    const TimeOfImpactOutput toi = ComputeHeightfieldTimeOfImpactViewsInternal(quadViewA, effSweepA, worldAlias.m_heightfieldShapes[sB.geometryIndex], effSweepB, bestT, false);
+                                    const f32 hitFrac = toi.fraction();
+                                    if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                        candidateHit = true;
+                                        candidateFrac = hitFrac;
+                                        candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                        candidatePt = toi.point();
+                                        candidateTriB = toi.hitTriangleIndex;
+                                    }
+                                }
+                            }
+                            else if(sB.type == ShapeType::Mesh){
+                                if(sB.geometryIndex < worldAlias.m_meshShapes.size()){
+                                    const TimeOfImpactOutput toi = ComputeMeshTimeOfImpactViews(quadViewA, effSweepA, worldAlias.m_meshShapes[sB.geometryIndex], effSweepB, bestT);
+                                    const f32 hitFrac = toi.fraction();
+                                    if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                        candidateHit = true;
+                                        candidateFrac = hitFrac;
+                                        candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                        candidatePt = toi.point();
+                                        candidateTriB = toi.hitTriangleIndex;
+                                    }
+                                }
+                            }
+                            else{
+                                Array<f32x3u, 2u> inlinePtsB;
+                                const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, inlinePtsB);
+                                const TimeOfImpactOutput toi = ComputePlaneTimeOfImpactViews(proxyB, effSweepB, sA.planeShape(), effSweepA, bestT);
+                                const f32 hitFrac = toi.fraction();
+                                if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                    candidateHit = true;
+                                    candidateFrac = hitFrac;
+                                    candidateN = SafeNormalizeVec3(-toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                    candidatePt = toi.point();
+                                }
                             }
                         }
                     }
@@ -3101,6 +3481,7 @@ b8 EvalBulletContinuousCandidateShapeB(
                                 candidateFrac = hitFrac;
                                 candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                                 candidatePt = toi.point();
+                                candidateTriB = toi.hitTriangleIndex;
                             }
                         }
                     }
@@ -3113,6 +3494,7 @@ b8 EvalBulletContinuousCandidateShapeB(
                                 candidateFrac = hitFrac;
                                 candidateN = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                                 candidatePt = toi.point();
+                                candidateTriB = toi.hitTriangleIndex;
                             }
                         }
                     }
@@ -3139,6 +3521,8 @@ b8 EvalBulletContinuousCandidateShapeB(
                 f32x4 candidateFricDir(1.0f, 0.0f, 0.0f, 0.0f);
                 if(candidateHit){
                     Contact matC;
+                    matC.manifold.materialTriangleA = candidateTriA;
+                    matC.manifold.materialTriangleB = candidateTriB;
                     VectorSingle hitPosA(0.0f);
                     VectorSingle hitRotA(0.0f, 0.0f, 0.0f, 1.0f);
                     EvalSweepTransformValues(VectorSingle(sweepARef.c0), VectorSingle(sweepARef.c1), VectorSingle(sweepARef.q0), VectorSingle(sweepARef.q1), VectorSingle(sweepARef.localCenter), candidateFrac, hitPosA, hitRotA);
@@ -3213,6 +3597,8 @@ b8 EvalBulletContinuousCandidateShapeB(
                     bestT = candidateFrac;
                     bestShapeIdxA = shapeIdxA;
                     bestShapeIdxB = shapeIdxB;
+                    bestMaterialTriangleA = candidateTriA;
+                    bestMaterialTriangleB = candidateTriB;
                     bestNormal = candidateN;
                     bestPoint = candidatePt;
                     bestSweepB = sweepB;
@@ -3246,6 +3632,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     outRes.awakeIdx = cast<u32>(idx);
     outRes.bestShapeIdxA = s_NullIndex;
     outRes.bestShapeIdxB = s_NullIndex;
+    outRes.bestMaterialTriangleA = s_NullIndex;
+    outRes.bestMaterialTriangleB = s_NullIndex;
 
     in BodySim simInit = worldRef.m_solverSets[s_AwakeSetIndex].sims[idx];
     const u32 bodyIdA = simInit.bodyId;
@@ -3323,6 +3711,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     b8 foundToi = false;
     u32 bestShapeIdxA = s_NullIndex;
     u32 bestShapeIdxB = s_NullIndex;
+    u32 bestMaterialTriangleA = s_NullIndex;
+    u32 bestMaterialTriangleB = s_NullIndex;
     VectorSingle bestNormal(0.0f, 1.0f, 0.0f, 0.0f);
     VectorSingle bestPoint(0.0f);
     Sweep3D bestSweepB;
@@ -3365,7 +3755,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
             queryBox,
             bodyQueryMask,
             s_TreeNodeHasNonSensor,
-            lambda[in worldAlias, in t, in bodyIdA, in bodyInit, in sweepARef, in sweepANonRotating, in singleShapeIdxA, in singleProxyA, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction, mut bestTangentSpeed, mut bestRollingResistance, mut bestStaticFriction, mut bestSurfaceVelocity, mut bestAnisotropicFriction, mut bestFrictionDirection](in u32 proxyId, in u32 shapeIdxB) -> b8{
+            lambda[in worldAlias, in t, in bodyIdA, in bodyInit, in sweepARef, in sweepANonRotating, in singleShapeIdxA, in singleProxyA, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestMaterialTriangleA, mut bestMaterialTriangleB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction, mut bestTangentSpeed, mut bestRollingResistance, mut bestStaticFriction, mut bestSurfaceVelocity, mut bestAnisotropicFriction, mut bestFrictionDirection](in u32 proxyId, in u32 shapeIdxB) -> b8{
                 if(worldAlias.m_cpuBroadphaseDirty && t != s_TreeStatic){
                     if(shapeIdxB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdxB].alive())
                         return true;
@@ -3385,6 +3775,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                     foundToi,
                     bestShapeIdxA,
                     bestShapeIdxB,
+                    bestMaterialTriangleA,
+                    bestMaterialTriangleB,
                     bestNormal,
                     bestPoint,
                     bestSweepB,
@@ -3437,6 +3829,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                 foundToi,
                 bestShapeIdxA,
                 bestShapeIdxB,
+                bestMaterialTriangleA,
+                bestMaterialTriangleB,
                 bestNormal,
                 bestPoint,
                 bestSweepB,
@@ -3460,6 +3854,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     outRes.bestT = bestT;
     outRes.bestShapeIdxA = bestShapeIdxA;
     outRes.bestShapeIdxB = bestShapeIdxB;
+    outRes.bestMaterialTriangleA = bestMaterialTriangleA;
+    outRes.bestMaterialTriangleB = bestMaterialTriangleB;
     outRes.bestNormal = f32x4(bestNormal, 0.0f);
     outRes.bestPoint = f32x4(bestPoint, 0.0f);
     outRes.bestSweepB = bestSweepB;
@@ -3603,6 +3999,8 @@ void ApplyBulletContinuousToiResultWithBounce(
 
     if(vn < 0.0f && kNormal > s_NormalizeEpsilonSq){
         Contact fallbackMat;
+        fallbackMat.manifold.materialTriangleA = hit.bestMaterialTriangleA;
+        fallbackMat.manifold.materialTriangleB = hit.bestMaterialTriangleB;
         if(hit.bestRestitution < 0.0f || hit.bestFriction < 0.0f){
             in Transform3D curXfA = world.m_solverSets[s_AwakeSetIndex].sims[idx].transform;
             in Transform3D curXfB = world.m_solverSets[bodyBInit.setIndex].sims[bodyBInit.localIndex].transform;
@@ -4003,7 +4401,56 @@ void EmitContinuousSensorPassThroughPairsForSet(mut PhysicsWorld world, in Span<
             }
         }
         else if(aNonConv && bNonConv){
-            continue;
+            if((sA.type == ShapeType::Heightfield || sB.type == ShapeType::Heightfield) && sA.type != ShapeType::Plane && sB.type != ShapeType::Plane){
+                f32 hfFrac = 1.0f;
+                VectorSingle hfN(0.0f, 1.0f, 0.0f, 0.0f);
+                VectorSingle hfPt(0.0f);
+                u32 triA = s_NullIndex;
+                u32 triB = s_NullIndex;
+                if(SweepHeightfieldNonConvexPair(sA, effSweepA, sB, effSweepB, world.m_meshShapes, world.m_heightfieldShapes, 1.0f, true, hfFrac, hfN, hfPt, triA, triB)){
+                    toi.pointFraction = f32x4(hfPt, hfFrac);
+                    toi.normalFlags = f32x3_u32(hfN.x, hfN.y, hfN.z, 1u);
+                }
+            }
+            else if(sA.type == ShapeType::Plane && sB.type == ShapeType::Plane){
+                if(!sA.planeShape().isFiniteExtent() && !sB.planeShape().isFiniteExtent())
+                    continue;
+                if(sA.planeShape().isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsA;
+                    toi = ComputePlaneTimeOfImpactViews(MakeFinitePlaneQuadProxyView(sA.planeShape(), quadPtsA), effSweepA, sB.planeShape(), effSweepB, 1.0f);
+                }
+                if(!toi.hit() && sB.planeShape().isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsB;
+                    toi = ComputePlaneTimeOfImpactViews(MakeFinitePlaneQuadProxyView(sB.planeShape(), quadPtsB), effSweepB, sA.planeShape(), effSweepA, 1.0f);
+                }
+            }
+            else if(sA.type == ShapeType::Plane || sB.type == ShapeType::Plane){
+                PlaneShape pl = sB.planeShape();
+                Sweep3D plSweep = effSweepB;
+                Shape otherS = sA;
+                Sweep3D otherSweep = effSweepA;
+                if(sA.type == ShapeType::Plane){
+                    pl = sA.planeShape();
+                    plSweep = effSweepA;
+                    otherS = sB;
+                    otherSweep = effSweepB;
+                }
+                if(!pl.isFiniteExtent())
+                    continue;
+                Array<f32x3u, 4u> quadPts;
+                const ShapeProxyView quadView = MakeFinitePlaneQuadProxyView(pl, quadPts);
+                if(otherS.type == ShapeType::Heightfield){
+                    if(otherS.geometryIndex < world.m_heightfieldShapes.size())
+                        toi = ComputeHeightfieldTimeOfImpactViewsInternal(quadView, plSweep, world.m_heightfieldShapes[otherS.geometryIndex], otherSweep, 1.0f, true);
+                }
+                else if(otherS.type == ShapeType::Mesh){
+                    if(otherS.geometryIndex < world.m_meshShapes.size())
+                        toi = ComputeSensorMeshTimeOfImpactViews(quadView, plSweep, world.m_meshShapes[otherS.geometryIndex], otherSweep, 1.0f);
+                }
+            }
+            else{
+                continue;
+            }
         }
         else if(sB.type == ShapeType::Plane){
             toi = ComputePlaneTimeOfImpactViews(MakeShapeProxyViewFromShape(sA, world.m_hullShapes, inlinePtsA), effSweepA, sB.planeShape(), effSweepB, 1.0f);
@@ -5353,18 +5800,7 @@ void PackComponentsIntoIslandBins(
 }
 
 b8 IsCpuOnlyJoint(in Joint j){
-    if(cast<u32>(j.type) > cast<u32>(JointType::Wheel))
-        return true;
-    if(
-        j.invInertiaScaleA != 1.0f
-        || j.invInertiaScaleB != 1.0f
-        || j.limitRestitution > 0.0f
-        || j.limitHertz > 0.0f
-        || j.swingLimitY > 0.0f
-        || j.enableProjection()
-    )
-        return true;
-    return false;
+    return j.type == JointType::SixDof || j.type == JointType::Path;
 }
 
 void BuildSolverWorkPartitionWithColorContacts(
@@ -5474,6 +5910,8 @@ void BuildSolverWorkPartitionWithColorContacts(
             rec.color = cast<u32>(c);
             rec.dynAwakeIdx = dynAwakeIdx;
             rec.hasAwakeKin = hasAwakeKin;
+            if((contact.flags & cast<u32>(ContactFlags::HasCustomSolverScale)) != 0u)
+                rec.isCpuOnly = 1u;
             conRecs.push_back(rec);
         }
     }
@@ -5598,6 +6036,8 @@ void BuildSolverWorkPartitionWithColorContacts(
         ++components[ci].contactCount;
         if(rec.hasAwakeKin != 0u)
             components[ci].hasAwakeKinematic = true;
+        if(rec.isCpuOnly != 0u)
+            components[ci].hasCpuOnlyJoint = true;
         if(rec.color == s_OverflowColorIndex){
             components[ci].hasOverflowContact = true;
         }

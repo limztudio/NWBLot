@@ -469,14 +469,15 @@ b8 ParseSurfaceMaterialMap(
     return true;
 }
 
-b8 ParseSurfaceMaterialList(
+b8 ParsePhysicsSurfaceMaterialList(
     in Path file,
     in MetascriptValue listVal,
     in StringView prefix,
+    in StringView fieldName,
     mut Vector<SurfaceMaterial> outMaterials
 ){
     if(!listVal.isList()){
-        error("{} '{}': field 'heightfield_materials' must be a list of material maps", prefix, PathToString(file));
+        error("{} '{}': field '{}' must be a list of material maps", prefix, PathToString(file), fieldName);
         return false;
     }
     const Span<MetascriptValue> items = listVal.listView();
@@ -484,13 +485,22 @@ b8 ParseSurfaceMaterialList(
     outMaterials.resize(items.size());
     for(usize i = 0u; i < items.size(); ++i){
         if(!items[i].isMap()){
-            error("{} '{}': 'heightfield_materials[{}]' must be a map", prefix, PathToString(file), i);
+            error("{} '{}': '{}[{}]' must be a map", prefix, PathToString(file), fieldName, i);
             return false;
         }
         if(!ParseSurfaceMaterialMap(file, items[i], prefix, outMaterials[i]))
             return false;
     }
     return true;
+}
+
+b8 ParseSurfaceMaterialList(
+    in Path file,
+    in MetascriptValue listVal,
+    in StringView prefix,
+    mut Vector<SurfaceMaterial> outMaterials
+){
+    return ParsePhysicsSurfaceMaterialList(file, listVal, prefix, "heightfield_materials", outMaterials);
 }
 
 Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
@@ -616,6 +626,7 @@ b8 ValidateCookColliderGeometryFields(
     in AssetRef<Mesh> meshAsset,
     in AssetRef<ConvexHullAsset> convexHullAsset,
     in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+    in AssetRef<HeightfieldAsset> heightfieldAsset,
     in b8 isBox,
     in b8 isChain,
     in f32 chainRadius,
@@ -713,6 +724,8 @@ b8 ValidateCookColliderGeometryFields(
         return true;
     }
     if(shapeType == ShapeType::Heightfield){
+        if(heightfieldAsset.valid())
+            return true;
         if(!IsFinite(VectorSingle(heightfieldThickness)) || heightfieldThickness < 0.0f){
             error("{} '{}': invalid heightfield thickness", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
@@ -721,9 +734,16 @@ b8 ValidateCookColliderGeometryFields(
             error("{} '{}': invalid heightfield geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
-        if(!heightfieldCellMaterialIndices.empty() && heightfieldMaterials.empty()){
-            error("{} '{}': heightfield cell material indices require materials", s_ColliderComponentDiagnosticPrefix, PathToString(file));
-            return false;
+        if(!heightfieldCellMaterialIndices.empty()){
+            if(heightfieldMaterials.empty()){
+                error("{} '{}': heightfield cell material indices require materials", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            const usize expectedCellCount = cast<usize>(heightfieldRows - 1u) * cast<usize>(heightfieldCols - 1u);
+            if(heightfieldCellMaterialIndices.size() != expectedCellCount){
+                error("{} '{}': heightfield cell material index count does not match heightfield cells", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
         }
         for(usize ci = 0u; ci < heightfieldCellMaterialIndices.size(); ++ci){
             if(cast<usize>(heightfieldCellMaterialIndices[ci]) >= heightfieldMaterials.size()){
@@ -743,6 +763,7 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
         e.meshAsset,
         e.convexHullAsset,
         e.collisionMeshAsset,
+        e.heightfieldAsset,
         e.isBox,
         e.isChain,
         e.chainRadius,
@@ -910,6 +931,7 @@ b8 ApplyColliderShapeField(
     if(key == "category_bits") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.categoryBits);
     if(key == "mask_bits") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.maskBits);
     if(key == "group_index") return ReadPhysicsI32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.groupIndex);
+    if(key == "collision_layer") return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.collisionLayer);
     if(key == "user_data") return ReadPhysicsU64Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.userData);
     if(key == "is_box") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isBox);
     if(key == "is_sensor") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isSensor);
@@ -961,6 +983,16 @@ b8 ApplyColliderShapeField(
         outEntry.collisionMeshAsset = assetRef.value();
         return true;
     }
+    if(key == "heightfield_asset"){
+        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
+        if(!refText.has_value())
+            return false;
+        const Expected<AssetRef<HeightfieldAsset>> assetRef = ParseReservedAssetRefText<HeightfieldAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
+        if(!assetRef.has_value())
+            return false;
+        outEntry.heightfieldAsset = assetRef.value();
+        return true;
+    }
     error("{} '{}': unsupported asset field '{}'", s_ColliderComponentDiagnosticPrefix, PathToString(file), key);
     return false;
 }
@@ -981,6 +1013,7 @@ void CopyShapeScalarFieldsToColliderComponent(in ColliderShapeEntry src, mut Col
     dst.categoryBits = src.categoryBits;
     dst.maskBits = src.maskBits;
     dst.groupIndex = src.groupIndex;
+    dst.collisionLayer = src.collisionLayer;
     dst.userData = src.userData;
     dst.isBox = src.isBox;
     dst.isSensor = src.isSensor;
@@ -993,6 +1026,7 @@ void CopyShapeScalarFieldsToColliderComponent(in ColliderShapeEntry src, mut Col
     dst.materialAsset = src.materialAsset;
     dst.convexHullAsset = src.convexHullAsset;
     dst.collisionMeshAsset = src.collisionMeshAsset;
+    dst.heightfieldAsset = src.heightfieldAsset;
     dst.staticFriction = src.staticFriction;
     dst.anisotropicFriction = src.anisotropicFriction;
     dst.surfaceVelocity = src.surfaceVelocity;
@@ -1080,6 +1114,7 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
         entry.component.meshAsset,
         entry.component.convexHullAsset,
         entry.component.collisionMeshAsset,
+        entry.component.heightfieldAsset,
         entry.component.isBox,
         entry.component.isChain,
         entry.component.chainRadius,

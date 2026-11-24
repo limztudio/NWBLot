@@ -173,6 +173,7 @@ enum<u32> Section{
     Slider,
     Progress,
     Image,
+    VectorPaint,
     kCount
 }
 

@@ -37,6 +37,7 @@ class EcsEntityPhysicsRecord{
     public BodyId bodyId;
     public ShapeId primaryShapeId;
     public Vector<ShapeId> extraShapeIds;
+    public Vector<u32> extraShapeEntryIndices;
     public Transform3D syncedRelativeTransform;
     public f32x4 syncedColliderScale(1.0f, 1.0f, 1.0f, 0.0f);
     public usize syncedExtraShapeCount = 0u;
@@ -49,6 +50,7 @@ class EcsEntityPhysicsRecord{
     public Name failedMeshAsset = s_NameNone;
     public Name failedHullAsset = s_NameNone;
     public Name failedCollisionMeshAsset = s_NameNone;
+    public Name failedHeightfieldAsset = s_NameNone;
     public Name failedMaterialAsset = s_NameNone;
     public u64 failedMeshSignature = 0u;
 }
@@ -126,10 +128,18 @@ class EcsCachedMeshGeometry{
     public MeshGeometryId geometryId;
 }
 
+class EcsCachedHeightfieldGeometry{
+    public f32x4 signedScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 centerThickness(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 entryScaleZeroOrigin(1.0f, 1.0f, 1.0f, 0.0f);
+    public HeightfieldGeometryId geometryId;
+}
+
 class EcsPhysicsAssetCache{
     public HashMap<Name, SurfaceMaterial> materialCache;
     public HashMap<Name, Vector<EcsCachedHullGeometry>> hullGeometries;
     public HashMap<Name, Vector<EcsCachedMeshGeometry>> meshGeometries;
+    public HashMap<Name, Vector<EcsCachedHeightfieldGeometry>> heightfieldGeometries;
 }
 
 void ReleaseEcsPhysicsAssetCache(mut EcsPhysicsAssetCache cache, mut PhysicsWorld physicsWorld, in b8 destroyGeometries){
@@ -148,10 +158,18 @@ void ReleaseEcsPhysicsAssetCache(mut EcsPhysicsAssetCache cache, mut PhysicsWorl
                     physicsWorld.destroyMeshGeometry(list[i].geometryId);
             }
         }
+        for(in auto kv : cache.heightfieldGeometries){
+            in Vector<EcsCachedHeightfieldGeometry> list = kv.second;
+            for(usize i = 0u; i < list.size(); ++i){
+                if(physicsWorld.isHeightfieldGeometryValid(list[i].geometryId))
+                    physicsWorld.destroyHeightfieldGeometry(list[i].geometryId);
+            }
+        }
     }
     cache.materialCache.clear();
     cache.hullGeometries.clear();
     cache.meshGeometries.clear();
+    cache.heightfieldGeometries.clear();
 }
 
 b8 EcsF32x3BitEqual(in VectorSingle a, in VectorSingle b){
@@ -173,9 +191,11 @@ class EcsCharacterControllerSyncState{
     public f32x4 prevRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 currPosition(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 currRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public u64 ownBodyCheckedTopologyVersion = 0u;
     public b8 hasPrevSnapshot = false;
-    public b8 ownBodyChecked = false;
+}
+
+class EcsSoftBodySyncState{
+    public b8 transformApplied = false;
 }
 
 class EcsArticulationProxySyncState{
@@ -203,6 +223,8 @@ class EcsPhysicsSyncScratch{
     public Vector<u32> nextAwakeWriteBackBodyIndices;
     public Vector<u32> writeBackBodyStamps;
     public Vector<u32> snapshotBodyStamps;
+    public Vector<u8> movedStaticBodyFlags;
+    public Vector<u32> movedStaticBodyIndices;
     public Vector<EntityID> deferredDynamicBodyEntities;
     public Vector<EcsBodySyncedPose> bodySyncedPoses;
     public Vector<EcsStaticBodyPoseCache> staticBodyPoseCache;
@@ -212,9 +234,11 @@ class EcsPhysicsSyncScratch{
     public HashMap<Name, EntityID> manualNamedEntities;
     public HashMap<EntityID, Name> syncedParentNames;
     public HashMap<EntityID, EcsCharacterControllerSyncState> characterSyncStates;
+    public HashMap<EntityID, EcsSoftBodySyncState> softBodySyncStates;
     public HashMap<EntityID, EcsArticulationProxySyncState> articulationProxySyncStates;
     public HashMap<u64, EntityID> destroyedBodyOwners;
     public HashMap<u64, EntityID> destroyedShapeOwners;
+    public Vector<Transform3D> ragdollWorldTargetPoseScratch;
     public u32 writeBackStamp = 0u;
     public u32 snapshotStamp = 0u;
     public u64 lastJointMutationVersion = 0u;
@@ -233,12 +257,34 @@ class EcsPhysicsSyncScratch{
     public u64 tagPrepassColMutationVersion = 0u;
     public Name loadedCollisionLayerMatrixName = s_NameNone;
     public Name failedCollisionLayerMatrixName = s_NameNone;
+    public b8 collisionLayerMatrixChanged = false;
     public b8 mutationVersionsValid = false;
     public b8 hasSyncedTopologyVersion = false;
     public b8 hasRagdollTopology = false;
     public b8 manualNamedEntitiesDirty = false;
     public b8 writeBackDisablePoseCache = false;
     public b8 tagPrepassVersionsValid = false;
+}
+
+void MarkStaticBodyMoved(in BodyId bodyId, mut Vector<u8> movedFlags, mut Vector<u32> movedIndices){
+    if(!bodyId.valid())
+        return;
+    const u32 idx = bodyId.index;
+    if(idx >= cast<u32>(movedFlags.size()))
+        movedFlags.resize(cast<usize>(idx) + 1u, 0u);
+    if(movedFlags[idx] == 0u){
+        movedFlags[idx] = 1u;
+        movedIndices.push_back(idx);
+    }
+}
+
+void ClearMovedStaticBodies(mut Vector<u8> movedFlags, mut Vector<u32> movedIndices){
+    for(usize i = 0u; i < movedIndices.size(); ++i){
+        const u32 idx = movedIndices[i];
+        if(idx < cast<u32>(movedFlags.size()))
+            movedFlags[idx] = 0u;
+    }
+    movedIndices.clear();
 }
 
 const u32 s_EcsSnapshotValidBit = 0x80000000u;
@@ -1088,6 +1134,10 @@ void ResolvePhysicsConfigSettings(
             outInterpolateTransforms = cfg.interpolateTransforms;
 
             if(!cfg.collisionLayerMatrixAsset.valid()){
+                if(scratch.loadedCollisionLayerMatrixName != s_NameNone){
+                    collisionLayerMatrix = CollisionLayerMatrix();
+                    scratch.collisionLayerMatrixChanged = true;
+                }
                 scratch.loadedCollisionLayerMatrixName = s_NameNone;
                 scratch.failedCollisionLayerMatrixName = s_NameNone;
             }
@@ -1105,6 +1155,7 @@ void ResolvePhysicsConfigSettings(
                     collisionLayerMatrix = matLoaded.value().deref().matrix;
                     scratch.loadedCollisionLayerMatrixName = cfg.collisionLayerMatrixAsset.name();
                     scratch.failedCollisionLayerMatrixName = s_NameNone;
+                    scratch.collisionLayerMatrixChanged = true;
                 }
                 else{
                     scratch.failedCollisionLayerMatrixName = cfg.collisionLayerMatrixAsset.name();
@@ -1137,6 +1188,35 @@ void ResolvePhysicsConfigSettings(
             }
         }
     );
+    if(!resolved && scratch.loadedCollisionLayerMatrixName != s_NameNone){
+        collisionLayerMatrix = CollisionLayerMatrix();
+        scratch.loadedCollisionLayerMatrixName = s_NameNone;
+        scratch.failedCollisionLayerMatrixName = s_NameNone;
+        scratch.collisionLayerMatrixChanged = true;
+    }
+}
+
+b8 EcsColliderUsesNamedLayer(in ColliderComponent col){
+    if(col.collisionLayer != s_NameNone)
+        return true;
+    for(usize i = 0u; i < col.extraShapes.size(); ++i){
+        if(col.extraShapes[i].collisionLayer != s_NameNone)
+            return true;
+    }
+    return false;
+}
+
+Filter ResolveEcsColliderFilter(in ColliderShapeEntry entry, in CollisionLayerMatrix collisionLayerMatrix){
+    if(entry.collisionLayer != s_NameNone){
+        const u32 layerIdx = collisionLayerMatrix.findLayerIndex(entry.collisionLayer);
+        if(layerIdx < s_MaxCollisionLayers)
+            return collisionLayerMatrix.makeFilter(layerIdx, entry.groupIndex);
+    }
+    Filter flt;
+    flt.categoryBits = entry.categoryBits;
+    flt.maskBits = entry.maskBits;
+    flt.groupIndex = entry.groupIndex;
+    return flt;
 }
 
 ColliderShapeEntry BuildPrimaryColliderEntryScalar(in ColliderComponent col){
@@ -1156,6 +1236,7 @@ ColliderShapeEntry BuildPrimaryColliderEntryScalar(in ColliderComponent col){
     entry.categoryBits = col.categoryBits;
     entry.maskBits = col.maskBits;
     entry.groupIndex = col.groupIndex;
+    entry.collisionLayer = col.collisionLayer;
     entry.userData = col.userData;
     entry.isBox = col.isBox;
     entry.isSensor = col.isSensor;
@@ -1168,6 +1249,7 @@ ColliderShapeEntry BuildPrimaryColliderEntryScalar(in ColliderComponent col){
     entry.materialAsset = col.materialAsset;
     entry.convexHullAsset = col.convexHullAsset;
     entry.collisionMeshAsset = col.collisionMeshAsset;
+    entry.heightfieldAsset = col.heightfieldAsset;
     entry.staticFriction = col.staticFriction;
     entry.anisotropicFriction = col.anisotropicFriction;
     entry.surfaceVelocity = col.surfaceVelocity;
@@ -1201,8 +1283,10 @@ void FlipMeshTriangleWindingInPlace(mut Vector<u32> indices){
 SurfaceMaterial BuildEcsShapeSurfaceMaterial(
     in ColliderShapeEntry entry,
     in Optional<mut AssetManager> assetManager,
-    mut EcsPhysicsAssetCache assetCache
+    mut EcsPhysicsAssetCache assetCache,
+    mut b8 outMaterialFailed
 ){
+    outMaterialFailed = false;
     if(entry.materialAsset.valid() && assetManager.has_value()){
         const Name matName = entry.materialAsset.name();
         const auto cachedIt = assetCache.materialCache.find(matName);
@@ -1214,6 +1298,8 @@ SurfaceMaterial BuildEcsShapeSurfaceMaterial(
             assetCache.materialCache.insert_or_assign(matName, assetMat);
             return assetMat;
         }
+        outMaterialFailed = true;
+        return SurfaceMaterial();
     }
     SurfaceMaterial mat;
     const VectorSingle matScalar = Max(VectorSingle(entry.friction, entry.restitution, entry.rollingResistance, 0.0f), VectorSingle(0.0f));
@@ -1263,17 +1349,17 @@ SurfaceMaterial BuildEcsShapeSurfaceMaterial(
 ShapeDef BuildShapeDefFromEntry(
     in ColliderShapeEntry entry,
     in b8 updateBodyMass,
+    in Transform3D localTransform,
+    in CollisionLayerMatrix collisionLayerMatrix,
     in Optional<mut AssetManager> assetManager,
     mut EcsPhysicsAssetCache assetCache,
-    in Transform3D localTransform
+    mut b8 outMaterialFailed
 ){
     ShapeDef sd;
     sd.localTransform = localTransform;
     sd.density = SimdMax(entry.density, 0.0f);
-    sd.material = BuildEcsShapeSurfaceMaterial(entry, assetManager, assetCache);
-    sd.filter.categoryBits = entry.categoryBits;
-    sd.filter.maskBits = entry.maskBits;
-    sd.filter.groupIndex = entry.groupIndex;
+    sd.material = BuildEcsShapeSurfaceMaterial(entry, assetManager, assetCache, outMaterialFailed);
+    sd.filter = ResolveEcsColliderFilter(entry, collisionLayerMatrix);
     sd.userData = entry.userData;
     sd.isSensor = entry.isSensor;
     sd.enableContactEvents = entry.enableContactEvents;
@@ -1544,6 +1630,9 @@ Expected<HeightfieldShape> BuildEcsHeightfieldShape(
     hf.cellMaterialIndices.clear();
     if(!heightfieldCellMaterialIndices.empty()){
         if(hf.materials.empty())
+            return MakeUnexpected(Failure());
+        const usize expectedCellCount = cast<usize>(entry.heightfieldRows - 1u) * cast<usize>(entry.heightfieldCols - 1u);
+        if(heightfieldCellMaterialIndices.size() != expectedCellCount)
             return MakeUnexpected(Failure());
         const usize matCount = hf.materials.size();
         hf.cellMaterialIndices.reserve(heightfieldCellMaterialIndices.size());
@@ -2137,6 +2226,113 @@ b8 ResolveOrCreateCachedMeshGeometry(
     return true;
 }
 
+Expected<HeightfieldShape> BuildEcsHeightfieldFromAsset(
+    in ColliderShapeEntry entry,
+    in VectorSingle signedScale,
+    in b8 zeroOrigin,
+    in Optional<mut AssetManager> assetManager
+){
+    if(!entry.heightfieldAsset.valid() || !assetManager.has_value())
+        return MakeUnexpected(Failure());
+    if(!IsFinite(VectorSingle(entry.heightfieldThickness)) || entry.heightfieldThickness < 0.0f)
+        return MakeUnexpected(Failure());
+    const auto hfAssetRes = LoadTypedAssetSync<HeightfieldAsset>(assetManager.value(), entry.heightfieldAsset.name(), "PhysicsCollider");
+    if(!hfAssetRes.has_value())
+        return MakeUnexpected(Failure());
+    in HeightfieldShape srcHf = hfAssetRes.value().deref().heightfieldShape();
+    if(!srcHf.isValid())
+        return MakeUnexpected(Failure());
+
+    const VectorSingle absScale = Abs(signedScale);
+    const f32 sx = srcHf.scaleMinMaxY.x * entry.heightfieldScale.x * absScale.x;
+    const f32 sy = srcHf.scaleMinMaxY.y * entry.heightfieldScale.y * absScale.y;
+    const f32 sz = srcHf.scaleMinMaxY.z * entry.heightfieldScale.z * absScale.z;
+    if(!IsFinite(VectorSingle(sx, sy, sz, 0.0f)) || sx <= 0.0f || sz <= 0.0f)
+        return MakeUnexpected(Failure());
+
+    VectorSingle effOrigin(
+        srcHf.originMaxY.x * signedScale.x,
+        srcHf.originMaxY.y * signedScale.y,
+        srcHf.originMaxY.z * signedScale.z,
+        0.0f
+    );
+    if(!zeroOrigin)
+        effOrigin = effOrigin + VectorSingle(entry.center.x * signedScale.x, entry.center.y * signedScale.y, entry.center.z * signedScale.z, 0.0f);
+    if(!IsValidPositionVec3(effOrigin))
+        return MakeUnexpected(Failure());
+
+    HeightfieldShape hf = srcHf;
+    hf.scaleMinMaxY = f32x4(sx, sy, sz, 0.0f);
+    hf.originMaxY = f32x4(effOrigin.x, effOrigin.y, effOrigin.z, 0.0f);
+    f32 baseThickness = srcHf.thickness;
+    if(entry.heightfieldThickness > 0.0f)
+        baseThickness = entry.heightfieldThickness;
+    hf.thickness = SimdMax(baseThickness * absScale.y, 0.0f);
+    for(usize i = 0u; i < hf.heights.size(); ++i){
+        const f32 h = hf.heights[i];
+        if(IsFinite(VectorSingle(h)) && Abs(VectorSingle(effOrigin.y + h * sy)).x > s_HugeCoordinate)
+            return MakeUnexpected(Failure());
+    }
+    hf.updateHeightRange();
+    if(!hf.isValid())
+        return MakeUnexpected(Failure());
+    return Expected<HeightfieldShape>(hf);
+}
+
+b8 ResolveOrCreateCachedHeightfieldGeometry(
+    in ColliderShapeEntry entry,
+    in VectorSingle signedScale,
+    in b8 zeroOrigin,
+    in Optional<mut AssetManager> assetManager,
+    mut PhysicsWorld physicsWorld,
+    mut EcsPhysicsAssetCache assetCache,
+    mut HeightfieldGeometryId outGeometryId
+){
+    outGeometryId = HeightfieldGeometryId();
+    if(!entry.heightfieldAsset.valid() || !assetManager.has_value())
+        return false;
+    const Name assetName = entry.heightfieldAsset.name();
+    f32 zeroFlag = 0.0f;
+    if(zeroOrigin)
+        zeroFlag = 1.0f;
+    const f32x4 scaleVal(signedScale);
+    const f32x4 centerThick(entry.center.x, entry.center.y, entry.center.z, entry.heightfieldThickness);
+    const f32x4 entryScaleZero(entry.heightfieldScale.x, entry.heightfieldScale.y, entry.heightfieldScale.z, zeroFlag);
+
+    const auto found = assetCache.heightfieldGeometries.find(assetName);
+    if(found != assetCache.heightfieldGeometries.end()){
+        const usize listCount = found.value().size();
+        for(usize i = 0u; i < listCount; ++i){
+            const EcsCachedHeightfieldGeometry item = found.value()[i];
+            if(
+                EcsF32x3BitEqual(VectorSingle(item.signedScale), signedScale)
+                && EcsF32x4BitEqual(VectorSingle(item.centerThickness), VectorSingle(centerThick))
+                && EcsF32x4BitEqual(VectorSingle(item.entryScaleZeroOrigin), VectorSingle(entryScaleZero))
+                && physicsWorld.isHeightfieldGeometryValid(item.geometryId)
+            ){
+                outGeometryId = item.geometryId;
+                return true;
+            }
+        }
+    }
+
+    const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldFromAsset(entry, signedScale, zeroOrigin, assetManager);
+    if(!hfRes.has_value())
+        return false;
+    const Expected<HeightfieldGeometryId> idRes = physicsWorld.createHeightfieldGeometry(hfRes.value());
+    if(!idRes.has_value())
+        return false;
+
+    EcsCachedHeightfieldGeometry rec;
+    rec.signedScale = scaleVal;
+    rec.centerThickness = centerThick;
+    rec.entryScaleZeroOrigin = entryScaleZero;
+    rec.geometryId = idRes.value();
+    assetCache.heightfieldGeometries[assetName].push_back(rec);
+    outGeometryId = rec.geometryId;
+    return true;
+}
+
 b8 EcsSurfaceMaterialsBitEqual(in SurfaceMaterial a, in SurfaceMaterial b){
     return a.friction == b.friction
         && a.staticFriction == b.staticFriction
@@ -2150,6 +2346,33 @@ b8 EcsSurfaceMaterialsBitEqual(in SurfaceMaterial a, in SurfaceMaterial b){
         && EcsF32x3BitEqual(VectorSingle(a.frictionDirection), VectorSingle(b.frictionDirection));
 }
 
+b8 EcsHeightfieldShapesBitEqual(in HeightfieldShape a, in HeightfieldShape b){
+    if(
+        a.rows != b.rows
+        || a.cols != b.cols
+        || a.thickness != b.thickness
+        || !EcsF32x4BitEqual(VectorSingle(a.scaleMinMaxY), VectorSingle(b.scaleMinMaxY))
+        || !EcsF32x4BitEqual(VectorSingle(a.originMaxY), VectorSingle(b.originMaxY))
+        || a.heights.size() != b.heights.size()
+        || a.materials.size() != b.materials.size()
+        || a.cellMaterialIndices.size() != b.cellMaterialIndices.size()
+    )
+        return false;
+    for(usize i = 0u; i < a.heights.size(); ++i){
+        if(bit_cast<u32>(a.heights[i]) != bit_cast<u32>(b.heights[i]))
+            return false;
+    }
+    for(usize i = 0u; i < a.materials.size(); ++i){
+        if(!EcsSurfaceMaterialsBitEqual(a.materials[i], b.materials[i]))
+            return false;
+    }
+    for(usize i = 0u; i < a.cellMaterialIndices.size(); ++i){
+        if(a.cellMaterialIndices[i] != b.cellMaterialIndices[i])
+            return false;
+    }
+    return true;
+}
+
 b8 ApplyEcsColliderPropertiesInPlace(
     in ShapeId shapeId,
     in ColliderShapeEntry entry,
@@ -2161,6 +2384,7 @@ b8 ApplyEcsColliderPropertiesInPlace(
     in Span<u16> heightfieldCellMaterialIndices,
     in VectorSingle signedScale,
     in Transform3D localTransform,
+    in CollisionLayerMatrix collisionLayerMatrix,
     in Optional<mut AssetManager> assetManager,
     mut EcsPhysicsAssetCache assetCache,
     mut PhysicsWorld physicsWorld,
@@ -2403,25 +2627,45 @@ b8 ApplyEcsColliderPropertiesInPlace(
         }
     }
     else if(entry.shapeType == ShapeType::Heightfield){
-        const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldShape(entry, heightfieldHeights, heightfieldMaterials, heightfieldCellMaterialIndices, signedScale, rotateInLocal);
-        if(!hfRes.has_value() || !physicsWorld.setShapeHeightfield(shapeId, hfRes.value()))
-            return false;
-        geometryChanged = true;
+        if(entry.heightfieldAsset.valid() && assetManager.has_value()){
+            HeightfieldGeometryId cachedHfId;
+            if(!ResolveOrCreateCachedHeightfieldGeometry(entry, signedScale, rotateInLocal, assetManager, physicsWorld, assetCache, cachedHfId))
+                return false;
+            if(curType != ShapeType::Heightfield || curGeomIdx != cachedHfId.index){
+                if(!physicsWorld.setShapeHeightfieldGeometry(shapeId, cachedHfId))
+                    return false;
+                geometryChanged = true;
+            }
+        }
+        else{
+            const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldShape(entry, heightfieldHeights, heightfieldMaterials, heightfieldCellMaterialIndices, signedScale, rotateInLocal);
+            if(!hfRes.has_value())
+                return false;
+            in HeightfieldShape newHf = hfRes.value();
+            b8 hfMatches = (curType == ShapeType::Heightfield) && (curGeomIdx < cast<u32>(physicsWorld.m_heightfieldShapes.size()));
+            if(hfMatches && !EcsHeightfieldShapesBitEqual(physicsWorld.m_heightfieldShapes[curGeomIdx], newHf))
+                hfMatches = false;
+            if(!hfMatches){
+                if(!physicsWorld.setShapeHeightfield(shapeId, newHf))
+                    return false;
+                geometryChanged = true;
+            }
+        }
     }
     else{
         return false;
     }
 
-    const SurfaceMaterial mat = BuildEcsShapeSurfaceMaterial(entry, assetManager, assetCache);
+    b8 matFailed = false;
+    const SurfaceMaterial mat = BuildEcsShapeSurfaceMaterial(entry, assetManager, assetCache, matFailed);
+    if(matFailed)
+        return false;
     if(!EcsSurfaceMaterialsBitEqual(curMat, mat)){
         if(!physicsWorld.setShapeMaterial(shapeId, mat))
             return false;
     }
 
-    Filter flt;
-    flt.categoryBits = entry.categoryBits;
-    flt.maskBits = entry.maskBits;
-    flt.groupIndex = entry.groupIndex;
+    const Filter flt = ResolveEcsColliderFilter(entry, collisionLayerMatrix);
     const b8 filterChanged = (curFilter.categoryBits != flt.categoryBits || curFilter.maskBits != flt.maskBits || curFilter.groupIndex != flt.groupIndex);
     if(filterChanged && !physicsWorld.setShapeFilter(shapeId, flt))
         return false;
@@ -2482,6 +2726,7 @@ b8 AttachEcsColliderEntryMulti(
     in VectorSingle scale,
     in Transform3D localTransform,
     in b8 updateBodyMass,
+    in CollisionLayerMatrix collisionLayerMatrix,
     in Optional<mut AssetManager> assetManager,
     mut EcsPhysicsAssetCache assetCache,
     mut PhysicsWorld physicsWorld,
@@ -2491,7 +2736,10 @@ b8 AttachEcsColliderEntryMulti(
     const VectorSingle signedScale = ResolveSignedColliderScale(scale);
     const b8 rotateInLocal = ShouldApplyColliderRotationInLocalTransform(entry);
     const Transform3D effLocalTransform = ComputeEcsShapeEntryLocalTransform(localTransform, entry, signedScale);
-    const ShapeDef sd = BuildShapeDefFromEntry(entry, updateBodyMass, assetManager, assetCache, effLocalTransform);
+    b8 matFailed = false;
+    const ShapeDef sd = BuildShapeDefFromEntry(entry, updateBodyMass, effLocalTransform, collisionLayerMatrix, assetManager, assetCache, matFailed);
+    if(matFailed)
+        return false;
 
     if(entry.shapeType == ShapeType::Sphere){
         const Expected<ShapeId> res = physicsWorld.createSphereShape(bodyId, sd, BuildEcsSphereShape(entry, signedScale));
@@ -2583,6 +2831,16 @@ b8 AttachEcsColliderEntryMulti(
     }
 
     if(entry.shapeType == ShapeType::Heightfield){
+        if(entry.heightfieldAsset.valid() && assetManager.has_value()){
+            HeightfieldGeometryId cachedHfId;
+            if(!ResolveOrCreateCachedHeightfieldGeometry(entry, signedScale, rotateInLocal, assetManager, physicsWorld, assetCache, cachedHfId))
+                return false;
+            const Expected<ShapeId> res = physicsWorld.createHeightfieldShapeFromGeometry(bodyId, sd, cachedHfId);
+            if(!res.has_value())
+                return false;
+            outCreatedShapes.push_back(res.value());
+            return true;
+        }
         const Expected<HeightfieldShape> hfRes = BuildEcsHeightfieldShape(entry, heightfieldHeights, heightfieldMaterials, heightfieldCellMaterialIndices, signedScale, rotateInLocal);
         if(!hfRes.has_value())
             return false;
@@ -2819,11 +3077,25 @@ b8 RestoreMissingNamedEntities(
     return restored;
 }
 
-b8 EcsColliderHasMeshShape(in ColliderComponent col){
-    if(col.shapeType == ShapeType::Mesh)
+b8 EcsColliderEntryIsDynamicIllegal(in ColliderShapeEntry entry){
+    if(entry.shapeType == ShapeType::Mesh && !entry.autoConvexDecompose)
+        return true;
+    if(entry.shapeType == ShapeType::Heightfield)
+        return true;
+    if(entry.shapeType == ShapeType::Plane && (entry.halfExtents.x <= 0.0f || entry.halfExtents.z <= 0.0f))
+        return true;
+    return false;
+}
+
+b8 EcsColliderHasDynamicIllegalShape(in ColliderComponent col){
+    if(col.shapeType == ShapeType::Mesh && !col.autoConvexDecompose)
+        return true;
+    if(col.shapeType == ShapeType::Heightfield)
+        return true;
+    if(col.shapeType == ShapeType::Plane && (col.halfExtents.x <= 0.0f || col.halfExtents.z <= 0.0f))
         return true;
     for(usize i = 0u; i < col.extraShapes.size(); ++i){
-        if(col.extraShapes[i].shapeType == ShapeType::Mesh)
+        if(EcsColliderEntryIsDynamicIllegal(col.extraShapes[i]))
             return true;
     }
     return false;
@@ -3035,6 +3307,7 @@ void PruneRemovedPhysicsEntities(
                 rec.failedMeshAsset = s_NameNone;
                 rec.failedHullAsset = s_NameNone;
                 rec.failedCollisionMeshAsset = s_NameNone;
+                rec.failedHeightfieldAsset = s_NameNone;
                 rec.failedMaterialAsset = s_NameNone;
                 rec.failedMeshSignature = 0u;
             }
@@ -3221,6 +3494,7 @@ u64 ComputeColliderAssetFailureSignature(in ColliderComponent col){
     h = MixColliderAssetSignatureHash(h, FoldNameHash64(col.meshAsset.name().hash()));
     h = MixColliderAssetSignatureHash(h, FoldNameHash64(col.convexHullAsset.name().hash()));
     h = MixColliderAssetSignatureHash(h, FoldNameHash64(col.collisionMeshAsset.name().hash()));
+    h = MixColliderAssetSignatureHash(h, FoldNameHash64(col.heightfieldAsset.name().hash()));
     h = MixColliderAssetSignatureHash(h, FoldNameHash64(col.materialAsset.name().hash()));
     h = MixColliderAssetSignatureHash(h, cast<u64>(col.extraShapes.size()));
     for(usize i = 0u; i < col.extraShapes.size(); ++i){
@@ -3232,6 +3506,7 @@ u64 ComputeColliderAssetFailureSignature(in ColliderComponent col){
         h = MixColliderAssetSignatureHash(h, FoldNameHash64(e.meshAsset.name().hash()));
         h = MixColliderAssetSignatureHash(h, FoldNameHash64(e.convexHullAsset.name().hash()));
         h = MixColliderAssetSignatureHash(h, FoldNameHash64(e.collisionMeshAsset.name().hash()));
+        h = MixColliderAssetSignatureHash(h, FoldNameHash64(e.heightfieldAsset.name().hash()));
         h = MixColliderAssetSignatureHash(h, FoldNameHash64(e.materialAsset.name().hash()));
     }
     if(h == 0u)
@@ -3245,6 +3520,7 @@ b8 MatchesFailedColliderAssets(in EcsEntityPhysicsRecord rec, in ColliderCompone
         && rec.failedMeshAsset == col.meshAsset.name()
         && rec.failedHullAsset == col.convexHullAsset.name()
         && rec.failedCollisionMeshAsset == col.collisionMeshAsset.name()
+        && rec.failedHeightfieldAsset == col.heightfieldAsset.name()
         && rec.failedMaterialAsset == col.materialAsset.name();
 }
 
@@ -3252,6 +3528,7 @@ void ClearFailedColliderAssets(mut EcsEntityPhysicsRecord rec){
     rec.failedMeshAsset = s_NameNone;
     rec.failedHullAsset = s_NameNone;
     rec.failedCollisionMeshAsset = s_NameNone;
+    rec.failedHeightfieldAsset = s_NameNone;
     rec.failedMaterialAsset = s_NameNone;
     rec.failedMeshSignature = 0u;
 }
@@ -3285,21 +3562,24 @@ void DestroyEcsRecordColliderShapes(
     }
     rec.primaryShapeId = ShapeId();
     rec.extraShapeIds.clear();
+    rec.extraShapeEntryIndices.clear();
     rec.hasColliderSync = false;
     rec.hasDecomposedShapes = false;
 }
 
 void SyncEntityColliderRecord(
     in Optional<mut AssetManager> assetsRef,
-    mut EcsPhysicsAssetCache assetCache,
     in Optional<mut RigidBodyComponent> rbOpt,
     in EntityID entity,
-    mut ColliderComponent col,
     in BodyId targetBodyId,
     in b8 useCustomMass,
     in BodyType targetBodyType,
     in VectorSingle worldScale,
     in Transform3D localTransform,
+    in CollisionLayerMatrix collisionLayerMatrix,
+    in b8 collisionLayerMatrixChanged,
+    mut EcsPhysicsAssetCache assetCache,
+    mut ColliderComponent col,
     mut PhysicsWorld physicsWorld,
     mut Vector<EcsSlotOwner> shapeIndexToEntity,
     mut HashMap<u64, EntityID> destroyedShapeOwners,
@@ -3311,8 +3591,9 @@ void SyncEntityColliderRecord(
     const b8 bodyChanged = !(col.boundBodyId == targetBodyId);
     const b8 scaleChanged = !rec.hasColliderSync || !EcsVec4NearlyEqual(VectorSingle(rec.syncedColliderScale), worldScale, 1.0e-5f);
     const b8 extraCountChanged = rec.hasColliderSync && (rec.syncedExtraShapeCount != col.extraShapes.size());
+    const b8 layerRefreshNeeded = collisionLayerMatrixChanged && EcsColliderUsesNamedLayer(col);
 
-    if(!col.dirty && !bodyChanged && !scaleChanged && !rec.primaryShapeId.valid() && rec.failedMeshSignature != 0u){
+    if(!col.dirty && !bodyChanged && !scaleChanged && !layerRefreshNeeded && !rec.primaryShapeId.valid() && rec.failedMeshSignature != 0u){
         const u64 failSig = ComputeColliderAssetFailureSignature(col);
         if(MatchesFailedColliderAssets(rec, col, failSig))
             return;
@@ -3332,7 +3613,7 @@ void SyncEntityColliderRecord(
     const b8 hasExactShapeSlots = !rec.hasDecomposedShapes && (rec.extraShapeIds.size() == col.extraShapes.size());
     const b8 hasValidAttachedShapes = existingShapesValid && rec.primaryShapeId.valid() && (rec.hasDecomposedShapes || rec.extraShapeIds.size() == col.extraShapes.size());
 
-    const b8 needsSync = !rec.hasColliderSync || !hasValidAttachedShapes || col.dirty || bodyChanged || scaleChanged || extraCountChanged;
+    const b8 needsSync = !rec.hasColliderSync || !hasValidAttachedShapes || col.dirty || bodyChanged || scaleChanged || extraCountChanged || layerRefreshNeeded;
     if(!needsSync)
         return;
 
@@ -3346,7 +3627,7 @@ void SyncEntityColliderRecord(
     const Span<f32x4> primaryChainSpan(col.chainPoints.data(), col.chainPoints.size());
     const VectorSingle signedScale = ResolveSignedColliderScale(worldScale);
 
-    if(hasExactShapeSlots && hasValidAttachedShapes && !bodyChanged && (col.dirty || scaleChanged)){
+    if(hasExactShapeSlots && hasValidAttachedShapes && !bodyChanged && (col.dirty || scaleChanged || layerRefreshNeeded)){
         b8 canUpdateInPlace = CanUpdateEcsShapeEntryInPlace(primaryEntry.shapeType, primaryEntry.isChain, primaryEntry.autoConvexDecompose, rec.hasDecomposedShapes, rec.primaryShapeId, physicsWorld);
         for(usize ei = 0u; ei < col.extraShapes.size() && canUpdateInPlace; ++ei){
             in ColliderShapeEntry ee = col.extraShapes[ei];
@@ -3359,7 +3640,7 @@ void SyncEntityColliderRecord(
         if(canUpdateInPlace){
             b8 anyMassNeedsUpdate = scaleChanged;
             b8 shapeMassChanged = false;
-            b8 inPlaceOk = ApplyEcsColliderPropertiesInPlace(rec.primaryShapeId, primaryEntry, primaryHullSpan, primaryMeshVertsSpan, primaryMeshIndicesSpan, primaryHfSpan, primaryHfMatsSpan, primaryHfCellIdxSpan, signedScale, localTransform, assetsRef, assetCache, physicsWorld, shapeMassChanged);
+            b8 inPlaceOk = ApplyEcsColliderPropertiesInPlace(rec.primaryShapeId, primaryEntry, primaryHullSpan, primaryMeshVertsSpan, primaryMeshIndicesSpan, primaryHfSpan, primaryHfMatsSpan, primaryHfCellIdxSpan, signedScale, localTransform, collisionLayerMatrix, assetsRef, assetCache, physicsWorld, shapeMassChanged);
             if(shapeMassChanged)
                 anyMassNeedsUpdate = true;
             for(usize ei = 0u; ei < col.extraShapes.size() && inPlaceOk; ++ei){
@@ -3376,6 +3657,7 @@ void SyncEntityColliderRecord(
                     Span<u16>(extraEntry.heightfieldCellMaterialIndices.data(), extraEntry.heightfieldCellMaterialIndices.size()),
                     signedScale,
                     localTransform,
+                    collisionLayerMatrix,
                     assetsRef,
                     assetCache,
                     physicsWorld,
@@ -3432,6 +3714,7 @@ void SyncEntityColliderRecord(
         worldScale,
         localTransform,
         false,
+        collisionLayerMatrix,
         assetsRef,
         assetCache,
         physicsWorld,
@@ -3446,6 +3729,7 @@ void SyncEntityColliderRecord(
             decomposedAny = true;
             for(usize pi = 1u; pi < primaryScratch.size(); ++pi){
                 rec.extraShapeIds.push_back(primaryScratch[pi]);
+                rec.extraShapeEntryIndices.push_back(s_NullIndex);
                 col.runtimeExtraShapeIds.push_back(primaryScratch[pi]);
                 InsertSlotOwner(primaryScratch[pi].index, primaryScratch[pi].generation, entity, shapeIndexToEntity);
             }
@@ -3453,10 +3737,10 @@ void SyncEntityColliderRecord(
     }
 
     b8 extraAllOk = true;
-    b8 anyAssetRef = primaryEntry.meshAsset.valid() || primaryEntry.collisionMeshAsset.valid() || primaryEntry.convexHullAsset.valid();
+    b8 anyAssetRef = primaryEntry.meshAsset.valid() || primaryEntry.collisionMeshAsset.valid() || primaryEntry.convexHullAsset.valid() || primaryEntry.heightfieldAsset.valid() || primaryEntry.materialAsset.valid();
     for(usize ei = 0u; ei < col.extraShapes.size(); ++ei){
         in ColliderShapeEntry extraEntry = col.extraShapes[ei];
-        if(extraEntry.meshAsset.valid() || extraEntry.collisionMeshAsset.valid() || extraEntry.convexHullAsset.valid())
+        if(extraEntry.meshAsset.valid() || extraEntry.collisionMeshAsset.valid() || extraEntry.convexHullAsset.valid() || extraEntry.heightfieldAsset.valid() || extraEntry.materialAsset.valid())
             anyAssetRef = true;
         const b8 ok = AttachEcsColliderEntryMulti(
             extraEntry,
@@ -3471,6 +3755,7 @@ void SyncEntityColliderRecord(
             worldScale,
             localTransform,
             false,
+            collisionLayerMatrix,
             assetsRef,
             assetCache,
             physicsWorld,
@@ -3481,6 +3766,7 @@ void SyncEntityColliderRecord(
                 decomposedAny = true;
             for(usize ki = 0u; ki < extraScratch.size(); ++ki){
                 rec.extraShapeIds.push_back(extraScratch[ki]);
+                rec.extraShapeEntryIndices.push_back(cast<u32>(ei));
                 InsertSlotOwner(extraScratch[ki].index, extraScratch[ki].generation, entity, shapeIndexToEntity);
                 col.runtimeExtraShapeIds.push_back(extraScratch[ki]);
             }
@@ -3515,6 +3801,7 @@ void SyncEntityColliderRecord(
         rec.failedMeshAsset = primaryEntry.meshAsset.name();
         rec.failedHullAsset = primaryEntry.convexHullAsset.name();
         rec.failedCollisionMeshAsset = primaryEntry.collisionMeshAsset.name();
+        rec.failedHeightfieldAsset = primaryEntry.heightfieldAsset.name();
         rec.failedMaterialAsset = primaryEntry.materialAsset.name();
         rec.failedMeshSignature = ComputeColliderAssetFailureSignature(col);
         col.dirty = false;
@@ -3758,6 +4045,8 @@ b8 SyncSingleEcsJointEntry(
         return true;
     }
     if(hasPrevRecord && !isAliveInWorld && !dirtyRequested && !bodiesChanged){
+        EraseSlotOwnerIfMatches(inOutJointId.index, inOutJointId.generation, jointIndexToEntity);
+        ClearJointFastCacheIfMatches(inOutJointId, scratch.jointFastCache);
         inOutBroken = true;
         inOutJointId = JointId();
         return true;
@@ -3788,8 +4077,6 @@ b8 SyncSingleEcsJointEntry(
     const f32x4 scaledAnchorA(VectorSingle(je.localAnchorA) * scaleA, 0.0f);
     const f32x4 scaledAnchorB(VectorSingle(je.localAnchorB) * scaleB, 0.0f);
     const f32x4 scaledOffset(VectorSingle(je.linearOffset) * scaleA, 0.0f);
-    const f32 maxScaleA = Vector3MaxComponent(Abs(scaleA)).x;
-    const f32 maxScaleB = Vector3MaxComponent(Abs(scaleB)).x;
 
     EcsJointStructuralSnapshot curStruct;
     curStruct.type = je.type;
@@ -3868,8 +4155,9 @@ b8 SyncSingleEcsJointEntry(
                     allOk = false;
             }
         }
-        if(physicsWorld.m_joints[inOutJointId.index].enableMotor() != je.enableMotor){
-            if(!physicsWorld.setJointEnableMotor(inOutJointId, je.enableMotor))
+        const b8 effEnableMotor = je.enableMotor || (je.type == JointType::Motor);
+        if(physicsWorld.m_joints[inOutJointId.index].enableMotor() != effEnableMotor){
+            if(!physicsWorld.setJointEnableMotor(inOutJointId, effEnableMotor))
                 allOk = false;
         }
         if(!IsFinite(VectorSingle(je.motorSpeed)) || physicsWorld.m_joints[inOutJointId.index].motorSpeed() != je.motorSpeed){
@@ -3953,10 +4241,13 @@ b8 SyncSingleEcsJointEntry(
                     allOk = false;
             }
         }
-        if(je.minLength <= je.maxLength){
+        f32 effMaxLength = je.maxLength;
+        if(je.type == JointType::Rope && effMaxLength >= s_HugeCoordinate * 0.5f)
+            effMaxLength = je.length;
+        if(je.minLength <= effMaxLength){
             in Joint curJLr = physicsWorld.m_joints[inOutJointId.index];
-            if(!IsFinite(VectorSingle(je.minLength, je.maxLength, 0.0f, 0.0f)) || je.minLength < 0.0f || curJLr.minLength() != je.minLength || curJLr.maxLength() != je.maxLength){
-                if(!physicsWorld.setJointLengthRange(inOutJointId, je.minLength, je.maxLength))
+            if(!IsFinite(VectorSingle(je.minLength, effMaxLength, 0.0f, 0.0f)) || je.minLength < 0.0f || curJLr.minLength() != je.minLength || curJLr.maxLength() != effMaxLength){
+                if(!physicsWorld.setJointLengthRange(inOutJointId, je.minLength, effMaxLength))
                     allOk = false;
             }
         }
@@ -4054,29 +4345,30 @@ b8 SyncSingleEcsJointEntry(
             }
         }
         if(je.type == JointType::Pulley){
-            const VectorSingle gA(je.groundAnchorA.x * scaleA.x, je.groundAnchorA.y * scaleA.y, je.groundAnchorA.z * scaleA.z, 0.0f);
-            const VectorSingle gB(je.groundAnchorB.x * scaleB.x, je.groundAnchorB.y * scaleB.y, je.groundAnchorB.z * scaleB.z, 0.0f);
+            const VectorSingle gA(je.groundAnchorA);
+            const VectorSingle gB(je.groundAnchorB);
+            b8 pulleyInputsChanged = scaleChanged || dirtyRequested;
             if(!hasExtra || !IsFiniteVec3(gA) || !EcsF32x3BitEqual(VectorSingle(physicsWorld.m_jointExtraData[extraIdx].groundAnchorA), gA)){
+                pulleyInputsChanged = true;
                 if(!physicsWorld.setJointGroundAnchorA(inOutJointId, gA))
                     allOk = false;
             }
             if(!hasExtra || !IsFiniteVec3(gB) || !EcsF32x3BitEqual(VectorSingle(physicsWorld.m_jointExtraData[extraIdx].groundAnchorB), gB)){
+                pulleyInputsChanged = true;
                 if(!physicsWorld.setJointGroundAnchorB(inOutJointId, gB))
                     allOk = false;
             }
-            const f32 scaledLenA = je.lengthA * maxScaleA;
-            const f32 scaledLenB = je.lengthB * maxScaleB;
-            if(scaledLenA > 0.0f || scaledLenB > 0.0f){
-                const f32 targetPC = SimdMax(scaledLenA + je.ratio * scaledLenB, 0.0f);
+            if(je.lengthA > 0.0f || je.lengthB > 0.0f){
+                const f32 targetPC = SimdMax(je.lengthA + je.ratio * je.lengthB, 0.0f);
                 if(!hasExtra || !IsFinite(VectorSingle(targetPC)) || physicsWorld.m_jointExtraData[extraIdx].pulleyConstant != targetPC){
                     if(!physicsWorld.setJointPulleyConstant(inOutJointId, targetPC))
                         allOk = false;
                 }
             }
-            else if(scaleChanged){
+            else if(pulleyInputsChanged){
                 const Expected<Transform3D> xfARes = physicsWorld.tryGetBodyTransform(bodyIdA);
                 const Expected<Transform3D> xfBRes = physicsWorld.tryGetBodyTransform(bodyIdB);
-                f32 pulleyC = je.length * maxScaleA;
+                f32 pulleyC = je.length;
                 if(xfARes.has_value() && xfBRes.has_value()){
                     in Transform3D xfA = xfARes.value();
                     in Transform3D xfB = xfBRes.value();
@@ -4136,6 +4428,9 @@ b8 SyncSingleEcsJointEntry(
                 if(!physicsWorld.setJointPathPoints(inOutJointId, Span<f32x4>(scaledPath.data(), scaledPath.size()), je.pathClosed, je.pathLockRotation))
                     allOk = false;
             }
+        }
+        else if(je.type == JointType::Path){
+            allOk = false;
         }
         if(allOk){
             inOutStructure = curStruct;
@@ -4201,10 +4496,10 @@ b8 SyncSingleEcsJointEntry(
     jd.steeringAngle = je.steeringAngle;
     jd.suspensionRestLength = je.suspensionRestLength;
     jd.ratio = je.ratio;
-    jd.groundAnchorA = f32x4(je.groundAnchorA.x * scaleA.x, je.groundAnchorA.y * scaleA.y, je.groundAnchorA.z * scaleA.z, 0.0f);
-    jd.groundAnchorB = f32x4(je.groundAnchorB.x * scaleB.x, je.groundAnchorB.y * scaleB.y, je.groundAnchorB.z * scaleB.z, 0.0f);
-    jd.lengthA = je.lengthA * maxScaleA;
-    jd.lengthB = je.lengthB * maxScaleB;
+    jd.groundAnchorA = je.groundAnchorA;
+    jd.groundAnchorB = je.groundAnchorB;
+    jd.lengthA = je.lengthA;
+    jd.lengthB = je.lengthB;
     jd.sixDofAxes = je.sixDofAxes;
     jd.pathClosed = je.pathClosed;
     jd.pathLockRotation = je.pathLockRotation;
@@ -4343,6 +4638,7 @@ b8 ResolveAncestorRigidBody(
 
 void SyncEcsEntitiesToPhysicsWorld(
     in Optional<mut AssetManager> assetManager,
+    in CollisionLayerMatrix collisionLayerMatrix,
     mut EcsPhysicsAssetCache assetCache,
     mut World world,
     mut PhysicsWorld physicsWorld,
@@ -4610,6 +4906,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     if(!hasComparePose){
                         const Transform3D normalizedXf(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
                         physicsWorld.setBodyTransform(rec.bodyId, VectorSingle(normalizedXf.position), VectorSingle(normalizedXf.rotation));
+                        MarkStaticBodyMoved(rec.bodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                         SetBodySyncedPose(rec.bodyId, normalizedXf, scratch.bodySyncedPoses);
                         SetStaticBodyPoseCache(rec.bodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                         return;
@@ -4620,6 +4917,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         return;
                     }
                     physicsWorld.setBodyTransform(rec.bodyId, VectorSingle(normalizedXf.position), VectorSingle(normalizedXf.rotation));
+                    MarkStaticBodyMoved(rec.bodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                     SetBodySyncedPose(rec.bodyId, normalizedXf, scratch.bodySyncedPoses);
                     SetStaticBodyPoseCache(rec.bodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                 }
@@ -4629,6 +4927,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     if(hasComparePose && EcsTransformsNearlyEqual(compareXf, worldPose.transform))
                         return;
                     physicsWorld.setBodyTransform(rec.bodyId, VectorSingle(worldPose.transform.position), VectorSingle(worldPose.transform.rotation));
+                    MarkStaticBodyMoved(rec.bodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                     SetBodySyncedPose(rec.bodyId, worldPose.transform, scratch.bodySyncedPoses);
                 }
                 return;
@@ -4719,9 +5018,11 @@ void SyncEcsEntitiesToPhysicsWorld(
                         scratch.pendingWriteBackBodyIndices.push_back(created.value().index);
                     }
                     else if(!hasParentNow){
+                        MarkStaticBodyMoved(created.value(), scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                         SetStaticBodyPoseCache(created.value(), entity, worldPose.transform, scratch.staticBodyPoseCache);
                     }
                     else{
+                        MarkStaticBodyMoved(created.value(), scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                         ClearStaticBodyPoseCacheIfMatches(created.value(), scratch.staticBodyPoseCache);
                     }
                     if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled)
@@ -4750,9 +5051,9 @@ void SyncEcsEntitiesToPhysicsWorld(
                     if(
                         rb.type == BodyType::Dynamic
                         && actualType.has_value()
-                        && actualType.value() == BodyType::Static
+                        && (actualType.value() == BodyType::Static || actualType.value() == BodyType::Kinematic)
                         && world.hasComponent<ColliderComponent>(entity)
-                        && !EcsColliderHasMeshShape(world.getComponent<ColliderComponent>(entity))
+                        && !EcsColliderHasDynamicIllegalShape(world.getComponent<ColliderComponent>(entity))
                     ){
                         deferDynamicType = true;
                         scratch.deferredDynamicBodyEntities.push_back(entity);
@@ -4798,8 +5099,11 @@ void SyncEcsEntitiesToPhysicsWorld(
                     physicsWorld.setBodyAllowFastRotation(bodyId, rb.allowFastRotation);
                 if(((physicsWorld.m_bodies[bodyId.index].flags & cast<u32>(BodyFlags::EnableGyroscopicTorque)) != 0u) != rb.enableGyroscopicTorque)
                     physicsWorld.setBodyGyroscopicTorque(bodyId, rb.enableGyroscopicTorque);
-                if(poseChanged || typeChanged)
+                if(poseChanged || typeChanged){
                     physicsWorld.setBodyTransform(bodyId, VectorSingle(worldPose.transform.position), VectorSingle(worldPose.transform.rotation));
+                    if(simType == BodyType::Static)
+                        MarkStaticBodyMoved(bodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
+                }
 
                 const b8 hasParentNow = hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity);
                 if(deferDynamicType){
@@ -4859,8 +5163,9 @@ void SyncEcsEntitiesToPhysicsWorld(
 
     in Optional<mut AssetManager> assetsRef = assetManager;
     const b8 shapeHandlesTrusted = scratch.hasSyncedTopologyVersion && (physicsWorld.m_topologyVersion == scratch.lastSyncedTopologyVersion);
+    const b8 layerMatrixDirty = scratch.collisionLayerMatrixChanged;
     world.view<ColliderComponent, TransformComponent>().each(
-        lambda[mut world, mut physicsWorld, in assetsRef, mut assetCache, in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in shapeHandlesTrusted, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut anyTagErased](
+        lambda[mut world, mut physicsWorld, in assetsRef, in collisionLayerMatrix, in layerMatrixDirty, mut assetCache, in hasAnyPhysicsParents, in didPrepassTags, in needTagRecovery, in shapeHandlesTrusted, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots, mut bodyTransformSnapshotMeta, mut scratch, mut anyTagErased](
             in EntityID entity,
             mut ColliderComponent col,
             in TransformComponent xf
@@ -4870,9 +5175,11 @@ void SyncEcsEntitiesToPhysicsWorld(
                     ++scratch.namedEntitiesVersion;
             }
 
+            const b8 bypassLayerSkip = layerMatrixDirty && EcsColliderUsesNamedLayer(col);
             const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
             if(
-                rbOpt.has_value()
+                !bypassLayerSkip
+                && rbOpt.has_value()
                 && !col.dirty
                 && (col.extraShapes.size() == col.runtimeExtraShapeIds.size() || ((col.autoConvexDecompose || col.isChain) && col.extraShapes.empty()))
                 && col.runtimeShapeId.valid()
@@ -4918,7 +5225,8 @@ void SyncEcsEntitiesToPhysicsWorld(
             }
 
             if(
-                !rbOpt.has_value()
+                !bypassLayerSkip
+                && !rbOpt.has_value()
                 && !col.dirty
                 && col.boundBodyId.valid()
                 && col.runtimeShapeId.valid()
@@ -5064,18 +5372,21 @@ void SyncEcsEntitiesToPhysicsWorld(
                                     break;
                                 }
                             }
-                            if(extraChildShapesValid){
+                            if(extraChildShapesValid && !bypassLayerSkip){
                                 if(EcsTransformsNearlyEqual(existingRec.syncedRelativeTransform, localShapeTransform))
                                     return;
                                 const ColliderShapeEntry primaryLocalEntry = BuildPrimaryColliderEntryScalar(col);
                                 const VectorSingle pSignedScale = ResolveSignedColliderScale(ancChildScale);
                                 physicsWorld.setShapeLocalTransform(existingRec.primaryShapeId, ComputeEcsShapeEntryLocalTransform(localShapeTransform, primaryLocalEntry, pSignedScale));
-                                if(!existingRec.hasDecomposedShapes && !col.isChain){
-                                    for(usize si = 0u; si < existingRec.extraShapeIds.size() && si < col.extraShapes.size(); ++si)
-                                        physicsWorld.setShapeLocalTransform(existingRec.extraShapeIds[si], ComputeEcsShapeEntryLocalTransform(localShapeTransform, col.extraShapes[si], pSignedScale));
-                                }
-                                else{
-                                    for(usize si = 0u; si < existingRec.extraShapeIds.size(); ++si)
+                                for(usize si = 0u; si < existingRec.extraShapeIds.size(); ++si){
+                                    u32 entryIdx = s_NullIndex;
+                                    if(si < existingRec.extraShapeEntryIndices.size())
+                                        entryIdx = existingRec.extraShapeEntryIndices[si];
+                                    if(entryIdx == s_NullIndex)
+                                        physicsWorld.setShapeLocalTransform(existingRec.extraShapeIds[si], ComputeEcsShapeEntryLocalTransform(localShapeTransform, primaryLocalEntry, pSignedScale));
+                                    else if(cast<usize>(entryIdx) < col.extraShapes.size())
+                                        physicsWorld.setShapeLocalTransform(existingRec.extraShapeIds[si], ComputeEcsShapeEntryLocalTransform(localShapeTransform, col.extraShapes[entryIdx], pSignedScale));
+                                    else
                                         physicsWorld.setShapeLocalTransform(existingRec.extraShapeIds[si], localShapeTransform);
                                 }
                                 if(ancBodyType == BodyType::Dynamic && !ancCustomMass)
@@ -5116,6 +5427,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         return;
                     targetBodyId = created.value();
                     InsertBodySlotOwner(targetBodyId.index, targetBodyId.generation, entity, hasParentNow, bodyIndexToEntity);
+                    MarkStaticBodyMoved(targetBodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                     if(!hasParentNow)
                         SetStaticBodyPoseCache(targetBodyId, entity, worldPose.transform, scratch.staticBodyPoseCache);
                     else
@@ -5149,6 +5461,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         const b8 poseMoved = !hasPrevBodyPose || !EcsTransformsNearlyEqual(prevBodyXf, worldPose.transform);
                         if(col.dirty || poseMoved){
                             physicsWorld.setBodyTransform(targetBodyId, VectorSingle(worldPose.transform.position), VectorSingle(worldPose.transform.rotation));
+                            MarkStaticBodyMoved(targetBodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                             SetBodySyncedPose(targetBodyId, worldPose.transform, scratch.bodySyncedPoses);
                         }
                         ClearStaticBodyPoseCacheIfMatches(targetBodyId, scratch.staticBodyPoseCache);
@@ -5160,6 +5473,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                             if(!hasPrevBodyPose)
                                 normalizedXf = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
                             physicsWorld.setBodyTransform(targetBodyId, VectorSingle(normalizedXf.position), VectorSingle(normalizedXf.rotation));
+                            MarkStaticBodyMoved(targetBodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                             SetBodySyncedPose(targetBodyId, normalizedXf, scratch.bodySyncedPoses);
                             SetStaticBodyPoseCache(targetBodyId, entity, normalizedXf, scratch.staticBodyPoseCache);
                         }
@@ -5195,6 +5509,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         return;
                     targetBodyId = created.value();
                     InsertBodySlotOwner(targetBodyId.index, targetBodyId.generation, entity, hasParentNow, bodyIndexToEntity);
+                    MarkStaticBodyMoved(targetBodyId, scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
                     if(!hasParentNow)
                         SetStaticBodyPoseCache(targetBodyId, entity, worldPose.transform, scratch.staticBodyPoseCache);
                     else
@@ -5212,15 +5527,17 @@ void SyncEcsEntitiesToPhysicsWorld(
                         newRec.hadPhysicsParent = hasParentNow;
                         SyncEntityColliderRecord(
                             assetsRef,
-                            assetCache,
                             rbOpt,
                             entity,
-                            col,
                             targetBodyId,
                             useCustomMass,
                             targetBodyType,
                             worldScale,
                             localShapeTransform,
+                            collisionLayerMatrix,
+                            layerMatrixDirty,
+                            assetCache,
+                            col,
                             physicsWorld,
                             shapeIndexToEntity,
                             scratch.destroyedShapeOwners,
@@ -5241,15 +5558,17 @@ void SyncEcsEntitiesToPhysicsWorld(
             if(hasExistingRecord){
                 SyncEntityColliderRecord(
                     assetsRef,
-                    assetCache,
                     rbOpt,
                     entity,
-                    col,
                     targetBodyId,
                     useCustomMass,
                     targetBodyType,
                     worldScale,
                     localShapeTransform,
+                    collisionLayerMatrix,
+                    layerMatrixDirty,
+                    assetCache,
+                    col,
                     physicsWorld,
                     shapeIndexToEntity,
                     scratch.destroyedShapeOwners,
@@ -5272,15 +5591,17 @@ void SyncEcsEntitiesToPhysicsWorld(
                 newRec.hadPhysicsParent = hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity);
                 SyncEntityColliderRecord(
                     assetsRef,
-                    assetCache,
                     rbOpt,
                     entity,
-                    col,
                     targetBodyId,
                     useCustomMass,
                     targetBodyType,
                     worldScale,
                     localShapeTransform,
+                    collisionLayerMatrix,
+                    layerMatrixDirty,
+                    assetCache,
+                    col,
                     physicsWorld,
                     shapeIndexToEntity,
                     scratch.destroyedShapeOwners,
@@ -5562,6 +5883,7 @@ void SyncEcsEntitiesToPhysicsWorld(
         }
     );
 
+    scratch.collisionLayerMatrixChanged = false;
     scratch.lastSyncedTopologyVersion = physicsWorld.m_topologyVersion;
     scratch.hasSyncedTopologyVersion = true;
 }
@@ -5776,7 +6098,8 @@ void WriteBackSinglePhysicsBody(
         if(body.setIndex < physicsWorld.m_solverSets.size() && body.localIndex < physicsWorld.m_solverSets[body.setIndex].sims.size()){
             in Transform3D physXf = physicsWorld.m_solverSets[body.setIndex].sims[body.localIndex].transform;
             b8 wasInterp = false;
-            const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+            const b8 bodyInterpolate = interpolateTransforms && (body.setIndex == s_AwakeSetIndex);
+            const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, bodyInterpolate, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
             mut TransformComponent xf = xfOpt.value();
             xf.position = renderXf.position;
             xf.rotation = renderXf.rotation;
@@ -5828,7 +6151,8 @@ void FlushWriteBackDeferredDepthBuckets(
             if(bRef.setIndex < worldRef.m_solverSets.size() && bRef.localIndex < worldRef.m_solverSets[bRef.setIndex].sims.size()){
                 in Transform3D physXf = worldRef.m_solverSets[bRef.setIndex].sims[bRef.localIndex].transform;
                 b8 wasInterp = false;
-                const Transform3D renderWorldXf = ComputeRenderPoseForPhysicsBody(physXf, bIdx, bRef.generation, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
+                const b8 bodyInterpolate = interpolateTransforms && (bRef.setIndex == s_AwakeSetIndex);
+                const Transform3D renderWorldXf = ComputeRenderPoseForPhysicsBody(physXf, bIdx, bRef.generation, bodyInterpolate, interpolationAlpha, snapshots, snapshotMeta, wasInterp);
                 const Optional<mut PhysicsParentComponent> ppOpt = world.borrowComponent<PhysicsParentComponent>(entity);
                 b8 cachedChildPoseReady = false;
                 EcsWorldPose childWorldPose;
@@ -6043,7 +6367,8 @@ void WriteBackPhysicsTransformsToEcs(
                 snapshotMeta.resize(cast<usize>(bodyIdx) + 1u, 0u);
             mut EcsBodyTransformSnapshot snap = snapshots[bodyIdx];
             const Transform3D curXf = ev.transform();
-            if(!EcsSnapshotMetaMatches(snapshotMeta[bodyIdx], ev.bodyId.generation))
+            const b8 isAwakeInWorld = bodyIdx < worldBodyCount && physicsWorld.m_bodies[bodyIdx].setIndex == s_AwakeSetIndex;
+            if(!EcsSnapshotMetaMatches(snapshotMeta[bodyIdx], ev.bodyId.generation) || !isAwakeInWorld)
                 snap.prevTransform = curXf;
             snap.currTransform = curXf;
             snapshotMeta[bodyIdx] = PackEcsSnapshotMeta(ev.bodyId.generation);
@@ -6113,6 +6438,7 @@ void WriteBackPhysicsTransformsToEcs(
                             const u32 pBodyIdx = pRb.runtimeBodyId.index;
                             if(
                                 pBodyIdx < worldBodyCount
+                                && (pBodyIdx >= cast<u32>(scratch.movedStaticBodyFlags.size()) || scratch.movedStaticBodyFlags[pBodyIdx] == 0u)
                                 && scratch.writeBackBodyStamps[pBodyIdx] != stamp
                                 && physRef.m_bodies[pBodyIdx].alive
                                 && physRef.m_bodies[pBodyIdx].generation == pRb.runtimeBodyId.generation
@@ -6138,7 +6464,8 @@ void WriteBackPhysicsTransformsToEcs(
                     if(body.setIndex < physRef.m_solverSets.size() && body.localIndex < physRef.m_solverSets[body.setIndex].sims.size()){
                         in Transform3D physXf = physRef.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                         b8 wasInterp = false;
-                        const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, interpolateTransforms, interpolationAlpha, snapsRef, metaRef, wasInterp);
+                        const b8 bodyInterpolate = interpolateTransforms && (body.setIndex == s_AwakeSetIndex);
+                        const Transform3D renderXf = ComputeRenderPoseForPhysicsBody(physXf, bodyIdx, body.generation, bodyInterpolate, interpolationAlpha, snapsRef, metaRef, wasInterp);
                         if(!EcsTransformMatchesSynced(xf, renderXf)){
                             xf.position = renderXf.position;
                             xf.rotation = renderXf.rotation;
@@ -6158,6 +6485,7 @@ void WriteBackPhysicsTransformsToEcs(
 
     scratch.prevAwakeWriteBackBodyIndices.swap(scratch.nextAwakeWriteBackBodyIndices);
     FlushWriteBackDeferredDepthBuckets(physicsWorld, maxDeferredDepth, interpolateTransforms, interpolationAlpha, snapshots, snapshotMeta, true, world, scratch);
+    ClearMovedStaticBodies(scratch.movedStaticBodyFlags, scratch.movedStaticBodyIndices);
 }
 
 void ApplyInterpolatedRenderTransformsToEcs(

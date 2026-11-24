@@ -643,6 +643,9 @@ b8 EmitPaintStrokeQuadAndAA(
     in f32 halfW,
     in Color premultiplied,
     in b8 antiAlias,
+    in b8 aaCapStart,
+    in b8 aaCapEnd,
+    in f32 aaWidth,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
@@ -656,22 +659,34 @@ b8 EmitPaintStrokeQuadAndAA(
     if(!antiAlias)
         return PushSolidQuadToBuffers(a, b, c, d, premultiplied, premultiplied, premultiplied, premultiplied, vertices, indices, inOutEmittedIndices);
 
-    if(vertices.size() > cast<usize>(u32.max - 8u) || indices.size() > cast<usize>(u32.max - 18u)){
+    usize reqIndices = 18u;
+    if(aaCapStart)
+        reqIndices += 6u;
+    if(aaCapEnd)
+        reqIndices += 6u;
+    if(vertices.size() > cast<usize>(u32.max - 8u) || indices.size() > cast<usize>(u32.max) - reqIndices){
         assert(false);
         return false;
     }
-    const f32 outerNx = -uy * (halfW + 1.0f);
-    const f32 outerNy = ux * (halfW + 1.0f);
+    const f32 effAa = UiSimdMax(0.25f, aaWidth);
+    const f32 outerNx = -uy * (halfW + effAa);
+    const f32 outerNy = ux * (halfW + effAa);
+    f32 startCapOff = 0.0f;
+    if(aaCapStart)
+        startCapOff = effAa;
+    f32 endCapOff = 0.0f;
+    if(aaCapEnd)
+        endCapOff = effAa;
     const u32 vertexBase = cast<u32>(vertices.size());
     const Color zeroAlpha(0.0f, 0.0f, 0.0f, 0.0f);
     vertices.push_back(Vertex(a, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(b, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(c, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(d, Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(p0.x + outerNx, p0.y + outerNy), Point(0.0f, 0.0f), zeroAlpha));
-    vertices.push_back(Vertex(Point(p1.x + outerNx, p1.y + outerNy), Point(0.0f, 0.0f), zeroAlpha));
-    vertices.push_back(Vertex(Point(p1.x - outerNx, p1.y - outerNy), Point(0.0f, 0.0f), zeroAlpha));
-    vertices.push_back(Vertex(Point(p0.x - outerNx, p0.y - outerNy), Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(Point(p0.x - ux * startCapOff + outerNx, p0.y - uy * startCapOff + outerNy), Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(Point(p1.x + ux * endCapOff + outerNx, p1.y + uy * endCapOff + outerNy), Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(Point(p1.x + ux * endCapOff - outerNx, p1.y + uy * endCapOff - outerNy), Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(Point(p0.x - ux * startCapOff - outerNx, p0.y - uy * startCapOff - outerNy), Point(0.0f, 0.0f), zeroAlpha));
     indices.push_back(vertexBase);
     indices.push_back(vertexBase + 1u);
     indices.push_back(vertexBase + 2u);
@@ -690,7 +705,23 @@ b8 EmitPaintStrokeQuadAndAA(
     indices.push_back(vertexBase + 3u);
     indices.push_back(vertexBase + 6u);
     indices.push_back(vertexBase + 7u);
-    inOutEmittedIndices += 18u;
+    if(aaCapStart){
+        indices.push_back(vertexBase + 3u);
+        indices.push_back(vertexBase);
+        indices.push_back(vertexBase + 4u);
+        indices.push_back(vertexBase + 3u);
+        indices.push_back(vertexBase + 4u);
+        indices.push_back(vertexBase + 7u);
+    }
+    if(aaCapEnd){
+        indices.push_back(vertexBase + 1u);
+        indices.push_back(vertexBase + 2u);
+        indices.push_back(vertexBase + 6u);
+        indices.push_back(vertexBase + 1u);
+        indices.push_back(vertexBase + 6u);
+        indices.push_back(vertexBase + 5u);
+    }
+    inOutEmittedIndices += cast<u32>(reqIndices);
     return true;
 }
 
@@ -707,12 +738,18 @@ b8 EmitPaintStrokeSegmentPreNormalized(
     in f32 halfW,
     in Color premultiplied,
     in b8 antiAlias,
+    in b8 aaCapStart,
+    in b8 aaCapEnd,
+    in f32 aaWidth,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
 ){
     Point p0 = inStart;
     Point p1 = inEnd;
+    f32 effAa = 0.0f;
+    if(antiAlias)
+        effAa = UiSimdMax(0.25f, aaWidth);
     const b8 trivialAccept =
         p0.x >= clipEntry.rect.x
         && p0.x <= clipEntry.right
@@ -725,10 +762,7 @@ b8 EmitPaintStrokeSegmentPreNormalized(
     if(!trivialAccept){
         if(!ClipPaintLineSegmentToPaddedBounds(minX, maxX, minY, maxY, p0, p1))
             return true;
-        f32 aaPad = 0.0f;
-        if(antiAlias)
-            aaPad = 1.0f;
-        const VectorSingle absN = Abs(VectorSingle(uy, ux, 0.0f, 0.0f) * halfW) + VectorSingle(aaPad);
+        const VectorSingle absN = Abs(VectorSingle(uy, ux, 0.0f, 0.0f) * halfW) + VectorSingle(effAa);
         const VectorSingle p0V(p0.x, p0.y, 0.0f, 0.0f);
         const VectorSingle p1V(p1.x, p1.y, 0.0f, 0.0f);
         const VectorSingle endMax = Max(p0V, p1V) + absN;
@@ -741,7 +775,7 @@ b8 EmitPaintStrokeSegmentPreNormalized(
         )
             return true;
     }
-    return EmitPaintStrokeQuadAndAA(p0, p1, ux, uy, halfW, premultiplied, antiAlias, vertices, indices, inOutEmittedIndices);
+    return EmitPaintStrokeQuadAndAA(p0, p1, ux, uy, halfW, premultiplied, antiAlias, aaCapStart, aaCapEnd, effAa, vertices, indices, inOutEmittedIndices);
 }
 
 b8 EmitPaintClippedStrokeSegment(
@@ -790,7 +824,7 @@ b8 EmitPaintClippedStrokeSegment(
     const f32 invLen = Rsqrt(lenSqVec).x;
     return EmitPaintStrokeSegmentPreNormalized(
         clipEntry, minX, maxX, minY, maxY,
-        inStart, inEnd, dx * invLen, dy * invLen, halfW, premultiplied, antiAlias,
+        inStart, inEnd, dx * invLen, dy * invLen, halfW, premultiplied, antiAlias, false, false, 1.0f,
         vertices, indices, inOutEmittedIndices
     );
 }
@@ -806,56 +840,83 @@ f32 WrapPaintDashPhase(in f32 value, in f32 cycle){
     return p;
 }
 
-b8 EmitPaintArcWedgeVertices(
+b8 EmitPaintArcWedgeSpan(
     in Point center,
-    in Point u0,
-    in Point u1,
-    in Point u2,
-    in Point u3,
-    in Point u4,
-    in f32 radius,
+    in Point basisU,
+    in Point basisV,
+    in f32 totalAngle,
+    in f32 radiusStart,
+    in f32 radiusEnd,
     in Color premultiplied,
     in b8 antiAlias,
+    in f32 aaWidth,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
 ){
-    usize reqV = 6u;
-    usize reqI = 12u;
+    const f32 maxR = UiSimdMax(radiusStart, radiusEnd);
+    const u32 segs = Clamp(cast<u32>(Ceil(VectorSingle(maxR * 0.5f)).x) + 4u, 4u, 16u);
+    const usize ringCount = cast<usize>(segs) + 1u;
+    usize reqV = 1u + ringCount;
+    usize reqI = cast<usize>(segs) * 3u;
     if(antiAlias){
-        reqV = 11u;
-        reqI = 36u;
+        reqV += ringCount;
+        reqI *= 3u;
     }
     if(vertices.size() > cast<usize>(u32.max) - reqV || indices.size() > cast<usize>(u32.max) - reqI){
         assert(false);
         return false;
     }
 
+    const f32 stepAngle = totalAngle / cast<f32>(segs);
+    VectorSingle sStepVec(0.0f);
+    VectorSingle cStepVec(0.0f);
+    VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+    const f32 ds = sStepVec.x;
+    const f32 dc = cStepVec.x;
+    const f32 invSegs = 1.0f / cast<f32>(segs);
+    const f32 dRadius = radiusEnd - radiusStart;
+    f32 c = 1.0f;
+    f32 s = 0.0f;
+
     const u32 vertexBase = cast<u32>(vertices.size());
     vertices.push_back(Vertex(center, Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(center.x + u0.x * radius, center.y + u0.y * radius), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(center.x + u1.x * radius, center.y + u1.y * radius), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(center.x + u2.x * radius, center.y + u2.y * radius), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(center.x + u3.x * radius, center.y + u3.y * radius), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(center.x + u4.x * radius, center.y + u4.y * radius), Point(0.0f, 0.0f), premultiplied));
-    for(u32 wi = 0u; wi < 4u; ++wi){
+    for(u32 wi = 0u; wi <= segs; ++wi){
+        const f32 dx = basisU.x * c + basisV.x * s;
+        const f32 dy = basisU.y * c + basisV.y * s;
+        const f32 r = radiusStart + dRadius * (cast<f32>(wi) * invSegs);
+        vertices.push_back(Vertex(Point(center.x + dx * r, center.y + dy * r), Point(0.0f, 0.0f), premultiplied));
+        const f32 cNext = c * dc - s * ds;
+        const f32 sNext = s * dc + c * ds;
+        c = cNext;
+        s = sNext;
+    }
+    for(u32 wi = 0u; wi < segs; ++wi){
         indices.push_back(vertexBase);
         indices.push_back(vertexBase + wi + 1u);
         indices.push_back(vertexBase + wi + 2u);
     }
     if(antiAlias){
-        const f32 outerR = radius + 1.0f;
+        const f32 effAa = UiSimdMax(0.25f, aaWidth);
         const Color zeroAlpha(0.0f, 0.0f, 0.0f, 0.0f);
-        vertices.push_back(Vertex(Point(center.x + u0.x * outerR, center.y + u0.y * outerR), Point(0.0f, 0.0f), zeroAlpha));
-        vertices.push_back(Vertex(Point(center.x + u1.x * outerR, center.y + u1.y * outerR), Point(0.0f, 0.0f), zeroAlpha));
-        vertices.push_back(Vertex(Point(center.x + u2.x * outerR, center.y + u2.y * outerR), Point(0.0f, 0.0f), zeroAlpha));
-        vertices.push_back(Vertex(Point(center.x + u3.x * outerR, center.y + u3.y * outerR), Point(0.0f, 0.0f), zeroAlpha));
-        vertices.push_back(Vertex(Point(center.x + u4.x * outerR, center.y + u4.y * outerR), Point(0.0f, 0.0f), zeroAlpha));
-        for(u32 wi = 0u; wi < 4u; ++wi){
+        const u32 outerBase = cast<u32>(vertices.size());
+        c = 1.0f;
+        s = 0.0f;
+        for(u32 wi = 0u; wi <= segs; ++wi){
+            const f32 dx = basisU.x * c + basisV.x * s;
+            const f32 dy = basisU.y * c + basisV.y * s;
+            const f32 outerR = radiusStart + dRadius * (cast<f32>(wi) * invSegs) + effAa;
+            vertices.push_back(Vertex(Point(center.x + dx * outerR, center.y + dy * outerR), Point(0.0f, 0.0f), zeroAlpha));
+            const f32 cNext = c * dc - s * ds;
+            const f32 sNext = s * dc + c * ds;
+            c = cNext;
+            s = sNext;
+        }
+        for(u32 wi = 0u; wi < segs; ++wi){
             const u32 in0 = vertexBase + wi + 1u;
             const u32 in1 = vertexBase + wi + 2u;
-            const u32 out0 = vertexBase + wi + 6u;
-            const u32 out1 = vertexBase + wi + 7u;
+            const u32 out0 = outerBase + wi;
+            const u32 out1 = outerBase + wi + 1u;
             indices.push_back(in0);
             indices.push_back(out0);
             indices.push_back(out1);
@@ -873,17 +934,17 @@ b8 EmitPaintRoundCapWedges(
     in Point center,
     in Point u0,
     in Point u2,
-    in Point u4,
     in f32 radius,
     in Color premultiplied,
     in b8 antiAlias,
+    in f32 aaWidth,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
 ){
     f32 cullRadius = radius;
     if(antiAlias)
-        cullRadius += 1.0f;
+        cullRadius += UiSimdMax(0.25f, aaWidth);
     if(
         center.x + cullRadius <= clipEntry.rect.x
         || center.y + cullRadius <= clipEntry.rect.y
@@ -892,10 +953,7 @@ b8 EmitPaintRoundCapWedges(
     )
         return true;
 
-    const f32 invSqrt2 = 0.70710678f;
-    const Point u1((u0.x + u2.x) * invSqrt2, (u0.y + u2.y) * invSqrt2);
-    const Point u3((u2.x + u4.x) * invSqrt2, (u2.y + u4.y) * invSqrt2);
-    return EmitPaintArcWedgeVertices(center, u0, u1, u2, u3, u4, radius, premultiplied, antiAlias, vertices, indices, inOutEmittedIndices);
+    return EmitPaintArcWedgeSpan(center, u0, u2, s_Pi, radius, radius, premultiplied, antiAlias, aaWidth, vertices, indices, inOutEmittedIndices);
 }
 
 b8 EmitPaintArcWedgesNormalized(
@@ -904,16 +962,18 @@ b8 EmitPaintArcWedgesNormalized(
     in Point u0,
     in Point u4,
     in Point midHintRaw,
-    in f32 radius,
+    in f32 radiusStart,
+    in f32 radiusEnd,
     in Color premultiplied,
     in b8 antiAlias,
+    in f32 aaWidth,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
 ){
-    f32 cullRadius = radius;
+    f32 cullRadius = UiSimdMax(radiusStart, radiusEnd);
     if(antiAlias)
-        cullRadius += 1.0f;
+        cullRadius += UiSimdMax(0.25f, aaWidth);
     if(
         center.x + cullRadius <= clipEntry.rect.x
         || center.y + cullRadius <= clipEntry.rect.y
@@ -922,28 +982,15 @@ b8 EmitPaintArcWedgesNormalized(
     )
         return true;
 
-    const Point midSum(u0.x + u4.x, u0.y + u4.y);
-    const VectorSingle midLenSqVec(midSum.x * midSum.x + midSum.y * midSum.y);
-    Point u2 = u0;
-    if(IsFinite(midLenSqVec) && midLenSqVec.x > 1.0e-12f){
-        const f32 invMid = Rsqrt(midLenSqVec).x;
-        u2 = Point(midSum.x * invMid, midSum.y * invMid);
+    const f32 cross = u0.x * u4.y - u0.y * u4.x;
+    const f32 dot = UiSimdClamp(u0.x * u4.x + u0.y * u4.y, -1.0f, 1.0f);
+    if(dot <= -0.9999f){
+        const Point uMid = NormalizePaintVec2(midHintRaw, Point(-u0.y, u0.x));
+        return EmitPaintArcWedgeSpan(center, u0, uMid, s_Pi, radiusStart, radiusEnd, premultiplied, antiAlias, aaWidth, vertices, indices, inOutEmittedIndices);
     }
-    else{
-        u2 = NormalizePaintVec2(midHintRaw, u0);
-    }
-
-    const Point chordSum(u0.x + u2.x, u0.y + u2.y);
-    const VectorSingle halfLenSqVec(chordSum.x * chordSum.x + chordSum.y * chordSum.y);
-    Point u1 = u0;
-    Point u3 = u4;
-    if(IsFinite(halfLenSqVec) && halfLenSqVec.x > 1.0e-12f){
-        const f32 invHalf = Rsqrt(halfLenSqVec).x;
-        u1 = Point(chordSum.x * invHalf, chordSum.y * invHalf);
-        u3 = Point((u2.x + u4.x) * invHalf, (u2.y + u4.y) * invHalf);
-    }
-
-    return EmitPaintArcWedgeVertices(center, u0, u1, u2, u3, u4, radius, premultiplied, antiAlias, vertices, indices, inOutEmittedIndices);
+    const f32 theta = ATan2(VectorSingle(cross), VectorSingle(dot)).x;
+    const Point perp(-u0.y, u0.x);
+    return EmitPaintArcWedgeSpan(center, u0, perp, theta, radiusStart, radiusEnd, premultiplied, antiAlias, aaWidth, vertices, indices, inOutEmittedIndices);
 }
 
 b8 EmitPaintStrokeWithCapsPreNormalized(
@@ -953,6 +1000,8 @@ b8 EmitPaintStrokeWithCapsPreNormalized(
     in f32 ux,
     in f32 uy,
     in PaintLineStyle style,
+    in f32 capHalfLen,
+    in f32 aaWidth,
     in b8 capStart,
     in b8 capEnd,
     in Color premultiplied,
@@ -965,18 +1014,18 @@ b8 EmitPaintStrokeWithCapsPreNormalized(
     Point segEnd = end;
     if(style.cap == PaintLineCap::Square){
         if(capStart){
-            segStart.x -= ux * halfW;
-            segStart.y -= uy * halfW;
+            segStart.x -= ux * capHalfLen;
+            segStart.y -= uy * capHalfLen;
         }
         if(capEnd){
-            segEnd.x += ux * halfW;
-            segEnd.y += uy * halfW;
+            segEnd.x += ux * capHalfLen;
+            segEnd.y += uy * capHalfLen;
         }
     }
 
     f32 aaPad = 0.0f;
     if(style.antiAlias)
-        aaPad = 1.0f;
+        aaPad = UiSimdMax(0.25f, aaWidth);
     const f32 pad = halfW + aaPad;
     const f32 minX = clipEntry.rect.x - pad;
     const f32 maxX = clipEntry.right + pad;
@@ -994,9 +1043,11 @@ b8 EmitPaintStrokeWithCapsPreNormalized(
             || segMin.y > maxY
         )
     ){
+        const b8 aaCapStart = style.antiAlias && capStart && style.cap != PaintLineCap::Round;
+        const b8 aaCapEnd = style.antiAlias && capEnd && style.cap != PaintLineCap::Round;
         if(!EmitPaintStrokeSegmentPreNormalized(
             clipEntry, minX, maxX, minY, maxY,
-            segStart, segEnd, ux, uy, halfW, premultiplied, style.antiAlias,
+            segStart, segEnd, ux, uy, halfW, premultiplied, style.antiAlias, aaCapStart, aaCapEnd, aaWidth,
             vertices, indices, inOutEmittedIndices
         ))
             return false;
@@ -1006,11 +1057,11 @@ b8 EmitPaintStrokeWithCapsPreNormalized(
         const Point leftN(-uy, ux);
         const Point rightN(uy, -ux);
         if(capStart){
-            if(!EmitPaintRoundCapWedges(clipEntry, start, leftN, Point(-ux, -uy), rightN, halfW, premultiplied, style.antiAlias, vertices, indices, inOutEmittedIndices))
+            if(!EmitPaintRoundCapWedges(clipEntry, start, leftN, Point(-ux, -uy), halfW, premultiplied, style.antiAlias, aaWidth, vertices, indices, inOutEmittedIndices))
                 return false;
         }
         if(capEnd){
-            if(!EmitPaintRoundCapWedges(clipEntry, end, rightN, Point(ux, uy), leftN, halfW, premultiplied, style.antiAlias, vertices, indices, inOutEmittedIndices))
+            if(!EmitPaintRoundCapWedges(clipEntry, end, rightN, Point(ux, uy), halfW, premultiplied, style.antiAlias, aaWidth, vertices, indices, inOutEmittedIndices))
                 return false;
         }
     }
@@ -1022,6 +1073,8 @@ b8 EmitPaintStrokeWithCaps(
     in Point start,
     in Point end,
     in PaintLineStyle style,
+    in f32 capHalfLen,
+    in f32 aaWidth,
     in b8 capStart,
     in b8 capEnd,
     in Color premultiplied,
@@ -1037,7 +1090,7 @@ b8 EmitPaintStrokeWithCaps(
 
     const f32 invLen = Rsqrt(lenSqVec).x;
     return EmitPaintStrokeWithCapsPreNormalized(
-        clipEntry, start, end, dx * invLen, dy * invLen, style, capStart, capEnd, premultiplied,
+        clipEntry, start, end, dx * invLen, dy * invLen, style, capHalfLen, aaWidth, capStart, capEnd, premultiplied,
         vertices, indices, inOutEmittedIndices
     );
 }
@@ -1050,6 +1103,10 @@ b8 EmitPaintDashedSegmentPreNormalized(
     in f32 ux,
     in f32 uy,
     in PaintLineStyle style,
+    in f32 capHalfLen,
+    in f32 aaWidth,
+    in b8 suppressStartCap,
+    in b8 suppressEndCap,
     in Color premultiplied,
     mut f32 inOutPhase,
     mut Vector<Vertex> vertices,
@@ -1067,10 +1124,10 @@ b8 EmitPaintDashedSegmentPreNormalized(
     const f32 halfW = 0.5f * style.thickness;
     f32 aaPad = 0.0f;
     if(style.antiAlias)
-        aaPad = 1.0f;
+        aaPad = UiSimdMax(0.25f, aaWidth);
     f32 pad = halfW + aaPad;
     if(style.cap == PaintLineCap::Square)
-        pad = halfW * 1.5f + aaPad;
+        pad = UiSimdMax(halfW, capHalfLen) + 0.5f * halfW + aaPad;
 
     const f32 minX = clipEntry.rect.x - pad;
     const f32 maxX = clipEntry.right + pad;
@@ -1116,16 +1173,16 @@ b8 EmitPaintDashedSegmentPreNormalized(
         usize idxPerDash = 6u;
         if(style.antiAlias){
             vertsPerDash = 8u;
-            idxPerDash = 18u;
+            idxPerDash = 30u;
         }
         if(style.cap == PaintLineCap::Round){
             if(style.antiAlias){
-                vertsPerDash += 22u;
-                idxPerDash += 72u;
+                vertsPerDash += 36u;
+                idxPerDash += 144u;
             }
             else{
-                vertsPerDash += 12u;
-                idxPerDash += 24u;
+                vertsPerDash += 18u;
+                idxPerDash += 48u;
             }
         }
         const usize maxVA = (cast<usize>(u32.max) - vertices.size()) / vertsPerDash;
@@ -1143,7 +1200,9 @@ b8 EmitPaintDashedSegmentPreNormalized(
             if(step > 1.0e-5f){
                 const Point d0(start.x + ux * s, start.y + uy * s);
                 const Point d1(start.x + ux * (s + step), start.y + uy * (s + step));
-                if(!EmitPaintStrokeWithCapsPreNormalized(clipEntry, d0, d1, ux, uy, style, true, true, premultiplied, vertices, indices, inOutEmittedIndices))
+                const b8 cStart = !(suppressStartCap && s <= 1.0e-5f);
+                const b8 cEnd = !(suppressEndCap && (s + step) >= segLen - 1.0e-5f);
+                if(!EmitPaintStrokeWithCapsPreNormalized(clipEntry, d0, d1, ux, uy, style, capHalfLen, aaWidth, cStart, cEnd, premultiplied, vertices, indices, inOutEmittedIndices))
                     return false;
             }
             s += step;
@@ -1166,6 +1225,10 @@ b8 EmitPaintDashedSegment(
     in Point start,
     in Point end,
     in PaintLineStyle style,
+    in f32 capHalfLen,
+    in f32 aaWidth,
+    in b8 suppressStartCap,
+    in b8 suppressEndCap,
     in Color premultiplied,
     mut f32 inOutPhase,
     mut Vector<Vertex> vertices,
@@ -1181,7 +1244,7 @@ b8 EmitPaintDashedSegment(
 
     const f32 invLen = 1.0f / segLen;
     return EmitPaintDashedSegmentPreNormalized(
-        clipEntry, start, end, segLen, dx * invLen, dy * invLen, style, premultiplied, inOutPhase,
+        clipEntry, start, end, segLen, dx * invLen, dy * invLen, style, capHalfLen, aaWidth, suppressStartCap, suppressEndCap, premultiplied, inOutPhase,
         vertices, indices, inOutEmittedIndices
     );
 }
@@ -1193,7 +1256,10 @@ b8 EmitPaintPolylineJoinPreNormalized(
     in f32 uy0,
     in f32 ux1,
     in f32 uy1,
+    in f32 thickness0,
+    in f32 thickness1,
     in PaintLineStyle style,
+    in f32 aaWidth,
     in Color premultiplied,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
@@ -1204,15 +1270,18 @@ b8 EmitPaintPolylineJoinPreNormalized(
     if(Abs(VectorSingle(cross)).x <= 1.0e-5f && dot >= 0.0f)
         return true;
 
-    const f32 halfW = 0.5f * style.thickness;
+    const f32 halfW0 = 0.5f * thickness0;
+    const f32 halfW1 = 0.5f * thickness1;
+    const f32 maxHalfW = UiSimdMax(halfW0, halfW1);
+    const f32 effAa = UiSimdMax(0.25f, aaWidth);
     f32 aaPad = 0.0f;
     if(style.antiAlias)
-        aaPad = 1.0f;
-    f32 joinPad = halfW;
+        aaPad = effAa;
+    f32 joinPad = maxHalfW;
     f32 miterLimit = 1.0f;
     if(style.join == PaintLineJoin::Miter){
         miterLimit = UiSimdMax(style.miterLimit, 1.0f);
-        joinPad = halfW * miterLimit;
+        joinPad = maxHalfW * miterLimit;
     }
     joinPad += aaPad;
     if(
@@ -1231,29 +1300,31 @@ b8 EmitPaintPolylineJoinPreNormalized(
 
     if(style.join == PaintLineJoin::Round){
         return EmitPaintArcWedgesNormalized(
-            clipEntry, currPt, n0, n1, Point(ux0 - ux1, uy0 - uy1), halfW, premultiplied, style.antiAlias,
+            clipEntry, currPt, n0, n1, Point(ux0 - ux1, uy0 - uy1), halfW0, halfW1, premultiplied, style.antiAlias, effAa,
             vertices, indices, inOutEmittedIndices
         );
     }
 
-    const Point pA(currPt.x + n0.x * halfW, currPt.y + n0.y * halfW);
-    const Point pB(currPt.x + n1.x * halfW, currPt.y + n1.y * halfW);
-    if(style.join == PaintLineJoin::Miter){
-        const Point bisector = NormalizePaintVec2(Point(n0.x + n1.x, n0.y + n1.y), Point(0.0f, 0.0f));
-        const f32 dotNB = n0.x * bisector.x + n0.y * bisector.y;
-        if(dotNB > 1.0e-4f && (1.0f / dotNB) <= miterLimit){
-            const f32 miterDist = halfW / dotNB;
-            const Point miterPt(currPt.x + bisector.x * miterDist, currPt.y + bisector.y * miterDist);
+    const Point pA(currPt.x + n0.x * halfW0, currPt.y + n0.y * halfW0);
+    const Point pB(currPt.x + n1.x * halfW1, currPt.y + n1.y * halfW1);
+    if(style.join == PaintLineJoin::Miter && Abs(VectorSingle(cross)).x > 1.0e-4f){
+        const f32 tInter = ((pB.x - pA.x) * uy1 - (pB.y - pA.y) * ux1) / cross;
+        const Point miterPt(pA.x + ux0 * tInter, pA.y + uy0 * tInter);
+        const f32 mdx = miterPt.x - currPt.x;
+        const f32 mdy = miterPt.y - currPt.y;
+        const f32 mDistSq = mdx * mdx + mdy * mdy;
+        const f32 maxLimR = miterLimit * UiSimdMax(maxHalfW, 1.0e-5f);
+        if(IsFinite(VectorSingle(mDistSq)) && mDistSq <= maxLimR * maxLimR && (mdx * (n0.x + n1.x) + mdy * (n0.y + n1.y)) > 0.0f){
             if(!style.antiAlias)
                 return PushSolidQuadToBuffers(currPt, pA, miterPt, pB, premultiplied, premultiplied, premultiplied, premultiplied, vertices, indices, inOutEmittedIndices);
             if(vertices.size() > cast<usize>(u32.max - 7u) || indices.size() > cast<usize>(u32.max - 18u)){
                 assert(false);
                 return false;
             }
-            const f32 outMiterDist = (halfW + 1.0f) / dotNB;
-            const Point pOutA(pA.x + n0.x, pA.y + n0.y);
-            const Point pOutM(currPt.x + bisector.x * outMiterDist, currPt.y + bisector.y * outMiterDist);
-            const Point pOutB(pB.x + n1.x, pB.y + n1.y);
+            const Point pOutA(pA.x + n0.x * effAa, pA.y + n0.y * effAa);
+            const Point pOutB(pB.x + n1.x * effAa, pB.y + n1.y * effAa);
+            const f32 tOut = ((pOutB.x - pOutA.x) * uy1 - (pOutB.y - pOutA.y) * ux1) / cross;
+            const Point pOutM(pOutA.x + ux0 * tOut, pOutA.y + uy0 * tOut);
             const Color zeroAlpha(0.0f, 0.0f, 0.0f, 0.0f);
             const u32 vertexBase = cast<u32>(vertices.size());
             vertices.push_back(Vertex(currPt, Point(0.0f, 0.0f), premultiplied));
@@ -1288,21 +1359,25 @@ b8 EmitPaintPolylineJoinPreNormalized(
 
     if(!style.antiAlias)
         return PushSolidTriToBuffers(currPt, pA, pB, premultiplied, vertices, indices, inOutEmittedIndices);
-    if(vertices.size() > cast<usize>(u32.max - 5u) || indices.size() > cast<usize>(u32.max - 9u)){
+    if(vertices.size() > cast<usize>(u32.max - 7u) || indices.size() > cast<usize>(u32.max - 15u)){
         assert(false);
         return false;
     }
     Point bn = NormalizePaintVec2(Point(pA.y - pB.y, pB.x - pA.x), n0);
     if(bn.x * (n0.x + n1.x) + bn.y * (n0.y + n1.y) < 0.0f)
         bn = Point(-bn.x, -bn.y);
-    const Point pOutA(pA.x + bn.x, pA.y + bn.y);
-    const Point pOutB(pB.x + bn.x, pB.y + bn.y);
+    const Point pOutA(pA.x + n0.x * effAa, pA.y + n0.y * effAa);
+    const Point pBevelOutA(pA.x + bn.x * effAa, pA.y + bn.y * effAa);
+    const Point pBevelOutB(pB.x + bn.x * effAa, pB.y + bn.y * effAa);
+    const Point pOutB(pB.x + n1.x * effAa, pB.y + n1.y * effAa);
     const Color zeroAlpha(0.0f, 0.0f, 0.0f, 0.0f);
     const u32 vertexBase = cast<u32>(vertices.size());
     vertices.push_back(Vertex(currPt, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(pA, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(pB, Point(0.0f, 0.0f), premultiplied));
     vertices.push_back(Vertex(pOutA, Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(pBevelOutA, Point(0.0f, 0.0f), zeroAlpha));
+    vertices.push_back(Vertex(pBevelOutB, Point(0.0f, 0.0f), zeroAlpha));
     vertices.push_back(Vertex(pOutB, Point(0.0f, 0.0f), zeroAlpha));
     indices.push_back(vertexBase);
     indices.push_back(vertexBase + 1u);
@@ -1312,8 +1387,14 @@ b8 EmitPaintPolylineJoinPreNormalized(
     indices.push_back(vertexBase + 4u);
     indices.push_back(vertexBase + 1u);
     indices.push_back(vertexBase + 4u);
+    indices.push_back(vertexBase + 5u);
+    indices.push_back(vertexBase + 1u);
+    indices.push_back(vertexBase + 5u);
     indices.push_back(vertexBase + 2u);
-    inOutEmittedIndices += 9u;
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase + 5u);
+    indices.push_back(vertexBase + 6u);
+    inOutEmittedIndices += 15u;
     return true;
 }
 
@@ -1360,9 +1441,13 @@ void EmitPaintLine(
 }
 
 f32 ComputePaintTransformedPerpScale(in PaintTransform2D xf, in f32 lx, in f32 ly){
-    const f32 px = xf.m00 * (-ly) + xf.m01 * lx;
-    const f32 py = xf.m10 * (-ly) + xf.m11 * lx;
-    return Sqrt(VectorSingle(px * px + py * py)).x;
+    const f32 ax = xf.m00 * lx + xf.m01 * ly;
+    const f32 ay = xf.m10 * lx + xf.m11 * ly;
+    const VectorSingle aLenSq(ax * ax + ay * ay);
+    if(!IsFinite(aLenSq) || aLenSq.x <= 1.0e-12f)
+        return 0.0f;
+    const f32 absDet = Abs(VectorSingle(xf.m00 * xf.m11 - xf.m01 * xf.m10)).x;
+    return absDet * Rsqrt(aLenSq).x;
 }
 
 void ComputePaintTransformedSegmentScales(
@@ -1374,19 +1459,25 @@ void ComputePaintTransformedSegmentScales(
 ){
     const f32 ax = xf.m00 * lx + xf.m01 * ly;
     const f32 ay = xf.m10 * lx + xf.m11 * ly;
-    const f32 px = xf.m00 * (-ly) + xf.m01 * lx;
-    const f32 py = xf.m10 * (-ly) + xf.m11 * lx;
-    const VectorSingle scales = Sqrt(VectorSingle(ax * ax + ay * ay, px * px + py * py, 0.0f, 0.0f));
-    outAlongScale = scales.x;
-    outPerpScale = scales.y;
+    const VectorSingle aLenSq(ax * ax + ay * ay);
+    if(!IsFinite(aLenSq) || aLenSq.x <= 1.0e-12f){
+        outAlongScale = 0.0f;
+        outPerpScale = 0.0f;
+        return;
+    }
+    const f32 invALen = Rsqrt(aLenSq).x;
+    outAlongScale = aLenSq.x * invALen;
+    outPerpScale = Abs(VectorSingle(xf.m00 * xf.m11 - xf.m01 * xf.m10)).x * invALen;
 }
 
-void EmitPaintLineStyled(
+void EmitPaintLineStyledCore(
     in b8 recording,
     in PaintClipEntry clipEntry,
     in Point start,
     in Point end,
     in PaintLineStyle style,
+    in f32 capHalfLen,
+    in f32 aaWidth,
     in Color color,
     in u32 layer,
     mut Vector<Vertex> vertices,
@@ -1426,10 +1517,10 @@ void EmitPaintLineStyled(
     if(useDash){
         const f32 cycle = style.dashLength + style.gapLength;
         f32 phase = WrapPaintDashPhase(style.dashOffset, cycle);
-        EmitPaintDashedSegment(clipEntry, start, end, style, premultiplied, phase, vertices, indices, emittedIndices);
+        EmitPaintDashedSegment(clipEntry, start, end, style, capHalfLen, aaWidth, false, false, premultiplied, phase, vertices, indices, emittedIndices);
     }
     else{
-        EmitPaintStrokeWithCaps(clipEntry, start, end, style, true, true, premultiplied, vertices, indices, emittedIndices);
+        EmitPaintStrokeWithCaps(clipEntry, start, end, style, capHalfLen, aaWidth, true, true, premultiplied, vertices, indices, emittedIndices);
     }
 
     AppendPaintSolidCommand(
@@ -1437,6 +1528,104 @@ void EmitPaintLineStyled(
         u32.max, u32.max, 0u, u32.max,
         commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
+}
+
+void EmitPaintLineStyled(
+    in b8 recording,
+    in PaintClipEntry clipEntry,
+    in Point start,
+    in Point end,
+    in PaintLineStyle style,
+    in Color color,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    EmitPaintLineStyledCore(
+        recording, clipEntry, start, end, style, 0.5f * style.thickness, 1.0f, color, layer,
+        vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void ResolvePolylineValidEndpoints(
+    in Span<Point> points,
+    in usize segCount,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 uniformScale,
+    in b8 uniformThicknessValid,
+    in f32 styleThickness,
+    mut usize outFirstValidSeg,
+    mut usize outLastValidSeg
+){
+    outFirstValidSeg = segCount;
+    outLastValidSeg = 0u;
+    for(usize pi = 0u; pi < segCount; ++pi){
+        in Point pa = points[pi];
+        in Point pb = points[pi + 1u];
+        const f32 ldx = pb.x - pa.x;
+        const f32 ldy = pb.y - pa.y;
+        const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+        if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
+            b8 segDrawable = true;
+            if(hasTransform){
+                const Point ta = ApplyPaintTransform(xf, pa);
+                const Point tb = ApplyPaintTransform(xf, pb);
+                const f32 tdx = tb.x - ta.x;
+                const f32 tdy = tb.y - ta.y;
+                const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
+                if(uniformScale){
+                    segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
+                }
+                else{
+                    const f32 invLLen = Rsqrt(lLenSqVec).x;
+                    const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                    segDrawable = IsFinite(VectorSingle(tLenSqVec.x, styleThickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
+                }
+            }
+            if(segDrawable){
+                outFirstValidSeg = pi;
+                break;
+            }
+        }
+    }
+    if(outFirstValidSeg >= segCount)
+        return;
+    outLastValidSeg = outFirstValidSeg;
+    usize rev = segCount;
+    while(rev > outFirstValidSeg + 1u){
+        --rev;
+        in Point pa = points[rev];
+        in Point pb = points[rev + 1u];
+        const f32 ldx = pb.x - pa.x;
+        const f32 ldy = pb.y - pa.y;
+        const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+        if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
+            b8 segDrawable = true;
+            if(hasTransform){
+                const Point ta = ApplyPaintTransform(xf, pa);
+                const Point tb = ApplyPaintTransform(xf, pb);
+                const f32 tdx = tb.x - ta.x;
+                const f32 tdy = tb.y - ta.y;
+                const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
+                if(uniformScale){
+                    segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
+                }
+                else{
+                    const f32 invLLen = Rsqrt(lLenSqVec).x;
+                    const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                    segDrawable = IsFinite(VectorSingle(tLenSqVec.x, styleThickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
+                }
+            }
+            if(segDrawable){
+                outLastValidSeg = rev;
+                break;
+            }
+        }
+    }
 }
 
 void EmitPaintPolylineCore(
@@ -1449,6 +1638,7 @@ void EmitPaintPolylineCore(
     in b8 uniformScale,
     in f32 xfScale,
     in PaintLineStyle style,
+    in f32 aaWidth,
     in Color color,
     in u32 layer,
     mut Vector<Vertex> vertices,
@@ -1509,6 +1699,15 @@ void EmitPaintPolylineCore(
     const f32 uniformScaledThickness = style.thickness * xfScale;
     const b8 uniformThicknessValid = uniformScaledThickness > 0.0f && IsFinite(VectorSingle(uniformScaledThickness));
 
+    usize firstValidSeg = segCount;
+    usize lastValidSeg = 0u;
+    if(!isLoop){
+        ResolvePolylineValidEndpoints(
+            points, segCount, hasTransform, xf, uniformScale, uniformThicknessValid, style.thickness,
+            firstValidSeg, lastValidSeg
+        );
+    }
+
     const b8 useDash = IsFinite(VectorSingle(style.dashLength, style.gapLength, 0.0f, 0.0f).xy) && style.dashLength > 0.0f && style.gapLength > 0.0f;
     if(useDash){
         f32 phase = 0.0f;
@@ -1527,6 +1726,22 @@ void EmitPaintPolylineCore(
                 phase = (phase / baseCycle) * uniformCycle;
             }
         }
+        const f32 initPhaseFrac = phase / UiSimdMax(uniformCycle, 1.0e-5f);
+        const f32 initDashFrac = style.dashLength / UiSimdMax(baseCycle, 1.0e-5f);
+        const b8 firstStartsInDash = isLoop && initPhaseFrac > 1.0e-4f && initPhaseFrac < initDashFrac - 1.0e-4f;
+
+        b8 prevValid = false;
+        b8 prevEndedInDash = false;
+        f32 prevUx = 1.0f;
+        f32 prevUy = 0.0f;
+        f32 prevThickness = style.thickness;
+        b8 firstValid = false;
+        f32 firstUx = 1.0f;
+        f32 firstUy = 0.0f;
+        f32 firstThickness = style.thickness;
+        Point firstAnchor(0.0f, 0.0f);
+        b8 brokeEarly = false;
+
         usize nextIdx = 1u;
         for(usize si = 0u; si < segCount; ++si){
             in Point la = points[si];
@@ -1544,46 +1759,146 @@ void EmitPaintPolylineCore(
             if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
                 in Point a = prevTa;
                 in Point b = tb;
-                if(isUniformTransformed){
-                    if(uniformThicknessValid){
-                        if(!EmitPaintDashedSegment(clipEntry, a, b, uniformStyle, premultiplied, phase, vertices, indices, emittedIndices))
-                            break;
-                    }
-                    else if(hasUniformCycle){
-                        const f32 segLen = Sqrt(VectorSingle((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))).x;
-                        phase = WrapPaintDashPhase(phase + segLen, uniformCycle);
-                    }
-                }
-                else if(hasTransform){
-                    PaintLineStyle segStyle = style;
-                    const f32 invLLen = Rsqrt(lLenSqVec).x;
-                    f32 perpScale = 1.0f;
-                    f32 alongScale = 1.0f;
-                    ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
-                    segStyle.thickness = style.thickness * perpScale;
-                    if(alongScale > 1.0e-5f && baseCycle > 1.0e-5f){
-                        const f32 phaseFrac = phase / baseCycle;
-                        segStyle.dashLength = style.dashLength * alongScale;
-                        segStyle.gapLength = style.gapLength * alongScale;
-                        const f32 segCycle = segStyle.dashLength + segStyle.gapLength;
-                        f32 segPhase = phaseFrac * segCycle;
-                        if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
-                            if(!EmitPaintDashedSegment(clipEntry, a, b, segStyle, premultiplied, segPhase, vertices, indices, emittedIndices))
+                const f32 dx = b.x - a.x;
+                const f32 dy = b.y - a.y;
+                const VectorSingle lenSqVec(dx * dx + dy * dy);
+                if(IsFinite(lenSqVec) && lenSqVec.x > 1.0e-8f){
+                    const f32 invLen = Rsqrt(lenSqVec).x;
+                    const f32 segLen = lenSqVec.x * invLen;
+                    const f32 ux = dx * invLen;
+                    const f32 uy = dy * invLen;
+                    if(isUniformTransformed){
+                        if(uniformThicknessValid){
+                            const b8 curStartsInDash = prevValid && prevEndedInDash && phase > 1.0e-5f && phase < uniformStyle.dashLength - 1.0e-5f;
+                            const b8 suppressStart = curStartsInDash || (!prevValid && firstStartsInDash);
+                            const f32 postPhase = WrapPaintDashPhase(phase + segLen, uniformCycle);
+                            const b8 endsInDash = postPhase > 1.0e-5f && postPhase < uniformStyle.dashLength - 1.0e-5f;
+                            b8 suppressEnd = false;
+                            if(endsInDash && (isLoop || si < lastValidSeg))
+                                suppressEnd = true;
+                            if(isLoop && si == segCount - 1u && !firstStartsInDash)
+                                suppressEnd = false;
+                            if(!EmitPaintDashedSegmentPreNormalized(clipEntry, a, b, segLen, ux, uy, uniformStyle, 0.5f * uniformStyle.thickness, aaWidth, suppressStart, suppressEnd, premultiplied, phase, vertices, indices, emittedIndices)){
+                                brokeEarly = true;
                                 break;
+                            }
+                            if(curStartsInDash){
+                                if(!EmitPaintPolylineJoinPreNormalized(clipEntry, a, prevUx, prevUy, ux, uy, prevThickness, uniformStyle.thickness, uniformStyle, aaWidth, premultiplied, vertices, indices, emittedIndices)){
+                                    brokeEarly = true;
+                                    break;
+                                }
+                            }
+                            if(!firstValid){
+                                firstUx = ux;
+                                firstUy = uy;
+                                firstThickness = uniformStyle.thickness;
+                                firstAnchor = a;
+                                firstValid = true;
+                            }
+                            prevUx = ux;
+                            prevUy = uy;
+                            prevThickness = uniformStyle.thickness;
+                            prevEndedInDash = endsInDash;
+                            prevValid = true;
                         }
-                        else{
-                            const f32 segLen = Sqrt(VectorSingle((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))).x;
-                            segPhase = WrapPaintDashPhase(segPhase + segLen, segCycle);
+                        else if(hasUniformCycle){
+                            phase = WrapPaintDashPhase(phase + segLen, uniformCycle);
+                            prevEndedInDash = false;
                         }
-                        phase = (segPhase / segCycle) * baseCycle;
                     }
-                    else if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
-                        if(!EmitPaintDashedSegment(clipEntry, a, b, segStyle, premultiplied, phase, vertices, indices, emittedIndices))
+                    else if(hasTransform){
+                        PaintLineStyle segStyle = style;
+                        const f32 invLLen = Rsqrt(lLenSqVec).x;
+                        f32 perpScale = 1.0f;
+                        f32 alongScale = 1.0f;
+                        ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
+                        segStyle.thickness = style.thickness * perpScale;
+                        if(alongScale > 1.0e-5f && baseCycle > 1.0e-5f){
+                            const f32 phaseFrac = phase / baseCycle;
+                            segStyle.dashLength = style.dashLength * alongScale;
+                            segStyle.gapLength = style.gapLength * alongScale;
+                            const f32 segCycle = segStyle.dashLength + segStyle.gapLength;
+                            f32 segPhase = phaseFrac * segCycle;
+                            if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
+                                const b8 curStartsInDash = prevValid && prevEndedInDash && segPhase > 1.0e-5f && segPhase < segStyle.dashLength - 1.0e-5f;
+                                const b8 suppressStart = curStartsInDash || (!prevValid && firstStartsInDash);
+                                const f32 postPhase = WrapPaintDashPhase(segPhase + segLen, segCycle);
+                                const b8 endsInDash = postPhase > 1.0e-5f && postPhase < segStyle.dashLength - 1.0e-5f;
+                                b8 suppressEnd = false;
+                                if(endsInDash && (isLoop || si < lastValidSeg))
+                                    suppressEnd = true;
+                                if(isLoop && si == segCount - 1u && !firstStartsInDash)
+                                    suppressEnd = false;
+                                if(!EmitPaintDashedSegmentPreNormalized(clipEntry, a, b, segLen, ux, uy, segStyle, 0.5f * style.thickness * alongScale, aaWidth, suppressStart, suppressEnd, premultiplied, segPhase, vertices, indices, emittedIndices)){
+                                    brokeEarly = true;
+                                    break;
+                                }
+                                if(curStartsInDash){
+                                    if(!EmitPaintPolylineJoinPreNormalized(clipEntry, a, prevUx, prevUy, ux, uy, prevThickness, segStyle.thickness, segStyle, aaWidth, premultiplied, vertices, indices, emittedIndices)){
+                                        brokeEarly = true;
+                                        break;
+                                    }
+                                }
+                                if(!firstValid){
+                                    firstUx = ux;
+                                    firstUy = uy;
+                                    firstThickness = segStyle.thickness;
+                                    firstAnchor = a;
+                                    firstValid = true;
+                                }
+                                prevUx = ux;
+                                prevUy = uy;
+                                prevThickness = segStyle.thickness;
+                                prevEndedInDash = endsInDash;
+                                prevValid = true;
+                            }
+                            else{
+                                segPhase = WrapPaintDashPhase(segPhase + segLen, segCycle);
+                                prevEndedInDash = false;
+                            }
+                            phase = (segPhase / segCycle) * baseCycle;
+                        }
+                        else if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
+                            if(!EmitPaintDashedSegmentPreNormalized(clipEntry, a, b, segLen, ux, uy, segStyle, 0.5f * segStyle.thickness, aaWidth, false, false, premultiplied, phase, vertices, indices, emittedIndices)){
+                                brokeEarly = true;
+                                break;
+                            }
+                            prevEndedInDash = false;
+                        }
+                    }
+                    else{
+                        const b8 curStartsInDash = prevValid && prevEndedInDash && phase > 1.0e-5f && phase < style.dashLength - 1.0e-5f;
+                        const b8 suppressStart = curStartsInDash || (!prevValid && firstStartsInDash);
+                        const f32 postPhase = WrapPaintDashPhase(phase + segLen, baseCycle);
+                        const b8 endsInDash = postPhase > 1.0e-5f && postPhase < style.dashLength - 1.0e-5f;
+                        b8 suppressEnd = false;
+                        if(endsInDash && (isLoop || si < lastValidSeg))
+                            suppressEnd = true;
+                        if(isLoop && si == segCount - 1u && !firstStartsInDash)
+                            suppressEnd = false;
+                        if(!EmitPaintDashedSegmentPreNormalized(clipEntry, a, b, segLen, ux, uy, style, 0.5f * style.thickness, aaWidth, suppressStart, suppressEnd, premultiplied, phase, vertices, indices, emittedIndices)){
+                            brokeEarly = true;
                             break;
+                        }
+                        if(curStartsInDash){
+                            if(!EmitPaintPolylineJoinPreNormalized(clipEntry, a, prevUx, prevUy, ux, uy, prevThickness, style.thickness, style, aaWidth, premultiplied, vertices, indices, emittedIndices)){
+                                brokeEarly = true;
+                                break;
+                            }
+                        }
+                        if(!firstValid){
+                            firstUx = ux;
+                            firstUy = uy;
+                            firstThickness = style.thickness;
+                            firstAnchor = a;
+                            firstValid = true;
+                        }
+                        prevUx = ux;
+                        prevUy = uy;
+                        prevThickness = style.thickness;
+                        prevEndedInDash = endsInDash;
+                        prevValid = true;
                     }
-                }
-                else if(!EmitPaintDashedSegment(clipEntry, a, b, style, premultiplied, phase, vertices, indices, emittedIndices)){
-                    break;
                 }
             }
             prevTa = tb;
@@ -1591,22 +1906,25 @@ void EmitPaintPolylineCore(
             if(nextIdx == points.size())
                 nextIdx = 0u;
         }
+        if(isLoop && !brokeEarly && prevValid && firstValid && prevEndedInDash && firstStartsInDash){
+            EmitPaintPolylineJoinPreNormalized(clipEntry, firstAnchor, prevUx, prevUy, firstUx, firstUy, prevThickness, firstThickness, style, aaWidth, premultiplied, vertices, indices, emittedIndices);
+        }
     }
     else{
         usize vertsPerSeg = 4u;
         usize idxPerSeg = 6u;
         if(style.antiAlias){
             vertsPerSeg = 8u;
-            idxPerSeg = 18u;
+            idxPerSeg = 30u;
         }
         if(style.join == PaintLineJoin::Round){
             if(style.antiAlias){
-                vertsPerSeg += 11u;
-                idxPerSeg += 36u;
+                vertsPerSeg += 19u;
+                idxPerSeg += 72u;
             }
             else{
-                vertsPerSeg += 6u;
-                idxPerSeg += 12u;
+                vertsPerSeg += 10u;
+                idxPerSeg += 24u;
             }
         }
         else if(style.join == PaintLineJoin::Miter){
@@ -1621,8 +1939,8 @@ void EmitPaintPolylineCore(
         }
         else{
             if(style.antiAlias){
-                vertsPerSeg += 5u;
-                idxPerSeg += 9u;
+                vertsPerSeg += 7u;
+                idxPerSeg += 15u;
             }
             else{
                 vertsPerSeg += 3u;
@@ -1635,74 +1953,6 @@ void EmitPaintPolylineCore(
         if(capSegs > 0u){
             vertices.reserve(vertices.size() + capSegs * vertsPerSeg);
             indices.reserve(indices.size() + capSegs * idxPerSeg);
-        }
-
-        usize firstValidSeg = segCount;
-        usize lastValidSeg = 0u;
-        if(!isLoop){
-            for(usize pi = 0u; pi < segCount; ++pi){
-                in Point pa = points[pi];
-                in Point pb = points[pi + 1u];
-                const f32 ldx = pb.x - pa.x;
-                const f32 ldy = pb.y - pa.y;
-                const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
-                if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
-                    b8 segDrawable = true;
-                    if(hasTransform){
-                        const Point ta = ApplyPaintTransform(xf, pa);
-                        const Point tb = ApplyPaintTransform(xf, pb);
-                        const f32 tdx = tb.x - ta.x;
-                        const f32 tdy = tb.y - ta.y;
-                        const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
-                        if(uniformScale){
-                            segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
-                        }
-                        else{
-                            const f32 invLLen = Rsqrt(lLenSqVec).x;
-                            const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
-                            segDrawable = IsFinite(VectorSingle(tLenSqVec.x, style.thickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
-                        }
-                    }
-                    if(segDrawable){
-                        firstValidSeg = pi;
-                        break;
-                    }
-                }
-            }
-            if(firstValidSeg < segCount){
-                lastValidSeg = firstValidSeg;
-                usize rev = segCount;
-                while(rev > firstValidSeg + 1u){
-                    --rev;
-                    in Point pa = points[rev];
-                    in Point pb = points[rev + 1u];
-                    const f32 ldx = pb.x - pa.x;
-                    const f32 ldy = pb.y - pa.y;
-                    const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
-                    if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
-                        b8 segDrawable = true;
-                        if(hasTransform){
-                            const Point ta = ApplyPaintTransform(xf, pa);
-                            const Point tb = ApplyPaintTransform(xf, pb);
-                            const f32 tdx = tb.x - ta.x;
-                            const f32 tdy = tb.y - ta.y;
-                            const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
-                            if(uniformScale){
-                                segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
-                            }
-                            else{
-                                const f32 invLLen = Rsqrt(lLenSqVec).x;
-                                const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
-                                segDrawable = IsFinite(VectorSingle(tLenSqVec.x, style.thickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
-                            }
-                        }
-                        if(segDrawable){
-                            lastValidSeg = rev;
-                            break;
-                        }
-                    }
-                }
-            }
         }
 
         b8 prevValid = false;
@@ -1733,13 +1983,18 @@ void EmitPaintPolylineCore(
                 in Point a = prevTa;
                 in Point b = tb;
                 PaintLineStyle segStyle = style;
+                f32 capHalfLen = 0.5f * style.thickness;
                 if(isUniformTransformed){
                     segStyle.thickness = uniformScaledThickness;
+                    capHalfLen = 0.5f * uniformScaledThickness;
                 }
                 else if(hasTransform){
                     const f32 invLLen = Rsqrt(lLenSqVec).x;
-                    const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                    f32 perpScale = 1.0f;
+                    f32 alongScale = 1.0f;
+                    ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
                     segStyle.thickness = style.thickness * perpScale;
+                    capHalfLen = 0.5f * style.thickness * alongScale;
                 }
                 const f32 dx = b.x - a.x;
                 const f32 dy = b.y - a.y;
@@ -1750,14 +2005,12 @@ void EmitPaintPolylineCore(
                     const f32 invLen = Rsqrt(lenSqVec).x;
                     const f32 ux = dx * invLen;
                     const f32 uy = dy * invLen;
-                    if(!EmitPaintStrokeWithCapsPreNormalized(clipEntry, a, b, ux, uy, segStyle, capStart, capEnd, premultiplied, vertices, indices, emittedIndices)){
+                    if(!EmitPaintStrokeWithCapsPreNormalized(clipEntry, a, b, ux, uy, segStyle, capHalfLen, aaWidth, capStart, capEnd, premultiplied, vertices, indices, emittedIndices)){
                         brokeEarly = true;
                         break;
                     }
                     if(prevValid){
-                        PaintLineStyle joinStyle = segStyle;
-                        joinStyle.thickness = 0.5f * (prevThickness + segStyle.thickness);
-                        if(!EmitPaintPolylineJoinPreNormalized(clipEntry, a, prevUx, prevUy, ux, uy, joinStyle, premultiplied, vertices, indices, emittedIndices)){
+                        if(!EmitPaintPolylineJoinPreNormalized(clipEntry, a, prevUx, prevUy, ux, uy, prevThickness, segStyle.thickness, segStyle, aaWidth, premultiplied, vertices, indices, emittedIndices)){
                             brokeEarly = true;
                             break;
                         }
@@ -1784,9 +2037,7 @@ void EmitPaintPolylineCore(
                 nextIdx = 0u;
         }
         if(isLoop && !brokeEarly && prevValid && firstValid){
-            PaintLineStyle closeStyle = style;
-            closeStyle.thickness = 0.5f * (prevThickness + firstThickness);
-            EmitPaintPolylineJoinPreNormalized(clipEntry, firstAnchor, prevUx, prevUy, firstUx, firstUy, closeStyle, premultiplied, vertices, indices, emittedIndices);
+            EmitPaintPolylineJoinPreNormalized(clipEntry, firstAnchor, prevUx, prevUy, firstUx, firstUy, prevThickness, firstThickness, style, aaWidth, premultiplied, vertices, indices, emittedIndices);
         }
     }
 
@@ -1803,6 +2054,7 @@ void EmitPaintPolyline(
     in Span<Point> points,
     in b8 closed,
     in PaintLineStyle style,
+    in f32 aaWidth,
     in Color color,
     in u32 layer,
     mut Vector<Vertex> vertices,
@@ -1812,7 +2064,7 @@ void EmitPaintPolyline(
     mut b8 inOutCommandsStrictlyDescending
 ){
     EmitPaintPolylineCore(
-        recording, clipEntry, points, closed, false, PaintTransformIdentity(), true, 1.0f, style, color, layer,
+        recording, clipEntry, points, closed, false, PaintTransformIdentity(), true, 1.0f, style, aaWidth, color, layer,
         vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
@@ -1826,6 +2078,7 @@ void EmitPaintPolylineTransformed(
     in b8 uniformScale,
     in f32 xfScale,
     in PaintLineStyle style,
+    in f32 aaWidth,
     in Color color,
     in u32 layer,
     mut Vector<Vertex> vertices,
@@ -1835,7 +2088,7 @@ void EmitPaintPolylineTransformed(
     mut b8 inOutCommandsStrictlyDescending
 ){
     EmitPaintPolylineCore(
-        recording, clipEntry, points, closed, true, xf, uniformScale, xfScale, style, color, layer,
+        recording, clipEntry, points, closed, true, xf, uniformScale, xfScale, style, aaWidth, color, layer,
         vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
@@ -1991,7 +2244,7 @@ void EmitPaintLineBatchCore(
         }
         if(!EmitPaintStrokeSegmentPreNormalized(
             clipEntry, minX, maxX, minY, maxY,
-            p0, p1, dx * invLen, dy * invLen, halfW, premultiplied, false,
+            p0, p1, dx * invLen, dy * invLen, halfW, premultiplied, false, false, false, 1.0f,
             vertices, indices, emittedIndices
         ))
             break;
@@ -2123,6 +2376,317 @@ void EmitPaintTransformedQuad(
         clipEntry, firstIndex, s_PaintQuadIndexCount, layer, material,
         glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
         commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+Color PremultiplyPaintColor(in Color color){
+    if(color.a == 1.0f)
+        return color;
+    const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+    return Color(premul.x, premul.y, premul.z, premul.w);
+}
+
+void EmitPaintFilledConvexPolygon(
+    in b8 recording,
+    in PaintClipEntry clipEntry,
+    in Span<Point> points,
+    in Color color,
+    in f32 aaWidth,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(!recording || points.size() < 3u || !IsValidPaintColor(color) || color.a <= 0.0f)
+        return;
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, aaWidth, 0.0f).xyz))
+        return;
+
+    const usize pointCount = points.size();
+    VectorSingle minXY(points[0u].x, points[0u].y, 0.0f, 0.0f);
+    VectorSingle maxXY = minXY;
+    f64 signedArea2 = 0.0;
+    b8 allValidEdges = true;
+    for(usize i = 0u; i < pointCount; ++i){
+        in Point p0 = points[i];
+        usize nextIdx = i + 1u;
+        if(nextIdx == pointCount)
+            nextIdx = 0u;
+        in Point p1 = points[nextIdx];
+        if(!IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)))
+            return;
+        const VectorSingle pv(p0.x, p0.y, 0.0f, 0.0f);
+        minXY = Min(minXY, pv);
+        maxXY = Max(maxXY, pv);
+        signedArea2 += cast<f64>(p0.x) * cast<f64>(p1.y) - cast<f64>(p1.x) * cast<f64>(p0.y);
+        const f32 dx = p1.x - p0.x;
+        const f32 dy = p1.y - p0.y;
+        if(dx * dx + dy * dy <= 1.0e-8f)
+            allValidEdges = false;
+    }
+
+    if(Abs(signedArea2) <= 1.0e-5)
+        return;
+
+    f32 clampedAa = aaWidth;
+    if(clampedAa < 0.0f || !allValidEdges)
+        clampedAa = 0.0f;
+    if(maxXY.x + clampedAa <= clipEntry.rect.x || minXY.x - clampedAa >= clipEntry.right || maxXY.y + clampedAa <= clipEntry.rect.y || minXY.y - clampedAa >= clipEntry.bottom)
+        return;
+
+    const usize coreIndexCount = (pointCount - 2u) * 3u;
+    usize neededVertices = pointCount;
+    usize neededIndices = coreIndexCount;
+    const b8 emitAa = clampedAa > 0.0f;
+    if(emitAa){
+        neededVertices += pointCount * 2u;
+        neededIndices += pointCount * 9u;
+    }
+    if(neededVertices > cast<usize>(u32.max) || neededIndices > cast<usize>(u32.max)){
+        assert(false);
+        return;
+    }
+    if(vertices.size() > cast<usize>(u32.max) - neededVertices || indices.size() > cast<usize>(u32.max) - neededIndices){
+        assert(false);
+        return;
+    }
+
+    vertices.reserve(vertices.size() + neededVertices);
+    indices.reserve(indices.size() + neededIndices);
+
+    const Color premultiplied = PremultiplyPaintColor(color);
+    const Color transparent = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    const Point zeroUv = Point(0.0f, 0.0f);
+    const u32 coreBase = cast<u32>(vertices.size());
+    const u32 firstIndex = cast<u32>(indices.size());
+    for(usize i = 0u; i < pointCount; ++i)
+        vertices.push_back(Vertex(points[i], zeroUv, premultiplied));
+    for(u32 i = 1u; i + 1u < cast<u32>(pointCount); ++i){
+        indices.push_back(coreBase);
+        indices.push_back(coreBase + i);
+        indices.push_back(coreBase + i + 1u);
+    }
+
+    u32 emittedIndices = cast<u32>(coreIndexCount);
+    if(emitAa){
+        f32 outSign = 1.0f;
+        if(signedArea2 < 0.0)
+            outSign = -1.0f;
+        const u32 outerBase = cast<u32>(vertices.size());
+        for(usize i = 0u; i < pointCount; ++i){
+            in Point p0 = points[i];
+            usize nextIdx = i + 1u;
+            if(nextIdx == pointCount)
+                nextIdx = 0u;
+            in Point p1 = points[nextIdx];
+            const f32 dx = p1.x - p0.x;
+            const f32 dy = p1.y - p0.y;
+            const f32 invLen = Rsqrt(VectorSingle(dx * dx + dy * dy)).x;
+            const f32 nx = dy * invLen * outSign * clampedAa;
+            const f32 ny = -dx * invLen * outSign * clampedAa;
+            const u32 idx0 = coreBase + cast<u32>(i);
+            const u32 idx1 = coreBase + cast<u32>(nextIdx);
+            const u32 out0 = outerBase + cast<u32>(i) * 2u;
+            const u32 out1 = out0 + 1u;
+            vertices.push_back(Vertex(Point(p0.x + nx, p0.y + ny), zeroUv, transparent));
+            vertices.push_back(Vertex(Point(p1.x + nx, p1.y + ny), zeroUv, transparent));
+            indices.push_back(idx0);
+            indices.push_back(out0);
+            indices.push_back(out1);
+            indices.push_back(idx0);
+            indices.push_back(out1);
+            indices.push_back(idx1);
+            emittedIndices += 6u;
+        }
+        for(u32 i = 0u; i < cast<u32>(pointCount); ++i){
+            u32 prevEdge = cast<u32>(pointCount) - 1u;
+            if(i > 0u)
+                prevEdge = i - 1u;
+            const u32 prevOutEnd = outerBase + prevEdge * 2u + 1u;
+            const u32 nextOutStart = outerBase + i * 2u;
+            indices.push_back(coreBase + i);
+            indices.push_back(prevOutEnd);
+            indices.push_back(nextOutStart);
+            emittedIndices += 3u;
+        }
+    }
+
+    AppendPaintSolidCommand(
+        clipEntry, firstIndex, emittedIndices, layer, PaintMaterial::Solid,
+        u32.max, u32.max, 0u, u32.max,
+        commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+Color LerpPremultipliedColor(in Color a, in Color b, in f32 t){
+    const VectorSingle va(a.r, a.g, a.b, a.a);
+    const VectorSingle vb(b.r, b.g, b.b, b.a);
+    const VectorSingle res = va + (vb - va) * VectorSingle(t);
+    return Color(res.x, res.y, res.z, res.w);
+}
+
+void EmitPaintGradientQuadRaw(
+    in PaintClipEntry clipEntry,
+    in Point p00,
+    in Point p10,
+    in Point p11,
+    in Point p01,
+    in Color c00Premul,
+    in Color c10Premul,
+    in Color c11Premul,
+    in Color c01Premul,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+        assert(false);
+        return;
+    }
+    const u32 vertexBase = cast<u32>(vertices.size());
+    const u32 firstIndex = cast<u32>(indices.size());
+    const Point zeroUv = Point(0.0f, 0.0f);
+    vertices.push_back(Vertex(p00, zeroUv, c00Premul));
+    vertices.push_back(Vertex(p10, zeroUv, c10Premul));
+    vertices.push_back(Vertex(p11, zeroUv, c11Premul));
+    vertices.push_back(Vertex(p01, zeroUv, c01Premul));
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 1u);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase + 3u);
+    AppendPaintSolidCommand(
+        clipEntry, firstIndex, s_PaintQuadIndexCount, layer, PaintMaterial::Solid,
+        u32.max, u32.max, 0u, u32.max,
+        commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void EmitPaintGradientRect(
+    in b8 recording,
+    in PaintClipEntry clipEntry,
+    in Rect rectangle,
+    in Color topLeftColor,
+    in Color topRightColor,
+    in Color bottomRightColor,
+    in Color bottomLeftColor,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(!recording || rectangle.width <= 0.0f || rectangle.height <= 0.0f)
+        return;
+    if(!IsValidPaintColor(topLeftColor) || !IsValidPaintColor(topRightColor) || !IsValidPaintColor(bottomRightColor) || !IsValidPaintColor(bottomLeftColor))
+        return;
+    if(topLeftColor.a <= 0.0f && topRightColor.a <= 0.0f && bottomRightColor.a <= 0.0f && bottomLeftColor.a <= 0.0f)
+        return;
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectEnd.x, rectEnd.y)))
+        return;
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
+        return;
+
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = Max(rectOrigin, clipOrigin);
+    const VectorSingle clippedEnd = Min(rectEnd, clipEnd);
+    const VectorSingle clippedSpan = clippedEnd - clippedOrigin;
+    if(!(clippedSpan.x > 0.0f) || !(clippedSpan.y > 0.0f))
+        return;
+
+    const Color pTL = PremultiplyPaintColor(topLeftColor);
+    const Color pTR = PremultiplyPaintColor(topRightColor);
+    const Color pBR = PremultiplyPaintColor(bottomRightColor);
+    const Color pBL = PremultiplyPaintColor(bottomLeftColor);
+
+    Color c00 = pTL;
+    Color c10 = pTR;
+    Color c11 = pBR;
+    Color c01 = pBL;
+    if(clippedOrigin.x != rectOrigin.x || clippedOrigin.y != rectOrigin.y || clippedEnd.x != rectEnd.x || clippedEnd.y != rectEnd.y){
+        const f32 tx0 = (clippedOrigin.x - rectangle.x) / rectangle.width;
+        const f32 tx1 = (clippedEnd.x - rectangle.x) / rectangle.width;
+        const f32 ty0 = (clippedOrigin.y - rectangle.y) / rectangle.height;
+        const f32 ty1 = (clippedEnd.y - rectangle.y) / rectangle.height;
+        const Color topLeft = LerpPremultipliedColor(pTL, pTR, tx0);
+        const Color topRight = LerpPremultipliedColor(pTL, pTR, tx1);
+        const Color botLeft = LerpPremultipliedColor(pBL, pBR, tx0);
+        const Color botRight = LerpPremultipliedColor(pBL, pBR, tx1);
+        c00 = LerpPremultipliedColor(topLeft, botLeft, ty0);
+        c10 = LerpPremultipliedColor(topRight, botRight, ty0);
+        c11 = LerpPremultipliedColor(topRight, botRight, ty1);
+        c01 = LerpPremultipliedColor(topLeft, botLeft, ty1);
+    }
+
+    EmitPaintGradientQuadRaw(
+        clipEntry,
+        Point(clippedOrigin.x, clippedOrigin.y),
+        Point(clippedEnd.x, clippedOrigin.y),
+        Point(clippedEnd.x, clippedEnd.y),
+        Point(clippedOrigin.x, clippedEnd.y),
+        c00, c10, c11, c01,
+        layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void EmitPaintTransformedGradientRect(
+    in b8 recording,
+    in PaintClipEntry clipEntry,
+    in PaintTransform2D xf,
+    in Rect rectangle,
+    in Color topLeftColor,
+    in Color topRightColor,
+    in Color bottomRightColor,
+    in Color bottomLeftColor,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(!recording || rectangle.width <= 0.0f || rectangle.height <= 0.0f)
+        return;
+    if(!IsValidPaintColor(topLeftColor) || !IsValidPaintColor(topRightColor) || !IsValidPaintColor(bottomRightColor) || !IsValidPaintColor(bottomLeftColor))
+        return;
+    if(topLeftColor.a <= 0.0f && topRightColor.a <= 0.0f && bottomRightColor.a <= 0.0f && bottomLeftColor.a <= 0.0f)
+        return;
+    if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
+        return;
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
+        return;
+
+    const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+    const Point p10 = ApplyPaintTransform(xf, Point(rectangle.x + rectangle.width, rectangle.y));
+    const Point p11 = ApplyPaintTransform(xf, Point(rectangle.x + rectangle.width, rectangle.y + rectangle.height));
+    const Point p01 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y + rectangle.height));
+    if(!IsFinite(VectorSingle(p00.x, p00.y, p10.x, p10.y)) || !IsFinite(VectorSingle(p11.x, p11.y, p01.x, p01.y)))
+        return;
+
+    const VectorSingle min0 = Min(VectorSingle(p00.x, p00.y, p10.x, p10.y), VectorSingle(p11.x, p11.y, p01.x, p01.y));
+    const VectorSingle max0 = Max(VectorSingle(p00.x, p00.y, p10.x, p10.y), VectorSingle(p11.x, p11.y, p01.x, p01.y));
+    const VectorSingle minXY = Min(VectorSingle(min0.x, min0.y, 0.0f, 0.0f), VectorSingle(min0.z, min0.w, 0.0f, 0.0f));
+    const VectorSingle maxXY = Max(VectorSingle(max0.x, max0.y, 0.0f, 0.0f), VectorSingle(max0.z, max0.w, 0.0f, 0.0f));
+    if(maxXY.x <= clipEntry.rect.x || minXY.x >= clipEntry.right || maxXY.y <= clipEntry.rect.y || minXY.y >= clipEntry.bottom)
+        return;
+
+    EmitPaintGradientQuadRaw(
+        clipEntry, p00, p10, p11, p01,
+        PremultiplyPaintColor(topLeftColor),
+        PremultiplyPaintColor(topRightColor),
+        PremultiplyPaintColor(bottomRightColor),
+        PremultiplyPaintColor(bottomLeftColor),
+        layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
 

@@ -49,6 +49,8 @@ void nwbPhysicsIslandSolveJointsPass(
             for(uint j = startIdx; j < cnt; j += stepIdx){
                 if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START)
                     nwbPhysicsWarmStartSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot, flags);
+                else if(mode == NWB_PHYSICS_SOLVER_MODE_PROJECT)
+                    nwbPhysicsProjectSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot);
                 else
                     nwbPhysicsSolveSingleJoint(off + j, mode == NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h);
             }
@@ -184,6 +186,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
         nwbPhysicsExportContactImpulses(contactOffset + k, constraintSlot, contactImpulseOutSlot, hasRolling, hasHitEvents);
 #endif
+    if(jointCount > 0u && (islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_PROJECTION) != 0u)
+        nwbPhysicsIslandSolveJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_SOLVER_MODE_PROJECT, bodySimSlot, bodyStateSlot, jointSlot, h, 0u);
     const uint jointImpulseOutSlot = g_NwbPhysicsPushConstants.slots1.z;
     for(uint j = tid; j < jointCount; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
         nwbPhysicsExportJointImpulses(jointOffset + j, jointSlot, jointImpulseOutSlot);

@@ -1773,6 +1773,66 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
     EXPECT_GT(visibleSamples, 100u);
 }
 
+void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingularClip(mut TextVisibleCoverageTests self){
+    const auto layout = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleSampleGlyphText, 24.0f));
+    ASSERT_TRUE(layout.has_value());
+
+    BeginTextVisibleFixturePaint(self, 31u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
+    self.m_paint.pushClip(Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    self.m_paint.pushTranslate(250.0f, 0.0f);
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(-220.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popTransform());
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot inClipSnap = self.m_paint.freeze();
+    EXPECT_GT(inClipSnap.vertices().size(), 0u);
+    for(usize vi = 0u; vi < inClipSnap.vertices().size(); ++vi){
+        EXPECT_TRUE(IsFinite(inClipSnap.vertices()[vi].position.x + inClipSnap.vertices()[vi].position.y));
+        EXPECT_GE(inClipSnap.vertices()[vi].position.x, -1.0f);
+        EXPECT_LE(inClipSnap.vertices()[vi].position.x, 101.0f);
+    }
+
+    BeginTextVisibleFixturePaint(self, 32u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
+    self.m_paint.pushClip(Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    self.m_paint.pushTranslate(250.0f, 0.0f);
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popTransform());
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot outClipSnap = self.m_paint.freeze();
+    EXPECT_EQ(outClipSnap.vertices().size(), 0u);
+
+    BeginTextVisibleFixturePaint(self, 33u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
+    self.m_paint.pushTranslate(50.0f, 50.0f);
+    self.m_paint.pushRotate(0.4f);
+    self.m_paint.pushScale(2.5f, 2.5f);
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(0.0f, 0.0f)));
+    ASSERT_TRUE(self.m_paint.popTransform());
+    ASSERT_TRUE(self.m_paint.popTransform());
+    ASSERT_TRUE(self.m_paint.popTransform());
+    const DrawSnapshot rotScaleSnap = self.m_paint.freeze();
+    EXPECT_GT(rotScaleSnap.vertices().size(), 0u);
+    for(usize vi = 0u; vi < rotScaleSnap.vertices().size(); ++vi)
+        EXPECT_TRUE(IsFinite(rotScaleSnap.vertices()[vi].position.x + rotScaleSnap.vertices()[vi].position.y));
+
+    ASSERT_TRUE(self.installMeasuredSdfAtlas(layout.value().glyphs()[0u].glyphId));
+    const auto sdfLayout = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleSampleGlyphText, 24.0f));
+    ASSERT_TRUE(sdfLayout.has_value());
+    BeginTextVisibleFixturePaint(self, 34u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
+    self.m_paint.pushClip(Rect(0.0f, 0.0f, 120.0f, 120.0f));
+    self.m_paint.pushTranslate(300.0f, 0.0f);
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, sdfLayout.value(), Point(-260.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popTransform());
+    ASSERT_TRUE(self.m_paint.popClip());
+    const DrawSnapshot sdfSnap = self.m_paint.freeze();
+    EXPECT_GT(sdfSnap.vertices().size(), 0u);
+
+    BeginTextVisibleFixturePaint(self, 35u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
+    self.m_paint.pushScale(0.0f, 1.0f);
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f)));
+    ASSERT_TRUE(self.m_paint.popTransform());
+    const DrawSnapshot singSnap = self.m_paint.freeze();
+    EXPECT_EQ(singSnap.vertices().size(), 0u);
+}
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales, VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales)
 
 NWB_ADHD_GTEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling, VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling)
@@ -1834,6 +1894,8 @@ NWB_ADHD_GTEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlas
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase, VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase)
 
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage, VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage)
+
+NWB_ADHD_GTEST_F(TextVisibleCoverageTests, TransformedTranslationRotationScaleAndSingularClip, VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingularClip)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

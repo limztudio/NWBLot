@@ -109,6 +109,7 @@ class PhysicsComponentBinaryCodec{
         in b8 meshAssetValid,
         in b8 convexHullAssetValid,
         in b8 collisionMeshAssetValid,
+        in b8 heightfieldAssetValid,
         in f32 staticFriction,
         in VectorSingle anisotropicFriction,
         in VectorSingle surfaceVelocity,
@@ -188,14 +189,20 @@ class PhysicsComponentBinaryCodec{
             if((meshIndexCount % 3u) != 0u)
                 return false;
         }
-        if(shapeType == ShapeType::Heightfield || heightfieldCount > 0u || heightfieldRows != 0u || heightfieldCols != 0u){
+        const b8 hasInlineHeightfield = (heightfieldCount > 0u || heightfieldRows != 0u || heightfieldCols != 0u);
+        if(hasInlineHeightfield || (shapeType == ShapeType::Heightfield && !heightfieldAssetValid)){
             if(heightfieldRows < 2u || heightfieldCols < 2u)
                 return false;
             if(cast<u64>(heightfieldRows) * cast<u64>(heightfieldCols) != cast<u64>(heightfieldCount))
                 return false;
         }
-        if(heightfieldCellMaterialCount > 0u && heightfieldMaterialCount == 0u)
-            return false;
+        if(heightfieldCellMaterialCount > 0u){
+            if(heightfieldMaterialCount == 0u || heightfieldRows < 2u || heightfieldCols < 2u)
+                return false;
+            const u64 expectedCells = cast<u64>(heightfieldRows - 1u) * cast<u64>(heightfieldCols - 1u);
+            if(cast<u64>(heightfieldCellMaterialCount) != expectedCells)
+                return false;
+        }
         return true;
     }
 
@@ -275,6 +282,7 @@ class PhysicsComponentBinaryCodec{
         in AssetRef<Mesh> meshAsset,
         in AssetRef<ConvexHullAsset> convexHullAsset,
         in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+        in AssetRef<HeightfieldAsset> heightfieldAsset,
         in f32 staticFriction,
         in VectorSingle anisotropicFriction,
         in VectorSingle surfaceVelocity,
@@ -316,6 +324,7 @@ class PhysicsComponentBinaryCodec{
             meshAsset.valid(),
             convexHullAsset.valid(),
             collisionMeshAsset.valid(),
+            heightfieldAsset.valid(),
             staticFriction,
             anisotropicFriction,
             surfaceVelocity,
@@ -371,6 +380,7 @@ class PhysicsComponentBinaryCodec{
             e.meshAsset,
             e.convexHullAsset,
             e.collisionMeshAsset,
+            e.heightfieldAsset,
             e.staticFriction,
             VectorSingle(e.anisotropicFriction),
             VectorSingle(e.surfaceVelocity),
@@ -452,6 +462,7 @@ class PhysicsComponentBinaryCodec{
         in VectorSingle groundAnchorB,
         in f32 lengthA,
         in f32 lengthB,
+        in b8 pathLockRotation,
         in Span<SixDofAxisConfig> sixDofAxes,
         in Span<f32x4> pathPoints
     )const{
@@ -531,6 +542,26 @@ class PhysicsComponentBinaryCodec{
         }
         if(type == JointType::Path && pathPoints.size() < 2u)
             return false;
+        const b8 needsAxisA =
+            (type == JointType::Spherical)
+            || (type == JointType::Revolute)
+            || (type == JointType::Prismatic)
+            || (type == JointType::Wheel)
+            || (type == JointType::Gear)
+            || (type == JointType::RackAndPinion)
+        ;
+        const b8 needsAxisB =
+            (type == JointType::Spherical)
+            || (type == JointType::Revolute)
+            || (type == JointType::Wheel)
+            || (type == JointType::Gear)
+            || (type == JointType::RackAndPinion)
+            || (type == JointType::Path && pathLockRotation)
+        ;
+        if(needsAxisA && Vector3LengthSq(VectorSingle(localAxisA, 0.0f)).x <= s_NormalizeEpsilonSq)
+            return false;
+        if(needsAxisB && Vector3LengthSq(VectorSingle(localAxisB, 0.0f)).x <= s_NormalizeEpsilonSq)
+            return false;
         return true;
     }
 
@@ -577,6 +608,7 @@ class PhysicsComponentBinaryCodec{
             VectorSingle(j.groundAnchorB),
             j.lengthA,
             j.lengthB,
+            j.pathLockRotation,
             Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
             Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
         );
@@ -625,6 +657,7 @@ class PhysicsComponentBinaryCodec{
             VectorSingle(j.groundAnchorB),
             j.lengthA,
             j.lengthB,
+            j.pathLockRotation,
             Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
             Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
         ))
@@ -645,7 +678,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, w.timeToSleep)))
             return false;
-        return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.timeToSleep >= 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
+        return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.timeToSleep > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
     }
 
     private b8 validPhysicsParentData(in PhysicsParentComponent p)const{
@@ -767,6 +800,7 @@ class PhysicsComponentBinaryCodec{
         in i32 groupIndex,
         in u32 categoryBits,
         in u32 maskBits,
+        in Name collisionLayer,
         in u64 userData,
         in b8 isBox,
         in b8 isSensor,
@@ -782,6 +816,7 @@ class PhysicsComponentBinaryCodec{
         in AssetRef<PhysicsMaterialAsset> materialAsset,
         in AssetRef<ConvexHullAsset> convexHullAsset,
         in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+        in AssetRef<HeightfieldAsset> heightfieldAsset,
         in f32 staticFriction,
         in VectorSingle anisotropicFriction,
         in VectorSingle surfaceVelocity,
@@ -818,8 +853,8 @@ class PhysicsComponentBinaryCodec{
         )
             return false;
         static_assert(
-            size_of<ColliderShapeEntryHeaderBinary>() == 528u
-            && offset_of<ColliderShapeEntryHeaderBinary>(reserved3) == 520u
+            size_of<ColliderShapeEntryHeaderBinary>() == 656u
+            && offset_of<ColliderShapeEntryHeaderBinary>(reserved3) == 648u
             && size_of<ColliderComponentPayloadHeaderBinary>() == 72u
             && offset_of<ColliderComponentPayloadHeaderBinary>(reserved0) == 68u
         );
@@ -842,6 +877,8 @@ class PhysicsComponentBinaryCodec{
         hdr.materialAssetHash = materialAsset.name().hash();
         hdr.convexHullAssetHash = convexHullAsset.name().hash();
         hdr.collisionMeshAssetHash = collisionMeshAsset.name().hash();
+        hdr.heightfieldAssetHash = heightfieldAsset.name().hash();
+        hdr.collisionLayerHash = collisionLayer.hash();
         hdr.userData = userData;
         hdr.groupIndex = groupIndex;
         hdr.categoryBits = categoryBits;
@@ -919,6 +956,7 @@ class PhysicsComponentBinaryCodec{
             e.groupIndex,
             e.categoryBits,
             e.maskBits,
+            e.collisionLayer,
             e.userData,
             e.isBox,
             e.isSensor,
@@ -934,6 +972,7 @@ class PhysicsComponentBinaryCodec{
             e.materialAsset,
             e.convexHullAsset,
             e.collisionMeshAsset,
+            e.heightfieldAsset,
             e.staticFriction,
             VectorSingle(e.anisotropicFriction),
             VectorSingle(e.surfaceVelocity),
@@ -979,6 +1018,7 @@ class PhysicsComponentBinaryCodec{
         mut i32 outGroupIndex,
         mut u32 outCategoryBits,
         mut u32 outMaskBits,
+        mut Name outCollisionLayer,
         mut u64 outUserData,
         mut b8 outIsBox,
         mut b8 outIsSensor,
@@ -994,6 +1034,7 @@ class PhysicsComponentBinaryCodec{
         mut AssetRef<PhysicsMaterialAsset> outMaterialAsset,
         mut AssetRef<ConvexHullAsset> outConvexHullAsset,
         mut AssetRef<CollisionMeshAsset> outCollisionMeshAsset,
+        mut AssetRef<HeightfieldAsset> outHeightfieldAsset,
         mut f32 outStaticFriction,
         mut VectorSingle outAnisotropicFriction,
         mut VectorSingle outSurfaceVelocity,
@@ -1099,6 +1140,14 @@ class PhysicsComponentBinaryCodec{
             outCollisionMeshAsset.virtualPath = s_NameNone;
         else
             outCollisionMeshAsset.virtualPath = Name(hdr.collisionMeshAssetHash);
+        if(hdr.heightfieldAssetHash == s_NameNone.hash())
+            outHeightfieldAsset.virtualPath = s_NameNone;
+        else
+            outHeightfieldAsset.virtualPath = Name(hdr.heightfieldAssetHash);
+        if(hdr.collisionLayerHash == s_NameNone.hash())
+            outCollisionLayer = s_NameNone;
+        else
+            outCollisionLayer = Name(hdr.collisionLayerHash);
 
         if(!this.validColliderEntryHeaderFields(
             outShapeType,
@@ -1123,6 +1172,7 @@ class PhysicsComponentBinaryCodec{
             outMeshAsset.valid(),
             outConvexHullAsset.valid(),
             outCollisionMeshAsset.valid(),
+            outHeightfieldAsset.valid(),
             outStaticFriction,
             outAnisotropicFriction,
             outSurfaceVelocity,
@@ -1217,6 +1267,7 @@ class PhysicsComponentBinaryCodec{
             outEntry.groupIndex,
             outEntry.categoryBits,
             outEntry.maskBits,
+            outEntry.collisionLayer,
             outEntry.userData,
             outEntry.isBox,
             outEntry.isSensor,
@@ -1232,6 +1283,7 @@ class PhysicsComponentBinaryCodec{
             outEntry.materialAsset,
             outEntry.convexHullAsset,
             outEntry.collisionMeshAsset,
+            outEntry.heightfieldAsset,
             outEntry.staticFriction,
             anisoVec,
             surfVec,
@@ -1293,6 +1345,7 @@ class PhysicsComponentBinaryCodec{
             c.meshAsset,
             c.convexHullAsset,
             c.collisionMeshAsset,
+            c.heightfieldAsset,
             c.staticFriction,
             VectorSingle(c.anisotropicFriction),
             VectorSingle(c.surfaceVelocity),
@@ -1374,6 +1427,7 @@ class PhysicsComponentBinaryCodec{
             c.groupIndex,
             c.categoryBits,
             c.maskBits,
+            c.collisionLayer,
             c.userData,
             c.isBox,
             c.isSensor,
@@ -1389,6 +1443,7 @@ class PhysicsComponentBinaryCodec{
             c.materialAsset,
             c.convexHullAsset,
             c.collisionMeshAsset,
+            c.heightfieldAsset,
             c.staticFriction,
             VectorSingle(c.anisotropicFriction),
             VectorSingle(c.surfaceVelocity),
@@ -1449,6 +1504,7 @@ class PhysicsComponentBinaryCodec{
             c.meshAsset,
             c.convexHullAsset,
             c.collisionMeshAsset,
+            c.heightfieldAsset,
             c.staticFriction,
             VectorSingle(c.anisotropicFriction),
             VectorSingle(c.surfaceVelocity),
@@ -1525,6 +1581,7 @@ class PhysicsComponentBinaryCodec{
             c.groupIndex,
             c.categoryBits,
             c.maskBits,
+            c.collisionLayer,
             c.userData,
             c.isBox,
             c.isSensor,
@@ -1540,6 +1597,7 @@ class PhysicsComponentBinaryCodec{
             c.materialAsset,
             c.convexHullAsset,
             c.collisionMeshAsset,
+            c.heightfieldAsset,
             c.staticFriction,
             cAniso,
             cSurf,
@@ -2003,6 +2061,7 @@ class PhysicsComponentBinaryCodec{
             outGroundAnchorB,
             outLengthA,
             outLengthB,
+            outPathLockRotation,
             Span<SixDofAxisConfig>(outSixDofAxes.data(), outSixDofAxes.size()),
             Span<f32x4>(outPathPoints.data(), outPathPoints.size())
         );

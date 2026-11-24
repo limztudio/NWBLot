@@ -49,6 +49,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const NwbPhysicsGpuBodyPose bp = g_NwbPhysicsBodyPoseBuffers[sourceSlot][bodyIdx];
         origin = bp.originPad.xyz;
         rot = bp.rotation;
+        if(exportMode != NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER){
+            linVel = bp.sweepDispFlags.xyz;
+            sleepTime = bp.originPad.w;
+        }
     }
 
     if(exportMode == NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER){

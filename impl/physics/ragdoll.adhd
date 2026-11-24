@@ -26,13 +26,17 @@ class RagdollBoneDef{
     public f32 motorDamping = 1.0f;
     public b8 useSixDof = false;
     public Array<SixDofAxisConfig, 6u> sixDofAxes;
+
+    public RagdollBoneDef(){
+        this.bodyDef.type = BodyType::Dynamic;
+    }
 }
 
 f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
     const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
     if(inRes.has_value()){
         in Mat3 inMat = inRes.value();
-        return SimdMax(0.05f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
+        return SimdMax(1.0e-4f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
     }
     return 0.5f;
 }
@@ -207,6 +211,28 @@ class RagdollInstance{
         }
     }
 
+    public void setBoneKinematic(in usize boneIndex, in b8 kinematic, mut PhysicsWorld world){
+        if(boneIndex >= this.boneBodies.size())
+            return;
+        const BodyId bodyId = this.boneBodies[boneIndex];
+        if(!world.isValidBody(bodyId))
+            return;
+        BodyType tgtType = BodyType::Dynamic;
+        if(kinematic)
+            tgtType = BodyType::Kinematic;
+        world.setBodyType(bodyId, tgtType);
+    }
+
+    public void setKinematicMask(in Vector<b8> mask, mut PhysicsWorld world){
+        const usize count = this.boneBodies.size();
+        for(usize i = 0u; i < count; ++i){
+            b8 isKin = false;
+            if(i < mask.size())
+                isKin = mask[i];
+            this.setBoneKinematic(i, isKin, world);
+        }
+    }
+
     public void setPose(mut PhysicsWorld world, in Span<Transform3D> worldTransforms, in b8 resetVelocities){
         const usize count = Min(this.boneBodies.size(), worldTransforms.size());
         const VectorSingle zero(0.0f);
@@ -216,6 +242,34 @@ class RagdollInstance{
                 continue;
             in Transform3D xf = worldTransforms[i];
             world.setBodyTransform(bodyId, VectorSingle(xf.position), VectorSingle(xf.rotation));
+            if(resetVelocities){
+                world.setLinearVelocity(bodyId, zero);
+                world.setAngularVelocity(bodyId, zero);
+            }
+        }
+    }
+
+    public void blendPose(in Span<Transform3D> targetWorldTransforms, in f32 alpha, in b8 resetVelocities, mut PhysicsWorld world){
+        const f32 t = SimdClamp(alpha, 0.0f, 1.0f);
+        const VectorSingle tVec(t);
+        const VectorSingle zero(0.0f);
+        const usize count = Min(this.boneBodies.size(), targetWorldTransforms.size());
+        for(usize i = 0u; i < count; ++i){
+            const BodyId bodyId = this.boneBodies[i];
+            if(!world.isValidBody(bodyId))
+                continue;
+            const Expected<Transform3D> curRes = world.tryGetBodyTransform(bodyId);
+            if(!curRes.has_value())
+                continue;
+            in Transform3D curXf = curRes.value();
+            in Transform3D tgtXf = targetWorldTransforms[i];
+            const VectorSingle pBlend = Lerp(VectorSingle(curXf.position), VectorSingle(tgtXf.position), tVec);
+            VectorSingle q0 = SafeNormalizeQuat(VectorSingle(curXf.rotation));
+            VectorSingle q1 = SafeNormalizeQuat(VectorSingle(tgtXf.rotation));
+            if(Vector4Dot(q0, q1).x < 0.0f)
+                q1 = -q1;
+            const VectorSingle qBlend = SafeNormalizeQuat(Lerp(q0, q1, tVec));
+            world.setBodyTransform(bodyId, pBlend, qBlend);
             if(resetVelocities){
                 world.setLinearVelocity(bodyId, zero);
                 world.setAngularVelocity(bodyId, zero);
@@ -246,6 +300,9 @@ class RagdollInstance{
             const BodyId bodyId = this.boneBodies[i];
             if(!world.isValidBody(bodyId))
                 continue;
+            const Expected<BodyType> bTypeRes = world.tryGetBodyType(bodyId);
+            if(!bTypeRes.has_value() || bTypeRes.value() != BodyType::Dynamic)
+                continue;
             const f32 maxTorque = this.maxMotorTorques[i] * gainScale;
             const f32 hertz = this.motorHertzes[i];
             if(maxTorque <= 0.0f || hertz <= 0.0f)
@@ -258,7 +315,34 @@ class RagdollInstance{
 
             const VectorSingle curQ = SafeNormalizeQuat(VectorSingle(xfRes.value().rotation));
             const VectorSingle tgtQ = SafeNormalizeQuat(VectorSingle(targetWorldTransforms[i].rotation));
-            VectorSingle qErr = QuaternionMultiply(tgtQ, QuaternionConjugate(curQ));
+            VectorSingle desQ = tgtQ;
+            VectorSingle refAngVel(0.0f);
+            BodyId validParentId;
+            b8 parentIsDynamic = false;
+
+            const u32 pIdx = this.parentIndices[i];
+            if(pIdx != s_NullIndex && pIdx < cast<u32>(this.boneBodies.size()) && pIdx != cast<u32>(i)){
+                const BodyId pBody = this.boneBodies[pIdx];
+                if(world.isValidBody(pBody)){
+                    const Expected<Transform3D> pXfRes = world.tryGetBodyTransform(pBody);
+                    const Expected<f32x4> pAvRes = world.tryGetAngularVelocity(pBody);
+                    if(pXfRes.has_value() && pAvRes.has_value()){
+                        const VectorSingle parCurQ = SafeNormalizeQuat(VectorSingle(pXfRes.value().rotation));
+                        VectorSingle parTgtQ = parCurQ;
+                        if(pIdx < cast<u32>(targetWorldTransforms.size()))
+                            parTgtQ = SafeNormalizeQuat(VectorSingle(targetWorldTransforms[pIdx].rotation));
+                        const VectorSingle relTgtQ = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(parTgtQ), tgtQ));
+                        desQ = SafeNormalizeQuat(QuaternionMultiply(parCurQ, relTgtQ));
+                        refAngVel = VectorSingle(pAvRes.value());
+                        validParentId = pBody;
+                        const Expected<BodyType> pTypeRes = world.tryGetBodyType(pBody);
+                        if(pTypeRes.has_value() && pTypeRes.value() == BodyType::Dynamic)
+                            parentIsDynamic = true;
+                    }
+                }
+            }
+
+            VectorSingle qErr = QuaternionMultiply(desQ, QuaternionConjugate(curQ));
             if(qErr.w < 0.0f)
                 qErr = -qErr;
             const VectorSingle qv(qErr.x, qErr.y, qErr.z, 0.0f);
@@ -270,13 +354,21 @@ class RagdollInstance{
             const f32 omegaN = 2.0f * s_Pi * hertz;
             const f32 kp = omegaN * omegaN;
             const f32 kd = 2.0f * this.motorDampings[i] * omegaN;
-            const f32 effInertia = this.m_boneMaxInertias[i];
+            f32 effInertia = this.m_boneMaxInertias[i];
+            if(parentIsDynamic){
+                const f32 parI = this.m_boneMaxInertias[pIdx];
+                effInertia = (effInertia * parI) / SimdMax(1.0e-6f, effInertia + parI);
+            }
+            const f32 impDenom = 1.0f + dt * (kd + dt * kp);
+            const VectorSingle relAv = VectorSingle(avRes.value()) - refAngVel;
 
-            VectorSingle torque = (rotErr * kp - VectorSingle(avRes.value()) * kd) * effInertia;
+            VectorSingle torque = (rotErr * kp - relAv * kd) * (effInertia / impDenom);
             const f32 tMagSq = Vector3LengthSq(VectorSingle(torque, 0.0f)).x;
             if(tMagSq > maxTorque * maxTorque && tMagSq > 1.0e-10f)
                 torque = torque * (maxTorque * Rsqrt(VectorSingle(tMagSq)).x);
             world.applyTorque(bodyId, torque, true);
+            if(parentIsDynamic)
+                world.applyTorque(validParentId, -torque, true);
         }
     }
 

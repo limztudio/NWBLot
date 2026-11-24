@@ -1574,6 +1574,134 @@ void VerifyPaintImageFixture_TransformedImageAndResolvedGlyphBatchEdgeCases(mut 
     EXPECT_FLOAT_EQ(xfDrawSnap.vertices()[6u].position.y, 34.0f);
 }
 
+void VerifyUiPaintTests_VectorPrimitivesShearCapAaAndGradientEdgeCases(mut UiPaintTests self){
+    self.m_builder.pushTranslate(50.0f, 10.0f);
+    self.m_builder.pushRotate(s_Pi * 0.5f);
+    self.m_builder.pushScale(3.0f, 1.0f);
+    PaintLineStyle sqStyle;
+    sqStyle.thickness = 4.0f;
+    sqStyle.cap = PaintLineCap::Square;
+    sqStyle.antiAlias = false;
+    self.m_builder.drawLine(Point(0.0f, 0.0f), Point(20.0f, 0.0f), sqStyle, Color(1.0f, 1.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.popTransform());
+    ASSERT_TRUE(self.m_builder.popTransform());
+    ASSERT_TRUE(self.m_builder.popTransform());
+    const DrawSnapshot capSnap = self.m_builder.freeze();
+    ASSERT_GT(capSnap.vertices().size(), 0u);
+    f32 minX = capSnap.vertices()[0u].position.x;
+    f32 maxX = minX;
+    f32 minY = capSnap.vertices()[0u].position.y;
+    f32 maxY = minY;
+    for(usize vi = 1u; vi < capSnap.vertices().size(); ++vi){
+        in Point pt = capSnap.vertices()[vi].position;
+        if(pt.x < minX) minX = pt.x;
+        if(pt.x > maxX) maxX = pt.x;
+        if(pt.y < minY) minY = pt.y;
+        if(pt.y > maxY) maxY = pt.y;
+    }
+    EXPECT_NEAR(minX, 48.0f, 0.05f);
+    EXPECT_NEAR(maxX, 52.0f, 0.05f);
+    EXPECT_NEAR(minY, 4.0f, 0.05f);
+    EXPECT_NEAR(maxY, 76.0f, 0.05f);
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f, 2.0f, 2.0f), 20u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    PaintLineStyle dpiAaStyle;
+    dpiAaStyle.thickness = 4.0f;
+    dpiAaStyle.cap = PaintLineCap::Butt;
+    dpiAaStyle.antiAlias = true;
+    self.m_builder.drawLine(Point(20.0f, 50.0f), Point(60.0f, 50.0f), dpiAaStyle, Color(1.0f, 0.5f, 0.25f, 1.0f));
+    const DrawSnapshot dpiSnap = self.m_builder.freeze();
+    ASSERT_GT(dpiSnap.vertices().size(), 4u);
+    f32 dpiMinY = dpiSnap.vertices()[0u].position.y;
+    f32 dpiMaxY = dpiMinY;
+    for(usize vi = 1u; vi < dpiSnap.vertices().size(); ++vi){
+        const f32 vy = dpiSnap.vertices()[vi].position.y;
+        if(vy < dpiMinY) dpiMinY = vy;
+        if(vy > dpiMaxY) dpiMaxY = vy;
+    }
+    EXPECT_NEAR(dpiMinY, 47.5f, 0.05f);
+    EXPECT_NEAR(dpiMaxY, 52.5f, 0.05f);
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 21u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    self.m_builder.pushScale(2.0f, 1.0f);
+    PaintLineStyle dashJoinStyle;
+    dashJoinStyle.thickness = 3.0f;
+    dashJoinStyle.cap = PaintLineCap::Round;
+    dashJoinStyle.join = PaintLineJoin::Bevel;
+    dashJoinStyle.dashLength = 8.0f;
+    dashJoinStyle.gapLength = 4.0f;
+    dashJoinStyle.antiAlias = true;
+    Array<Point, 4u> rectLoop;
+    rectLoop[0u] = Point(10.0f, 10.0f);
+    rectLoop[1u] = Point(50.0f, 10.0f);
+    rectLoop[2u] = Point(50.0f, 50.0f);
+    rectLoop[3u] = Point(10.0f, 50.0f);
+    self.m_builder.drawPolyline(Span<Point>(rectLoop.data(), 4u), true, dashJoinStyle, Color(0.2f, 0.9f, 0.7f, 1.0f));
+    ASSERT_TRUE(self.m_builder.popTransform());
+    const DrawSnapshot dashSnap = self.m_builder.freeze();
+    EXPECT_GT(dashSnap.vertices().size(), 24u);
+    for(usize vi = 0u; vi < dashSnap.vertices().size(); ++vi)
+        EXPECT_TRUE(IsFinite(dashSnap.vertices()[vi].position.x + dashSnap.vertices()[vi].position.y));
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 22u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    self.m_builder.pushClip(Rect(25.0f, 0.0f, 50.0f, 100.0f));
+    self.m_builder.fillRectGradient(
+        Rect(0.0f, 0.0f, 100.0f, 100.0f),
+        Color(0.0f, 0.0f, 0.0f, 1.0f),
+        Color(1.0f, 0.0f, 0.0f, 1.0f),
+        Color(1.0f, 1.0f, 0.0f, 1.0f),
+        Color(0.0f, 1.0f, 0.0f, 1.0f)
+    );
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot gradSnap = self.m_builder.freeze();
+    ASSERT_EQ(gradSnap.vertices().size(), 4u);
+    EXPECT_NEAR(gradSnap.vertices()[0u].position.x, 25.0f, 0.01f);
+    EXPECT_NEAR(gradSnap.vertices()[1u].position.x, 75.0f, 0.01f);
+    EXPECT_NEAR(gradSnap.vertices()[0u].color.r, 0.25f, 0.01f);
+    EXPECT_NEAR(gradSnap.vertices()[1u].color.r, 0.75f, 0.01f);
+    EXPECT_NEAR(gradSnap.vertices()[2u].color.g, 1.0f, 0.01f);
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 23u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    PaintLineStyle primStyle;
+    primStyle.thickness = 2.0f;
+    primStyle.antiAlias = true;
+    self.m_builder.strokeRect(Rect(5.0f, 5.0f, 30.0f, 20.0f), 2.0f, Color(1.0f, 1.0f, 1.0f, 1.0f));
+    self.m_builder.fillRoundedRect(Rect(40.0f, 5.0f, 20.0f, 20.0f), 20.0f, Color(0.2f, 0.6f, 1.0f, 1.0f));
+    self.m_builder.strokeRoundedRect(Rect(70.0f, 5.0f, 30.0f, 20.0f), 6.0f, primStyle, Color(1.0f, 0.8f, 0.2f, 1.0f));
+    self.m_builder.fillCircle(Point(25.0f, 55.0f), 12.0f, Color(0.9f, 0.3f, 0.4f, 1.0f));
+    self.m_builder.strokeCircle(Point(55.0f, 55.0f), 12.0f, primStyle, Color(0.4f, 0.9f, 0.5f, 1.0f));
+    self.m_builder.fillEllipse(Point(95.0f, 55.0f), 16.0f, 9.0f, Color(0.7f, 0.4f, 0.9f, 1.0f));
+    self.m_builder.strokeEllipse(Point(135.0f, 55.0f), 16.0f, 9.0f, primStyle, Color(0.3f, 0.8f, 0.9f, 1.0f));
+    self.m_builder.drawArc(Point(170.0f, 55.0f), 12.0f, 0.0f, s_Pi * 1.25f, primStyle, Color(1.0f, 1.0f, 0.4f, 1.0f));
+    Array<Point, 3u> triPts;
+    triPts[0u] = Point(10.0f, 80.0f);
+    triPts[1u] = Point(30.0f, 80.0f);
+    triPts[2u] = Point(20.0f, 95.0f);
+    self.m_builder.fillConvexPolygon(Span<Point>(triPts.data(), 3u), Color(0.8f, 0.9f, 0.2f, 1.0f));
+    self.m_builder.drawQuadraticBezier(Point(40.0f, 95.0f), Point(60.0f, 70.0f), Point(80.0f, 95.0f), primStyle, Color(0.5f, 1.0f, 0.7f, 1.0f));
+    self.m_builder.drawCubicBezier(Point(90.0f, 95.0f), Point(110.0f, 70.0f), Point(130.0f, 98.0f), Point(150.0f, 75.0f), primStyle, Color(0.9f, 0.6f, 1.0f, 1.0f));
+    self.m_builder.pushTranslate(2.0f, 2.0f);
+    self.m_builder.fillRectGradient(Rect(160.0f, 75.0f, 20.0f, 18.0f), Color(1.0f, 0.0f, 0.0f, 1.0f), Color(0.0f, 1.0f, 0.0f, 1.0f), Color(0.0f, 0.0f, 1.0f, 1.0f), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.popTransform());
+    const DrawSnapshot primSnap = self.m_builder.freeze();
+    EXPECT_GT(primSnap.vertices().size(), 64u);
+    EXPECT_GT(primSnap.indices().size(), 128u);
+    for(usize vi = 0u; vi < primSnap.vertices().size(); ++vi)
+        EXPECT_TRUE(IsFinite(primSnap.vertices()[vi].position.x + primSnap.vertices()[vi].position.y));
+
+    self.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 24u, 3u, AssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    self.m_builder.fillCircle(Point(50.0f, 50.0f), 0.0f, Color(1.0f, 1.0f, 1.0f, 1.0f));
+    self.m_builder.drawArc(Point(50.0f, 50.0f), 10.0f, 0.0f, 0.0f, primStyle, Color(1.0f, 1.0f, 1.0f, 1.0f));
+    Array<Point, 3u> collinearPts;
+    collinearPts[0u] = Point(0.0f, 0.0f);
+    collinearPts[1u] = Point(10.0f, 0.0f);
+    collinearPts[2u] = Point(20.0f, 0.0f);
+    self.m_builder.fillConvexPolygon(Span<Point>(collinearPts.data(), 3u), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    self.m_builder.fillConvexPolygon(Span<Point>(collinearPts.data(), 2u), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    const DrawSnapshot emptyDegenSnap = self.m_builder.freeze();
+    EXPECT_EQ(emptyDegenSnap.vertices().size(), 0u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1622,6 +1750,7 @@ NWB_ADHD_GTEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepInd
 NWB_ADHD_GTEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges, VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges)
 NWB_ADHD_GTEST_F(UiPaintTests, ClippedStyledPolylinesAndTransformStackEdgeCases, VerifyUiPaintTests_ClippedStyledPolylinesAndTransformStackEdgeCases)
 NWB_ADHD_GTEST_F(UiPaintTests, TransformsClipsOverlaysPolylinesAndAaEdgeCases, VerifyUiPaintTests_TransformsClipsOverlaysPolylinesAndAaEdgeCases)
+NWB_ADHD_GTEST_F(UiPaintTests, VectorPrimitivesShearCapAaAndGradientEdgeCases, VerifyUiPaintTests_VectorPrimitivesShearCapAaAndGradientEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

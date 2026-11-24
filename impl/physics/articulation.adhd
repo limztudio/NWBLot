@@ -315,6 +315,7 @@ class ArticulationLinkDef{
     public f32 driveMaxForce = 1.0e6f;
     public f32 jointDamping = 0.0f;
     public f32 jointFriction = 0.0f;
+    public f32 limitRestitution = 0.0f;
     public BodyId proxyBodyId;
 }
 
@@ -328,6 +329,63 @@ class ArticulationLinkState{
     public SpatialVec externalForce;
 }
 
+b8 BuildArticulationLinkShapeProxy(in PhysicsWorld world, in ShapeId shapeId, mut ShapeProxy outProxy){
+    const Expected<ShapeType> stRes = world.tryGetShapeType(shapeId);
+    if(!stRes.has_value())
+        return false;
+    const ShapeType st = stRes.value();
+    if(st == ShapeType::Sphere){
+        const Expected<SphereShape> s = world.tryGetSphereShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeSphereProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::Capsule){
+        const Expected<CapsuleShape> s = world.tryGetCapsuleShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeCapsuleProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::Cylinder){
+        const Expected<CylinderShape> s = world.tryGetCylinderShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeCylinderProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::Cone){
+        const Expected<ConeShape> s = world.tryGetConeShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeConeProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::TaperedCapsule){
+        const Expected<TaperedCapsuleShape> s = world.tryGetTaperedCapsuleShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeTaperedCapsuleProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::Segment){
+        const Expected<SegmentShape> s = world.tryGetSegmentShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeSegmentProxy(s.value());
+        return true;
+    }
+    if(st == ShapeType::Hull){
+        const Expected<HullShape> s = world.tryGetHullShape(shapeId);
+        if(!s.has_value())
+            return false;
+        outProxy = MakeHullProxy(s.value());
+        return true;
+    }
+    return false;
+}
+
 class Articulation{
     public Vector<ArticulationLinkDef> linkDefs;
     public Vector<ArticulationLinkState> linkStates;
@@ -335,6 +393,10 @@ class Articulation{
     public SpatialVec baseVelocity;
     public b8 fixedBase = true;
     public u32 subSteps = 4u;
+    public b8 enableContactCoupling = false;
+    public f32 contactRestitution = 0.0f;
+    public f32 contactFriction = 0.5f;
+    public Filter contactFilter;
     private Vector<SpatialMat6> m_linkSpatialInertia;
     private Vector<SpatialVec> m_linkJointSubspace;
     private Vector<Transform3D> m_relP2C;
@@ -345,6 +407,10 @@ class Articulation{
     private Vector<f32> m_dScalar;
     private Vector<f32> m_uTau;
     private Vector<SpatialVec> m_accel;
+    private Vector<f32> m_impU;
+    private Vector<SpatialVec> m_impDv;
+    private Vector<ShapeId> m_proxyShapesScratch;
+    private Vector<ShapeOverlapHit> m_overlapHitsScratch;
 
     public void reset(){
         this.linkDefs.clear();
@@ -353,6 +419,10 @@ class Articulation{
         this.baseVelocity = SpatialVec();
         this.fixedBase = true;
         this.subSteps = 4u;
+        this.enableContactCoupling = false;
+        this.contactRestitution = 0.0f;
+        this.contactFriction = 0.5f;
+        this.contactFilter = Filter();
         this.m_linkSpatialInertia.clear();
         this.m_linkJointSubspace.clear();
         this.m_relP2C.clear();
@@ -363,6 +433,10 @@ class Articulation{
         this.m_dScalar.clear();
         this.m_uTau.clear();
         this.m_accel.clear();
+        this.m_impU.clear();
+        this.m_impDv.clear();
+        this.m_proxyShapesScratch.clear();
+        this.m_overlapHitsScratch.clear();
     }
 
     public b8 init(in Transform3D rootTransform, in b8 isFixedBase, in Span<ArticulationLinkDef> links){
@@ -403,7 +477,11 @@ class Articulation{
         this.m_uTau.resize(n, 0.0f);
         this.m_accel.resize(n);
 
-        this.computeForwardKinematics();
+        this.computeForwardDynamicsABA(VectorSingle(0.0f));
+        for(usize i = 0u; i < n; ++i){
+            this.linkStates[i].qdd = 0.0f;
+            this.m_accel[i] = SpatialVec();
+        }
         return true;
     }
 
@@ -629,6 +707,345 @@ class Articulation{
         }
     }
 
+    private b8 evaluateWorldImpulseSweep(
+        in usize linkIdx,
+        in VectorSingle worldPoint,
+        in VectorSingle worldImpulse,
+        mut Vector<f32> ioImpU,
+        mut Vector<SpatialVec> outDv
+    )const{
+        const usize n = this.linkDefs.size();
+        if(linkIdx >= n
+            || this.m_iaList.size() != n
+            || this.m_uSubVec.size() != n
+            || this.m_dScalar.size() != n
+            || this.m_relP2C.size() != n
+            || this.m_linkJointSubspace.size() != n)
+            return false;
+
+        ioImpU.assign(n, 0.0f);
+        outDv.resize(n);
+
+        in Transform3D lXf = this.linkStates[linkIdx].worldTransform;
+        const VectorSingle qLink = SafeNormalizeQuat(VectorSingle(lXf.rotation));
+        const VectorSingle fLocal = Vector3InverseRotate(worldImpulse, qLink);
+        const VectorSingle rLocal = Vector3InverseRotate(worldPoint - VectorSingle(lXf.position), qLink);
+        SpatialVec curImp = SpatialVecMake(Cross(rLocal, fLocal), fLocal);
+
+        SpatialVec imp0;
+        usize cur = linkIdx;
+        while(cur != s_NullIndex && cur < n){
+            if(cur == 0u){
+                imp0 = curImp;
+                break;
+            }
+            in ArticulationLinkDef d = this.linkDefs[cur];
+            if(d.jointType != ArticulationJointType::Fixed && this.m_dScalar[cur] > 1.0e-9f){
+                const f32 uVal = SpatialDot(this.m_linkJointSubspace[cur], curImp);
+                ioImpU[cur] = uVal;
+                curImp = SpatialSub(curImp, SpatialScale(this.m_uSubVec[cur], uVal / this.m_dScalar[cur]));
+            }
+            in Transform3D rp = this.m_relP2C[cur];
+            curImp = SpatialTransformForceC2P(VectorSingle(rp.position), VectorSingle(rp.rotation), curImp);
+            cur = cast<usize>(d.parentIndex);
+        }
+
+        if(this.fixedBase)
+            outDv[0u] = SpatialVec();
+        else
+            outDv[0u] = SolveSpatial6x6(this.m_iaList[0u], imp0);
+
+        for(usize i = 1u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            in Transform3D rp = this.m_relP2C[i];
+            const SpatialVec dvPrime = SpatialTransformMotionP2C(VectorSingle(rp.position), VectorSingle(rp.rotation), outDv[d.parentIndex]);
+            if(d.jointType != ArticulationJointType::Fixed && this.m_dScalar[i] > 1.0e-9f){
+                const f32 dqd = (ioImpU[i] - SpatialDot(this.m_uSubVec[i], dvPrime)) / this.m_dScalar[i];
+                ioImpU[i] = dqd;
+                outDv[i] = SpatialAdd(dvPrime, SpatialScale(this.m_linkJointSubspace[i], dqd));
+            }
+            else{
+                ioImpU[i] = 0.0f;
+                outDv[i] = dvPrime;
+            }
+        }
+        return true;
+    }
+
+    private f32 computeLinkEffectiveInvMassAlongScratch(
+        in usize linkIdx,
+        in VectorSingle worldPoint,
+        in VectorSingle dir,
+        mut Vector<f32> tmpU,
+        mut Vector<SpatialVec> tmpDv
+    )const{
+        if(LengthSq(dir) <= s_NormalizeEpsilonSq)
+            return 0.0f;
+        if(!this.evaluateWorldImpulseSweep(linkIdx, worldPoint, dir, tmpU, tmpDv))
+            return 0.0f;
+        in Transform3D lXf = this.linkStates[linkIdx].worldTransform;
+        const VectorSingle qLink = SafeNormalizeQuat(VectorSingle(lXf.rotation));
+        const VectorSingle rLocal = Vector3InverseRotate(worldPoint - VectorSingle(lXf.position), qLink);
+        const VectorSingle vPtLocal = VectorSingle(tmpDv[linkIdx].lin) + Cross(VectorSingle(tmpDv[linkIdx].ang), rLocal);
+        const VectorSingle vPtWorld = Vector3Rotate(vPtLocal, qLink);
+        return SimdMax(0.0f, Vector3Dot(dir, vPtWorld).x);
+    }
+
+    public f32 computeLinkEffectiveInvMassAlong(in usize linkIdx, in VectorSingle worldPoint, in VectorSingle unitDir)const{
+        const VectorSingle dir = SafeNormalizeVec3(unitDir, VectorSingle(0.0f));
+        Vector<f32> tmpU;
+        Vector<SpatialVec> tmpDv;
+        return this.computeLinkEffectiveInvMassAlongScratch(linkIdx, worldPoint, dir, tmpU, tmpDv);
+    }
+
+    public void applySpatialImpulseToLink(in usize linkIdx, in VectorSingle worldPoint, in VectorSingle linearImpulse){
+        const usize n = this.linkDefs.size();
+        if(linkIdx >= n)
+            return;
+        if(this.m_iaList.size() != n || this.m_uSubVec.size() != n || this.m_dScalar.size() != n)
+            this.computeForwardDynamicsABA(VectorSingle(0.0f));
+        if(!this.evaluateWorldImpulseSweep(linkIdx, worldPoint, linearImpulse, this.m_impU, this.m_impDv))
+            return;
+        if(!this.fixedBase)
+            this.baseVelocity = SpatialAdd(this.baseVelocity, this.m_impDv[0u]);
+        for(usize i = 1u; i < n; ++i)
+            this.linkStates[i].qd += this.m_impU[i];
+    }
+
+    public void computeInverseDynamicsRNEA(in VectorSingle gravityWorld, in Span<f32> targetQdd, mut Vector<f32> outTorques)const{
+        const usize n = this.linkDefs.size();
+        outTorques.assign(n, 0.0f);
+        if(n == 0u)
+            return;
+
+        Vector<Transform3D> worldXfs;
+        Vector<Transform3D> relXfs;
+        Vector<SpatialVec> jointS;
+        Vector<SpatialVec> vList;
+        Vector<SpatialVec> aList;
+        Vector<SpatialVec> fList;
+        worldXfs.resize(n);
+        relXfs.resize(n);
+        jointS.resize(n);
+        vList.resize(n);
+        aList.resize(n);
+        fList.resize(n);
+
+        for(usize i = 0u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            in ArticulationLinkState s = this.linkStates[i];
+            if(i == 0u){
+                worldXfs[0u] = this.baseTransform;
+                if(this.fixedBase){
+                    vList[0u] = SpatialVec();
+                    aList[0u] = SpatialVec();
+                }
+                else{
+                    vList[0u] = this.baseVelocity;
+                    if(this.m_accel.size() == n)
+                        aList[0u] = this.m_accel[0u];
+                    else
+                        aList[0u] = SpatialVec();
+                }
+            }
+            else{
+                const Transform3D rp = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
+                relXfs[i] = rp;
+                worldXfs[i] = ComposeTransform(worldXfs[d.parentIndex], rp);
+                jointS[i] = this.computeJointSubspaceInChild(i);
+                const VectorSingle rpPos = VectorSingle(rp.position);
+                const VectorSingle rpRot = VectorSingle(rp.rotation);
+                const SpatialVec vJ = SpatialScale(jointS[i], s.qd);
+                vList[i] = SpatialAdd(SpatialTransformMotionP2C(rpPos, rpRot, vList[d.parentIndex]), vJ);
+                f32 qddI = 0.0f;
+                if(d.jointType != ArticulationJointType::Fixed && i < targetQdd.size())
+                    qddI = targetQdd[i];
+                aList[i] = SpatialAdd(
+                    SpatialAdd(SpatialTransformMotionP2C(rpPos, rpRot, aList[d.parentIndex]), SpatialScale(jointS[i], qddI)),
+                    SpatialCrossMotion(vList[i], vJ)
+                );
+            }
+
+            const SpatialMat6 iBody = SpatialInertiaMatrix(d.mass, VectorSingle(d.comLocal), VectorSingle(d.inertiaDiag));
+            const SpatialVec mv = SpatialMulMat6Vec(iBody, vList[i]);
+            const SpatialVec ma = SpatialMulMat6Vec(iBody, aList[i]);
+            const VectorSingle wG = Vector3InverseRotate(gravityWorld, VectorSingle(worldXfs[i].rotation));
+            const SpatialVec gForce = SpatialVecMake(Cross(VectorSingle(d.comLocal), wG * d.mass), wG * d.mass);
+            const SpatialVec totExt = SpatialAdd(s.externalForce, gForce);
+            fList[i] = SpatialSub(SpatialAdd(ma, SpatialCrossForce(vList[i], mv)), totExt);
+        }
+
+        for(usize rev = 0u; rev < n; ++rev){
+            const usize i = n - 1u - rev;
+            if(i == 0u)
+                break;
+            in ArticulationLinkDef d = this.linkDefs[i];
+            if(d.jointType != ArticulationJointType::Fixed)
+                outTorques[i] = SpatialDot(jointS[i], fList[i]);
+            in Transform3D rp = relXfs[i];
+            fList[d.parentIndex] = SpatialAdd(
+                fList[d.parentIndex],
+                SpatialTransformForceC2P(VectorSingle(rp.position), VectorSingle(rp.rotation), fList[i])
+            );
+        }
+    }
+
+    private VectorSingle linkPointWorldVelocity(in usize linkIdx, in VectorSingle worldPoint)const{
+        in ArticulationLinkState s = this.linkStates[linkIdx];
+        const VectorSingle qLink = SafeNormalizeQuat(VectorSingle(s.worldTransform.rotation));
+        const VectorSingle rLocal = Vector3InverseRotate(worldPoint - VectorSingle(s.worldTransform.position), qLink);
+        const VectorSingle vPtLocal = VectorSingle(s.spatialVelocity.lin) + Cross(VectorSingle(s.spatialVelocity.ang), rLocal);
+        return Vector3Rotate(vPtLocal, qLink);
+    }
+
+    private b8 isOwnProxyBody(in BodyId bodyId)const{
+        for(usize i = 0u; i < this.linkDefs.size(); ++i){
+            if(this.linkDefs[i].proxyBodyId == bodyId)
+                return true;
+        }
+        return false;
+    }
+
+    private void solveSubstepContactCoupling(mut PhysicsWorld world, in f32 subDt){
+        const usize n = this.linkDefs.size();
+        const f32 restCoeff = SimdClamp(this.contactRestitution, 0.0f, 1.0f);
+        const f32 baseFriction = SimdMax(0.0f, this.contactFriction);
+        const f32 invSubDt = 1.0f / subDt;
+
+        for(usize i = 0u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            if(!d.proxyBodyId.valid() || !world.isValidBody(d.proxyBodyId))
+                continue;
+            world.bodyShapes(d.proxyBodyId, this.m_proxyShapesScratch);
+            for(usize si = 0u; si < this.m_proxyShapesScratch.size(); ++si){
+                const ShapeId sId = this.m_proxyShapesScratch[si];
+                const Expected<b8> sensorRes = world.tryGetShapeIsSensor(sId);
+                if(!sensorRes.has_value() || sensorRes.value())
+                    continue;
+                ShapeProxy proxy;
+                if(!BuildArticulationLinkShapeProxy(world, sId, proxy))
+                    continue;
+                const Transform3D queryXf = ComposeTransform(this.linkStates[i].worldTransform, world.shapeLocalTransform(sId));
+                this.m_overlapHitsScratch.clear();
+                world.overlapShapeDetailed(proxy, queryXf, this.contactFilter, false, d.proxyBodyId, ShapeId(), this.m_overlapHitsScratch);
+
+                for(usize hi = 0u; hi < this.m_overlapHitsScratch.size(); ++hi){
+                    in ShapeOverlapHit ov = this.m_overlapHitsScratch[hi];
+                    const Expected<BodyId> hitBodyRes = world.tryGetShapeBody(ov.shapeId);
+                    if(!hitBodyRes.has_value())
+                        continue;
+                    const BodyId hitBodyId = hitBodyRes.value();
+                    if(this.isOwnProxyBody(hitBodyId))
+                        continue;
+                    const Expected<BodyType> hitTypeRes = world.tryGetBodyType(hitBodyId);
+                    if(!hitTypeRes.has_value())
+                        continue;
+                    const BodyType hitType = hitTypeRes.value();
+                    const b8 hitIsDynamic = (hitType == BodyType::Dynamic);
+                    const b8 hitCanMove = hitIsDynamic || (hitType == BodyType::Kinematic);
+
+                    const VectorSingle nA2B = SafeNormalizeVec3(VectorSingle(ov.normal), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                    const VectorSingle nOut = -nA2B;
+                    const VectorSingle ptA(ov.pointA);
+                    const VectorSingle ptB(ov.pointB);
+
+                    f32 invMassHit = 0.0f;
+                    MatrixSingle invInertiaHitWorld(VectorSingle(0.0f), VectorSingle(0.0f), VectorSingle(0.0f));
+                    VectorSingle comHit(0.0f);
+                    if(hitIsDynamic){
+                        in Body bHit = world.m_bodies[hitBodyId.index];
+                        in BodySim simHit = world.m_solverSets[bHit.setIndex].sims[bHit.localIndex];
+                        invMassHit = simHit.invMass();
+                        invInertiaHitWorld = Matrix3MaskAngularLocks(Matrix3FromSymMat3(simHit.invInertiaWorld), bHit.flags);
+                        comHit = simHit.center();
+                    }
+                    else if(hitCanMove){
+                        const Expected<f32x4> comRes = world.tryGetWorldCenterOfMass(hitBodyId);
+                        if(comRes.has_value())
+                            comHit = VectorSingle(comRes.value());
+                    }
+
+                    VectorSingle vHitW(0.0f);
+                    if(hitCanMove){
+                        const Expected<f32x4> lvRes = world.tryGetLinearVelocity(hitBodyId);
+                        const Expected<f32x4> avRes = world.tryGetAngularVelocity(hitBodyId);
+                        VectorSingle lv(0.0f);
+                        VectorSingle av(0.0f);
+                        if(lvRes.has_value())
+                            lv = VectorSingle(lvRes.value());
+                        if(avRes.has_value())
+                            av = VectorSingle(avRes.value());
+                        vHitW = lv + Cross(av, ptB - comHit);
+                    }
+                    const VectorSingle vLinkW = this.linkPointWorldVelocity(i, ptA);
+                    const f32 vRelN = Vector3Dot(vLinkW - vHitW, nOut).x;
+                    const f32 biasVel = SimdMax(0.0f, ov.penetrationDepth - 0.002f) * (0.2f * invSubDt);
+                    f32 targetRelN = 0.0f;
+                    if(vRelN < -0.5f)
+                        targetRelN = -restCoeff * vRelN;
+                    const f32 deltaVelN = SimdMax(targetRelN, biasVel) - vRelN;
+                    if(deltaVelN <= 0.0f)
+                        continue;
+
+                    const f32 invArtN = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, nOut, this.m_impU, this.m_impDv);
+                    const VectorSingle rB = ptB - comHit;
+                    const VectorSingle rxn = Cross(rB, nOut);
+                    const f32 invHitN = invMassHit + Vector3Dot(rxn, Matrix3MulVec(invInertiaHitWorld, rxn)).x;
+                    const f32 effInvN = invArtN + invHitN;
+                    if(effInvN <= 1.0e-8f)
+                        continue;
+
+                    const f32 jN = deltaVelN / effInvN;
+                    if(jN <= 0.0f)
+                        continue;
+                    this.applySpatialImpulseToLink(i, ptA, nOut * jN);
+                    if(hitIsDynamic)
+                        world.applyLinearImpulseAtPoint(hitBodyId, -nOut * jN, ptB, true);
+                    this.computeLinkSpatialVelocities();
+
+                    VectorSingle vHitAfterW(0.0f);
+                    if(hitCanMove){
+                        const Expected<f32x4> lv2Res = world.tryGetLinearVelocity(hitBodyId);
+                        const Expected<f32x4> av2Res = world.tryGetAngularVelocity(hitBodyId);
+                        VectorSingle lv2(0.0f);
+                        VectorSingle av2(0.0f);
+                        if(lv2Res.has_value())
+                            lv2 = VectorSingle(lv2Res.value());
+                        if(av2Res.has_value())
+                            av2 = VectorSingle(av2Res.value());
+                        vHitAfterW = lv2 + Cross(av2, ptB - comHit);
+                    }
+                    const VectorSingle vRelAfter = this.linkPointWorldVelocity(i, ptA) - vHitAfterW;
+                    const VectorSingle vRelTan = vRelAfter - nOut * Vector3Dot(vRelAfter, nOut).x;
+                    const f32 tanLenSq = Vector3LengthSq(vRelTan).x;
+                    if(tanLenSq <= 1.0e-10f)
+                        continue;
+
+                    const VectorSingle tDir = vRelTan * Rsqrt(VectorSingle(tanLenSq)).x;
+                    const f32 vRelT = Vector3Dot(vRelAfter, tDir).x;
+                    const f32 invArtT = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, tDir, this.m_impU, this.m_impDv);
+                    const VectorSingle rxt = Cross(rB, tDir);
+                    const f32 invHitT = invMassHit + Vector3Dot(rxt, Matrix3MulVec(invInertiaHitWorld, rxt)).x;
+                    const f32 effInvT = invArtT + invHitT;
+                    if(effInvT <= 1.0e-8f)
+                        continue;
+
+                    f32 mu = baseFriction;
+                    const Expected<SurfaceMaterial> matRes = world.tryGetShapeMaterial(ov.shapeId);
+                    if(matRes.has_value())
+                        mu = SqrtFast(baseFriction * SimdMax(0.0f, matRes.value().friction));
+                    const f32 jT = SimdClamp(-vRelT / effInvT, -mu * jN, 0.0f);
+                    if(Abs(VectorSingle(jT)).x <= 0.0f)
+                        continue;
+                    this.applySpatialImpulseToLink(i, ptA, tDir * jT);
+                    if(hitIsDynamic)
+                        world.applyLinearImpulseAtPoint(hitBodyId, -tDir * jT, ptB, true);
+                    this.computeLinkSpatialVelocities();
+                }
+            }
+        }
+    }
+
     public void step(mut PhysicsWorld world, in f32 dt){
         if(dt <= 0.0f || this.linkDefs.empty())
             return;
@@ -660,22 +1077,23 @@ class Articulation{
                 if(d.enableLimit && d.lowerLimit <= d.upperLimit){
                     b8 hitLimit = false;
                     const f32 oldQd = s.qd;
+                    const f32 e = SimdClamp(d.limitRestitution, 0.0f, 1.0f);
                     if(s.q < d.lowerLimit){
                         s.q = d.lowerLimit;
                         if(s.qd < 0.0f){
-                            s.qd = 0.0f;
+                            s.qd = -e * oldQd;
                             hitLimit = true;
                         }
                     }
                     else if(s.q > d.upperLimit){
                         s.q = d.upperLimit;
                         if(s.qd > 0.0f){
-                            s.qd = 0.0f;
+                            s.qd = -e * oldQd;
                             hitLimit = true;
                         }
                     }
                     if(hitLimit && i < this.m_relP2C.size() && i < this.m_uSubVec.size()){
-                        const f32 dqd = -oldQd;
+                        const f32 dqd = s.qd - oldQd;
                         in Transform3D rpI = this.m_relP2C[i];
                         SpatialVec impCur = SpatialTransformForceC2P(VectorSingle(rpI.position), VectorSingle(rpI.rotation), SpatialScale(this.m_uSubVec[i], -dqd));
                         u32 cur = d.parentIndex;
@@ -697,6 +1115,12 @@ class Articulation{
                         }
                     }
                 }
+            }
+
+            if(this.enableContactCoupling){
+                this.computeForwardKinematics();
+                this.computeLinkSpatialVelocities();
+                this.solveSubstepContactCoupling(world, subDt);
             }
         }
 

@@ -496,6 +496,11 @@ class PreSolveContext{
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
+    public f32 invMassScaleA = 1.0f;
+    public f32 invMassScaleB = 1.0f;
+    public f32 invInertiaScaleA = 1.0f;
+    public f32 invInertiaScaleB = 1.0f;
+    public f32 maxNormalImpulse = s_MaxF32;
     public u32 pointCount = 0u;
     public u8 pointEnableMask = 0x0fu;
     public b8 enabled = true;
@@ -504,6 +509,11 @@ class PreSolveContext{
         if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints))
             return this.points[idx].w;
         return 0.0f;
+    }
+
+    public void setPointSeparation(in u32 idx, in f32 sep){
+        if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints))
+            this.points[idx].w = sep;
     }
 
     public b8 isPointEnabled(in u32 idx)const{
@@ -527,6 +537,9 @@ type CustomFilterCallback = Func<64u, b8(in ShapeId, in ShapeId)>;
 type PreSolveCallback = Func<64u, b8(mut PreSolveContext)>;
 type MaterialCombineCallback = Func<64u, b8(in ShapeId, in ShapeId, in SurfaceMaterial, in SurfaceMaterial, mut MaterialCombineResult)>;
 type ShapeQueryFilterCallback = Func<64u, b8(in ShapeId)>;
+type RayCastCollectorCallback = Func<64u, f32(in RayCastHit)>;
+type ShapeCastCollectorCallback = Func<64u, f32(in ShapeCastHit)>;
+type OverlapCollectorCallback = Func<64u, b8(in ShapeOverlapHit)>;
 
 class ExplosionDef{
     public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);

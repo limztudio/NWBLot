@@ -143,6 +143,7 @@ class Sweep3D{
 class TimeOfImpactOutput{
     public f32x4 pointFraction(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x3_u32 normalFlags(0.0f, 1.0f, 0.0f, 0u);
+    public u32 hitTriangleIndex = s_NullIndex;
 
     public VectorSingle point()const{
         return VectorSingle(this.pointFraction, 0.0f);
@@ -269,6 +270,21 @@ ShapeProxyView MakeHullProxyView(in HullShape hull){
     v.radius = hull.centroidRadius.w;
     v.kind = ProxyKind::PointCloud;
     return v;
+}
+
+ShapeProxyView MakeFinitePlaneQuadProxyView(in PlaneShape pl, mut Array<f32x3u, 4u> outPts){
+    const VectorSingle nLocal = SafeNormalizeVec3(pl.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle t1(0.0f);
+    VectorSingle t2(0.0f);
+    ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
+    const VectorSingle cPlane = nLocal * pl.offset();
+    const VectorSingle e1 = t1 * pl.halfExtent.x;
+    const VectorSingle e2 = t2 * pl.halfExtent.z;
+    outPts[0u] = f32x3u(cPlane - e1 - e2);
+    outPts[1u] = f32x3u(cPlane + e1 - e2);
+    outPts[2u] = f32x3u(cPlane + e1 + e2);
+    outPts[3u] = f32x3u(cPlane - e1 + e2);
+    return MakeSpanProxyView(Span<f32x3u>(outPts), 0.0f);
 }
 
 b8 IsProxyViewEmpty(in ShapeProxyView p){
@@ -2308,6 +2324,7 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
                 const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotBStart), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 bestOut.pointFraction = f32x4(TransformPointValues(posBStart, rotBStart, closePt), 0.0f);
                 bestOut.normalFlags = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 3u);
+                bestOut.hitTriangleIndex = closeTri;
                 return bestOut;
             }
         }
@@ -2357,14 +2374,16 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
                     angBound += angB * ComputeProxyViewBoundingRadius(triView, VectorSingle(sweepB.localCenter));
                 const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angBound);
                 if(toi.hit()){
-                    if(forSensor && toi.initialOverlap())
-                        return toi;
-                    if(!toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < curMax){
-                        curMax = toi.fraction();
-                        bestOut = toi;
+                    TimeOfImpactOutput taggedToi = toi;
+                    taggedToi.hitTriangleIndex = ti;
+                    if(forSensor && taggedToi.initialOverlap())
+                        return taggedToi;
+                    if(!taggedToi.initialOverlap() && taggedToi.fraction() > 0.0f && taggedToi.fraction() < curMax){
+                        curMax = taggedToi.fraction();
+                        bestOut = taggedToi;
                     }
                     else if(!bestOut.hit()){
-                        bestOut = toi;
+                        bestOut = taggedToi;
                     }
                 }
             }

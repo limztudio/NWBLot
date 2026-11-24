@@ -79,6 +79,7 @@ class PaintBuilder : NoCopy{
     private Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> m_overlays;
     private Array<PaintTransformStackEntry, s_PaintMaxTransformDepth> m_transforms;
     private Vector<DrawCommand> m_sortScratch;
+    private Vector<Point> m_polyScratch;
     private usize m_overlayDepth = 0u;
     private usize m_transformBase = 0u;
     private usize m_transformDepth = 0u;
@@ -303,6 +304,22 @@ class PaintBuilder : NoCopy{
             return PaintTransformIdentity();
         return this.m_transforms[this.m_transformDepth - 1u].xf;
     }
+    public b8 hasActiveTransform()const{
+        return this.m_hasActiveTransform;
+    }
+    public f32 currentTransformScale(){
+        if(!this.m_hasActiveTransform)
+            return 1.0f;
+        return this.activeTransformScale();
+    }
+    private f32 activeAaWidth()const{
+        const f32 px = this.m_snapshot.m_displayMetrics.pixelScaleX;
+        const f32 py = this.m_snapshot.m_displayMetrics.pixelScaleY;
+        f32 scale = 1.0f;
+        if(IsFinite(VectorSingle(px, py, 0.0f, 0.0f).xy))
+            scale = UiSimdMax(1.0f, UiSimdMax(px, py));
+        return 1.0f / scale;
+    }
 
     [cpp_unwind]
     public b8 beginOverlay(in u32 layer){
@@ -450,26 +467,24 @@ class PaintBuilder : NoCopy{
                 if(!IsFinite(VectorSingle(lLenSq)) || lLenSq <= 1.0e-8f)
                     return;
                 const f32 invLLen = Rsqrt(VectorSingle(lLenSq)).x;
-                if(IsFinite(VectorSingle(style.dashLength, style.gapLength, 0.0f, 0.0f).xy) && style.dashLength > 0.0f && style.gapLength > 0.0f)
-                    ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
-                else
-                    perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
             }
             PaintLineStyle scaledStyle = style;
             scaledStyle.thickness = style.thickness * perpScale;
             scaledStyle.dashLength = style.dashLength * alongScale;
             scaledStyle.gapLength = style.gapLength * alongScale;
             scaledStyle.dashOffset = style.dashOffset * alongScale;
-            EmitPaintLineStyled(
+            const f32 capHalfLen = 0.5f * style.thickness * alongScale;
+            EmitPaintLineStyledCore(
                 this.m_recording, this.m_clips.back(),
                 ApplyPaintTransform(xf, start), ApplyPaintTransform(xf, end),
-                scaledStyle, color, this.m_layer,
+                scaledStyle, capHalfLen, this.activeAaWidth(), color, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
-        EmitPaintLineStyled(
-            this.m_recording, this.m_clips.back(), start, end, style, color, this.m_layer,
+        EmitPaintLineStyledCore(
+            this.m_recording, this.m_clips.back(), start, end, style, 0.5f * style.thickness, this.activeAaWidth(), color, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
@@ -493,6 +508,7 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public void drawPolyline(in Span<Point> points, in b8 closed, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
+        const f32 aaWidth = this.activeAaWidth();
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             in PaintTransform2D xf = entry.xf;
@@ -500,13 +516,313 @@ class PaintBuilder : NoCopy{
             if(entry.uniformScale)
                 scale = this.activeTransformScale();
             EmitPaintPolylineTransformed(
-                this.m_recording, this.m_clips.back(), points, closed, xf, entry.uniformScale, scale, style, color, this.m_layer,
+                this.m_recording, this.m_clips.back(), points, closed, xf, entry.uniformScale, scale, style, aaWidth, color, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintPolyline(
-            this.m_recording, this.m_clips.back(), points, closed, style, color, this.m_layer,
+            this.m_recording, this.m_clips.back(), points, closed, style, aaWidth, color, this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    public void strokeRect(in Rect rectangle, in f32 thickness, in Color color){
+        PaintLineStyle style;
+        style.thickness = thickness;
+        style.join = PaintLineJoin::Miter;
+        this.strokeRect(rectangle, style, color);
+    }
+    [cpp_unwind]
+    public void strokeRect(in Rect rectangle, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
+            return;
+        if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
+            return;
+        Array<Point, 4u> pts;
+        pts[0u] = Point(rectangle.x, rectangle.y);
+        pts[1u] = Point(rectangle.x + rectangle.width, rectangle.y);
+        pts[2u] = Point(rectangle.x + rectangle.width, rectangle.y + rectangle.height);
+        pts[3u] = Point(rectangle.x, rectangle.y + rectangle.height);
+        this.drawPolyline(Span<Point>(pts.data(), 4u), true, style, color);
+    }
+    private void pushScratchUniquePoint(in Point pt){
+        if(!this.m_polyScratch.empty()){
+            in Point prev = this.m_polyScratch[this.m_polyScratch.size() - 1u];
+            const f32 dx = pt.x - prev.x;
+            const f32 dy = pt.y - prev.y;
+            if(dx * dx + dy * dy <= 1.0e-6f)
+                return;
+        }
+        this.m_polyScratch.push_back(pt);
+    }
+    private b8 buildRoundedRectPoints(in Rect rectangle, in f32 radius){
+        if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
+            return false;
+        if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(VectorSingle(radius)))
+            return false;
+        const f32 halfMin = 0.5f * UiSimdMin(rectangle.width, rectangle.height);
+        const f32 r = UiSimdClamp(radius, 0.0f, halfMin);
+        if(r <= 1.0e-3f)
+            return false;
+
+        this.m_polyScratch.clear();
+        const usize segPerCorner = cast<usize>(UiSimdClamp(r * this.currentTransformScale() * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
+        const f32 stepAngle = (s_Pi * 0.5f) / cast<f32>(segPerCorner);
+        VectorSingle sStepVec(0.0f);
+        VectorSingle cStepVec(0.0f);
+        VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+        const f32 ds = sStepVec.x;
+        const f32 dc = cStepVec.x;
+
+        Array<Point, 4u> centers;
+        centers[0u] = Point(rectangle.x + r, rectangle.y + r);
+        centers[1u] = Point(rectangle.x + rectangle.width - r, rectangle.y + r);
+        centers[2u] = Point(rectangle.x + rectangle.width - r, rectangle.y + rectangle.height - r);
+        centers[3u] = Point(rectangle.x + r, rectangle.y + rectangle.height - r);
+        Array<Point, 4u> startDirs;
+        startDirs[0u] = Point(-1.0f, 0.0f);
+        startDirs[1u] = Point(0.0f, -1.0f);
+        startDirs[2u] = Point(1.0f, 0.0f);
+        startDirs[3u] = Point(0.0f, 1.0f);
+
+        for(usize ci = 0u; ci < 4u; ++ci){
+            f32 ux = startDirs[ci].x;
+            f32 uy = startDirs[ci].y;
+            for(usize si = 0u; si <= segPerCorner; ++si){
+                this.pushScratchUniquePoint(Point(centers[ci].x + ux * r, centers[ci].y + uy * r));
+                const f32 nextUx = ux * dc - uy * ds;
+                const f32 nextUy = ux * ds + uy * dc;
+                ux = nextUx;
+                uy = nextUy;
+            }
+        }
+        if(this.m_polyScratch.size() >= 2u){
+            in Point firstPt = this.m_polyScratch[0u];
+            in Point lastPt = this.m_polyScratch[this.m_polyScratch.size() - 1u];
+            const f32 dx = firstPt.x - lastPt.x;
+            const f32 dy = firstPt.y - lastPt.y;
+            if(dx * dx + dy * dy <= 1.0e-6f)
+                this.m_polyScratch.pop_back();
+        }
+        return this.m_polyScratch.size() >= 3u;
+    }
+    private b8 buildEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY){
+        if(!IsFinite(VectorSingle(center.x, center.y, radiusX, radiusY)) || !(radiusX > 0.0f) || !(radiusY > 0.0f))
+            return false;
+        const f32 maxR = UiSimdMax(radiusX, radiusY);
+        const usize segCount = cast<usize>(UiSimdClamp((2.0f * s_Pi) * maxR * this.currentTransformScale() / 3.0f, 12.0f, 64.0f));
+        const f32 stepAngle = (2.0f * s_Pi) / cast<f32>(segCount);
+        VectorSingle sStepVec(0.0f);
+        VectorSingle cStepVec(0.0f);
+        VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+        const f32 ds = sStepVec.x;
+        const f32 dc = cStepVec.x;
+        this.m_polyScratch.clear();
+        this.m_polyScratch.reserve(segCount);
+        f32 ux = 1.0f;
+        f32 uy = 0.0f;
+        for(usize i = 0u; i < segCount; ++i){
+            this.m_polyScratch.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
+            const f32 nextUx = ux * dc - uy * ds;
+            const f32 nextUy = ux * ds + uy * dc;
+            ux = nextUx;
+            uy = nextUy;
+        }
+        return true;
+    }
+    private void emitFilledScratchPolygon(in Color color){
+        if(this.m_polyScratch.size() < 3u)
+            return;
+        if(this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            for(usize i = 0u; i < this.m_polyScratch.size(); ++i)
+                this.m_polyScratch[i] = ApplyPaintTransform(xf, this.m_polyScratch[i]);
+        }
+        EmitPaintFilledConvexPolygon(
+            this.m_recording, this.m_clips.back(), Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()),
+            color, this.activeAaWidth(), this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    public void fillRoundedRect(in Rect rectangle, in f32 radius, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording)
+            return;
+        if(!this.buildRoundedRectPoints(rectangle, radius)){
+            if(rectangle.width > 0.0f && rectangle.height > 0.0f && IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
+                this.fillRect(rectangle, color);
+            return;
+        }
+        this.emitFilledScratchPolygon(color);
+    }
+    [cpp_unwind]
+    public void strokeRoundedRect(in Rect rectangle, in f32 radius, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording)
+            return;
+        if(!this.buildRoundedRectPoints(rectangle, radius)){
+            this.strokeRect(rectangle, style, color);
+            return;
+        }
+        this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
+    }
+    [cpp_unwind]
+    public void fillCircle(in Point center, in f32 radius, in Color color){
+        this.fillEllipse(center, radius, radius, color);
+    }
+    [cpp_unwind]
+    public void strokeCircle(in Point center, in f32 radius, in PaintLineStyle style, in Color color){
+        this.strokeEllipse(center, radius, radius, style, color);
+    }
+    [cpp_unwind]
+    public void fillEllipse(in Point center, in f32 radiusX, in f32 radiusY, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+            return;
+        this.emitFilledScratchPolygon(color);
+    }
+    [cpp_unwind]
+    public void strokeEllipse(in Point center, in f32 radiusX, in f32 radiusY, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+            return;
+        this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
+    }
+    [cpp_unwind]
+    public void drawArc(in Point center, in f32 radius, in f32 startAngleRadians, in f32 sweepAngleRadians, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsFinite(VectorSingle(center.x, center.y, radius, startAngleRadians)) || !IsFinite(VectorSingle(sweepAngleRadians)))
+            return;
+        if(!(radius > 0.0f) || Abs(VectorSingle(sweepAngleRadians)).x <= 1.0e-5f)
+            return;
+        const f32 twoPi = 2.0f * s_Pi;
+        const f32 sweep = UiSimdClamp(sweepAngleRadians, -twoPi, twoPi);
+        const f32 absSweep = Abs(VectorSingle(sweep)).x;
+        const b8 closed = Abs(VectorSingle(absSweep - twoPi)).x <= 1.0e-4f;
+        const usize segCount = cast<usize>(UiSimdClamp(absSweep * radius * this.currentTransformScale() / 3.0f, 4.0f, 64.0f));
+        const f32 stepAngle = sweep / cast<f32>(segCount);
+
+        VectorSingle sStartVec(0.0f);
+        VectorSingle cStartVec(0.0f);
+        VectorSinCos(sStartVec, cStartVec, VectorSingle(startAngleRadians));
+        VectorSingle sStepVec(0.0f);
+        VectorSingle cStepVec(0.0f);
+        VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+
+        const f32 ds = sStepVec.x;
+        const f32 dc = cStepVec.x;
+        f32 ux = cStartVec.x;
+        f32 uy = sStartVec.x;
+        this.m_polyScratch.clear();
+        usize emitCount = segCount + 1u;
+        if(closed)
+            emitCount = segCount;
+        this.m_polyScratch.reserve(emitCount);
+        for(usize i = 0u; i < emitCount; ++i){
+            this.m_polyScratch.push_back(Point(center.x + ux * radius, center.y + uy * radius));
+            const f32 nextUx = ux * dc - uy * ds;
+            const f32 nextUy = ux * ds + uy * dc;
+            ux = nextUx;
+            uy = nextUy;
+        }
+        this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), closed, style, color);
+    }
+    [cpp_unwind]
+    public void fillConvexPolygon(in Span<Point> points, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || points.size() < 3u)
+            return;
+        if(this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            this.m_polyScratch.clear();
+            this.m_polyScratch.reserve(points.size());
+            for(usize i = 0u; i < points.size(); ++i)
+                this.m_polyScratch.push_back(ApplyPaintTransform(xf, points[i]));
+            EmitPaintFilledConvexPolygon(
+                this.m_recording, this.m_clips.back(), Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()),
+                color, this.activeAaWidth(), this.m_layer,
+                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+            );
+            return;
+        }
+        EmitPaintFilledConvexPolygon(
+            this.m_recording, this.m_clips.back(), points, color, this.activeAaWidth(), this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    public void drawQuadraticBezier(in Point p0, in Point p1, in Point p2, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)) || !IsFinite(VectorSingle(p2.x, p2.y, 0.0f, 0.0f).xy))
+            return;
+        const f32 devX = p1.x - 0.5f * (p0.x + p2.x);
+        const f32 devY = p1.y - 0.5f * (p0.y + p2.y);
+        const f32 chordX = p2.x - p0.x;
+        const f32 chordY = p2.y - p0.y;
+        const f32 dev = Sqrt(VectorSingle(devX * devX + devY * devY)).x;
+        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
+        const usize steps = cast<usize>(UiSimdClamp((dev * 2.0f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 32.0f));
+        this.m_polyScratch.clear();
+        this.m_polyScratch.reserve(steps + 1u);
+        const f32 invSteps = 1.0f / cast<f32>(steps);
+        for(usize i = 0u; i <= steps; ++i){
+            const f32 t = cast<f32>(i) * invSteps;
+            const f32 u = 1.0f - t;
+            const f32 w0 = u * u;
+            const f32 w1 = 2.0f * u * t;
+            const f32 w2 = t * t;
+            this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y));
+        }
+        this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
+    }
+    [cpp_unwind]
+    public void drawCubicBezier(in Point p0, in Point p1, in Point p2, in Point p3, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)) || !IsFinite(VectorSingle(p2.x, p2.y, p3.x, p3.y)))
+            return;
+        const f32 d1x = p1.x - (p0.x + (p3.x - p0.x) * (1.0f / 3.0f));
+        const f32 d1y = p1.y - (p0.y + (p3.y - p0.y) * (1.0f / 3.0f));
+        const f32 d2x = p2.x - (p0.x + (p3.x - p0.x) * (2.0f / 3.0f));
+        const f32 d2y = p2.y - (p0.y + (p3.y - p0.y) * (2.0f / 3.0f));
+        const f32 dev = Sqrt(VectorSingle(d1x * d1x + d1y * d1y)).x + Sqrt(VectorSingle(d2x * d2x + d2y * d2y)).x;
+        const f32 chordX = p3.x - p0.x;
+        const f32 chordY = p3.y - p0.y;
+        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
+        const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 48.0f));
+        this.m_polyScratch.clear();
+        this.m_polyScratch.reserve(steps + 1u);
+        const f32 invSteps = 1.0f / cast<f32>(steps);
+        for(usize i = 0u; i <= steps; ++i){
+            const f32 t = cast<f32>(i) * invSteps;
+            const f32 u = 1.0f - t;
+            const f32 uu = u * u;
+            const f32 tt = t * t;
+            const f32 w0 = uu * u;
+            const f32 w1 = 3.0f * uu * t;
+            const f32 w2 = 3.0f * u * tt;
+            const f32 w3 = tt * t;
+            this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y));
+        }
+        this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
+    }
+    [cpp_unwind]
+    public void fillRectGradient(in Rect rectangle, in Color topLeftColor, in Color topRightColor, in Color bottomRightColor, in Color bottomLeftColor){
+        assert(this.m_recording);
+        if(this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            EmitPaintTransformedGradientRect(
+                this.m_recording, this.m_clips.back(), xf, rectangle,
+                topLeftColor, topRightColor, bottomRightColor, bottomLeftColor, this.m_layer,
+                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+            );
+            return;
+        }
+        EmitPaintGradientRect(
+            this.m_recording, this.m_clips.back(), rectangle,
+            topLeftColor, topRightColor, bottomRightColor, bottomLeftColor, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }

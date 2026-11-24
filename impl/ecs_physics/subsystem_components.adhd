@@ -97,7 +97,9 @@ class CharacterControllerComponent{
 class VehicleComponent{
     public VehicleEngineDef engine;
     public Vector<VehicleWheelDef> wheels;
+    public Vector<Name> wheelEntityNames;
     public VehicleInput input;
+    public Filter queryFilter;
     public VehicleController controller;
     public b8 enabled = true;
     public b8 initialized = false;
@@ -113,6 +115,8 @@ class RagdollComponent{
     public b8 driveToPose = false;
     public f32 driveStrengthMultiplier = 1.0f;
     public Vector<Transform3D> targetPose;
+    public Vector<b8> boneKinematicMask;
+    public Vector<Name> boneEntityNames;
     public b8 initialized = false;
     public b8 dirty = true;
 }
@@ -134,6 +138,11 @@ class ArticulationComponent{
     public Vector<ArticulationLinkDef> links;
     public Vector<Name> proxyEntityNames;
     public b8 isFixedBase = true;
+    public u32 subSteps = 4u;
+    public b8 enableContactCoupling = false;
+    public f32 contactRestitution = 0.0f;
+    public f32 contactFriction = 0.5f;
+    public Filter contactFilter;
     public Articulation articulation;
     public b8 enabled = true;
     public b8 initialized = false;
@@ -143,6 +152,7 @@ class ArticulationComponent{
 [arena, component("soft_body")]
 class SoftBodyComponent{
     public SoftBody softBody;
+    public Vector<Name> attachmentBodyEntityNames;
     public b8 enabled = true;
 }
 

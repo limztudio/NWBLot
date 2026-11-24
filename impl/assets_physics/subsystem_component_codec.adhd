@@ -19,6 +19,8 @@ const u8 s_CharCtrlFlagSyncFromTransform = 0x10u;
 const u8 s_VehicleFlagUseAckerman = 0x01u;
 const u8 s_VehicleFlagAutomatic = 0x02u;
 const u8 s_VehicleFlagEnabled = 0x04u;
+const u8 s_VehicleFlagEnableAbs = 0x08u;
+const u8 s_VehicleFlagEnableTcs = 0x10u;
 
 const u8 s_VehicleWheelFlagSteerable = 0x01u;
 const u8 s_VehicleWheelFlagDriven = 0x02u;
@@ -49,12 +51,14 @@ const u8 s_ForceFieldFlagComponentEnabled = 0x04u;
 
 const u8 s_ArticulationFlagIsFixedBase = 0x01u;
 const u8 s_ArticulationFlagEnabled = 0x02u;
+const u8 s_ArticulationFlagEnableContactCoupling = 0x04u;
 
 const u8 s_ArticulationLinkFlagEnableLimit = 0x01u;
 const u8 s_ArticulationLinkFlagEnableDrive = 0x02u;
 
 const u8 s_SoftBodyFlagCollideWithWorld = 0x01u;
 const u8 s_SoftBodyFlagEnabled = 0x02u;
+const u8 s_SoftBodyFlagEnableSelfCollision = 0x04u;
 
 const u8 s_GpuExportFlagEnabled = 0x01u;
 
@@ -84,6 +88,7 @@ class CharacterControllerComponentBinary{
 [serialize]
 class VehicleComponentBinary{
     public u32 wheelCount = 0u;
+    public u32 wheelNameCount = 0u;
     public u32 gearCount = 5u;
     public i32 requestedGear = 1;
     public f32 maxTorque = 450.0f;
@@ -103,6 +108,9 @@ class VehicleComponentBinary{
     public f32 brake = 0.0f;
     public f32 steer = 0.0f;
     public f32 handbrake = 0.0f;
+    public u32 queryFilterCategoryBits = 1u;
+    public u32 queryFilterMaskBits = u32.max;
+    public i32 queryFilterGroupIndex = 0;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
@@ -118,6 +126,7 @@ class VehicleWheelBinary{
     public f32 suspensionMaxTravel = 0.25f;
     public f32 suspensionStiffness = 35000.0f;
     public f32 suspensionDamping = 4500.0f;
+    public f32 suspensionReboundDamping = -1.0f;
     public f32 wheelRadius = 0.35f;
     public f32 wheelWidth = 0.22f;
     public f32 wheelInertia = 1.5f;
@@ -129,18 +138,23 @@ class VehicleWheelBinary{
     public f32 rollingResistanceCoeff = 0.015f;
     public f32 longitudinalStiffness = 12.0f;
     public f32 lateralStiffness = 10.0f;
+    public f32 pacejkaShapeC = 1.35f;
+    public f32 pacejkaCurvatureE = 0.0f;
     public f32 antiRollStiffness = 8000.0f;
     public i32 antiRollPairIndex = -1;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public u64 reserved2 = 0u;
+    public u32 reserved2 = 0u;
+    public u64 reserved3 = 0u;
 }
 
 [serialize]
 class RagdollComponentBinary{
     public u32 boneCount = 0u;
     public u32 targetPoseCount = 0u;
+    public u32 boneKinematicMaskCount = 0u;
+    public u32 boneNameCount = 0u;
     public f32 driveStrengthMultiplier = 1.0f;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
@@ -214,9 +228,9 @@ class FluidVolumeComponentBinary{
     public u32 filterCategoryBits = 1u;
     public u32 filterMaskBits = u32.max;
     public i32 filterGroupIndex = 0;
-    public u32 reserved1 = 0u;
-    public u32 reserved2 = 0u;
-    public u32 reserved3 = 0u;
+    public f32 waveAmplitude = 0.0f;
+    public f32 waveFrequency = 1.0f;
+    public f32 waveSpeed = 1.0f;
 }
 
 [serialize]
@@ -224,6 +238,7 @@ class ForceFieldComponentBinary{
     public f32x4 boundsLower(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 boundsUpper(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 originOrDirection(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 axis(0.0f, 1.0f, 0.0f, 0.0f);
     public u8 fieldType = 1u;
     public u8 flags = 0u;
     public u16 reserved0 = 0u;
@@ -244,6 +259,12 @@ class ForceFieldComponentBinary{
 class ArticulationComponentBinary{
     public u32 linkCount = 0u;
     public u32 proxyNameCount = 0u;
+    public u32 subSteps = 4u;
+    public u32 contactFilterCategoryBits = 1u;
+    public u32 contactFilterMaskBits = u32.max;
+    public i32 contactFilterGroupIndex = 0;
+    public f32 contactRestitution = 0.0f;
+    public f32 contactFriction = 0.5f;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
@@ -269,24 +290,34 @@ class ArticulationLinkBinary{
     public f32 driveMaxForce = 1.0e6f;
     public f32 jointDamping = 0.0f;
     public f32 jointFriction = 0.0f;
+    public f32 limitRestitution = 0.0f;
     public u8 jointType = 1u;
     public u8 flags = 0u;
     public u16 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u32 reserved3 = 0u;
 }
 
 [serialize]
 class SoftBodyComponentBinary{
+    public f32x4 windVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public u32 particleCount = 0u;
     public u32 distCount = 0u;
     public u32 bendCount = 0u;
     public u32 volCount = 0u;
     public u32 triCount = 0u;
     public u32 attachCount = 0u;
+    public u32 backstopCount = 0u;
     public f32 particleRadius = 0.03f;
     public f32 damping = 0.02f;
     public f32 aerodynamicDrag = 0.02f;
+    public f32 liftCoeff = 0.0f;
     public f32 friction = 0.4f;
     public f32 restitution = 0.0f;
+    public f32 tearStrainThreshold = 0.0f;
+    public f32 selfCollisionRadius = 0.0f;
+    public f32 selfCollisionStiffness = 0.5f;
     public u32 subSteps = 4u;
     public u32 solverIterations = 4u;
     public u32 filterCategoryBits = 1u;
@@ -295,6 +326,7 @@ class SoftBodyComponentBinary{
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
 }
 
 [serialize]
@@ -342,9 +374,20 @@ class SoftBodyTriangleBinary{
 [serialize]
 class SoftBodyAttachmentBinary{
     public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
+    public NameHash bodyEntityNameHash;
     public u32 particleIndex = 0u;
     public f32 compliance = 0.0f;
     public u64 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyBackstopBinary{
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32 particleIndex = 0u;
+    public f32 maxDistance = 0.0f;
+    public f32 backstopRadius = 0.0f;
+    public u32 reserved0 = 0u;
 }
 
 [serialize]
@@ -505,7 +548,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(v.input.throttle, v.input.brake, v.input.steer, v.input.handbrake)))
             return false;
-        if(v.wheels.size() > cast<usize>(u32.max))
+        if(v.wheels.size() > cast<usize>(u32.max) || v.wheelEntityNames.size() > cast<usize>(u32.max))
             return false;
         const i32 wheelCountI = cast<i32>(v.wheels.size());
         for(usize wi = 0u; wi < v.wheels.size(); ++wi){
@@ -522,9 +565,10 @@ class SubsystemPhysicsComponentBinaryCodec{
             if(!IsFinite(VectorSingle(w.suspensionRestLength, w.suspensionMaxTravel, w.suspensionStiffness, w.suspensionDamping))
                 || !IsFinite(VectorSingle(w.wheelRadius, w.wheelWidth, w.wheelInertia, w.maxSteerAngleRad))
                 || !IsFinite(VectorSingle(w.driveFraction, w.maxBrakeTorque, w.maxHandbrakeTorque, w.frictionMultiplier))
-                || !IsFinite(VectorSingle(w.rollingResistanceCoeff, w.longitudinalStiffness, w.lateralStiffness, w.antiRollStiffness)))
+                || !IsFinite(VectorSingle(w.rollingResistanceCoeff, w.longitudinalStiffness, w.lateralStiffness, w.antiRollStiffness))
+                || !IsFinite(VectorSingle(w.suspensionReboundDamping, w.pacejkaShapeC, w.pacejkaCurvatureE, 0.0f)))
                 return false;
-            if(w.suspensionRestLength < 0.0f || w.suspensionMaxTravel < 0.0f || w.suspensionStiffness < 0.0f || w.suspensionDamping < 0.0f || w.wheelRadius <= 0.0f || w.wheelWidth <= 0.0f || w.wheelInertia <= 0.0f || w.antiRollStiffness < 0.0f)
+            if(w.suspensionRestLength < 0.0f || w.suspensionMaxTravel < 0.0f || w.suspensionStiffness < 0.0f || w.suspensionDamping < 0.0f || w.wheelRadius <= 0.0f || w.wheelWidth <= 0.0f || w.wheelInertia <= 0.0f || w.antiRollStiffness < 0.0f || w.pacejkaShapeC <= 0.0f)
                 return false;
             if(w.antiRollPairIndex < -1 || w.antiRollPairIndex >= wheelCountI)
                 return false;
@@ -540,15 +584,18 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendVehicleValidated(in VehicleComponent v, mut Vector<u8> outBinary)const{
-        static_assert(size_of<VehicleComponentBinary>() == 104u && size_of<VehicleWheelBinary>() == 144u);
-        if(v.wheels.size() > cast<usize>(u32.max))
+        static_assert(size_of<VehicleComponentBinary>() == 120u && size_of<VehicleWheelBinary>() == 160u);
+        if(v.wheels.size() > cast<usize>(u32.max) || v.wheelEntityNames.size() > cast<usize>(u32.max))
             return false;
-        const usize reqBytes = size_of<VehicleComponentBinary>() + v.wheels.size() * size_of<VehicleWheelBinary>();
+        const usize reqBytes = size_of<VehicleComponentBinary>()
+            + v.wheels.size() * size_of<VehicleWheelBinary>()
+            + v.wheelEntityNames.size() * size_of<NameHash>();
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         in VehicleEngineDef eng = v.engine;
         VehicleComponentBinary bin;
         bin.wheelCount = cast<u32>(v.wheels.size());
+        bin.wheelNameCount = cast<u32>(v.wheelEntityNames.size());
         bin.gearCount = eng.gearCount;
         bin.requestedGear = v.input.requestedGear;
         bin.maxTorque = eng.maxTorque;
@@ -569,10 +616,15 @@ class SubsystemPhysicsComponentBinaryCodec{
         bin.brake = v.input.brake;
         bin.steer = v.input.steer;
         bin.handbrake = v.input.handbrake;
+        bin.queryFilterCategoryBits = v.queryFilter.categoryBits;
+        bin.queryFilterMaskBits = v.queryFilter.maskBits;
+        bin.queryFilterGroupIndex = v.queryFilter.groupIndex;
         u8 flags = 0u;
         if(eng.useAckermanSteering) flags |= s_VehicleFlagUseAckerman;
         if(eng.automaticTransmission) flags |= s_VehicleFlagAutomatic;
         if(v.enabled) flags |= s_VehicleFlagEnabled;
+        if(eng.enableAbs) flags |= s_VehicleFlagEnableAbs;
+        if(eng.enableTcs) flags |= s_VehicleFlagEnableTcs;
         bin.flags = flags;
         outBinary.reserve(outBinary.size() + reqBytes);
         AppendPOD(outBinary, bin);
@@ -587,6 +639,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             wb.suspensionMaxTravel = w.suspensionMaxTravel;
             wb.suspensionStiffness = w.suspensionStiffness;
             wb.suspensionDamping = w.suspensionDamping;
+            wb.suspensionReboundDamping = w.suspensionReboundDamping;
             wb.wheelRadius = w.wheelRadius;
             wb.wheelWidth = w.wheelWidth;
             wb.wheelInertia = w.wheelInertia;
@@ -598,6 +651,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             wb.rollingResistanceCoeff = w.rollingResistanceCoeff;
             wb.longitudinalStiffness = w.longitudinalStiffness;
             wb.lateralStiffness = w.lateralStiffness;
+            wb.pacejkaShapeC = w.pacejkaShapeC;
+            wb.pacejkaCurvatureE = w.pacejkaCurvatureE;
             wb.antiRollStiffness = w.antiRollStiffness;
             wb.antiRollPairIndex = w.antiRollPairIndex;
             u8 wFlags = 0u;
@@ -608,6 +663,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             wb.flags = wFlags;
             AppendPOD(outBinary, wb);
         }
+        for(usize ni = 0u; ni < v.wheelEntityNames.size(); ++ni)
+            AppendPOD(outBinary, v.wheelEntityNames[ni].hash());
         return true;
     }
 
@@ -626,12 +683,13 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in VehicleComponentBinary bin = hdrRes.value();
-        if(bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xf8u) != 0u){
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xe0u) != 0u){
             error("VehicleComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 wheelBytes = cast<u64>(bin.wheelCount) * cast<u64>(size_of<VehicleWheelBinary>());
-        if(wheelBytes != cast<u64>(payload.size() - cursor)){
+        const u64 nameBytes = cast<u64>(bin.wheelNameCount) * cast<u64>(size_of<NameHash>());
+        if(wheelBytes > cast<u64>(payload.size() - cursor) || nameBytes != cast<u64>(payload.size() - cursor) - wheelBytes){
             error("VehicleComponentAsset::loadComponentPayload failed: invalid payload size");
             return MakeUnexpected(Failure());
         }
@@ -656,16 +714,21 @@ class SubsystemPhysicsComponentBinaryCodec{
         v.input.brake = bin.brake;
         v.input.steer = bin.steer;
         v.input.handbrake = bin.handbrake;
+        v.queryFilter.categoryBits = bin.queryFilterCategoryBits;
+        v.queryFilter.maskBits = bin.queryFilterMaskBits;
+        v.queryFilter.groupIndex = bin.queryFilterGroupIndex;
         v.engine.useAckermanSteering = (bin.flags & s_VehicleFlagUseAckerman) != 0u;
         v.engine.automaticTransmission = (bin.flags & s_VehicleFlagAutomatic) != 0u;
         v.enabled = (bin.flags & s_VehicleFlagEnabled) != 0u;
+        v.engine.enableAbs = (bin.flags & s_VehicleFlagEnableAbs) != 0u;
+        v.engine.enableTcs = (bin.flags & s_VehicleFlagEnableTcs) != 0u;
         v.wheels.resize(bin.wheelCount);
         for(u32 wi = 0u; wi < bin.wheelCount; ++wi){
             const Expected<VehicleWheelBinary> wbRes = ReadPOD<VehicleWheelBinary>(payload, cursor);
             if(!wbRes.has_value())
                 return MakeUnexpected(Failure());
             in VehicleWheelBinary wb = wbRes.value();
-            if(wb.reserved0 != 0u || wb.reserved1 != 0u || wb.reserved2 != 0u || (wb.flags & 0xf0u) != 0u){
+            if(wb.reserved0 != 0u || wb.reserved1 != 0u || wb.reserved2 != 0u || wb.reserved3 != 0u || (wb.flags & 0xf0u) != 0u){
                 error("VehicleComponentAsset::loadComponentPayload failed: unsupported wheel flags");
                 return MakeUnexpected(Failure());
             }
@@ -678,6 +741,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             w.suspensionMaxTravel = wb.suspensionMaxTravel;
             w.suspensionStiffness = wb.suspensionStiffness;
             w.suspensionDamping = wb.suspensionDamping;
+            w.suspensionReboundDamping = wb.suspensionReboundDamping;
             w.wheelRadius = wb.wheelRadius;
             w.wheelWidth = wb.wheelWidth;
             w.wheelInertia = wb.wheelInertia;
@@ -689,12 +753,24 @@ class SubsystemPhysicsComponentBinaryCodec{
             w.rollingResistanceCoeff = wb.rollingResistanceCoeff;
             w.longitudinalStiffness = wb.longitudinalStiffness;
             w.lateralStiffness = wb.lateralStiffness;
+            w.pacejkaShapeC = wb.pacejkaShapeC;
+            w.pacejkaCurvatureE = wb.pacejkaCurvatureE;
             w.antiRollStiffness = wb.antiRollStiffness;
             w.antiRollPairIndex = wb.antiRollPairIndex;
             w.isSteerable = (wb.flags & s_VehicleWheelFlagSteerable) != 0u;
             w.isDriven = (wb.flags & s_VehicleWheelFlagDriven) != 0u;
             w.handbrakeAffected = (wb.flags & s_VehicleWheelFlagHandbrakeAffected) != 0u;
             w.useSweptCast = (wb.flags & s_VehicleWheelFlagUseSweptCast) != 0u;
+        }
+        v.wheelEntityNames.resize(bin.wheelNameCount);
+        for(u32 ni = 0u; ni < bin.wheelNameCount; ++ni){
+            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
+            if(!hRes.has_value())
+                return MakeUnexpected(Failure());
+            if(hRes.value() == s_NameNone.hash())
+                v.wheelEntityNames[ni] = s_NameNone;
+            else
+                v.wheelEntityNames[ni] = Name(hRes.value());
         }
         v.dirty = true;
         v.initialized = false;
@@ -708,7 +784,10 @@ class SubsystemPhysicsComponentBinaryCodec{
     public b8 validRagdollData(in RagdollComponent r)const{
         if(!IsFinite(VectorSingle(r.driveStrengthMultiplier)) || r.driveStrengthMultiplier < 0.0f)
             return false;
-        if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
+        if(r.bones.size() > cast<usize>(u32.max)
+            || r.targetPose.size() > cast<usize>(u32.max)
+            || r.boneKinematicMask.size() > cast<usize>(u32.max)
+            || r.boneEntityNames.size() > cast<usize>(u32.max))
             return false;
         PhysicsAssetBinaryCodec assetCodec;
         const u32 boneCount = cast<u32>(r.bones.size());
@@ -754,7 +833,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                     return false;
                 if(ax.maxMotorForce < 0.0f || ax.springHertz < 0.0f || ax.springDampingRatio < 0.0f)
                     return false;
-                if(ax.motion == JointMotion::Limited && ax.lowerLimit > ax.upperLimit)
+                if(ax.lowerLimit > ax.upperLimit)
                     return false;
             }
         }
@@ -773,23 +852,49 @@ class SubsystemPhysicsComponentBinaryCodec{
         return false;
     }
 
+    private void appendNameHashList(in Vector<Name> names, mut Vector<u8> outBinary)const{
+        for(usize ni = 0u; ni < names.size(); ++ni)
+            AppendPOD(outBinary, names[ni].hash());
+    }
+
+    private b8 readNameHashList(in Span<u8> payload, in u32 count, mut usize cursor, mut Vector<Name> outNames)const{
+        outNames.resize(count);
+        for(u32 ni = 0u; ni < count; ++ni){
+            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
+            if(!hRes.has_value())
+                return false;
+            if(hRes.value() == s_NameNone.hash())
+                outNames[ni] = s_NameNone;
+            else
+                outNames[ni] = Name(hRes.value());
+        }
+        return true;
+    }
+
     public b8 appendRagdollValidated(in RagdollComponent r, mut Vector<u8> outBinary)const{
         static_assert(
-            size_of<RagdollComponentBinary>() == 16u
+            size_of<RagdollComponentBinary>() == 24u
             && size_of<PhysicsTransformBinary>() == size_of<Transform3D>()
             && offset_of<PhysicsTransformBinary>(position) == offset_of<Transform3D>(position)
             && offset_of<PhysicsTransformBinary>(rotation) == offset_of<Transform3D>(rotation)
         );
-        if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
+        if(r.bones.size() > cast<usize>(u32.max)
+            || r.targetPose.size() > cast<usize>(u32.max)
+            || r.boneKinematicMask.size() > cast<usize>(u32.max)
+            || r.boneEntityNames.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<RagdollComponentBinary>()
             + r.bones.size() * size_of<RagdollBoneBinary>()
-            + r.targetPose.size() * size_of<PhysicsTransformBinary>();
+            + r.targetPose.size() * size_of<PhysicsTransformBinary>()
+            + r.boneKinematicMask.size() * size_of<u8>()
+            + r.boneEntityNames.size() * size_of<NameHash>();
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         RagdollComponentBinary hdr;
         hdr.boneCount = cast<u32>(r.bones.size());
         hdr.targetPoseCount = cast<u32>(r.targetPose.size());
+        hdr.boneKinematicMaskCount = cast<u32>(r.boneKinematicMask.size());
+        hdr.boneNameCount = cast<u32>(r.boneEntityNames.size());
         hdr.driveStrengthMultiplier = r.driveStrengthMultiplier;
         u8 flags = 0u;
         if(r.enabled) flags |= s_RagdollFlagEnabled;
@@ -874,7 +979,16 @@ class SubsystemPhysicsComponentBinaryCodec{
             }
             AppendPOD(outBinary, bb);
         }
-        return AppendBinaryVectorPayload(outBinary, r.targetPose).has_value();
+        if(!AppendBinaryVectorPayload(outBinary, r.targetPose).has_value())
+            return false;
+        for(usize mi = 0u; mi < r.boneKinematicMask.size(); ++mi){
+            u8 mv = 0u;
+            if(r.boneKinematicMask[mi])
+                mv = 1u;
+            AppendPOD(outBinary, mv);
+        }
+        this.appendNameHashList(r.boneEntityNames, outBinary);
+        return true;
     }
 
     public b8 serializeRagdoll(in RagdollComponent r, mut Vector<u8> outPayload)const{
@@ -897,7 +1011,9 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         const u64 expectedBytes = cast<u64>(hdr.boneCount) * cast<u64>(size_of<RagdollBoneBinary>())
-            + cast<u64>(hdr.targetPoseCount) * cast<u64>(size_of<PhysicsTransformBinary>());
+            + cast<u64>(hdr.targetPoseCount) * cast<u64>(size_of<PhysicsTransformBinary>())
+            + cast<u64>(hdr.boneKinematicMaskCount) * cast<u64>(size_of<u8>())
+            + cast<u64>(hdr.boneNameCount) * cast<u64>(size_of<NameHash>());
         if(expectedBytes != cast<u64>(payload.size() - cursor)){
             error("RagdollComponentAsset::loadComponentPayload failed: invalid payload size");
             return MakeUnexpected(Failure());
@@ -988,6 +1104,15 @@ class SubsystemPhysicsComponentBinaryCodec{
         }
         if(!ReadBinaryVectorPayload(payload, hdr.targetPoseCount, cursor, r.targetPose).has_value())
             return MakeUnexpected(Failure());
+        r.boneKinematicMask.resize(hdr.boneKinematicMaskCount, false);
+        for(u32 mi = 0u; mi < hdr.boneKinematicMaskCount; ++mi){
+            const Expected<u8> mvRes = ReadPOD<u8>(payload, cursor);
+            if(!mvRes.has_value() || mvRes.value() > 1u)
+                return MakeUnexpected(Failure());
+            r.boneKinematicMask[mi] = (mvRes.value() != 0u);
+        }
+        if(!this.readNameHashList(payload, hdr.boneNameCount, cursor, r.boneEntityNames))
+            return MakeUnexpected(Failure());
         r.dirty = true;
         r.initialized = false;
         if(!this.validRagdollData(r)){
@@ -999,18 +1124,21 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validFluidVolumeData(in FluidVolumeComponent f)const{
         in FluidVolume v = f.volume;
-        if(cast<u8>(v.shape) > cast<u8>(FluidVolumeShape::BoxAabb))
+        if(cast<u8>(v.shape) > cast<u8>(FluidVolumeShape::Sphere))
             return false;
         if(!IsFinite(VectorSingle(v.surfaceNormalOffset))
             || !IsFinite(VectorSingle(v.bounds.lowerBound))
             || !IsFinite(VectorSingle(v.bounds.upperBound))
             || !IsFinite(VectorSingle(v.flowVelocity)))
             return false;
-        if(!IsFinite(VectorSingle(v.density, v.linearDrag, v.angularDrag, v.quadraticDrag)) || !IsFinite(VectorSingle(v.liftCoeff)))
+        if(!IsFinite(VectorSingle(v.density, v.linearDrag, v.angularDrag, v.quadraticDrag))
+            || !IsFinite(VectorSingle(v.liftCoeff, v.waveAmplitude, v.waveFrequency, v.waveSpeed)))
             return false;
-        if(v.density < 0.0f || v.linearDrag < 0.0f || v.angularDrag < 0.0f || v.quadraticDrag < 0.0f)
+        if(v.density < 0.0f || v.linearDrag < 0.0f || v.angularDrag < 0.0f || v.quadraticDrag < 0.0f || v.waveAmplitude < 0.0f || v.waveFrequency < 0.0f)
             return false;
         if(v.shape == FluidVolumeShape::HalfSpacePlane && LengthSq(VectorSingle(v.surfaceNormalOffset.x, v.surfaceNormalOffset.y, v.surfaceNormalOffset.z, 0.0f)) <= s_NormalizeEpsilonSq)
+            return false;
+        if(v.shape == FluidVolumeShape::Sphere && v.surfaceNormalOffset.w < 0.0f)
             return false;
         if(v.shape == FluidVolumeShape::BoxAabb && (v.bounds.lowerBound.x > v.bounds.upperBound.x || v.bounds.lowerBound.y > v.bounds.upperBound.y || v.bounds.lowerBound.z > v.bounds.upperBound.z))
             return false;
@@ -1047,6 +1175,9 @@ class SubsystemPhysicsComponentBinaryCodec{
         bin.filterCategoryBits = v.filter.categoryBits;
         bin.filterMaskBits = v.filter.maskBits;
         bin.filterGroupIndex = v.filter.groupIndex;
+        bin.waveAmplitude = v.waveAmplitude;
+        bin.waveFrequency = v.waveFrequency;
+        bin.waveSpeed = v.waveSpeed;
         outBinary.reserve(outBinary.size() + size_of<FluidVolumeComponentBinary>());
         AppendPOD(outBinary, bin);
         return true;
@@ -1067,7 +1198,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in FluidVolumeComponentBinary bin = res.value();
-        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.flags & 0xfcu) != 0u){
+        if(bin.reserved0 != 0u || (bin.flags & 0xfcu) != 0u){
             error("FluidVolumeComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
@@ -1086,6 +1217,9 @@ class SubsystemPhysicsComponentBinaryCodec{
         f.volume.filter.categoryBits = bin.filterCategoryBits;
         f.volume.filter.maskBits = bin.filterMaskBits;
         f.volume.filter.groupIndex = bin.filterGroupIndex;
+        f.volume.waveAmplitude = bin.waveAmplitude;
+        f.volume.waveFrequency = bin.waveFrequency;
+        f.volume.waveSpeed = bin.waveSpeed;
         if(!this.validFluidVolumeData(f)){
             error("FluidVolumeComponentAsset::loadComponentPayload failed: invalid fluid volume fields");
             return MakeUnexpected(Failure());
@@ -1095,16 +1229,19 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validForceFieldData(in ForceFieldComponent ff)const{
         in ForceField field = ff.field;
-        if(cast<u8>(field.type) > cast<u8>(ForceFieldType::BoxWind))
+        if(cast<u8>(field.type) > cast<u8>(ForceFieldType::LocalGravityOverride))
             return false;
         if(!IsFinite(VectorSingle(field.bounds.lowerBound))
             || !IsFinite(VectorSingle(field.bounds.upperBound))
-            || !IsFinite(VectorSingle(field.originOrDirection)))
+            || !IsFinite(VectorSingle(field.originOrDirection))
+            || !IsFinite(VectorSingle(field.axis)))
             return false;
         if(!IsFinite(VectorSingle(field.strength, field.minDistance, field.radius, field.falloffPower))
             || !IsFinite(VectorSingle(field.turbulenceAmplitude, field.turbulenceFrequency, 0.0f, 0.0f)))
             return false;
         if(field.minDistance < 0.0f || field.radius < 0.0f || field.falloffPower < 0.0f || field.turbulenceAmplitude < 0.0f || field.turbulenceFrequency < 0.0f)
+            return false;
+        if(field.type == ForceFieldType::Vortex && LengthSq(VectorSingle(field.axis)) <= s_NormalizeEpsilonSq)
             return false;
         if(field.useBounds && (field.bounds.lowerBound.x > field.bounds.upperBound.x || field.bounds.lowerBound.y > field.bounds.upperBound.y || field.bounds.lowerBound.z > field.bounds.upperBound.z))
             return false;
@@ -1119,7 +1256,7 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendForceFieldValidated(in ForceFieldComponent ff, mut Vector<u8> outBinary)const{
-        static_assert(size_of<ForceFieldComponentBinary>() == 96u);
+        static_assert(size_of<ForceFieldComponentBinary>() == 112u);
         if(!CanAppendBytes(outBinary, size_of<ForceFieldComponentBinary>()))
             return false;
         in ForceField field = ff.field;
@@ -1127,6 +1264,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         bin.boundsLower = field.bounds.lowerBound;
         bin.boundsUpper = field.bounds.upperBound;
         bin.originOrDirection = field.originOrDirection;
+        bin.axis = field.axis;
         bin.fieldType = cast<u8>(field.type);
         u8 flags = 0u;
         if(field.useBounds) flags |= s_ForceFieldFlagUseBounds;
@@ -1170,6 +1308,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         ff.field.type = cast<ForceFieldType>(bin.fieldType);
         ff.field.bounds = Aabb3D(VectorSingle(bin.boundsLower), VectorSingle(bin.boundsUpper));
         ff.field.originOrDirection = bin.originOrDirection;
+        ff.field.axis = bin.axis;
         ff.field.useBounds = (bin.flags & s_ForceFieldFlagUseBounds) != 0u;
         ff.field.enabled = (bin.flags & s_ForceFieldFlagFieldEnabled) != 0u;
         ff.enabled = (bin.flags & s_ForceFieldFlagComponentEnabled) != 0u;
@@ -1190,13 +1329,22 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 validArticulationData(in ArticulationComponent a)const{
-        if(a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
+        if(a.subSteps < 1u || a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
             return false;
-        const u32 linkCount = cast<u32>(a.links.size());
+        if(!IsFinite(VectorSingle(a.contactRestitution, a.contactFriction, 0.0f, 0.0f))
+            || a.contactRestitution < 0.0f
+            || a.contactRestitution > 1.0f
+            || a.contactFriction < 0.0f)
+            return false;
         for(usize li = 0u; li < a.links.size(); ++li){
             in ArticulationLinkDef l = a.links[li];
-            if(l.parentIndex != s_NullIndex && (l.parentIndex >= linkCount || l.parentIndex == cast<u32>(li)))
+            if(li == 0u){
+                if(l.parentIndex != s_NullIndex)
+                    return false;
+            }
+            else if(l.parentIndex >= cast<u32>(li)){
                 return false;
+            }
             if(cast<u8>(l.jointType) > cast<u8>(ArticulationJointType::Prismatic))
                 return false;
             if(!IsValidPositionVec3(VectorSingle(l.parentToJoint.position))
@@ -1215,9 +1363,9 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return false;
             if(!IsFinite(VectorSingle(l.lowerLimit, l.upperLimit, l.driveTargetPos, l.driveTargetVel))
                 || !IsFinite(VectorSingle(l.driveStiffness, l.driveDamping, l.driveMaxForce, l.jointDamping))
-                || !IsFinite(VectorSingle(l.jointFriction)))
+                || !IsFinite(VectorSingle(l.jointFriction, l.limitRestitution, 0.0f, 0.0f)))
                 return false;
-            if(l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f || l.jointDamping < 0.0f || l.jointFriction < 0.0f)
+            if(l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f || l.jointDamping < 0.0f || l.jointFriction < 0.0f || l.limitRestitution < 0.0f || l.limitRestitution > 1.0f)
                 return false;
             if(l.enableLimit && l.lowerLimit > l.upperLimit)
                 return false;
@@ -1233,7 +1381,7 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendArticulationValidated(in ArticulationComponent a, mut Vector<u8> outBinary)const{
-        static_assert(size_of<ArticulationComponentBinary>() == 12u && size_of<ArticulationLinkBinary>() == 160u);
+        static_assert(size_of<ArticulationComponentBinary>() == 36u && size_of<ArticulationLinkBinary>() == 176u);
         if(a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<ArticulationComponentBinary>()
@@ -1244,9 +1392,16 @@ class SubsystemPhysicsComponentBinaryCodec{
         ArticulationComponentBinary hdr;
         hdr.linkCount = cast<u32>(a.links.size());
         hdr.proxyNameCount = cast<u32>(a.proxyEntityNames.size());
+        hdr.subSteps = a.subSteps;
+        hdr.contactFilterCategoryBits = a.contactFilter.categoryBits;
+        hdr.contactFilterMaskBits = a.contactFilter.maskBits;
+        hdr.contactFilterGroupIndex = a.contactFilter.groupIndex;
+        hdr.contactRestitution = a.contactRestitution;
+        hdr.contactFriction = a.contactFriction;
         u8 flags = 0u;
         if(a.isFixedBase) flags |= s_ArticulationFlagIsFixedBase;
         if(a.enabled) flags |= s_ArticulationFlagEnabled;
+        if(a.enableContactCoupling) flags |= s_ArticulationFlagEnableContactCoupling;
         hdr.flags = flags;
         outBinary.reserve(outBinary.size() + reqBytes);
         AppendPOD(outBinary, hdr);
@@ -1272,6 +1427,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             lb.driveMaxForce = l.driveMaxForce;
             lb.jointDamping = l.jointDamping;
             lb.jointFriction = l.jointFriction;
+            lb.limitRestitution = l.limitRestitution;
             lb.jointType = cast<u8>(l.jointType);
             u8 lFlags = 0u;
             if(l.enableLimit) lFlags |= s_ArticulationLinkFlagEnableLimit;
@@ -1279,8 +1435,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             lb.flags = lFlags;
             AppendPOD(outBinary, lb);
         }
-        for(usize pi = 0u; pi < a.proxyEntityNames.size(); ++pi)
-            AppendPOD(outBinary, a.proxyEntityNames[pi].hash());
+        this.appendNameHashList(a.proxyEntityNames, outBinary);
         return true;
     }
 
@@ -1299,7 +1454,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in ArticulationComponentBinary hdr = hdrRes.value();
-        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xf8u) != 0u){
             error("ArticulationComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
@@ -1310,15 +1465,22 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         ArticulationComponent a;
+        a.subSteps = hdr.subSteps;
+        a.contactFilter.categoryBits = hdr.contactFilterCategoryBits;
+        a.contactFilter.maskBits = hdr.contactFilterMaskBits;
+        a.contactFilter.groupIndex = hdr.contactFilterGroupIndex;
+        a.contactRestitution = hdr.contactRestitution;
+        a.contactFriction = hdr.contactFriction;
         a.isFixedBase = (hdr.flags & s_ArticulationFlagIsFixedBase) != 0u;
         a.enabled = (hdr.flags & s_ArticulationFlagEnabled) != 0u;
+        a.enableContactCoupling = (hdr.flags & s_ArticulationFlagEnableContactCoupling) != 0u;
         a.links.resize(hdr.linkCount);
         for(u32 li = 0u; li < hdr.linkCount; ++li){
             const Expected<ArticulationLinkBinary> lbRes = ReadPOD<ArticulationLinkBinary>(payload, cursor);
             if(!lbRes.has_value())
                 return MakeUnexpected(Failure());
             in ArticulationLinkBinary lb = lbRes.value();
-            if(lb.reserved0 != 0u || (lb.flags & 0xfcu) != 0u){
+            if(lb.reserved0 != 0u || lb.reserved1 != 0u || lb.reserved2 != 0u || lb.reserved3 != 0u || (lb.flags & 0xfcu) != 0u){
                 error("ArticulationComponentAsset::loadComponentPayload failed: unsupported link flags");
                 return MakeUnexpected(Failure());
             }
@@ -1342,17 +1504,10 @@ class SubsystemPhysicsComponentBinaryCodec{
             l.driveMaxForce = lb.driveMaxForce;
             l.jointDamping = lb.jointDamping;
             l.jointFriction = lb.jointFriction;
+            l.limitRestitution = lb.limitRestitution;
         }
-        a.proxyEntityNames.resize(hdr.proxyNameCount);
-        for(u32 pi = 0u; pi < hdr.proxyNameCount; ++pi){
-            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
-            if(!hRes.has_value())
-                return MakeUnexpected(Failure());
-            if(hRes.value() == s_NameNone.hash())
-                a.proxyEntityNames[pi] = s_NameNone;
-            else
-                a.proxyEntityNames[pi] = Name(hRes.value());
-        }
+        if(!this.readNameHashList(payload, hdr.proxyNameCount, cursor, a.proxyEntityNames))
+            return MakeUnexpected(Failure());
         a.dirty = true;
         a.initialized = false;
         if(!this.validArticulationData(a)){
@@ -1364,9 +1519,12 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validSoftBodyData(in SoftBodyComponent sb)const{
         in SoftBody s = sb.softBody;
-        if(!IsFinite(VectorSingle(s.particleRadius, s.damping, s.aerodynamicDrag, s.friction)) || !IsFinite(VectorSingle(s.restitution)))
+        if(!IsFinite(VectorSingle(s.windVelocity))
+            || !IsFinite(VectorSingle(s.particleRadius, s.damping, s.aerodynamicDrag, s.friction))
+            || !IsFinite(VectorSingle(s.restitution, s.liftCoeff, s.tearStrainThreshold, s.selfCollisionRadius))
+            || !IsFinite(VectorSingle(s.selfCollisionStiffness)))
             return false;
-        if(s.particleRadius <= 0.0f || s.damping < 0.0f || s.aerodynamicDrag < 0.0f || s.friction < 0.0f || s.restitution < 0.0f)
+        if(s.particleRadius <= 0.0f || s.damping < 0.0f || s.aerodynamicDrag < 0.0f || s.friction < 0.0f || s.restitution < 0.0f || s.tearStrainThreshold < 0.0f || s.selfCollisionRadius < 0.0f || s.selfCollisionStiffness < 0.0f)
             return false;
         if(s.subSteps < 1u || s.solverIterations < 1u)
             return false;
@@ -1375,7 +1533,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             || s.bendingConstraints.size() > cast<usize>(u32.max)
             || s.volumeConstraints.size() > cast<usize>(u32.max)
             || s.surfaceTriangles.size() > cast<usize>(u32.max)
-            || s.attachments.size() > cast<usize>(u32.max))
+            || s.attachments.size() > cast<usize>(u32.max)
+            || s.backstopConstraints.size() > cast<usize>(u32.max))
             return false;
         const u32 pCount = cast<u32>(s.particles.size());
         for(usize pi = 0u; pi < s.particles.size(); ++pi){
@@ -1408,9 +1567,16 @@ class SubsystemPhysicsComponentBinaryCodec{
             if(t.p0 >= pCount || t.p1 >= pCount || t.p2 >= pCount)
                 return false;
         }
+        if(sb.attachmentBodyEntityNames.size() > s.attachments.size())
+            return false;
         for(usize ai = 0u; ai < s.attachments.size(); ++ai){
             in SoftBodyAttachment a = s.attachments[ai];
             if(a.particleIndex >= pCount || !IsFinite(VectorSingle(a.localAnchor)) || !IsFinite(VectorSingle(a.compliance)) || a.compliance < 0.0f)
+                return false;
+        }
+        for(usize bsi = 0u; bsi < s.backstopConstraints.size(); ++bsi){
+            in SoftBodyBackstopConstraint bs = s.backstopConstraints[bsi];
+            if(bs.particleIndex >= pCount || !IsFinite(VectorSingle(bs.center)) || !IsFinite(VectorSingle(bs.normal)) || !IsFinite(VectorSingle(bs.maxDistance, bs.backstopRadius)) || bs.maxDistance < 0.0f || bs.backstopRadius < 0.0f)
                 return false;
         }
         return true;
@@ -1425,11 +1591,14 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 appendSoftBodyValidated(in SoftBodyComponent sb, mut Vector<u8> outBinary)const{
         static_assert(
-            size_of<SoftBodyComponentBinary>() == 68u
+            size_of<SoftBodyComponentBinary>() == 112u
             && size_of<SoftBodyTriangleBinary>() == size_of<SoftBodyTriangle>()
             && offset_of<SoftBodyTriangleBinary>(p0) == offset_of<SoftBodyTriangle>(p0)
             && offset_of<SoftBodyTriangleBinary>(p1) == offset_of<SoftBodyTriangle>(p1)
             && offset_of<SoftBodyTriangleBinary>(p2) == offset_of<SoftBodyTriangle>(p2)
+            && size_of<SoftBodyAttachmentBinary>() == 96u
+            && offset_of<SoftBodyAttachmentBinary>(reserved0) == 88u
+            && size_of<SoftBodyBackstopBinary>() == 48u
         );
         in SoftBody s = sb.softBody;
         if(s.particles.size() > cast<usize>(u32.max)
@@ -1437,28 +1606,36 @@ class SubsystemPhysicsComponentBinaryCodec{
             || s.bendingConstraints.size() > cast<usize>(u32.max)
             || s.volumeConstraints.size() > cast<usize>(u32.max)
             || s.surfaceTriangles.size() > cast<usize>(u32.max)
-            || s.attachments.size() > cast<usize>(u32.max))
+            || s.attachments.size() > cast<usize>(u32.max)
+            || s.backstopConstraints.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<SoftBodyComponentBinary>()
             + s.particles.size() * size_of<SoftBodyParticleBinary>()
             + (s.distanceConstraints.size() + s.bendingConstraints.size()) * size_of<SoftBodyPairConstraintBinary>()
             + s.volumeConstraints.size() * size_of<SoftBodyVolumeConstraintBinary>()
             + s.surfaceTriangles.size() * size_of<SoftBodyTriangleBinary>()
-            + s.attachments.size() * size_of<SoftBodyAttachmentBinary>();
+            + s.attachments.size() * size_of<SoftBodyAttachmentBinary>()
+            + s.backstopConstraints.size() * size_of<SoftBodyBackstopBinary>();
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         SoftBodyComponentBinary hdr;
+        hdr.windVelocity = s.windVelocity;
         hdr.particleCount = cast<u32>(s.particles.size());
         hdr.distCount = cast<u32>(s.distanceConstraints.size());
         hdr.bendCount = cast<u32>(s.bendingConstraints.size());
         hdr.volCount = cast<u32>(s.volumeConstraints.size());
         hdr.triCount = cast<u32>(s.surfaceTriangles.size());
         hdr.attachCount = cast<u32>(s.attachments.size());
+        hdr.backstopCount = cast<u32>(s.backstopConstraints.size());
         hdr.particleRadius = s.particleRadius;
         hdr.damping = s.damping;
         hdr.aerodynamicDrag = s.aerodynamicDrag;
+        hdr.liftCoeff = s.liftCoeff;
         hdr.friction = s.friction;
         hdr.restitution = s.restitution;
+        hdr.tearStrainThreshold = s.tearStrainThreshold;
+        hdr.selfCollisionRadius = s.selfCollisionRadius;
+        hdr.selfCollisionStiffness = s.selfCollisionStiffness;
         hdr.subSteps = s.subSteps;
         hdr.solverIterations = s.solverIterations;
         hdr.filterCategoryBits = s.collisionFilter.categoryBits;
@@ -1467,6 +1644,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         u8 flags = 0u;
         if(s.collideWithWorld) flags |= s_SoftBodyFlagCollideWithWorld;
         if(sb.enabled) flags |= s_SoftBodyFlagEnabled;
+        if(s.enableSelfCollision) flags |= s_SoftBodyFlagEnableSelfCollision;
         hdr.flags = flags;
         outBinary.reserve(outBinary.size() + reqBytes);
         AppendPOD(outBinary, hdr);
@@ -1521,9 +1699,23 @@ class SubsystemPhysicsComponentBinaryCodec{
             in SoftBodyAttachment a = s.attachments[ai];
             SoftBodyAttachmentBinary ab;
             ab.localAnchor = a.localAnchor;
+            if(ai < sb.attachmentBodyEntityNames.size())
+                ab.bodyEntityNameHash = sb.attachmentBodyEntityNames[ai].hash();
+            else
+                ab.bodyEntityNameHash = s_NameNone.hash();
             ab.particleIndex = a.particleIndex;
             ab.compliance = a.compliance;
             AppendPOD(outBinary, ab);
+        }
+        for(usize bsi = 0u; bsi < s.backstopConstraints.size(); ++bsi){
+            in SoftBodyBackstopConstraint bs = s.backstopConstraints[bsi];
+            SoftBodyBackstopBinary bb;
+            bb.center = bs.center;
+            bb.normal = bs.normal;
+            bb.particleIndex = bs.particleIndex;
+            bb.maxDistance = bs.maxDistance;
+            bb.backstopRadius = bs.backstopRadius;
+            AppendPOD(outBinary, bb);
         }
         return true;
     }
@@ -1543,7 +1735,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in SoftBodyComponentBinary hdr = hdrRes.value();
-        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || (hdr.flags & 0xf8u) != 0u){
             error("SoftBodyComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
@@ -1551,18 +1743,24 @@ class SubsystemPhysicsComponentBinaryCodec{
             + (cast<u64>(hdr.distCount) + cast<u64>(hdr.bendCount)) * cast<u64>(size_of<SoftBodyPairConstraintBinary>())
             + cast<u64>(hdr.volCount) * cast<u64>(size_of<SoftBodyVolumeConstraintBinary>())
             + cast<u64>(hdr.triCount) * cast<u64>(size_of<SoftBodyTriangleBinary>())
-            + cast<u64>(hdr.attachCount) * cast<u64>(size_of<SoftBodyAttachmentBinary>());
+            + cast<u64>(hdr.attachCount) * cast<u64>(size_of<SoftBodyAttachmentBinary>())
+            + cast<u64>(hdr.backstopCount) * cast<u64>(size_of<SoftBodyBackstopBinary>());
         if(expectedBytes != cast<u64>(payload.size() - cursor)){
             error("SoftBodyComponentAsset::loadComponentPayload failed: invalid payload size");
             return MakeUnexpected(Failure());
         }
         SoftBodyComponent sb;
         mut SoftBody s = sb.softBody;
+        s.windVelocity = hdr.windVelocity;
         s.particleRadius = hdr.particleRadius;
         s.damping = hdr.damping;
         s.aerodynamicDrag = hdr.aerodynamicDrag;
+        s.liftCoeff = hdr.liftCoeff;
         s.friction = hdr.friction;
         s.restitution = hdr.restitution;
+        s.tearStrainThreshold = hdr.tearStrainThreshold;
+        s.selfCollisionRadius = hdr.selfCollisionRadius;
+        s.selfCollisionStiffness = hdr.selfCollisionStiffness;
         s.subSteps = hdr.subSteps;
         s.solverIterations = hdr.solverIterations;
         s.collisionFilter.categoryBits = hdr.filterCategoryBits;
@@ -1570,6 +1768,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         s.collisionFilter.groupIndex = hdr.filterGroupIndex;
         s.collideWithWorld = (hdr.flags & s_SoftBodyFlagCollideWithWorld) != 0u;
         sb.enabled = (hdr.flags & s_SoftBodyFlagEnabled) != 0u;
+        s.enableSelfCollision = (hdr.flags & s_SoftBodyFlagEnableSelfCollision) != 0u;
 
         s.particles.resize(hdr.particleCount);
         for(u32 pi = 0u; pi < hdr.particleCount; ++pi){
@@ -1628,6 +1827,8 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!ReadBinaryVectorPayload(payload, hdr.triCount, cursor, s.surfaceTriangles).has_value())
             return MakeUnexpected(Failure());
         s.attachments.resize(hdr.attachCount);
+        sb.attachmentBodyEntityNames.resize(hdr.attachCount, s_NameNone);
+        b8 hasAnyAttachBodyName = false;
         for(u32 ai = 0u; ai < hdr.attachCount; ++ai){
             const Expected<SoftBodyAttachmentBinary> abRes = ReadPOD<SoftBodyAttachmentBinary>(payload, cursor);
             if(!abRes.has_value() || abRes.value().reserved0 != 0u)
@@ -1636,6 +1837,24 @@ class SubsystemPhysicsComponentBinaryCodec{
             a.particleIndex = abRes.value().particleIndex;
             a.localAnchor = abRes.value().localAnchor;
             a.compliance = abRes.value().compliance;
+            if(abRes.value().bodyEntityNameHash != s_NameNone.hash()){
+                sb.attachmentBodyEntityNames[ai] = Name(abRes.value().bodyEntityNameHash);
+                hasAnyAttachBodyName = true;
+            }
+        }
+        if(!hasAnyAttachBodyName)
+            sb.attachmentBodyEntityNames.clear();
+        s.backstopConstraints.resize(hdr.backstopCount);
+        for(u32 bsi = 0u; bsi < hdr.backstopCount; ++bsi){
+            const Expected<SoftBodyBackstopBinary> bsRes = ReadPOD<SoftBodyBackstopBinary>(payload, cursor);
+            if(!bsRes.has_value() || bsRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyBackstopConstraint bs = s.backstopConstraints[bsi];
+            bs.particleIndex = bsRes.value().particleIndex;
+            bs.center = bsRes.value().center;
+            bs.normal = bsRes.value().normal;
+            bs.maxDistance = bsRes.value().maxDistance;
+            bs.backstopRadius = bsRes.value().backstopRadius;
         }
         if(!this.validSoftBodyData(sb)){
             error("SoftBodyComponentAsset::loadComponentPayload failed: invalid soft body fields");

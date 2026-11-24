@@ -9,7 +9,7 @@
 
 
 const u32 s_SnapshotMagic = 0x50534E57u;
-const u32 s_SnapshotVersion = 1u;
+const u32 s_SnapshotVersion = 2u;
 const u32 s_SnapshotMaxElements = 16777216u;
 const u64 s_Fnv64OffsetBasis = 14695981039346656037u;
 const u64 s_Fnv64Prime = 1099511628211u;
@@ -440,7 +440,7 @@ usize EstimatePhysicsWorldSnapshotSize(in PhysicsWorld world){
         est += 64u + hf.heights.size() * 4u + hf.cellMaterialIndices.size() * 2u + hf.materials.size() * 70u;
     }
     est += world.m_heightfieldRefCounts.size() * 4u + world.m_heightfieldGenerations.size() * 2u + world.m_heightfieldOwnedByUser.size() + world.m_freeHeightfieldShapeIds.size() * 4u;
-    est += world.m_contacts.size() * 364u + world.m_freeContactIds.size() * 4u;
+    est += world.m_contacts.size() * 384u + world.m_freeContactIds.size() * 4u;
     est += world.m_joints.size() * 320u + world.m_freeJointIds.size() * 4u;
     for(usize i = 0u; i < world.m_jointExtraData.size(); ++i)
         est += 260u + world.m_jointExtraData[i].pathPoints.size() * 16u;
@@ -495,8 +495,6 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
     w.writeU32(world.m_gpuDispatchThreshold);
     w.writeF32(world.m_gpuWorkloadFraction);
     w.writeB8(world.m_enableWarmStarting);
-    w.writeU64(world.m_topologyVersion);
-    w.writeU64(world.m_worldGeneration);
     w.writeB8(world.m_hasDirtyBodyMass);
     w.writeB8(world.m_cpuBroadphaseDirty);
     w.writeU32(world.m_sensorEventShapeCount);
@@ -685,6 +683,11 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
         w.writeF32(c.restitution);
         w.writeF32(c.rollingResistance);
         w.writeF32(c.tangentSpeed);
+        w.writeF32(c.invMassScaleA);
+        w.writeF32(c.invMassScaleB);
+        w.writeF32(c.invInertiaScaleA);
+        w.writeF32(c.invInertiaScaleB);
+        w.writeF32(c.maxNormalImpulse);
         w.writeU32(c.flags);
         for(usize pi = 0u; pi < s_MaxManifoldPoints; ++pi){
             SnapWriteVec4(w, VectorSingle(c.manifold.points[pi].pointSeparation));
@@ -1079,8 +1082,6 @@ b8 RestorePhysicsWorldSnapshot(in Span<u8> bytes, mut PhysicsWorld world){
         || !r.readU32(bytes, tmp.m_gpuDispatchThreshold)
         || !r.readF32(bytes, tmp.m_gpuWorkloadFraction)
         || !r.readB8(bytes, tmp.m_enableWarmStarting)
-        || !r.readU64(bytes, tmp.m_topologyVersion)
-        || !r.readU64(bytes, tmp.m_worldGeneration)
         || !r.readB8(bytes, tmp.m_hasDirtyBodyMass)
         || !r.readB8(bytes, tmp.m_cpuBroadphaseDirty)
         || !r.readU32(bytes, tmp.m_sensorEventShapeCount)
@@ -1351,6 +1352,11 @@ b8 RestorePhysicsWorldSnapshot(in Span<u8> bytes, mut PhysicsWorld world){
             || !r.readF32(bytes, c.restitution)
             || !r.readF32(bytes, c.rollingResistance)
             || !r.readF32(bytes, c.tangentSpeed)
+            || !r.readF32(bytes, c.invMassScaleA)
+            || !r.readF32(bytes, c.invMassScaleB)
+            || !r.readF32(bytes, c.invInertiaScaleA)
+            || !r.readF32(bytes, c.invInertiaScaleB)
+            || !r.readF32(bytes, c.maxNormalImpulse)
             || !r.readU32(bytes, c.flags)
         )
             return false;
@@ -1661,8 +1667,6 @@ b8 RestorePhysicsWorldSnapshot(in Span<u8> bytes, mut PhysicsWorld world){
     world.m_gpuDispatchThreshold = tmp.m_gpuDispatchThreshold;
     world.m_gpuWorkloadFraction = tmp.m_gpuWorkloadFraction;
     world.m_enableWarmStarting = tmp.m_enableWarmStarting;
-    world.m_topologyVersion = tmp.m_topologyVersion;
-    world.m_worldGeneration = tmp.m_worldGeneration;
     world.m_hasDirtyBodyMass = tmp.m_hasDirtyBodyMass;
     world.m_cpuBroadphaseDirty = tmp.m_cpuBroadphaseDirty;
     world.m_sensorEventShapeCount = tmp.m_sensorEventShapeCount;
@@ -1744,6 +1748,10 @@ b8 RestorePhysicsWorldSnapshot(in Span<u8> bytes, mut PhysicsWorld world){
         }
     }
 
+    ++world.m_worldGeneration;
+    ++world.m_topologyVersion;
+    ++world.m_poseMutationVersion;
+    ++world.m_stepPoseVersion;
     ++world.m_nonCollideJointVersion;
     world.m_inStep = false;
     return true;

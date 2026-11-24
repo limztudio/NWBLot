@@ -23,6 +23,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint poseOffset = g_NwbPhysicsPushConstants.slots1.x;
 
+    if(mode == NWB_PHYSICS_RESIDENT_MODE_SYNC_POSES){
+        if(bodyPoseSlot != NWB_PHYSICS_INVALID_INDEX){
+            const NwbPhysicsGpuBodyOut boSync = g_NwbPhysicsBodyOutBuffers[bodyOutSlot][idx];
+            const float3 localCenterSync = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].localCenterMinExtent.xyz;
+            const float3 originSync = boSync.positionSleepTime.xyz - nwbPhysicsQuatRotate(localCenterSync, boSync.rotation);
+            NwbPhysicsGpuBodyPose poseSync;
+            poseSync.originPad = float4(originSync, boSync.positionSleepTime.w);
+            poseSync.rotation = boSync.rotation;
+            poseSync.sweepDispFlags = float4(boSync.linearVelocityFlags.xyz, 0.0f);
+            g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][poseOffset + idx] = poseSync;
+        }
+        return;
+    }
+
     NwbPhysicsGpuBodyOut bo;
     NwbPhysicsGpuBodySim sim;
     if(mode == NWB_PHYSICS_RESIDENT_MODE_INTEGRATE_SUBSTEP){
@@ -65,6 +79,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nextState.deltaPositionFlags = float4(0.0f, 0.0f, 0.0f, bo.linearVelocityFlags.w);
     nextState.deltaRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
     g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx] = nextState;
+
+    if(bodyPoseSlot != NWB_PHYSICS_INVALID_INDEX){
+        const float3 originUpd = bo.positionSleepTime.xyz - nwbPhysicsQuatRotate(sim.localCenterMinExtent.xyz, bo.rotation);
+        NwbPhysicsGpuBodyPose poseUpd;
+        poseUpd.originPad = float4(originUpd, bo.positionSleepTime.w);
+        poseUpd.rotation = bo.rotation;
+        poseUpd.sweepDispFlags = float4(bo.linearVelocityFlags.xyz, 0.0f);
+        g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][poseOffset + idx] = poseUpd;
+    }
 }
 
 

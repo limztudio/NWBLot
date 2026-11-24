@@ -154,6 +154,7 @@ StringView SectionName(in Section section){
         case Section::Slider: return "Slider";
         case Section::Progress: return "Progress";
         case Section::Image: return "Images";
+        case Section::VectorPaint: return "Vector Paint";
         case Section::kCount: return "";
     }
     return "";
@@ -217,7 +218,7 @@ StringView ResolvePopupGalleryCaption(in u32 choice){
 }
 
 f32 ResolveWidgetGalleryContentWidth(in u32 selected){
-    if(selected == cast<u32>(Section::TextArea))
+    if(selected == cast<u32>(Section::TextArea) || selected == cast<u32>(Section::VectorPaint))
         return s_SelectorWidth;
     return s_OrdinaryGalleryWidth;
 }

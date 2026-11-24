@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/physics/world.adhd>
+#include <impl/physics/buoyancy.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +56,29 @@ class SoftBodyAttachment{
     public f32 compliance = 0.0f;
 }
 
+class SoftBodyBackstopConstraint{
+    public u32 particleIndex = 0u;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 maxDistance = 0.0f;
+    public f32 backstopRadius = 0.0f;
+}
+
+u64 MakeSoftBodyUndirectedEdgeKey(in u32 a, in u32 b){
+    u32 lo = a;
+    u32 hi = b;
+    if(b < a){
+        lo = b;
+        hi = a;
+    }
+    return (cast<u64>(lo) << 32u) | cast<u64>(hi);
+}
+
+u32 HashSoftBodyCellCoord(in i32 cx, in i32 cy, in i32 cz, in usize tableMask){
+    const u32 h = (cast<u32>(cx) * 73856093u) ^ (cast<u32>(cy) * 19349663u) ^ (cast<u32>(cz) * 83492791u);
+    return h & cast<u32>(tableMask);
+}
+
 class SoftBodyColImpulse{
     public u32 shapeIndex = 0u;
     public f32x4 impulse(0.0f, 0.0f, 0.0f, 0.0f);
@@ -90,7 +113,6 @@ void StepSoftBodyParticlesPredictRange(
         const VectorSingle vel = (VectorSingle(pt.velocity) + totalAcc * h) * dampScale;
         pt.velocity = f32x4(vel, 0.0f);
         pt.position = f32x4(VectorSingle(pt.position) + vel * h, 0.0f);
-        pt.externalForce = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 }
 
@@ -256,11 +278,18 @@ class SoftBody{
     public Vector<SoftBodyVolumeConstraint> volumeConstraints;
     public Vector<SoftBodyTriangle> surfaceTriangles;
     public Vector<SoftBodyAttachment> attachments;
+    public Vector<SoftBodyBackstopConstraint> backstopConstraints;
+    public f32x4 windVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 particleRadius = 0.03f;
     public f32 damping = 0.02f;
     public f32 aerodynamicDrag = 0.02f;
+    public f32 liftCoeff = 0.0f;
     public f32 friction = 0.4f;
     public f32 restitution = 0.0f;
+    public f32 tearStrainThreshold = 0.0f;
+    public b8 enableSelfCollision = false;
+    public f32 selfCollisionRadius = 0.0f;
+    public f32 selfCollisionStiffness = 0.5f;
     public u32 subSteps = 4u;
     public u32 solverIterations = 4u;
     public Filter collisionFilter;
@@ -274,6 +303,12 @@ class SoftBody{
     private Vector<u8> m_scratchAttValid;
     private Vector<Vector<ShapeOverlapHit>> m_scratchWorkerOvHits;
     private Vector<Vector<SoftBodyColImpulse>> m_scratchWorkerImpulses;
+    private Vector<u32> m_selfHashHeads;
+    private Vector<u32> m_selfHashNext;
+    private HashMap<u64, u8> m_selfConnectedEdges;
+    private usize m_selfConnectedEdgeBuiltCount = 0u;
+    private HashMap<u64, u8> m_tornEdgeSetScratch;
+    private HashMap<u32, u8> m_tornVertSetScratch;
 
     public Aabb3D computeWorldAabb()const{
         if(this.particles.empty())
@@ -371,9 +406,11 @@ class SoftBody{
     }
 
     private void applyAeroDragAndResetLambdas(in f32 h){
-        if(this.aerodynamicDrag > 0.0f && !this.surfaceTriangles.empty()){
+        if((this.aerodynamicDrag > 0.0f || this.liftCoeff != 0.0f) && !this.surfaceTriangles.empty()){
             const usize pCount = this.particles.size();
             const f32 dragCoeff = this.aerodynamicDrag * h / 6.0f;
+            const VectorSingle windW = VectorSingle(this.windVelocity);
+            const b8 hasLift = (this.liftCoeff != 0.0f);
             for(usize ti = 0u; ti < this.surfaceTriangles.size(); ++ti){
                 in SoftBodyTriangle tri = this.surfaceTriangles[ti];
                 if(tri.p0 >= pCount || tri.p1 >= pCount || tri.p2 >= pCount)
@@ -391,6 +428,7 @@ class SoftBody{
                     + VectorSingle(p1.velocity)
                     + VectorSingle(p2.velocity)
                 ) * (1.0f / 3.0f);
+                const VectorSingle vRel = vAvg - windW;
                 const VectorSingle e1 = VectorSingle(p1.position) - VectorSingle(p0.position);
                 const VectorSingle e2 = VectorSingle(p2.position) - VectorSingle(p0.position);
                 const VectorSingle areaVec = Cross(e1, e2);
@@ -399,19 +437,38 @@ class SoftBody{
                     const f32 invDoubleArea = Rsqrt(VectorSingle(areaSq)).x;
                     const f32 doubleArea = areaSq * invDoubleArea;
                     const VectorSingle triN = areaVec * invDoubleArea;
-                    const f32 vn = Vector3Dot(vAvg, triN).x;
+                    const VectorSingle vAir = -vRel;
+                    const f32 vn = Vector3Dot(vRel, triN).x;
+                    const VectorSingle vAirTan = vAir + triN * vn;
+                    VectorSingle triPush = (triN * (-vn) + vAirTan * 0.1f) * h;
                     const f32 baseCoeff = doubleArea * dragCoeff;
+                    if(hasLift){
+                        const f32 vRelSq = Vector3LengthSq(VectorSingle(vRel, 0.0f)).x;
+                        if(vRelSq > 1.0e-10f){
+                            VectorSingle nEff = triN;
+                            if(vn > 0.0f)
+                                nEff = -triN;
+                            const VectorSingle liftVec = Cross(Cross(vAir, nEff), vAir);
+                            const f32 liftLenSq = Vector3LengthSq(VectorSingle(liftVec, 0.0f)).x;
+                            if(liftLenSq > 1.0e-14f){
+                                const VectorSingle liftDir = liftVec * Rsqrt(VectorSingle(liftLenSq)).x;
+                                const f32 liftDisp = (doubleArea * this.liftCoeff * Abs(VectorSingle(vn)).x * SqrtFast(vRelSq) * h * h) / 6.0f;
+                                const f32 effBase = SimdMax(baseCoeff, 1.0e-4f);
+                                triPush = triPush + liftDir * SimdClamp(liftDisp / effBase, -0.5f, 0.5f);
+                            }
+                        }
+                    }
                     if(m0){
                         const f32 scale0 = SimdClamp(baseCoeff * p0.invMass, 0.0f, 0.9f);
-                        this.particles[tri.p0].position = f32x4(VectorSingle(this.particles[tri.p0].position) + triN * (-vn * h * scale0), 0.0f);
+                        this.particles[tri.p0].position = f32x4(VectorSingle(this.particles[tri.p0].position) + triPush * scale0, 0.0f);
                     }
                     if(m1){
                         const f32 scale1 = SimdClamp(baseCoeff * p1.invMass, 0.0f, 0.9f);
-                        this.particles[tri.p1].position = f32x4(VectorSingle(this.particles[tri.p1].position) + triN * (-vn * h * scale1), 0.0f);
+                        this.particles[tri.p1].position = f32x4(VectorSingle(this.particles[tri.p1].position) + triPush * scale1, 0.0f);
                     }
                     if(m2){
                         const f32 scale2 = SimdClamp(baseCoeff * p2.invMass, 0.0f, 0.9f);
-                        this.particles[tri.p2].position = f32x4(VectorSingle(this.particles[tri.p2].position) + triN * (-vn * h * scale2), 0.0f);
+                        this.particles[tri.p2].position = f32x4(VectorSingle(this.particles[tri.p2].position) + triPush * scale2, 0.0f);
                     }
                 }
             }
@@ -480,6 +537,8 @@ class SoftBody{
             const ShapeId sId = this.m_scratchCandShapes[ci];
             if(!world.isValidShape(sId))
                 continue;
+            if(world.m_customFilterCallback.has_value() && !world.passesCustomFilter(ShapeId(), sId))
+                continue;
             in Shape shape = world.m_shapes[sId.index];
             in Body body = world.m_bodies[shape.bodyId];
             SoftBodyCandShapeCache entry;
@@ -546,6 +605,308 @@ class SoftBody{
             if(Vector3LengthSq(VectorSingle(imp, 0.0f)).x > 0.0f)
                 world.applyLinearImpulseAtPoint(this.attachments[ai].bodyId, imp, VectorSingle(this.m_scratchAttAnchorW[ai]), true);
         }
+
+        const usize pCount = this.particles.size();
+        for(usize bsi = 0u; bsi < this.backstopConstraints.size(); ++bsi){
+            in SoftBodyBackstopConstraint bs = this.backstopConstraints[bsi];
+            if(bs.particleIndex >= pCount)
+                continue;
+            mut SoftBodyParticle pt = this.particles[bs.particleIndex];
+            if(pt.isFixed || pt.invMass <= 0.0f)
+                continue;
+            VectorSingle pCur = VectorSingle(pt.position);
+            const VectorSingle center = VectorSingle(bs.center);
+            if(bs.maxDistance > 0.0f){
+                const VectorSingle diff = pCur - center;
+                const f32 dSq = Vector3LengthSq(VectorSingle(diff, 0.0f)).x;
+                if(dSq > bs.maxDistance * bs.maxDistance && dSq > 1.0e-12f)
+                    pCur = center + diff * (bs.maxDistance * Rsqrt(VectorSingle(dSq)).x);
+            }
+            if(bs.backstopRadius > 0.0f){
+                const VectorSingle n = SafeNormalizeVec3(VectorSingle(bs.normal), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle bsCenter = center - n * bs.backstopRadius;
+                const VectorSingle toP = pCur - bsCenter;
+                const f32 bsSq = Vector3LengthSq(VectorSingle(toP, 0.0f)).x;
+                if(bsSq < bs.backstopRadius * bs.backstopRadius){
+                    VectorSingle pushDir = n;
+                    if(bsSq > 1.0e-12f)
+                        pushDir = toP * Rsqrt(VectorSingle(bsSq)).x;
+                    pCur = bsCenter + pushDir * bs.backstopRadius;
+                }
+            }
+            pt.position = f32x4(pCur, 0.0f);
+        }
+    }
+
+    private void solveSelfCollisions(){
+        const usize pCount = this.particles.size();
+        if(!this.enableSelfCollision || pCount < 2u)
+            return;
+        f32 radius = this.particleRadius;
+        if(this.selfCollisionRadius > 0.0f)
+            radius = this.selfCollisionRadius;
+        if(radius <= 1.0e-5f)
+            return;
+
+        if(this.m_selfConnectedEdgeBuiltCount != this.distanceConstraints.size()){
+            this.m_selfConnectedEdges.clear();
+            for(usize di = 0u; di < this.distanceConstraints.size(); ++di){
+                in SoftBodyDistanceConstraint dc = this.distanceConstraints[di];
+                this.m_selfConnectedEdges.insert_or_assign(MakeSoftBodyUndirectedEdgeKey(dc.p0, dc.p1), 1u);
+            }
+            this.m_selfConnectedEdgeBuiltCount = this.distanceConstraints.size();
+        }
+
+        const f32 minDist = 2.0f * radius;
+        const f32 minDistSq = minDist * minDist;
+        const f32 invCell = 1.0f / minDist;
+        const f32 stiff = SimdClamp(this.selfCollisionStiffness, 0.0f, 1.0f);
+        usize tableSize = 64u;
+        while(tableSize < pCount * 2u && tableSize < 65536u)
+            tableSize *= 2u;
+        const usize tableMask = tableSize - 1u;
+
+        this.m_selfHashHeads.resize(tableSize);
+        for(usize h = 0u; h < tableSize; ++h)
+            this.m_selfHashHeads[h] = s_NullIndex;
+        this.m_selfHashNext.resize(pCount, s_NullIndex);
+
+        for(usize pi = 0u; pi < pCount; ++pi){
+            in f32x4 pos = this.particles[pi].position;
+            const f32 sx = pos.x * invCell;
+            const f32 sy = pos.y * invCell;
+            const f32 sz = pos.z * invCell;
+            i32 cx = cast<i32>(sx);
+            i32 cy = cast<i32>(sy);
+            i32 cz = cast<i32>(sz);
+            if(sx < cast<f32>(cx)) --cx;
+            if(sy < cast<f32>(cy)) --cy;
+            if(sz < cast<f32>(cz)) --cz;
+            const u32 slot = HashSoftBodyCellCoord(cx, cy, cz, tableMask);
+            this.m_selfHashNext[pi] = this.m_selfHashHeads[slot];
+            this.m_selfHashHeads[slot] = cast<u32>(pi);
+        }
+
+        for(usize i = 0u; i < pCount; ++i){
+            in SoftBodyParticle pi = this.particles[i];
+            f32 wi = pi.invMass;
+            if(pi.isFixed) wi = 0.0f;
+            in f32x4 posI = pi.position;
+            const f32 sx = posI.x * invCell;
+            const f32 sy = posI.y * invCell;
+            const f32 sz = posI.z * invCell;
+            i32 cx = cast<i32>(sx);
+            i32 cy = cast<i32>(sy);
+            i32 cz = cast<i32>(sz);
+            if(sx < cast<f32>(cx)) --cx;
+            if(sy < cast<f32>(cy)) --cy;
+            if(sz < cast<f32>(cz)) --cz;
+
+            for(i32 dz = -1; dz <= 1; ++dz){
+                for(i32 dy = -1; dy <= 1; ++dy){
+                    for(i32 dx = -1; dx <= 1; ++dx){
+                        const u32 slot = HashSoftBodyCellCoord(cx + dx, cy + dy, cz + dz, tableMask);
+                        u32 jU32 = this.m_selfHashHeads[slot];
+                        while(jU32 != s_NullIndex){
+                            const usize j = cast<usize>(jU32);
+                            jU32 = this.m_selfHashNext[j];
+                            if(j <= i)
+                                continue;
+                            if(this.m_selfConnectedEdges.find(MakeSoftBodyUndirectedEdgeKey(cast<u32>(i), cast<u32>(j))) != this.m_selfConnectedEdges.end())
+                                continue;
+                            mut SoftBodyParticle pj = this.particles[j];
+                            f32 wj = pj.invMass;
+                            if(pj.isFixed) wj = 0.0f;
+                            const f32 wSum = wi + wj;
+                            if(wSum <= 1.0e-12f)
+                                continue;
+                            const VectorSingle p0 = VectorSingle(this.particles[i].position);
+                            const VectorSingle p1 = VectorSingle(pj.position);
+                            const VectorSingle diff = p0 - p1;
+                            const f32 dSq = Vector3LengthSq(VectorSingle(diff, 0.0f)).x;
+                            if(dSq < minDistSq && dSq > 1.0e-12f){
+                                const f32 invD = Rsqrt(VectorSingle(dSq)).x;
+                                const f32 d = dSq * invD;
+                                const VectorSingle corr = diff * (invD * ((minDist - d) * stiff) / wSum);
+                                if(wi > 0.0f)
+                                    this.particles[i].position = f32x4(p0 + corr * wi, 0.0f);
+                                if(wj > 0.0f)
+                                    pj.position = f32x4(p1 - corr * wj, 0.0f);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void tearOverstretchedConstraints(){
+        if(this.tearStrainThreshold <= 1.0f || this.distanceConstraints.empty())
+            return;
+        const usize pCount = this.particles.size();
+        this.m_tornEdgeSetScratch.clear();
+        this.m_tornVertSetScratch.clear();
+        usize writeDist = 0u;
+        for(usize i = 0u; i < this.distanceConstraints.size(); ++i){
+            in SoftBodyDistanceConstraint dc = this.distanceConstraints[i];
+            b8 torn = false;
+            if(dc.p0 < pCount && dc.p1 < pCount && dc.restLength > 1.0e-5f){
+                const f32 dist = Vector3Length(VectorSingle(this.particles[dc.p0].position) - VectorSingle(this.particles[dc.p1].position)).x;
+                if(dist > dc.restLength * this.tearStrainThreshold)
+                    torn = true;
+            }
+            if(torn){
+                this.m_tornEdgeSetScratch.insert_or_assign(MakeSoftBodyUndirectedEdgeKey(dc.p0, dc.p1), 1u);
+                this.m_tornVertSetScratch.insert_or_assign(dc.p0, 1u);
+                this.m_tornVertSetScratch.insert_or_assign(dc.p1, 1u);
+            }
+            else{
+                if(writeDist != i)
+                    this.distanceConstraints[writeDist] = dc;
+                ++writeDist;
+            }
+        }
+        if(writeDist == this.distanceConstraints.size())
+            return;
+        this.distanceConstraints.resize(writeDist);
+        this.m_selfConnectedEdgeBuiltCount = 0u;
+
+        usize writeBend = 0u;
+        for(usize bi = 0u; bi < this.bendingConstraints.size(); ++bi){
+            in SoftBodyBendingConstraint bc = this.bendingConstraints[bi];
+            b8 dropBend = (this.m_tornEdgeSetScratch.find(MakeSoftBodyUndirectedEdgeKey(bc.p0, bc.p1)) != this.m_tornEdgeSetScratch.end());
+            if(!dropBend && bc.p0 < pCount && bc.p1 < pCount && bc.restLength > 1.0e-5f){
+                const b8 touchesTorn = (this.m_tornVertSetScratch.find(bc.p0) != this.m_tornVertSetScratch.end())
+                    || (this.m_tornVertSetScratch.find(bc.p1) != this.m_tornVertSetScratch.end());
+                if(touchesTorn){
+                    const f32 bDist = Vector3Length(VectorSingle(this.particles[bc.p0].position) - VectorSingle(this.particles[bc.p1].position)).x;
+                    if(bDist > bc.restLength * this.tearStrainThreshold)
+                        dropBend = true;
+                }
+            }
+            if(!dropBend){
+                if(writeBend != bi)
+                    this.bendingConstraints[writeBend] = bc;
+                ++writeBend;
+            }
+        }
+        this.bendingConstraints.resize(writeBend);
+
+        usize writeTri = 0u;
+        for(usize ti = 0u; ti < this.surfaceTriangles.size(); ++ti){
+            in SoftBodyTriangle tri = this.surfaceTriangles[ti];
+            const b8 dropTri = (
+                this.m_tornEdgeSetScratch.find(MakeSoftBodyUndirectedEdgeKey(tri.p0, tri.p1)) != this.m_tornEdgeSetScratch.end()
+                || this.m_tornEdgeSetScratch.find(MakeSoftBodyUndirectedEdgeKey(tri.p1, tri.p2)) != this.m_tornEdgeSetScratch.end()
+                || this.m_tornEdgeSetScratch.find(MakeSoftBodyUndirectedEdgeKey(tri.p2, tri.p0)) != this.m_tornEdgeSetScratch.end()
+            );
+            if(!dropTri){
+                if(writeTri != ti)
+                    this.surfaceTriangles[writeTri] = tri;
+                ++writeTri;
+            }
+        }
+        this.surfaceTriangles.resize(writeTri);
+    }
+
+    public void computeSurfaceNormals(mut Vector<f32x4> outNormals)const{
+        const usize pCount = this.particles.size();
+        outNormals.resize(pCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        for(usize i = 0u; i < pCount; ++i)
+            outNormals[i] = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        for(usize ti = 0u; ti < this.surfaceTriangles.size(); ++ti){
+            in SoftBodyTriangle tri = this.surfaceTriangles[ti];
+            if(tri.p0 >= pCount || tri.p1 >= pCount || tri.p2 >= pCount)
+                continue;
+            const VectorSingle p0 = VectorSingle(this.particles[tri.p0].position);
+            const VectorSingle p1 = VectorSingle(this.particles[tri.p1].position);
+            const VectorSingle p2 = VectorSingle(this.particles[tri.p2].position);
+            const VectorSingle faceN = Cross(p1 - p0, p2 - p0);
+            outNormals[tri.p0] = f32x4(VectorSingle(outNormals[tri.p0]) + faceN, 0.0f);
+            outNormals[tri.p1] = f32x4(VectorSingle(outNormals[tri.p1]) + faceN, 0.0f);
+            outNormals[tri.p2] = f32x4(VectorSingle(outNormals[tri.p2]) + faceN, 0.0f);
+        }
+        for(usize i = 0u; i < pCount; ++i)
+            outNormals[i] = f32x4(SafeNormalizeVec3(VectorSingle(outNormals[i]), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+    }
+
+    public void applyForceField(in ForceField field, in VectorSingle worldGravity, in f32 timeSec, in f32 dt){
+        if(!field.enabled || dt <= 0.0f || this.particles.empty())
+            return;
+        const f32 invDt = 1.0f / SimdMax(dt, 1.0e-4f);
+        VectorSingle hoistedDir(0.0f);
+        Aabb3D unusedBox;
+        ResolveForceFieldDirectionAndQueryBox(field, hoistedDir, unusedBox);
+
+        for(usize i = 0u; i < this.particles.size(); ++i){
+            mut SoftBodyParticle pt = this.particles[i];
+            if(pt.isFixed || pt.invMass <= 0.0f)
+                continue;
+            const VectorSingle pos = VectorSingle(pt.position);
+            if(field.useBounds){
+                if(
+                    pos.x < field.bounds.lowerBound.x || pos.x > field.bounds.upperBound.x
+                    || pos.y < field.bounds.lowerBound.y || pos.y > field.bounds.upperBound.y
+                    || pos.z < field.bounds.lowerBound.z || pos.z > field.bounds.upperBound.z
+                )
+                    continue;
+            }
+            const f32 mass = 1.0f / pt.invMass;
+            VectorSingle f(0.0f);
+            if(field.type == ForceFieldType::GlobalGravity){
+                f = hoistedDir * (field.strength * mass);
+            }
+            else if(field.type == ForceFieldType::LocalGravityOverride){
+                f = (hoistedDir * field.strength - worldGravity) * mass;
+            }
+            else if(field.type == ForceFieldType::PointGravity){
+                const VectorSingle diff = VectorSingle(field.originOrDirection) - pos;
+                const f32 distSq = Vector3LengthSq(VectorSingle(diff, 0.0f)).x;
+                if(distSq > 1.0e-12f && (field.radius <= 0.0f || distSq <= field.radius * field.radius)){
+                    const f32 invDist = Rsqrt(VectorSingle(distSq)).x;
+                    const f32 falloff = ComputeForceFieldRadialFalloff(distSq, invDist, field.minDistance, field.falloffPower);
+                    f = diff * (invDist * field.strength * mass * falloff);
+                }
+            }
+            else if(field.type == ForceFieldType::BoxWind){
+                VectorSingle windVel = hoistedDir * field.strength;
+                if(field.turbulenceAmplitude > 0.0f){
+                    const f32 phase = timeSec * field.turbulenceFrequency + pos.x * 0.37f + pos.y * 0.53f + pos.z * 0.71f;
+                    VectorSingle sinTurb(0.0f);
+                    VectorSingle cosTurb(0.0f);
+                    VectorSinCos(sinTurb, cosTurb, VectorSingle(phase, phase * 1.31f, phase * 0.79f + 1.1f, 0.0f));
+                    windVel = windVel + VectorSingle(sinTurb.x, cosTurb.y, sinTurb.z, 0.0f) * field.turbulenceAmplitude;
+                }
+                const VectorSingle relWind = windVel - VectorSingle(pt.velocity);
+                f = relWind * SimdClamp(this.aerodynamicDrag * 4.0f, 0.05f, 4.0f) * mass;
+            }
+            else if(field.type == ForceFieldType::Vortex){
+                const VectorSingle diff = pos - VectorSingle(field.originOrDirection);
+                const VectorSingle radialPerp = diff - hoistedDir * Vector3Dot(diff, hoistedDir).x;
+                const f32 distSq = Vector3LengthSq(VectorSingle(radialPerp, 0.0f)).x;
+                if(distSq > 1.0e-12f && (field.radius <= 0.0f || distSq <= field.radius * field.radius)){
+                    const f32 invDist = Rsqrt(VectorSingle(distSq)).x;
+                    const VectorSingle radialDir = radialPerp * invDist;
+                    const VectorSingle swirlDir = SafeNormalizeVec3(Cross(hoistedDir, radialDir), VectorSingle(0.0f));
+                    const f32 falloff = ComputeForceFieldRadialFalloff(distSq, invDist, field.minDistance, field.falloffPower);
+                    f = swirlDir * (field.strength * mass * falloff);
+                    if(field.turbulenceAmplitude != 0.0f)
+                        f = f - radialDir * (field.turbulenceAmplitude * mass * falloff);
+                }
+            }
+            else if(field.type == ForceFieldType::DampingZone){
+                const VectorSingle linV = VectorSingle(pt.velocity);
+                const f32 speedSq = Vector3LengthSq(VectorSingle(linV, 0.0f)).x;
+                if(speedSq > 1.0e-12f){
+                    const f32 invSpeed = Rsqrt(VectorSingle(speedSq)).x;
+                    const f32 speed = speedSq * invSpeed;
+                    const f32 dampMag = SimdMin(SimdMax(0.0f, field.strength) * mass * speed, mass * speed * invDt * 0.9f);
+                    f = (-linV) * (dampMag * invSpeed);
+                }
+            }
+            if(IsFiniteVec3(f))
+                pt.externalForce = f32x4(VectorSingle(pt.externalForce) + f, 0.0f);
+        }
     }
 
     private void commitWorldCollisionImpulses(mut PhysicsWorld world, in Span<SoftBodyColImpulse> impulses){
@@ -591,7 +952,9 @@ class SoftBody{
         for(u32 sub = 0u; sub < subCount; ++sub){
             StepSoftBodyParticlesPredictRange(this.particles, 0u, pCount, gravityW, h, dampScale);
             this.applyAeroDragAndResetLambdas(h);
+            this.tearOverstretchedConstraints();
             this.solveSubstepConstraintsAndAttachments(world, h, invDt2, iterCount);
+            this.solveSelfCollisions();
 
             if(this.collideWithWorld){
                 this.prepareCandShapeCache(world);
@@ -617,7 +980,11 @@ class SoftBody{
             }
 
             StepSoftBodyParticlesVelUpdateRange(this.particles, 0u, pCount, invH);
+            this.tearOverstretchedConstraints();
         }
+        const f32x4 zeroForce4(0.0f, 0.0f, 0.0f, 0.0f);
+        for(usize i = 0u; i < pCount; ++i)
+            this.particles[i].externalForce = zeroForce4;
     }
 
     public void stepWithScheduler(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
@@ -688,7 +1055,9 @@ class SoftBody{
             }
 
             this.applyAeroDragAndResetLambdas(h);
+            this.tearOverstretchedConstraints();
             this.solveSubstepConstraintsAndAttachments(world, h, invDt2, iterCount);
+            this.solveSelfCollisions();
 
             if(this.collideWithWorld){
                 this.prepareCandShapeCache(world);
@@ -775,7 +1144,11 @@ class SoftBody{
             else{
                 StepSoftBodyParticlesVelUpdateRange(this.particles, 0u, pCount, invH);
             }
+            this.tearOverstretchedConstraints();
         }
+        const f32x4 zeroForce4(0.0f, 0.0f, 0.0f, 0.0f);
+        for(usize i = 0u; i < pCount; ++i)
+            this.particles[i].externalForce = zeroForce4;
     }
 }
 

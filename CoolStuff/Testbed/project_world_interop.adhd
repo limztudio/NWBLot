@@ -42,6 +42,7 @@
 enum<u8> TestbedPhysicsSceneMode{
     Default = 0u,
     Stress = 1u,
+    Showcase = 2u,
     kCount
 }
 
@@ -86,6 +87,19 @@ class TestbedPhysicsHudStats{
     public u32 gpuSolvedIslandCount = 0u;
     public u8 backendUsed = 0u;
     public f64 stepMs = 0.0;
+    public f32 broadphaseMs = 0.0f;
+    public f32 narrowphaseMs = 0.0f;
+    public f32 solveMs = 0.0f;
+    public f32 ccdMs = 0.0f;
+}
+
+class TestbedGrabState{
+    public b8 active = false;
+    public EntityID entity = s_InvalidEntityId;
+    public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 grabWorldPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 targetWorldPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 distance = 0.0f;
 }
 
 class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
@@ -486,6 +500,263 @@ void SetStartupGroundPlaneActive(
             rb.isEnabled = false;
             rb.dirty = true;
         }
+        if(world.hasComponent<RendererComponent>(e))
+            world.getComponent<RendererComponent>(e).visible = active;
+    }
+}
+
+void RequestPhysicsSingleStep(mut NotNullUniquePtr<World> worldHandle){
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().requestSingleStep();
+}
+
+void ClearPhysicsAccumulator(mut NotNullUniquePtr<World> worldHandle){
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().clearAccumulator();
+}
+
+b8 CaptureTestbedPhysicsSnapshot(mut NotNullUniquePtr<World> worldHandle, mut Vector<u8> outBytes){
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return false;
+    return physicsSystem.value().captureWorldSnapshot(outBytes);
+}
+
+b8 RestoreTestbedPhysicsSnapshot(mut NotNullUniquePtr<World> worldHandle, in Span<u8> bytes){
+    if(bytes.empty())
+        return false;
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return false;
+    if(!physicsSystem.value().restoreWorldSnapshot(bytes))
+        return false;
+    physicsSystem.value().clearAccumulator();
+    return true;
+}
+
+b8 ComputeCameraMouseRay(
+    mut World world,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    mut VectorSingle outOrigin,
+    mut VectorSingle outDir
+){
+    if(vpW <= 0.0f || vpH <= 0.0f || !IsFinite(VectorSingle(vpW, vpH, mouseX, mouseY)))
+        return false;
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, vpW / vpH);
+    if(!cameraView.valid())
+        return false;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    in CameraProjection camProj = cameraView.projection;
+    if(camProj.projectionParams.x <= 0.0f || camProj.projectionParams.y <= 0.0f)
+        return false;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    const VectorSingle right = basis[0u];
+    const VectorSingle up = basis[1u];
+    const VectorSingle forward = basis[2u];
+    outOrigin = basis[3u];
+    const f32 ndcX = (mouseX / vpW) * 2.0f - 1.0f;
+    const f32 ndcY = 1.0f - (mouseY / vpH) * 2.0f;
+    const VectorSingle rawDir = forward + right * (ndcX / camProj.projectionParams.x) + up * (ndcY / camProj.projectionParams.y);
+    outDir = SafeNormalizeVec3(rawDir, forward);
+    return true;
+}
+
+b8 BeginTestbedGrab(
+    mut NotNullUniquePtr<World> worldHandle,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    mut TestbedGrabState outGrab
+){
+    outGrab.active = false;
+    outGrab.entity = s_InvalidEntityId;
+    mut World world = worldHandle.deref();
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return false;
+    VectorSingle rayOrigin(0.0f);
+    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
+    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
+        return false;
+    RayCastInput rayInput;
+    rayInput.origin = f32x4(rayOrigin, 0.0f);
+    rayInput.translation = f32x4(rayDir * 100.0f, 0.0f);
+    rayInput.useCustomFilter = true;
+    const EcsRayCastHit hit = physicsSystem.value().rayCastClosest(rayInput);
+    if(!hit.hit.hit || !hit.entity.valid() || !world.alive(hit.entity))
+        return false;
+    if(!world.hasComponent<RigidBodyComponent>(hit.entity) || world.getComponent<RigidBodyComponent>(hit.entity).type != BodyType::Dynamic)
+        return false;
+    const Expected<Transform3D> bodyXfRes = physicsSystem.value().tryGetBodyTransform(hit.entity);
+    if(!bodyXfRes.has_value())
+        return false;
+    in Transform3D bodyXf = bodyXfRes.value();
+    const VectorSingle hitPt = VectorSingle(hit.hit.point);
+    const VectorSingle invRot = QuaternionConjugate(SafeNormalizeQuat(VectorSingle(bodyXf.rotation)));
+    const VectorSingle localAnchor = Vector3Rotate(VectorSingle(hitPt - VectorSingle(bodyXf.position), 0.0f), invRot);
+    outGrab.active = true;
+    outGrab.entity = hit.entity;
+    outGrab.localAnchor = f32x4(localAnchor, 0.0f);
+    outGrab.grabWorldPoint = f32x4(hitPt, 0.0f);
+    outGrab.targetWorldPoint = f32x4(hitPt, 0.0f);
+    outGrab.distance = Vector3Length(VectorSingle(hitPt - rayOrigin, 0.0f)).x;
+    return true;
+}
+
+void UpdateTestbedGrab(
+    mut NotNullUniquePtr<World> worldHandle,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    in f32 dt,
+    mut TestbedGrabState inOutGrab
+){
+    if(!inOutGrab.active)
+        return;
+    mut World world = worldHandle.deref();
+    if(!inOutGrab.entity.valid() || !world.alive(inOutGrab.entity) || !world.hasComponent<RigidBodyComponent>(inOutGrab.entity)){
+        inOutGrab.active = false;
+        inOutGrab.entity = s_InvalidEntityId;
+        return;
+    }
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    const Expected<Transform3D> bodyXfRes = physicsSystem.value().tryGetBodyTransform(inOutGrab.entity);
+    if(!bodyXfRes.has_value()){
+        inOutGrab.active = false;
+        inOutGrab.entity = s_InvalidEntityId;
+        return;
+    }
+    in Transform3D bodyXf = bodyXfRes.value();
+    const VectorSingle bodyPos = VectorSingle(bodyXf.position);
+    const VectorSingle bodyRot = SafeNormalizeQuat(VectorSingle(bodyXf.rotation));
+    const VectorSingle anchorW = TransformPointValues(bodyPos, bodyRot, VectorSingle(inOutGrab.localAnchor));
+    inOutGrab.grabWorldPoint = f32x4(anchorW, 0.0f);
+
+    VectorSingle rayOrigin(0.0f);
+    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
+    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
+        return;
+    const VectorSingle targetW = rayOrigin + rayDir * inOutGrab.distance;
+    inOutGrab.targetWorldPoint = f32x4(targetW, 0.0f);
+
+    const f32 safeDt = SimdClamp(dt, 1.0e-4f, 0.05f);
+    f32 mass = 1.0f;
+    in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(inOutGrab.entity);
+    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
+    if(rb.runtimeBodyId.valid() && rb.runtimeBodyId.index < pw.m_bodies.size()){
+        in Body b = pw.m_bodies[rb.runtimeBodyId.index];
+        if(b.alive && b.setIndex < pw.m_solverSets.size() && b.localIndex < pw.m_solverSets[b.setIndex].sims.size()){
+            const f32 invM = pw.m_solverSets[b.setIndex].sims[b.localIndex].centerInvMass.w;
+            if(invM > 1.0e-6f)
+                mass = 1.0f / invM;
+        }
+    }
+
+    VectorSingle linVel(0.0f);
+    VectorSingle angVel(0.0f);
+    const Expected<f32x4> lvRes = physicsSystem.value().tryGetLinearVelocity(inOutGrab.entity);
+    if(lvRes.has_value())
+        linVel = VectorSingle(lvRes.value());
+    const Expected<f32x4> avRes = physicsSystem.value().tryGetAngularVelocity(inOutGrab.entity);
+    if(avRes.has_value())
+        angVel = VectorSingle(avRes.value());
+
+    const VectorSingle anchorVel = linVel + Cross(angVel, VectorSingle(anchorW - bodyPos, 0.0f));
+    const VectorSingle err = VectorSingle(targetW - anchorW, 0.0f);
+    VectorSingle impulse = (err * 120.0f - anchorVel * 14.0f) * (mass * safeDt);
+    const f32 maxImp = mass * 20.0f * safeDt;
+    const f32 impLenSq = Vector3LengthSq(VectorSingle(impulse, 0.0f)).x;
+    if(impLenSq > maxImp * maxImp && impLenSq > 1.0e-8f)
+        impulse = impulse * (maxImp * Rsqrt(VectorSingle(impLenSq)).x);
+    physicsSystem.value().applyLinearImpulseAtPoint(inOutGrab.entity, impulse, anchorW, true);
+}
+
+void ReleaseTestbedGrab(mut TestbedGrabState outGrab){
+    outGrab.active = false;
+    outGrab.entity = s_InvalidEntityId;
+}
+
+void ShootTestbedProjectile(mut NotNullUniquePtr<World> worldHandle, mut Vector<EntityID> outEntities){
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    const VectorSingle camPos = basis[3u];
+    const VectorSingle camFwd = basis[2u];
+    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
+    const Name whiteMatName = Name("project/materials/mat_white_opaque");
+    const EntityID projId = SpawnPhysicsDynamicSphere(
+        world,
+        camPos + camFwd * 1.1f,
+        VectorSingle(0.24f, 0.24f, 0.24f, 0.0f),
+        camFwd * 18.0f,
+        3.0f,
+        0.4f,
+        0.45f,
+        sphereModelName,
+        whiteMatName
+    );
+    if(projId.valid()){
+        if(world.hasComponent<RigidBodyComponent>(projId)){
+            mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(projId);
+            rb.isBullet = true;
+            rb.dirty = true;
+        }
+        outEntities.push_back(projId);
+    }
+}
+
+void TriggerTestbedExplosion(mut NotNullUniquePtr<World> worldHandle){
+    mut World world = worldHandle.deref();
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!physicsSystem.has_value() || !cameraView.valid())
+        return;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    const VectorSingle camPos = basis[3u];
+    const VectorSingle camFwd = basis[2u];
+
+    VectorSingle center = camPos + camFwd * 5.0f;
+    RayCastInput rayInput;
+    rayInput.origin = f32x4(camPos, 0.0f);
+    rayInput.translation = f32x4(camFwd * 40.0f, 0.0f);
+    rayInput.useCustomFilter = true;
+    const EcsRayCastHit rayHit = physicsSystem.value().rayCastClosest(rayInput);
+    if(rayHit.hit.hit)
+        center = VectorSingle(rayHit.hit.point);
+
+    const f32 radius = 6.0f;
+    const VectorSingle halfExt(radius, radius, radius, 0.0f);
+    Vector<EntityID> hitEntities;
+    physicsSystem.value().overlapAabb(Aabb3D(center - halfExt, center + halfExt), Filter(), false, hitEntities);
+    for(usize i = 0u; i < hitEntities.size(); ++i){
+        const EntityID ent = hitEntities[i];
+        if(!ent.valid() || !world.alive(ent) || !world.hasComponent<RigidBodyComponent>(ent))
+            continue;
+        if(world.getComponent<RigidBodyComponent>(ent).type != BodyType::Dynamic)
+            continue;
+        const Expected<Transform3D> xfRes = physicsSystem.value().tryGetBodyTransform(ent);
+        if(!xfRes.has_value())
+            continue;
+        const VectorSingle delta = VectorSingle(VectorSingle(xfRes.value().position) - center, 0.0f);
+        const f32 dist = Vector3Length(delta).x;
+        if(dist >= radius)
+            continue;
+        const f32 falloff = 1.0f - (dist / radius);
+        const VectorSingle dir = SafeNormalizeVec3(delta + VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        physicsSystem.value().applyLinearImpulse(ent, dir * (14.0f * falloff), true);
     }
 }
 
@@ -524,6 +795,10 @@ void ResetTestbedCameraForPhysicsScene(mut NotNullUniquePtr<World> worldHandle, 
     if(mode == TestbedPhysicsSceneMode::Stress){
         cameraTransform.position = f32x4(0.0f, 3.8f, 4.5f, 0.0f);
         cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-0.28f, s_Pi, 0.0f, 0.0f)));
+    }
+    else if(mode == TestbedPhysicsSceneMode::Showcase){
+        cameraTransform.position = f32x4(0.0f, 3.4f, 3.6f, 0.0f);
+        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-0.24f, s_Pi, 0.0f, 0.0f)));
     }
     else{
         cameraTransform.position = f32x4(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
@@ -732,6 +1007,467 @@ void CreateStressPhysicsScene(
     }
 }
 
+void SpawnShowcaseAnchorAndBody(
+    mut World world,
+    in VectorSingle anchorPos,
+    in VectorSingle bodyPos,
+    in Name boxModelName,
+    in Name whiteMatName,
+    mut Vector<EntityID> outEntities,
+    mut EntityID outAnchor,
+    mut EntityID outBody
+){
+    const VectorSingle smallScale(0.18f, 0.18f, 0.18f, 0.0f);
+    const VectorSingle bodyScale(0.28f, 0.28f, 0.28f, 0.0f);
+    const VectorSingle unitHalf(0.5f, 0.5f, 0.5f, 0.0f);
+    outAnchor = SpawnPhysicsStaticBox(world, anchorPos, smallScale, unitHalf, 0.5f, 0.1f, true, boxModelName, whiteMatName);
+    outBody = SpawnPhysicsDynamicBox(world, bodyPos, bodyScale, 0.5f, 0.1f, boxModelName, whiteMatName);
+    outEntities.push_back(outAnchor);
+    outEntities.push_back(outBody);
+}
+
+EntityID SpawnShowcaseBasicShape(
+    mut World world,
+    in ShapeType shapeType,
+    in VectorSingle pos,
+    in BodyType bodyType
+){
+    Entity entity = world.createEntity();
+    mut TransformComponent xf = entity.addComponent<TransformComponent>();
+    xf.position = f32x4(pos, 0.0f);
+    xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    xf.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+
+    mut RigidBodyComponent rb = entity.addComponent<RigidBodyComponent>();
+    rb.type = bodyType;
+    rb.dirty = true;
+
+    mut ColliderComponent col = entity.addComponent<ColliderComponent>();
+    col.shapeType = shapeType;
+    col.density = 1.0f;
+    col.friction = 0.55f;
+    col.restitution = 0.15f;
+    if(shapeType == ShapeType::Capsule){
+        col.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        col.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        col.radius = 0.22f;
+    }
+    else if(shapeType == ShapeType::Cylinder){
+        col.cylinderHalfHeight = 0.30f;
+        col.radius = 0.24f;
+        col.skinRadius = 0.03f;
+    }
+    else if(shapeType == ShapeType::Cone){
+        col.cylinderHalfHeight = 0.34f;
+        col.radius = 0.26f;
+        col.skinRadius = 0.03f;
+    }
+    else if(shapeType == ShapeType::TaperedCapsule){
+        col.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        col.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        col.radius = 0.24f;
+        col.topRadius = 0.10f;
+    }
+    col.dirty = true;
+    return entity.id();
+}
+
+void CreateShowcasePhysicsScene(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedPhysicsBackendChoice backendChoice,
+    mut EntityID outConfigEntity,
+    mut Vector<EntityID> outEntities
+){
+    mut World world = worldHandle.deref();
+    outEntities.clear();
+
+    {
+        Entity cfgEntity = world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
+        cfg.fixedDeltaTime = 1.0f / 60.0f;
+        cfg.subStepCount = 4u;
+        ApplyPhysicsBackendSettings(backendChoice, cfg);
+        outConfigEntity = cfgEntity.id();
+    }
+
+    const Name boxModelName = Name("project/meshes/physics_box/model");
+    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
+    const Name whiteMatName = Name("project/materials/mat_white_opaque");
+
+    {
+        Entity floorEnt = world.createEntity();
+        mut TransformComponent fXf = floorEnt.addComponent<TransformComponent>();
+        fXf.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        fXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent fRb = floorEnt.addComponent<RigidBodyComponent>();
+        fRb.type = BodyType::Static;
+        fRb.dirty = true;
+        mut ColliderComponent fCol = floorEnt.addComponent<ColliderComponent>();
+        fCol.shapeType = ShapeType::Plane;
+        fCol.planeNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        fCol.halfExtents = f32x4(14.0f, 0.0f, 14.0f, 0.0f);
+        fCol.friction = 0.7f;
+        fCol.dirty = true;
+        outEntities.push_back(floorEnt.id());
+    }
+
+    {
+        Entity segEnt = world.createEntity();
+        mut TransformComponent sXf = segEnt.addComponent<TransformComponent>();
+        sXf.position = f32x4(-1.6f, 0.35f, -2.4f, 0.0f);
+        sXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent sRb = segEnt.addComponent<RigidBodyComponent>();
+        sRb.type = BodyType::Static;
+        sRb.dirty = true;
+        mut ColliderComponent sCol = segEnt.addComponent<ColliderComponent>();
+        sCol.shapeType = ShapeType::Segment;
+        sCol.center = f32x4(-0.6f, 0.0f, 0.0f, 0.0f);
+        sCol.center2 = f32x4(0.6f, 0.25f, 0.0f, 0.0f);
+        sCol.radius = 0.08f;
+        sCol.dirty = true;
+        outEntities.push_back(segEnt.id());
+    }
+
+    {
+        Entity hfEnt = world.createEntity();
+        mut TransformComponent hfXf = hfEnt.addComponent<TransformComponent>();
+        hfXf.position = f32x4(3.2f, 0.0f, -6.8f, 0.0f);
+        hfXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent hfRb = hfEnt.addComponent<RigidBodyComponent>();
+        hfRb.type = BodyType::Static;
+        hfRb.dirty = true;
+        mut ColliderComponent hfCol = hfEnt.addComponent<ColliderComponent>();
+        hfCol.shapeType = ShapeType::Heightfield;
+        hfCol.heightfieldRows = 5u;
+        hfCol.heightfieldCols = 5u;
+        hfCol.heightfieldScale = f32x4(0.7f, 0.35f, 0.7f, 0.0f);
+        hfCol.heightfieldThickness = 0.35f;
+        hfCol.heightfieldHeights.resize(25u, 0.0f);
+        hfCol.heightfieldHeights[6u] = 0.5f;
+        hfCol.heightfieldHeights[7u] = 0.75f;
+        hfCol.heightfieldHeights[8u] = 0.5f;
+        hfCol.heightfieldHeights[11u] = 0.75f;
+        hfCol.heightfieldHeights[12u] = 1.25f;
+        hfCol.heightfieldHeights[13u] = 0.75f;
+        hfCol.heightfieldHeights[16u] = 0.5f;
+        hfCol.heightfieldHeights[17u] = 0.75f;
+        hfCol.heightfieldHeights[18u] = 0.5f;
+        hfCol.dirty = true;
+        outEntities.push_back(hfEnt.id());
+    }
+
+    outEntities.push_back(SpawnShowcaseBasicShape(world, ShapeType::Capsule, VectorSingle(-2.6f, 0.9f, -3.0f, 0.0f), BodyType::Dynamic));
+    outEntities.push_back(SpawnShowcaseBasicShape(world, ShapeType::Cylinder, VectorSingle(-1.7f, 0.9f, -3.0f, 0.0f), BodyType::Dynamic));
+    outEntities.push_back(SpawnShowcaseBasicShape(world, ShapeType::Cone, VectorSingle(-0.8f, 0.9f, -3.0f, 0.0f), BodyType::Dynamic));
+    outEntities.push_back(SpawnShowcaseBasicShape(world, ShapeType::TaperedCapsule, VectorSingle(0.1f, 0.9f, -3.0f, 0.0f), BodyType::Dynamic));
+    outEntities.push_back(SpawnPhysicsDynamicBox(world, VectorSingle(1.0f, 0.8f, -3.0f, 0.0f), VectorSingle(0.45f, 0.45f, 0.45f, 0.0f), 0.6f, 0.1f, boxModelName, whiteMatName));
+    outEntities.push_back(SpawnPhysicsDynamicSphere(world, VectorSingle(1.9f, 1.0f, -3.0f, 0.0f), VectorSingle(0.42f, 0.42f, 0.42f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), 1.0f, 0.5f, 0.45f, sphereModelName, whiteMatName));
+
+    {
+        EntityID anc = s_InvalidEntityId;
+        EntityID bod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-2.8f, 2.2f, -4.4f, 0.0f), VectorSingle(-2.8f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
+        Entity je = world.createEntity();
+        mut JointComponent jc = je.addComponent<JointComponent>();
+        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
+        jc.type = JointType::Revolute;
+        jc.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jc.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jc.localAnchorA = f32x4(0.0f, -0.2f, 0.0f, 0.0f);
+        jc.localAnchorB = f32x4(0.0f, 0.4f, 0.0f, 0.0f);
+        jc.enableLimit = true; jc.lowerLimit = -1.1f; jc.upperLimit = 1.1f;
+        jc.enableMotor = true; jc.motorSpeed = 1.2f; jc.maxMotorForce = 8.0f;
+        jc.dirty = true;
+        outEntities.push_back(je.id());
+    }
+    {
+        EntityID anc = s_InvalidEntityId;
+        EntityID bod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.9f, 2.2f, -4.4f, 0.0f), VectorSingle(-1.9f, 1.8f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
+        Entity je = world.createEntity();
+        mut JointComponent jc = je.addComponent<JointComponent>();
+        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
+        jc.type = JointType::Prismatic;
+        jc.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jc.enableLimit = true; jc.lowerLimit = -0.45f; jc.upperLimit = 0.45f;
+        jc.enableSpring = true; jc.hertz = 2.5f; jc.dampingRatio = 0.3f;
+        jc.dirty = true;
+        outEntities.push_back(je.id());
+    }
+    {
+        EntityID anc = s_InvalidEntityId;
+        EntityID bod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.0f, 2.2f, -4.4f, 0.0f), VectorSingle(-1.0f, 1.3f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
+        Entity je = world.createEntity();
+        mut JointComponent jc = je.addComponent<JointComponent>();
+        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
+        jc.type = JointType::Distance;
+        jc.length = 0.85f;
+        jc.enableLimit = true; jc.minLength = 0.45f; jc.maxLength = 1.25f;
+        jc.enableSpring = true; jc.hertz = 2.0f; jc.dampingRatio = 0.4f;
+        jc.dirty = true;
+        outEntities.push_back(je.id());
+    }
+    {
+        EntityID anc = s_InvalidEntityId;
+        EntityID bod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-0.1f, 2.2f, -4.4f, 0.0f), VectorSingle(-0.1f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
+        Entity je = world.createEntity();
+        mut JointComponent jc = je.addComponent<JointComponent>();
+        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
+        jc.type = JointType::Spherical;
+        jc.localAxisA = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+        jc.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+        jc.localAnchorB = f32x4(0.0f, 0.6f, 0.0f, 0.0f);
+        jc.enableLimit = true; jc.swingLimit = 0.65f; jc.swingLimitY = 0.45f;
+        jc.dirty = true;
+        outEntities.push_back(je.id());
+    }
+    {
+        EntityID anc = s_InvalidEntityId;
+        EntityID bod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(0.8f, 2.2f, -4.4f, 0.0f), VectorSingle(0.8f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
+        Entity je = world.createEntity();
+        mut JointComponent jc = je.addComponent<JointComponent>();
+        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
+        jc.type = JointType::SixDof;
+        jc.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jc.localAxisB = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jc.sixDofAxes[0u].motion = JointMotion::Limited; jc.sixDofAxes[0u].lowerLimit = -0.25f; jc.sixDofAxes[0u].upperLimit = 0.25f;
+        jc.sixDofAxes[1u].motion = JointMotion::Locked;
+        jc.sixDofAxes[2u].motion = JointMotion::Locked;
+        jc.sixDofAxes[3u].motion = JointMotion::Free;
+        jc.sixDofAxes[4u].motion = JointMotion::Limited; jc.sixDofAxes[4u].lowerLimit = -0.5f; jc.sixDofAxes[4u].upperLimit = 0.5f;
+        jc.sixDofAxes[5u].motion = JointMotion::Limited; jc.sixDofAxes[5u].lowerLimit = -0.5f; jc.sixDofAxes[5u].upperLimit = 0.5f;
+        jc.dirty = true;
+        outEntities.push_back(je.id());
+    }
+    {
+        EntityID gAnc = s_InvalidEntityId;
+        EntityID gA = s_InvalidEntityId;
+        EntityID gB = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(1.7f, 2.2f, -4.4f, 0.0f), VectorSingle(1.55f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, gAnc, gA);
+        gB = SpawnPhysicsDynamicBox(world, VectorSingle(1.95f, 1.6f, -4.4f, 0.0f), VectorSingle(0.24f, 0.24f, 0.24f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
+        outEntities.push_back(gB);
+        Entity revA = world.createEntity();
+        mut JointComponent jra = revA.addComponent<JointComponent>();
+        jra.bodyEntityA = gAnc; jra.bodyEntityB = gA; jra.type = JointType::Revolute;
+        jra.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jra.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jra.enableMotor = true; jra.motorSpeed = 1.5f; jra.maxMotorForce = 5.0f; jra.dirty = true;
+        outEntities.push_back(revA.id());
+        Entity gear = world.createEntity();
+        mut JointComponent jg = gear.addComponent<JointComponent>();
+        jg.bodyEntityA = gA; jg.bodyEntityB = gB; jg.type = JointType::Gear;
+        jg.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jg.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jg.ratio = 2.0f; jg.dirty = true;
+        outEntities.push_back(gear.id());
+    }
+    {
+        const EntityID pA = SpawnPhysicsDynamicBox(world, VectorSingle(2.5f, 1.8f, -4.4f, 0.0f), VectorSingle(0.24f, 0.24f, 0.24f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
+        const EntityID pB = SpawnPhysicsDynamicBox(world, VectorSingle(3.1f, 1.5f, -4.4f, 0.0f), VectorSingle(0.24f, 0.24f, 0.24f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
+        outEntities.push_back(pA);
+        outEntities.push_back(pB);
+        Entity pulley = world.createEntity();
+        mut JointComponent jp = pulley.addComponent<JointComponent>();
+        jp.bodyEntityA = pA; jp.bodyEntityB = pB; jp.type = JointType::Pulley;
+        jp.groundAnchorA = f32x4(2.5f, 2.7f, -4.4f, 0.0f);
+        jp.groundAnchorB = f32x4(3.1f, 2.7f, -4.4f, 0.0f);
+        jp.lengthA = 0.9f; jp.lengthB = 1.2f; jp.ratio = 1.0f; jp.dirty = true;
+        outEntities.push_back(pulley.id());
+    }
+    {
+        EntityID rack = s_InvalidEntityId;
+        EntityID pinion = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-2.4f, 1.6f, -5.8f, 0.0f), VectorSingle(-2.4f, 1.2f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, rack, pinion);
+        Entity rp = world.createEntity();
+        mut JointComponent jrp = rp.addComponent<JointComponent>();
+        jrp.bodyEntityA = rack; jrp.bodyEntityB = pinion; jrp.type = JointType::RackAndPinion;
+        jrp.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jrp.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jrp.ratio = 0.22f; jrp.dirty = true;
+        outEntities.push_back(rp.id());
+    }
+    {
+        EntityID pathAnc = s_InvalidEntityId;
+        EntityID pathBod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.3f, 2.1f, -5.8f, 0.0f), VectorSingle(-1.3f, 2.3f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, pathAnc, pathBod);
+        Entity pe = world.createEntity();
+        mut JointComponent jpt = pe.addComponent<JointComponent>();
+        jpt.bodyEntityA = pathAnc; jpt.bodyEntityB = pathBod; jpt.type = JointType::Path;
+        jpt.pathPoints.push_back(f32x4(-0.35f, 0.0f, 0.0f, 0.0f));
+        jpt.pathPoints.push_back(f32x4(0.0f, 0.25f, 0.2f, 0.0f));
+        jpt.pathPoints.push_back(f32x4(0.35f, 0.0f, 0.0f, 0.0f));
+        jpt.pathPoints.push_back(f32x4(0.0f, -0.25f, -0.2f, 0.0f));
+        jpt.pathClosed = true;
+        jpt.dirty = true;
+        outEntities.push_back(pe.id());
+    }
+    {
+        EntityID ropeAnc = s_InvalidEntityId;
+        EntityID ropeBod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(2.5f, 2.3f, -5.8f, 0.0f), VectorSingle(2.8f, 1.4f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, ropeAnc, ropeBod);
+        Entity re = world.createEntity();
+        mut JointComponent jr = re.addComponent<JointComponent>();
+        jr.bodyEntityA = ropeAnc; jr.bodyEntityB = ropeBod; jr.type = JointType::Rope;
+        jr.maxLength = 1.05f; jr.dirty = true;
+        outEntities.push_back(re.id());
+    }
+
+    {
+        Entity charEnt = world.createEntity();
+        mut TransformComponent xf = charEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(-4.0f, 1.05f, -3.5f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut CharacterControllerComponent cc = charEnt.addComponent<CharacterControllerComponent>();
+        cc.def.radius = 0.32f;
+        cc.def.halfHeight = 0.50f;
+        cc.dirty = true;
+        outEntities.push_back(charEnt.id());
+    }
+
+    {
+        Entity vehEnt = world.createEntity();
+        mut TransformComponent xf = vehEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(4.0f, 0.9f, -3.4f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent rb = vehEnt.addComponent<RigidBodyComponent>();
+        rb.type = BodyType::Dynamic;
+        rb.dirty = true;
+        mut ColliderComponent col = vehEnt.addComponent<ColliderComponent>();
+        col.shapeType = ShapeType::Hull;
+        col.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
+        col.density = 3.0f;
+        col.dirty = true;
+        mut VehicleComponent vc = vehEnt.addComponent<VehicleComponent>();
+        vc.engine.forwardGearRatios[0u] = 3.5f;
+        vc.engine.forwardGearRatios[1u] = 2.2f;
+        vc.engine.forwardGearRatios[2u] = 1.5f;
+        vc.engine.forwardGearRatios[3u] = 1.1f;
+        vc.engine.forwardGearRatios[4u] = 0.9f;
+        vc.engine.forwardGearRatios[5u] = 0.75f;
+        for(u32 wi = 0u; wi < 4u; ++wi){
+            VehicleWheelDef wd;
+            f32 wx = -0.7f;
+            if((wi & 1u) != 0u)
+                wx = 0.7f;
+            f32 wz = 0.95f;
+            if(wi >= 2u)
+                wz = -0.95f;
+            wd.attachmentPoint = f32x4(wx, -0.1f, wz, 0.0f);
+            wd.isSteerable = (wi < 2u);
+            wd.isDriven = (wi >= 2u);
+            vc.wheels.push_back(wd);
+        }
+        vc.input.brake = 0.25f;
+        vc.dirty = true;
+        outEntities.push_back(vehEnt.id());
+    }
+
+    {
+        Entity ragEnt = world.createEntity();
+        mut TransformComponent xf = ragEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(0.0f, 1.6f, -5.8f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RagdollComponent rc = ragEnt.addComponent<RagdollComponent>();
+        for(u32 bi = 0u; bi < 3u; ++bi){
+            RagdollBoneDef bone;
+            if(bi == 0u)
+                bone.parentIndex = s_NullIndex;
+            else
+                bone.parentIndex = bi - 1u;
+            const f32 by = cast<f32>(bi) * 0.45f;
+            bone.bodyDef.type = BodyType::Dynamic;
+            bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
+            bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
+            bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
+            bone.jointAnchorWorld = f32x4(0.0f, by - 0.22f, 0.0f, 0.0f);
+            rc.bones.push_back(bone);
+        }
+        rc.dirty = true;
+        outEntities.push_back(ragEnt.id());
+    }
+
+    {
+        Entity fluidEnt = world.createEntity();
+        mut TransformComponent xf = fluidEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(0.4f, 0.45f, -7.8f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut FluidVolumeComponent fvc = fluidEnt.addComponent<FluidVolumeComponent>();
+        fvc.volume.shape = FluidVolumeShape::BoxAabb;
+        fvc.volume.bounds = Aabb3D(VectorSingle(-1.5f, -0.45f, -1.5f, 0.0f), VectorSingle(1.5f, 0.45f, 1.5f, 0.0f));
+        fvc.volume.flowVelocity = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        fvc.volume.density = 1200.0f;
+        outEntities.push_back(fluidEnt.id());
+
+        outEntities.push_back(SpawnPhysicsDynamicBox(world, VectorSingle(0.2f, 0.9f, -7.8f, 0.0f), VectorSingle(0.35f, 0.35f, 0.35f, 0.0f), 0.4f, 0.1f, boxModelName, whiteMatName));
+    }
+
+    {
+        Entity ffEnt = world.createEntity();
+        mut TransformComponent xf = ffEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(3.0f, 1.3f, -8.8f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut ForceFieldComponent ffc = ffEnt.addComponent<ForceFieldComponent>();
+        ffc.field.type = ForceFieldType::Vortex;
+        ffc.field.useBounds = true;
+        ffc.field.bounds = Aabb3D(VectorSingle(-1.8f, -1.2f, -1.8f, 0.0f), VectorSingle(1.8f, 1.2f, 1.8f, 0.0f));
+        ffc.field.axis = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        ffc.field.radius = 2.0f;
+        ffc.field.strength = 12.0f;
+        outEntities.push_back(ffEnt.id());
+
+        outEntities.push_back(SpawnPhysicsDynamicSphere(world, VectorSingle(2.4f, 1.5f, -8.8f, 0.0f), VectorSingle(0.25f, 0.25f, 0.25f, 0.0f), VectorSingle(0.0f, 0.0f, 1.5f, 0.0f), 0.5f, 0.3f, 0.3f, sphereModelName, whiteMatName));
+    }
+
+    {
+        Entity artEnt = world.createEntity();
+        mut TransformComponent xf = artEnt.addComponent<TransformComponent>();
+        xf.position = f32x4(-3.8f, 2.3f, -6.8f, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut ArticulationComponent ac = artEnt.addComponent<ArticulationComponent>();
+        ac.isFixedBase = true;
+        for(u32 li = 0u; li < 2u; ++li){
+            ArticulationLinkDef link;
+            if(li == 0u){
+                link.parentIndex = s_NullIndex;
+                link.parentToJoint.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            }
+            else{
+                link.parentIndex = 0u;
+                link.parentToJoint.position = f32x4(0.0f, -0.55f, 0.0f, 0.0f);
+            }
+            link.jointType = ArticulationJointType::Revolute;
+            link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+            link.jointToChild.position = f32x4(0.0f, -0.35f, 0.0f, 0.0f);
+            link.mass = 1.0f;
+            ac.links.push_back(link);
+        }
+        ac.dirty = true;
+        outEntities.push_back(artEnt.id());
+    }
+
+    {
+        Entity softEnt = world.createEntity();
+        softEnt.addComponent<TransformComponent>();
+        mut SoftBodyComponent sbc = softEnt.addComponent<SoftBodyComponent>();
+        sbc.softBody = CreateClothGrid(
+            VectorSingle(-2.0f, 2.5f, -7.8f, 0.0f),
+            VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, -1.0f, 0.0f, 0.0f),
+            6u,
+            5u,
+            0.25f,
+            0.25f,
+            0.0005f,
+            0.002f
+        );
+        sbc.softBody.particles[0u].invMass = 0.0f;
+        sbc.softBody.particles[5u].invMass = 0.0f;
+        outEntities.push_back(softEnt.id());
+    }
+}
+
 TestbedPhysicsHudStats QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle){
     TestbedPhysicsHudStats outStats = TestbedPhysicsHudStats();
     const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
@@ -748,6 +1484,10 @@ TestbedPhysicsHudStats QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle
         outStats.gpuSolvedIslandCount = stats.gpuSolvedIslandCount;
         outStats.backendUsed = cast<u8>(stats.backendUsed);
         outStats.stepMs = physicsSystem.value().lastStepMs();
+        outStats.broadphaseMs = stats.broadphaseMs;
+        outStats.narrowphaseMs = stats.narrowphaseMs;
+        outStats.solveMs = stats.solveMs;
+        outStats.ccdMs = stats.ccdMs;
     }
     return outStats;
 }
@@ -836,7 +1576,13 @@ b8 InstantiateSceneSubsystemsEntities(
     mut NotNullUniquePtr<World> worldHandle,
     mut InstantiatedSceneEntities outInstantiated
 ){
-    return sceneSubsystems.instantiateEntities(worldHandle.deref(), outInstantiated);
+    const b8 ok = sceneSubsystems.instantiateEntities(worldHandle.deref(), outInstantiated);
+    if(ok){
+        const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+        if(physicsSystem.has_value())
+            physicsSystem.value().registerNamedSceneEntities(outInstantiated);
+    }
+    return ok;
 }
 
 AssetRef<Texture> ResolveUiGallerySkinTextureRef(in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
@@ -858,11 +1604,16 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
 
 PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     in PhysicsDebugDrawOptions options,
+    in b8 drawPhysicsWorldDebug,
+    in TestbedGrabState grabState,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
     mut PhysicsDebugDrawScratch debugScratch,
     mut Vector<PaintLineSegment> screenLines
 ){
+    if(!drawPhysicsWorldDebug && !grabState.active)
+        return PhysicsDebugDrawStats();
+
     mut World world = worldHandle.deref();
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
     if(!physicsSystem.has_value())
@@ -884,8 +1635,24 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     if(!projector.valid())
         return PhysicsDebugDrawStats();
 
-    TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
-    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
+    PhysicsDebugDrawStats stats;
+    if(drawPhysicsWorldDebug){
+        TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
+        stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
+    }
+    else{
+        screenLines.clear();
+    }
+    if(grabState.active){
+        VectorSingle grabSeg(0.0f);
+        if(projector.projectSegment(VectorSingle(grabState.grabWorldPoint), VectorSingle(grabState.targetWorldPoint), grabSeg)){
+            PaintLineSegment grabLine;
+            grabLine.start = Point(grabSeg.x, grabSeg.y);
+            grabLine.end = Point(grabSeg.z, grabSeg.w);
+            grabLine.color = Color(0.98f, 0.92f, 0.20f, 1.0f);
+            screenLines.push_back(grabLine);
+        }
+    }
     if(!screenLines.empty()){
         f32 lineThickness = 1.5f;
         if(IsFinite(VectorSingle(options.lineThickness)) && options.lineThickness > 0.0f)

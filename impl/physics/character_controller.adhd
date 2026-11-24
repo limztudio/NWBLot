@@ -22,6 +22,7 @@ enum<u8> CharacterGroundState{
 
 class CharacterContactInfo{
     public ShapeId shapeId;
+    public u32 triangleIndex = s_NullIndex;
     public BodyId bodyId;
     public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
@@ -61,9 +62,13 @@ class CharacterController{
     public CharacterGroundState groundState = CharacterGroundState::InAir;
     public BodyId groundBodyId;
     public ShapeId groundShapeId;
+    public u32 groundTriangleIndex = s_NullIndex;
+    public SurfaceMaterial groundMaterial;
+    public b8 hitCeiling = false;
     public Transform3D prevGroundTransform;
     public b8 hasPrevGroundTransform = false;
     public Vector<CharacterContactInfo> activeContacts;
+    private f32x4 m_groundConveyorVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     private Vector<ShapeOverlapHit> m_scratchHits;
     private Vector<CharacterContactInfo> m_scratchStepContacts;
     private f32 m_cachedSlopeAngleRad = -1.0f;
@@ -100,7 +105,7 @@ class CharacterController{
         }
     }
 
-    public void init(in CharacterControllerDef inDef, in VectorSingle startPosition, in VectorSingle startRotation){
+    private void sanitizeAndRefreshDef(in CharacterControllerDef inDef){
         this.def = inDef;
         if(this.def.radius < 0.05f)
             this.def.radius = 0.05f;
@@ -114,6 +119,18 @@ class CharacterController{
             this.def.maxConstraintIterations = 1u;
         const VectorSingle upVec = SafeNormalizeVec3(VectorSingle(this.def.up), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         this.def.up = f32x4(upVec, 0.0f);
+        this.m_cachedSlopeAngleRad = -1.0f;
+        this.syncWalkableCos();
+        this.m_cachedProxyRadius = -1.0f;
+        this.syncCachedProxies();
+    }
+
+    public void applyDefInPlace(in CharacterControllerDef inDef){
+        this.sanitizeAndRefreshDef(inDef);
+    }
+
+    public void init(in CharacterControllerDef inDef, in VectorSingle startPosition, in VectorSingle startRotation){
+        this.sanitizeAndRefreshDef(inDef);
         this.position = f32x4(startPosition, 0.0f);
         this.rotation = f32x4(SafeNormalizeQuat(startRotation));
         this.linearVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -123,13 +140,13 @@ class CharacterController{
         this.groundState = CharacterGroundState::InAir;
         this.groundBodyId = BodyId();
         this.groundShapeId = ShapeId();
+        this.groundTriangleIndex = s_NullIndex;
+        this.groundMaterial = SurfaceMaterial();
+        this.hitCeiling = false;
+        this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.prevGroundTransform = Transform3D();
         this.hasPrevGroundTransform = false;
         this.activeContacts.clear();
-        this.m_cachedSlopeAngleRad = -1.0f;
-        this.syncWalkableCos();
-        this.m_cachedProxyRadius = -1.0f;
-        this.syncCachedProxies();
     }
 
     public VectorSingle upDirection()const{
@@ -195,6 +212,7 @@ class CharacterController{
     private void recordContactTo(
         in PhysicsWorld world,
         in ShapeId shapeId,
+        in u32 triIdx,
         in VectorSingle point,
         in VectorSingle outNormal,
         in f32 depth,
@@ -202,6 +220,7 @@ class CharacterController{
     )const{
         for(usize i = 0u; i < dstContacts.size(); ++i){
             if(dstContacts[i].shapeId == shapeId){
+                dstContacts[i].triangleIndex = triIdx;
                 dstContacts[i].point = f32x4(point, 0.0f);
                 dstContacts[i].normal = f32x4(outNormal, 0.0f);
                 dstContacts[i].penetrationDepth = SimdMax(dstContacts[i].penetrationDepth, depth);
@@ -211,6 +230,7 @@ class CharacterController{
         }
         CharacterContactInfo hitInfo;
         hitInfo.shapeId = shapeId;
+        hitInfo.triangleIndex = triIdx;
         const Expected<BodyId> bodyRes = world.tryGetShapeBody(shapeId);
         if(bodyRes.has_value())
             hitInfo.bodyId = bodyRes.value();
@@ -261,7 +281,7 @@ class CharacterController{
                 in ShapeOverlapHit ov = this.m_scratchHits[i];
                 const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), this.upDirection());
                 const f32 depth = ov.penetrationDepth;
-                this.recordContactTo(world, ov.shapeId, VectorSingle(ov.pointB), outN, depth, this.activeContacts);
+                this.recordContactTo(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), outN, depth, this.activeContacts);
                 if(depth > maxPen)
                     maxPen = depth;
                 if(depth > 1.0e-5f)
@@ -275,24 +295,26 @@ class CharacterController{
     }
 
     private VectorSingle slideMoveFrom(
-        mut PhysicsWorld world,
         in VectorSingle startPos,
         in VectorSingle initialDelta,
         in f32 dt,
         in b8 pushBodies,
+        mut PhysicsWorld world,
         mut Vector<CharacterContactInfo> dstContacts,
         mut b8 outHitObstacle,
         mut b8 outHitSteepWall,
+        mut b8 outHitCeiling,
         mut VectorSingle outEndNormal
     ){
         outHitObstacle = false;
         outHitSteepWall = false;
+        outHitCeiling = false;
         outEndNormal = this.upDirection();
+        const VectorSingle up = this.upDirection();
         VectorSingle curPos = startPos;
         VectorSingle remDelta = initialDelta;
         f32 remFrac = 1.0f;
-        VectorSingle firstPlaneN(0.0f);
-        b8 hasFirstPlane = false;
+        FixedVector<f32x4, 4u> clipPlanes;
 
         for(u32 iter = 0u; iter < this.def.maxCollisionIterations; ++iter){
             const f32 remLenSq = Vector3LengthSq(VectorSingle(remDelta, 0.0f)).x;
@@ -306,9 +328,12 @@ class CharacterController{
             }
 
             outHitObstacle = true;
-            const VectorSingle n = SafeNormalizeVec3(VectorSingle(hit.normal), this.upDirection());
+            const VectorSingle n = SafeNormalizeVec3(VectorSingle(hit.normal), up);
             outEndNormal = n;
             const b8 walkable = this.isWalkableNormal(n);
+            const f32 nDotUp = Vector3Dot(n, up).x;
+            if(nDotUp < -0.5f)
+                outHitCeiling = true;
             if(!walkable)
                 outHitSteepWall = true;
 
@@ -323,26 +348,83 @@ class CharacterController{
 
             if(pushBodies)
                 this.pushDynamicBody(world, hit.shapeId, VectorSingle(hit.point), n, approachVel, dt);
-            this.recordContactTo(world, hit.shapeId, VectorSingle(hit.point), n, 0.0f, dstContacts);
+            this.recordContactTo(world, hit.shapeId, hit.triangleIndex, VectorSingle(hit.point), n, 0.0f, dstContacts);
 
-            const f32 intoN = Vector3Dot(remDelta, n).x;
-            if(intoN < 0.0f)
-                remDelta = remDelta - n * intoN;
+            VectorSingle clipN = n;
+            if(!walkable && nDotUp > 0.05f){
+                const VectorSingle nHoriz = SafeNormalizeVec3(n - up * nDotUp, n);
+                clipN = nHoriz;
+                const f32 intoH = Vector3Dot(remDelta, nHoriz).x;
+                if(intoH < 0.0f)
+                    remDelta = remDelta - nHoriz * intoH;
+                const f32 remUp = Vector3Dot(remDelta, up).x;
+                if(remUp > 0.0f)
+                    remDelta = remDelta - up * remUp;
+            }
+            else{
+                const f32 intoN = Vector3Dot(remDelta, n).x;
+                if(intoN < 0.0f)
+                    remDelta = remDelta - n * intoN;
+            }
 
             if(!walkable){
-                if(!hasFirstPlane){
-                    firstPlaneN = n;
-                    hasFirstPlane = true;
+                b8 dupPlane = false;
+                for(usize pi = 0u; pi < clipPlanes.size(); ++pi){
+                    if(Vector3Dot(VectorSingle(clipPlanes[pi]), clipN).x >= 0.999f){
+                        dupPlane = true;
+                        break;
+                    }
                 }
-                else{
-                    const f32 dotPlanes = Vector3Dot(firstPlaneN, n).x;
-                    if(dotPlanes < 0.99f){
-                        const VectorSingle crease = SafeNormalizeVec3(Cross(firstPlaneN, n), VectorSingle(0.0f));
-                        const f32 creaseLenSq = Vector3LengthSq(VectorSingle(crease, 0.0f)).x;
-                        if(creaseLenSq > 1.0e-6f)
+                if(!dupPlane && clipPlanes.size() < 4u)
+                    clipPlanes.push_back(f32x4(clipN, 0.0f));
+
+                if(clipPlanes.size() == 2u){
+                    const VectorSingle p0 = VectorSingle(clipPlanes[0u]);
+                    const VectorSingle p1 = VectorSingle(clipPlanes[1u]);
+                    if(Vector3Dot(p0, p1).x < 0.99f){
+                        const VectorSingle crease = SafeNormalizeVec3(Cross(p0, p1), VectorSingle(0.0f));
+                        if(Vector3LengthSq(VectorSingle(crease, 0.0f)).x > 1.0e-6f)
                             remDelta = crease * Vector3Dot(remDelta, crease).x;
                         else
                             remDelta = VectorSingle(0.0f);
+                    }
+                }
+                else if(clipPlanes.size() >= 3u){
+                    const usize pCount = clipPlanes.size();
+                    b8 validSlide = true;
+                    for(usize pi = 0u; pi < pCount; ++pi){
+                        if(Vector3Dot(remDelta, VectorSingle(clipPlanes[pi])).x < -1.0e-4f){
+                            validSlide = false;
+                            break;
+                        }
+                    }
+                    if(!validSlide){
+                        b8 foundCrease = false;
+                        for(usize pa = 0u; pa < pCount && !foundCrease; ++pa){
+                            const VectorSingle planeA = VectorSingle(clipPlanes[pa]);
+                            for(usize pb = pa + 1u; pb < pCount && !foundCrease; ++pb){
+                                const VectorSingle planeB = VectorSingle(clipPlanes[pb]);
+                                if(Vector3Dot(planeA, planeB).x >= 0.99f)
+                                    continue;
+                                const VectorSingle crease = SafeNormalizeVec3(Cross(planeA, planeB), VectorSingle(0.0f));
+                                if(Vector3LengthSq(VectorSingle(crease, 0.0f)).x <= 1.0e-6f)
+                                    continue;
+                                const VectorSingle cand = crease * Vector3Dot(remDelta, crease).x;
+                                b8 candOk = (Vector3LengthSq(VectorSingle(cand, 0.0f)).x > 1.0e-10f);
+                                for(usize pk = 0u; pk < pCount && candOk; ++pk){
+                                    if(pk != pa && pk != pb && Vector3Dot(cand, VectorSingle(clipPlanes[pk])).x < -1.0e-4f)
+                                        candOk = false;
+                                }
+                                if(candOk){
+                                    remDelta = cand;
+                                    foundCrease = true;
+                                }
+                            }
+                        }
+                        if(!foundCrease){
+                            remDelta = VectorSingle(0.0f);
+                            break;
+                        }
                     }
                 }
             }
@@ -352,10 +434,10 @@ class CharacterController{
     }
 
     private b8 tryStepUp(
-        mut PhysicsWorld world,
         in VectorSingle startPos,
         in VectorSingle horizDelta,
         in f32 dt,
+        mut PhysicsWorld world,
         mut VectorSingle outSteppedPos
     ){
         if(this.def.stepUpHeight <= 1.0e-4f)
@@ -373,17 +455,37 @@ class CharacterController{
         const VectorSingle topPos = startPos + up * lifted;
         b8 hitObs = false;
         b8 hitSteep = false;
+        b8 hitCeil = false;
         VectorSingle unusedN(0.0f);
-        const VectorSingle movedTop = this.slideMoveFrom(world, topPos, horizDelta, dt, false, this.m_scratchStepContacts, hitObs, hitSteep, unusedN);
+        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
-        const ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
+        ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
         if(!downHit.hit)
             return false;
 
-        const VectorSingle landN = SafeNormalizeVec3(VectorSingle(downHit.normal), up);
-        if(!this.isWalkableNormal(landN))
-            return false;
+        VectorSingle landN = SafeNormalizeVec3(VectorSingle(downHit.normal), up);
+        if(!this.isWalkableNormal(landN)){
+            if(Vector3Dot(landN, up).x <= 0.05f)
+                return false;
+            const f32 horizLenSq = Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x;
+            if(horizLenSq <= 1.0e-10f)
+                return false;
+            const f32 effR = this.def.radius + this.def.skinWidth;
+            const f32 maxSlopeSin = SqrtFast(SimdMax(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos));
+            const f32 extraForward = effR * (1.0f - maxSlopeSin) + 0.02f;
+            const VectorSingle extraHoriz = horizDelta * (extraForward * Rsqrt(VectorSingle(horizLenSq)).x);
+            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
+            const ShapeCastHit probeDown = this.castCapsule(world, probeTop, downVec);
+            if(!probeDown.hit)
+                return false;
+            const VectorSingle probeLandN = SafeNormalizeVec3(VectorSingle(probeDown.normal), up);
+            if(!this.isWalkableNormal(probeLandN))
+                return false;
+            movedTop = probeTop;
+            downHit = probeDown;
+            landN = probeLandN;
+        }
 
         const VectorSingle candidate = movedTop + downVec * SimdMax(0.0f, downHit.fraction - 0.001f) + up * 0.002f;
         const VectorSingle deltaCand = candidate - startPos;
@@ -398,9 +500,32 @@ class CharacterController{
                 return false;
         }
 
-        this.recordContactTo(world, downHit.shapeId, VectorSingle(downHit.point), landN, 0.0f, this.m_scratchStepContacts);
+        this.recordContactTo(world, downHit.shapeId, downHit.triangleIndex, VectorSingle(downHit.point), landN, 0.0f, this.m_scratchStepContacts);
         outSteppedPos = candidate;
         return true;
+    }
+
+    private void updateGroundMaterialAndConveyor(in PhysicsWorld world, in ShapeId shapeId, in u32 triIdx, mut VectorSingle inoutGroundVel){
+        this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        if(!shapeId.valid() || !world.isValidShape(shapeId)){
+            this.groundMaterial = SurfaceMaterial();
+            return;
+        }
+        in Shape gShape = world.m_shapes[shapeId.index];
+        this.groundMaterial = world.resolveShapeContactMaterial(gShape, triIdx);
+        if(this.groundMaterial.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(this.groundMaterial.surfaceVelocity))){
+            VectorSingle shapeRot(0.0f, 0.0f, 0.0f, 1.0f);
+            if(this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
+                const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.groundBodyId);
+                if(xfRes.has_value())
+                    shapeRot = SafeNormalizeQuat(VectorSingle(xfRes.value().rotation));
+            }
+            if(gShape.hasLocalTransform())
+                shapeRot = SafeNormalizeQuat(QuaternionMultiply(shapeRot, VectorSingle(gShape.localTransform.rotation)));
+            const VectorSingle convW = Vector3Rotate(VectorSingle(this.groundMaterial.surfaceVelocity, 0.0f), shapeRot);
+            this.m_groundConveyorVelocity = f32x4(convW, 0.0f);
+            inoutGroundVel = inoutGroundVel + convW;
+        }
     }
 
     private void updateGroundState(in PhysicsWorld world){
@@ -414,11 +539,13 @@ class CharacterController{
             this.groundNormal = f32x4(n, 0.0f);
             this.groundPoint = groundHit.point;
             this.groundShapeId = groundHit.shapeId;
+            this.groundTriangleIndex = groundHit.triangleIndex;
             if(this.isWalkableNormal(n))
                 this.groundState = CharacterGroundState::OnGround;
             else
                 this.groundState = CharacterGroundState::OnSteepGround;
 
+            VectorSingle gVel(0.0f);
             const Expected<BodyId> bodyRes = world.tryGetShapeBody(groundHit.shapeId);
             if(bodyRes.has_value()){
                 this.groundBodyId = bodyRes.value();
@@ -432,20 +559,19 @@ class CharacterController{
 
                 const Expected<f32x4> lvRes = world.tryGetLinearVelocity(this.groundBodyId);
                 const Expected<f32x4> avRes = world.tryGetAngularVelocity(this.groundBodyId);
-                VectorSingle gVel(0.0f);
                 if(lvRes.has_value())
                     gVel = VectorSingle(lvRes.value());
                 if(avRes.has_value() && xfRes.has_value()){
                     const VectorSingle arm = VectorSingle(groundHit.point) - VectorSingle(xfRes.value().position);
                     gVel = gVel + Cross(VectorSingle(avRes.value()), arm);
                 }
-                this.groundVelocity = f32x4(gVel, 0.0f);
             }
             else{
                 this.groundBodyId = BodyId();
-                this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 this.hasPrevGroundTransform = false;
             }
+            this.updateGroundMaterialAndConveyor(world, groundHit.shapeId, groundHit.triangleIndex, gVel);
+            this.groundVelocity = f32x4(gVel, 0.0f);
             return;
         }
 
@@ -456,6 +582,7 @@ class CharacterController{
         VectorSingle bestN = up;
         VectorSingle bestPt = curPos;
         ShapeId bestShape;
+        u32 bestTriIdx = s_NullIndex;
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
             const VectorSingle n = SafeNormalizeVec3(-VectorSingle(this.m_scratchHits[i].normal), up);
             const f32 d = Vector3Dot(n, up).x;
@@ -465,6 +592,7 @@ class CharacterController{
                 bestN = n;
                 bestPt = VectorSingle(this.m_scratchHits[i].pointB);
                 bestShape = this.m_scratchHits[i].shapeId;
+                bestTriIdx = this.m_scratchHits[i].triangleIndex;
                 foundWalkable = this.isWalkableNormal(n);
             }
         }
@@ -472,8 +600,10 @@ class CharacterController{
             this.groundNormal = f32x4(bestN, 0.0f);
             this.groundPoint = f32x4(bestPt, 0.0f);
             this.groundShapeId = bestShape;
+            this.groundTriangleIndex = bestTriIdx;
             if(foundWalkable){
                 this.groundState = CharacterGroundState::OnGround;
+                VectorSingle gVel(0.0f);
                 const Expected<BodyId> bodyRes = world.tryGetShapeBody(bestShape);
                 if(bodyRes.has_value()){
                     this.groundBodyId = bodyRes.value();
@@ -487,24 +617,25 @@ class CharacterController{
 
                     const Expected<f32x4> lvRes = world.tryGetLinearVelocity(this.groundBodyId);
                     const Expected<f32x4> avRes = world.tryGetAngularVelocity(this.groundBodyId);
-                    VectorSingle gVel(0.0f);
                     if(lvRes.has_value())
                         gVel = VectorSingle(lvRes.value());
                     if(avRes.has_value() && xfRes.has_value()){
                         const VectorSingle arm = bestPt - VectorSingle(xfRes.value().position);
                         gVel = gVel + Cross(VectorSingle(avRes.value()), arm);
                     }
-                    this.groundVelocity = f32x4(gVel, 0.0f);
                 }
                 else{
                     this.groundBodyId = BodyId();
-                    this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                     this.hasPrevGroundTransform = false;
                 }
+                this.updateGroundMaterialAndConveyor(world, bestShape, bestTriIdx, gVel);
+                this.groundVelocity = f32x4(gVel, 0.0f);
             }
             else{
                 this.groundState = CharacterGroundState::NotSupported;
                 this.groundBodyId = BodyId();
+                this.groundMaterial = SurfaceMaterial();
+                this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 this.hasPrevGroundTransform = false;
             }
@@ -513,7 +644,10 @@ class CharacterController{
             this.groundState = CharacterGroundState::InAir;
             this.groundNormal = f32x4(up, 0.0f);
             this.groundShapeId = ShapeId();
+            this.groundTriangleIndex = s_NullIndex;
             this.groundBodyId = BodyId();
+            this.groundMaterial = SurfaceMaterial();
+            this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.hasPrevGroundTransform = false;
         }
@@ -526,6 +660,7 @@ class CharacterController{
         this.syncWalkableCos();
         this.syncCachedProxies();
         this.activeContacts.clear();
+        this.hitCeiling = false;
         const VectorSingle up = this.upDirection();
         const b8 wasOnGround = (this.groundState == CharacterGroundState::OnGround);
 
@@ -544,20 +679,53 @@ class CharacterController{
         this.depenetrate(world);
 
         const VectorSingle vel = VectorSingle(this.linearVelocity);
-        const VectorSingle fullDelta = vel * dt;
+        VectorSingle fullDelta = vel * dt;
+        if(wasOnGround)
+            fullDelta = fullDelta + VectorSingle(this.m_groundConveyorVelocity) * dt;
         const f32 vUp = Vector3Dot(fullDelta, up).x;
         const VectorSingle vertDelta = up * vUp;
         const VectorSingle horizDelta = fullDelta - vertDelta;
 
-        VectorSingle curPos = VectorSingle(this.position);
+        const VectorSingle curPos = VectorSingle(this.position);
         b8 hitObs = false;
         b8 hitSteep = false;
-        VectorSingle endN = up;
-        VectorSingle flatEndPos = this.slideMoveFrom(world, curPos, fullDelta, dt, true, this.activeContacts, hitObs, hitSteep, endN);
+        b8 hitCeil = false;
+        VectorSingle flatEndPos = curPos;
+
+        const f32 fullDistSq = Vector3LengthSq(VectorSingle(fullDelta, 0.0f)).x;
+        const f32 maxStepDist = SimdMax(0.1f, this.def.radius * 0.75f);
+        u32 moveSubSteps = 1u;
+        if(fullDistSq > maxStepDist * maxStepDist){
+            const f32 fullDist = SqrtFast(fullDistSq);
+            moveSubSteps = Clamp(cast<u32>(fullDist / maxStepDist) + 1u, 1u, 8u);
+        }
+        const f32 invSub = 1.0f / cast<f32>(moveSubSteps);
+        const VectorSingle subDelta = fullDelta * invSub;
+        const f32 subDt = dt * invSub;
+        for(u32 ms = 0u; ms < moveSubSteps; ++ms){
+            b8 subObs = false;
+            b8 subSteep = false;
+            b8 subCeil = false;
+            VectorSingle subEndN = up;
+            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, world, this.activeContacts, subObs, subSteep, subCeil, subEndN);
+            if(subObs)
+                hitObs = true;
+            if(subSteep)
+                hitSteep = true;
+            if(subCeil)
+                hitCeil = true;
+        }
+
+        if(hitCeil){
+            this.hitCeiling = true;
+            const f32 vUpVel = Vector3Dot(VectorSingle(this.linearVelocity), up).x;
+            if(vUpVel > 0.0f)
+                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) - up * vUpVel, 0.0f);
+        }
 
         if(wasOnGround && hitSteep && Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x > 1.0e-8f){
             VectorSingle steppedPos(0.0f);
-            if(this.tryStepUp(world, curPos, horizDelta, dt, steppedPos)){
+            if(this.tryStepUp(curPos, horizDelta, dt, world, steppedPos)){
                 const VectorSingle dFlat = flatEndPos - curPos;
                 const VectorSingle hFlat = dFlat - up * Vector3Dot(dFlat, up).x;
                 const VectorSingle dStep = steppedPos - curPos;
@@ -566,7 +734,7 @@ class CharacterController{
                     flatEndPos = steppedPos;
                     for(usize si = 0u; si < this.m_scratchStepContacts.size(); ++si){
                         in CharacterContactInfo sc = this.m_scratchStepContacts[si];
-                        this.recordContactTo(world, sc.shapeId, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
+                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
                     }
                 }
             }
@@ -602,10 +770,12 @@ class CharacterController{
             return false;
         const f32 oldR = this.def.radius;
         const f32 oldH = this.def.halfHeight;
+        const f32 footDelta = (newHalfHeight + newRadius) - (oldH + oldR);
+        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
         this.def.radius = newRadius;
         this.def.halfHeight = newHalfHeight;
         this.syncCachedProxies();
-        this.gatherOverlapsAt(world, VectorSingle(this.position), 0.0f);
+        this.gatherOverlapsAt(world, testPos, 0.0f);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
             if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
                 this.def.radius = oldR;
@@ -614,6 +784,7 @@ class CharacterController{
                 return false;
             }
         }
+        this.position = f32x4(testPos, 0.0f);
         return true;
     }
 }

@@ -58,6 +58,7 @@ class PhysicsSystem{
     private u64 m_lastStepTopologyVersion = 0u;
     private b8 m_useDirectWorldEvents = false;
     private b8 m_ecsEventsPopulated = false;
+    private b8 m_pendingSingleStep = false;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
@@ -1152,6 +1153,8 @@ class PhysicsSystem{
         const BodyId bodyId = found.value().bodyId;
         if(!this.m_physicsWorld.setBodyTransform(bodyId, position, rotation))
             return false;
+        if(this.m_physicsWorld.m_bodies[bodyId.index].type == BodyType::Static)
+            MarkStaticBodyMoved(bodyId, this.m_syncScratch.movedStaticBodyFlags, this.m_syncScratch.movedStaticBodyIndices);
         const Transform3D normXf(position, SafeNormalizeQuat(rotation));
         SetBodySyncedPose(bodyId, normXf, this.m_syncScratch.bodySyncedPoses);
         SetBodyTransformSnapshotBoth(bodyId, normXf, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
@@ -1219,6 +1222,14 @@ class PhysicsSystem{
             }
         }
         return true;
+    }
+
+    public void clearAccumulator(){
+        this.m_accumulator = 0.0f;
+    }
+
+    public void requestSingleStep(){
+        this.m_pendingSingleStep = true;
     }
 
     public b8 captureWorldSnapshot(mut Vector<u8> outBytes)const{
@@ -1474,7 +1485,7 @@ class PhysicsSystem{
         }
         for(usize ri = 0u; ri < removeRagdolls.size(); ++ri)
             this.m_activeRagdolls.erase(removeRagdolls[ri]);
-        WriteBackEcsRagdollRootPoses(this.m_world, this.m_physicsWorld);
+        WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, this.m_world);
 
         this.m_bodyTransformSnapshots.resize(bodyCount);
         this.m_bodyTransformSnapshotMeta.resize(bodyCount, 0u);
@@ -1498,12 +1509,14 @@ class PhysicsSystem{
         this.m_physicsWorld.consumePendingEndEvents(discardCE, discardSE);
         this.m_physicsWorld.consumePendingWakeEvents(discardBW);
         this.clearFrameEvents();
+        this.m_gpuDispatcher.invalidateWorldCaches();
         ClearDestroyedSlotOwners(this.m_syncScratch);
         this.m_syncScratch.bodySyncedPoses.clear();
         this.m_syncScratch.staticBodyPoseCache.clear();
         this.m_syncScratch.colliderScaleCache.clear();
         this.m_syncScratch.syncedParentNames.clear();
         this.m_syncScratch.characterSyncStates.clear();
+        this.m_syncScratch.softBodySyncStates.clear();
         this.m_syncScratch.articulationProxySyncStates.clear();
         this.m_syncScratch.pendingWriteBackBodyIndices.clear();
         this.m_syncScratch.prevAwakeWriteBackBodyIndices.clear();
@@ -1511,6 +1524,7 @@ class PhysicsSystem{
         this.m_syncScratch.dirtyPrevSnapshotBodyIndices.clear();
         this.m_syncScratch.drivenKinematicEntries.clear();
         this.m_syncScratch.kinematicTargets.clear();
+        ClearMovedStaticBodies(this.m_syncScratch.movedStaticBodyFlags, this.m_syncScratch.movedStaticBodyIndices);
         this.m_syncScratch.hasSyncedTopologyVersion = false;
         this.m_syncScratch.hasRagdollTopology = false;
         this.m_syncScratch.mutationVersionsValid = false;
@@ -1522,6 +1536,7 @@ class PhysicsSystem{
 
     public void setCollisionLayerMatrix(in CollisionLayerMatrix matrix){
         this.m_collisionLayerMatrix = matrix;
+        this.m_syncScratch.collisionLayerMatrixChanged = true;
     }
 
     public in CollisionLayerMatrix collisionLayerMatrix()const{
@@ -1535,6 +1550,7 @@ class PhysicsSystem{
         if(!loaded.has_value())
             return false;
         this.m_collisionLayerMatrix = loaded.value().deref().matrix;
+        this.m_syncScratch.collisionLayerMatrixChanged = true;
         return true;
     }
 
@@ -1564,6 +1580,7 @@ class PhysicsSystem{
 
     public void reset(){
         this.m_physicsWorld.clear();
+        this.m_gpuDispatcher.invalidateWorldCaches();
         this.m_collisionLayerMatrix = CollisionLayerMatrix();
         this.m_entityRecords.clear();
         this.m_entityJoints.clear();
@@ -1583,6 +1600,7 @@ class PhysicsSystem{
         this.clearFrameEvents();
         this.m_accumulator = 0.0f;
         this.m_interpolationAlpha = 1.0f;
+        this.m_pendingSingleStep = false;
         this.m_lastStepStats = WorldStepStats();
         this.m_lastStepMs = 0.0;
         this.m_lastStepTopologyVersion = 0u;
@@ -1657,6 +1675,7 @@ class PhysicsSystem{
         b8 hasDrivenKinematic = false;
         SyncEcsEntitiesToPhysicsWorld(
             this.m_assetManager,
+            this.m_collisionLayerMatrix,
             this.m_assetCache,
             world,
             this.m_physicsWorld,
@@ -1684,7 +1703,10 @@ class PhysicsSystem{
             this.m_syncScratch.deadRagdolls
         );
 
-        if(paused || !IsFinite(VectorSingle(delta)) || delta <= 0.0f){
+        const b8 runSingleStep = this.m_pendingSingleStep;
+        this.m_pendingSingleStep = false;
+
+        if((paused && !runSingleStep) || (!runSingleStep && (!IsFinite(VectorSingle(delta)) || delta <= 0.0f))){
             if(this.m_physicsWorld.m_topologyVersion != this.m_lastStepTopologyVersion){
                 this.m_lastStepStats = WorldStepStats();
                 this.m_lastStepMs = 0.0;
@@ -1706,12 +1728,19 @@ class PhysicsSystem{
             return Expected<void, CpuTaskAdmissionError>();
         }
 
-        const f32 clampedDelta = SimdMin(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
-        this.m_accumulator += clampedDelta;
+        u32 maxAllowedSteps = maxSubStepsPerFrame;
+        if(runSingleStep){
+            this.m_accumulator = fixedDt;
+            maxAllowedSteps = 1u;
+        }
+        else{
+            const f32 clampedDelta = SimdMin(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
+            this.m_accumulator += clampedDelta;
+        }
 
         u32 plannedSteps = 0u;
         f32 simAccum = this.m_accumulator;
-        while(simAccum + 1.0e-6f >= fixedDt && plannedSteps < maxSubStepsPerFrame){
+        while(simAccum + 1.0e-6f >= fixedDt && plannedSteps < maxAllowedSteps){
             if(simAccum >= fixedDt)
                 simAccum -= fixedDt;
             else
@@ -1728,7 +1757,7 @@ class PhysicsSystem{
 
         mut CpuTaskScheduler scheduler = world.taskScheduler();
         u32 stepsExecuted = 0u;
-        while(this.m_accumulator + 1.0e-6f >= fixedDt && stepsExecuted < maxSubStepsPerFrame){
+        while(this.m_accumulator + 1.0e-6f >= fixedDt && stepsExecuted < maxAllowedSteps){
             if(this.m_accumulator >= fixedDt)
                 this.m_accumulator -= fixedDt;
             else
@@ -1774,7 +1803,13 @@ class PhysicsSystem{
             ++stepsExecuted;
         }
 
-        this.m_interpolationAlpha = SimdClamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
+        if(runSingleStep){
+            this.m_accumulator = 0.0f;
+            this.m_interpolationAlpha = 1.0f;
+        }
+        else{
+            this.m_interpolationAlpha = SimdClamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
+        }
 
         if(stepsExecuted > 0u){
             if(stepsExecuted == 1u){
@@ -1808,7 +1843,7 @@ class PhysicsSystem{
                     this.m_bodyTransformSnapshotMeta
                 );
             }
-            WriteBackEcsRagdollRootPoses(world, this.m_physicsWorld);
+            WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, world);
             if(interpolateTransforms)
                 ApplyInterpolatedCharacterTransformsToEcs(world, this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha);
         }

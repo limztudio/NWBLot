@@ -43,6 +43,8 @@ Paired encoded texture payloads stay with the texture cooker and are not added a
 separate inputs. Its `--output` is a UTF-8 file containing one input path per line. Explicit seed paths
 are retained, and transitive dependencies add their resolved provider paths.
 
+Entity metadata may provide a `name` alongside its required component references. A supplied name must be nonempty and unpadded; scene loading rejects duplicate resolved entity names. `ActiveSceneSubsystems::instantiateEntitiesWithResult()` returns the created entity IDs and a name lookup, and rolls back entities created by that call if instantiation fails. Call `destroyEntities()` when the owning code removes those instantiated entities.
+
 ```console
 python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets project/assets --output dependencies.list
 ```

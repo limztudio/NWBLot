@@ -104,7 +104,7 @@ permits positions from zero through EOF, and rejects invalid origins, overflow, 
 without changing the cursor. `closeFile` clears the cursor. Cursors do not retain their filesystem; discard
 all cursors when unmounting, remounting, or destroying it.
 
-The default backend serializes individual operations using its internal `Futex`. A cursor is caller-owned
+The default backend uses a reader/writer lock for mutable volume state: reads can share the lock and writes take it exclusively. Some read paths omit the lock for an immutable read-only mount. A cursor is caller-owned
 and requires caller synchronization when shared between threads. Whole-container reads consist of a size
 query followed by a range read; clients requiring a stable snapshot must prevent concurrent replacement or
 removal of that file for the complete operation. Runtime asset volumes are normally immutable while mounted.

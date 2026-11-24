@@ -150,9 +150,11 @@ visible views; the cache does not evict entries within an atlas identity.
 
 ## Native coverage fallback
 
-`TextService::paint()` reads the builder's saved display metrics. It rasterizes at
-`ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with hinting disabled, while layout
-measurement stays in logical units. Raster bitmap bounds are converted back using
+`TextService::paint()` reads the builder's saved display metrics. Without an active
+transform, it rasterizes at `ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with
+hinting disabled. An active transform adjusts the raster scale within supported
+pixel-size bounds and uses transformed bounds for visibility; a singular transform
+emits no glyphs. Layout measurement stays in logical units. Raster bitmap bounds are converted back using
 the actual raster scale, then their top-left edges are snapped to the physical pixel
 grid before drawing. Shaping positions, caret geometry, and baked SDF quads remain
 fractional. Shaped ink bounds and raster pixel bounds can differ by the bitmap's

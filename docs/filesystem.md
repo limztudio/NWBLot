@@ -76,7 +76,10 @@ empty directory and only publishes it after successful finalization.
 `writeFile(path, data, bytes)` replaces the complete file; it does not write at a cursor. Empty files are valid
 and use a null pointer with zero bytes. `writeFileDeferred` has the same payload-copy contract, but can defer
 metadata publication until `flush` or `unmount`. Callers may reuse their buffer immediately after either
-write returns. `flush` persists pending writes; the volume backend also compacts and trims its segments.
+write returns. `writeFilesDeferred(items, count)` processes a batch of deferred writes; zero items succeed,
+and a nonzero count requires a valid item array. Failure can leave earlier items deferred, so the batch is
+not an atomic transaction. The volume backend holds its exclusive lock across the batch. `flush` persists
+pending writes; the volume backend also compacts and trims its segments.
 `unmount` persists pending metadata before releasing the mount and reports failure; a failed unmount keeps
 the mounted state and pending metadata available for an explicit retry. The volume backend also flushes
 pending metadata before a remount. Writable owners must check `flush` or `unmount` before reporting success

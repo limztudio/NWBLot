@@ -132,7 +132,7 @@
 ## 4. Parameters, `const`, Control Flow, Exceptions, Diagnostics & Split Methods
 
 - **Parameter Passing Modes**:
-  - Every parameter must declare its mode; default parameter values are prohibited (use overloads):
+  - Every typed parameter must declare its mode. Authored callables prohibit default parameter values (use overloads); typed `extern` declarations may represent C++ defaults with placeholders such as `= {}`, and parameters after the first default must also have defaults:
     - `in T`: Read-only borrow (`CallTraits<T>::param_type`: value for small scalars/handles/SIMD vectors, `const T&` for larger types).
     - `mut T`: Mutable reference (`T&`); call sites must supply a mutable lvalue.
     - `in borrow T name`: Retained read-only reference; generated C++ always passes `const T&` even for small types. Inline constructors infer this automatically when assigning an `in` parameter or its subobject into a retained `in` field; out-of-line declarations and forwarding wrappers declare `in borrow` explicitly. Callers must pass a directly bindable lvalue with sufficient lifetime.

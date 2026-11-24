@@ -218,7 +218,7 @@ Rows share a uniform height derived from the active font, display-scale visual t
 
 ## Combo selection
 
-`Builder::comboBox(key, source, ComboState&, ComboOptions)` uses the same keyed source as `virtualList`. Keep source/state alive and unchanged through the enclosing panel/window end. The component declares its field and internal popup/list identities, consumes input from the last accepted layout during declaration, and automatically paints the popup after arranging the containing scope. `ComboResult::committed` and `selectionChanged` are available immediately; the field text reflects that accepted selection in the same callback.
+`Builder::comboBox(key, source, ComboState&, ComboOptions)` uses the same keyed source as `virtualList`. Keep source/state alive and unchanged through the enclosing panel/window end or outermost popup end. The component declares its field and internal popup/list identities, consumes input from the last accepted layout during declaration, and automatically paints the popup after arranging the containing scope. `ComboResult::committed` and `selectionChanged` are available immediately; the field text reflects that accepted selection in the same callback.
 
 The popup previews enabled rows with Arrow/Page/Home/End, wheel and thumb scrolling. Enter/Space or a row release commits; Escape/outside/native focus loss cancels. Selected keys remain stable through reorder, and openings ensure the committed row is visible without walking the full dataset. Omission/recreation, source replacement and explicit state changes retire previous input lifetimes. Skin appearance, exact loan/lifetime rules, popup Tab behavior and current composition limits are documented in [the combo contract](widgets/README.md#combo-boxes).
 

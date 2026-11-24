@@ -17,12 +17,8 @@ function(nwb_disable_vendor_warnings target)
     endif()
 endfunction()
 
-# RGD and its vendored AMD dependencies are C/C++ static libraries linked into engine targets, so their MSVC
-# runtime (debug vs release CRT) and the _DEBUG-driven _ITERATOR_DEBUG_LEVEL must match the engine's per-config
-# choice from nwb_apply_codegen — otherwise lld-link rejects the mix via /failifmismatch ('_ITERATOR_DEBUG_LEVEL'
-# / 'RuntimeLibrary'). This applies ONLY the CRT + debug-macro half of nwb_apply_codegen, deliberately not its
-# warning / -fno-rtti flags, which would break the vendored code's RTTI and exception use. Config names are the
-# engine's custom dbg/opt/fin (CMake's default MSVC_RUNTIME_LIBRARY keys off 'Debug', so it would mis-select).
+# Match the engine CRT and iterator-debug level to avoid lld-link mismatches.
+# Keep vendor warning and RTTI settings; the engine uses dbg/opt/fin configurations.
 function(nwb_match_engine_runtime target)
     if(NOT TARGET ${target})
         return()

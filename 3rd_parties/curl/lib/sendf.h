@@ -194,7 +194,7 @@ struct Curl_cwriter *Curl_cwriter_get_by_name(struct Curl_easy *data,
 #define Curl_cwriter_is_paused(d)     ((bool)(d)->req.writer.paused)
 
 /**
- * Unpause client writer and flush any buffered date to the client.
+ * Unpause client writer and flush any buffered data to the client.
  */
 CURLcode Curl_cwriter_unpause(struct Curl_easy *data);
 
@@ -220,7 +220,7 @@ typedef enum {
 
 /* Client Reader Type, provides the implementation */
 struct Curl_crtype {
-  const char *name;        /* writer name. */
+  const char *name;        /* reader name. */
   CURLcode (*do_init)(struct Curl_easy *data, struct Curl_creader *reader);
   CURLcode (*do_read)(struct Curl_easy *data, struct Curl_creader *reader,
                       char *buf, size_t blen, size_t *nread, bool *eos);
@@ -249,8 +249,8 @@ typedef enum {
 
 /* Client reader instance, allocated on creation.
  * `void *ctx` is the pointer from the allocation of
- * the `struct Curl_cwriter` itself. This is suitable for "downcasting"
- * by the writers implementation. See https://github.com/curl/curl/pull/13054
+ * the `struct Curl_creader` itself. This is suitable for "downcasting"
+ * by the reader implementation. See https://github.com/curl/curl/pull/13054
  * for the alignment problems that arise otherwise.
  */
 struct Curl_creader {
@@ -261,8 +261,7 @@ struct Curl_creader {
 };
 
 /**
- * Default implementations for do_init, do_write, do_close that
- * do nothing and pass the data through.
+ * Default reader callbacks; do_read passes data through.
  */
 CURLcode Curl_creader_def_init(struct Curl_easy *data,
                                struct Curl_creader *reader);
@@ -301,7 +300,7 @@ CURLcode Curl_creader_clear_eos(struct Curl_easy *data,
 
 /**
  * Create a new creader instance with given type and phase. Is not
- * inserted into the writer chain by this call.
+ * inserted into the reader chain by this call.
  * Invokes `reader->do_init()`.
  */
 CURLcode Curl_creader_create(struct Curl_creader **preader,

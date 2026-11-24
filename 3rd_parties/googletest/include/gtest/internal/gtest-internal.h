@@ -283,9 +283,7 @@ class [[nodiscard]] FloatingPoint {
   // to be considered equal.
   //
   // The maximum error of a single floating-point operation is 0.5
-  // units in the last place.  On Intel CPU's, all floating-point
-  // calculations are done with 80-bit precision, while double has 64
-  // bits.  Therefore, 4 should be enough for ordinary use.
+  // units in the last place.
   //
   // See the following article for more details on ULP:
   // https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
@@ -893,30 +891,8 @@ class [[nodiscard]] HasDebugStringAndShortDebugString {
       HasDebugStringType::value && HasShortDebugStringType::value;
 };
 
-// When the compiler sees expression IsContainerTest<C>(0), if C is an
-// STL-style container class, the first overload of IsContainerTest
-// will be viable (since both C::iterator* and C::const_iterator* are
-// valid types and NULL can be implicitly converted to them).  It will
-// be picked over the second overload as 'int' is a perfect match for
-// the type of argument 0.  If C::iterator or C::const_iterator is not
-// a valid type, the first overload is not viable, and the second
-// overload will be picked.  Therefore, we can determine whether C is
-// a container class by checking the type of IsContainerTest<C>(0).
-// The value of the expression is insignificant.
-//
-// In C++11 mode we check the existence of a const_iterator and that an
-// iterator is properly implemented for the container.
-//
-// For pre-C++11 that we look for both C::iterator and C::const_iterator.
-// The reason is that C++ injects the name of a class as a member of the
-// class itself (e.g. you can refer to class iterator as either
-// 'iterator' or 'iterator::iterator').  If we look for C::iterator
-// only, for example, we would mistakenly think that a class named
-// iterator is an STL container.
-//
-// Also note that the simpler approach of overloading
-// IsContainerTest(typename C::const_iterator*) and
-// IsContainerTest(...) doesn't work with Visual Age C++ and Sun C++.
+// Detect containers with a const iterator and usable begin/end operations.
+// Overload resolution selects IsNotContainer when those checks fail.
 typedef int IsContainer;
 template <class C,
           class Iterator = decltype(::std::declval<const C&>().begin()),
@@ -962,10 +938,6 @@ struct IsRecursiveContainerImpl;
 template <typename C>
 struct IsRecursiveContainerImpl<C, false> : public std::false_type {};
 
-// Since the IsRecursiveContainerImpl depends on the IsContainerTest we need to
-// obey the same inconsistencies as the IsContainerTest, namely check if
-// something is a container is relying on only const_iterator in C++11 and
-// is relying on both const_iterator and iterator otherwise
 template <typename C>
 struct IsRecursiveContainerImpl<C, true> {
   using value_type = decltype(*std::declval<typename C::const_iterator>());
@@ -1088,7 +1060,6 @@ class [[nodiscard]] NativeArray {
     InitCopy(array, count);
   }
 
-  // Copy constructor.
   NativeArray(const NativeArray& rhs) {
     (this->*rhs.clone_)(rhs.array_, rhs.size_);
   }

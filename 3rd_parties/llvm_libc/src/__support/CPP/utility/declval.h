@@ -15,7 +15,6 @@
 namespace LIBC_NAMESPACE_DECL {
 namespace cpp {
 
-// declval
 template <typename T> cpp::add_rvalue_reference_t<T> declval() {
   static_assert(cpp::always_false<T>,
                 "declval not allowed in an evaluated context");

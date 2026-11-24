@@ -301,8 +301,6 @@ struct is_wrapper<T, conditional_t<false, void_t<typename T::value_type>, void>>
 // Even though in C++26 std::complex gains a std::tuple interface, for our purposes we treat is as NOT a tuple
 template <typename S> class is_tuple_like {
     template <typename SS, enable_if_t<!is_complex<SS>::value, detail::enabler> = detail::dummy>
-    // static auto test(int)
-    //     -> decltype(std::conditional<(std::tuple_size<SS>::value > 0), std::true_type, std::false_type>::type());
     static auto test(int) -> decltype(std::tuple_size<typename std::decay<SS>::type>::value, std::true_type{});
     template <typename> static auto test(...) -> std::false_type;
 

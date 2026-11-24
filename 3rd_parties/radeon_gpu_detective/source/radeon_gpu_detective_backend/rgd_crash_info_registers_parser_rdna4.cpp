@@ -72,7 +72,6 @@ bool CrashInfoRegistersParserRdna4::ParseWaveInfoRegisters(const CrashData& kmd_
                         break;
 
                     default:
-                        // Should not reach here.
                         assert(false);
                     }
                 }

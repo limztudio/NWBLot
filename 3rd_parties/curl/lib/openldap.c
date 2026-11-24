@@ -124,7 +124,6 @@ static void oldap_state(struct Curl_easy *data, struct ldapconninfo *li,
                         ldapstate newstate)
 {
 #if defined(DEBUGBUILD) && defined(CURLVERBOSE)
-  /* for debug purposes */
   static const char * const names[] = {
     "STOP",
     "SSL",

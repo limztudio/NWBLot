@@ -32,9 +32,6 @@
 #define DYNINIT 0xbee51da /* random pattern */
 #endif
 
-/*
- * Init a dynbuf struct.
- */
 void curlx_dyn_init(struct dynbuf *s, size_t toobig)
 {
   DEBUGASSERT(s);
@@ -231,9 +228,6 @@ CURLcode curlx_dyn_addf(struct dynbuf *s, const char *fmt, ...)
   return result;
 }
 
-/*
- * Returns a pointer to the buffer.
- */
 char *curlx_dyn_ptr(const struct dynbuf *s)
 {
   DEBUGASSERT(s);
@@ -254,9 +248,6 @@ char *curlx_dyn_take(struct dynbuf *s, size_t *plen)
   return ptr;
 }
 
-/*
- * Returns an unsigned pointer to the buffer.
- */
 unsigned char *curlx_dyn_uptr(const struct dynbuf *s)
 {
   DEBUGASSERT(s);
@@ -265,9 +256,6 @@ unsigned char *curlx_dyn_uptr(const struct dynbuf *s)
   return (unsigned char *)s->bufr;
 }
 
-/*
- * Returns the length of the buffer.
- */
 size_t curlx_dyn_len(const struct dynbuf *s)
 {
   DEBUGASSERT(s);

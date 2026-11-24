@@ -10177,7 +10177,6 @@ Expected<DeclContext *> ASTImporter::ImportContext(DeclContext *FromDC) {
   } else if (auto *ToEnum = dyn_cast<EnumDecl>(ToDC)) {
     auto *FromEnum = cast<EnumDecl>(FromDC);
     if (ToEnum->isCompleteDefinition()) {
-      // Do nothing.
     } else if (FromEnum->isCompleteDefinition()) {
       if (Error Err = ASTNodeImporter(*this).ImportDefinition(
           FromEnum, ToEnum, ASTNodeImporter::IDK_Basic))
@@ -10188,7 +10187,6 @@ Expected<DeclContext *> ASTImporter::ImportContext(DeclContext *FromDC) {
   } else if (auto *ToClass = dyn_cast<ObjCInterfaceDecl>(ToDC)) {
     auto *FromClass = cast<ObjCInterfaceDecl>(FromDC);
     if (ToClass->getDefinition()) {
-      // Do nothing.
     } else if (ObjCInterfaceDecl *FromDef = FromClass->getDefinition()) {
       if (Error Err = ASTNodeImporter(*this).ImportDefinition(
           FromDef, ToClass, ASTNodeImporter::IDK_Basic))
@@ -10199,7 +10197,6 @@ Expected<DeclContext *> ASTImporter::ImportContext(DeclContext *FromDC) {
   } else if (auto *ToProto = dyn_cast<ObjCProtocolDecl>(ToDC)) {
     auto *FromProto = cast<ObjCProtocolDecl>(FromDC);
     if (ToProto->getDefinition()) {
-      // Do nothing.
     } else if (ObjCProtocolDecl *FromDef = FromProto->getDefinition()) {
       if (Error Err = ASTNodeImporter(*this).ImportDefinition(
           FromDef, ToProto, ASTNodeImporter::IDK_Basic))

@@ -15151,7 +15151,6 @@ TreeTransform<Derived>::TransformCXXNewExpr(CXXNewExpr *E) {
     // dependently-sized array types.
     const ArrayType *ArrayT = SemaRef.Context.getAsArrayType(AllocType);
     if (!ArrayT) {
-      // Do nothing
     } else if (const ConstantArrayType *ConsArrayT
                                      = dyn_cast<ConstantArrayType>(ArrayT)) {
       ArraySize = IntegerLiteral::Create(SemaRef.Context, ConsArrayT->getSize(),

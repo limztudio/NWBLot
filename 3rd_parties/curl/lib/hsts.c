@@ -93,12 +93,10 @@ void Curl_hsts_cleanup(struct hsts **hp)
   }
 }
 
-/* append the new entry to the list after possibly removing an old entry
-   first */
+/* Evict the oldest entry when the cache is full. */
 static void hsts_append(struct hsts *h, struct stsentry *sts)
 {
   if(Curl_llist_count(&h->list) == MAX_HSTS_ENTRIES) {
-    /* It is full. Remove the first entry in the list */
     struct Curl_llist_node *e = Curl_llist_head(&h->list);
     struct stsentry *oldsts = Curl_node_elem(e);
     Curl_node_remove(e);
@@ -296,10 +294,8 @@ CURLcode Curl_hsts_parse(struct hsts *h, const char *hostname,
   else
     expires += now;
 
-  /* check if it already exists */
   sts = hsts_check(h, hostname, hlen, FALSE);
   if(sts) {
-    /* update these fields */
     sts->expires = expires;
     sts->includeSubDomains = subdomains;
   }
@@ -363,9 +359,6 @@ static void hsts_out(struct stsentry *sts, FILE *fp)
                   sts->includeSubDomains ? "." : "", sts->host, UNLIMITED);
 }
 
-/*
- * Curl_https_save() writes the HSTS cache to file and callback.
- */
 CURLcode Curl_hsts_save(struct Curl_easy *data, struct hsts *h,
                         const char *file)
 {
@@ -379,7 +372,6 @@ CURLcode Curl_hsts_save(struct Curl_easy *data, struct hsts *h,
     /* no cache activated */
     return CURLE_OK;
 
-  /* if no new name is given, use the one we stored from the load */
   if(!file && h->filename)
     file = h->filename;
 
@@ -407,7 +399,6 @@ CURLcode Curl_hsts_save(struct Curl_easy *data, struct hsts *h,
   curlx_free(tempstore);
 skipsave:
   if(data->set.hsts_write) {
-    /* if there is a write callback */
     struct curl_index i; /* count */
     i.total = Curl_llist_count(&h->list);
     i.index = 0;
@@ -509,7 +500,6 @@ static CURLcode hsts_add(struct hsts *h, const char *line)
  */
 static CURLcode hsts_pull(struct Curl_easy *data, struct hsts *h)
 {
-  /* if the HSTS read callback is set, use it */
   if(data->set.hsts_read) {
     CURLSTScode sc;
     DEBUGASSERT(h);
@@ -596,9 +586,6 @@ static CURLcode hsts_load(struct hsts *h, const char *file)
   return result;
 }
 
-/*
- * Curl_hsts_loadfile() loads HSTS from file
- */
 CURLcode Curl_hsts_loadfile(struct Curl_easy *data,
                             struct hsts *h, const char *file)
 {
@@ -607,9 +594,6 @@ CURLcode Curl_hsts_loadfile(struct Curl_easy *data,
   return hsts_load(h, file);
 }
 
-/*
- * Curl_hsts_loadcb() loads HSTS from callback
- */
 CURLcode Curl_hsts_loadcb(struct Curl_easy *data, struct hsts *h)
 {
   if(h)

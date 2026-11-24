@@ -388,7 +388,6 @@ static void pop3_state(struct Curl_easy *data, pop3state newstate)
     Curl_conn_meta_get(data->conn, CURL_META_POP3_CONN);
   if(pop3c) {
 #if defined(DEBUGBUILD) && defined(CURLVERBOSE)
-    /* for debug purposes */
     static const char * const names[] = {
       "STOP",
       "SERVERGREET",

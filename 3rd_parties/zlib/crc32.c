@@ -445,7 +445,6 @@ local void write_table64(FILE *out, const z_word_t FAR *table, int k) {
                 n == k - 1 ? "" : (n % 3 == 2 ? ",\n" : ", "));
 }
 
-/* Actually do the deed. */
 int main(void) {
     make_crc_table();
     return 0;

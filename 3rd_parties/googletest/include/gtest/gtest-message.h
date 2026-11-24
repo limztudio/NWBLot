@@ -108,7 +108,6 @@ class GTEST_API_ Message {
   // Constructs an empty Message.
   Message();
 
-  // Copy constructor.
   Message(const Message& msg) : ss_(new ::std::stringstream) {  // NOLINT
     *ss_ << msg.GetString();
   }

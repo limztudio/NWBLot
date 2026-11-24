@@ -500,7 +500,7 @@ ZEXTERN int ZEXPORT inflate(z_streamp strm, int flush);
   deflate data.  The header type is detected automatically, if requested when
   initializing with inflateInit2().  Any information contained in the gzip
   header is not retained unless inflateGetHeader() is used.  When processing
-  gzip-wrapped deflate data, strm->adler32 is set to the CRC-32 of the output
+  gzip-wrapped deflate data, strm->adler is set to the CRC-32 of the output
   produced so far.  The CRC-32 is checked against the gzip trailer, as is the
   uncompressed length, modulo 2^32.
 
@@ -1228,7 +1228,7 @@ ZEXTERN uLong ZEXPORT zlibCompileFlags(void);
 
     Compiler, assembler, and debug options:
      8: ZLIB_DEBUG
-     9: ASMV or ASMINF -- use ASM code
+     9: 0 (reserved; ASM options are not reported)
      10: ZLIB_WINAPI -- exported functions use the WINAPI calling convention
      11: 0 (reserved)
 
@@ -1389,8 +1389,7 @@ ZEXTERN gzFile ZEXPORT gzopen(const char *path, const char *mode);
 
      gzopen can be used to read a file which is not in gzip format; in this
    case gzread will directly read from the file without decompression.  When
-   reading, this will be detected automatically by looking for the magic two-
-   byte gzip header.
+   reading, this is detected using the first four gzip header bytes.
 
      gzopen returns NULL if the file could not be opened, if there was
    insufficient memory to allocate the gzFile state, or if an invalid mode was

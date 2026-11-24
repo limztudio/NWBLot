@@ -43,8 +43,6 @@ void MCXCOFFStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
   // and symbol_B is in it.
   // TODO: Currently we only set the fragment for XMC_PR csects and DWARF
   // sections because we don't have other cases that hit this problem yet.
-  // if (IsDwarfSec || CsectProp->MappingClass == XCOFF::XMC_PR)
-  //   QualName->setFragment(F);
   if (Sec->isDwarfSect() || Sec->getMappingClass() == XCOFF::XMC_PR) {
     MCSymbol *QualNameSymbol = Sec->getQualNameSymbol();
     // Only set the fragment the first time we're switching to the section.

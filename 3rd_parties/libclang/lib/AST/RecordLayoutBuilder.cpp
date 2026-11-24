@@ -1019,7 +1019,6 @@ void ItaniumRecordLayoutBuilder::LayoutNonVirtualBases(
   // Then, determine the primary base class.
   DeterminePrimaryBase(RD);
 
-  // Compute base subobject info.
   ComputeBaseSubobjectInfo(RD);
 
   // If we have a primary base class, lay it out.

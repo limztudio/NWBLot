@@ -380,7 +380,6 @@ public:
     enumerable_thread_specific_iterator( const Container &container, typename Container::size_type index ) :
         my_container(&const_cast<Container &>(container)), my_index(index), my_value(nullptr) {}
 
-    //! Default constructor
     enumerable_thread_specific_iterator() : my_container(nullptr), my_index(0), my_value(nullptr) {}
 
     template<typename U>
@@ -531,7 +530,6 @@ public:
     using reference = Value&;
     using iterator_category = std::input_iterator_tag;
 
-    // Copy Constructor
     template<typename U>
     segmented_iterator(const segmented_iterator<SegmentedContainer, U>& other) :
         my_segcont(other.my_segcont),

@@ -141,8 +141,7 @@ MHD_unescape_plus (char *arg)
  * The result is still be 0-terminated.
  *
  * @param val value to unescape (modified in the process)
- * @return length of the resulting val (`strlen(val)` may be
- *  shorter afterwards due to elimination of escape sequences)
+ * @return decoded length; `strlen(val)` may be shorter if decoding yields NUL
  */
 _MHD_EXTERN size_t
 MHD_http_unescape (char *val)
@@ -185,10 +184,8 @@ MHD_parse_arguments_ (struct MHD_Connection *connection,
     amper = strchr (args, '&');
     if (NULL == amper)
     {
-      /* last argument */
       if (NULL == equals)
       {
-        /* last argument, without '=' */
         MHD_unescape_plus (args);
         key_len = daemon->unescape_callback (daemon->unescape_callback_cls,
                                              connection,
@@ -202,7 +199,6 @@ MHD_parse_arguments_ (struct MHD_Connection *connection,
           return MHD_NO;
         break;
       }
-      /* got 'foo=bar' */
       equals[0] = '\0';
       equals++;
       MHD_unescape_plus (args);
@@ -222,7 +218,6 @@ MHD_parse_arguments_ (struct MHD_Connection *connection,
         return MHD_NO;
       break;
     }
-    /* amper is non-NULL here */
     amper[0] = '\0';
     amper++;
     if ( (NULL == equals) ||
@@ -240,12 +235,9 @@ MHD_parse_arguments_ (struct MHD_Connection *connection,
                         0,
                         kind))
         return MHD_NO;
-      /* continue with 'bar' */
       args = amper;
       continue;
     }
-    /* equals and amper are non-NULL here, and equals < amper,
- so we got regular 'foo=value&bar...'-kind of argument */
     equals[0] = '\0';
     equals++;
     MHD_unescape_plus (args);
@@ -269,4 +261,3 @@ MHD_parse_arguments_ (struct MHD_Connection *connection,
 }
 
 
-/* end of internal.c */

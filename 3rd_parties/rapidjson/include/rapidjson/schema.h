@@ -1,16 +1,16 @@
-// Tencent is pleased to support the open source community by making RapidJSON available->
+// Tencent is pleased to support the open source community by making RapidJSON available.
 // 
-// Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip-> All rights reserved->
+// Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.
 //
 // Licensed under the MIT License (the "License"); you may not use this file except
-// in compliance with the License-> You may obtain a copy of the License at
+// in compliance with the License. You may obtain a copy of the License at
 //
-// http://opensource->org/licenses/MIT
+// http://opensource.org/licenses/MIT
 //
 // Unless required by applicable law or agreed to in writing, software distributed 
 // under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR 
-// CONDITIONS OF ANY KIND, either express or implied-> See the License for the 
-// specific language governing permissions and limitations under the License->
+// CONDITIONS OF ANY KIND, either express or implied. See the License for the
+// specific language governing permissions and limitations under the License.
 
 #ifndef RAPIDJSON_SCHEMA_H_
 #define RAPIDJSON_SCHEMA_H_
@@ -1118,7 +1118,7 @@ private:
                     RAPIDJSON_INVALID_KEYWORD_RETURN(GetMaximumString());
             }
             else if (maximum_.IsUint64())
-                /* do nothing */; // i <= max(int64_t) < maximum_.GetUint64()
+                ; // i <= max(int64_t) < maximum_.GetUint64()
             else if (!CheckDoubleMaximum(context, static_cast<double>(i)))
                 return false;
         }
@@ -1145,7 +1145,7 @@ private:
                     RAPIDJSON_INVALID_KEYWORD_RETURN(GetMinimumString());
             }
             else if (minimum_.IsInt64())
-                /* do nothing */; // i >= 0 > minimum.Getint64()
+                ; // i >= 0 > minimum.Getint64()
             else if (!CheckDoubleMinimum(context, static_cast<double>(i)))
                 return false;
         }

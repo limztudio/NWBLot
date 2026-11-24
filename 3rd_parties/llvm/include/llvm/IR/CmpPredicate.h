@@ -25,7 +25,6 @@ class CmpPredicate {
   bool HasSameSign;
 
 public:
-  /// Default constructor.
   CmpPredicate() : Pred(CmpInst::BAD_ICMP_PREDICATE), HasSameSign(false) {}
 
   /// Constructed implictly with a either Predicate and samesign information, or

@@ -587,7 +587,6 @@ struct tuple_delta_t
     return compiled_peak_coords.length;
   }
 
-  /* if no need to encode intermediate coords, then just return p */
   unsigned encode_interm_coords (hb_array_t<F2DOT14> coords,
                                  unsigned& flag) const
   {
@@ -1198,7 +1197,6 @@ struct TupleVariationData
         /* if all axes are pinned, drop the tuple variation */
         if (var.axis_tuples.is_empty ())
         {
-          /* if iup_delta_optimize is enabled, add deltas to contour coords */
           if (contour_points && !contour_points->add_deltas (var.deltas_x,
                                                              var.deltas_y,
                                                              var.indices))

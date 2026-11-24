@@ -175,7 +175,6 @@ inline std::pair<graph_task*, graph_task*> order_tasks(graph_task* first, graph_
 
 // submit task if necessary. Returns the non-enqueued task if there is one.
 inline graph_task* combine_tasks(graph& g, graph_task* left, graph_task* right) {
-    // if no RHS task, don't change left.
     if (right == nullptr) return left;
     // right != nullptr
     if (left == nullptr) return right;
@@ -371,7 +370,6 @@ protected:
         my_priority = a_priority;
     }
 
-    //! Copy constructor
     continue_receiver( const continue_receiver& src ) : receiver<continue_msg>() {
         my_predecessor_count = my_initial_predecessor_count = src.my_initial_predecessor_count;
         my_current_count = 0;
@@ -678,7 +676,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM input_node( const input_node& src )
         : graph_node(src.my_graph), sender<Output>()
         , my_active(false)
@@ -929,7 +926,6 @@ public:
         : function_node(nodes, concurrency, body, Policy(), a_priority) {}
 #endif // __TBB_PREVIEW_FLOW_GRAPH_NODE_SET
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM function_node( const function_node& src ) :
         graph_node(src.my_graph),
         input_impl_type(src),
@@ -1183,7 +1179,6 @@ public:
         : continue_node(nodes, number_of_predecessors, body, Policy(), a_priority) {}
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM continue_node( const continue_node& src ) :
         graph_node(src.my_graph), input_impl_type(src),
         function_output<Output>(src.my_graph) {
@@ -1230,7 +1225,6 @@ public:
     }
 #endif
 
-    // Copy constructor
     __TBB_NOINLINE_SYM broadcast_node( const broadcast_node& src ) : broadcast_node(src.my_graph) {}
 
     //! Adds a successor
@@ -1546,7 +1540,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM buffer_node( const buffer_node& src ) : buffer_node(src.my_graph) {}
 
     //
@@ -1781,7 +1774,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM queue_node( const queue_node& src) : base_type(src) {
         fgt_node( CODEPTR(), FLOW_QUEUE_NODE, &(this->my_graph),
                                  static_cast<receiver<input_type> *>(this),
@@ -1827,7 +1819,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM sequencer_node( const sequencer_node& src ) : queue_node<T>(src),
         my_sequencer( src.my_sequencer->clone() ) {
         fgt_node( CODEPTR(), FLOW_SEQUENCER_NODE, &(this->my_graph),
@@ -1899,7 +1890,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     __TBB_NOINLINE_SYM priority_queue_node( const priority_queue_node &src )
         : buffer_node<T>(src), mark(0)
     {
@@ -1940,7 +1930,6 @@ protected:
     }
 
     void internal_pop(prio_operation *op) override {
-        // if empty or already reserved, don't pop
         if ( this->my_reserved == true || this->my_tail == 0 ) {
             op->status.store(FAILED, std::memory_order_release);
             return;
@@ -2287,7 +2276,6 @@ public:
     }
 #endif
 
-    //! Copy constructor
     limiter_node( const limiter_node& src ) : limiter_node(src.my_graph, src.my_threshold) {}
 
     //! The interface for accessing internal receiver< DecrementType > that adjusts the count
@@ -2551,7 +2539,6 @@ public:
     }
 #endif
 
-    // Copy constructor
     __TBB_NOINLINE_SYM indexer_node( const indexer_node& other ) : unfolded_type(other) {
         fgt_multiinput_node<N>( CODEPTR(), FLOW_INDEXER_NODE, &this->my_graph,
                                            this->input_ports(), static_cast< sender< output_type > *>(this) );

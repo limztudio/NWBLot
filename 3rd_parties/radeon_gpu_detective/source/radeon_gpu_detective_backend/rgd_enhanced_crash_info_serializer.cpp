@@ -163,7 +163,6 @@ static void BuildHighLevelSourceJson(const std::string& high_level_source,
                 }
             }
 
-            // If entry point found, add context lines around it.
             if (entry_line > 0)
             {
                 // Calculate start_line ensuring we don't show already shown lines.
@@ -246,7 +245,6 @@ static void DisplayTruncatedSource(std::stringstream& out, const std::string& so
             }
         }
 
-        // If entry point found, display context lines around it
         if (entry_line > 0)
         {
             // Calculate start_line ensuring we don't print already shown lines
@@ -347,10 +345,8 @@ static std::string ConsolidateWaveCoordinates(const std::vector<uint32_t>& shade
 class RgdEnhancedCrashInfoSerializer::Impl
 {
 public:
-    /// @brief Constructor.
     Impl() {}
 
-    /// @brief Destructor.
     ~Impl() {}
 
     /// @brief Build the crashing code object info map.
@@ -868,7 +864,6 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildEnhancedCrashInfoRegisterContext
     {
         CrashInfoRegistersParserContext crash_info_registers_context(std::move(crash_info_registers_parser));
 
-        // Parse wave info registers.
         ret = crash_info_registers_context.ParseWaveInfoRegisters(rgd_crash_dump_contents.kmd_crash_data, wave_info_registers_map_);
     }
     if (!ret)
@@ -1481,8 +1476,6 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstruction(con
 
                     if (!sgpr_signature.empty())
                     {
-                        // SGPR/VGPR data is captured for "Active" waves at the time of the crash and it is not available for "Hung" waves.
-                        // GetSgprSignatureFromGroups returns empty string for "Hung" wave coordinates - for which no SGPR/VGPR data is available, ignore those wave coordinates.
                         sgpr_signature_to_wave_coords[sgpr_signature].push_back(current_wave_coordinates);
                     }
                 }
@@ -1589,8 +1582,6 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
 
                         if (!sgpr_signature.empty())
                         {
-                            // SGPR/VGPR data is captured for "Active" waves at the time of the crash and it is not available for "Hung" waves.
-                            // GetSgprSignatureFromGroups returns empty string for "Hung" wave coordinates - for which no SGPR/VGPR data is available, ignore those wave coordinates.
                             sgpr_signature_to_wave_coords[sgpr_signature].push_back(current_wave_coordinates);
                         }
                     }
@@ -1770,7 +1761,6 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
             }
             else
             {
-                // Should not reach here.
                 assert(false);
             }
         }
@@ -1961,7 +1951,6 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShaderJson(const std::ma
             }
             else
             {
-                // Should not reach here.
                 assert(false);
             }
         }

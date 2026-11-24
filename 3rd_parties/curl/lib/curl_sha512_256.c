@@ -125,7 +125,6 @@ static CURLcode Curl_sha512_256_init(void *context)
     return CURLE_OK; /* Success */
   }
 
-  /* Cleanup */
   EVP_MD_CTX_free(*ctx);
   return CURLE_FAILED_INIT;
 }

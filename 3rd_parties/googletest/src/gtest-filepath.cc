@@ -359,7 +359,6 @@ bool FilePath::CreateFolder() const {
 #elif defined(GTEST_OS_ESP8266) || defined(GTEST_OS_XTENSA) || \
     defined(GTEST_OS_QURT) || defined(GTEST_OS_NXP_QN9090) ||  \
     defined(GTEST_OS_NRF52)
-  // do nothing
   int result = 0;
 #else
   int result = mkdir(pathname_.c_str(), 0777);

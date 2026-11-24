@@ -21,7 +21,6 @@
 
 #include "rmt_assert.h"
 
-/* structure for a thread. */
 typedef struct RmtThreadInternal
 {
 #ifdef _WIN32
@@ -33,7 +32,6 @@ typedef struct RmtThreadInternal
 #endif  // #ifdef _WIN32
 } RmtThreadInternal;
 
-/* create a thread */
 RmtErrorCode RmtThreadCreate(RmtThread* thread, RmtThreadFunc thread_func, void* input_data)
 {
     RMT_ASSERT_MESSAGE(thread, "Parameter thread is NULL.");
@@ -43,7 +41,6 @@ RmtErrorCode RmtThreadCreate(RmtThread* thread, RmtThreadFunc thread_func, void*
     // if this fails it means the external opaque structure isn't large enough for an internal thread.
     RMT_STATIC_ASSERT(sizeof(RmtThread) >= sizeof(RmtThreadInternal));
 
-    // conver the pointer to the internal representation
     RmtThreadInternal* thread_internal = (RmtThreadInternal*)thread;
 
 #ifdef _WIN32
@@ -56,16 +53,13 @@ RmtErrorCode RmtThreadCreate(RmtThread* thread, RmtThreadFunc thread_func, void*
     return kRmtOk;
 }
 
-/* wait for the thread to exit */
 RmtErrorCode RmtThreadWaitForExit(RmtThread* thread)
 {
     RMT_ASSERT_MESSAGE(thread, "Parameter thread is NULL.");
     RMT_RETURN_ON_ERROR(thread, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadInternal* thread_internal = (RmtThreadInternal*)thread;
 
-    // wait for the thread to exit
 #ifdef _WIN32
     WaitForSingleObject(thread_internal->handle, INFINITE);
 #else

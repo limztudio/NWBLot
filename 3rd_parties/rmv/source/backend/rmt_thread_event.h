@@ -65,7 +65,7 @@ RmtErrorCode RmtThreadEventSignal(RmtThreadEvent* thread_event);
 ///
 RmtErrorCode RmtThreadEventWait(RmtThreadEvent* thread_event);
 
-/// Wait for a thread event to be reset.
+/// Reset a thread event.
 ///
 /// @param [in]     thread_event                A pointer to a <c><i>RmtThreadEvent</i></c> structure.
 ///

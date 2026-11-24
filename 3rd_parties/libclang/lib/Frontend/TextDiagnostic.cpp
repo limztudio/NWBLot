@@ -358,7 +358,6 @@ static void selectInterestingSourceRegion(
   Columns FixItColumns = llvm::sys::locale::columnWidth(FixItInsertionLine);
   Columns MaxColumns =
       std::max({Map.columns().V, CaretColumns.V, FixItColumns.V});
-  // if the number of columns is less than the desired number we're done
   if (MaxColumns <= NonGutterColumns)
     return;
 

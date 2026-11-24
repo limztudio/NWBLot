@@ -205,8 +205,6 @@ static void init_pq_tables()
 		}
 	}
 
-	//fmt_printf("{.15} {.15}\n", g_pq_approx_tabs[0][0], inversePQ(g_pq_approx_tabs[0][0]));
-	//fmt_printf("{.15}\n", forwardPQ(SMALLEST_PQ_VAL_IN));
 }
 
 static inline float forwardPQTab(float v)
@@ -1333,8 +1331,6 @@ static bool estimate_partition2_6x6(
 	}
 #endif
 	
-	//interval_timer tm;
-	//tm.start();
 	
 #if BRUTE_FORCE_PART_SEARCH
 	uint32_t part_similarity[NUM_UNIQUE_PARTITIONS2];
@@ -1383,7 +1379,6 @@ static bool estimate_partition2_6x6(
 		pBest_parts[i] = elements[1 + i].m_pat_index;
 #endif
 
-	//fmt_printf("{} ", tm.get_elapsed_ms());
 
 	return true;
 }
@@ -2207,12 +2202,6 @@ struct smooth_map_params
 
 		// 11x11 region
 		m_max_ultra_smooth_std_dev = 4.0f;
-		//m_ultra_smooth_max_mse_scale = 4500.0f;
-		//m_ultra_smooth_max_mse_scale = 10000.0f;
-		//m_ultra_smooth_max_mse_scale = 50000.0f;
-		//m_ultra_smooth_max_mse_scale = 100000.0f;
-		//m_ultra_smooth_max_mse_scale = 400000.0f;
-		//m_ultra_smooth_max_mse_scale = 800000.0f;
 		m_ultra_smooth_max_mse_scale = 2000000.0f;
 
 		m_debug_images = true;
@@ -2224,7 +2213,6 @@ Resampler::Contrib_List* g_contrib_lists[7]; // 1-6
 static void init_contrib_lists()
 {
 	for (uint32_t dst_width = 1; dst_width <= 6; dst_width++)
-		//g_contrib_lists[dst_width] = Resampler::make_clist(6, 6, basisu::Resampler::BOUNDARY_CLAMP, gaussian_filter, BASISU_GAUSSIAN_FILTER_SUPPORT, 6.0f / (float)dst_width, 0.0f);
 		g_contrib_lists[dst_width] = Resampler::make_clist(6, 6, basisu::Resampler::BOUNDARY_CLAMP, gaussian_filter, BASISU_BELL_FILTER_SUPPORT, 6.0f / (float)dst_width, 0.0f);
 }
 
@@ -2468,7 +2456,6 @@ static void create_smooth_maps2(
 {
 	const uint32_t width = orig_img.get_width();
 	const uint32_t height = orig_img.get_height();
-	//const uint32_t total_pixels = orig_img.get_total_pixels();
 	const uint32_t num_comps = 3;
 		
 	if (params.m_no_mse_scaling)
@@ -2512,14 +2499,12 @@ static void create_smooth_maps2(
 					max_std_dev = basisu::maximum(max_std_dev, (float)comp_stats[i].get_std_dev());
 
 				float yl = clampf(max_std_dev / params.m_max_smooth_std_dev, 0.0f, 1.0f);
-				//yl = powf(yl, 2.0f);
 				yl = powf(yl, 1.0f / 2.0f); // substantially less bits
 
 				smooth_block_mse_scales(x, y) = lerp(params.m_smooth_max_mse_scale, 1.0f, yl);
 
 				if (params.m_debug_images)
 				{
-					//smooth_vis(x, y).set(clamp((int)((smooth_block_mse_scales(x, y) - 1.0f) / (params.m_smooth_max_mse_scale - 1.0f) * 255.0f + .5f), 0, 255));
 					// white=high local activity (edges/detail)
 					// black=low local activity (smooth - error is amplified)
 					smooth_vis(x, y).set(clamp((int)((yl * 255.0f) + .5f), 0, 255));
@@ -2547,7 +2532,6 @@ static void create_smooth_maps2(
 					max_std_dev = basisu::maximum(max_std_dev, (float)comp_stats[i].get_std_dev());
 
 				float yl = clampf(max_std_dev / params.m_max_med_smooth_std_dev, 0.0f, 1.0f);
-				//yl = powf(yl, 2.0f);
 
 				smooth_block_mse_scales(x, y) = lerp(params.m_med_smooth_max_mse_scale, smooth_block_mse_scales(x, y), yl);
 
@@ -2903,10 +2887,8 @@ static bool decode_file(const uint8_vec& comp_data, vector2D<astc_helpers::astc_
 	const uint32_t total_blocks = num_blocks_x * num_blocks_y;
 
 	decoded_blocks.resize(num_blocks_x, num_blocks_y);
-	//memset(decoded_blocks.get_ptr(), 0, decoded_blocks.size_in_bytes());
 
 	vector2D<astc_helpers::log_astc_block> decoded_log_blocks(num_blocks_x, num_blocks_y);
-	//memset(decoded_log_blocks.get_ptr(), 0, decoded_log_blocks.size_in_bytes());
 
 	uint32_t cur_bx = 0, cur_by = 0;
 	uint32_t step_counter = 0;
@@ -2916,8 +2898,6 @@ static bool decode_file(const uint8_vec& comp_data, vector2D<astc_helpers::astc_
 	{
 		step_counter++;
 		
-		//if ((cur_bx == 9) && (cur_by == 13))
-		//	printf("!");
 
 #if SYNC_MARKERS
 		uint32_t mk = decoder.get_bits(16);
@@ -3353,7 +3333,6 @@ static bool decode_file(const uint8_vec& comp_data, vector2D<astc_helpers::astc_
 		return false;
 	}
 
-	//fmt_printf("Total decode_file() time: {} secs\n", tm.get_elapsed_secs());
 
 	return true;
 }
@@ -3471,7 +3450,6 @@ static bool pack_bc6h_image(const imagef &src_img, vector2D<basist::bc6h_block> 
 		} // bx
 	} // by
 
-	//fmt_printf("Total BC6H encode time: {}\n", total_enc_time);
 
 	return true;
 }
@@ -3574,7 +3552,6 @@ static void estimate_partitions_mode7_and_11(
 		for (uint32_t part_index = 0; part_index < num_parts; part_index++)
 			total_variance[part_index] = part_cov[part_index][0] + part_cov[part_index][3] + part_cov[part_index][5];
 
-		//vec3F part_axis[MAX_PARTS];
 		float mode11_eigenvalue_est[MAX_PARTS]; // For each partition, compute the variance along the principle axis
 		float mode7_eigenvalue_est[MAX_PARTS]; // For each partition, compute the variance along the principle axis
 
@@ -3632,8 +3609,6 @@ static void estimate_partitions_mode7_and_11(
 
 				// Estimate the principle eigenvalue by computing the magnitude of the transformed vector.
 				// The result is the variance along the principle axis.
-				//float z1 = sqrtf(r * r + g * g + b * b); // this works with the principle axis
-				//float z2 = r * xr + g * xg + b * xb; // compute length projected along xr,xg,xb
 				
 				mode11_eigenvalue_est[part_index] = r * xr + g * xg + b * xb;
 			}
@@ -4245,13 +4220,10 @@ static bool compress_strip_task(
 
 		for (uint32_t bx = 0; bx < num_blocks_x; bx++)
 		{
-			//if ((bx == 1) && (by == 2))
-			//	basisu::fmt_printf("!");
 
 			for (uint32_t outer_pass = 0; outer_pass < 3; outer_pass++)
 			{
 				const bool has_left_neighbor = bx > 0;
-				//const bool has_prev = has_left_neighbor || has_upper_neighbor;
 
 				// Select either the original source image, or the Gaussian filtered version.
 				// From here the encoder *must* use these 2 sources.
@@ -4309,7 +4281,6 @@ static bool compress_strip_task(
 							block_hy = py;
 						block_avg_y += py;
 
-						//linear_rgb_to_itp(rgb_input, block_pixels_as_itp[y][x]);
 
 						block_pixels_as_itp[y][x] = block_pixels_itp[y][x];
 
@@ -4335,7 +4306,6 @@ static bool compress_strip_task(
 				const float filtered_y_err = diff_blocks((vec4F*)block_pixels, (vec4F*)y_filtered);
 				const bool filter_horizontally = filtered_x_err < filtered_y_err;
 
-				//const float block_mag_gradient_mag = block_max_gradient_mag(bx, by);
 
 				if (filter_horizontally)
 					debug_state.m_total_filter_horizontal.fetch_add(1, std::memory_order_relaxed);
@@ -4578,7 +4548,6 @@ static bool compress_strip_task(
 				// Gather all candidate encodings
 				bool status = false;
 
-				// ---- Run candidate
 				if ((global_cfg.m_use_runs) && (has_left_neighbor || has_upper_neighbor))
 				{
 					candidate_encoding candidate;
@@ -4621,7 +4590,6 @@ static bool compress_strip_task(
 					candidates.emplace_back(std::move(candidate));
 				}
 
-				// ---- Reuse candidate
 				if ((!is_solid_block) && (global_cfg.m_lambda > 0.0f))
 				{
 					for (uint32_t reuse_delta_index = 0; reuse_delta_index < global_cfg.m_num_reuse_xy_deltas; reuse_delta_index++)
@@ -4882,7 +4850,6 @@ static bool compress_strip_task(
 					} // reuse_delta_index
 				}
 
-				// ---- Solid candidate
 				if (global_cfg.m_use_solid_blocks)
 				{
 					candidate_encoding candidate;
@@ -5136,7 +5103,6 @@ static bool compress_strip_task(
 
 					const opt_mode_t mode11_opt_mode = complex_block ? cWeightedLeastSquares : cOrdinaryLeastSquares;
 
-					// ---- Encoded block candidate
 					for (uint32_t block_mode_iter = 0; block_mode_iter < (uint32_t)block_mode::cBMTotalModes; block_mode_iter++)
 					{
 						const block_mode bm = (block_mode)block_mode_iter;
@@ -5558,7 +5524,6 @@ static bool compress_strip_task(
 
 								// TODO: For now, just try 5 bits for each endpoint. Can tune later.
 								// This isn't right, it's computing the deltas in ISE space.
-								//const uint32_t NUM_ENDPOINT_DELTA_BITS = 5;
 								const int total_endpoint_delta_vals = 1 << NUM_ENDPOINT_DELTA_BITS;
 								const int low_delta_limit = -(total_endpoint_delta_vals / 2), high_delta_limit = (total_endpoint_delta_vals / 2) - 1;
 
@@ -5656,12 +5621,9 @@ static bool compress_strip_task(
 							}
 							case endpoint_mode::cRaw:
 							{
-								//if (candidates.size() == 339)
-								//	fmt_printf("!");
 
 								const auto& mode_desc = g_block_mode_descs[(uint32_t)bm];
 								const uint32_t cem = mode_desc.m_cem;
-								//const uint32_t num_endpoint_vals = get_num_endpoint_vals(cem);
 								const bool dual_plane = mode_desc.m_dp;
 
 								if ((global_cfg.m_disable_twothree_subsets) && (mode_desc.m_num_partitions >= 2))
@@ -6431,7 +6393,6 @@ static bool compress_strip_task(
 					}
 					else if (best_candidate.m_decomp_log_blk.m_num_partitions == 3)
 					{
-						//part_vis.fill_box(bx * 6, by * 6, 6, 6, color_rgba(0, 0, 255, 255));
 
 						const int part3_unique_index = g_part3_seed_to_unique_index[best_candidate.m_decomp_log_blk.m_partition_id];
 						assert((part3_unique_index >= 0) && (part3_unique_index < (int)NUM_UNIQUE_PARTITIONS3));
@@ -6571,7 +6532,6 @@ void global_init()
 
 	g_initialized = true;
 
-	//fmt_printf("astc_6x6_hdr::global_init() total time: {}\n", tm.get_elapsed_secs());
 }
 
 bool compress_photo(const basisu::imagef &orig_src_img, const astc_hdr_6x6_global_config &orig_global_cfg, job_pool *pJob_pool,
@@ -6604,7 +6564,6 @@ bool compress_photo(const basisu::imagef &orig_src_img, const astc_hdr_6x6_globa
 	enc_state.master_coptions.m_q_log_bias = Q_LOG_BIAS_6x6;
 	enc_state.src_img = orig_src_img;
 
-	//src_img.crop(256, 256);
 
 	const uint32_t width = enc_state.src_img.get_width();
 	const uint32_t height = enc_state.src_img.get_height();

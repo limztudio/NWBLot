@@ -175,10 +175,6 @@ namespace basisu
 		return (float)t;
 	}
 
-	//static double blackman_window(double x)
-	//{
-	//	return .42f + .50f * cos(M_PI*x) + .08f * cos(2.0f*M_PI*x);
-	//}
 
 	static double blackman_exact_window(double x)
 	{
@@ -192,7 +188,6 @@ namespace basisu
 			t = -t;
 
 		if (t < 3.0f)
-			//return clean(sinc(t) * blackman_window(t / 3.0f));
 			return clean(sinc(t) * blackman_exact_window(t / 3.0f));
 		else
 			return (0.0f);
@@ -279,7 +274,6 @@ namespace basisu
 		return sum;
 	}
 
-	//static const float KAISER_ALPHA = 4.0;
 	static double kaiser(double alpha, double half_width, double x)
 	{
 		const double ratio = (x / half_width);
@@ -297,7 +291,6 @@ namespace basisu
 			// db atten
 			const float att = 40.0f;
 			const float alpha = (float)(exp(log((double)0.58417 * (att - 20.96)) * 0.4) + 0.07886 * (att - 20.96));
-			//const float alpha = KAISER_ALPHA;
 			return (float)clean(sinc(t) * kaiser(alpha, KAISER_SUPPORT, t));
 		}
 

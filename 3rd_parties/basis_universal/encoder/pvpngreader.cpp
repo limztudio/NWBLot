@@ -1645,8 +1645,6 @@ int png_decoder::png_decode_start()
 
 	if (m_ihdr.m_ilace_type == 1)
 	{
-		//int i;
-		//uint32_t total_lines, lines_processed;
 
 		m_adam7_pass_size_x[0] = adam7_pass_size(m_ihdr.m_width, 0, 8);
 		m_adam7_pass_size_x[1] = adam7_pass_size(m_ihdr.m_width, 4, 8);
@@ -1703,7 +1701,6 @@ int png_decoder::png_decode_start()
 				}
 			}
 
-			//lines_processed++;
 		}
 
 		m_adam7_decoded_flag = TRUE;

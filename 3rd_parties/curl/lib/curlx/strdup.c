@@ -65,7 +65,7 @@ void *curlx_memdup(const void *src, size_t length)
 {
   void *buffer = curlx_malloc(length);
   if(!buffer)
-    return NULL; /* fail */
+    return NULL;
 
   memcpy(buffer, src, length);
 

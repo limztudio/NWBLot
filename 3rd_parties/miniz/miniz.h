@@ -58,8 +58,7 @@
      int mz_zip_reader_locate_file(mz_zip_archive *pZip, const char *pName, const char *pComment, mz_uint flags);
 
      The locate operation can optionally check file comments too, which (as one example) can be used to identify
-     multiple versions of the same file in an archive. This function uses a simple linear search through the central
-     directory, so it's not very fast.
+     multiple versions of the same file in an archive. A sorted directory can use binary search; other cases scan linearly.
 
      Alternately, you can iterate through all the files in an archive (using mz_zip_reader_get_num_files()) and
      retrieve detailed info on each file by calling mz_zip_reader_file_stat().
@@ -97,9 +96,6 @@
      - ZIP archive support limitations:
      No spanning support. Extraction functions can only handle unencrypted, stored or deflated files.
      Requires streams capable of seeking.
-
-   * This is a header file library, like stb_image.c. To get only a header file, either cut and paste the
-     below header, or create miniz.h, #define MINIZ_HEADER_FILE_ONLY, and then include miniz.c from it.
 
    * Important: For best perf. be sure to customize the below macros for your target platform:
      #define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 1
@@ -150,7 +146,7 @@
 /* Define MINIZ_NO_ZLIB_APIS to remove all ZLIB-style compression/decompression API's. */
 /*#define MINIZ_NO_ZLIB_APIS */
 
-/* Define MINIZ_NO_ZLIB_COMPATIBLE_NAME to disable zlib names, to prevent conflicts against stock zlib. */
+/* Define MINIZ_NO_ZLIB_COMPATIBLE_NAMES to prevent conflicts with zlib names. */
 /*#define MINIZ_NO_ZLIB_COMPATIBLE_NAMES */
 
 /* Define MINIZ_NO_MALLOC to disable all calls to malloc, free, and realloc.
@@ -366,7 +362,7 @@ extern "C"
     /*  MZ_MEM_ERROR on out of memory. */
     MINIZ_EXPORT int mz_deflateInit(mz_streamp pStream, int level);
 
-    /* mz_deflateInit2() is like mz_deflate(), except with more control: */
+    /* mz_deflateInit2() is like mz_deflateInit(), with more options: */
     /* Additional parameters: */
     /*   method must be MZ_DEFLATED */
     /*   window_bits must be MZ_DEFAULT_WINDOW_BITS (to wrap the deflate stream with zlib header/adler-32 footer) or -MZ_DEFAULT_WINDOW_BITS (raw deflate/no header or footer) */
@@ -416,7 +412,7 @@ extern "C"
     /* window_bits must be MZ_DEFAULT_WINDOW_BITS (to parse zlib header/footer) or -MZ_DEFAULT_WINDOW_BITS (raw deflate). */
     MINIZ_EXPORT int mz_inflateInit2(mz_streamp pStream, int window_bits);
 
-    /* Quickly resets a compressor without having to reallocate anything. Same as calling mz_inflateEnd() followed by mz_inflateInit()/mz_inflateInit2(). */
+    /* Resets a decompressor without reallocating, retaining its window setting. */
     MINIZ_EXPORT int mz_inflateReset(mz_streamp pStream);
 
     /* Decompresses the input stream to the output, consuming only as much of the input as needed, and writing as much to the output as possible. */

@@ -606,7 +606,6 @@ MHD_pool_reallocate (struct MemoryPool *pool,
                 (pool->pos > old_offset));
     mhd_assert ((old_size == 0) || \
                 ((pool->end - _MHD_RED_ZONE_SIZE) >= (old_offset + old_size)));
-    /* Try resizing in-place */
     if (shrinking)
     {     /* Shrinking in-place, zero-out freed part */
       memset ((uint8_t *) old + new_size, 0, old_size - new_size);
@@ -632,7 +631,6 @@ MHD_pool_reallocate (struct MemoryPool *pool,
              (new_apos < pool->pos) ) /* Value wrap */
           return NULL;                /* No space */
       }
-      /* Resized in-place */
       pool->pos = new_apos;
       _MHD_UNPOISON_MEMORY (old, new_size);
       return old;
@@ -640,7 +638,6 @@ MHD_pool_reallocate (struct MemoryPool *pool,
     if (shrinking)
       return old;   /* Resized in-place, freed part remains allocated */
   }
-  /* Need to allocate new block */
   asize = ROUND_TO_ALIGN_PLUS_RED_ZONE (new_size);
   if ( (asize < new_size) || /* Value wrap, too large new_size. */
        (asize > pool->end - pool->pos) ) /* Not enough space */
@@ -654,7 +651,6 @@ MHD_pool_reallocate (struct MemoryPool *pool,
   {
     /* Move data to new block, old block remains allocated */
     memcpy (new_blc, old, old_size);
-    /* Zero-out old block */
     memset (old, 0, old_size);
     _MHD_POISON_MEMORY (old, old_size);
   }
@@ -696,7 +692,6 @@ MHD_pool_deallocate (struct MemoryPool *pool,
        legitimately start at pool->pos; only a normal block may not. */
     mhd_assert ((block_offset >= pool->end) || \
                 (block_offset != pool->pos) || (block_size == 0));
-    /* Zero-out deallocated region */
     if (0 != block_size)
     {
       memset (block, 0, block_size);

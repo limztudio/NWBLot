@@ -1220,7 +1220,6 @@ static MZ_FORCEINLINE void tdefl_find_match(tdefl_compressor *d, mz_uint lookahe
                 d->m_saved_match_dist = cur_match_dist;
                 d->m_saved_match_len = cur_match_len;
             }
-            /* Move the lookahead forward by len_to_move bytes. */
             d->m_lookahead_pos += len_to_move;
             MZ_ASSERT(d->m_lookahead_size >= len_to_move);
             d->m_lookahead_size -= len_to_move;
@@ -1514,7 +1513,6 @@ static MZ_FORCEINLINE void tdefl_find_match(tdefl_compressor *d, mz_uint lookahe
         /* write dummy header */
         for (z = 41; z; --z)
             tdefl_output_buffer_putter(&z, 1, &out_buf);
-        /* compress image data */
         tdefl_init(pComp, tdefl_output_buffer_putter, &out_buf, s_tdefl_png_num_probes[MZ_MIN(10, level)] | TDEFL_WRITE_ZLIB_HEADER);
         for (y = 0; y < h; ++y)
         {
@@ -1565,7 +1563,6 @@ static MZ_FORCEINLINE void tdefl_find_match(tdefl_compressor *d, mz_uint lookahe
         c = (mz_uint32)mz_crc32(MZ_CRC32_INIT, out_buf.m_pBuf + 41 - 4, *pLen_out + 4);
         for (i = 0; i < 4; ++i, c <<= 8)
             (out_buf.m_pBuf + out_buf.m_size - 16)[i] = (mz_uint8)(c >> 24);
-        /* compute final size of file, grab compressed data buffer and return */
         *pLen_out += 57;
         MZ_FREE(pComp);
         return out_buf.m_pBuf;

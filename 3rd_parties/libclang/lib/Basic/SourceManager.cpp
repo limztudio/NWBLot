@@ -1176,8 +1176,6 @@ unsigned SourceManager::getColumnNumber(FileID FID, unsigned FilePos,
   return (FilePos - LineStart) + 1;
 }
 
-// isInvalid - Return the result of calling loc.isInvalid(), and
-// if Invalid is not null, set its value to same.
 template<typename LocType>
 static bool isInvalid(LocType Loc, bool *Invalid) {
   bool MyInvalid = Loc.isInvalid();

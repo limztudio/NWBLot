@@ -64,9 +64,7 @@ struct cpool {
 /* Get connection pool instance for data or NULL if none exists */
 struct cpool *Curl_cpool_get_instance(struct Curl_easy *data);
 
-/* Init the pool, pass multi only if pool is owned by it.
- * Cannot fail.
- */
+/* Initialize the pool; pass share when the pool belongs to a share. */
 void Curl_cpool_init(struct cpool *cpool,
                      struct Curl_share *share,
                      size_t size);
@@ -107,7 +105,7 @@ typedef enum {
   CPOOL_MATCH_TOO_OLD /* No match, `conn` is too old, close when idle */
 } cpool_match_result;
 
-/* Return of conn is suitable. If so, stops iteration. */
+/* Decide whether to use, skip, or close a connection. */
 typedef cpool_match_result
  Curl_cpool_conn_match_cb(struct connectdata *conn, void *userdata);
 
@@ -121,10 +119,9 @@ typedef bool Curl_cpool_done_match_cb(void *userdata);
  * @param destination match against `conn->destination` in pool
  * @param prune_dead  perform reaping of dead connections at start
  * @param pnow        timestamp of operation
- * @param conn_cb     must be present, called for each connection in the
- *                    bundle until it returns TRUE
- * @return combined result of last conn_db and result_cb or FALSE if no
-                      connections were present.
+ * @param conn_cb     required; returns CPOOL_MATCH_FOUND to stop the search
+ * @param done_cb     optional; its return value overrides the search result
+ * @return TRUE if a connection matched, unless done_cb overrides the result
  */
 bool Curl_cpool_find(struct Curl_easy *data,
                      const char *destination,

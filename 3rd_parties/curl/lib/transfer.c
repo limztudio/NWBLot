@@ -304,7 +304,6 @@ static CURLcode sendrecv_dl(struct Curl_easy *data,
     if((!is_multiplex && data->req.download_done) || is_eos) {
       CURL_REQ_CLEAR_RECV(data);
     }
-    /* if we stopped receiving, leave the loop */
     if(!CURL_REQ_WANT_RECV(data))
       break;
 

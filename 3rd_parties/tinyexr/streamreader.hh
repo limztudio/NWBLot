@@ -22,7 +22,6 @@ enum class Endian {
 
 class StreamReader {
 public:
-  // Constructor: takes memory address, length, and endianness
   StreamReader(const uint8_t* data, size_t length, Endian endian = Endian::Little)
       : data_(data), length_(length), pos_(0), endian_(endian) {
     // Detect native endian
@@ -132,27 +131,22 @@ public:
     return true;
   }
 
-  // Rewind to beginning
   void rewind() {
     pos_ = 0;
   }
 
-  // Get current position
   size_t tell() const {
     return pos_;
   }
 
-  // Get remaining bytes
   size_t remaining() const {
     return length_ - pos_;
   }
 
-  // Check if at end
   bool eof() const {
     return pos_ >= length_;
   }
 
-  // Get total length
   size_t length() const {
     return length_;
   }

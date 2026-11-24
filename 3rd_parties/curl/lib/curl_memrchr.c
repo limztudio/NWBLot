@@ -29,10 +29,7 @@
 /*
  * Curl_memrchr()
  *
- * Our memrchr() function clone for systems which lack this function. The
- * memrchr() function is like the memchr() function, except that it searches
- * backwards from the end of the n bytes pointed to by s instead of forward
- * from the beginning.
+ * Search backwards through n bytes on systems without memrchr().
  */
 void *Curl_memrchr(const void *s, int c, size_t n)
 {

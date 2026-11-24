@@ -47,7 +47,7 @@ public:
     /// @retval
     /// kRmtErrorInvalidPointer                      Invalid <c><i>chunk_file</i></c>.
     /// @retval
-    /// kRmtMalformedData                            Failed to retrieve the chunk data from the RDF file.
+    /// kRmtErrorMalformedData                            Failed to retrieve the chunk data from the RDF file.
     /// @retVal
     /// kRmtEof                                      The chunk was not found in the RDF file.
     RmtErrorCode LoadLastChunk(rdfChunkFile* chunk_file);

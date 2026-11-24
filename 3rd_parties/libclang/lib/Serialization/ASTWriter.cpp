@@ -338,7 +338,6 @@ public:
 } // namespace
 
 void TypeLocWriter::VisitQualifiedTypeLoc(QualifiedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocWriter::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
@@ -360,15 +359,12 @@ void TypeLocWriter::VisitPointerTypeLoc(PointerTypeLoc TL) {
 }
 
 void TypeLocWriter::VisitDecayedTypeLoc(DecayedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocWriter::VisitAdjustedTypeLoc(AdjustedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocWriter::VisitArrayParameterTypeLoc(ArrayParameterTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocWriter::VisitBlockPointerTypeLoc(BlockPointerTypeLoc TL) {
@@ -584,11 +580,9 @@ void TypeLocWriter::VisitAttributedTypeLoc(AttributedTypeLoc TL) {
 }
 
 void TypeLocWriter::VisitCountAttributedTypeLoc(CountAttributedTypeLoc TL) {
-  // Nothing to do
 }
 
 void TypeLocWriter::VisitBTFTagAttributedTypeLoc(BTFTagAttributedTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocWriter::VisitOverflowBehaviorTypeLoc(OverflowBehaviorTypeLoc TL) {
@@ -597,11 +591,9 @@ void TypeLocWriter::VisitOverflowBehaviorTypeLoc(OverflowBehaviorTypeLoc TL) {
 
 void TypeLocWriter::VisitHLSLAttributedResourceTypeLoc(
     HLSLAttributedResourceTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocWriter::VisitHLSLInlineSpirvTypeLoc(HLSLInlineSpirvTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocWriter::VisitTemplateTypeParmTypeLoc(TemplateTypeParmTypeLoc TL) {
@@ -694,7 +686,6 @@ void TypeLocWriter::VisitDependentBitIntTypeLoc(
 
 void TypeLocWriter::VisitPredefinedSugarTypeLoc(
     clang::PredefinedSugarTypeLoc TL) {
-  // Nothing to do.
 }
 
 void ASTWriter::WriteTypeAbbrevs() {
@@ -2956,11 +2947,8 @@ unsigned ASTWriter::getLocalOrImportedSubmoduleID(const Module *Mod) {
 
 unsigned ASTWriter::getSubmoduleID(Module *Mod) {
   unsigned ID = getLocalOrImportedSubmoduleID(Mod);
-  // FIXME: This can easily happen, if we have a reference to a submodule that
-  // did not result in us loading a module file for that submodule. For
-  // instance, a cross-top-level-module 'conflict' declaration will hit this.
-  // assert((ID || !Mod) &&
-  //        "asked for module ID for non-local, non-imported module");
+  // FIXME: A referenced submodule may lack a loaded module file, such as
+  // for a cross-top-level-module conflict declaration.
   return ID;
 }
 

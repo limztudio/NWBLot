@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/test_mhd_version.с
+ * @file microhttpd/test_mhd_version.c
  * @brief  Tests for MHD versions identifiers
  * @author Karlson2k (Evgeny Grin)
  */

@@ -216,10 +216,8 @@ bool RgdCodeObjDbCreateIsaContextAmdGpuDis(RgdCodeObjectEntry* code_obj_entry, e
 class RgdCodeObjectDatabase
 {
 public:
-    /// @brief Constructor.
     RgdCodeObjectDatabase() = default;
 
-    /// @brief Destructor.
     ~RgdCodeObjectDatabase() = default;
 
     /// @brief Add a code object to the database.

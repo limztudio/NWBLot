@@ -57,10 +57,8 @@ struct easy_pollset;
  * This may add a socket or, in case no actions remain, remove
  * a socket from the set.
  *
- * Filter implementations need to call filters "below" *after* they have
- * made their adjustments. This allows lower filters to override "upper"
- * actions. If a "lower" filter is unable to write, it needs to be able
- * to disallow POLL_OUT.
+ * The chain dispatcher calls eligible filters from top to bottom, so lower
+ * filters can override upper actions, such as disallowing POLL_OUT.
  *
  * A filter without own restrictions/preferences should not modify
  * the pollset. Filters, whose filter "below" is not connected, should
@@ -246,8 +244,7 @@ struct Curl_cfilter {
 void Curl_cf_def_destroy_this(struct Curl_cfilter *cf,
                               struct Curl_easy *data);
 
-/* Default implementations for the type functions, implementing pass-through
- * the filter chain. */
+/* Default implementations for filter callbacks. */
 CURLcode Curl_cf_def_adjust_pollset(struct Curl_cfilter *cf,
                                     struct Curl_easy *data,
                                     struct easy_pollset *ps);

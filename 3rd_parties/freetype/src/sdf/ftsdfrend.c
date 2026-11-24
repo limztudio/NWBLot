@@ -47,13 +47,7 @@
 #define SDF_RENDERER( rend )  ( (SDF_Renderer)rend )
 
 
-  /**************************************************************************
-   *
-   * for setting properties
-   *
-   */
 
-  /* property setter function */
   static FT_Error
   sdf_property_set( FT_Module    module,
                     const char*  property_name,

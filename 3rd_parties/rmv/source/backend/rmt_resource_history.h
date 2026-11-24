@@ -35,7 +35,7 @@ typedef enum RmtResourceHistoryEventType
     kRmtResourceHistoryEventBackingMemoryPaged        = 9,   ///< Some or all of the backing memory was paged from one memory type to another.
     kRmtResourceHistoryEventPhysicalMapToLocal        = 10,  ///< Some or all of the physical memory backing this resource was mapped.
     kRmtResourceHistoryEventPhysicalUnmap             = 11,  ///< Some or all of the physical memory backing this resource was unmapped.
-    kRmtResourceHistoryEventPhysicalMapToHost         = 12,  ///< Some or all of the physical memory backing this resource was paged to local.
+    kRmtResourceHistoryEventPhysicalMapToHost         = 12,  ///< Some or all of the physical memory backing this resource was mapped to host memory.
     kRmtResourceHistoryEventResourceNamed             = 13   ///< A resource was named.
 
 } RmtResourceHistoryEventType;
@@ -63,8 +63,8 @@ typedef struct RmtResourceAddressRange
 typedef struct RmtResourceHistory
 {
     const RmtResource*          resource;                                     ///< The resource the history pertains to.
-    RmtResourceHistoryEvent     events[RMT_MAXIMUM_RESOURCE_HISTORY_EVENTS];  ///< A pointer to an array of <c><i>RmtResourceHistoryEvent</i></c> structures.
-    int32_t                     event_count;      ///< The number of <c><i>RmtResourceHistoryEvent</i></c> structures pointed to by <c><i>events</i></c>.
+    RmtResourceHistoryEvent     events[RMT_MAXIMUM_RESOURCE_HISTORY_EVENTS];  ///< The resource history events.
+    int32_t                     event_count;      ///< The number of events in the array.
     const RmtVirtualAllocation* base_allocation;  ///< A pointer to a <c><i>RmtVirtualAllocation</i></c> structure that underpins <c><i>resource</i></c>.
 
 } RmtResourceHistory;
@@ -79,7 +79,7 @@ typedef struct RmtResourceHistory
 /// @param [in] physical_address                    The physical address of the event, if applicable.
 /// @param [in] size_in_bytes                       The size, in bytes of the event, if applicable.
 /// @param [in] page_size_in_bytes                  The page size, in bytes of the event, if applicable.
-/// @param [in] compact                             If true, ignore identical sequential events.
+/// @param [in] compact                             If true, skip events matching the previous type, timestamp, thread, and virtual address.
 ///
 /// @retval
 /// kRmtOk                                          The operation completed successfully.

@@ -3250,20 +3250,7 @@ namespace
 {
 void* vma_aligned_alloc(size_t alignment, size_t size)
 {
-    // Unfortunately, aligned_alloc causes VMA to crash due to it returning null pointers. (At least under 11.4)
-    // Therefore, for now disable this specific exception until a proper solution is found.
-    //#if defined(__APPLE__) && (defined(MAC_OS_X_VERSION_10_16) || defined(__IPHONE_14_0))
-    //#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_16 || __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-    //    // For C++14, usr/include/malloc/_malloc.h declares aligned_alloc()) only
-    //    // with the MacOSX11.0 SDK in Xcode 12 (which is what adds
-    //    // MAC_OS_X_VERSION_10_16), even though the function is marked
-    //    // available for 10.15. That is why the preprocessor checks for 10.16 but
-    //    // the __builtin_available checks for 10.15.
-    //    // People who use C++17 could call aligned_alloc with the 10.15 SDK already.
-    //    if (__builtin_available(macOS 10.15, iOS 13, *))
-    //        return aligned_alloc(alignment, size);
-    //#endif
-    //#endif
+    // Avoid aligned_alloc because it can return null on some Apple systems.
 
     // alignment must be >= sizeof(void*)
     if(alignment < sizeof(void*))
@@ -6090,7 +6077,7 @@ public:
     // Begins array by writing "[".
     // Inside an array, you can write a sequence of any values.
     void BeginArray(bool singleLine = false);
-    // Ends array by writing "[".
+    // Ends array by writing "]".
     void EndArray();
 
     // Writes a string value inside "".
@@ -7922,7 +7909,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                 ++nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex < suballoc2ndCount)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -7943,7 +7929,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                 lastOffset = suballoc.offset + suballoc.size;
                 ++nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 // There is free space from lastOffset to freeSpace2ndTo1stEnd.
@@ -7953,7 +7938,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                     VmaAddDetailedStatisticsUnusedRange(inoutStats, unusedRangeSize);
                 }
 
-                // End of loop.
                 lastOffset = freeSpace2ndTo1stEnd;
             }
         }
@@ -7971,7 +7955,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
             ++nextAlloc1stIndex;
         }
 
-        // Found non-null allocation.
         if (nextAlloc1stIndex < suballoc1stCount)
         {
             const VmaSuballocation& suballoc = suballocations1st[nextAlloc1stIndex];
@@ -7992,7 +7975,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
             lastOffset = suballoc.offset + suballoc.size;
             ++nextAlloc1stIndex;
         }
-        // We are at the end.
         else
         {
             // There is free space from lastOffset to freeSpace1stTo2ndEnd.
@@ -8002,7 +7984,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                 VmaAddDetailedStatisticsUnusedRange(inoutStats, unusedRangeSize);
             }
 
-            // End of loop.
             lastOffset = freeSpace1stTo2ndEnd;
         }
     }
@@ -8019,7 +8000,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                 --nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex != SIZE_MAX)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8040,7 +8020,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                 lastOffset = suballoc.offset + suballoc.size;
                 --nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 // There is free space from lastOffset to size.
@@ -8050,7 +8029,6 @@ void VmaBlockMetadata_Linear::AddDetailedStatistics(VmaDetailedStatistics& inout
                     VmaAddDetailedStatisticsUnusedRange(inoutStats, unusedRangeSize);
                 }
 
-                // End of loop.
                 lastOffset = size;
             }
         }
@@ -8084,7 +8062,6 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
                 ++nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex < suballoc2ndCount)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8097,10 +8074,8 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
                 lastOffset = suballoc.offset + suballoc.size;
                 ++nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
-                // End of loop.
                 lastOffset = freeSpace2ndTo1stEnd;
             }
         }
@@ -8118,7 +8093,6 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
             ++nextAlloc1stIndex;
         }
 
-        // Found non-null allocation.
         if (nextAlloc1stIndex < suballoc1stCount)
         {
             const VmaSuballocation& suballoc = suballocations1st[nextAlloc1stIndex];
@@ -8131,10 +8105,8 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
             lastOffset = suballoc.offset + suballoc.size;
             ++nextAlloc1stIndex;
         }
-        // We are at the end.
         else
         {
-            // End of loop.
             lastOffset = freeSpace1stTo2ndEnd;
         }
     }
@@ -8151,7 +8123,6 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
                 --nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex != SIZE_MAX)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8164,10 +8135,8 @@ void VmaBlockMetadata_Linear::AddStatistics(VmaStatistics& inoutStats) const
                 lastOffset = suballoc.offset + suballoc.size;
                 --nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
-                // End of loop.
                 lastOffset = size;
             }
         }
@@ -8204,7 +8173,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 ++nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex < suballoc2ndCount)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8225,7 +8193,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 lastOffset = suballoc.offset + suballoc.size;
                 ++nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 if (lastOffset < freeSpace2ndTo1stEnd)
@@ -8234,7 +8201,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                     ++unusedRangeCount;
                 }
 
-                // End of loop.
                 lastOffset = freeSpace2ndTo1stEnd;
             }
         }
@@ -8253,7 +8219,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
             ++nextAlloc1stIndex;
         }
 
-        // Found non-null allocation.
         if (nextAlloc1stIndex < suballoc1stCount)
         {
             const VmaSuballocation& suballoc = suballocations1st[nextAlloc1stIndex];
@@ -8274,7 +8239,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
             lastOffset = suballoc.offset + suballoc.size;
             ++nextAlloc1stIndex;
         }
-        // We are at the end.
         else
         {
             if (lastOffset < freeSpace1stTo2ndEnd)
@@ -8283,7 +8247,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 ++unusedRangeCount;
             }
 
-            // End of loop.
             lastOffset = freeSpace1stTo2ndEnd;
         }
     }
@@ -8300,7 +8263,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 --nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex != SIZE_MAX)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8321,7 +8283,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 lastOffset = suballoc.offset + suballoc.size;
                 --nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 if (lastOffset < size)
@@ -8330,7 +8291,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                     ++unusedRangeCount;
                 }
 
-                // End of loop.
                 lastOffset = size;
             }
         }
@@ -8355,7 +8315,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 ++nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex < suballoc2ndCount)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8376,7 +8335,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 lastOffset = suballoc.offset + suballoc.size;
                 ++nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 if (lastOffset < freeSpace2ndTo1stEnd)
@@ -8386,7 +8344,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                     PrintDetailedMap_UnusedRange(json, lastOffset, unusedRangeSize);
                 }
 
-                // End of loop.
                 lastOffset = freeSpace2ndTo1stEnd;
             }
         }
@@ -8402,7 +8359,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
             ++nextAlloc1stIndex;
         }
 
-        // Found non-null allocation.
         if (nextAlloc1stIndex < suballoc1stCount)
         {
             const VmaSuballocation& suballoc = suballocations1st[nextAlloc1stIndex];
@@ -8423,7 +8379,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
             lastOffset = suballoc.offset + suballoc.size;
             ++nextAlloc1stIndex;
         }
-        // We are at the end.
         else
         {
             if (lastOffset < freeSpace1stTo2ndEnd)
@@ -8433,7 +8388,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 PrintDetailedMap_UnusedRange(json, lastOffset, unusedRangeSize);
             }
 
-            // End of loop.
             lastOffset = freeSpace1stTo2ndEnd;
         }
     }
@@ -8450,7 +8404,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 --nextAlloc2ndIndex;
             }
 
-            // Found non-null allocation.
             if (nextAlloc2ndIndex != SIZE_MAX)
             {
                 const VmaSuballocation& suballoc = suballocations2nd[nextAlloc2ndIndex];
@@ -8471,7 +8424,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                 lastOffset = suballoc.offset + suballoc.size;
                 --nextAlloc2ndIndex;
             }
-            // We are at the end.
             else
             {
                 if (lastOffset < size)
@@ -8481,7 +8433,6 @@ void VmaBlockMetadata_Linear::PrintDetailedMap(class VmaJsonWriter& json) const
                     PrintDetailedMap_UnusedRange(json, lastOffset, unusedRangeSize);
                 }
 
-                // End of loop.
                 lastOffset = size;
             }
         }
@@ -9572,7 +9523,6 @@ bool VmaBlockMetadata_TLSF::CreateAllocationRequest(
     if (allocSize > GetSumFreeSize())
         return false;
 
-    // If no free blocks in pool then check only null block
     if (m_BlocksFreeCount == 0)
         return CheckBlock(*m_NullBlock, m_ListsCount, allocSize, allocAlignment, allocType, pAllocationRequest);
 
@@ -9601,7 +9551,6 @@ bool VmaBlockMetadata_TLSF::CreateAllocationRequest(
         if (nextListBlock != VMA_NULL && CheckBlock(*nextListBlock, nextListIndex, allocSize, allocAlignment, allocType, pAllocationRequest))
             return true;
 
-        // If not fitted then null block
         if (CheckBlock(*m_NullBlock, m_ListsCount, allocSize, allocAlignment, allocType, pAllocationRequest))
             return true;
 
@@ -9633,7 +9582,6 @@ bool VmaBlockMetadata_TLSF::CreateAllocationRequest(
             prevListBlock = prevListBlock->NextFree();
         }
 
-        // If failed check null block
         if (CheckBlock(*m_NullBlock, m_ListsCount, allocSize, allocAlignment, allocType, pAllocationRequest))
             return true;
 
@@ -9666,7 +9614,6 @@ bool VmaBlockMetadata_TLSF::CreateAllocationRequest(
                 return true;
         }
 
-        // If failed check null block
         if (CheckBlock(*m_NullBlock, m_ListsCount, allocSize, allocAlignment, allocType, pAllocationRequest))
             return true;
 
@@ -9684,7 +9631,6 @@ bool VmaBlockMetadata_TLSF::CreateAllocationRequest(
             nextListBlock = nextListBlock->NextFree();
         }
 
-        // If failed check null block
         if (CheckBlock(*m_NullBlock, m_ListsCount, allocSize, allocAlignment, allocType, pAllocationRequest))
             return true;
 
@@ -12399,7 +12345,7 @@ VmaDefragmentationContext_T::VmaDefragmentationContext_T(
         }
         break;
     default:
-        ; // Do nothing.
+        ;
     }
 }
 
@@ -13897,12 +13843,8 @@ void VmaAllocator_T::ValidateVulkanFunctions() const
     }
 #endif
 
-    // Not validating these due to suspected driver bugs with these function
-    // pointers being null despite correct extension or Vulkan version is enabled.
-    // See issue #397. Their usage in VMA is optional anyway.
-    //
-    // VMA_ASSERT(m_VulkanFunctions.vkGetDeviceBufferMemoryRequirements != VMA_NULL);
-    // VMA_ASSERT(m_VulkanFunctions.vkGetDeviceImageMemoryRequirements != VMA_NULL);
+    // vkGetDeviceBufferMemoryRequirements and vkGetDeviceImageMemoryRequirements are optional;
+    // some drivers return null even when the extension or Vulkan version is enabled (issue #397).
 }
 
 VkDeviceSize VmaAllocator_T::CalcPreferredBlockSize(uint32_t memTypeIndex)
@@ -14194,15 +14136,7 @@ VkResult VmaAllocator_T::AllocateDedicatedMemory(
             VmaAllocation currAlloc = pAllocations[allocIndex];
             VkDeviceMemory hMemory = currAlloc->GetMemory();
 
-            /*
-            There is no need to call this, because Vulkan spec allows to skip vkUnmapMemory
-            before vkFreeMemory.
-
-            if(currAlloc->GetMappedData() != VMA_NULL)
-            {
-                (*m_VulkanFunctions.vkUnmapMemory)(m_hDevice, hMemory);
-            }
-            */
+            // Vulkan permits freeing memory without unmapping it first.
 
             FreeVulkanMemory(memTypeIndex, currAlloc->GetSize(), hMemory);
             m_Budget.RemoveAllocation(MemoryTypeIndexToHeapIndex(memTypeIndex), currAlloc->GetSize());
@@ -14794,7 +14728,6 @@ void VmaAllocator_T::FreeMemory(
 
 void VmaAllocator_T::CalculateStatistics(VmaTotalStatistics* pStats)
 {
-    // Initialize.
     VmaClearDetailedStatistics(pStats->total);
     for(uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i)
         VmaClearDetailedStatistics(pStats->memoryType[i]);
@@ -15434,15 +15367,7 @@ void VmaAllocator_T::FreeDedicatedMemory(VmaAllocation allocation)
 
     VkDeviceMemory hMemory = allocation->GetMemory();
 
-    /*
-    There is no need to call this, because Vulkan spec allows to skip vkUnmapMemory
-    before vkFreeMemory.
-
-    if(allocation->GetMappedData() != VMA_NULL)
-    {
-        (*m_VulkanFunctions.vkUnmapMemory)(m_hDevice, hMemory);
-    }
-    */
+    // Vulkan permits freeing memory without unmapping it first.
 
     FreeVulkanMemory(memTypeIndex, allocation->GetSize(), hMemory);
 
@@ -17192,17 +17117,6 @@ VMA_CALL_PRE VkResult VMA_CALL_POST vmaCreateVirtualBlock(
     *pVirtualBlock = vma_new(pCreateInfo->pAllocationCallbacks, VmaVirtualBlock_T)(*pCreateInfo);
     return VK_SUCCESS;
 
-    /*
-    Code for the future if we ever need a separate Init() method that could fail:
-
-    VkResult res = (*pVirtualBlock)->Init();
-    if(res < 0)
-    {
-        vma_delete(pCreateInfo->pAllocationCallbacks, *pVirtualBlock);
-        *pVirtualBlock = VK_NULL_HANDLE;
-    }
-    return res;
-    */
 }
 
 VMA_CALL_PRE void VMA_CALL_POST vmaDestroyVirtualBlock(VmaVirtualBlock VMA_NULLABLE virtualBlock)

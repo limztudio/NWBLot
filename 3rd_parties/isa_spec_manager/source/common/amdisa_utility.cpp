@@ -127,14 +127,11 @@ namespace amdisa
             // Check that the order in XML are sequential.
             assert(order == range.order);
 
-            // Construct the mask.
             uint32_t mask = (1ULL << range.bit_count) - 1;
             uint32_t positioned_mask = mask << current_pos;
 
-            // Get the value.
             uint64_t positioned_value = (value & positioned_mask) >> current_pos;
 
-            // Save the retrieved value to the final result.
             order++;
             current_pos += range.bit_count;
             range_values.push_back(positioned_value << range.bit_offset);

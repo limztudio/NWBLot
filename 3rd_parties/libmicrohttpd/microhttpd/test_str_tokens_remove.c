@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/test_str_token.c
+ * @file microhttpd/test_str_tokens_remove.c
  * @brief  Unit tests for MHD_str_remove_tokens_caseless_() function
  * @author Karlson2k (Evgeny Grin)
  */

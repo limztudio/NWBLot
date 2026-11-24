@@ -507,7 +507,6 @@ std::string RgdParsingUtils::UmdRgdEventIdToString(uint8_t event_id)
         ret << "DEBUG NOP";
         break;
     default:
-        // Shouldn't get here.
         assert(false);
         ret << kStrNotAvailable;
         break;
@@ -544,7 +543,6 @@ std::string RgdParsingUtils::KmdRgdEventIdToString(uint8_t event_id)
         ret << "WAVE STATE VGPRs / SGPRs";
         break;
     default:
-        // Shouldn't get here.
         assert(false);
         ret << kStrNotAvailable;
         break;
@@ -1142,10 +1140,8 @@ bool RgdParsingUtils::ParseCrashDump(const Config& user_config, RgdCrashDumpCont
                 }
             }
         }
-        // If ApiInfo chunk is available, parse chunk.
         ParseApiInfoChunk(chunk_file, contents.api_info, user_config.is_verbose);
 
-        // Parse TraceProcessInfo chunk.
         RgdParsingUtils::ParseTraceProcessInfoChunk(chunk_file, kChunkIdTraceProcessInfo, contents.crashing_app_process_info);
 
         // Parse the 'DriverOverrides' chunk.

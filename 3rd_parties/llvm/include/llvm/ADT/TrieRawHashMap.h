@@ -369,7 +369,6 @@ public:
           [](void *P) { static_cast<value_type *>(P)->~value_type(); });
   }
 
-  // Move constructor okay.
   ThreadSafeTrieRawHashMap(ThreadSafeTrieRawHashMap &&) = default;
 
   // No move assignment or any copy.

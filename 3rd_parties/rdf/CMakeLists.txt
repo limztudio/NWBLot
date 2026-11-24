@@ -1,8 +1,5 @@
-# NWB-rewritten rdf CMakeLists for the offline/vendored RGD build. Upstream nested the amdrdf library under
-# rdf/rdf behind an orchestrator that also pulled in imported/ (zstd), tools (rdfi/rdfg/rdfm) and tests; here
-# the library is flattened to this directory, zstd lives at top-level 3rd_parties/zstd, and the tools/tests are
-# dropped. Built STATIC so nothing has to deploy an amdrdf.dll next to the logserver (upstream defaulted to a
-# shared lib). RDF_BUILD_STATIC=1 keeps RDF_EXPORT empty so the C API links straight out of the static archive.
+# Build rdf statically with zstd for the offline RGD build.
+# RDF_BUILD_STATIC=1 keeps RDF_EXPORT empty for static linking.
 cmake_minimum_required(VERSION 3.13)
 project(rdf LANGUAGES CXX C)
 include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")

@@ -2001,7 +2001,6 @@ CallInst *CodeExtractor::emitReplacerCall(
       ReturnInst::Create(Context, nullptr,
                          TheSwitch->getIterator()); // Return void
     } else if (OldFnRetTy == TheSwitch->getCondition()->getType()) {
-      // return what we have
       ReturnInst::Create(Context, TheSwitch->getCondition(),
                          TheSwitch->getIterator());
     } else {

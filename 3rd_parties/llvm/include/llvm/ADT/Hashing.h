@@ -6,10 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the newly proposed standard C++ interfaces for hashing
-// arbitrary data and building hash functions for user-defined types. This
-// interface was originally proposed in N3333[1] and is currently under review
-// for inclusion in a future TR and/or standard.
+// This file provides interfaces for hashing arbitrary data and user-defined types.
 //
 // The primary interfaces provide are comprised of one type and three functions:
 //

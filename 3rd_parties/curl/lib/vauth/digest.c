@@ -210,7 +210,6 @@ static bool auth_digest_get_key_value(const char *chlg, const char *key,
         return FALSE; /* weird */
 
       if(curlx_str_cmp(&name, key)) {
-        /* if this is our key, return the value */
         size_t len = curlx_strlen(&data);
         const char *src = curlx_str(&data);
         size_t i;

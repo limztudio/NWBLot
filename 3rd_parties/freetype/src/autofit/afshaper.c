@@ -184,7 +184,7 @@
                                      gsub_lookups );
 
     if ( hb( set_is_empty )( gsub_lookups ) )
-      goto Exit; /* nothing to do */
+      goto Exit;
 
     FT_TRACE4(( "GSUB lookups (style `%s'):\n",
                 af_style_names[style_class->style] ));

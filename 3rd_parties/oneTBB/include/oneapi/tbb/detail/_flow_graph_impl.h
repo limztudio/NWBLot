@@ -53,7 +53,6 @@ public:
     typedef const GraphNodeType& const_reference;
     typedef std::forward_iterator_tag iterator_category;
 
-    //! Copy constructor
     graph_iterator(const graph_iterator& other) :
         my_graph(other.my_graph), current_node(other.current_node)
     {}

@@ -3015,7 +3015,6 @@ ExprResult SemaObjC::BuildInstanceMessage(
     // __attribute__((NSObject)) pointer, we don't need to do any
     // special conversion in order to look up a receiver.
     if (ReceiverType->isObjCRetainableType()) {
-      // do nothing
     } else if (!getLangOpts().ObjCAutoRefCount &&
                !Context.getObjCIdType().isNull() &&
                (ReceiverType->isPointerType() ||

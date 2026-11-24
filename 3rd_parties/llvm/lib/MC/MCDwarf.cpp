@@ -721,7 +721,6 @@ MCDwarfLineTableHeader::tryGetFile(StringRef &Directory, StringRef &FileName,
   if (Source.has_value())
     HasAnySource = true;
 
-  // return the allocated FileNumber.
   return FileNumber;
 }
 

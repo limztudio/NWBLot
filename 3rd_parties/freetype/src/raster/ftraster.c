@@ -948,7 +948,7 @@
     if ( y1 == e )
       e += ras.precision;
 
-    if ( e2 < e )  /* nothing to do */
+    if ( e2 < e )
       return SUCCESS;
 
     size = (Int)TRUNC( e2 - e ) + 1;
@@ -1106,7 +1106,7 @@
     if ( y1 == e )
       e += ras.precision;
 
-    if ( e2 < e )  /* nothing to do */
+    if ( e2 < e )
       return SUCCESS;
 
     top = ras.top;
@@ -2709,7 +2709,6 @@
     if ( !target_map )
       return FT_THROW( Invalid_Argument );
 
-    /* nothing to do */
     if ( !target_map->width || !target_map->rows )
       return Raster_Err_Ok;
 

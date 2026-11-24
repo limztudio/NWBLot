@@ -346,7 +346,7 @@ category_overrides = {
 
   0x103A: 'As',
 
-  #0x1040: 'D0', # XXX The spec says D0, but Uniscribe doesn't seem to do.
+  # The spec says U+1040 is D0, but Uniscribe seems to differ.
 
   0x103E: 'MH',
   0x1060: 'ML',
@@ -422,7 +422,7 @@ def matra_pos_bottom(u, block):
   if block == 'Kannada':	return  'BEFORE_SUB'
   if block == 'Malayalam':	return  'AFTER_POST'
   return "AFTER_SUB"
-def indic_matra_position(u, pos, block): # Reposition matra
+def indic_matra_position(u, pos, block):
   if pos == 'PRE_C':	return matra_pos_left(u, block)
   if pos == 'POST_C':	return matra_pos_right(u, block)
   if pos == 'ABOVE_C':	return matra_pos_top(u, block)
@@ -458,7 +458,6 @@ for k, (cat, pos, block) in indic_data.items():
     pos = 'END'
     indic_data[k] = (cat, pos, block)
 
-# Position overrides are more complicated
 
 # Keep in sync with CONSONANT_FLAGS in the shaper
 consonant_categories = ('C', 'CS', 'Ra','CM', 'V', 'PLACEHOLDER', 'DOTTEDCIRCLE')
@@ -546,7 +545,6 @@ elif language.name == "rust":
 else:
 	assert False, "Unknown language: %s" % language.name
 
-# Shorten values
 short = [{
 	"Repha":		'Rf',
 	"PLACEHOLDER":		'GB',

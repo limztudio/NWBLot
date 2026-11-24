@@ -2257,7 +2257,6 @@ void TypePrinter::printHLSLInlineSpirvBefore(const HLSLInlineSpirvType *T,
 
 void TypePrinter::printHLSLInlineSpirvAfter(const HLSLInlineSpirvType *T,
                                             raw_ostream &OS) {
-  // nothing to do
 }
 
 void TypePrinter::printObjCInterfaceBefore(const ObjCInterfaceType *T,

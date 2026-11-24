@@ -62,8 +62,7 @@ CURLcode Curl_thrdq_create(struct curl_thrdq **ptqueue,
                            Curl_thrdq_ev_cb *fn_event, /* optional */
                            void *user_data);
 
-/* Destroy the queue, free all queued items unprocessed and destroy
- * the thread pool used.
+/* Destroy the queue, free queued items and destroy the thread pool.
  * @param join TRUE when thread pool shall be joined. FALSE for
  *             detaching any running threads.
  */
@@ -74,8 +73,8 @@ void Curl_thrdq_destroy(struct curl_thrdq *tqueue, bool join);
  * `description` is an optional string describing the item for tracing
  * purposes. It needs to have the same lifetime as `item`.
  *
- * With`timeout_ms` != 0, items that get stuck that long in the send
- * queue are removed and added to the receive queue right away.
+ * With `timeout_ms` != 0, workers move expired items from the send queue
+ * to the receive queue when they next check for work.
  */
 CURLcode Curl_thrdq_send(struct curl_thrdq *tqueue, void *item,
                          const char *description, timediff_t timeout_ms);

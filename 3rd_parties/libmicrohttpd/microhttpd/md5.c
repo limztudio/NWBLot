@@ -49,7 +49,6 @@ MHD_MD5_init (struct Md5Ctx *ctx)
   ctx->H[2] = UINT32_C (0x98badcfe);
   ctx->H[3] = UINT32_C (0x10325476);
 
-  /* Initialise the number of bytes. */
   ctx->count = 0;
 }
 
@@ -89,11 +88,7 @@ md5_transform (uint32_t H[MD5_HASH_SIZE_WORDS],
 #endif /* _MHD_GET_32BIT_LE_UNALIGNED */
 
   /* Four auxiliary functions, see RFC 1321, Clause 3.4 (step 4). */
-  /* Some optimisations used. */
-/* #define F_FUNC(x,y,z) (((x)&(y)) | ((~(x))&(z))) */ /* Original version */
 #define F_FUNC(x,y,z) ((((y) ^ (z)) & (x)) ^ (z))
-/* #define G_FUNC_1(x,y,z) (((x)&(z)) | ((y)&(~(z)))) */ /* Original version */
-/* #define G_FUNC_2(x,y,z) UINT32_C(0) */ /* Original version */
 #ifndef MHD_FAVOR_SMALL_CODE
 #  define G_FUNC_1(x,y,z) ((~(z)) & (y))
 #  define G_FUNC_2(x,y,z) ((z) & (x))
@@ -101,8 +96,7 @@ md5_transform (uint32_t H[MD5_HASH_SIZE_WORDS],
 #  define G_FUNC_1(x,y,z) ((((x) ^ (y)) & (z)) ^ (y))
 #  define G_FUNC_2(x,y,z) UINT32_C(0)
 #endif /* MHD_FAVOR_SMALL_CODE */
-#define H_FUNC(x,y,z) ((x) ^ (y) ^ (z)) /* Original version */
-/* #define I_FUNC(x,y,z) ((y) ^ ((x) | (~(z)))) */ /* Original version */
+#define H_FUNC(x,y,z) ((x) ^ (y) ^ (z))
 #define I_FUNC(x,y,z) (((~(z)) | (x)) ^ (y))
 
   /* One step of round 1 of MD5 computation, see RFC 1321, Clause 3.4 (step 4).
@@ -400,7 +394,7 @@ MHD_MD5_update (struct Md5Ctx *ctx,
 
 #ifndef MHD_FAVOR_SMALL_CODE
   if (0 == length)
-    return; /* Shortcut, do nothing */
+    return;
 #endif /* MHD_FAVOR_SMALL_CODE */
 
   /* Note: (count & (MD5_BLOCK_SIZE-1))

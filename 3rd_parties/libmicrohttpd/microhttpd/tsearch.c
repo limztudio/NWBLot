@@ -43,18 +43,18 @@ tsearch (const void *vkey, void **vrootp,
     int r;
 
     if ((r = (*compar)(vkey, (*rootp)->key)) == 0) /* T2: */
-      return *rootp;                               /* we found it! */
+      return *rootp;
 
     rootp = (r < 0) ?
-            &(*rootp)->llink :      /* T3: follow left branch */
-            &(*rootp)->rlink;       /* T4: follow right branch */
+            &(*rootp)->llink :      /* T3 */
+            &(*rootp)->rlink;       /* T4 */
   }
 
-  q = malloc (sizeof(node_t)); /* T5: key not found */
-  if (q != NULL)               /* make new node */
+  q = malloc (sizeof(node_t)); /* T5 */
+  if (q != NULL)
   {
-    *rootp = q;                /* link new node to old */
-    q->key = vkey; /* initialize new node */
+    *rootp = q;
+    q->key = vkey;
     q->llink = q->rlink = NULL;
   }
   return q;
@@ -77,17 +77,16 @@ tfind (const void *vkey, void * const *vrootp,
     int r;
 
     if ((r = (*compar)(vkey, (*rootp)->key)) == 0) /* T2: */
-      return *rootp;                               /* key found */
+      return *rootp;
     rootp = (r < 0) ?
-            &(*rootp)->llink :                     /* T3: follow left branch */
-            &(*rootp)->rlink;                      /* T4: follow right branch */
+            &(*rootp)->llink :                     /* T3 */
+            &(*rootp)->rlink;                      /* T4 */
   }
   return NULL;
 }
 
 
 /*  $NetBSD: tdelete.c,v 1.8 2016/01/20 20:47:41 christos Exp $ */
-/* find a node with key "vkey" in tree "vrootp" */
 void *
 tdelete (const void *vkey, void **vrootp,
          int (*compar)(const void *, const void *))
@@ -103,15 +102,15 @@ tdelete (const void *vkey, void **vrootp,
   {
     p = *rootp;
     rootp = (cmp < 0) ?
-            &(*rootp)->llink :       /* follow llink branch */
-            &(*rootp)->rlink;        /* follow rlink branch */
+            &(*rootp)->llink :
+            &(*rootp)->rlink;
     if (*rootp == NULL)
-      return NULL;                   /* key not found */
+      return NULL;
   }
   r = (*rootp)->rlink;               /* D1: */
   if ((q = (*rootp)->llink) == NULL) /* Left NULL? */
     q = r;
-  else if (r != NULL)                /* Right link is NULL? */
+  else if (r != NULL)
   {
     if (r->llink == NULL)            /* D2: Find successor */
     {
@@ -127,8 +126,8 @@ tdelete (const void *vkey, void **vrootp,
       q->rlink = (*rootp)->rlink;
     }
   }
-  free (*rootp);            /* D4: Free node */
-  *rootp = q;               /* link parent to new node */
+  free (*rootp);            /* D4 */
+  *rootp = q;
   return p;
 }
 

@@ -248,7 +248,6 @@ std::string RgdUtils::GetApiString(TraceApiType api_type)
     case TraceApiType::HIP:
     case TraceApiType::METAL:
     default:
-        // Should not reach here.
         assert(false);
         ret_txt << "Invalid";
         break;
@@ -272,7 +271,6 @@ std::string RgdUtils::GetHangTypeString(HangType hang_type)
         ret_txt << "Unknown";
         break;
     default:
-        // Should not reach here.
         assert(false);
         ret_txt << "Invalid";
         break;
@@ -296,7 +294,6 @@ bool RgdUtils::SaveCodeObjectBinaries(const std::string& file_name, const std::m
 
     try
     {
-        // Create the output directory based on the input file path.
         std::filesystem::path output_dir = std::filesystem::path(file_name).replace_extension("");
         output_dir_str = output_dir.string();
         if (std::filesystem::create_directory(output_dir))
@@ -305,12 +302,10 @@ bool RgdUtils::SaveCodeObjectBinaries(const std::string& file_name, const std::m
             {
                 try
                 {
-                    // Create the output file name based on the code object hash.
                     std::stringstream file_path;
                     file_path << output_dir.string() << "/0x" << std::hex << hash.high << hash.low << ".bin";
                     std::string output_file_path = file_path.str();
 
-                    // Write the code object binary to the file.
                     std::ofstream output_file(output_file_path, std::ios::binary);
                     if (output_file.is_open())
                     {

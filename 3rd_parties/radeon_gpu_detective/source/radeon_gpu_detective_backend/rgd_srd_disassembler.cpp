@@ -34,7 +34,7 @@ uint32_t ShaderResourceDescriptor::ExtractBits(uint32_t dword_index, uint32_t st
     }
     else
     {
-        // if (dword_index >= data_.size()){} Not an error; may have bitfields beyond provided data, in which case return 0.
+        // Missing words return zero when assertions are disabled.
 
         if (start_bit > end_bit || end_bit >= 32)
         {
@@ -96,7 +96,6 @@ uint32_t ShaderResourceDescriptor::GetDword(uint32_t index) const
 {
     uint32_t result = 0;
 
-    // Check if index is within bounds.
     assert(index < data_.size());
     if (index < data_.size()) {
         result = data_[index];

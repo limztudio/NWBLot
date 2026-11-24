@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/test_sha512_256.h
+ * @file microhttpd/test_sha512_256.c
  * @brief  Unit tests for SHA-512/256 functions
  * @author Karlson2k (Evgeny Grin)
  */

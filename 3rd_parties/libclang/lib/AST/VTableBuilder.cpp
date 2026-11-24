@@ -593,7 +593,6 @@ public:
       : MostDerivedClass(MostDerivedClass), LayoutClass(LayoutClass),
         Context(MostDerivedClass->getASTContext()), Overriders(Overriders) {
 
-    // Add vcall and vbase offsets.
     AddVCallAndVBaseOffsets(Base, BaseIsVirtual, OffsetInLayoutClass);
   }
 
@@ -1775,7 +1774,6 @@ void ItaniumVTableBuilder::LayoutPrimaryAndSecondaryVTables(
     RD = PrimaryBase;
   }
 
-  // Layout secondary vtables.
   LayoutSecondaryVTables(Base, BaseIsMorallyVirtual, OffsetInLayoutClass);
 }
 

@@ -247,7 +247,6 @@ static CURLcode cf_ip_attempt_connect(struct cf_ip_attempt *a,
 {
   *connected = (bool)a->connected;
   if(!a->result && !*connected) {
-    /* evaluate again */
     a->result = Curl_conn_cf_connect(a->cf, data, connected);
 
     if(!a->result) {
@@ -441,7 +440,6 @@ evaluate:
         bs->running_tail = &bs->running;
         return CURLE_OK;
       }
-      /* still running */
       ++ongoing;
       panchor = &(*panchor)->next;
     }
@@ -531,13 +529,11 @@ evaluate:
         goto out;
       DEBUGASSERT(a);
 
-      /* append to running list */
       *bs->running_tail = a;
       a->next = NULL;
       bs->running_tail = &a->next;
       bs->last_attempt_started = *pnow;
       bs->last_attempt_ai_family = ai_family;
-      /* and run everything again */
       goto evaluate;
     }
     else if(inconclusive) {
@@ -560,10 +556,9 @@ evaluate:
           bs->last_attempt_started = *pnow;
           goto evaluate;
         }
-        DEBUGASSERT(0); /* should not come here */
+        DEBUGASSERT(0);
       }
       else {
-        /* let's wait some more before restarting */
         infof(data, "connect attempts inconclusive, retrying "
                     "in %" FMT_TIMEDIFF_T "ms", delay_ms);
         Curl_expire_set(data, EXPIRE_HAPPY_EYEBALLS, delay_ms, pnow);

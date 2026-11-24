@@ -1981,7 +1981,6 @@ typedef ptrdiff_t  FT_PtrDist;
     if ( !outline )
       return FT_THROW( Invalid_Outline );
 
-    /* return immediately if the outline is empty */
     if ( outline->n_points == 0 || outline->n_contours == 0 )
       return Smooth_Err_Ok;
 
@@ -2013,7 +2012,6 @@ typedef ptrdiff_t  FT_PtrDist;
       if ( !target_map )
         return FT_THROW( Invalid_Argument );
 
-      /* nothing to do */
       if ( !target_map->width || !target_map->rows )
         return Smooth_Err_Ok;
 
@@ -2156,7 +2154,7 @@ typedef ptrdiff_t  FT_PtrDist;
     FT_UNUSED( args );
 
 
-    return 0; /* nothing to do */
+    return 0;
   }
 
 

@@ -23424,8 +23424,6 @@ static ExprResult buildImplicitMapper(Sema &S, QualType BaseType,
                              DMD, false, SourceLocation(), BaseType, VK_LValue);
 }
 
-// Look up the user-defined mapper given the mapper name and mapper type,
-// return true if found one.
 static bool hasUserDefinedMapper(Sema &SemaRef, Scope *S,
                                  CXXScopeSpec &MapperIdScopeSpec,
                                  const DeclarationNameInfo &MapperId,

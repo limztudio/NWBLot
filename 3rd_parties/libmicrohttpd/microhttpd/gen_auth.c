@@ -128,10 +128,10 @@ find_auth_rq_header_ (const struct MHD_Connection *c, enum MHD_AuthType type,
         auth_value->str = h->value + token_len;
         auth_value->len = h->value_size - token_len;
       }
-      return true; /* Found a match */
+      return true;
     }
   }
-  return false; /* No matching header has been found */
+  return false;
 }
 
 
@@ -156,7 +156,6 @@ parse_bauth_params (const char *str,
 
   i = 0;
 
-  /* Skip all whitespaces at start */
   while (i < str_len && (' ' == str[i] || '\t' == str[i]))
     i++;
 
@@ -179,7 +178,6 @@ parse_bauth_params (const char *str,
     token68_len = i - token68_start;
     mhd_assert (0 != token68_len);
 
-    /* Skip all whitespaces */
     while (i < str_len && (' ' == str[i] || '\t' == str[i]))
       i++;
     /* Check whether any garbage is present at the end of the string */
@@ -398,7 +396,6 @@ parse_dauth_params (const char *str,
                     const size_t str_len,
                     struct MHD_RqDAuth *pdauth)
 {
-  /* The tokens */
   static const struct _MHD_cstr_w_len nonce_tk = _MHD_S_STR_W_LEN ("nonce");
   static const struct _MHD_cstr_w_len opaque_tk = _MHD_S_STR_W_LEN ("opaque");
   static const struct _MHD_cstr_w_len algorithm_tk =
@@ -419,7 +416,6 @@ parse_dauth_params (const char *str,
   /* The locally processed parameters */
   struct MHD_RqDAuthParam userhash;
   struct MHD_RqDAuthParam algorithm;
-  /* Indexes */
   size_t i;
   size_t p;
   /* The list of the tokens.
@@ -461,7 +457,6 @@ parse_dauth_params (const char *str,
   memset (&algorithm, 0, sizeof(algorithm));
   i = 0;
 
-  /* Skip all whitespaces at start */
   while (i < str_len && (' ' == str[i] || '\t' == str[i]))
     i++;
 

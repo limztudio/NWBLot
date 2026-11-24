@@ -398,7 +398,6 @@ namespace astc_ldr
 		return ise_index;
 	}
 
-	// returns true if blue contraction was actually used
 	// note the encoded endpoints may be swapped
 	// TODO: Pass in vec4F l/h and let it more precisely quantize in here.
 	struct cem_encode_ldr_rgb_or_rgba_direct_result
@@ -427,8 +426,6 @@ namespace astc_ldr
 		const auto& quant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(endpoint_ise_range).m_val_to_ise;
 		const auto& dequant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(endpoint_ise_range).m_ISE_to_val;
 
-		//const auto &ISE_to_rank = astc_helpers::g_dequant_tables.get_endpoint_tab(endpoint_ise_range).m_ISE_to_rank;
-		//const auto &rank_to_ISE = astc_helpers::g_dequant_tables.get_endpoint_tab(endpoint_ise_range).m_rank_to_ISE;
 
 		color_rgba enc_l(l), enc_h(h);
 		endpoints_are_swapped = false;
@@ -634,7 +631,6 @@ namespace astc_ldr
 	}
 #endif
 		
-	// returns true if blue contraction was used
 	// note the encoded endpoints may be swapped
 	struct rgb_base_offset_res
 	{
@@ -2256,7 +2252,6 @@ namespace astc_ldr
 		assert(pTrial_weight_vals0);
 		assert((ccs_index == -1) || (pTrial_weight_vals1));
 				
-		//const uint32_t num_endpoint_vals = astc_helpers::get_num_cem_values(cem_index);
 		const uint32_t num_comps = (cem_index == astc_helpers::CEM_LDR_RGB_BASE_PLUS_OFFSET) ? 3 : 4;
 
 		color_rgba low_color, high_color;
@@ -3038,7 +3033,6 @@ namespace astc_ldr
 		const uint32_t total_weights = pixel_stats.m_num_pixels;
 
 		float best_l = BIG_FLOAT_VAL, best_h = -BIG_FLOAT_VAL;
-		//int best_l_index = 0, best_h_index = 0;
 
 		for (uint32_t c = 0; c < pixel_stats.m_num_pixels; c++)
 		{
@@ -3048,13 +3042,11 @@ namespace astc_ldr
 			if (p < best_l)
 			{
 				best_l = p;
-				//best_l_index = c;
 			}
 
 			if (p > best_h)
 			{
 				best_h = p;
-				//best_h_index = c;
 			}
 		} // c
 
@@ -3529,7 +3521,6 @@ namespace astc_ldr
 			flattened_axis = calc_pca_4D(pixel_stats.m_num_pixels, flattened_pixels, flattened_pixels_mean);
 
 		float best_l = BIG_FLOAT_VAL, best_h = -BIG_FLOAT_VAL;
-		//int best_l_index = 0, best_h_index = 0;
 
 		for (uint32_t c = 0; c < pixel_stats.m_num_pixels; c++)
 		{
@@ -3539,13 +3530,11 @@ namespace astc_ldr
 			if (p < best_l)
 			{
 				best_l = p;
-				//best_l_index = c;
 			}
 
 			if (p > best_h)
 			{
 				best_h = p;
-				//best_h_index = c;
 			}
 		} // c
 
@@ -4140,7 +4129,6 @@ namespace astc_ldr
 		const uint32_t total_weights = pixel_stats.m_num_pixels;
 
 		float best_l = BIG_FLOAT_VAL, best_h = -BIG_FLOAT_VAL;
-		//int best_l_index = 0, best_h_index = 0;
 
 		for (uint32_t c = 0; c < pixel_stats.m_num_pixels; c++)
 		{
@@ -4151,13 +4139,11 @@ namespace astc_ldr
 			if (p < best_l)
 			{
 				best_l = p;
-				//best_l_index = c;
 			}
 
 			if (p > best_h)
 			{
 				best_h = p;
-				//best_h_index = c;
 			}
 		} // c
 
@@ -5374,8 +5360,6 @@ namespace astc_ldr
 							float v1 = lerp(actual_l, actual_h, 2.0f / 3.0f);
 							assert(v0 <= v1);
 
-							//if (v0 > v1)
-							//	std::swap(v0, v1);
 
 							float dist0 = v0 - ps.m_min_f[0];
 							float dist1 = v1 - ps.m_max_f[0];
@@ -6091,7 +6075,6 @@ namespace astc_ldr
 
 		m_num_subsets = num_subsets;
 		m_num_samples = (num_subsets == 2) ? 6 : 5;
-		//m_num_hash_tabs = (total_texels > 36) ? 12 : 8;
 		m_num_hash_tabs = 12;
 
 		const uint32_t hash_key_shift = (num_subsets == 2) ? 1 : 2;
@@ -6256,7 +6239,6 @@ namespace astc_ldr
 	{
 		assert((num_partitions >= 2) && (num_partitions <= 4));
 
-		//const uint32_t total_texels = block_width * block_height;
 
 		m_width = block_width;
 		m_height = block_height;
@@ -6270,7 +6252,6 @@ namespace astc_ldr
 			m_unique_index_to_part_seed[i] = -1;
 		}
 
-		//const bool is_small_block = astc_helpers::is_small_block(block_width, block_height);
 	
 		partition_hash_map part_hash;
 		part_hash.reserve(1024);
@@ -6289,7 +6270,6 @@ namespace astc_ldr
 			{
 				for (uint32_t x = 0; x < block_width; x++)
 				{
-					//const uint8_t p = (uint8_t)astc_helpers::compute_texel_partition(seed_index, x, y, 0, m_num_partitions, is_small_block);
 					const uint8_t p = (uint8_t)astc_helpers::get_precomputed_texel_partition(block_width, block_height, seed_index, x, y, num_partitions);
 					
 					assert((p < m_num_partitions) && (p < 4));

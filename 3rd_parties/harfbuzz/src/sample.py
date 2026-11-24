@@ -18,7 +18,6 @@ font = hb.font_create (face)
 upem = hb.face_get_upem (face)
 del face
 hb.font_set_scale (font, upem, upem)
-#hb.ft_font_set_funcs (font)
 hb.ot_font_set_funcs (font)
 
 buf = hb.buffer_create ()

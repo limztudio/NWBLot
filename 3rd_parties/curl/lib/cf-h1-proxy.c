@@ -188,7 +188,6 @@ static void h1_tunnel_go_state(struct Curl_cfilter *cf,
     ts->tunnel_state = new_state;
     curlx_dyn_reset(&ts->rcvbuf);
     curlx_dyn_reset(&ts->request_data);
-    /* restore the protocol pointer */
     data->info.httpcode = 0; /* clear it as it might have been used for the
                                 proxy */
     /* If a proxy-authorization header was used for the proxy, then we should
@@ -517,8 +516,7 @@ static CURLcode recv_CONNECT_resp(struct Curl_cfilter *cf,
     size_t nread;
     char byte;
 
-    /* Read one byte at a time to avoid a race condition. Wait at most one
-       second before looping to ensure continuous pgrsUpdates. */
+    /* Read one byte at a time to avoid a race condition. */
     result = Curl_conn_recv(data, cf->sockindex, &byte, 1, &nread);
     if(result == CURLE_AGAIN)
       /* socket buffer drained, return */
@@ -601,7 +599,6 @@ static CURLcode recv_CONNECT_resp(struct Curl_cfilter *cf,
 
     if(ts->leading_unfold) {
       if(ISBLANK(byte))
-        /* skip a bit brother */
         continue;
       /* non-blank, insert a space then continue the unfolding */
       if(curlx_dyn_addn(&ts->rcvbuf, " ", 1)) {
@@ -615,7 +612,6 @@ static CURLcode recv_CONNECT_resp(struct Curl_cfilter *cf,
       return CURLE_RECV_ERROR;
     }
 
-    /* if this is not the end of a header line then continue */
     if(byte != 0x0a)
       continue;
     else {
@@ -700,7 +696,6 @@ static CURLcode H1_CONNECT(struct Curl_cfilter *cf,
       /* error or not complete yet. return for more multi-multi */
       if(result || !done)
         goto out;
-      /* got it */
       h1_tunnel_go_state(cf, ts, H1_TUNNEL_RESPONSE, data);
       FALLTHROUGH();
 

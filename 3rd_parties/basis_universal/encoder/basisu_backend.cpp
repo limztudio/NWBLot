@@ -130,7 +130,6 @@ namespace basisu
 	void basisu_backend::reoptimize_and_sort_endpoints_codebook(uint32_t total_block_endpoints_remapped, uint_vec& all_endpoint_indices)
 	{
 		basisu_frontend& r = *m_pFront_end;
-		//const bool is_video = r.get_params().m_tex_type == basist::cBASISTexTypeVideoFrames;
 
 		if (m_params.m_used_global_codebooks)
 		{
@@ -141,7 +140,6 @@ namespace basisu
 		}
 		else
 		{
-			//if ((total_block_endpoints_remapped) && (m_params.m_compression_level > 0))
 			if ((total_block_endpoints_remapped) && (m_params.m_compression_level > 1))
 			{
 				// We've changed the block endpoint indices, so we need to go and adjust the endpoint codebook (remove unused entries, optimize existing entries that have changed)
@@ -165,10 +163,7 @@ namespace basisu
 
 				for (uint32_t slice_index = 0; slice_index < m_slices.size(); slice_index++)
 				{
-					//const uint32_t first_block_index = m_slices[slice_index].m_first_block_index;
 
-					//const uint32_t width = m_slices[slice_index].m_width;
-					//const uint32_t height = m_slices[slice_index].m_height;
 					const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
 					const uint32_t num_blocks_y = m_slices[slice_index].m_num_blocks_y;
 
@@ -176,7 +171,6 @@ namespace basisu
 					{
 						for (uint32_t block_x = 0; block_x < num_blocks_x; block_x++)
 						{
-							//const uint32_t block_index = first_block_index + block_x + block_y * num_blocks_x;
 
 							encoder_block& m = m_slice_encoder_blocks[slice_index](block_x, block_y);
 
@@ -345,10 +339,7 @@ namespace basisu
 		for (uint32_t slice_index = 0; slice_index < m_slices.size(); slice_index++)
 		{
 			const bool is_iframe = m_slices[slice_index].m_iframe;
-			//const uint32_t first_block_index = m_slices[slice_index].m_first_block_index;
 
-			//const uint32_t width = m_slices[slice_index].m_width;
-			//const uint32_t height = m_slices[slice_index].m_height;
 			const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
 			const uint32_t num_blocks_y = m_slices[slice_index].m_num_blocks_y;
 			const int prev_frame_slice_index = find_video_frame(slice_index, -1);
@@ -426,8 +417,6 @@ namespace basisu
 			const bool is_iframe = m_slices[slice_index].m_iframe;
 			const uint32_t first_block_index = m_slices[slice_index].m_first_block_index;
 
-			//const uint32_t width = m_slices[slice_index].m_width;
-			//const uint32_t height = m_slices[slice_index].m_height;
 			const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
 			const uint32_t num_blocks_y = m_slices[slice_index].m_num_blocks_y;
 
@@ -620,7 +609,6 @@ namespace basisu
 	{
 		for (uint32_t slice_index = 0; slice_index < m_slices.size(); slice_index++)
 		{
-			//const uint32_t first_block_index = m_slices[slice_index].m_first_block_index;
 			const uint32_t width = m_slices[slice_index].m_width;
 			const uint32_t height = m_slices[slice_index].m_height;
 			const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
@@ -633,7 +621,6 @@ namespace basisu
 			{
 				for (uint32_t block_x = 0; block_x < num_blocks_x; block_x++)
 				{
-					//const uint32_t block_index = first_block_index + block_x + block_y * num_blocks_x;
 
 					encoder_block& m = m_slice_encoder_blocks[slice_index](block_x, block_y);
 
@@ -642,7 +629,6 @@ namespace basisu
 
 						output_block.set_diff_bit(true);
 						// Setting the flip bit to false to be compatible with the Khronos KDFS.
-						//output_block.set_flip_bit(true);
 						output_block.set_flip_bit(false);
 
 						const uint32_t endpoint_index = m.m_endpoint_index;
@@ -680,8 +666,6 @@ namespace basisu
 		} // slice_index
 	}
 
-	//uint32_t g_color_delta_hist[255 * 3 + 1];
-	//uint32_t g_color_delta_bad_hist[255 * 3 + 1];
 		
 	// TODO: Split this into multiple methods.
 	bool basisu_backend::encode_image()
@@ -721,11 +705,7 @@ namespace basisu
 		
 		for (uint32_t slice_index = 0; slice_index < m_slices.size(); slice_index++)
 		{
-			//const int prev_frame_slice_index = is_video ? find_video_frame(slice_index, -1) : -1;
-			//const int next_frame_slice_index = is_video ? find_video_frame(slice_index, 1) : -1;
 			const uint32_t first_block_index = m_slices[slice_index].m_first_block_index;
-			//const uint32_t width = m_slices[slice_index].m_width;
-			//const uint32_t height = m_slices[slice_index].m_height;
 			const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
 			const uint32_t num_blocks_y = m_slices[slice_index].m_num_blocks_y;
 
@@ -743,7 +723,6 @@ namespace basisu
 			{
 				for (uint32_t block_x = 0; block_x < num_blocks_x; block_x++)
 				{
-					//const uint32_t block_index = first_block_index + block_x + block_y * num_blocks_x;
 
 					encoder_block& m = m_slice_encoder_blocks[slice_index](block_x, block_y);
 
@@ -848,7 +827,6 @@ namespace basisu
 								const float endpoint_remap_thresh = maximum(1.0f, m_params.m_endpoint_rdo_quality_thresh);
 								const uint64_t thresh_err = (uint64_t)(cur_err * endpoint_remap_thresh);
 
-								//const int MAX_ENDPOINT_SEARCH_DIST = (m_params.m_compression_level >= 2) ? 64 : 32;
 								const int MAX_ENDPOINT_SEARCH_DIST = (m_params.m_compression_level >= 2) ? 64 : 16;
 
 								if (!g_cpu_supports_sse41)
@@ -970,8 +948,6 @@ namespace basisu
 											linear_distance_rgb_4_N_sse41(&trial_err, block_selectors, block_colors, src_pixels.get_ptr(), 16, best_trial_err);
 										}
 
-										//if (trial_err > thresh_err)
-										//	g_color_delta_bad_hist[color_delta]++;
 
 										if ((trial_err < best_trial_err) && (trial_err <= (int64_t)thresh_err))
 										{
@@ -1262,10 +1238,6 @@ namespace basisu
 
 		} // slice_index
 
-		//for (int i = 0; i <= 255 * 3; i++)
-		//{
-		//	printf("%u, %u, %f\n", g_color_delta_bad_hist[i], g_color_delta_hist[i], g_color_delta_hist[i] ? g_color_delta_bad_hist[i] / (float)g_color_delta_hist[i] : 0);
-		//}
 				
 		double total_prep_time = tm.get_elapsed_secs();
 		debug_printf("basisu_backend::encode_image: Total prep time: %3.2f\n", total_prep_time);
@@ -1277,7 +1249,6 @@ namespace basisu
 			total_selector_indices_remapped, total_selector_indices_remapped * 100.0f / get_total_blocks(),
 			total_used_selector_history_buf, total_used_selector_history_buf * 100.0f / get_total_blocks());
 
-		//if ((total_endpoint_indices_remapped) && (m_params.m_compression_level > 0))
 		if ((total_endpoint_indices_remapped) && (m_params.m_compression_level > 1) && (!m_params.m_used_global_codebooks))
 		{
 			int_vec unused;
@@ -1360,8 +1331,6 @@ namespace basisu
 
 		for (uint32_t slice_index = 0; slice_index < m_slices.size(); slice_index++)
 		{
-			//const uint32_t width = m_slices[slice_index].m_width;
-			//const uint32_t height = m_slices[slice_index].m_height;
 			const uint32_t num_blocks_x = m_slices[slice_index].m_num_blocks_x;
 			const uint32_t num_blocks_y = m_slices[slice_index].m_num_blocks_y;
 
@@ -1372,7 +1341,6 @@ namespace basisu
 
 			int endpoint_pred_repeat_count = 0;
 			uint32_t cur_endpoint_pred_sym_ofs = 0;
-//			uint32_t prev_endpoint_pred_sym = 0;
 			uint32_t prev_endpoint_index = 0;
 
 			for (uint32_t block_y = 0; block_y < num_blocks_y; block_y++)
@@ -1406,7 +1374,6 @@ namespace basisu
 							{
 								total_endpoint_pred_bits += coder.put_code(sym, endpoint_pred_model);
 
-								//prev_endpoint_pred_sym = sym;
 							}
 						}
 					}
@@ -1746,7 +1713,6 @@ namespace basisu
 
 	uint32_t basisu_backend::encode()
 	{
-		//const bool is_video = m_pFront_end->get_params().m_tex_type == basist::cBASISTexTypeVideoFrames;
 		m_output.m_slice_desc = m_slices;
 		m_output.m_etc1s = m_params.m_etc1s;
 		m_output.m_uses_global_codebooks = m_params.m_used_global_codebooks;

@@ -999,7 +999,7 @@ Error BitcodeAnalyzer::parseBlock(unsigned BlockID, unsigned IndentLevel,
     if (Error Err = Stream.JumpToBit(CurrentRecordPos))
       return Err;
     if (Expected<unsigned> Skipped = Stream.skipRecord(Entry.ID))
-      ; // Do nothing.
+      ;
     else
       return Skipped.takeError();
   }

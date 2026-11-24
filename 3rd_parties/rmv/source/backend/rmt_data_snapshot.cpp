@@ -471,7 +471,6 @@ RmtErrorCode RmtDataSnapshotGetSegmentStatus(const RmtDataSnapshot* snapshot, Rm
             min_virtual_allocation_size = RMT_MINIMUM(min_virtual_allocation_size, size_in_bytes);
             allocation_count++;
 
-            // Get the size of the resources in the allocation.
             uint64_t memory_region_size = RmtVirtualAllocationGetTotalResourceMemoryInBytes(snapshot, current_virtual_allocation);
             out_segment_status->total_bound_virtual_memory += memory_region_size;
             RMT_ASSERT(size_in_bytes >= memory_region_size);

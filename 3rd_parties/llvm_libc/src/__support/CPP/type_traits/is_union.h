@@ -15,7 +15,6 @@
 namespace LIBC_NAMESPACE_DECL {
 namespace cpp {
 
-// is_union
 template <class T> struct is_union : bool_constant<__is_union(T)> {};
 template <typename T>
 LIBC_INLINE_VAR constexpr bool is_union_v = is_union<T>::value;

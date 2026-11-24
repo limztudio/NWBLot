@@ -114,7 +114,6 @@ class CacheBinFunctor {
         LargeMemoryBlock *head, *tail;
         int putListNum;
 
-        /* if the OP_CLEAN_ALL is requested. */
         bool isCleanAll;
 
         inline void commitOperation(CacheBinOperation *op) const;

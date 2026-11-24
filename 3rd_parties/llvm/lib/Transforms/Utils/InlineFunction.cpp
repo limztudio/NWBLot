@@ -1189,7 +1189,7 @@ void ScopedAliasMetadataDeepCloner::clone() {
 void ScopedAliasMetadataDeepCloner::remap(Function::iterator FStart,
                                           Function::iterator FEnd) {
   if (MDMap.empty())
-    return; // Nothing to do.
+    return;
 
   for (BasicBlock &BB : make_range(FStart, FEnd)) {
     for (Instruction &I : BB) {
@@ -2687,8 +2687,6 @@ llvm::InlineResult llvm::CanInlineCallSite(const CallBase &CB,
           // The MSVC personality cannot tolerate catches getting inlined into
           // cleanup funclets.
           if (isa<CleanupPadInst>(IFI.CallSiteEHPad)) {
-            // Ok, the call site is within a cleanuppad.  Let's check the callee
-            // for catchpads.
             for (const BasicBlock &CalledBB : *CalledFunc) {
               if (isa<CatchSwitchInst>(CalledBB.getFirstNonPHIIt()))
                 return InlineResult::failure("catch in cleanup funclet");

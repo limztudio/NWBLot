@@ -329,7 +329,7 @@ CINDEX_LINKAGE unsigned clang_getDiagnosticNumRanges(CXDiagnostic);
  *
  * \param Diagnostic the diagnostic whose range is being extracted.
  *
- * \param Range the zero-based index specifying which range to
+ * \param Range the zero-based index of the range to retrieve.
  *
  * \returns the requested source range.
  */

@@ -868,7 +868,6 @@ void InitListChecker::FillInEmptyInitForField(unsigned Init, FieldDecl *Field,
     }
 
     if (hadError || VerifyOnly) {
-      // Do nothing
     } else if (Init < NumInits) {
       ILE->setInit(Init, MemberInit.getAs<Expr>());
     } else if (!isa<ImplicitValueInitExpr>(MemberInit.get())) {
@@ -1044,7 +1043,6 @@ InitListChecker::FillInEmptyInitializations(const InitializedEntity &Entity,
       }
 
       if (hadError) {
-        // Do nothing
       } else if (VerifyOnly) {
         SkipEmptyInitChecks = true;
       } else if (Init < NumInits) {
@@ -3182,8 +3180,6 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
     if (!VerifyOnly)
       D->setFieldDecl(*Field);
 
-    // Make sure that our non-designated initializer list has space
-    // for a subobject corresponding to this field.
     if (StructuredList && FieldIndex >= StructuredList->getNumInits())
       StructuredList->resizeInits(SemaRef.Context, FieldIndex + 1);
 
@@ -3443,8 +3439,6 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
     }
   }
 
-  // Make sure that our non-designated initializer list has space
-  // for a subobject corresponding to this array element.
   if (StructuredList &&
       DesignatedEndIndex.getZExtValue() >= StructuredList->getNumInits())
     StructuredList->resizeInits(SemaRef.Context,

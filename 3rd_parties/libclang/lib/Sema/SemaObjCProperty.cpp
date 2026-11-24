@@ -757,7 +757,6 @@ static void setImpliedPropertyAttributeForReadOnlyProperty(
     return;
 
   if (!ivar) {
-    // if no backing ivar, make property 'strong'.
     property->setPropertyAttributes(ObjCPropertyAttribute::kind_strong);
     return;
   }
@@ -2728,7 +2727,6 @@ void SemaObjC::CheckObjCPropertyAttributes(Decl *PDecl, SourceLocation Loc,
   // readwrite, and this is an object type.
   if (!getOwnershipRule(Attributes) && PropertyTy->isObjCRetainableType()) {
     if (Attributes & ObjCPropertyAttribute::kind_readonly) {
-      // do nothing
     } else if (getLangOpts().ObjCAutoRefCount) {
       // With arc, @property definitions should default to strong when
       // not specified.

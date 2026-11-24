@@ -731,7 +731,6 @@ void emitVariableInfo(raw_ostream &OS, const VariableInfo &VI) {
     bytes[0] = 1;
     bytes[1] = static_cast<uint8_t>(*nullable);
   } else {
-    // Nothing to do.
   }
 
   OS.write(reinterpret_cast<const char *>(bytes), 2);

@@ -95,9 +95,7 @@ int64_t Curl_rlimit_per_step(struct Curl_rlimit *r);
 int64_t Curl_rlimit_avail(struct Curl_rlimit *r,
                           const struct curltime *pts);
 
-/* Drain tokens from the ratelimit, give an estimate of how many tokens
- * remain to be drained in the future (-1 for unknown).
- * Pass timestamp or NULL. */
+/* Drain tokens from the rate limit. Pass a timestamp or NULL. */
 void Curl_rlimit_drain(struct Curl_rlimit *r, size_t tokens,
                        const struct curltime *pts);
 

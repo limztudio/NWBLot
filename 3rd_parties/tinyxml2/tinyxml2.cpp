@@ -20,6 +20,7 @@ must not be misrepresented as being the original software.
 3. This notice may not be removed or altered from any source
 distribution.
 */
+// Modified by NWBLot.
 
 #include "tinyxml2.h"
 
@@ -34,13 +35,6 @@ distribution.
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1400 ) && (!defined WINCE)
 	// Microsoft Visual Studio, version 2005 and higher. Not WinCE.
-	/*int _snprintf_s(
-	   char *buffer,
-	   size_t sizeOfBuffer,
-	   size_t count,
-	   const char *format [,
-		  argument] ...
-	);*/
 	static inline int TIXML_SNPRINTF( char* buffer, size_t size, const char* format, ... )
 	{
 		va_list va;
@@ -88,7 +82,6 @@ distribution.
 	#endif
 #else
 	// GCC version 3 and higher
-	//#warning( "Using sn* functions." )
 	#define TIXML_SNPRINTF	snprintf
 	#define TIXML_VSNPRINTF	vsnprintf
 	static inline int TIXML_VSCPRINTF( const char* format, va_list va )
@@ -439,8 +432,7 @@ void XMLUtil::ConvertUTF32ToUTF8( unsigned long input, char* output, int* length
 
     output += *length;
 
-    // Scary scary fall throughs are annotated with carefully designed comments
-    // to suppress compiler warnings such as -Wimplicit-fallthrough in gcc
+    // Fallthrough annotations suppress compiler warnings.
     switch (*length) {
         case 4:
             --output;
@@ -582,13 +574,12 @@ void XMLUtil::ToStr( double v, char* buffer, int bufferSize )
 
 void XMLUtil::ToStr( int64_t v, char* buffer, int bufferSize )
 {
-	// horrible syntax trick to make the compiler happy about %lld
+	// Match the printf formats' long long argument types.
 	TIXML_SNPRINTF(buffer, bufferSize, "%lld", static_cast<long long>(v));
 }
 
 void XMLUtil::ToStr( uint64_t v, char* buffer, int bufferSize )
 {
-    // horrible syntax trick to make the compiler happy about %llu
     TIXML_SNPRINTF(buffer, bufferSize, "%llu", static_cast<unsigned long long>(v));
 }
 
@@ -661,17 +652,18 @@ bool XMLUtil::ToDouble( const char* str, double* value )
 }
 
 
+// Match the scanf formats' long long pointer types.
 bool XMLUtil::ToInt64(const char* str, int64_t* value)
 {
     if (IsPrefixHex(str)) {
-        unsigned long long v = 0;	// horrible syntax trick to make the compiler happy about %llx
+        unsigned long long v = 0;
         if (TIXML_SSCANF(str, "%llx", &v) == 1) {
             *value = static_cast<int64_t>(v);
             return true;
         }
     }
     else {
-        long long v = 0;	// horrible syntax trick to make the compiler happy about %lld
+        long long v = 0;
         if (TIXML_SSCANF(str, "%lld", &v) == 1) {
             *value = static_cast<int64_t>(v);
             return true;
@@ -682,7 +674,7 @@ bool XMLUtil::ToInt64(const char* str, int64_t* value)
 
 
 bool XMLUtil::ToUnsigned64(const char* str, uint64_t* value) {
-    unsigned long long v = 0;	// horrible syntax trick to make the compiler happy about %llu
+    unsigned long long v = 0;
     if(TIXML_SSCANF(str, IsPrefixHex(str) ? "%llx" : "%llu", &v) == 1) {
         *value = static_cast<uint64_t>(v);
         return true;
@@ -1331,7 +1323,6 @@ XMLDeclaration::XMLDeclaration( XMLDocument* doc ) : XMLNode( doc )
 
 XMLDeclaration::~XMLDeclaration()
 {
-    //printf( "~XMLDeclaration\n" );
 }
 
 
@@ -1959,7 +1950,6 @@ char* XMLElement::ParseAttributes( char* p, int* curLineNumPtr )
             return 0;
         }
 
-        // attribute.
         if (XMLUtil::IsNameStartChar( static_cast<unsigned char>(*p) ) ) {
             XMLAttribute* attrib = CreateAttribute();
             TIXMLASSERT( attrib );
@@ -1973,11 +1963,6 @@ char* XMLElement::ParseAttributes( char* p, int* curLineNumPtr )
                 _document->SetError( XML_ERROR_PARSING_ATTRIBUTE, attrLineNum, "XMLElement name=%s", Name() );
                 return 0;
             }
-            // There is a minor bug here: if the attribute in the source xml
-            // document is duplicated, it will not be detected and the
-            // attribute will be doubly added. However, tracking the 'prevAttribute'
-            // avoids re-scanning the attribute list. Preferring performance for
-            // now, may reconsider in the future.
             if ( prevAttribute ) {
                 TIXMLASSERT( prevAttribute->_next == 0 );
                 prevAttribute->_next = attrib;
@@ -1988,15 +1973,13 @@ char* XMLElement::ParseAttributes( char* p, int* curLineNumPtr )
             }
             prevAttribute = attrib;
         }
-        // end of the tag
         else if ( *p == '>' ) {
             ++p;
             break;
         }
-        // end of the tag
         else if ( *p == '/' && *(p+1) == '>' ) {
             _closingType = CLOSED;
-            return p+2;	// done; sealed element.
+            return p+2;
         }
         else {
             _document->SetError( XML_ERROR_PARSING_ELEMENT, _parseLineNum, 0 );

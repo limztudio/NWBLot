@@ -36,8 +36,6 @@ namespace xbc7 {
 //    inverse() and inverse_check() bit-identical (int64 addition commutes,
 //    unlike float).
 //  - The inverse zero-skip is pSrc[...].v == 0 -- no type-punning needed.
-//  - The stale BASISU_NOTE_UNUSED(src_stride/dst_stride) lines are gone:
-//    the strides were actually used right below them.
 //
 // Range guidance (Q15.16, asserts catch violations in debug): worst-case
 // gain of the 2D transform is sqrt(rows*cols) <= 12, so inputs bounded by
@@ -489,7 +487,6 @@ namespace xbc7 {
 
 				fixed16_16 base = g_base_4x4_quant[x + y * 4];
 
-				//int quant_scale = (base * level_scale).round_to_int();
 				
 				int quant_scale = base.mul_round_to_int(level_scale);
 
@@ -1306,13 +1303,9 @@ inline constexpr xbc7_xy_delta g_xbc7_xy_deltas[NUM_XY_DELTAS] =
 		uint32_t p, int pOut_preds[16]);
 
 	// ----------------------------- decoder API -----------------------------
-	// Bounds-checked read-only byte view that the decoder takes as input (the
-	// decoder no longer accepts a uint8_vec -- it's a low-level API over a
-	// pointer+size). Unlike std::span it TRAPS on any access outside [0,size):
-	// assert() in debug, and a safe sentinel (the first byte, or 0 if empty) in
-	// all builds -- so a malformed stream or a decoder bug degrades to a
-	// controlled, reproducible value instead of reading bogus memory or crashing.
-	// The viewed buffer must outlive every decode call that uses the span.
+	// Read-only byte view. Out-of-range access asserts in debug; otherwise,
+	// byte reads return the first byte (or 0 if empty) and region reads return
+	// the start pointer. The buffer must outlive every decode call.
 	struct byte_span
 	{
 		const uint8_t* m_p = nullptr;
@@ -1337,10 +1330,7 @@ inline constexpr xbc7_xy_delta g_xbc7_xy_deltas[NUM_XY_DELTAS] =
 			return first();
 		}
 
-		// Checked pointer to the [offset, offset+len) region, so a caller can
-		// read a whole run directly (no per-byte overhead). Out of range (either
-		// end) -> assert + m_p clamped to the start, so the read stays inside the
-		// buffer rather than walking off it. (offset==m_size, len==0 is valid.)
+		// Returns the start pointer on failure. offset==m_size with len==0 is valid.
 		const uint8_t* checked_ptr(size_t offset, size_t len) const
 		{
 			if ((offset <= m_size) && (len <= m_size - offset)) // len<=m_size-offset avoids overflow

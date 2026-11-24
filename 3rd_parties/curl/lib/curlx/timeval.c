@@ -27,8 +27,7 @@
 
 static LARGE_INTEGER s_time_freq;
 
-/* For tool or tests, we must initialize before calling curlx_now().
-   Providing this function here is wrong. */
+/* The tool and tests must initialize before calling curlx_now(). */
 void curlx_now_init(void)
 {
   QueryPerformanceFrequency(&s_time_freq);

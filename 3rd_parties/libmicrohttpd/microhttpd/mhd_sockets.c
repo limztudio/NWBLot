@@ -288,7 +288,6 @@ MHD_W32_socket_pair_ (SOCKET sockets_pair[2], int non_blk)
 
       if (INVALID_SOCKET == client_s)
       {
-        /* try again */
         closesocket (listen_s);
         continue;
       }
@@ -301,7 +300,6 @@ MHD_W32_socket_pair_ (SOCKET sockets_pair[2], int non_blk)
                             c_addinlen)) &&
              (WSAGetLastError () != WSAEWOULDBLOCK)) )
       {
-        /* try again */
         closesocket (listen_s);
         closesocket (client_s);
         continue;
@@ -313,7 +311,6 @@ MHD_W32_socket_pair_ (SOCKET sockets_pair[2], int non_blk)
                          &addr_len);
       if (INVALID_SOCKET == server_s)
       {
-        /* try again */
         closesocket (listen_s);
         closesocket (client_s);
         continue;
@@ -388,7 +385,7 @@ MHD_add_to_fd_set_ (MHD_socket fd,
     return 0;
 
 #ifndef HAS_FD_SETSIZE_OVERRIDABLE
-  (void) fd_setsize;  /* Mute compiler warning */
+  (void) fd_setsize;
   fd_setsize = (int) FD_SETSIZE; /* Help compiler to optimise */
 #endif /* ! HAS_FD_SETSIZE_OVERRIDABLE */
 

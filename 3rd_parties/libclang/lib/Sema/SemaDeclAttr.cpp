@@ -1127,17 +1127,8 @@ static void handleParamTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     return;
   }
 
-  // FIXME: This check is currently being done in the analysis.  It can be
-  //        enabled here only after the parser propagates attributes at
-  //        template specialization definition, not declaration.
-  //QualType ReturnType = cast<ParmVarDecl>(D)->getType();
-  //const CXXRecordDecl *RD = ReturnType->getAsCXXRecordDecl();
-  //
-  //if (!RD || !RD->hasAttr<ConsumableAttr>()) {
-  //    S.Diag(AL.getLoc(), diag::warn_return_state_for_unconsumable_type) <<
-  //      ReturnType.getAsString();
-  //    return;
-  //}
+  // FIXME: Move consumable-type validation from analysis here once the parser
+  // propagates attributes to template specialization definitions.
 
   D->addAttr(::new (S.Context) ParamTypestateAttr(S.Context, AL, ParamState));
 }
@@ -1159,30 +1150,8 @@ static void handleReturnTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     return;
   }
 
-  // FIXME: This check is currently being done in the analysis.  It can be
-  //        enabled here only after the parser propagates attributes at
-  //        template specialization definition, not declaration.
-  // QualType ReturnType;
-  //
-  // if (const ParmVarDecl *Param = dyn_cast<ParmVarDecl>(D)) {
-  //  ReturnType = Param->getType();
-  //
-  //} else if (const CXXConstructorDecl *Constructor =
-  //             dyn_cast<CXXConstructorDecl>(D)) {
-  //  ReturnType = Constructor->getFunctionObjectParameterType();
-  //
-  //} else {
-  //
-  //  ReturnType = cast<FunctionDecl>(D)->getCallResultType();
-  //}
-  //
-  // const CXXRecordDecl *RD = ReturnType->getAsCXXRecordDecl();
-  //
-  // if (!RD || !RD->hasAttr<ConsumableAttr>()) {
-  //    S.Diag(Attr.getLoc(), diag::warn_return_state_for_unconsumable_type) <<
-  //      ReturnType.getAsString();
-  //    return;
-  //}
+  // FIXME: Move consumable-type validation from analysis here once the parser
+  // propagates attributes to template specialization definitions.
 
   D->addAttr(::new (S.Context) ReturnTypestateAttr(S.Context, AL, ReturnState));
 }

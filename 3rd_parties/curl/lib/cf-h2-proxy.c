@@ -308,8 +308,7 @@ static CURLcode proxy_h2_nw_out_flush(struct Curl_cfilter *cf,
 
 /*
  * Processes pending input left in network input buffer.
- * This function returns 0 if it succeeds, or -1 and error code will
- * be assigned to *err.
+ * Returns CURLE_OK on success or CURLE_RECV_ERROR on failure.
  */
 static CURLcode proxy_h2_process_pending_input(struct Curl_cfilter *cf,
                                                struct Curl_easy *data)
@@ -521,9 +520,8 @@ static int proxy_h2_on_frame_recv(nghttp2_session *session,
 
   switch(frame->hd.type) {
   case NGHTTP2_HEADERS:
-    /* nghttp2 guarantees that :status is received, and we store it to
-       stream->status_code. Fuzzing has proven this can still be reached
-       without status code having been set. */
+    /* Fuzzing reached this without a response, despite nghttp2's :status
+       guarantee. */
     if(!ctx->tunnel.resp)
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     /* Only final status code signals the end of header */
@@ -1292,8 +1290,7 @@ static CURLcode cf_h2_proxy_send(struct Curl_cfilter *cf,
   result = Curl_1st_fatal(result, proxy_h2_progress_egress(cf, data));
 
   if(!result && proxy_h2_should_close_session(ctx)) {
-    /* nghttp2 thinks this session is done. If the stream has not been
-     * closed, this is an error state for out transfer */
+    /* A completed nghttp2 session cannot send more tunnel data. */
     if(ctx->tunnel.closed) {
       result = CURLE_SEND_ERROR;
     }

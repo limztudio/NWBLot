@@ -52,11 +52,11 @@ typedef enum RmtFileChunkType
     kRmtFileChunkTypeAsicInfo     = 0,  ///< A chunk containing information about the ASIC on which the RMT file was generated.
     kRmtFileChunkTypeApiInfo      = 1,  ///< A chunk containing information about the API that the application generating the RMT file was using.
     kRmtFileChunkTypeSystemInfo   = 2,  ///< A chunk containing the description of the system on which the trace was made.
-    kRmtFileChunkTypeRmtData      = 3,  ///< A chunk containing the RMT data.
+    kRmtFileChunkTypeRmtData      = 3,
     kRmtFileChunkTypeSegmentInfo  = 4,  ///< A chunk containing segment information for the main process.
     kRmtFileChunkTypeProcessStart = 5,  ///< A chunk containing process state information at the start of the RMT trace.
-    kRmtFileChunkTypeSnapshotInfo = 6,  ///< A chunk containing snapshot info.
-    kRmtFileChunkTypeAdapterInfo  = 7,  ///< A chunk containing adapter info.
+    kRmtFileChunkTypeSnapshotInfo = 6,
+    kRmtFileChunkTypeAdapterInfo  = 7,
 
     // NOTE: Add new chunks above this.
     kRmtFileChunkTypeCount  ///< The number of different chunk types.
@@ -65,17 +65,17 @@ typedef enum RmtFileChunkType
 /// An enumeration of flags about the file header.
 typedef enum RmtFileChunkFileHeaderFlags
 {
-    kRmtFileHeaderFlagReserved = (1 << 0),  ///< Get the queue timing source
+    kRmtFileHeaderFlagReserved = (1 << 0),
 } RmtFileChunkFileHeaderFlags;
 
 /// An enumeration of the API types.
 typedef enum RmtApiType
 {
-    kRmtApiTypeDirectx12 = 0,  ///< The trace contains data from a DirectX 12 application.
-    kRmtApiTypeVulkan    = 1,  ///< The trace contains data from a Vulkan application.
+    kRmtApiTypeDirectx12 = 0,
+    kRmtApiTypeVulkan    = 1,
     kRmtApiTypeGeneric   = 2,  ///< The API of the application is not known.
-    kRmtApiTypeOpencl    = 3,  ///< The API of the application is OpenCL.
-    kRmtApiTypeCount           ///< The number of APIs supported.
+    kRmtApiTypeOpencl    = 3,
+    kRmtApiTypeCount
 } RmtApiType;
 
 typedef struct ChunkInfo
@@ -99,7 +99,7 @@ typedef struct RmtFileChunkIdentifier
 typedef struct RmtFileChunkHeader
 {
     RmtFileChunkIdentifier chunk_identifier;  ///< A unique identifier for the chunk.
-    int16_t                version_minor;     ///< The minor version of the chunk. Please see above note on ordering of minor and major version
+    int16_t                version_minor;     ///< The minor version of the chunk.
     int16_t                version_major;     ///< The major version of the chunk.
     int32_t                size_in_bytes;     ///< The size of the chunk in bytes.
     int32_t                padding;           ///< Reserved padding dword.
@@ -165,13 +165,13 @@ typedef struct RmtFileChunkSnapshotInfo
 typedef struct RmtFileParser
 {
     FILE*              file_handle;        ///< The file handle.
-    RmtFileHeader      header;             ///< The RMT file header read from the buffer.
+    RmtFileHeader      header;             ///< The RMT file header read from the file.
     RmtFileChunkHeader current_chunk;      ///< Storage for a <c><i>RmtFileChunkHeader</i></c> structure.
     int32_t            next_chunk_offset;  ///< The offset to the next chunk to read.
     size_t             file_size;          ///< The size of the file.
 } RmtFileParser;
 
-/// Create an RMT file parser from a buffer.
+/// Create an RMT file parser from a file handle.
 ///
 /// @param [in, out]    file_parser                 A pointer to a <c><i>RmtFileParser</i></c> structure to populate.
 /// @param [in]         file_handle                 A pointer to a <c><i>FILE</i></c> object.
@@ -179,50 +179,43 @@ typedef struct RmtFileParser
 /// @retval
 /// kRmtOk                          The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer         The operation failed because <c><i>fileParser</i></c> or <c><i>fileBuffer</i></c> was NULL.
+/// kRmtErrorInvalidPointer         The parser pointer was NULL.
 /// @retval
-/// kRmtErrorInvalidSize            The operation failed because <c><i>fileBufferSize</i></c> was not large enough to contain the RMT file header.
+/// kRmtErrorFileNotOpen            The file handle was NULL or the file was empty.
 /// @retval
-/// kRmtErrorMalformedData          The operation failed because the data pointed to by <c><i>fileBuffer</i></c> didn't begin with a valid RMT file header.
+/// kRmtErrorMalformedData          The file header was incomplete or had an invalid magic number.
 ///
 RmtErrorCode RmtFileParserCreateFromHandle(RmtFileParser* file_parser, FILE* file_handle);
 
 /// Get a pointer to the next chunk in the file.
 ///
 /// @param [in, out]    file_parser                 A pointer to a <c><i>RmtFileParser</i></c> structure.
-/// @param [out]        parsed_chunk                A pointer to a <c><i>RmtFileChunkHeader</i></c> structure to populate with the chunk information.
+/// @param [out]        parsed_chunk                Receives a pointer to the parser's current chunk header.
 ///
 /// @retval
 /// kRmtOk                          The operation completed successfully.
 /// @retval
 /// kRmtErrorInvalidPointer         The operation failed because <c><i>fileParser</i></c> or <c><i>parsedChunk</i></c> was NULL.
 /// @retval
-/// kRmtEndOfFile                   The operation failed because the end of the buffer was reached.
+/// kRmtEndOfFile                   The next chunk offset is at or beyond the end of the file.
+/// @retval
+/// kRmtErrorMalformedData          The chunk header was incomplete.
 ///
 RmtErrorCode RmtFileParserParseNextChunk(RmtFileParser* file_parser, RmtFileChunkHeader** parsed_chunk);
 
-/// Check if the current chunk can be processed by this build of RMT. Only checks major versions.
-/// See implementation comment for directions on how to express the versions presently supported.
+/// Return success without checking the chunk version.
 ///
 /// @param [in]     header      A pointer to a Chunk header
 /// @retval
 /// kRmtOk                                  The chunk is supported.
-/// @retval
-/// RMT_ERROR_UNSUPPORTED_LOW_SPEC_VERSION  Incompatible version
-/// @retval
-/// RMT_ERROR_UNSUPPORTED_HIGH_SPEC_VERSION Incompatible version
 ///
 RmtErrorCode RmtFileParserIsChunkSupported(const RmtFileChunkHeader* header);
 
-/// Check if the RMT file can be processed by this build of RMT.
+/// Return success without checking the file version.
 ///
 /// @param [in]     header      A pointer to a file header
 /// @retval
 /// kRmtOk                                  The file is compatible.
-/// @retval
-/// RMT_ERROR_UNSUPPORTED_LOW_SPEC_VERSION  Incompatible version
-/// @retval
-/// RMT_ERROR_UNSUPPORTED_HIGH_SPEC_VERSION Incompatible version
 ///
 RmtErrorCode RmtFileParserIsFileSupported(const RmtFileHeader* header);
 

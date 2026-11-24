@@ -24,7 +24,7 @@
  *
  ***************************************************************************/
 
-int curlx_nonblock(curl_socket_t sockfd,    /* operate on this */
+int curlx_nonblock(curl_socket_t sockfd,
                    int nonblock   /* TRUE or FALSE */);
 
 #endif /* HEADER_CURL_NONBLOCK_H */

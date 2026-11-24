@@ -33,7 +33,6 @@
 #include "curlx/strcopy.h"
 
 #define IN6ADDRSZ       16
-/* #define INADDRSZ         4 */
 #define INT16SZ          2
 
 /*

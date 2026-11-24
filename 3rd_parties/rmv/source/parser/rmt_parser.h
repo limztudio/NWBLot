@@ -133,12 +133,12 @@ RmtErrorCode RmtParserSetCallbacks(RmtParser*                           rmt_pars
 ///
 /// @param [in]  rmt_parser                 A pointer to a <c><i>RmtParser</i></c> structure.
 /// @param [out] out_token                  A pointer to a <c><i>RmtToken</i></c> structure.
-/// @param [in]  out_parser_position        A pointer to a <c><i>RmtParserPosition</i></c> structure.
+/// @param [out] out_parser_position        Optional pointer to receive the position before advancing.
 ///
 /// @retval
 /// kRmtOk                              The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer             The operation failed because <c><i>rmt_parser</i></c> or <c><i>out_parser_position</i></c> being set to <c><i>NULL</i></c>.
+/// kRmtErrorInvalidPointer             The parser or output token pointer was <c><i>NULL</i></c>.
 RmtErrorCode RmtParserAdvance(RmtParser* rmt_parser, RmtToken* out_token, RmtParserPosition* out_parser_position);
 
 /// Check if the RMT parser has finished.

@@ -234,7 +234,6 @@ void serialize_link (const hb_serialize_context_t::object_t::link_t& link,
       serialize_link_of_type<OT::HBUINT24> (link, head, size, id_map, c);
       return;
     default:
-      // Unexpected link width.
       assert (0);
   }
 }

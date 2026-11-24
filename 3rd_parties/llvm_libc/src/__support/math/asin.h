@@ -135,7 +135,6 @@ LIBC_INLINE double asin(double x) {
   if (LIBC_UNLIKELY(x_exp >= FPBits::EXP_BIAS)) {
     // x = +-1, asin(x) = +- pi/2
     if (x_abs == 1.0) {
-      // return +- pi/2
       return fputil::multiply_add(x_sign, PI_OVER_TWO.hi,
                                   x_sign * PI_OVER_TWO.lo);
     }

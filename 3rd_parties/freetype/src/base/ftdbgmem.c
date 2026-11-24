@@ -647,7 +647,6 @@
          table->alloc_count >= table->alloc_count_max )
       return NULL;
 
-    /* return NULL if this allocation would overflow the maximum heap size */
     if ( table->bound_total                                   &&
          table->alloc_total_max - table->alloc_current > size )
       return NULL;

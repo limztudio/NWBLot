@@ -49,8 +49,6 @@
 #endif
 
 // Add deprecation support for Comgr on Linux
-// This can be removed in favor of generic [[deprecated]] in C23, which should
-// also allow us to more easily include support on Windows
 
 #ifndef AMD_COMGR_DEPRECATED
 #ifdef AMD_COMGR_BUILD

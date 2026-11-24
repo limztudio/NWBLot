@@ -2972,9 +2972,6 @@ namespace bu_math
 
 		inline dynamic_matrix& clear()
 		{
-			//const uint32_t total = m_rows * m_cols;
-			//for (uint32_t i = 0; i < total; i++)
-			//	m_v[i] = static_cast<T>(0);
 			memset(m_v.data(), 0, m_v.size_in_bytes());
 
 			return *this;
@@ -3349,7 +3346,6 @@ namespace bu_math
 			return result;
 		}
 
-		// ---- Transpose ----
 
 		inline dynamic_matrix get_transposed() const
 		{
@@ -3369,7 +3365,6 @@ namespace bu_math
 			return *this;
 		}
 
-		// ---- Frobenius Norm ----
 
 		inline T get_norm() const
 		{
@@ -3379,7 +3374,6 @@ namespace bu_math
 			return static_cast<T>(sqrt(result));
 		}
 
-		// ---- Trace ----
 
 		inline T get_trace() const
 		{
@@ -3390,7 +3384,6 @@ namespace bu_math
 			return total;
 		}
 
-		// ---- Comparison ----
 
 		inline bool operator==(const dynamic_matrix& rhs) const
 		{
@@ -3494,7 +3487,6 @@ namespace bu_math
 			return *this;
 		}
 
-		// ---- Debug print ----
 
 		void print() const
 		{
@@ -3639,7 +3631,7 @@ namespace basisu
 		uint32_t m_median_index;
 
 		FloatType m_five_percent_lo;		// avg of the lowest 5%, must calc median to be valid
-		FloatType m_five_percent_hi;		// avg of the lowest 5%, must calc median to be valid
+		FloatType m_five_percent_hi;		// avg of the highest 5%, must calc median to be valid
 
 		stats() 
 		{ 

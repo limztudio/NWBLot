@@ -195,13 +195,7 @@ namespace PixEventDecoder
                 continue;
             }
 
-            //restore timestamp to full 64-bit format
-            //only bottom 44 bits of the timestamp are written in an event
-            //top 20 bits are added from the block start timestamp
-            //it could happen that bottom 44 bit part overflows
-            //in this case we use the fact that all timestamps in the blocks are written in non-descending order
-            //we increase top 20 bits value by (mask + 1) which is an equivalent of adding carry flag
-            //we add (mask + 1) to the restored timestamp so it is greater or equal than the previous timestamp
+            // Restore the upper bits and carry when the 44-bit timestamp wraps.
             time |= maskedTimeBits;
             if (time < previousTimestamp)
             {
@@ -276,36 +270,12 @@ namespace PixEventDecoder
                     }
                     else
                     {
-                        //
-                        // Unfortunately, the event buffer format doesn't indicate how
-                        // many parameters are expected (or how many bytes to skip to
-                        // account for the parameters). This can cause problems when the
-                        // format string doesn't contain any format specifiers. For
-                        // example: PIXSetMarker("Foo", 123).
-                        //
-                        // The peek loops below try and account for this by looking for
-                        // the next thing that looks like a valid event. This is fine,
-                        // unless we have some data in there that looks like a valid
-                        // event. As most bit patterns are valid events (eg "0" is a
-                        // valid opcode) we end up having to rely on the timestamp. We
-                        // can reject any events that are before the one we just
-                        // processed ("time") and any events that are after the last
-                        // event in the block ("m_blockEndTime").
-                        //
-                        // Ideally we'd modify the emitting code to be more robust, but
-                        // we have the added complication that we need to support old
-                        // code generating these events (including Windows OS
-                        // components).
-                        //
-
-                        //peek at the event after the current event
-                        //if reached the end of the data block, then look for extra events after the current format string
+                        // Legacy events omit argument counts. Scan for the next valid timestamp,
+                        // though argument data may also look like an event.
                         const UINT64* peekPosition = currentPosition + eventData.TotalBytesUsed / sizeof(UINT64);
                         if ((peekPosition < m_blockDataEnd && *peekPosition != PIXEventsBlockEndMarker && !IsValidEventInfo(m_blockEndTime, time, maskedTimeBits, *peekPosition))
                             || (peekPosition >= m_blockDataEnd))
                         {
-                            //does not look like the correct event info or event was truncated
-                            //start looking for the next event right after the format string of the current event
                             peekPosition = currentPosition + 1 + eventData.FormatStringBytesUsed / sizeof(UINT64); //metadata + format string
                             while (peekPosition < m_blockDataEnd && *peekPosition != PIXEventsBlockEndMarker && !IsValidEventInfo(m_blockEndTime, time, maskedTimeBits, *peekPosition))
                             {

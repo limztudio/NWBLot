@@ -29,7 +29,7 @@ uint64_t RmtThreadAtomicRead(volatile uint64_t* address);
 /// @param [in] value                       The 64bit value to write to <c><i>address</i></c>.
 ///
 /// @returns
-/// The 64bit value that was written to the specified address.
+/// The previous value at the specified address.
 ///
 uint64_t RmtThreadAtomicWrite(volatile uint64_t* address, uint64_t value);
 
@@ -39,7 +39,7 @@ uint64_t RmtThreadAtomicWrite(volatile uint64_t* address, uint64_t value);
 /// @param [in] value                       The 64bit value to OR with the value at <c><i>address</i></c>.
 ///
 /// @returns
-/// The 64bit value that resulted from the OR operation to the specified address.
+/// Windows returns the previous value; Linux returns the value after OR.
 ///
 uint64_t RmtThreadAtomicOr(volatile uint64_t* address, uint64_t value);
 
@@ -69,7 +69,7 @@ int64_t RmtThreadAtomicAdd64(volatile int64_t* address, int64_t value);
 /// @param [in] value                       The 64bit value to max against the value at <c><i>address</i></c>.
 ///
 /// @returns
-/// The 64bit value that resulted from adding <c><i>value</i></c> with the value at <c><i>address</i></c>.
+/// The supplied value on Windows.
 ///
 int64_t RmtThreadAtomicMax64(volatile int64_t* address, int64_t value);
 

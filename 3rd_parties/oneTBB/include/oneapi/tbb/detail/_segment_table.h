@@ -260,7 +260,6 @@ public:
         segment_table_type current_segment_table = get_table();
         for (size_type i = number_of_segments(current_segment_table); i != 0; --i) {
             if (current_segment_table[i - 1].load(std::memory_order_relaxed) != nullptr) {
-                // If the segment was enabled - disable and deallocate it
                 delete_segment(i - 1);
             }
         }
@@ -277,7 +276,6 @@ public:
     void clear_table() {
         segment_table_type current_segment_table = get_table();
         if (current_segment_table != my_embedded_table) {
-            // If the active table is not the embedded one - deallocate the active table
             destroy_and_deallocate_table(current_segment_table, pointers_per_long_table);
             my_segment_table.store(my_embedded_table, std::memory_order_relaxed);
             zero_table(my_embedded_table, pointers_per_embedded_table);
@@ -326,7 +324,6 @@ public:
         }
     }
 
-    // Return the segment where index is stored
     static constexpr segment_index_type segment_index_of( size_type index ) {
         return size_type(tbb::detail::log2(uintptr_t(index|1)));
     }
@@ -336,7 +333,6 @@ public:
         return size_type(1) << index & ~size_type(1);
     }
 
-    // Return size of the segment
     static constexpr size_type segment_size( size_type index ) {
         return index == 0 ? 2 : size_type(1) << index;
     }
@@ -422,7 +418,7 @@ private:
     }
 
     // Move construct the segment table with the allocator object
-    // if any instances of allocator_type are always equal
+    // if instances of allocator_type are not always equal
     void internal_move_construct_with_allocator( segment_table&& other, const allocator_type& alloc,
                                                  /*is_always_equal = */ std::false_type ) {
         if (other.my_segment_table_allocator == alloc) {

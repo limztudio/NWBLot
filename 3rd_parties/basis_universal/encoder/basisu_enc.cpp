@@ -512,7 +512,6 @@ namespace basisu
 
 		img.grant_ownership(reinterpret_cast<color_rgba*>(pImage), width, height);
 
-		//debug_printf("Total load_png() time: %3.3f secs\n", tm.get_elapsed_secs());
 
 		return true;
 	}
@@ -2846,7 +2845,6 @@ namespace basisu
 	void job_pool::job_thread(uint32_t index)
 	{
 		BASISU_NOTE_UNUSED(index);
-		//debug_printf("job_pool::job_thread: starting %u\n", index);
 
 		m_num_active_workers.fetch_add(1);
 		
@@ -2896,7 +2894,6 @@ namespace basisu
 
 		m_num_active_workers.fetch_add(-1);
 
-		//debug_printf("job_pool::job_thread: exiting\n");
 	}
 
 	// .TGA image loading
@@ -3019,7 +3016,6 @@ namespace basisu
 			return nullptr;
 		}
 
-		//const uint32_t bytes_per_line = hdr.m_width * tga_bytes_per_pixel;
 
 		const uint8_t *pSrc = pBuf + sizeof(tga_header);
 		uint32_t bytes_remaining = buf_size - sizeof(tga_header);
@@ -3382,7 +3378,6 @@ namespace basisu
 		if ((filedata[0] != '#') || (filedata[1] != '?'))
 			return false;
 
-		//uint32_t width = 0, height = 0;
 		bool is_rgbe = false;
 		size_t cur_ofs = 0;
 
@@ -3656,10 +3651,7 @@ namespace basisu
 
 		} // y
 
-		// at here:
 		// img(width,height)=image pixels as read from file, x=minor axis, y=major axis
-		// width=minor axis dimension
-		// height=major axis dimension
 		// in file, pixels are emitted in minor order, them major (so major=scanlines in the file)
 		
 		imagef final_img;
@@ -4288,8 +4280,6 @@ namespace basisu
 					float Lmapped = 0.0f;
 					if (L > 0.0f)
 					{
-						//Lmapped = L / (1.0f + L);
-						//Lmapped /= L;
 						
 						Lmapped = 1.0f / (1.0f + L);
 					}
@@ -4368,13 +4358,10 @@ namespace basisu
 						return false;
 
 					uint32_t h = basist::float_to_half(p[i]);
-					//uint32_t orig_h = h;
 
 					orig_half_img[(x + y * width) * 3 + i] = (uint16_t)h;
 
 					// Rotate sign bit into LSB
-					//h = rot_left16((uint16_t)h, 1);
-					//assert(rot_right16((uint16_t)h, 1) == orig_h);
 					h <<= 1;
 
 					half_img[(x + y * width) * 3 + i] = (uint16_t)h;
@@ -4393,7 +4380,6 @@ namespace basisu
 			} // x
 		} // y
 
-		//printf("tonemap_image_compressive: Max leading zeros: %i\n", max_shift);
 
 		uint32_t high_hist[256];
 		clear_obj(high_hist);
@@ -4432,7 +4418,6 @@ namespace basisu
 
 		assert(total_vals_used >= 1);
 
-		//printf("tonemap_image_compressive: Total used high byte values: %u, unused: %u\n", total_vals_used, 256 - total_vals_used);
 
 		bool val_used[256];
 		clear_obj(val_used);
@@ -4465,12 +4450,10 @@ namespace basisu
 				remap_old_to_new[i] = c;
 				prev_c = c;
 
-				//printf("%u ", c);
 
 				val_used[c] = true;
 			}
 		} // i
-		//printf("\n");
 
 		dst_img.resize(width, height);
 
@@ -4483,7 +4466,6 @@ namespace basisu
 					uint16_t& v16 = half_img[(x + y * width) * 3 + c];
 
 					uint32_t hb = v16 >> 8;
-					//uint32_t lb = v16 & 0xFF;
 
 					assert(remap_old_to_new[hb] != -1);
 					assert(remap_old_to_new[hb] <= 255);
@@ -4491,7 +4473,6 @@ namespace basisu
 
 					hb = remap_old_to_new[hb];
 
-					//v16 = (uint16_t)((hb << 8) | lb);
 
 					dst_img(x, y)[c] = (uint8_t)hb;
 				}

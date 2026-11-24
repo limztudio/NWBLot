@@ -168,7 +168,6 @@ def typeset(face, text, target_advance):
         words.append(word)
         buf, advance = shape(face, words)
         if advance > target_advance:
-            # Shrink
             ret, buf, variation = justify(face, words, advance, target_advance)
             if ret:
                 lines.append((buf, variation))
@@ -180,12 +179,10 @@ def typeset(face, text, target_advance):
                 _, buf, variation = justify(face, words, advance, target_advance)
                 lines.append((buf, variation))
                 words = [word]
-            # But if it is one word, meh.
             else:
                 lines.append((buf, variation))
                 words = []
 
-    # Justify last line
     if words:
         _, buf, variation = justify(face, words, advance, target_advance)
         lines.append((buf, variation))

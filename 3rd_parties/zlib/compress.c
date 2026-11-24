@@ -12,8 +12,8 @@
      Compresses the source buffer into the destination buffer. The level
    parameter has the same meaning as in deflateInit.  sourceLen is the byte
    length of the source buffer. Upon entry, destLen is the total size of the
-   destination buffer, which must be at least 0.1% larger than sourceLen plus
-   12 bytes. Upon exit, destLen is the actual size of the compressed buffer.
+   destination buffer. Use compressBound_z(sourceLen) for sufficient space.
+   Upon exit, destLen is the actual size of the compressed buffer.
 
      compress2 returns Z_OK if success, Z_MEM_ERROR if there was not enough
    memory, Z_BUF_ERROR if there was not enough room in the output buffer,

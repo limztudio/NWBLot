@@ -1254,8 +1254,6 @@ namespace basisu
 							const uint32_t block_x = block_index % num_blocks_x;
 							const uint32_t block_y = block_index / num_blocks_x;
 
-							//if ((block_x == 176) && (block_y == 128))
-							//	printf("!");
 
 							vec4F block_pixels[16];
 
@@ -1832,10 +1830,7 @@ namespace basisu
 		m_uastc_slice_textures.resize(m_slice_descs.size());
 
 		const texture_format tex_fmt = texture_format::cBC7;
-		//const basist::transcoder_texture_format transcoder_tex_fmt = basist::transcoder_texture_format::cTFBC7_RGBA;
-		//BASISU_NOTE_UNUSED(transcoder_tex_fmt);
 
-		//const uint32_t block_width = 4, block_height = 4;
 		
 		for (uint32_t slice_index = 0; slice_index < m_slice_descs.size(); slice_index++)
 			m_uastc_slice_textures[slice_index].init(tex_fmt, m_slice_descs[slice_index].m_orig_width, m_slice_descs[slice_index].m_orig_height);
@@ -1885,7 +1880,6 @@ namespace basisu
 		
 		const uint32_t desired_num_stripes = m_params.m_xubc7_num_stripes; // [1,16]; set_num_stripes_for_image() re-clamps per image
 		
-		//options.m_debug_file_prefix = fmt_string("slice_{}_", slice_index);
 
 		if (m_params.m_status_output)
 		{
@@ -3369,7 +3363,6 @@ namespace basisu
 			max_selectors = minimum<uint32_t>(max_selectors, m_total_blocks);
 
 			float color_selector_quality = quality;
-			//color_selector_quality = powf(color_selector_quality, 1.65f);
 			color_selector_quality = powf(color_selector_quality, 2.62f);
 
 			if (max_selectors < 96)
@@ -4094,7 +4087,6 @@ namespace basisu
 						{
 							printf("BC6H RGB: ");
 							im.print_hp();
-							//printf("\n");
 						}
 
 						im.calc(m_slice_images_hdr[slice_index], m_decoded_output_textures_astc_hdr_unpacked[slice_index], 0, 3, true, true);
@@ -4230,7 +4222,6 @@ namespace basisu
 						if (m_params.m_print_stats)
 							em.print("B   Avg:          ");
 
-						//if (m_params.m_uastc)
 						{
 							em.calc(m_slice_images[slice_index], m_decoded_output_textures_unpacked[slice_index], 3, 1);
 							if (m_params.m_print_stats)
@@ -4300,7 +4291,6 @@ namespace basisu
 							if (m_params.m_print_stats)
 								em.print("BC7 B   Avg:             ");
 
-							//if (m_params.m_uastc)
 							{
 								em.calc(m_slice_images[slice_index], m_decoded_output_textures_unpacked_bc7[slice_index], 3, 1);
 								if (m_params.m_print_stats)
@@ -4338,19 +4328,13 @@ namespace basisu
 						{
 							// ---- Nearly best possible ETC1S stats
 							em.calc(m_slice_images[slice_index], m_best_etc1s_images_unpacked[slice_index], 0, 3);
-							//if (m_params.m_print_stats)
-							//	em.print("Unquantized ETC1S RGB Avg:     ");
 							s.m_best_etc1s_rgb_avg_psnr = static_cast<float>(em.m_psnr);
 
 							em.calc(m_slice_images[slice_index], m_best_etc1s_images_unpacked[slice_index], 0, 0);
-							//if (m_params.m_print_stats)
-							//	em.print("Unquantized ETC1S 709 Luma:    ");
 							s.m_best_etc1s_luma_709_psnr = static_cast<float>(em.m_psnr);
 							s.m_best_etc1s_luma_709_ssim = static_cast<float>(em.m_ssim);
 
 							em.calc(m_slice_images[slice_index], m_best_etc1s_images_unpacked[slice_index], 0, 0, true, true);
-							//if (m_params.m_print_stats)
-							//	em.print("Unquantized ETC1S 601 Luma:    ");
 							s.m_best_etc1s_luma_601_psnr = static_cast<float>(em.m_psnr);
 						}
 					}
@@ -4469,7 +4453,7 @@ namespace basisu
 		0x2C,0x0,0x0,0x0,		// 0 totalSize
 		0x0,0x0,0x0,0x0,		// 1 descriptorType/vendorId
 		0x2,0x0,0x28,0x0,		// 2 descriptorBlockSize/versionNumber
-		0xA3,0x1,0x2,0x0,		// 3 flags, transferFunction, colorPrimaries, colorModel (KTX2_KDF_DF_MODEL_UASTC_HDR_6X6_INTERMEDIATE)
+		0xA3,0x1,0x2,0x0,		// 3 flags, transferFunction, colorPrimaries, colorModel (KTX2_KDF_DF_MODEL_ETC1S)
 		0x3,0x3,0x0,0x0,		// 4 texelBlockDimension0-texelBlockDimension3
 		0x8,0x0,0x0,0x0,		// 5 bytesPlane0-bytesPlane3
 		0x0,0x0,0x0,0x0,		// 6 bytesPlane4-bytesPlane7
@@ -4588,7 +4572,7 @@ namespace basisu
 		0x2C,0x0,0x0,0x0,		// 0 totalSize
 		0x0,0x0,0x0,0x0,		// 1 descriptorType/vendorId
 		0x2,0x0,0x28,0x0,		// 2 descriptorBlockSize/versionNumber
-		(uint8_t)basist::KTX2_KDF_DF_MODEL_XUASTC_LDR_INTERMEDIATE,0x1,0x1,0x0,		// 3 flags, transferFunction, colorPrimaries, colorModel (KTX2_KDF_DF_MODEL_UASTC_HDR_6X6_INTERMEDIATE)
+		(uint8_t)basist::KTX2_KDF_DF_MODEL_XUASTC_LDR_INTERMEDIATE,0x1,0x1,0x0,		// 3 flags, transferFunction, colorPrimaries, colorModel (KTX2_KDF_DF_MODEL_XUASTC_LDR_INTERMEDIATE)
 		0x3,0x3,0x0,0x0,		// 4 texelBlockDimension0-texelBlockDimension3
 		0x10,0x0,0x0,0x0,		// 5 bytesPlane0-bytesPlane3
 		0x0,0x0,0x0,0x0,		// 6 bytesPlane4-bytesPlane7
@@ -4615,7 +4599,7 @@ namespace basisu
 	};
 
 	// colorModel=KTX2_KDF_DF_MODEL_XUBC7 (0xAA)
-	// Custom supercompressed intermediate format, decodes directly to standard ASTC LDR 4x4-12x12.
+	// Custom supercompressed intermediate format, decodes to BC7.
 	static uint8_t g_ktx2_xubc7_dfd[44] =
 	{
 		0x2C,0x0,0x0,0x0,		// 0 totalSize
@@ -4744,7 +4728,6 @@ namespace basisu
 		uint32_t dfd_bits = basisu::read_le_dword(dfd.data() + 3 * sizeof(uint32_t));
 
 		// Color primaries - TODO: Move this option outside of the m_astc_hdr_6x6_options struct.
-		//if ((m_params.m_hdr) && (m_params.m_astc_hdr_6x6_options.m_rec2020_bt2100_color_gamut))
 		if (m_params.m_astc_hdr_6x6_options.m_rec2020_bt2100_color_gamut)
 		{
 			dfd_bits &= ~(0xFF << 8);
@@ -4827,7 +4810,6 @@ namespace basisu
 
 	bool basis_compressor::create_ktx2_file()
 	{
-		//bool needs_global_data = false;
 		bool can_use_zstd = false;
 
 		bool is_xuastc_ldr = false;
@@ -4839,7 +4821,6 @@ namespace basisu
 		{
 		case basist::basis_tex_format::cETC1S:
 		{
-			//needs_global_data = true;
 			break;
 		}
 		case basist::basis_tex_format::cUASTC_LDR_4x4:
@@ -4859,7 +4840,6 @@ namespace basisu
 		}
 		case basist::basis_tex_format::cUASTC_HDR_6x6_INTERMEDIATE:
 		{
-			//needs_global_data = true;
 			is_hdr_6x6i = true;
 			break;
 		}
@@ -4910,7 +4890,6 @@ namespace basisu
 		}
 		default:
 			assert(0);
-			//fmt_debug_printf("HERE 1\n");
 			return false;
 		}
 
@@ -5039,7 +5018,6 @@ namespace basisu
 			}
 			default:
 				assert(0);
-				//fmt_debug_printf("HERE 3\n");
 			}
 		}
 
@@ -5078,16 +5056,13 @@ namespace basisu
 
 				if (ZSTD_isError(result))
 				{
-					//fmt_debug_printf("HERE 5\n");
 					return false;
 				}
 
 				compressed_level_data_bytes[level_index].resize(result);
 			}
 #else
-			// Can't get here
 			assert(0);
-			//fmt_debug_printf("HERE 6\n");
 			return false;
 #endif
 		}
@@ -5221,12 +5196,10 @@ namespace basisu
 			append_vector(ktx2_global_data, (const uint8_t*)slice_offset_len_descs.data(), slice_offset_len_descs.size_in_bytes());
 			
 			// Note v2.0 would always write BASISLZ for the supercompression scheme. KTX-Software changes this, and we need to be compatible.
-			//header.m_supercompression_scheme = basist::KTX2_SS_BASISLZ;
 
 			header.m_supercompression_scheme = is_hdr_6x6i ? basist::KTX2_SS_UASTC_HDR_6x6I : (is_xubc7 ? basist::KTX2_SS_XUBC7 : basist::KTX2_SS_XUASTC_LDR);
 		}
 		
-		// Key values
 		basist::key_value_vec key_values(m_params.m_key_values);
 		
 		basist::add_key_value(key_values, "KTXwriter", fmt_string("Basis Universal {}", BASISU_LIB_VERSION_STRING));
@@ -5242,7 +5215,6 @@ namespace basisu
 			}
 						
 			// Always write the scale to simplify testing.
-			//if (m_hdr_image_scale != 1.0f)
 			{
 				// add "KTXmapRange" key value
 				struct ktx_map_range 
@@ -5344,7 +5316,6 @@ namespace basisu
 				bytes_needed_to_pad += 16;
 
 			// Just add the padding. It's likely not necessary anymore, but can't really hurt other than a tiny increase in file size.
-			//printf("WARNING: Due to a KTX2 validator bug related to mipPadding, we must insert a dummy key into the KTX2 file of %u bytes\n", bytes_needed_to_pad);
 			
 			// We're not good - need to add a dummy key large enough to force file alignment so the mip level array gets aligned. 
 			// We can't just add some bytes before the mip level array because ktx2check will see that as extra data in the file that shouldn't be there in ktxValidator::validateDataSize().
@@ -5841,8 +5812,6 @@ namespace basisu
 		else if (flags_and_quality & cFlagForceDeblocking)
 			comp_params.m_xuastc_ldr_deblocking_mode = (int)xuastc_ldr_deblocking_mode::cUseSCDAndFilteringAllBlockSizes;
 		
-		//if (flags_and_quality & cFlagDisableSharpening)
-		//	comp_params.m_xuastc_ldr_sharpen_mode = (int)xuastc_ldr_sharpen_mode::cDisabled;
 				
 		// Now set the unified quality/effort level, if they've specified it. 
 		// This will override some of the lower-level options set above, or leave them alone if -1.
@@ -6037,7 +6006,6 @@ namespace basisu
 			img.debug_text(x, y, sx, sy, c, nullptr, false, "%c", static_cast<char>(r.irand(32, 127)));
 		}
 
-		//save_png("test.png", img);
 
 		image_stats stats;
 

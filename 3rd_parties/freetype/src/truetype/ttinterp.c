@@ -2461,7 +2461,6 @@
   static void
   Ins_POP( void )
   {
-    /* nothing to do */
   }
 
 
@@ -3231,7 +3230,6 @@
   static void
   Ins_EIF( void )
   {
-    /* nothing to do */
   }
 
 

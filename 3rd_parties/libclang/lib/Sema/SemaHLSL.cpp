@@ -245,7 +245,6 @@ Decl *SemaHLSL::ActOnStartBuffer(Scope *BufferScope, bool CBuffer,
   HLSLBufferDecl *Result = HLSLBufferDecl::Create(
       getASTContext(), LexicalParent, CBuffer, KwLoc, Ident, IdentLoc, LBrace);
 
-  // if CBuffer is false, then it's a TBuffer
   auto RC = CBuffer ? llvm::hlsl::ResourceClass::CBuffer
                     : llvm::hlsl::ResourceClass::SRV;
   Result->addAttr(HLSLResourceClassAttr::CreateImplicit(getASTContext(), RC));
@@ -3009,8 +3008,6 @@ void DiagnoseHLSLAvailability::RunOnTranslationUnit(
       if (D->isImplicit())
         continue;
 
-      // for namespace or export declaration add the context to the list to be
-      // scanned later
       if (llvm::dyn_cast<NamespaceDecl>(D) || llvm::dyn_cast<ExportDecl>(D)) {
         DeclContextsToScan.push_back(llvm::dyn_cast<DeclContext>(D));
         continue;
@@ -4048,7 +4045,6 @@ bool SemaHLSL::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
     ExprResult A = TheCall->getArg(0);
     QualType ArgTyA = A.get()->getType();
-    // return type is the same as the input type
     TheCall->setType(ArgTyA);
     break;
   }
@@ -4208,7 +4204,6 @@ bool SemaHLSL::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
     ExprResult A = TheCall->getArg(0);
     QualType ArgTyA = A.get()->getType();
-    // return type is the same as the input type
     TheCall->setType(ArgTyA);
     break;
   }
@@ -4408,7 +4403,6 @@ bool SemaHLSL::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
       return true;
     ExprResult A = TheCall->getArg(0);
     QualType ArgTyA = A.get()->getType();
-    // return type is the same as the input type
     TheCall->setType(ArgTyA);
     break;
   }
@@ -4424,7 +4418,6 @@ bool SemaHLSL::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
     ExprResult A = TheCall->getArg(0);
     QualType ArgTyA = A.get()->getType();
-    // return type is the same as input type
     TheCall->setType(ArgTyA);
     break;
   }
@@ -4465,7 +4458,6 @@ bool SemaHLSL::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
     ExprResult A = TheCall->getArg(0);
     QualType ArgTyA = A.get()->getType();
-    // return type is the same as the input type
     TheCall->setType(ArgTyA);
     break;
   }

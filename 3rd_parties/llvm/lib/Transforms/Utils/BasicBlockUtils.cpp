@@ -1495,8 +1495,6 @@ static void SplitLandingPadPredecessorsImpl(
     Clone2->setName(Twine("lpad") + Suffix2);
     Clone2->insertInto(NewBB2, NewBB2->getFirstInsertionPt());
 
-    // Create a PHI node for the two cloned landingpad instructions only
-    // if the original landingpad instruction has some uses.
     if (!LPad->use_empty()) {
       assert(!LPad->getType()->isTokenTy() &&
              "Split cannot be applied if LPad is token type. Otherwise an "

@@ -273,12 +273,8 @@ static CURLcode cf_setup_add_origin_filters(struct Curl_cfilter *cf,
       else
 #endif
       {
-        /* FTP is a bitch. Wherever we really connect to on the DATA
-         * (secondary) connection, many servers require TLS sessions reuse
-         * to prove they are talking to the same client.
-         * For the TLS session lookup to work, we need to instantiate
-         * the SSL filter with the same peers as FIRSTSOCKET. See #22225
-         * Meaning: cf->sockindex does not matter here. */
+        /* FTP data connections may require TLS session reuse to prove
+         * client identity. Use the FIRSTSOCKET peers for lookup; see #22225. */
         result = Curl_cf_ssl_insert_after(cf, data,
           Curl_conn_get_origin(cf->conn, FIRSTSOCKET),
           Curl_conn_get_destination(cf->conn, FIRSTSOCKET));
@@ -365,11 +361,8 @@ static CURLcode cf_setup_connect(struct Curl_cfilter *cf,
   struct cf_setup_ctx *ctx = cf->ctx;
   CURLcode result;
 
-  /* In some situations, a server/proxy may close the connection and
-   * we need to connect again (HTTP/1.x proxy auth, for example).
-   * We used to close the filters and reuse them for another attempt,
-   * however that complicates filter code and it is simpler to tear them
-   * all down and start over. */
+  /* A server or proxy may close the connection during setup, such as during
+   * HTTP/1.x proxy authentication. Rebuild the filter chain before retrying. */
 retry:
   result = cf_setup_connect_steps(cf, data, done);
 

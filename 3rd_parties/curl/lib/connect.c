@@ -112,12 +112,6 @@ timediff_t Curl_timeleft_now_ms(struct Curl_easy *data,
   return timeleft_now_ms(data, pnow);
 }
 
-/*
- * Used to extract socket and connectdata struct for the most recent
- * transfer on the given Curl_easy.
- *
- * The returned socket will be CURL_SOCKET_BAD in case of failure!
- */
 curl_socket_t Curl_getconnectinfo(struct Curl_easy *data,
                                   struct connectdata **connp)
 {
@@ -234,7 +228,7 @@ static CURLcode conn_connect_trace(struct Curl_easy *data,
  */
 static void conn_report_stats(struct Curl_easy *data, int sockindex)
 {
-  /* We do gather stats for the second socket...yet */
+  /* Only the first socket reports connection statistics. */
   if(sockindex == FIRSTSOCKET) {
     Curl_conn_cntrl_report_stats(data, data->conn, sockindex);
   }
@@ -365,7 +359,6 @@ CURLcode Curl_conn_connect(struct Curl_easy *data,
         result = CURLE_COULDNT_CONNECT;
         goto out;
       }
-      /* continue iterating */
     }
   }
 

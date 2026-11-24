@@ -561,7 +561,6 @@ namespace jpgd {
 		{
 			if (symbol & 0x8000)
 			{
-				//get_bits_no_markers((symbol >> 8) & 31);
 				assert(((symbol >> 8) & 31) <= 15);
 				get_bits_no_markers((symbol >> 8) & 15);
 				extra_bits = symbol >> 16;
@@ -945,7 +944,6 @@ namespace jpgd {
 
 		num_left -= 3;
 
-		/* read past whatever is num_left */
 		while (num_left)
 		{
 			get_bits(8);
@@ -958,13 +956,11 @@ namespace jpgd {
 	{
 		uint c;// , bytes;
 
-		//bytes = 0;
 
 		do
 		{
 			do
 			{
-				//bytes++;
 				c = get_bits(8);
 			} while (c != 0xFF);
 
@@ -1033,7 +1029,6 @@ namespace jpgd {
 				read_dri_marker();
 				break;
 			}
-			//case M_APP0:  /* no need to read the JFIF marker */
 			case M_JPG:
 			case M_RST0:    /* no parameters */
 			case M_RST1:
@@ -1067,7 +1062,6 @@ namespace jpgd {
 
 		thischar = get_bits(8);
 
-		/* ok if it's a normal JPEG file without a special header */
 
 		if ((lastchar == 0xFF) && (thischar == M_SOI))
 			return;
@@ -1347,7 +1341,6 @@ namespace jpgd {
 					if (p[g_ZAG[i]])
 						p[g_ZAG[i]] = static_cast<jpgd_block_t>(p[g_ZAG[i]] * q[i]);
 
-				//row_block++;
 
 				if (m_comps_in_scan == 1)
 					block_x_mcu[component_id]++;
@@ -1434,7 +1427,6 @@ namespace jpgd {
 	// Decodes and dequantizes the next row of coefficients.
 	void jpeg_decoder::decode_next_row()
 	{
-		//int row_block = 0;
 
 		for (int mcu_row = 0; mcu_row < m_mcus_per_row; mcu_row++)
 		{
@@ -1537,7 +1529,6 @@ namespace jpgd {
 
 				m_mcu_block_max_zag[mcu_block] = k;
 
-				//row_block++;
 			}
 
 			transform_mcu(mcu_row);
@@ -1663,7 +1654,7 @@ namespace jpgd {
 		}
 	}
 
-	// YCbCr H2V1 (1x2:1:1, 4 m_blocks per MCU) to RGB
+	// YCbCr H1V2 (1x2:1:1, 4 m_blocks per MCU) to RGB
 	void jpeg_decoder::H1V2Convert()
 	{
 		int row = m_max_mcu_y_size - m_mcu_lines_left;
@@ -1711,7 +1702,7 @@ namespace jpgd {
 		}
 	}
 
-	// YCbCr H2V1 (1x2:1:1, 4 m_blocks per MCU) to RGB
+	// YCbCr H1V2 (1x2:1:1, 4 m_blocks per MCU) to RGB
 	void jpeg_decoder::H1V2ConvertFiltered()
 	{
 		const uint BLOCKS_PER_MCU = 4;
@@ -2731,7 +2722,6 @@ namespace jpgd {
 
 		int p1 = 1 << pD->m_successive_low;
 
-		//int m1 = (-1) << pD->m_successive_low;
 		int m1 = static_cast<int>((UINT32_MAX << pD->m_successive_low));
 
 		jpgd_block_t* p = pD->coeff_buf_getp(pD->m_ac_coeffs[component_id], block_x, block_y);

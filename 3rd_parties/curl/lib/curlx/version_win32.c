@@ -212,8 +212,7 @@ bool curlx_verify_windows_version(const unsigned int majorVersion,
   /* Compare the build number separately. VerifyVersionInfo normally compares
      major.minor in hierarchical order (eg 1.9 is less than 2.0) but does not
      do the same for build (eg 1.9 build 222 is not less than 2.0 build 111).
-     Build comparison is only needed when build numbers are equal (eg 1.9 is
-     always less than 2.0 so build comparison is not needed). */
+     Build comparison is only needed when major and minor versions match. */
   if(matched && buildVersion &&
      (condition == VERSION_EQUAL ||
       ((condition == VERSION_GREATER_THAN_EQUAL ||

@@ -47,7 +47,6 @@ bool RmtTraceLoaderDataSetValid()
 
 RmtErrorCode RmtTraceLoaderTraceLoad(const char* trace_file_name, RmtDataSetErrorReportFunc reporter_function)
 {
-    // Loading regular binary data.
     RmtErrorCode error_code = RmtDataSetInitialize(trace_file_name, &data_set_);
     if (error_code != kRmtOk)
     {
@@ -56,10 +55,8 @@ RmtErrorCode RmtTraceLoaderTraceLoad(const char* trace_file_name, RmtDataSetErro
         return error_code;
     }
 
-    // Set the error reporter callback function.
     RmtDataSetSetErrorReporter(&data_set_, reporter_function);
 
-    // Create the default timeline for the data set.
     error_code = RmtDataSetGenerateTimeline(&data_set_, kRmtDataTimelineTypeVirtualMemory, &timeline_);
     return error_code;
 }
@@ -74,10 +71,8 @@ RmtErrorCode RmtTraceLoaderTraceLoadFromMemory(uint8_t* bytes, size_t num_bytes,
         return error_code;
     }
 
-    // Set the error reporter callback function.
     RmtDataSetSetErrorReporter(&data_set_, reporter_function);
 
-    // Create the default timeline for the data set.
     error_code = RmtDataSetGenerateTimeline(&data_set_, kRmtDataTimelineTypeVirtualMemory, &timeline_);
     return error_code;
 }

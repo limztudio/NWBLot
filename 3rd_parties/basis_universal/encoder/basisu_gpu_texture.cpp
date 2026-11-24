@@ -857,7 +857,7 @@ namespace basisu
 			// colora=554
 			color_rgba color_a(pBlock->m_opaque_color_data.m_red_a, pBlock->m_opaque_color_data.m_green_a, (pBlock->m_opaque_color_data.m_blue_a << 1) | (pBlock->m_opaque_color_data.m_blue_a >> 3), 255);
 			
-			// colora=555
+			// colorb=555
 			color_rgba color_b(pBlock->m_opaque_color_data.m_red_b, pBlock->m_opaque_color_data.m_green_b, pBlock->m_opaque_color_data.m_blue_b, 255);
 						
 			colors[0] = convert_rgb_555_to_888(color_a);
@@ -955,7 +955,6 @@ namespace basisu
 				val = clamp<int>(val, 0, 2047);
 
 				// Convert to 8-bits with rounding
-				//pPixels[x + y * 4].m_comps[c] = static_cast<uint8_t>((val * 255 + 1024) / 2047);
 				pPixels[x + y * 4].m_comps[c] = static_cast<uint8_t>((val * 255 + 1023) / 2047);
 
 			} // x
@@ -1185,7 +1184,6 @@ namespace basisu
 					pPixels[p][3] = basist::half_to_float(half_block[p][3]);
 				}
 
-				//memset(pPixels, 0, sizeof(vec4F) * 16);
 #endif
 				return true;
 			}
@@ -1431,7 +1429,6 @@ namespace basisu
 
 			if (!levels.size())
 			{
-				// Empty mip chain
 				assert(0);
 				return false;
 			}
@@ -1470,7 +1467,6 @@ namespace basisu
 
 				if (fmt != levels[level_index].get_format())
 				{
-					// All input textures must use the same GPU format
 					assert(0);
 					return false;
 				}
@@ -1695,7 +1691,6 @@ namespace basisu
 		}
 		default:
 		{
-			// TODO
 			assert(0);
 			return false;
 		}
@@ -1823,7 +1818,6 @@ namespace basisu
 
 			if (!levels.size())
 			{
-				// Empty mip chain
 				assert(0);
 				return false;
 			}
@@ -1862,7 +1856,6 @@ namespace basisu
 
 				if (fmt != levels[level_index].get_format())
 				{
-					// All input textures must use the same GPU format
 					assert(0);
 					return false;
 				}
@@ -2254,7 +2247,6 @@ namespace basisu
 		return write_compressed_texture_file(pFilename, v, false, use_srgb_format);
 	}
 
-	//const uint32_t OUT_FILE_MAGIC = 'TEXC';
 	struct out_file_header 
 	{
 		packed_uint<4> m_magic;
@@ -2267,7 +2259,6 @@ namespace basisu
 	bool write_3dfx_out_file(const char* pFilename, const gpu_image& gi)
 	{
 		out_file_header hdr;
-		//hdr.m_magic = OUT_FILE_MAGIC;
 		hdr.m_magic.m_bytes[0] = 67;
 		hdr.m_magic.m_bytes[1] = 88;
 		hdr.m_magic.m_bytes[2] = 69;

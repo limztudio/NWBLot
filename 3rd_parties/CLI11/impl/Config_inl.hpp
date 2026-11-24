@@ -743,18 +743,6 @@ ConfigBase::to_config(const App *app, ConfigOutputMode mode, bool write_descript
             if(write_description && !subcom->get_group().empty()) {
                 out << '\n' << commentChar << commentLead << subcom->get_group() << " Options\n";
             }
-            /*if (!prefix.empty() || app->get_parent() == nullptr) {
-                out << '[' << prefix << "___"<< subcom->get_group() << "]\n";
-            } else {
-                std::string subname = app->get_name() + parentSeparatorChar + "___"+subcom->get_group();
-                const auto *p = app->get_parent();
-                while(p->get_parent() != nullptr) {
-                    subname = p->get_name() + parentSeparatorChar +subname;
-                    p = p->get_parent();
-                }
-                out << '[' << subname << "]\n";
-            }
-            */
             out << to_config(subcom, mode, write_description, prefix);
         }
     }

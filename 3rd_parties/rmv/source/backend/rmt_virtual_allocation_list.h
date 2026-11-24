@@ -60,11 +60,11 @@ typedef struct RmtVirtualAllocation
     RmtHeapType   heap_preferences[RMT_NUM_HEAP_PREFERENCES];  ///< The heap preferences in order.
     RmtOwnerType  owner;                                       ///< The owner of the allocation.
     uint32_t      commit_type;                                 ///< A bit field of all commit types used by resources inside this allocation.
-    RmtResource** resources;                                   ///< The address of an array of points to <c><i>RmtResource</i></c> structures.
+    RmtResource** resources;                                   ///< Array of resource pointers.
     int32_t       next_resource_index;                         ///< The index of the new resource.
     RmtMemoryRegion*
-        unbound_memory_regions;  ///< An array of <c><i>RmtUnboundMemoryRegion</i></c> structures representing the unbound memory inside this virtual allocation.
-    int32_t     unbound_memory_region_count;  ///< The number of <c><i>RmtUnboundMemoryRegion</i></c> structures inside <c><i>unboundMemoryRegions</i></c>.
+        unbound_memory_regions;  ///< Unbound memory regions in this allocation.
+    int32_t     unbound_memory_region_count;  ///< Number of unbound memory regions.
     uint64_t    allocation_identifier;        ///< Uniquely identifies this virtual memory allocation.
     uint64_t    resource_usage_aliased_size[kRmtResourceUsageTypeCount];  ///< Aliased resource usage sizes for resource bound to this allocation.
     const char* name;                                                     ///< Allocation name.
@@ -136,7 +136,7 @@ float RmtVirtualAllocationGetFragmentationQuotient(const RmtVirtualAllocation* v
 
 /// Get a histogram of bytes backing a virtual allocation.
 ///
-/// @param [in] snapshot                                A pointer to a <c><i>RmtDataSnapshot</i></c> structure.
+/// @param [in] snapshot                                A non-null pointer to a <c><i>RmtDataSnapshot</i></c> structure.
 /// @param [in] virtual_allocation                      A pointer to a <c><i>RmtVirtualAllocation</i></c> structure.
 /// @param [out] out_bytes_per_backing_storage_type     A pointer an array of <c><i>uint64_t</i></c> that will contain histogram values (in bytes).
 /// @param [out] out_histogram_total                    A pointer to a <c><i>uint64_t</i></c> value where the size will be written.
@@ -144,7 +144,7 @@ float RmtVirtualAllocationGetFragmentationQuotient(const RmtVirtualAllocation* v
 /// @retval
 /// kRmtOk                                  The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                 The operation failed because <c><i>snapshot</i></c> or <c><i>outAllocation</i></c> was <c><i>NULL</i></c>.
+/// kRmtErrorInvalidPointer                 The allocation or an output pointer was <c><i>NULL</i></c>.
 RmtErrorCode RmtVirtualAllocationGetBackingStorageHistogram(const RmtDataSnapshot*      snapshot,
                                                             const RmtVirtualAllocation* virtual_allocation,
                                                             uint64_t*                   out_bytes_per_backing_storage_type,
@@ -180,14 +180,14 @@ typedef struct RmtVirtualAllocationList
     RmtResource**         resource_connectivity;                              ///< An array of pointers to resources, sorted by the resource's base address.
     int32_t               resource_connectivity_count;  ///< The number of resoure pointers in the buffer pointed to by <c><i>resourceConnectivity</i></c>.
     RmtMemoryRegion*
-        unbound_memory_regions;  ///< An array of <c><i>RmtUnboundMemoryRegion</i></c> structures representing all unbound memory regions for all allocations.
-    int32_t unbound_memory_region_count;  ///< The number of <c><i>RmtUnboundMemoryRegion</i></c> structures inside <c><i>unboundMemoryRegions</i></c>.
+        unbound_memory_regions;  ///< Unbound memory regions across all allocations.
+    int32_t unbound_memory_region_count;  ///< Number of unbound memory regions.
 
 } RmtVirtualAllocationList;
 
 /// Calculate the size of the workling buffer required for a specific number of concurrent allocations.
 ///
-/// @param [in] total_allocations                   The maximum number of concurrent allocations that can be in flight at any one time.
+/// @param [in] total_allocations                   The number of allocations to reserve space for.
 /// @param [in] max_concurrent_resources            The maximum number of concurrent resources that can be in flight at any one time.
 ///
 /// @returns
@@ -201,7 +201,7 @@ size_t RmtVirtualAllocationListGetBufferSize(int32_t total_allocations, int32_t 
 /// @param [in] buffer_size                             The buffer size, in bytes.
 /// @param [in] maximum_concurrent_allocations          The maximum number of allocations that can be in flight at once.
 /// @param [in] maximum_concurrent_resources            The maximum number of resources that can be in flight at once.
-/// @param [in] total_resources                         The maximum number of resources that can be in flight at once.
+/// @param [in] total_allocations                       The number of allocations to reserve space for.
 ///
 /// @retval
 /// kRmtOk                          The operation completed successfully.
@@ -256,10 +256,10 @@ RmtErrorCode RmtVirtualAllocationListRemoveAllocation(RmtVirtualAllocationList* 
 /// Add a residency update to a specific address.
 ///
 /// @param [in] virtual_allocation_list                 A pointer to a <c><i>RmtVirtualAllocationList</i></c> structure.
-/// @param [in] timestamp                               The timestamp for when the allocation happened.
+/// @param [in] timestamp                               The time of the residency update.
 /// @param [in] address                                 The address of the allocation.
-/// @param [in] update_type                             The address of the allocation.
-/// @param [in] queue                                   The address of the allocation.
+/// @param [in] update_type                             The type of residency update.
+/// @param [in] queue                                   The queue for the update; currently unused.
 ///
 /// @retval
 /// kRmtOk                          The operation completed successfully.
@@ -276,7 +276,7 @@ RmtErrorCode RmtVirtualAllocationListAddResourceReference(RmtVirtualAllocationLi
 /// Add a CPU map to a specific address.
 ///
 /// @param [in] virtual_allocation_list                 A pointer to a <c><i>RmtVirtualAllocationList</i></c> structure.
-/// @param [in] timestamp                               The timestamp for when the allocation happened.
+/// @param [in] timestamp                               The time of the CPU map.
 /// @param [in] address                                 The address of the allocation.
 ///
 /// @retval
@@ -290,7 +290,7 @@ RmtErrorCode RmtVirtualAllocationListAddCpuMap(RmtVirtualAllocationList* virtual
 /// Add a CPU unmap to a specific address.
 ///
 /// @param [in] virtual_allocation_list                 A pointer to a <c><i>RmtVirtualAllocationList</i></c> structure.
-/// @param [in] timestamp                               The timestamp for when the allocation happened.
+/// @param [in] timestamp                               The time of the CPU unmap.
 /// @param [in] address                                 The address of the allocation.
 ///
 /// @retval
@@ -363,7 +363,7 @@ uint64_t RmtVirtualAllocationListGetUnboundTotalSizeInBytes(const RmtDataSnapsho
 /// @retval
 /// kRmtOk                                  The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                 The operation failed because <c><i>virtual_allocation_list</i></c> or <c><i>resource_list</i></c> was <c><i>NULL</i></c>.
+/// kRmtErrorInvalidPointer                 The allocation list or resource list was <c><i>NULL</i></c>.
 RmtErrorCode RmtVirtualAllocationListUpdateAliasedResourceSizes(const RmtVirtualAllocationList* allocation_list,
                                                                 const RmtResourceList*          resource_list,
                                                                 const uint64_t                  resource_usage_mask);

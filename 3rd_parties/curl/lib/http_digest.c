@@ -54,7 +54,6 @@ static void digest_flush_stale(struct Curl_easy *data,
   }
 
   if(flush) {
-    /* flush Digest state */
     Curl_auth_digest_cleanup(digest);
   }
 
@@ -72,7 +71,6 @@ CURLcode Curl_input_digest(struct Curl_easy *data,
                            const char *header) /* rest of the *-authenticate:
                                                   header */
 {
-  /* Point to the correct struct with this */
   struct digestdata *digest;
   struct Curl_peer *origin = NULL;
   CURLcode result;
@@ -118,14 +116,10 @@ CURLcode Curl_output_digest(struct Curl_easy *data,
   size_t len;
   bool have_chlg;
 
-  /* Point to the address of the pointer that holds the string to send to the
-     server, which is for a plain host or for an HTTP proxy */
   char **allocuserpwd;
 
-  /* Point to the name and password for this */
   struct Curl_creds *creds = NULL;
 
-  /* Point to the correct struct with this */
   struct digestdata *digest;
   struct auth *authp;
 

@@ -273,7 +273,6 @@ char *curl_version(void)
     if(outlen <= (n + 2))
       break;
     if(j) {
-      /* prepend a space if not the first */
       *outp++ = ' ';
       outlen--;
     }
@@ -607,7 +606,6 @@ curl_version_info_data *curl_version_info(CURLversion stamp)
 
 #ifdef HAVE_LIBZ
   version_info.libz_version = zlibVersion();
-  /* libz left NULL if non-existing */
 #endif
 #ifdef USE_ARES
   {

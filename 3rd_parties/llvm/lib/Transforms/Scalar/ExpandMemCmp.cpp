@@ -529,8 +529,6 @@ void MemCmpExpansion::emitLoadCompareBlock(unsigned BlockIndex) {
   const LoadPair Loads = getLoadPair(LoadSizeType, BSwapSizeType, MaxLoadType,
                                      CurLoadEntry.Offset);
 
-  // Add the loaded values to the phi nodes for calculating memcmp result only
-  // if result is not used in a zero equality.
   if (!IsUsedForZeroCmp) {
     ResBlock.PhiSrc1->addIncoming(Loads.Lhs, LoadCmpBlocks[BlockIndex]);
     ResBlock.PhiSrc2->addIncoming(Loads.Rhs, LoadCmpBlocks[BlockIndex]);

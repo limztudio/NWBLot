@@ -390,9 +390,6 @@ public:
   }
 };
 
-// inline std::ostream& operator<<(std::ostream& SS, StringRef R) {
-//   return SS.write(R.data(), R.size());
-// }
 
 // Pretty printer for TIL expressions
 template <typename Self, typename StreamType>

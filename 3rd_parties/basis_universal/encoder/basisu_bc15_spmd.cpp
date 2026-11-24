@@ -224,7 +224,6 @@ namespace basisu
 			out[4] = (uint8_t)sw; out[5] = (uint8_t)(sw >> 8); out[6] = (uint8_t)(sw >> 16); out[7] = (uint8_t)(sw >> 24);
 		}
 
-		// ---- public API ----
 		void encode_bc1_scalar(void* pBlocks, const color_rgba* pSrc_pixels, uint32_t num_blocks, uint32_t block_stride)
 		{
 			ensure_init();

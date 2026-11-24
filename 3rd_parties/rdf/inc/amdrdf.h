@@ -141,7 +141,7 @@ struct rdfUserStream
      *
      * This function must be always provided.
      *
-     * - `position` must not positive or 0
+     * - `position` must be nonnegative
      * - The provided context will be passed into `ctx`
     */
     int (*Seek)(void* ctx, std::int64_t position);

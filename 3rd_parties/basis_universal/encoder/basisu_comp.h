@@ -1171,7 +1171,7 @@ namespace basisu
 	// 
 	// pSize: Returns the output data's compressed size in bytes
 	// 
-	// Return value is the compressed .basis or .ktx2 file data, or nullptr on failure. Must call basis_free() to free it.
+	// Return value is the compressed .basis or .ktx2 file data, or nullptr on failure. Call basis_free_data() to free it.
 	enum
 	{
 		cFlagUseOpenCL = 1 << 8,		// use OpenCL if available
@@ -1188,7 +1188,6 @@ namespace basisu
 		cFlagYFlip = 1 << 16,			// flip source image on Y axis before compression
 		
 		// Note 11/18/2025: cFlagUASTCRDO flag is now ignored. Now if uastc_rdo_or_dct_quality>0 in UASTC LDR 4x4 mode, you automatically get RDO.
-		//cFlagUASTCRDO = 1 << 17,		// use RDO postprocessing when generating UASTC LDR 4x4 files (must set uastc_rdo_or_dct_quality to the quality scalar) 
 		
 		cFlagPrintStats = 1 << 18,		// print image stats to stdout
 		cFlagPrintStatus = 1 << 19,		// print status to stdout

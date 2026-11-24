@@ -11,42 +11,22 @@
 
 namespace amdisa
 {
-    // Forward declarations.
     struct IsaSpec;
     struct EncodingCondition;
 
     class IsaXmlReader
     {
     public:
-        /*
-         * ReadSpec --
-         *
-         * Reads an ISA Spec XML from a filepath and loads the spec data into an IsaSpec.
-         *
-         * Returns true on success or false on error, in which case err_message is populated with an appropriate human-readable error string.
-         */
+        // Reads a spec from a file. On failure, err_message describes the error.
         static bool ReadSpec(const std::string& path_to_input_xml, IsaSpec& spec_data, std::string& err_message);
 
-        /*
-         * ReadSpec --
-         *
-         * Reads an ISA Spec XML from a buffer in memory (of length datalen) and loads the spec data into an IsaSpec.
-         *
-         * Returns true on success or false on error, in which case err_message is populated with an appropriate human-readable error string.
-         */
+        // Reads datalen bytes from memory. On failure, err_message describes the error.
         static bool ReadSpec(const char *input_xml_data, const size_t datalen, IsaSpec& spec_data, std::string& err_message);
 
-        /*
-         * ReadEncodingConditionExpressionTrees --
-         *
-         * Reads expression trees for encoding conditions from ISA Spec XML.
-         *
-         * Returns true on success or false on error, in which case err_message is populated with an appropriate human-readable error string.
-         */
+        // Reads condition trees from a file. On failure, err_message describes the error.
         static bool ReadEncodingConditionExpressionTrees(const std::string& path_to_input_xml,
             std::vector<EncodingCondition>& encoding_conditions, uint32_t& architecture_id, std::string& err_message);
 
-        // Explicitly remove the constructors and assignment operators.
         IsaXmlReader()                               = delete;
         IsaXmlReader(const IsaXmlReader&)            = delete;
         IsaXmlReader& operator=(const IsaXmlReader&) = delete;

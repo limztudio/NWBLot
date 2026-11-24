@@ -4,16 +4,16 @@
 #define TINY_DDS_TINYDDS_H
 
 #ifndef TINYDDS_HAVE_UINTXX_T
-#include <stdint.h>  // for uint32_t and int64_t
+#include <stdint.h>
 #endif
 #ifndef TINYDDS_HAVE_BOOL
-#include <stdbool.h>  // for bool
+#include <stdbool.h>
 #endif
 #ifndef TINYDDS_HAVE_SIZE_T
-#include <stddef.h>    // for size_t
+#include <stddef.h>
 #endif
 #ifndef TINYDDS_HAVE_MEMCPY
-#include <string.h>  // for memcpy
+#include <string.h>
 #endif
 
 #ifdef __cplusplus
@@ -46,7 +46,7 @@ void TinyDDS_DestroyContext(TinyDDS_ContextHandle handle);
 // reset lets you reuse the context for another file (saves an alloc/free cycle)
 void TinyDDS_Reset(TinyDDS_ContextHandle handle);
 
-// call this to read the header file should already be at the start of the KTX data
+// The input must be positioned at the start of the DDS data.
 bool TinyDDS_ReadHeader(TinyDDS_ContextHandle handle);
 
 bool TinyDDS_Is1D(TinyDDS_ContextHandle handle);
@@ -883,7 +883,6 @@ void TinyDDS_Reset(TinyDDS_ContextHandle handle) {
 	if (ctx == NULL)
 		return;
 
-	// backup user provided callbacks and data
 	TinyDDS_Callbacks callbacks;
 	memcpy(&callbacks, &ctx->callbacks, sizeof(TinyDDS_Callbacks));
 	void *user = ctx->user;
@@ -899,7 +898,6 @@ void TinyDDS_Reset(TinyDDS_ContextHandle handle) {
 		ctx->clut = NULL;
 	}
 
-	// reset to default state
 	memset(ctx, 0, sizeof(TinyDDS_Context));
 	memcpy(&ctx->callbacks, &callbacks, sizeof(TinyDDS_Callbacks));
 	ctx->user = user;
@@ -1091,7 +1089,6 @@ static uint32_t TinyDDS_FormatSize(TinyDDS_Format fmt) {
 		return 16;
 
 	case TDDS_UNDEFINED: return 0;
-		//	default: return 0;
 	case TDDS_AYUV:break;
 	case TDDS_Y410:break;
 	case TDDS_Y416:break;
@@ -1189,8 +1186,6 @@ static TinyDDS_Format TinyDDS_DecodeFormat(TinyDDS_Context *ctx) {
 		}
 	}
 
-	// okay back to direct draw surface bit fields to try and work format out.
-	// TODO this could be better i'm sure
 
 	if ((ctx->header.formatFlags & TINYDDS_DDPF_PALETTEINDEXED4)) {
 		return TDDS_UNDEFINED; // TODO 4 bit CLUTs
@@ -1206,7 +1201,6 @@ static TinyDDS_Format TinyDDS_DecodeFormat(TinyDDS_Context *ctx) {
 	}
 	// what is this? TINYDDS_DDPF_PALETTEINDEXEDTO8
 
-	// most have RGB data and/or alpha
 	if ((ctx->header.formatFlags & TINYDDS_DDPF_RGB) ||
 			(ctx->header.formatFlags & TINYDDS_DDPF_ALPHA)) {
 
@@ -1318,12 +1312,9 @@ static TinyDDS_Format TinyDDS_DecodeFormat(TinyDDS_Context *ctx) {
 
 static uint32_t TinyDDS_MipMapReduce(uint32_t value, uint32_t mipmaplevel) {
 
-	// handle 0 being passed in
 	if (value <= 1)
 		return 1;
 
-	// there are better ways of doing this (log2 etc.) but this doesn't require any
-	// dependecies and isn't used enough to matter imho
 	for (uint32_t i = 0u; i < mipmaplevel; ++i) {
 		if (value <= 1)
 			return 1;
@@ -1822,17 +1813,7 @@ static bool TinyDDS_EncodeFormat(TinyDDS_Format fmt, TinyDDS_Header* header, Tin
 	case TDDS_X8R8G8B8_UNORM:
 	TDDS_EF_RGBA( 32,0x0000FF00, 0x00FF0000, 0xFF000000, 0x00000000)
 
-	/* A2R10G10B10 is broken via the traditional DDS descriptions, so we
-	 * always use the Dx10 header for those
-	case TDDS_R10G10B10A2_UNORM:
-	TDDS_EF_RGBA( 32,0x3FF00000, 0x000FFC00, 0x000003FF, 0xC0000000)
-	case TDDS_A2B10G10R10_UNORM:
-	TDDS_EF_RGBA( 32,0xFFC00000, 0x003FF000, 0x00000FFC, 0x00000003)
-	case TDDS_A2R10G10B10_UNORM:
-	TDDS_EF_RGBA( 32,0x00000FFC, 0x003FF000, 0xFFC00000, 0x00000003)
-	case TDDS_B10G10R10A2_UNORM:
-	TDDS_EF_RGBA( 32,0x3FF00000, 0x000FFC00, 0x000003FF, 0xC0000000)
-	*/
+	// Legacy A2R10G10B10 descriptions are broken; use a DX10 header.
 	case TDDS_R10G10B10A2_UNORM:
 	case TDDS_B10G10R10A2_UNORM:
 	case TDDS_A2B10G10R10_UNORM:
@@ -1947,7 +1928,6 @@ static bool TinyDDS_EncodeFormat(TinyDDS_Format fmt, TinyDDS_Header* header, Tin
 		break;
 
 	}
-	// these formats can probably be done via dx10 header so check
 	if(headerDx10->DXGIFormat == TIF_DXGI_FORMAT_UNKNOWN) return false;
 	else return true;
 }
@@ -1985,7 +1965,6 @@ bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 
 	if(!TinyDDS_EncodeFormat(format, &header, &headerDX10)) return false;
 
-	// do we have to force dx10 (for slices)
 	if (slices > 1) {
 		if(headerDX10.DXGIFormat == TIF_DXGI_FORMAT_UNKNOWN) {
 			// DDS doesn't support slices for formats that aren't DXGI compatible
@@ -2023,7 +2002,6 @@ bool TinyDDS_WriteImage(TinyDDS_WriteCallbacks const *callbacks,
 		header.formatFourCC = TINYDDS_MAKE_RIFFCODE('D','X','1','0');
 	}
 
-	// now write
 	callbacks->write(user, &header, sizeof(TinyDDS_Header));
 	if(header.formatFlags & TINYDDS_DDPF_FOURCC &&
 			header.formatFourCC == TINYDDS_MAKE_RIFFCODE('D','X','1','0')) {

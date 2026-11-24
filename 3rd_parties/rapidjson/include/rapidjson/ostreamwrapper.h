@@ -31,9 +31,9 @@ RAPIDJSON_NAMESPACE_BEGIN
 
     - \c std::ostringstream
     - \c std::stringstream
-    - \c std::wpstringstream
+    - \c std::wostringstream
     - \c std::wstringstream
-    - \c std::ifstream
+    - \c std::ofstream
     - \c std::fstream
     - \c std::wofstream
     - \c std::wfstream

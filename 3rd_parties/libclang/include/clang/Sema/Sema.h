@@ -2034,7 +2034,6 @@ public:
       Act(CurrentPragmaLocation, Action, Label, CurrentValue);
     }
 
-    // Constructors.
     explicit PragmaStack(const ValueType &Default)
         : DefaultValue(Default), CurrentValue(Default) {}
 

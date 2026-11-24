@@ -6936,13 +6936,6 @@ std::string Driver::GetStdModuleManifestPath(const Compilation &C,
       // flavours do not exist at the moment, but there are plans to provide a
       // variant that is built with sanitizer instrumentation enabled.
 
-      // For example
-      //  StringRef modules = [&] {
-      //    const SanitizerArgs &Sanitize = TC.getSanitizerArgs(C.getArgs());
-      //    if (Sanitize.needsAsanRt())
-      //      return "libc++.modules-asan.json";
-      //    return "libc++.modules.json";
-      //  }();
 
       SmallString<128> path(lib.begin(), lib.end());
       llvm::sys::path::remove_filename(path);

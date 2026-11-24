@@ -36,16 +36,13 @@ uint64_t RmtGetClockFrequency();
 /// Utility function to get the current timestamp.
 ///
 /// @returns
-/// The current clock frquency of the CPU.
+/// The current timestamp.
 ///
 uint64_t RmtGetCurrentTimestamp();
 
 /// Utility function to sleep.
 ///
 /// @param [in] timeout         The sleep time, in milliseconds.
-///
-/// @returns
-/// The current clock frquency of the CPU.
 ///
 void RmtSleep(uint32_t timeout);
 

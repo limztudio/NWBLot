@@ -275,7 +275,7 @@ template<typename T>
 inline bool is_poisoned(const std::atomic<T*>& p) { return is_poisoned(p.load(std::memory_order_relaxed)); }
 #else
 template<typename T>
-inline void poison_pointer(T&) {/*do nothing*/}
+inline void poison_pointer(T&) { }
 #endif /* !TBB_USE_ASSERT */
 
 template <std::size_t alignment = 0, typename T>

@@ -661,7 +661,6 @@ typedef struct _RTL_CRITICAL_SECTION GTEST_CRITICAL_SECTION;
 #endif  // GTEST_HAS_STREAM_REDIRECTION
 
 // Determines whether to support death tests.
-// pops up a dialog window that cannot be suppressed programmatically.
 #if (defined(GTEST_OS_LINUX) || defined(GTEST_OS_CYGWIN) ||           \
      defined(GTEST_OS_SOLARIS) || defined(GTEST_OS_ZOS) ||            \
      (defined(GTEST_OS_MAC) && !defined(GTEST_OS_IOS)) ||             \
@@ -1241,7 +1240,6 @@ class GTEST_API_ [[nodiscard]] AutoHandle {
 
 #if GTEST_HAS_NOTIFICATION_
 // Notification has already been imported into the namespace.
-// Nothing to do here.
 
 #else
 // Allows a controller thread to pause execution of newly created
@@ -1401,7 +1399,6 @@ class [[nodiscard]] ThreadWithParam : public ThreadWithParamBase {
 
 #if GTEST_HAS_MUTEX_AND_THREAD_LOCAL_
 // Mutex and ThreadLocal have already been imported into the namespace.
-// Nothing to do here.
 
 #elif defined(GTEST_OS_WINDOWS) && !defined(GTEST_OS_WINDOWS_PHONE) && \
     !defined(GTEST_OS_WINDOWS_RT)

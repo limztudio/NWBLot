@@ -97,7 +97,6 @@ static void cpool_bundle_link(struct cpool_bundle **pdest,
 
 static struct cpool_bundle *cpool_create_bundle(void)
 {
-  /* created with refcount == 1 */
   struct cpool_bundle *bundle = curlx_calloc(1, sizeof(*bundle));
   if(!bundle)
     return NULL;
@@ -116,7 +115,6 @@ static bool cpool_bundle_add_id(struct cpool *cpool,
   if(!Curl_uint32_spbset_add(&bundle->ids, pool_id))
     return FALSE;
   if(Curl_uint32_spbset_count(&bundle->ids) == 1) {
-    /* first one added, register bundle */
     struct cpool_bundle *new_ref = NULL;
     cpool_bundle_link(&new_ref, bundle);
     if(!Curl_hash_add(&cpool->dest2bundle,
@@ -136,7 +134,6 @@ static void cpool_bundle_remove_id(struct cpool *cpool,
 {
   Curl_uint32_spbset_remove(&bundle->ids, pool_id);
   if(!Curl_uint32_spbset_count(&bundle->ids)) {
-    /* Now empty, unregister bundle */
     Curl_hash_delete(&cpool->dest2bundle, destination, strlen(destination));
   }
 }
@@ -608,7 +605,6 @@ CURLcode Curl_cpool_add(struct Curl_easy *data,
     break;
   }
 
-  /* We add the connection */
   capacity = Curl_uint32_tbl_capacity(&cpool->conns);
   if(capacity == UINT32_MAX) {
     infof(data, "No connections available, pool at max capacity");
@@ -859,7 +855,6 @@ static int cpool_reap_dead_cb(struct cpool *cpool,
   if(cpool_conn_can_be_closed(conn)) {
     if(conn->bits.no_reuse || conn->bits.close ||
        !Curl_cpool_conn_seems_healthy(conn, admin, reaper->pnow)) {
-      /* terminate conn and stop the iteration */
       reaper->reaped++;
       cpool_conn_close(cpool, admin, conn, FALSE);
     }

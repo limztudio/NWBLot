@@ -2081,12 +2081,10 @@ void InlineCostCallAnalyzer::updateThreshold(CallBase &Call, Function &Callee) {
 
   Function *Caller = Call.getCaller();
 
-  // return min(A, B) if B is valid.
   auto MinIfValid = [](int A, std::optional<int> B) {
     return B ? std::min(A, *B) : A;
   };
 
-  // return max(A, B) if B is valid.
   auto MaxIfValid = [](int A, std::optional<int> B) {
     return B ? std::max(A, *B) : A;
   };

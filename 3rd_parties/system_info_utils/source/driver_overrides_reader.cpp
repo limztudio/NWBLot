@@ -63,10 +63,8 @@ namespace driver_overrides_utils
     class IDriverOverridesParser
     {
     public:
-        /// @brief Constructor.
         IDriverOverridesParser() = default;
 
-        /// @brief Destructor.
         virtual ~IDriverOverridesParser()
         {
         }
@@ -88,10 +86,8 @@ namespace driver_overrides_utils
     class DriverOverridesParserV1 : public IDriverOverridesParser
     {
     public:
-        /// @brief Constructor.
         DriverOverridesParserV1() = default;
 
-        /// @brief Destructor.
         virtual ~DriverOverridesParserV1() = default;
 
         /// @brief Process the Driver Overrides JSON node.
@@ -418,11 +414,9 @@ namespace driver_overrides_utils
 
         if (IsChunkPresent(file))
         {
-            // Check if the version is supported.
             auto version = file.GetChunkVersion(kDriverOverridesChunkIdentifier);
             if ((version >= kDriverOverridesChunkVersionMin) && (version <= kDriverOverridesChunkVersionMax))
             {
-                // Get the size of the chunk.
                 auto chunk_size = file.GetChunkDataSize(kDriverOverridesChunkIdentifier);
 
                 char* buffer = new (std::nothrow) char[chunk_size + 1];
@@ -431,7 +425,6 @@ namespace driver_overrides_utils
                     file.ReadChunkDataToBuffer(kDriverOverridesChunkIdentifier, buffer);
                     buffer[chunk_size] = '\0';
 
-                    // Parse the JSON text.
                     result = Parse(buffer, version, out_processed_json_text);
                     delete[] buffer;
                 }
@@ -472,12 +465,10 @@ namespace driver_overrides_utils
 
         if (IsChunkPresent(file))
         {
-            // Check if the version is supported.
             uint32_t version{};
             rdfChunkFileGetChunkVersion(file, kDriverOverridesChunkIdentifier, 0, &version);
             if ((version >= kDriverOverridesChunkVersionMin) && (version <= kDriverOverridesChunkVersionMax))
             {
-                // Get the size of the chunk.
                 int64_t chunk_size{};
                 rdfChunkFileGetChunkDataSize(file, kDriverOverridesChunkIdentifier, 0, &chunk_size);
 
@@ -487,7 +478,6 @@ namespace driver_overrides_utils
                     rdfChunkFileReadChunkData(file, kDriverOverridesChunkIdentifier, 0, buffer);
                     buffer[chunk_size] = '\0';
 
-                    // Parse the JSON text.
                     result = Parse(buffer, version, out_processed_json_text);
                     delete[] buffer;
                 }

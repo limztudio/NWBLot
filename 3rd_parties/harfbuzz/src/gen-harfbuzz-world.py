@@ -18,7 +18,6 @@ OUTPUT = sys.argv[1]
 CURRENT_SOURCE_DIR = sys.argv[2]
 TEMPLATE = sys.argv[3]
 
-# Parse --TAG file... groups
 groups = {}
 current_tag = None
 for arg in sys.argv[4:]:
@@ -28,7 +27,6 @@ for arg in sys.argv[4:]:
     elif current_tag is not None:
         groups[current_tag].append(arg)
 
-# Build #include lines for each group
 def make_includes(files):
     seen = set()
     lines = []
@@ -41,7 +39,6 @@ def make_includes(files):
             lines.append('#include "{}"'.format(rel))
     return '\n'.join(lines)
 
-# Read template and substitute
 with open(TEMPLATE, 'r') as f:
     content = f.read()
 

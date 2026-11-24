@@ -466,7 +466,6 @@ static void imap_state(struct Curl_easy *data,
                        imapstate newstate)
 {
 #if defined(DEBUGBUILD) && defined(CURLVERBOSE)
-  /* for debug purposes */
   static const char * const names[] = {
     "STOP",
     "SERVERGREET",

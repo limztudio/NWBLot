@@ -719,7 +719,6 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
     ECase(SHT_AARCH64_MEMTAG_GLOBALS_DYNAMIC);
     break;
   default:
-    // Nothing to do.
     break;
   }
 #undef ECase
@@ -782,7 +781,6 @@ void ScalarBitSetTraits<ELFYAML::ELF_SHF>::bitset(IO &IO,
     BCase(SHF_X86_64_LARGE);
     break;
   default:
-    // Nothing to do.
     break;
   }
 #undef BCase
@@ -924,7 +922,6 @@ void ScalarEnumerationTraits<ELFYAML::ELF_REL>::enumeration(
 #include "llvm/BinaryFormat/ELFRelocs/Xtensa.def"
     break;
   default:
-    // Nothing to do.
     break;
   }
 #undef ELF_RELOC

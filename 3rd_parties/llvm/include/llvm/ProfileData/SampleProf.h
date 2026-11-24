@@ -1642,7 +1642,6 @@ private:
     for (const auto &I : FS.getCallsiteSamples()) {
       for (const auto &Callee : I.second) {
         const auto &CalleeProfile = Callee.second;
-        // Add body sample.
         Profile.addBodySamples(I.first.LineOffset, I.first.Discriminator,
                                CalleeProfile.getHeadSamplesEstimate());
         // Add callsite sample.

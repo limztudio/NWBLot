@@ -31,9 +31,6 @@
 #define SIGNATURE 0x5c48e9b2    /* Random pattern. */
 #endif
 
-/*
- * Init a bufref struct.
- */
 void Curl_bufref_init(struct bufref *br)
 {
   DEBUGASSERT(br);
@@ -81,9 +78,6 @@ void Curl_bufref_set(struct bufref *br, const void *ptr, size_t len,
   br->dtor = dtor;
 }
 
-/*
- * Get a pointer to the referenced buffer.
- */
 const unsigned char *Curl_bufref_uptr(const struct bufref *br)
 {
   DEBUGASSERT(br);
@@ -93,9 +87,6 @@ const unsigned char *Curl_bufref_uptr(const struct bufref *br)
   return br->ptr;
 }
 
-/*
- * Get a pointer to the referenced string.
- */
 const char *Curl_bufref_ptr(const struct bufref *br)
 {
   DEBUGASSERT(br);
@@ -105,9 +96,6 @@ const char *Curl_bufref_ptr(const struct bufref *br)
   return (const char *)br->ptr;
 }
 
-/*
- * Get the length of the referenced buffer data.
- */
 size_t Curl_bufref_len(const struct bufref *br)
 {
   DEBUGASSERT(br);

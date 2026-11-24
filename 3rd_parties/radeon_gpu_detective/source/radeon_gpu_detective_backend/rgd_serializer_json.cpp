@@ -302,7 +302,6 @@ void RgdSerializerJson::SetUmdCrashData(const CrashData& umd_crash_data)
     {
         const RgdEvent& rgd_event = *umd_crash_data.events[i].rgd_event;
 
-        //UmdEventId event_id = static_cast<UmdEventId>(rgd_event.header.eventId);
         switch (rgd_event.header.eventId)
         {
         case uint8_t(UmdEventId::RgdEventExecutionMarkerBegin):
@@ -382,11 +381,9 @@ void RgdSerializerJson::SetUmdCrashData(const CrashData& umd_crash_data)
                 });
         }
         break;
-        // These are ignored.
         case uint8_t(DDCommonEventId::RgdEventTimestamp):
         break;
         default:
-            // Notify in case there is an unknown event type.
             assert(false);
         }
     }
@@ -418,11 +415,9 @@ void RgdSerializerJson::SetKmdCrashData(const CrashData& kmd_crash_data)
                 });
         }
         break;
-        // These are ignored.
         case uint8_t(DDCommonEventId::RgdEventTimestamp):
         break;
         default:
-            // Notify in case there is an unknown event type.
             assert(false);
         }
     }
@@ -634,7 +629,6 @@ void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
 {
     bool should_process = true;
 
-    // Check if no events.
     if (kmd_crash_data.events.empty())
     {
         should_process = false;
@@ -658,7 +652,6 @@ void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
         }
     }
 
-    // Check if no GPR events found.
     if (gpr_event_count == 0)
     {
         should_process = false;

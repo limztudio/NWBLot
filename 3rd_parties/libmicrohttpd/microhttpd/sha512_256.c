@@ -52,7 +52,6 @@ MHD_SHA512_256_init (struct Sha512_256Ctx *ctx)
   ctx->H[6] = UINT64_C (0x2B0199FC2C85B8AA);
   ctx->H[7] = UINT64_C (0x0EB72DDC81C52CA2);
 
-  /* Initialise number of bytes and high part of number of bits. */
   ctx->count = 0;
   ctx->count_bits_hi = 0;
 }
@@ -102,10 +101,6 @@ sha512_256_transform (uint64_t H[SHA512_256_HASH_SIZE_WORDS],
      See FIPS PUB 180-4 formulae 4.8, 4.9. */
 #define Ch(x,y,z)     ( (z) ^ ((x) & ((y) ^ (z))) )
 #define Maj(x,y,z)    ( ((x) & (y)) ^ ((z) & ((x) ^ (y))) )
-  /* Unoptimized (original) versions: */
-/* #define Ch(x,y,z)  ( ( (x) & (y) ) ^ ( ~(x) & (z) ) )          */
-/* #define Maj(x,y,z) ( ((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)) ) */
-
   /* Four 'Sigma' macro functions.
      See FIPS PUB 180-4 formulae 4.10, 4.11, 4.12, 4.13. */
 #define SIG0(x)  \
@@ -468,7 +463,7 @@ MHD_SHA512_256_update (struct Sha512_256Ctx *ctx,
 
 #ifndef MHD_FAVOR_SMALL_CODE
   if (0 == length)
-    return; /* Shortcut, do nothing */
+    return;
 #endif /* ! MHD_FAVOR_SMALL_CODE */
 
   /* Note: (count & (SHA512_256_BLOCK_SIZE-1))

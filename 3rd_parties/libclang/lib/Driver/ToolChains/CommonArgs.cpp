@@ -446,7 +446,7 @@ void tools::addDirectoryList(const ArgList &Args, ArgStringList &CmdArgs,
   bool CombinedArg = false;
 
   if (!DirList)
-    return; // Nothing to do.
+    return;
 
   StringRef Name(ArgName);
   if (Name == "-I" || Name == "-L" || Name.empty())

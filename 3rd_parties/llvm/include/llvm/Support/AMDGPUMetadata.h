@@ -148,7 +148,6 @@ struct Metadata final {
   /// for enqueued blocks.
   std::string mRuntimeHandle = std::string();
 
-  /// Default constructor.
   Metadata() = default;
 
   /// \returns True if kernel attributes metadata is empty, false otherwise.
@@ -234,7 +233,6 @@ struct Metadata final {
   /// True if 'pipe' qualifier is specified. Optional.
   bool mIsPipe = false;
 
-  /// Default constructor.
   Metadata() = default;
 };
 
@@ -306,7 +304,6 @@ struct Metadata final {
   /// Number of VGPRs spilled by a workitem. Optional.
   uint16_t mNumSpilledVGPRs = 0;
 
-  /// Default constructor.
   Metadata() = default;
 
   /// \returns True if kernel code properties metadata is empty, false
@@ -363,7 +360,6 @@ struct Metadata final {
   /// or SGPR is not used or not known. Optional.
   uint16_t mWavefrontPrivateSegmentOffsetSGPR = uint16_t(-1);
 
-  /// Default constructor.
   Metadata() = default;
 
   /// \returns True if kernel debug properties metadata is empty, false
@@ -419,7 +415,6 @@ struct Metadata final {
   /// Debug properties metadata. Optional.
   DebugProps::Metadata mDebugProps = DebugProps::Metadata();
 
-  /// Default constructor.
   Metadata() = default;
 };
 
@@ -443,7 +438,6 @@ struct Metadata final {
   /// Kernels metadata. Required.
   std::vector<Kernel::Metadata> mKernels = std::vector<Kernel::Metadata>();
 
-  /// Default constructor.
   Metadata() = default;
 };
 

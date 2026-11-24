@@ -139,7 +139,6 @@ class [[nodiscard]] AssertionResult;
 
 class GTEST_API_ [[nodiscard]] AssertionResult {
  public:
-  // Copy constructor.
   // Used in EXPECT_TRUE/FALSE(assertion_result).
   AssertionResult(const AssertionResult& other);
 
@@ -175,7 +174,6 @@ class GTEST_API_ [[nodiscard]] AssertionResult {
   GTEST_DISABLE_MSC_WARNINGS_POP_()
 #endif
 
-  // Assignment operator.
   AssertionResult& operator=(AssertionResult other) {
     swap(other);
     return *this;

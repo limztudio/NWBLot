@@ -49,16 +49,16 @@ namespace amdisa
     };
 
     constexpr const char* FunctionalGroupNames[] = {
-        "Unknown",        // Unknown
-        "Scalar ALU",     // Scalar ALU
-        "Scalar Memory",  // Scalar Memory
-        "Vector ALU",     // Vector ALU
-        "Vector Memory",  // Vector Memory
-        "Export",         // Export
-        "Branch",         // Branch
-        "Message",        // Message
-        "Wave Control",   // Wave Control
-        "Trap"            // Trap
+        "Unknown",
+        "Scalar ALU",
+        "Scalar Memory",
+        "Vector ALU",
+        "Vector Memory",
+        "Export",
+        "Branch",
+        "Message",
+        "Wave Control",
+        "Trap"
     };
 
     // Instruction's functional group's subgroup.
@@ -82,21 +82,21 @@ namespace amdisa
     };
 
     constexpr const char* FunctionalSubgroupNames[] = {
-        "Unknown",         // Unknown
-        "Floating Point",  // Floating Point
-        "Buffer",          // Buffer
-        "Texture",         // Texture
-        "Load",            // Load
-        "Store",           // Store
-        "Sample",          // Sample
-        "BVH",             // BVH
-        "Atomic",          // Atomic
-        "Flat",            // Flat
-        "Data Share",      // Data Share
-        "Static",          // Static
-        "MFMA",            // MFMA
-        "WMMA",            // WMMA
-        "Transcendental"   // Transcendental
+        "Unknown",
+        "Floating Point",
+        "Buffer",
+        "Texture",
+        "Load",
+        "Store",
+        "Sample",
+        "BVH",
+        "Atomic",
+        "Flat",
+        "Data Share",
+        "Static",
+        "MFMA",
+        "WMMA",
+        "Transcendental"
     };
 
     // OperandModifier provides information about an input/output modifier.
@@ -106,10 +106,7 @@ namespace amdisa
         uint32_t    value = 0;
     };
 
-    // EncodingField provides information about a single field of an instruction's encoding.
-    // For example, OP is a field that encodes the opcode of a specific instruction.
-    // InstructionInfo object contains a vector of EncodingFields that provide
-    // information about every single field of the encoding.
+    // A field of an instruction's encoding, such as OP for the opcode.
     struct EncodingField
     {
         std::string field_name;
@@ -122,9 +119,7 @@ namespace amdisa
         uint64_t bit_offset = 0;
     };
 
-    // InstructionOperand provides information about a single operand of an
-    // instruction. InstructionInfo contains a vector of InstructionOperands
-    // that provide information about operands involved in a given instruction.
+    // An operand of a decoded instruction.
     struct InstructionOperand
     {
         // Name of the operand. For example: v1, s1, or literals.
@@ -245,12 +240,7 @@ namespace amdisa
         FunctionalGroupSubgroupInfo functional_group_subgroup_info;
     };
 
-    // InstructionInfoBundle is one or more InstructionInfo objects
-    // that were generated as a result of the decode of a single
-    // binary encoded instruction. Certain encodings decode more than
-    // a single instruction, and are therefore decoded into multiple
-    // instructions. The purpose of this structure is to bundle such
-    // instructions together.
+    // One encoding can decode into multiple instructions.
     struct InstructionInfoBundle
     {
         std::vector<InstructionInfo> bundle;
@@ -287,11 +277,6 @@ namespace amdisa
      */
         std::string GetVersion() const;
 
-        /*
-     * GetArchitecture --
-     *
-     * Return the architecture enumaration.
-     */
         GpuArchitecture GetArchitecture() const;
 
         /*
@@ -352,13 +337,8 @@ namespace amdisa
      * On successful decode, the function outputs a vector of
      * InstructionInfoBundle with the decoded information of all the instructions.
      *
-     * Additional Option: resolve_direct_branch_targets
-     * (optional, default - false and skipped)
-     * Setting the resolve_direct_branch_targets to true enables determining
-     * the direct branch's target instruction's index in the
-     * instruction_info_bundle vector which will be available in the
-     * InstructionInfo.instruction_semantic_info.branch_info's struct member
-     * branch_target_index
+     * When resolve_direct_branch_targets is true, branch_target_index holds
+     * the target instruction's index in instruction_info_stream.
      */
         bool DecodeShaderDisassemblyText(const std::string&                  shader_disassembly_text,
                                          std::vector<InstructionInfoBundle>& instruction_info_stream,
@@ -377,13 +357,8 @@ namespace amdisa
      * the function outputs a vector of InstructionInfoBundle with the decoded
      * information of all the instructions.
      *
-     * Additional Option: resolve_direct_branch_targets
-     * (optional, default - false and skipped)
-     * Setting the resolve_direct_branch_targets to true enables determining
-     * the direct branch's target instruction's index in the
-     * instruction_info_bundle vector which will be available in the
-     * InstructionInfo.instruction_semantic_info.branch_info's struct member
-     * branch_target_index
+     * When resolve_direct_branch_targets is true, branch_target_index holds
+     * the target instruction's index in instruction_info_stream.
      */
         bool DecodeShaderDisassemblyFile(const std::string&                  shader_disassembly_file,
                                          std::vector<InstructionInfoBundle>& instruction_info_stream,

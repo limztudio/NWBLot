@@ -1,7 +1,5 @@
-# NWB CMakeLists for vendored GoogleTest (gtest only; no gmock). Built from the single gtest-all.cc unity
-# source, which #includes the other src/*.cc files. The engine supplies its own test entry point
-# (tests/common/gtest_nwb_main.cpp) so gtest_main.cc is intentionally not compiled here. The CRT / iterator-debug
-# level is aligned with engine targets by the parent via nwb_match_engine_runtime.
+# The engine supplies its own test entry point; gtest_main.cc is omitted.
+# The parent aligns CRT and iterator-debug settings with engine targets.
 cmake_minimum_required(VERSION 3.13)
 project(googletest CXX)
 include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")

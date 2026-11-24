@@ -13,7 +13,6 @@ function(_harfbuzz_set_imported_library target library_name)
   endif ()
 endfunction()
 
-# Add the libraries.
 add_library(harfbuzz::harfbuzz @HB_LIBRARY_TYPE@ IMPORTED)
 set_target_properties(harfbuzz::harfbuzz PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "@PACKAGE_INCLUDE_INSTALL_DIR@")
@@ -31,7 +30,6 @@ set_target_properties(harfbuzz::subset PROPERTIES
   INTERFACE_LINK_LIBRARIES "harfbuzz::harfbuzz")
 _harfbuzz_set_imported_library(harfbuzz::subset harfbuzz-subset)
 
-# Only add the gobject library if it was built.
 if (@HB_HAVE_GOBJECT@)
   add_library(harfbuzz::gobject @HB_LIBRARY_TYPE@ IMPORTED)
   set_target_properties(harfbuzz::gobject PROPERTIES

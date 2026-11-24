@@ -441,7 +441,6 @@ _closure_glyphs_lookups_features (hb_subset_plan_t   *plan,
                           &lookup_indices);
   remap_indexes (&lookup_indices, lookups);
 
-  // prune features
   table->prune_features (lookups,
                          plan->user_axes_location.is_empty () ? nullptr : feature_record_cond_idx_map,
                          feature_substitutes_map,

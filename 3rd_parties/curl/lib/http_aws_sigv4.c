@@ -308,7 +308,7 @@ static int compare_header_names(const char *a, const char *b)
 
   cmp = strncmp(a, b, min_len);
 
-  /* return the shorter of the two if one is shorter */
+  /* Equal prefixes sort by length. */
   if(!cmp)
     return (int)(len_a - len_b);
 
@@ -830,7 +830,6 @@ static CURLcode parse_sigv4_params(struct Curl_easy *data,
           curlx_str_until(&line, region, MAX_SIGV4_LEN, ':') ||
           curlx_str_single(&line, ':') ||
           curlx_str_until(&line, service, MAX_SIGV4_LEN, ':')) {
-    /* nothing to do */
   }
 
   if(!curlx_strlen(service)) {

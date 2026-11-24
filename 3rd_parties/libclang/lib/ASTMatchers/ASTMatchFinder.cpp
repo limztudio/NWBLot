@@ -1115,7 +1115,7 @@ private:
   void matchDispatch(const Attr *Node) {
     matchWithoutFilter(*Node, Matchers->Attr);
   }
-  void matchDispatch(const void *) { /* Do nothing. */ }
+  void matchDispatch(const void *) {  }
   /// @}
 
   // Returns whether a direct parent of \p Node matches \p Matcher.

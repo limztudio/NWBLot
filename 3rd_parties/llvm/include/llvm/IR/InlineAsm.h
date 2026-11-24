@@ -114,7 +114,6 @@ public:
     /// constraint letter/number.
     ConstraintCodeVector Codes;
 
-    /// Default constructor.
     SubConstraintInfo() = default;
   };
 
@@ -165,7 +164,6 @@ public:
     /// The currently selected alternative constraint index.
     unsigned currentAlternativeIndex = 0;
 
-    /// Default constructor.
     ConstraintInfo() = default;
 
     /// Parse - Analyze the specified string (e.g. "=*&{eax}") and fill in the

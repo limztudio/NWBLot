@@ -868,7 +868,6 @@
 
     if ( !line_bits || !height )
     {
-      /* nothing to do */
       goto Exit;
     }
 

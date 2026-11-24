@@ -35,7 +35,7 @@ struct Curl_easy;
 extern const struct Curl_cwtype Curl_cwt_out;
 
 /**
- * Mark EndOfStream reached and flush ALL data to the client.
+ * Flush the client, then flush output unless the writer is paused.
  */
 CURLcode Curl_cw_out_done(struct Curl_easy *data);
 

@@ -573,7 +573,6 @@ til::SExpr *SExprBuilder::translateCXXMemberCallExpr(
         ME->getNumArgs() == 0) {
       auto *E = translate(ME->getImplicitObjectArgument(), Ctx);
       return new (Arena) til::Cast(til::CAST_objToPtr, E);
-      // return E;
     }
   }
   return translateCallExpr(cast<CallExpr>(ME), Ctx,
@@ -588,7 +587,6 @@ til::SExpr *SExprBuilder::translateCXXOperatorCallExpr(
     if (k == OO_Star || k == OO_Arrow) {
       auto *E = translate(OCE->getArg(0), Ctx);
       return new (Arena) til::Cast(til::CAST_objToPtr, E);
-      // return E;
     }
   }
   return translateCallExpr(cast<CallExpr>(OCE), Ctx);
@@ -739,7 +737,6 @@ til::SExpr *SExprBuilder::translateCastExpr(const CastExpr *CE,
     til::SExpr *E0 = translate(CE->getSubExpr(), Ctx);
     return E0;
     // FIXME!! -- get Load working properly
-    // return new (Arena) til::Load(E0);
   }
   case CK_NoOp:
   case CK_DerivedToBase:
@@ -1026,7 +1023,6 @@ void SExprBuilder::enterCFGBlock(const CFGBlock *B) {
 
   // CurrentLVarMap is moved to ExitMap on block exit.
   // FIXME: the entry block will hold function parameters.
-  // assert(!CurrentLVarMap.valid() && "CurrentLVarMap already initialized.");
 }
 
 void SExprBuilder::handlePredecessor(const CFGBlock *Pred) {

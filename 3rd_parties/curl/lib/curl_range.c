@@ -27,7 +27,6 @@
 #include "curl_trc.h"
 #include "curlx/strparse.h"
 
-/* Only include this function if one or more of FTP, FILE are enabled. */
 #if !defined(CURL_DISABLE_FTP) || !defined(CURL_DISABLE_FILE)
 
 /* Check if this is a range download, and if so, set the internal variables
@@ -46,7 +45,6 @@ CURLcode Curl_range(struct Curl_easy *data)
       return CURLE_RANGE_ERROR;
 
     if(curlx_str_number(&p, &to, CURL_OFF_T_MAX)) {
-      /* no second number */
       /* X - */
       data->state.resume_from = from;
       DEBUGF(infof(data, "RANGE %" FMT_OFF_T " to end of file", from));

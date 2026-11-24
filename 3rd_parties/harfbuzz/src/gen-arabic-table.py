@@ -181,13 +181,11 @@ def read_shaping_table(f):
 			if c not in LIGATURES:
 				continue
 
-			# Save ligature
 			names[c] = fields[1]
 			if items not in ligatures:
 				ligatures[items] = {}
 			ligatures[items][shape] = c
 		else:
-			# Save shape
 			if items[0] not in names:
 				names[items[0]] = fields[1]
 			else:

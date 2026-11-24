@@ -1647,8 +1647,6 @@
 
     opened_frame = 1;
 
-    /* if it is a simple glyph, load it */
-
     if ( loader->n_contours > 0 )
     {
       error = face->read_simple_glyph( loader );

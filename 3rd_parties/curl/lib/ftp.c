@@ -1249,7 +1249,6 @@ static CURLcode ftp_port_send_command(struct Curl_easy *data,
   for(; fcmd != DONE; fcmd++) {
 
     if(!conn->bits.ftp_use_eprt && (EPRT == fcmd))
-      /* if disabled, goto next */
       continue;
 
     if((PORT == fcmd) && sa->sa_family != AF_INET)
@@ -1386,7 +1385,6 @@ static CURLcode ftp_state_use_port(struct Curl_easy *data,
   if(!result)
     portsock = CURL_SOCKET_BAD; /* now held in filter */
 
-  /* cleanup */
 
   if(dns_entry)
     Curl_dns_entry_unlink(data, &dns_entry);
@@ -2266,8 +2264,6 @@ static CURLcode ftp_do_more(struct Curl_easy *data, domore *more)
     if(complete)
       *more = DOMORE_DONE;
 
-    /* if we got an error or if we do not wait for a data connection return
-       immediately */
     if(result || !ftpc->wait_data_conn)
       return result;
 
@@ -3004,7 +3000,6 @@ static CURLcode ftp_state_user_resp(struct Curl_easy *data,
   return result;
 }
 
-/* for ACCT response */
 static CURLcode ftp_state_acct_resp(struct Curl_easy *data,
                                     struct ftp_conn *ftpc,
                                     int ftpcode)
@@ -3407,7 +3402,6 @@ static CURLcode ftp_pp_statemachine(struct Curl_easy *data,
           ftp_state(data, ftpc, FTP_MKD);
       }
       else {
-        /* return failure */
         failf(data, "Server denied you to change to the given directory");
         ftpc->cwdfail = TRUE; /* do not remember this path as we failed
                                  to enter it */

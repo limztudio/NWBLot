@@ -49,7 +49,6 @@ MHD_SHA1_init (void *ctx_)
   ctx->H[3] = UINT32_C (0x10325476);
   ctx->H[4] = UINT32_C (0xc3d2e1f0);
 
-  /* Initialise number of bytes. */
   ctx->count = 0;
 }
 
@@ -81,9 +80,6 @@ sha1_transform (uint32_t H[_SHA1_DIGEST_LENGTH],
      See FIPS PUB 180-4 formulae 4.1. */
 #define Ch(x,y,z)     ( (z) ^ ((x) & ((y) ^ (z))) )
 #define Maj(x,y,z)    ( ((x) & (y)) ^ ((z) & ((x) ^ (y))) )
-  /* Unoptimized (original) versions: */
-/* #define Ch(x,y,z)  ( ( (x) & (y) ) ^ ( ~(x) & (z) ) )          */
-/* #define Maj(x,y,z) ( ((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)) ) */
 #define Par(x,y,z)    ( (x) ^ (y) ^ (z) )
 
   /* Single step of SHA-1 computation,
@@ -135,8 +131,6 @@ sha1_transform (uint32_t H[_SHA1_DIGEST_LENGTH],
   /* During first 16 steps, before making any calculations on each step,
      the W element is read from input data buffer as big-endian value and
      stored in array of W elements. */
-  /* Note: instead of using K constants as array, all K values are specified
-     individually for each step. */
   SHA1STEP32 (a, b, c, d, e, Ch, K00, W[0] = GET_W_FROM_DATA (data, 0));
   SHA1STEP32 (e, a, b, c, d, Ch, K00, W[1] = GET_W_FROM_DATA (data, 1));
   SHA1STEP32 (d, e, a, b, c, Ch, K00, W[2] = GET_W_FROM_DATA (data, 2));
@@ -259,7 +253,7 @@ MHD_SHA1_update (void *ctx_,
   mhd_assert ((data != NULL) || (length == 0));
 
   if (0 == length)
-    return; /* Do nothing */
+    return;
 
   /* Note: (count & (SHA1_BLOCK_SIZE-1))
            equal (count % SHA1_BLOCK_SIZE) for this block size. */

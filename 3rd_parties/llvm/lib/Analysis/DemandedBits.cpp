@@ -569,11 +569,7 @@ static APInt determineLiveOperandBitsAddCarry(unsigned OperandNo,
   assert(!(CarryZero && CarryOne) &&
          "Carry can't be zero and one at the same time");
 
-  // The following check should be done by the caller, as it also indicates
-  // that LHS and RHS don't need to be computed.
-  //
-  // if (AOut.isMask())
-  //   return AOut;
+  // The caller should handle AOut.isMask() without computing LHS or RHS.
 
   // Boundary bits' carry out is unaffected by their carry in.
   APInt Bound = (LHS.Zero & RHS.Zero) | (LHS.One & RHS.One);

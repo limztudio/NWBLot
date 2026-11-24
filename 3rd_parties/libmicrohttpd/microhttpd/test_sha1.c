@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/test_sha1.h
+ * @file microhttpd/test_sha1.c
  * @brief  Unit tests for SHA-1 functions
  * @author Karlson2k (Evgeny Grin)
  */

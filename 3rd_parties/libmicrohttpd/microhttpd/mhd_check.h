@@ -41,7 +41,7 @@
  * 2. Check the *precondition*, not the symptom.  An assertion that compares
  *    two pointers after the bad one has already been derived is decoration:
  *    it happily passes on a NULL-derived pointer.  Assert what has to be true
- *    for the following arithmetic to be defined.  See commit 29eaa56b.
+ *    for the following arithmetic to be defined.
  * 3. A failing check must FAIL THE CONNECTION - close it, or reply 4xx/5xx -
  *    and must not continue and must not panic.  MHD_PANIC() aborts the whole
  *    daemon, which turns a bounded per-connection problem into a global
@@ -107,8 +107,9 @@
  * @param expr the invariant, must evaluate to true
  * @param fail_stmt a single statement to execute when @a expr is false; it
  *                  must transfer control out of the current function
- *                  (return, goto or break), because execution must not
- *                  continue past a violated memory-safety invariant.
+ *                  (return or goto), because execution must not continue
+ *                  past a violated memory-safety invariant. A break exits
+ *                  only the macro's loop and does not leave the function.
  *                  When the failure action needs several statements, spell
  *                  the check out instead - "if (MHD_CHECK_FAILED_ (expr)) {
  *                  MHD_CHECK_LOG_ (daemon, "expr"); ... }" - because a

@@ -717,7 +717,7 @@ MCPseudoProbeDecoder::getCallProbeForAddr(uint64_t Address) const {
   const MCDecodedPseudoProbe *CallProbe = nullptr;
   for (const MCDecodedPseudoProbe &Probe : Address2ProbesMap.find(Address)) {
     if (Probe.isCall()) {
-      // Disabling the assert and returning first call probe seen so far.
+      // Return the first call probe seen.
       // Subsequent call probes, if any, are ignored. Due to the the way
       // .pseudo_probe section is decoded, probes of the same-named independent
       // static functions are merged thus multiple call probes may be seen for a
@@ -726,9 +726,6 @@ MCPseudoProbeDecoder::getCallProbeForAddr(uint64_t Address) const {
       //
       // TODO: re-enable or narrow down the assert to static functions only.
       //
-      // assert(!CallProbe &&
-      //        "There should be only one call probe corresponding to address "
-      //        "which is a callsite.");
       CallProbe = &Probe;
       break;
     }

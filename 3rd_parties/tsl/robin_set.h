@@ -79,7 +79,7 @@ namespace tsl {
  *
  * Iterators invalidation:
  *  - clear, operator=, reserve, rehash: always invalidate the iterators.
- *  - insert, emplace, emplace_hint, operator[]: if there is an effective
+ *  - insert, emplace, emplace_hint: if there is an effective
  * insert, invalidate the iterators.
  *  - erase: always invalidate the iterators.
  */
@@ -119,9 +119,6 @@ class robin_set {
   using iterator = typename ht::iterator;
   using const_iterator = typename ht::const_iterator;
 
-  /*
-   * Constructors
-   */
   robin_set() : robin_set(ht::DEFAULT_INIT_BUCKETS_SIZE) {}
 
   explicit robin_set(size_type bucket_count, const Hash& hash = Hash(),
@@ -198,9 +195,6 @@ class robin_set {
 
   allocator_type get_allocator() const { return m_ht.get_allocator(); }
 
-  /*
-   * Iterators
-   */
   iterator begin() noexcept { return m_ht.begin(); }
   const_iterator begin() const noexcept { return m_ht.begin(); }
   const_iterator cbegin() const noexcept { return m_ht.cbegin(); }
@@ -209,16 +203,10 @@ class robin_set {
   const_iterator end() const noexcept { return m_ht.end(); }
   const_iterator cend() const noexcept { return m_ht.cend(); }
 
-  /*
-   * Capacity
-   */
   bool empty() const noexcept { return m_ht.empty(); }
   size_type size() const noexcept { return m_ht.size(); }
   size_type max_size() const noexcept { return m_ht.max_size(); }
 
-  /*
-   * Modifiers
-   */
   void clear() noexcept { m_ht.clear(); }
 
   std::pair<iterator, bool> insert(const value_type& value) {
@@ -248,10 +236,10 @@ class robin_set {
 
   /**
    * Due to the way elements are stored, emplace will need to move or copy the
-   * key-value once. The method is equivalent to
+   * key once. The method is equivalent to
    * insert(value_type(std::forward<Args>(args)...));
    *
-   * Mainly here for compatibility with the std::unordered_map interface.
+   * Mainly here for compatibility with the std::unordered_set interface.
    */
   template <class... Args>
   std::pair<iterator, bool> emplace(Args&&... args) {
@@ -260,10 +248,10 @@ class robin_set {
 
   /**
    * Due to the way elements are stored, emplace_hint will need to move or copy
-   * the key-value once. The method is equivalent to insert(hint,
+   * the key once. The method is equivalent to insert(hint,
    * value_type(std::forward<Args>(args)...));
    *
-   * Mainly here for compatibility with the std::unordered_map interface.
+   * Mainly here for compatibility with the std::unordered_set interface.
    */
   template <class... Args>
   iterator emplace_hint(const_iterator hint, Args&&... args) {
@@ -322,9 +310,6 @@ class robin_set {
 
   void swap(robin_set& other) { other.m_ht.swap(m_ht); }
 
-  /*
-   * Lookup
-   */
   size_type count(const Key& key) const { return m_ht.count(key); }
 
   /**
@@ -543,15 +528,9 @@ class robin_set {
     return m_ht.equal_range(key, precalculated_hash);
   }
 
-  /*
-   * Bucket interface
-   */
   size_type bucket_count() const { return m_ht.bucket_count(); }
   size_type max_bucket_count() const { return m_ht.max_bucket_count(); }
 
-  /*
-   *  Hash policy
-   */
   float load_factor() const { return m_ht.load_factor(); }
 
   float min_load_factor() const { return m_ht.min_load_factor(); }
@@ -572,15 +551,9 @@ class robin_set {
   void rehash(size_type count_) { m_ht.rehash(count_); }
   void reserve(size_type count_) { m_ht.reserve(count_); }
 
-  /*
-   * Observers
-   */
   hasher hash_function() const { return m_ht.hash_function(); }
   key_equal key_eq() const { return m_ht.key_eq(); }
 
-  /*
-   * Other
-   */
 
   /**
    * Convert a const_iterator to an iterator.
@@ -612,9 +585,6 @@ class robin_set {
    *  - `template<typename U> void operator()(const U& value);` where the types
    * `std::int16_t`, `std::uint32_t`, `std::uint64_t`, `float` and `Key` must be
    * supported for U.
-   *  - `template<typename U> void skip();` for `std::uint32_t`. This command
-   * must consume one serialized U, including checking its encoded bounds. It
-   * skips archived hashes when rebuilding with an incompatible hash function.
    *
    * The implementation leaves binary compatibility (endianness, IEEE 754 for
    * floats, ...) of the types it serializes in the hands of the `Serializer`
@@ -634,6 +604,8 @@ class robin_set {
    *  - `template<typename U> U operator()();` where the types `std::int16_t`,
    * `std::uint32_t`, `std::uint64_t`, `float` and `Key` must be supported for
    * U.
+   *  - `template<typename U> void skip();` for `std::uint32_t`. It must consume
+   * one serialized U and check its bounds. It skips incompatible archived hashes.
    *
    * If the deserialized hash set type is hash compatible with the serialized
    * set, the deserialization process can be sped up by setting

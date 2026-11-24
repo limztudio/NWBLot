@@ -180,7 +180,7 @@ typedef struct MHD_thread_handle_struct_ MHD_thread_handle_;
  */
 #  define MHD_thread_handle_get_native_(handle_var) \
    ((handle_var).native)
-#else  /* MHD_THREAD_HANDLE_NATIVE_INVALID_ */
+#else  /* MHD_THREAD_HANDLE_NATIVE_VALUE_INVALID_ */
 /**
  * Type with thread handle that can be set to invalid value
  */
@@ -214,7 +214,7 @@ typedef MHD_thread_handle_native_ MHD_thread_handle_;
  */
 #  define MHD_thread_handle_get_native_ptr_(handle_ptr) \
     (handle_ptr)
-#endif /* MHD_THREAD_HANDLE_NATIVE_INVALID_ */
+#endif /* MHD_THREAD_HANDLE_NATIVE_VALUE_INVALID_ */
 
 
 /* ** Thread ID - used to check threads match ** */
@@ -321,7 +321,7 @@ typedef struct MHD_thread_ID_struct_ MHD_thread_ID_;
 #  define MHD_thread_ID_is_current_thread_(ID_var) \
     (MHD_thread_ID_is_valid_(ID_var) && \
      MHD_thread_ID_native_is_current_thread_((ID_var).native))
-#else  /* MHD_THREAD_ID_NATIVE_INVALID_ */
+#else  /* MHD_THREAD_ID_NATIVE_VALUE_INVALID_ */
 /**
  * Type with thread ID that can be set to invalid value
  */
@@ -353,7 +353,7 @@ typedef MHD_thread_ID_native_ MHD_thread_ID_;
  */
 #  define MHD_thread_ID_is_current_thread_(ID_var) \
     MHD_thread_ID_native_is_current_thread_(ID_var)
-#endif /* MHD_THREAD_ID_NATIVE_INVALID_ */
+#endif /* MHD_THREAD_ID_NATIVE_VALUE_INVALID_ */
 
 /**
  * Set current thread ID in variable pointed by @a ID_ptr

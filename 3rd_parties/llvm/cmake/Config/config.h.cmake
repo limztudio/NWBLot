@@ -239,13 +239,13 @@
 /* Have host's ___chkstk_ms */
 #cmakedefine HAVE____CHKSTK_MS ${HAVE____CHKSTK_MS}
 
-/* Define if ICU library is available */
+/* Set to 1 if ICU library is available */
 #cmakedefine01 HAVE_ICU
 
-/* Define if Windows vendored ICU is available */
+/* Set to 1 if Windows vendored ICU is available */
 #cmakedefine01 HAVE_WINDOWS_ICU
 
-/* Define if iconv library is available */
+/* Set to 1 if iconv library is available */
 #cmakedefine01 HAVE_ICONV
 
 /* Linker version detected at compile time. */

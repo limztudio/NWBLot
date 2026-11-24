@@ -51,8 +51,6 @@ private: // CodeViewContext manages these
       : Label(Label), FunctionId(functionid), FileNum(fileNum), Line(line),
         Column(column), PrologueEnd(prologueend), IsStmt(isstmt) {}
 
-  // Allow the default copy constructor and assignment operator to be used
-  // for an MCCVLoc object.
 
 public:
   const MCSymbol *getLabel() const { return Label; }

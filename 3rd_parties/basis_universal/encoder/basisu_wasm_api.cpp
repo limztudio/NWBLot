@@ -269,7 +269,6 @@ wasm_bool_t bu_compress_texture(
 	int quality_level, int effort_level,
 	uint64_t flags_and_quality, float low_level_uastc_rdo_or_dct_quality)
 {
-	//enable_debug_printf((flags_and_quality & cFlagDebug) != 0);
 
 	comp_params* pParams = (comp_params*)wasm_ptr(params_ofs);
 	if (!pParams)

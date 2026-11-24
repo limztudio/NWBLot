@@ -1735,7 +1735,6 @@ check_two_auths (void)
   }
 #endif /* DAUTH_SUPPORT */
 
-  /* Cleanup */
   conn.rq.headers_received = NULL;
   conn.rq.headers_received_tail = NULL;
   conn.state = MHD_CONNECTION_INIT;

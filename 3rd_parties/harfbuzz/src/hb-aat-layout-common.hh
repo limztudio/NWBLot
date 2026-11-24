@@ -825,17 +825,11 @@ DECLARE_NULL_NAMESPACE_BYTES_TEMPLATE1 (AAT, Lookup, 13);
 template <typename T>
 struct Entry
 {
-  // This doesn't seem like it's ever called.
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
-    /* Note, we don't recurse-sanitize data because we don't access it.
-     * That said, in our DEFINE_SIZE_STATIC we access T::static_size,
-     * which ensures that data has a simple sanitize(). To be determined
-     * if I need to remove that as well.
-     *
-     * HOWEVER! Because we are a template, our DEFINE_SIZE_STATIC
-     * assertion wouldn't be checked, hence the line below. */
+    /* The entry data is not accessed; check T::static_size explicitly
+     * because DEFINE_SIZE_STATIC does not check it for this template. */
     static_assert (T::static_size, "");
 
     return_trace (c->check_struct (this));

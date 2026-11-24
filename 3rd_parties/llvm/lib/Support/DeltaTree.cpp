@@ -441,7 +441,6 @@ int DeltaTree::getDeltaAt(unsigned FileIndex) const {
     // partially included in the range.
     Node = IN->getChild(NumValsGreater);
   }
-  // NOT REACHED.
 }
 
 /// AddDelta - When a change is made that shifts around the text buffer,

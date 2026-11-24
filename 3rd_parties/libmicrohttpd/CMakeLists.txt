@@ -1,13 +1,5 @@
 # --------------------------------------------------------------------------- #
-# MHD_config.h generation.
-#
-# Upstream libmicrohttpd expects a configure-generated MHD_config.h (it is pulled in
-# unconditionally by include/mhd_options.h). The NWB vendored tree ships no autotools, so
-# this function probes the platform directly with CMake's check_* modules and configures
-# the MHD_config.h.in template. It works for both the vendored Windows build (which fills
-# the W32 macros) and the vendored Linux/POSIX build (which fills the POSIX macros); the
-# .in template's #cmakedefine directives simply evaluate to undefined for whichever
-# platform half does not apply.
+# Generate MHD_config.h for Windows and POSIX without autotools.
 # --------------------------------------------------------------------------- #
 function(nwb_microhttpd_generate_config output_file)
     include(CheckCSourceCompiles)
@@ -18,7 +10,6 @@ function(nwb_microhttpd_generate_config output_file)
 
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-    # Feature toggles common to both vendored builds.
     set(BAUTH_SUPPORT 1)
     set(DAUTH_SUPPORT 1)
     set(MHD_DAUTH_DEF_MAX_NC_ 1000)
@@ -56,7 +47,6 @@ function(nwb_microhttpd_generate_config output_file)
             set(NWB_MHD_STATIC_INLINE "static inline")
         endif()
 
-        # Windows-only header set.
         set(_nwb_mhd_headers
             assert.h
             errno.h
@@ -83,7 +73,6 @@ function(nwb_microhttpd_generate_config output_file)
             ws2tcpip.h
         )
 
-        # Windows-only symbol probes.
         check_symbol_exists("_lseeki64" "io.h" HAVE___LSEEKI64)
         check_symbol_exists("calloc" "stdlib.h" HAVE_CALLOC)
     else()
@@ -102,7 +91,6 @@ function(nwb_microhttpd_generate_config output_file)
 
         set(MHD_USE_POSIX_THREADS 1)
 
-        # POSIX header set (the W32 set above is skipped here).
         set(_nwb_mhd_headers
             arpa/inet.h
             assert.h
@@ -145,7 +133,6 @@ function(nwb_microhttpd_generate_config output_file)
             unistd.h
         )
 
-        # POSIX function probes (headers passed where the prototype needs one).
         check_function_exists("accept4" HAVE_ACCEPT4)
         check_function_exists("clock_gettime" HAVE_CLOCK_GETTIME)
         check_function_exists("fork" HAVE_FORK)
@@ -289,7 +276,6 @@ function(nwb_microhttpd_generate_config output_file)
             return (int)_Alignof(int);
         }
     " HAVE_C_ALIGNOF)
-    # __attribute__((format)) support for the MHD_FUNC pretty-function macro (mhd_str.h).
     check_c_source_compiles("
         __attribute__((format(printf, 1, 2)))
         static void nwb_mhd_chk(const char *fmt, ...) { (void) fmt; }
@@ -361,7 +347,6 @@ if(WIN32)
     endif()
     target_link_libraries(nwb_vendor_microhttpd PUBLIC ws2_32)
 else()
-    # POSIX: eventfd ITC, the pipe ITC, and POSIX threads all live in this translation unit set.
     target_sources(nwb_vendor_microhttpd PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/microhttpd/mhd_itc.c"
         "${CMAKE_CURRENT_LIST_DIR}/microhttpd/mhd_compat.c"

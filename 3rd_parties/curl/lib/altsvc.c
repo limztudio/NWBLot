@@ -262,7 +262,7 @@ static CURLcode altsvc_load(struct altsvcinfo *asi, const char *file)
             altsvc_add(asi, lineptr);
         }
       } while(!result && !eof);
-      curlx_dyn_free(&buf); /* free the line buffer */
+      curlx_dyn_free(&buf);
     }
     curlx_fclose(fp);
   }
@@ -328,7 +328,6 @@ struct altsvcinfo *Curl_altsvc_init(void)
     return NULL;
   Curl_llist_init(&asi->list, NULL);
 
-  /* set default behavior */
   asi->flags = CURLALTSVC_H1
 #ifdef USE_HTTP2
     | CURLALTSVC_H2
@@ -384,7 +383,7 @@ void Curl_altsvc_cleanup(struct altsvcinfo **asi)
     }
     curlx_free(altsvc->filename);
     curlx_free(altsvc);
-    *asi = NULL; /* clear the pointer */
+    *asi = NULL;
   }
 }
 
@@ -402,7 +401,6 @@ CURLcode Curl_altsvc_save(struct Curl_easy *data,
     /* no cache activated */
     return CURLE_OK;
 
-  /* if not new name is given, use the one we stored from the load */
   if(!file && asi->filename)
     file = asi->filename;
 
@@ -707,7 +705,6 @@ bool Curl_altsvc_lookup(struct altsvcinfo *asi,
          (versions & (int)as->dst.alpnid) &&
          (origin->port == as->src.port) &&
          hostcompare(origin->hostname, as->src.host)) {
-        /* match */
         *dstentry = as;
         /* alt-svc on the same host+port or another one? */
         *psame_destination = (origin->port == as->dst.port) &&

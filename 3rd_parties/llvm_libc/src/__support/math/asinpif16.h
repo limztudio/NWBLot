@@ -90,7 +90,6 @@ LIBC_INLINE float16 asinpif16(float16 x) {
                                 POLY_COEFFS[5], POLY_COEFFS[6], POLY_COEFFS[7]);
   };
 
-  // if |x| <= 0.5:
   if (LIBC_UNLIKELY(x_abs <= 0.5)) {
     // Use polynomial approximation of asin(x)/pi in the range [0, 0.5]
     double result = asinpi_polyeval(fputil::cast<double>(x));

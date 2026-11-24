@@ -87,23 +87,9 @@ static wchar_t *fn_convert_UTF8_to_wchar(const char *str_utf8)
 WINBASEAPI DWORD WINAPI GetFullPathNameW(LPCWSTR, DWORD, LPWSTR, LPWSTR *);
 #endif
 
-/* Fix excessive paths (paths that exceed MAX_PATH length of 260).
- *
- * This is a helper function to fix paths that would exceed the MAX_PATH
- * limitation check done by Windows APIs. It does so by normalizing the passed
- * in filename or path 'in' to its full canonical path, and if that path is
- * longer than MAX_PATH then setting 'out' to "\\?\" prefix + that full path.
- *
- * For example 'in' filename255chars in current directory C:\foo\bar is
- * fixed as \\?\C:\foo\bar\filename255chars for 'out' which tells Windows
- * it is ok to access that filename even though the actual full path is longer
- * than 260 chars.
- *
- * For non-Unicode builds this function may fail sometimes because only the
- * Unicode versions of some Windows API functions can access paths longer than
- * MAX_PATH, for example GetFullPathNameW which is used in this function. When
- * the full path is then converted from Unicode to multibyte that fails if any
- * directories in the path contain characters not in the current codepage.
+/* Normalize paths longer than MAX_PATH and add the extended-length prefix.
+ * Non-Unicode builds can fail if the full path cannot be represented in the
+ * current codepage.
  */
 static bool fix_excessive_path(const TCHAR *in, TCHAR **out)
 {
@@ -169,7 +155,7 @@ static bool fix_excessive_path(const TCHAR *in, TCHAR **out)
    * https://learn.microsoft.com/dotnet/standard/io/file-path-formats
    */
   if(!wcsncmp(fbuf, L"\\\\?\\", 4))
-    ; /* do nothing */
+    ;
   else if(!wcsncmp(fbuf, L"\\\\.\\", 4))
     fbuf[2] = '?';
   else if(!wcsncmp(fbuf, L"\\\\.", 3) || !wcsncmp(fbuf, L"\\\\?", 3)) {

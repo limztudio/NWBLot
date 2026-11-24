@@ -19,7 +19,7 @@
 */
 
 /**
- * @file microhttpd/mhd_panic.h
+ * @file microhttpd/mhd_panic.c
  * @brief  MHD_panic() function and helpers
  * @author Daniel Pittman
  * @author Christian Grothoff
@@ -56,7 +56,7 @@ mhd_panic_std (void *cls,
                unsigned int line,
                const char *reason)
 {
-  (void) cls; /* Mute compiler warning. */
+  (void) cls;
 #ifdef HAVE_MESSAGES
   fprintf (stderr,
            _ ("Fatal error in GNU libmicrohttpd %s:%u: %s\n"),
@@ -64,9 +64,9 @@ mhd_panic_std (void *cls,
            line,
            reason);
 #else  /* ! HAVE_MESSAGES */
-  (void) file;   /* Mute compiler warning. */
-  (void) line;   /* Mute compiler warning. */
-  (void) reason; /* Mute compiler warning. */
+  (void) file;
+  (void) line;
+  (void) reason;
 #endif
   abort ();
 }

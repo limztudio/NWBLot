@@ -15,7 +15,6 @@
 namespace LIBC_NAMESPACE_DECL {
 namespace cpp {
 
-// is_enum
 template <typename T> struct is_enum : bool_constant<__is_enum(T)> {};
 template <typename T>
 LIBC_INLINE_VAR constexpr bool is_enum_v = is_enum<T>::value;

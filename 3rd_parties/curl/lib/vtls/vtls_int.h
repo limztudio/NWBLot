@@ -158,7 +158,7 @@ struct Curl_ssl {
      to get readable */
   bool (*data_pending)(struct Curl_cfilter *cf, const struct Curl_easy *data);
 
-  /* return 0 if a find random is filled in */
+  /* return CURLE_OK when the entropy buffer is filled */
   CURLcode (*random)(struct Curl_easy *data, unsigned char *entropy,
                      size_t length);
   bool (*cert_status_request)(void);

@@ -1650,8 +1650,6 @@ namespace basisu
 
 			uint32_t total_leaf_nodes = 1;
 
-			//interval_timer tm;
-			//tm.start();
 
 			while ((var_heap.size()) && (total_leaf_nodes < max_size))
 			{
@@ -1673,7 +1671,6 @@ namespace basisu
 				}
 			}
 
-			//debug_printf("tree_vector_quant::generate %u: %3.3f secs\n", TrainingVectorType::num_elements, tm.get_elapsed_secs());
 
 			return true;
 		}
@@ -1847,7 +1844,6 @@ namespace basisu
 
 		bool prep_split(const tsvq_node &node, TrainingVectorType &l_child_result, TrainingVectorType &r_child_result) const
 		{
-			//const uint32_t N = TrainingVectorType::num_elements;
 
 			if (2 == node.m_training_vecs.size())
 			{
@@ -2223,7 +2219,6 @@ namespace basisu
 		uint32_t max_threads, job_pool *pJob_pool,
 		bool even_odd_input_pairs_equal)
 	{
-		//typedef bit_hasher<typename Quantizer::training_vec_type> training_vec_bit_hasher;
 
 		// rg 6/24/2025 - Cross platform determinism
 #if 0
@@ -2233,8 +2228,6 @@ namespace basisu
 		typedef std::map< typename Quantizer::training_vec_type, weighted_block_group > group_hash;
 #endif
 		
-		//interval_timer tm;
-		//tm.start();
 
 		group_hash unique_vecs;
 
@@ -2288,7 +2281,6 @@ namespace basisu
 			}
 		}
 
-		//debug_printf("generate_hierarchical_codebook_threaded: %u training vectors, %u unique training vectors, %3.3f secs\n", q.get_total_training_vecs(), (uint32_t)unique_vecs.size(), tm.get_elapsed_secs());
 		debug_printf("generate_hierarchical_codebook_threaded: %u training vectors, %u unique training vectors\n", q.get_total_training_vecs(), (uint32_t)unique_vecs.size());
 
 		Quantizer group_quant;
@@ -2678,8 +2670,6 @@ namespace basisu
 
 		inline void append_byte(uint8_t c)
 		{
-			//m_bytes.resize(m_bytes.size() + 1);
-			//m_bytes.back() = c;
 
 			m_bytes.push_back(c);
 		}
@@ -3699,7 +3689,6 @@ namespace basisu
 						}
 						else
 						{
-							//const float o = p;
 							if (p < 0.0f)
 							{
 								p = 0.0f;
@@ -3877,14 +3866,11 @@ namespace basisu
 
 		void print(const char *pPrefix = nullptr)	
 		{ 
-			//fmt_printf("{}Max: {3.3} Mean: {3.3} RMS: {3.3} PSNR: {2.3} dB, Sums: {} {}, Dim: {}x{}\n", pPrefix ? pPrefix : "", m_max, m_mean, m_rms, m_psnr, m_sum_a, m_sum_b, m_width, m_height);
 			fmt_printf("{}Max: {3.3} Mean: {3.3} RMS: {3.3} PSNR: {2.3} dB\n", pPrefix ? pPrefix : "", m_max, m_mean, m_rms, m_psnr);
 		}
 
 		void print_hp(const char* pPrefix = nullptr) 
 		{ 
-			//fmt_printf("{}Max: {3.6} Mean: {3.6} RMS: {3.6} PSNR: {2.6} dB, Any Neg: {}, Half float overflow: {}, Any NaN/Inf: {}, Sums: {} {}, Dim: {}x{}\n", 
-			//	pPrefix ? pPrefix : "", m_max, m_mean, m_rms, m_psnr, m_has_neg, m_hf_mag_overflow, m_any_abnormal, m_sum_a, m_sum_b, m_width, m_height); 
 			fmt_printf("{}Max: {3.6} Mean: {3.6} RMS: {3.6} PSNR: {2.6} dB, Any Neg: {}, Half float overflow: {}, Any NaN/Inf: {}\n",
 				pPrefix ? pPrefix : "", m_max, m_mean, m_rms, m_psnr, m_has_neg, m_hf_mag_overflow, m_any_abnormal);
 		}

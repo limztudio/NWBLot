@@ -82,16 +82,13 @@ extern z_const char * const z_errmsg[10]; /* indexed by 2-zlib_error */
 #else
 #  define DEF_MEM_LEVEL  MAX_MEM_LEVEL
 #endif
-/* default memLevel */
 
 #define STORED_BLOCK 0
 #define STATIC_TREES 1
 #define DYN_TREES    2
-/* The three kinds of block type */
 
 #define MIN_MATCH  3
 #define MAX_MATCH  258
-/* The minimum and maximum match lengths */
 
 #define PRESET_DICT 0x20 /* preset dictionary flag in zlib header */
 

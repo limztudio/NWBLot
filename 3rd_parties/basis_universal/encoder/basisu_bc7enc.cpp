@@ -1180,11 +1180,8 @@ static uint64_t find_optimal_solution(uint32_t mode, bc7enc_vec4F xl, bc7enc_vec
 			{
 				color_quad_u8 xMinColor, xMaxColor;
 
-				// Notes: The pbit controls which quantization intervals are selected.
-				// total_levels=2^(comp_bits+1), where comp_bits=4 for mode 0, etc.
-				// pbit 0: v=(b*2)/(total_levels-1), pbit 1: v=(b*2+1)/(total_levels-1) where b is the component bin from [0,total_levels/2-1] and v is the [0,1] component value
-				// rearranging you get for pbit 0: b=floor(v*(total_levels-1)/2+.5)
-				// rearranging you get for pbit 1: b=floor((v*(total_levels-1)-1)/2+.5)
+				// With levels = 2^(comp_bits + 1), the p-bit selects v = (2*b + p) / (levels - 1).
+				// Quantize with b = floor((v * (levels - 1) - p) / 2 + 0.5).
 				for (uint32_t c = 0; c < 4; c++)
 				{
 					xMinColor.m_c[c] = (uint8_t)(clampi(((int)((xl.m_c[c] * scalep - p) / 2.0f + .5f)) * 2 + p, p, iscalep - 1 + p));
@@ -1318,8 +1315,6 @@ void check_best_overall_error(const color_cell_compressor_params *pParams, color
 #endif
 
 	// HACK HACK
-	//if (total_err != pResults->m_best_overall_err)
-	//	printf("X");
 }
 
 static bool is_solid_rgb(const color_cell_compressor_params *pParams, uint32_t &r, uint32_t &g, uint32_t &b)
@@ -1659,7 +1654,6 @@ uint64_t color_cell_compression(uint32_t mode, const color_cell_compressor_param
 					for (uint32_t i = 0; i < pParams->m_num_pixels; i++)
 						selectors_temp1[i] = (uint8_t)clampf(floorf((float)max_selector * ((float)selectors_temp[i] - (float)ly) / ((float)hy - (float)ly) + .5f), 0, (float)max_selector);
 
-					//bc7enc_vec4F xl, xh;
 					vec4F_set_scalar(&xl, 0.0f);
 					vec4F_set_scalar(&xh, 0.0f);
 					if (pParams->m_has_alpha)

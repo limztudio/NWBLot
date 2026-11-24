@@ -5976,8 +5976,6 @@ bool InstCombinerImpl::run() {
         LLVM_DEBUG(dbgs() << "IC: Mod = " << OrigI << '\n'
                           << "    New = " << *I << '\n');
 
-        // If the instruction was modified, it's possible that it is now dead.
-        // if so, remove it.
         if (isInstructionTriviallyDead(I, &TLI)) {
           eraseInstFromFunction(*I);
         } else {

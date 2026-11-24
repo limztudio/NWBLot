@@ -116,7 +116,6 @@ static struct addrinfo *mk_getaddrinfo(const struct ares_addrinfo *aihead)
       name = NULL;
     }
 
-    /* if the return list is empty, this becomes the first element */
     if(!cafirst)
       cafirst = ca;
 
@@ -170,7 +169,6 @@ int r_getaddrinfo(const char *node,
       rc = ares_set_servers_ports_csv(channel, env);
       if(rc) {
         curl_mfprintf(stderr, "ares_set_servers_ports_csv failed: %d", rc);
-        /* Cleanup */
         ares_destroy(channel);
         return EAI_MEMORY; /* we cannot run */
       }
@@ -193,7 +191,6 @@ int r_getaddrinfo(const char *node,
   else
     rc = EAI_AGAIN; /* failed without an authoritative answer */
 
-  /* Cleanup */
   ares_destroy(channel);
 
   return rc;

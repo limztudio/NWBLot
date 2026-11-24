@@ -581,7 +581,7 @@ static inline void calc_unnormalized_covariance(
 // note not clamped
 // xy = cross term
 // xx = first chan
-// xy = second chan
+// yy = second chan
 static inline float corr_pair(float xy, float xx, float yy)
 {
 	float d = xx * yy;
@@ -701,10 +701,8 @@ static void compute_principle_axis(float pAxis[4], const float pCovar[cTotalCova
 	assert(max_pair_iters);
 	assert((num_comps == 3) || (num_comps == 4));
 
-	//vec4_set(pAxis, 1.0f, 1.0f, 1.0f, (num_comps == 4) ? 1.0f : 0.0f);
 	get_initial_axis_from_largest_diag(pAxis, pCovar, num_comps);
 
-	//vec_normalize(pAxis, num_comps);
 	float s = maximum(fabs(pAxis[0]), fabs(pAxis[1]), fabs(pAxis[2]), fabs(pAxis[3]));
 	if (s > TINY_EPS)
 		vec4_scale(pAxis, 1.0f / s);
@@ -759,7 +757,6 @@ struct block_stats
 // endpoint values returned in direct ASTC endpoint order: lr hr lg hg lb hb la ha
 static void calc_initial_cem_endpoints(const pixelbuf& block, float pCEM_values[8], uint32_t num_comps, block_stats *pOut_stats, bool zero_centered)
 {
-	//static inline void compute_covariance(float pDst_covar[cTotalCovar], float* pMean, const pixelbuf & block, uint32_t num_comps, bool zero_centered)
 	float cov[cTotalCovar];
 	float block_mean[4];
 
@@ -871,7 +868,7 @@ struct single_subset_shortlist_state
 	bool m_dp_valid[cCEMTotalIndices][4];
 
 	// mean centered block stats
-	// unclamped Pearson, order RG, RB, GB, RA, GA, BA; beware if a channel is invalid it's 1 not 0
+	// unclamped Pearson, order RG, RB, RA, GB, GA, BA; inactive channels use 1
 	// normalized 3D or 4D (depending on if the block had alpha or not)
 	block_stats m_stats;
 
@@ -1064,8 +1061,6 @@ static bool should_include_dual_plane(const single_subset_shortlist_state& short
 	if (total_active_chans <= 1)
 		return false;
 
-	//const float MIN_A_DP_CORR = .995f;
-	//const float MIN_RGB_DP_CORR = .985f;
 
 	const float MIN_A_DP_CORR = .9999f;
 	const float MIN_RGB_DP_CORR = .9999f;
@@ -1359,18 +1354,14 @@ static inline float analytical_quant_est_sse(uint32_t astc_cem, uint32_t e_level
 	assert((astc_cem == 0) || (astc_cem == 4) || (astc_cem == 6) || (astc_cem == 8) || (astc_cem == 10) || (astc_cem == 12));
 
 	const float Dep = g_intervals_recip[e_levels]; // endpoint quant step
-	//const float Dw = g_intervals_recip[w_levels]; // weight quant step
 	const float Dw = g_intervals_recip[w_levels + 1]; // weight quant step, adjusted to approximately factor in endpoint LS fit (especially less pessimestic for 2-3 level configs)
 	const float ab_sum = g_ab_sum_tab[w_levels];
 
 	// sanity checks
 	assert(fabs(Dep - (1.0f / (float)(e_levels - 1))) < .000125f);
-	//assert(fabs(Dw - (1.0f / (float)(w_levels - 1))) < .000125f);
 	assert(fabs(Dw - (1.0f / (float)(w_levels))) < .000125f);
 	assert(fabs(ab_sum - (2.0f * float(w_levels) - 1.0f) / (3.0f * (float(w_levels) - 1.0f))) < .000125f);
 
-	//const int num_chans = ((astc_cem == 6) || (astc_cem == 8)) ? 3 : 4;
-	//const int num_chans = (astc_cem <= 8) ? 3 : 4;
 	const int num_chans = get_num_cem_chans(astc_cem);
 
 	// For num_chans = 3 we know the decoder always outputs 255 for Alpha, so there isn't any endpoint quant error there, and spans[3] should always be 0.
@@ -1400,7 +1391,6 @@ static inline float analytical_quant_est_sse(uint32_t astc_cem, uint32_t e_level
 	assert((astc_cem == 0) || (astc_cem == 4) || (astc_cem == 6) || (astc_cem == 8) || (astc_cem == 10) || (astc_cem == 12));
 
 	const float Dep = 1.0f / (float)(e_levels - 1); // endpoint quant step
-	//const float Dw = 1.0f / (float)(w_levels - 1); // weight quant step
 	const float Dw = 1.0f / (float)(w_levels); // weight quant step, adjusted to approximately factor in endpoint LS fit (especially less pessimestic for 2-3 level configs)
 
 	assert(fabs(g_intervals_recip[w_levels + 1] - Dw) < TINY_EPS);
@@ -1409,7 +1399,6 @@ static inline float analytical_quant_est_sse(uint32_t astc_cem, uint32_t e_level
 	const float N = float(w_levels);
 	const float ab_sum = (2.0f * N - 1.0f) / (3.0f * (N - 1.0f)); // simple model, assumes uniform weights, estimates how much endpoint quantization error survives after interpolation, averaged over all weight levels.
 
-	//const int num_chans = ((astc_cem == 6) || (astc_cem == 8)) ? 3 : 4;
 	const int num_chans = get_num_cem_chans(astc_cem);
 
 	// For num_chans = 3 we know the decoder always outputs 255 for Alpha, so there isn't any endpoint quant error there, and spans[3] should always be 0.
@@ -1435,10 +1424,8 @@ const float DEF_QUANT_WEIGHT = 1.0f;
 static inline float estimate_base_config_sse(single_subset_shortlist_state&state, const astc_unpacked_config& cfg)
 {
 	const uint32_t astc_cem = cfg.m_cem;
-	//assert((astc_cem >= 6) && (astc_cem <= 12));
 	assert(is_cem_0_or_4(astc_cem) || is_cem_6_or_10(astc_cem) || is_cem_8_or_12(astc_cem));
 
-	//float error = 0.0f;
 
 	uint32_t cem_index = 0; // = (astc_cem - 6) >> 1;
 	if (astc_cem >= 6)
@@ -1639,14 +1626,8 @@ static uint32_t generate_single_subset_shortlist(
 										
 #if 0
 		// HACK HACK
-		//if (!cfg.m_dual_plane)
-		//	continue;
 		if ((cfg.m_cem != 0) && (cfg.m_cem != 8) && (cfg.m_cem != 12))
 			continue;
-		//if (cfg.m_cem == 6)
-		//	continue;
-		//if (!cfg.m_dual_plane)
-		//	continue;
 #endif
 
 		if (cfg.m_dual_plane)
@@ -2697,7 +2678,6 @@ static void eval_weights_for_plane(
 		float xl, xh;
 		
 		float det = z00 * z11 - z01 * z10;
-		//if (fabs(det) >= TINY_EPS)
 		if (det >= TINY_EPS)
 		{
 			det = 1.0f / det;
@@ -2857,12 +2837,10 @@ static bool refine_endpoints_given_weights_cem_6_or_10_method3(
 #if 0
 		if ((q2 > TINY_EPS) || (q2 < -TINY_EPS))
 		{
-			//const double disc = (double)q1 * (double)q1 - 4.0f * (double)q2 * (double)q0;
 			const float disc = q1 * q1 - 4.0f * q2 * q0;
 
 			if (disc >= 0.0f)
 			{
-				//const float sqrt_disc = (float)sqrt(disc);
 				const float sqrt_disc = sqrtf(disc);
 
 				const float inv_2q2 = 0.5f / q2;
@@ -3008,7 +2986,6 @@ static bool refine_endpoints_given_weights_cem_6_or_10_method3(
 		float xl, xh;
 
 		float det = z00 * z11 - z01 * z10;
-		//if (fabs(det) >= TINY_EPS) // todo should always be pos?
 		if (det >= TINY_EPS) // todo should always be pos?
 		{
 			det = 1.0f / det;
@@ -3085,7 +3062,6 @@ static bool refine_endpoints_given_weights_cem_8_9_12_or_13(
 			
 	float det = z00 * z11 - z01 * z10; // should be non-negative mathematically
 	
-	//if (fabs(det) >= TINY_EPS)
 	if (det >= TINY_EPS)
 	{
 		det = 1.0f / det;
@@ -3175,7 +3151,6 @@ static bool refine_endpoints_given_weights_cem_0_or_4(
 	pNew_CEM_vals[7] = 255.0f;
 
 	float det = z00 * z11 - z01 * z10; // should be non-negative mathematically
-	//if (fabs(det) >= TINY_EPS)
 	if (det >= TINY_EPS)
 	{
 		det = 1.0f / det;
@@ -3547,7 +3522,6 @@ static inline void get_pca_config(const astc_unpacked_config& cfg, uint32_t& num
 		if (cfg.m_cem == 4)
 		{
 			assert(cfg.m_ccs_index == 3);
-			//num_pca_comps = 3;
 		}
 		else if (cfg.m_ccs_index < 3)
 		{
@@ -3575,7 +3549,6 @@ static void create_single_subset_block(
 	assert(is_cem_0_or_4(cem_index) || is_cem_6_or_10(cem_index) || is_cem_8_or_12(cem_index));
 
 	const bool cem_6_or_10 = is_cem_6_or_10(cem_index); // (cem_index & 3) == 2;
-	//const bool cem_has_alpha = does_cem_have_alpha(cem_index); // only true when the block has alpha, too
 	const bool dual_plane = log_blk.m_dual_plane;
 
 	if (num_block_comps == 3)
@@ -3673,7 +3646,6 @@ static void encode_single_subset_block(
 
 	if (num_src_block_comps == 3)
 	{
-		//assert(cfg.m_cem <= 8);
 		assert((cfg.m_cem == 0) || (cfg.m_cem == 6) || (cfg.m_cem == 8));
 	}
 	
@@ -3831,7 +3803,6 @@ static bool weight_polish(
 					const uint32_t packed_texel_index = influenced_texels[j];
 					const uint32_t texel_x = packed_texel_index & 0xFF;
 					const uint32_t texel_y = packed_texel_index >> 8;
-					//const uint32_t texel_index = texel_x + texel_y * block_width;
 
 					astc_helpers::color_rgba dec_c;
 					block_decoder.decode_texel(texel_x, texel_y, dec_c);
@@ -4243,7 +4214,7 @@ static bool weight_gradient_descent(
 
 	// now compute the residual at block res
 
-	int weight_block_raw_residuals[astc_helpers::MAX_BLOCK_PIXELS]; // block res, [0,64]
+	int weight_block_raw_residuals[astc_helpers::MAX_BLOCK_PIXELS]; // block res, [-64,64]
 
 	for (uint32_t i = 0; i < total_block_pixels; i++)
 		weight_block_raw_residuals[i] = ideal_block_weight_vals[i] - dequant_block_weights[i];
@@ -4253,13 +4224,13 @@ static bool weight_gradient_descent(
 	const basisu::vector<float>& unweighted_downsample_matrix = pGrid_data->m_unweighted_downsample_matrix;
 	const basisu::vector<float>& one_over_diag_AtA = pGrid_data->m_one_over_diag_AtA;
 
-	float weight_grid_residuals_downsampled[astc_helpers::MAX_GRID_WEIGHTS]; // grid res, [0,64]
+	float weight_grid_residuals_downsampled[astc_helpers::MAX_GRID_WEIGHTS]; // grid res
 
 	basisu::astc_ldr::downsample_weight_residual_grid(
 		unweighted_downsample_matrix.get_ptr(),
 		block_width, block_height,		// source/from dimension (block size)
 		best_config.m_grid_width, best_config.m_grid_height,		// dest/to dimension (grid size)
-		weight_block_raw_residuals,	// these are dequantized weights, NOT ISE symbols, [by][bx]
+		weight_block_raw_residuals,	// weight residuals, [by][bx]
 		weight_grid_residuals_downsampled);			// [wy][wx]
 
 	for (uint32_t i = 0; i < total_grid_weights; i++)
@@ -4324,7 +4295,6 @@ static bool refine_endpoints_with_current_weights(
 	const uint32_t total_block_pixels = block_width * block_height;
 
 	const uint32_t num_cem_endpoint_vals = astc_helpers::get_num_cem_values(best_config.m_cem);
-	//const uint32_t num_weight_levels = get_levels(best_config.m_weight_range);
 
 	const uint32_t total_grid_weights = best_config.m_grid_width * best_config.m_grid_height;
 
@@ -4668,11 +4638,9 @@ static void compress_block_2subsets_internal(
 				const uint32_t num_cem_endpoint_vals = astc_helpers::get_num_cem_values(best_config.m_cem);
 				const uint32_t total_grid_weights = carrier_lblock.m_grid_width * carrier_lblock.m_grid_height;
 
-				//const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 				const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
 
-				// ------- method 1
 				if (enc_context.m_use_method1)
 				{
 					memcpy(final_lblock.m_weights, carrier_lblock.m_weights, total_grid_weights);
@@ -4714,7 +4682,6 @@ static void compress_block_2subsets_internal(
 				double best_pat_lblock_error = DBL_MAX;
 				astc_helpers::log_astc_block best_pat_lblock;
 
-				// ------- method 2
 				if (enc_context.m_use_method2)
 				{
 					uint8_t desired_block_weights[astc_helpers::MAX_BLOCK_PIXELS]; // at block res, ranks
@@ -5165,11 +5132,9 @@ static void compress_block_3subsets_internal(
 			const uint32_t num_cem_endpoint_vals = astc_helpers::get_num_cem_values(best_config.m_cem);
 			const uint32_t total_grid_weights = carrier_lblock.m_grid_width * carrier_lblock.m_grid_height;
 
-			//const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 			const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
 
-			// ------- method 1
 			if (enc_context.m_use_method1)
 			{
 				memcpy(final_lblock.m_weights, carrier_lblock.m_weights, total_grid_weights);
@@ -5212,7 +5177,6 @@ static void compress_block_3subsets_internal(
 			double best_pat_lblock_error = DBL_MAX;
 			astc_helpers::log_astc_block best_pat_lblock;
 
-			// ------- method 2
 			if (enc_context.m_use_method2)
 			{
 				uint8_t desired_block_weights[astc_helpers::MAX_BLOCK_PIXELS]; // at block res, ranks

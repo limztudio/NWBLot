@@ -260,7 +260,6 @@ UNITTEST bool proxy_check_noproxy(const char *name, const char *no_proxy)
 
       /* pass blanks after pattern */
       curlx_str_passblanks(&p);
-      /* if not a comma, this ends the loop */
       if(*p != ',')
         break;
       /* pass any number of commas */
@@ -541,7 +540,6 @@ CURLcode Curl_proxy_init_conn(struct Curl_easy *data,
   if(str) {
     if(*str) {
       proxy = curlx_strdup(str);
-      /* if global proxy is set, this is it */
       if(!proxy) {
         failf(data, "memory shortage");
         result = CURLE_OUT_OF_MEMORY;
@@ -556,7 +554,6 @@ CURLcode Curl_proxy_init_conn(struct Curl_easy *data,
   if(str) {
     if(*str) {
       pre_proxy = curlx_strdup(str);
-      /* if global socks proxy is set, this is it */
       if(!pre_proxy) {
         failf(data, "memory shortage");
         result = CURLE_OUT_OF_MEMORY;

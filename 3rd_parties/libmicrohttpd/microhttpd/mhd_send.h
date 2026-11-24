@@ -64,8 +64,7 @@ MHD_send_init_static_vars_ (void);
  *                  system buffers (usually set for the last piece of data),
  *                  set to false to prefer holding incomplete network packets
  *                  (more data will be send for the same reply).
- * @return sum of the number of bytes sent from both buffers or
- *         error code (negative)
+ * @return number of bytes sent or error code (negative)
  */
 ssize_t
 MHD_send_data_ (struct MHD_Connection *connection,

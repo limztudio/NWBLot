@@ -48,7 +48,6 @@ static void handleHVXWarnings(const Driver &D, const ArgList &Args) {
 static void handleHVXTargetFeatures(const Driver &D, const ArgList &Args,
                                     std::vector<StringRef> &Features,
                                     StringRef Cpu, bool &HasHVX) {
-  // Handle HVX warnings.
   handleHVXWarnings(D, Args);
 
   auto makeFeature = [&Args](Twine T, bool Enable) -> StringRef {

@@ -6286,7 +6286,6 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
               "corresponding "
               "llvm.call.preallocated.setup's argument count");
       } else if (IID == Intrinsic::call_preallocated_teardown) {
-        // nothing to do
       } else {
         Check(!FoundCall, "Can have at most one call corresponding to a "
                           "llvm.call.preallocated.setup");

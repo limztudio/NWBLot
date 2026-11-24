@@ -19,7 +19,7 @@
 //
 // Supported -dds_format tokens (see parse_dds_output_format):
 //   Block compressed: bc1 bc2 bc3 bc4 bc5 bc7
-//   Uncompressed:     a8r8g8b8 r8 r8g8 r5g6b5 a1r5g5b5 a4r4g4b4
+//   Uncompressed:     a8r8g8b8 a8b8g8r8 r8 r8g8 r5g6b5 a1r5g5b5 a4r4g4b4
 //
 // The sRGB-vs-UNORM DXGI variant is selected from the compressor's transfer function flag
 // (m_ktx2_and_basis_srgb_transfer_function, set by -srgb/-photo/-linear); only bc1/bc2/bc3/bc7/a8r8g8b8/a8b8g8r8
@@ -66,7 +66,7 @@ namespace basisu
 	// Returns the canonical token string for a format (for messages), or "?" if invalid.
 	const char* get_dds_output_format_string(dds_output_format fmt);
 
-	// True if the format has a distinct sRGB DXGI variant (bc1/bc3/bc7/a8r8g8b8); false for the formats
+	// True if the format has a distinct sRGB DXGI variant; false for the formats
 	// that are always written UNORM. Lets a caller report the actually-emitted variant accurately.
 	bool dds_output_format_has_srgb_variant(dds_output_format fmt);
 

@@ -1455,8 +1455,6 @@ private:
                           DuplicateBlockMap &DuplicateMap) {
     CloneList ClonedBBs = DuplicateMap[BB];
 
-    // Find an entry in the CloneList with this NextState. If it exists then
-    // return the corresponding BB
     auto It = llvm::find_if(ClonedBBs, [NextState](const ClonedBlock &C) {
       return C.State == NextState;
     });

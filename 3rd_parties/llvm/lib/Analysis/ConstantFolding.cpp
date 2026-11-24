@@ -624,7 +624,6 @@ bool ReadDataFromGlobal(Constant *C, uint64_t ByteOffset, unsigned char *CurPtr,
       ByteOffset = 0;
       CurEltOffset = NextEltOffset;
     }
-    // not reached.
   }
 
   if (isa<ConstantArray>(C) || isa<ConstantVector>(C) ||

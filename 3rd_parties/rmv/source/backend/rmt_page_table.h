@@ -27,7 +27,6 @@
 #define RMT_PAGE_DIRECTORY_LEVEL_3_SIZE (256)
 
 /// The size (in bytes) of a set of 256 x 48-bit physical offsets for the leaf node.
-/// NOTE: This could be optimized down to 36-bit later.
 #define RMT_MAXIMUM_PAGE_TABLE_LEAF_SIZE (RMT_PAGE_DIRECTORY_LEVEL_3_SIZE * 6)
 
 /// The number of level 0 nodes to keep space for.
@@ -52,7 +51,6 @@ typedef struct RmtResource          RmtResource;
 /// A structure encapsulating the leaf node of a page table.
 typedef struct RmtPageDirectoryLevel3
 {
-    // NOTE: Moving to 36 bit offsets in here would save 25MB at 64GB.
 
     uint8_t physical_addresses[RMT_MAXIMUM_PAGE_TABLE_LEAF_SIZE];  ///< An array of bytes to store 256 x 48bit physical addresses.
     uint8_t is_mapped[RMT_PAGE_DIRECTORY_LEVEL_3_SIZE / 8];        ///< A bit field indicating if the slot in <c><i>physicalAddresses</i></c> is used or not.
@@ -64,7 +62,6 @@ typedef struct RmtPageDirectoryLevel2
     RmtPageDirectoryLevel3* page_directory[RMT_PAGE_DIRECTORY_LEVEL_2_SIZE];  ///< An array of pointers to level 3 page directory structures.
 } RmtPageDirectoryLevel2;
 
-/// A structure to encapsulate
 typedef struct RmtPageDirectoryLevel1
 {
     RmtPageDirectoryLevel2* page_directory[RMT_PAGE_DIRECTORY_LEVEL_1_SIZE];  ///< An array of pointers to level 2 page directory structures.
@@ -85,16 +82,10 @@ typedef struct RmtPageDirectoryLevel1
 /// to index in to the array of pointers at the different tree levels. At the leaf of
 /// the trie, we are storing a compacted array of 48bit physical address pointers.
 ///
-/// On top of this the <c><i>RmtPageTable</i></c> structure also implements a small
-/// TLB-like cache, which keeps a small buffer of the most recently accessed Lvl. 3
-/// nodes from the trie. This means that iterating through virtual address space
-/// will only result in a tree traversal every 1MB of VA range.
-///
 typedef struct RmtPageTable
 {
     RmtPageDirectoryLevel1* level0[RMT_PAGE_DIRECTORY_LEVEL_0_SIZE];  ///< An array of pointers to level 1 page directory structures.
 
-    // Storage and allocators for level 2..3 structures and what not.
     RmtPageDirectoryLevel1 level1_nodes[RMT_PAGE_DIRECTORY_LEVEL_1_COUNT];  ///< An array of <c><i>RmtPageDirectoryLevel1</i></c> structures.
     RmtPageDirectoryLevel2 level2_nodes[RMT_PAGE_DIRECTORY_LEVEL_2_COUNT];  ///< An array of <c><i>RmtPageDirectoryLevel2</i></c> structures.
     RmtPageDirectoryLevel3 level3_nodes[RMT_PAGE_DIRECTORY_LEVEL_3_COUNT];  ///< An array of <c><i>RmtPageDirectoryLevel3</i></c> structures.
@@ -122,14 +113,11 @@ typedef struct RmtPageTable
 /// kRmtErrorInvalidPointer             The operation failed as <c><i>pageTable</i></c> structure was <c><i>NULL</i></c>.
 RmtErrorCode RmtPageTableInitialize(RmtPageTable* page_table, const RmtSegmentInfo* segment_info, int32_t segment_info_count, uint64_t target_process_id);
 
-/// Map some virtual memory to an underlaying physical range.
-///
-/// If <c><i>pageSize</i></c> is set to <c><i>RMT_PAGE_SIZE_UNAMPPED</i></c> then this function will
-/// interpret this as an unmapping operation and call <c><i>rmtPageTableUnmap</i></c>.
+/// Update a virtual memory mapping.
 ///
 /// @param [in] page_table                  A pointer to a <c><i>RmtPageTable</i></c> structure to update.
 /// @param [in] virtual_address             The virtual address of the page table mapping.
-/// @param [in] physical_address            The physical address that the virtual address is being mapped to. Only valid when <c><i>pageSize</i></c> is not <c><i>RMT_PAGE_SIZE_UNMAPPED</i></c>.
+/// @param [in] physical_address            The physical address to map. Ignored when <c><i>is_unmapping</i></c> is true.
 /// @param [in] size_in_pages               The size of the the mapping specified in pages. The page size is determined by <c><i>pageSize</i></c>.
 /// @param [in] page_size                   The size of each page being mapped.
 /// @param [in] is_unmapping                A boolean value indicating if the mapping update is an unmap operation.
@@ -141,7 +129,7 @@ RmtErrorCode RmtPageTableInitialize(RmtPageTable* page_table, const RmtSegmentIn
 /// @retval
 /// kRmtErrorInvalidPointer             The operation failed as <c><i>pageTable</i></c> structure was <c><i>NULL</i></c>.
 /// @retval
-/// kRmtErrorAddressAlreadyMapped       The operation failed because some memory in this range was already mapped.
+/// kRmtErrorPageTableSizeExceeded       A page table node pool is full.
 RmtErrorCode RmtPageTableUpdateMemoryMappings(RmtPageTable*          page_table,
                                               RmtGpuAddress          virtual_address,
                                               RmtGpuAddress          physical_address,

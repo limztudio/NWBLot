@@ -341,7 +341,6 @@ void MacroCallReconstructor::endReconstruction(FormatToken *Token) {
         // potentially end up in the line when we finish the expansion.
         // FIXME: Add the information which arguments are unused, and assert
         // one of the cases below plus reconstructed macro argument tokens.
-        // assert(ClosingParen || TrailingComment || PreviousLevel);
       }
     }());
     // Handle the remaining open tokens:

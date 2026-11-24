@@ -1272,7 +1272,6 @@ LabelDecl *IndirectGotoStmt::getConstantTarget() {
   return nullptr;
 }
 
-// ReturnStmt
 ReturnStmt::ReturnStmt(SourceLocation RL, Expr *E, const VarDecl *NRVOCandidate)
     : Stmt(ReturnStmtClass), RetExpr(E) {
   bool HasNRVOCandidate = NRVOCandidate != nullptr;

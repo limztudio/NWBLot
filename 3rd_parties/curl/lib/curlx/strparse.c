@@ -140,7 +140,7 @@ int curlx_str_single(const char **linep, char byte)
   DEBUGASSERT(linep && *linep);
   if(**linep != byte)
     return STRE_BYTE;
-  (*linep)++; /* move over it */
+  (*linep)++;
   return STRE_OK;
 }
 
@@ -246,7 +246,7 @@ int curlx_str_newline(const char **linep)
   DEBUGASSERT(linep && *linep);
   if(ISNEWLINE(**linep)) {
     (*linep)++;
-    return STRE_OK; /* yessir */
+    return STRE_OK;
   }
   return STRE_NEWLINE;
 }
@@ -318,5 +318,5 @@ void curlx_str_trimblanks(struct Curl_str *out)
 void curlx_str_passblanks(const char **linep)
 {
   while(ISBLANK(**linep))
-    (*linep)++; /* move over it */
+    (*linep)++;
 }

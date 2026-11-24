@@ -194,7 +194,6 @@ public:
     // Then add relative offset, if required
     switch (Encoding & 0x70) {
     case dwarf::DW_EH_PE_absptr:
-      // do nothing
       break;
     case dwarf::DW_EH_PE_pcrel:
       Result += PCRelOffset;

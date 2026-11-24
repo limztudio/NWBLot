@@ -19,13 +19,10 @@ public:
   Reader(const uint8_t* data, size_t length, Endian endian = Endian::Little)
       : stream_(data, length, endian), has_error_(false) {}
 
-  // Check if any errors have occurred
   bool has_error() const { return has_error_; }
 
-  // Get all accumulated errors
   const std::vector<std::string>& errors() const { return errors_; }
 
-  // Get the most recent error
   std::string last_error() const {
     return errors_.empty() ? "" : errors_.back();
   }
@@ -40,7 +37,6 @@ public:
     return result;
   }
 
-  // Clear error stack
   void clear_errors() {
     errors_.clear();
     has_error_ = false;
@@ -146,27 +142,22 @@ public:
     return seek(static_cast<size_t>(new_pos));
   }
 
-  // Rewind to beginning
   void rewind() {
     stream_.rewind();
   }
 
-  // Get current position
   size_t tell() const {
     return stream_.tell();
   }
 
-  // Get remaining bytes
   size_t remaining() const {
     return stream_.remaining();
   }
 
-  // Check if at end
   bool eof() const {
     return stream_.eof();
   }
 
-  // Get total length
   size_t length() const {
     return stream_.length();
   }

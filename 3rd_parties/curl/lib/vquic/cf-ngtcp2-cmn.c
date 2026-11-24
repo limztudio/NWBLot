@@ -880,7 +880,6 @@ static CURLcode cf_ngtcp2_tls_ctx_setup(struct Curl_cfilter *cf,
     return CURLE_FAILED_INIT;
   }
 #elif defined(OPENSSL_QUIC_API2)
-  /* nothing to do */
 #else
   if(ngtcp2_crypto_quictls_configure_client_context(ctx->ossl.ssl_ctx) != 0) {
     failf(data, "ngtcp2_crypto_quictls_configure_client_context failed");

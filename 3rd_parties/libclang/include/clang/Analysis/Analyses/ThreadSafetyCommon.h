@@ -130,7 +130,6 @@ class CFGVisitor {
   // Called after all statements have been handled.
   void exitCFGBlockBody(const CFGBlock *B) {}
 
-  // Return true
   bool visitSuccessors() { return true; }
 
   // Process a successor edge.

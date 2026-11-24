@@ -189,7 +189,6 @@ namespace amdt
         uint32_t       current_position;              ///< Current position.
         CodeObjSymbol* code_object_symbols;           ///< Array of symbols that is filled.
 
-        /// @brief Constructor.
         CodeObjSymbolIterState()
             : scratch_buffer(nullptr)
             , scratch_buffer_size_in_bytes(0)
@@ -302,7 +301,6 @@ namespace amdt
 
         if (*((amd_comgr_symbol_type_t*)buffer) == AMD_COMGR_SYMBOL_TYPE_FUNC)
         {
-            // if its a function print some more info
             state->symbol_count += 1;
         }
 
@@ -322,7 +320,6 @@ namespace amdt
         assert(user_data);
         CodeObjSymbolIterState* state = static_cast<CodeObjSymbolIterState*>(user_data);
 
-        // Abbreviated name to use in this function.
         void*  buffer      = state->scratch_buffer;
         size_t buffer_size = state->scratch_buffer_size_in_bytes;
         memset(buffer, '\0', buffer_size);
@@ -354,7 +351,6 @@ namespace amdt
             status = ComgrEntryPoints::Instance()->amd_comgr_symbol_get_info_fn(symbol, AMD_COMGR_SYMBOL_INFO_VALUE, buffer);
             function_symbol->symbol_function.symbol_value = *(uint64_t*)buffer;
 
-            // Next position.
             state->current_position += 1;
         }
 
@@ -589,7 +585,6 @@ namespace amdt
         minor_node.Destroy();
         version.Destroy();
 
-        // Extract HSA kernels.
         MDNode kernels = md[kHsaMdTagKernels];
         if (!kernels.IsValid())
         {
@@ -624,7 +619,6 @@ namespace amdt
             HsaKernel* kernel_data = &data.kernels[i];
             MDNode     kernel_node = kernels[i];
 
-            // Extract name.
             MDNode kernel_name = kernel_node[kHsaMdTagKernalName];
             if (kernel_name.IsValid())
             {
@@ -639,7 +633,6 @@ namespace amdt
             }
             kernel_name.Destroy();
 
-            // Extract SGPR count.
             MDNode sgpr_count = kernel_node[kHsaMdTagSgprCount];
             if (sgpr_count.IsValid())
             {
@@ -647,7 +640,6 @@ namespace amdt
             }
             sgpr_count.Destroy();
 
-            // Extract VGPR count.
             MDNode vgpr_count = kernel_node[kHsaMdTagVgprCount];
             if (vgpr_count.IsValid())
             {
@@ -655,7 +647,6 @@ namespace amdt
             }
             vgpr_count.Destroy();
 
-            // Extract kernel arguments.
             if (!ExtractHsaMdKernelArgsInfo(*kernel_data, kernel_node))
             {
                 ret_code = kComgrUtilsStatusInvalidHsaKernelInfo;
@@ -669,7 +660,6 @@ namespace amdt
     {
         MDNode md = GetMD();
 
-        // Extract version.
         MDNode version = md[kPalMdTagPipelineVersion];
         if (!version.IsValid())
         {
@@ -696,7 +686,6 @@ namespace amdt
         minor_node.Destroy();
         version.Destroy();
 
-        // Extract pipelines.
         MDNode pipelines = md[kPalMdTagPipelines];
         if (!pipelines.IsValid())
         {
@@ -882,10 +871,8 @@ namespace amdt
                 api_create.Destroy();
             }
 
-            // Extract shaders and shader info.
             bool regular_shader = ExtractPalMDShadersInfo(*pipeline_data, ppln);
 
-            // Extract shader function info.
             bool shader_function = ExtractPalMDShaderFunctionsInfo(*pipeline_data, ppln);
 
             if (!regular_shader && !shader_function)
@@ -894,7 +881,6 @@ namespace amdt
             }
             else
             {
-                // Extract hardware stages.
                 if (!ExtractPalMDHardwareStages(*pipeline_data, data.version, ppln, shader_function))
                 {
                     ppln.Destroy();
@@ -903,7 +889,6 @@ namespace amdt
                     return kComgrUtilsStatusInvalidHwStageInfo;
                 }
 
-                // Extract register info.
                 if (!ExtractPalMDRegisterInfo(*pipeline_data, ppln))
                 {
                     ppln.Destroy();
@@ -973,7 +958,6 @@ namespace amdt
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, nullptr);
         CheckStatus(this, status, false);
 
-        // Update output buffer.
         out_size_in_bytes[0] = static_cast<uint32_t>(count);
         return true;
     }
@@ -1018,10 +1002,8 @@ namespace amdt
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, nullptr);
         CheckStatus(this, status, false);
 
-        // If we at least have enough memory.
         if (ip_buffer_size_in_bytes >= count)
         {
-            // Fill output buffer.
             status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, out_data);
             CheckStatus(this, status, false);
         }
@@ -1069,7 +1051,6 @@ namespace amdt
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, nullptr);
         CheckStatus(this, status, false);
 
-        // Update output buffer.
         assembly_buffer.resize(count);
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, assembly_buffer.data());
         CheckStatus(this, status, false);
@@ -1210,7 +1191,6 @@ namespace amdt
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, nullptr);
         CheckStatus(this, status, false);
 
-        // Update output buffer.
         code_object_buffer.resize(count);
         status = ComgrEntryPoints::Instance()->amd_comgr_get_data_fn(data_out, &count, code_object_buffer.data());
         CheckStatus(this, status, false);
@@ -1440,7 +1420,6 @@ namespace amdt
             MDNode            kernel_arg      = kernel_args[arg_idx];
             HsaKernelArgInfo* kernel_arg_info = &md_hsa_kernel_data.kernel_arg_list[arg_idx];
 
-            // Extract name.
             MDNode kernel_arg_name = kernel_arg[kHsaMdTagKernelArgName];
             if (kernel_arg_name.IsValid())
             {
@@ -1455,7 +1434,6 @@ namespace amdt
             }
             kernel_arg_name.Destroy();
 
-            // Extract type name.
             MDNode kernel_arg_type_name = kernel_arg[kHsaMdTagKernelArgTypeName];
             if (kernel_arg_type_name.IsValid())
             {
@@ -1470,7 +1448,6 @@ namespace amdt
             }
             kernel_arg_type_name.Destroy();
 
-            // Extract offset.
             MDNode kernel_arg_offset = kernel_arg[kHsaMdTagKernelArgOffset];
             if (kernel_arg_offset.IsValid())
             {
@@ -1478,7 +1455,6 @@ namespace amdt
             }
             kernel_arg_offset.Destroy();
 
-            // Extract size.
             MDNode kernel_arg_size = kernel_arg[kHsaMdTagKernelArgSize];
             if (kernel_arg_size.IsValid())
             {
@@ -1659,7 +1635,6 @@ namespace amdt
         {
             ShaderInfo* shader_info_data = &md_pipeline_data.shader_list[shader_n++];
 
-            // Shader Info Type.
             if (shader_type == kPalMdTagShaderTypeVertex)
             {
                 shader_info_data->shader_type = ShaderInfoType::kVertexShader;
@@ -1705,7 +1680,6 @@ namespace amdt
                 return false;
             }
 
-            // API Shader Hash.
             MDNode api_shader_hash = shader_info[kPalMdTagShaderHash];
             if (!api_shader_hash.IsValid())
             {
@@ -1732,7 +1706,6 @@ namespace amdt
                 api_shader_hash.Destroy();
             }
 
-            // Hardware Mapping.
             MDNode shader_hw_mapping = shader_info[kPalMdTagShaderHardwareMapping];
             if (!shader_hw_mapping.IsValid())
             {
@@ -1772,7 +1745,6 @@ namespace amdt
                 }
             }
 
-            // Shader subtype.
             MDNode shader_subtype = shader_info[kPalMdTagShaderSubtype];
             if (shader_subtype.IsValid())
             {
@@ -1826,7 +1798,6 @@ namespace amdt
         {
             HWStageInfo* stage_info_data = &md_pipeline_data.stage_list[stage_n++];
 
-            // Stage Type.
             if (stage_type == kPalMdTagShaderStageLs)
             {
                 stage_info_data->stage_type = HwStageType::kHwStageLs;
@@ -1914,7 +1885,6 @@ namespace amdt
                 }
             }
 
-            // Local Data Share Size.
             MDNode local_share_size = stage_info[kPalMdTagLocalDataShareSize];
             if (local_share_size.IsValid())
             {
@@ -1922,7 +1892,6 @@ namespace amdt
                 local_share_size.Destroy();
             }
 
-            // Perf Data Buffer Size.
             MDNode perf_buf_size = stage_info[kPalMdTagPerfDataBufferSize];
             if (perf_buf_size.IsValid())
             {
@@ -1930,7 +1899,6 @@ namespace amdt
                 perf_buf_size.Destroy();
             }
 
-            // Used VGPRs/SGPRs.
             MDNode used_vgprs = stage_info[kPalMdTagNumUsedVgprs];
             if (used_vgprs.IsValid())
             {
@@ -1945,7 +1913,6 @@ namespace amdt
                 used_sgprs.Destroy();
             }
 
-            // Wavefront size.
             MDNode wavefront_size = stage_info[kPalMdTagWavefrontSize];
             if (wavefront_size.IsValid())
             {
@@ -1958,7 +1925,6 @@ namespace amdt
             //
             // The metadata tags only added if the limits were explicitly overwritten.
 
-            // Available VGPRs/SGPRs.
             MDNode available_vgprs = stage_info[kPalMdTagNumAvailableVgprs];
             if (available_vgprs.IsValid())
             {
@@ -1973,7 +1939,6 @@ namespace amdt
                 available_sgprs.Destroy();
             }
 
-            // Waves Per Group.
             MDNode waves_per_group = stage_info[kPalMdTagWavesPerGroup];
             if (waves_per_group.IsValid())
             {
@@ -1981,7 +1946,6 @@ namespace amdt
                 waves_per_group.Destroy();
             }
 
-            // Uses Uavs.
             MDNode uses_uavs = stage_info[kPalMdTagUsesUavs];
             if (uses_uavs.IsValid())
             {
@@ -1989,7 +1953,6 @@ namespace amdt
                 uses_uavs.Destroy();
             }
 
-            // Uses Rovs.
             MDNode uses_rovs = stage_info[kPalMdTagUsesRovs];
             if (uses_rovs.IsValid())
             {
@@ -1997,7 +1960,6 @@ namespace amdt
                 uses_rovs.Destroy();
             }
 
-            // Writes Uavs.
             MDNode writes_uavs = stage_info[kPalMdTagWritesUavs];
             if (writes_uavs.IsValid())
             {
@@ -2005,7 +1967,6 @@ namespace amdt
                 writes_uavs.Destroy();
             }
 
-            // Writes Depth.
             MDNode writes_depth = stage_info[kPalMdTagWritesDepth];
             if (writes_depth.IsValid())
             {
@@ -3092,7 +3053,6 @@ namespace amdt
     bool CodeObj::ExtractPalMDRegisterInfo(Pipeline& md_pipeline_data, MDNode& ppln)
     {
         bool ret_code = true;
-        // Registers.
         MDNode regs = ppln[kPalMdTagRegisters];
         if (!regs.IsValid())
         {
@@ -3173,8 +3133,7 @@ namespace amdt
         amd_comgr_status_t        status = ComgrEntryPoints::Instance()->amd_comgr_get_metadata_kind_fn(handle_, &kind);
         CheckStatus(current_code_object_, status, Kind::kNodeKindNone);
 
-        // TODO: Current comgr implementation returns integer values as strings.
-        // That will change soon, so this code must be updated too.
+        // COMGR returns integer metadata as strings.
         switch (kind)
         {
         case AMD_COMGR_METADATA_KIND_STRING:
@@ -3271,12 +3230,10 @@ namespace amdt
         static_assert(
             std::is_arithmetic<TYPE>::value == false,
             "Arithmetic types should not fallback on this slow stringstream path as they have significantly quicker alternatives (stoi, stol, etc.).");
-        // The default specialization for arithmetic types.
         CheckValid(0);
         TYPE val = (TYPE)0;
 
-        // TODO: Current comgr implementation returns integer values as strings.
-        // That will change soon, so this code must be updated too.
+        // COMGR returns integer metadata as strings.
         if (GetKind() == Kind::kNodeKindString)
         {
             std::stringstream stream(value<std::string>());

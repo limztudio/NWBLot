@@ -21,7 +21,7 @@
 /* Doesn't use `cmakedefine` because it is allowed to be empty. */
 #define LLVM_DEFAULT_TARGET_TRIPLE "${LLVM_DEFAULT_TARGET_TRIPLE}"
 
-/* Define if threads enabled */
+/* Set to 1 if threads enabled */
 #cmakedefine01 LLVM_ENABLE_THREADS
 
 /* Has gcc/MSVC atomic intrinsics */
@@ -57,13 +57,13 @@
 /* Define if this is Unixish platform */
 #cmakedefine LLVM_ON_UNIX ${LLVM_ON_UNIX}
 
-/* Define if we have the Intel JIT API runtime support library */
+/* Set to 1 if we have the Intel JIT API runtime support library */
 #cmakedefine01 LLVM_USE_INTEL_JITEVENTS
 
-/* Define if we have the oprofile JIT-support library */
+/* Set to 1 if we have the oprofile JIT-support library */
 #cmakedefine01 LLVM_USE_OPROFILE
 
-/* Define if we have the perf JIT-support library */
+/* Set to 1 if we have the perf JIT-support library */
 #cmakedefine01 LLVM_USE_PERF
 
 /* Major version of the LLVM API */
@@ -92,10 +92,10 @@
 /* Define if we have cpp-httplib and want to use it */
 #cmakedefine LLVM_ENABLE_HTTPLIB ${LLVM_ENABLE_HTTPLIB}
 
-/* Define if zlib compression is available */
+/* Set to 1 if zlib compression is available */
 #cmakedefine01 LLVM_ENABLE_ZLIB
 
-/* Define if zstd compression is available */
+/* Set to 1 if zstd compression is available */
 #cmakedefine01 LLVM_ENABLE_ZSTD
 
 /* Define if LLVM is using tflite */
@@ -126,7 +126,7 @@
  * in non assert builds */
 #cmakedefine01 LLVM_UNREACHABLE_OPTIMIZE
 
-/* Define if building LLVM with LLVM_ENABLE_IO_SANDBOX */
+/* Set to 1 if building LLVM with LLVM_ENABLE_IO_SANDBOX */
 #cmakedefine01 LLVM_ENABLE_IO_SANDBOX
 
 /* Define to 1 if you have the DIA SDK installed, and to 0 if you don't. */
@@ -138,7 +138,7 @@
 /* Define if logf128 is available */
 #cmakedefine LLVM_HAS_LOGF128
 
-/* Define if building LLVM with LLVM_ENABLE_TELEMETRY */
+/* Set to 1 if building LLVM with LLVM_ENABLE_TELEMETRY */
 #cmakedefine01 LLVM_ENABLE_TELEMETRY
 
 /* Define to 1 to enable expensive checks for debug location coverage checking,

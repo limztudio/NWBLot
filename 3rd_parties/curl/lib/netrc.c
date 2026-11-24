@@ -186,8 +186,8 @@ out:
 }
 
 /*
- * Parse a quoted token starting after the opening '"'. Handles \n, \r, \t
- * escape sequences. Advances *tok_endp past the closing '"'.
+ * Parse a quoted token, handling \n, \r and \t escapes.
+ * Advance the lexer past the closing quote.
  *
  * Returns NETRC_OK or error.
  */
@@ -272,7 +272,6 @@ static NETRCcode netrc_lexer_next(struct netrc_lexer *lexer,
     s = lexer->pos;
     break;
   default:
-    /* unquoted token */
     start = s;
     while(*s && !ISBLANK(*s) && !ISNEWLINE(*s))
       ++s;
@@ -483,7 +482,6 @@ static NETRCcode netrc_scan(struct Curl_easy *data,
       case NETRC_TOK_LITERAL:
       case NETRC_TOK_JUNK:
       default:
-        /* skip this */
         break;
       }
     }
@@ -572,9 +570,6 @@ static NETRCcode netrc_scan_file(struct Curl_easy *data,
 
 /*
  * @unittest: 1304
- *
- * *loginp and *passwordp MUST be allocated if they are not NULL when passed
- * in.
  */
 NETRCcode Curl_netrc_scan(struct Curl_easy *data,
                           struct store_netrc *store,

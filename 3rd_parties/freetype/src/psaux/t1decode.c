@@ -1225,7 +1225,6 @@
 
           FT_TRACE4(( "\n" ));
 
-          /* return now! */
           return FT_Err_Ok;
 
         case op_hsbw:

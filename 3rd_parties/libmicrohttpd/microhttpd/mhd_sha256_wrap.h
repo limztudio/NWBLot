@@ -88,9 +88,7 @@
 
 #ifndef MHD_SHA256_HAS_DEINIT
 #define MHD_SHA256_deinit(ignore) (void)0
-#endif /* HAVE_SHA256_DEINIT */
-
-/* Sanity checks */
+#endif /* ! MHD_SHA256_HAS_DEINIT */
 
 #if ! defined(MHD_SHA256_HAS_FINISH_RESET) && ! defined(MHD_SHA256_HAS_FINISH)
 #error Required MHD_SHA256_finish_reset() or MHD_SHA256_finish()

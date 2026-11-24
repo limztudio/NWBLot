@@ -15919,7 +15919,6 @@ static const SCEV *getPreviousSCEVDivisibleByDivisor(const SCEV *Expr,
       DivisorVal.isNonPositive())
     return Expr;
   APInt Rem = ExprVal->urem(DivisorVal);
-  // return the SCEV: Expr - Expr % Divisor
   return SE.getConstant(*ExprVal - Rem);
 }
 
@@ -15936,7 +15935,6 @@ static const SCEV *getNextSCEVDivisibleByDivisor(const SCEV *Expr,
   APInt Rem = ExprVal->urem(DivisorVal);
   if (Rem.isZero())
     return Expr;
-  // return the SCEV: Expr + Divisor - Expr % Divisor
   return SE.getConstant(*ExprVal + DivisorVal - Rem);
 }
 

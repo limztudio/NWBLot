@@ -45,7 +45,7 @@ typedef struct RmtStreamMerger
 {
     RmtParser* parsers;                      ///< A pointers to an array of <c><i>RmtParser</i></c> structures.
     int32_t    parser_count;                 ///< The number of parsers.
-    RmtToken   buffer[RMT_MAXIMUM_STREAMS];  ///< An array of pointers to <c><i>RmtToken</i></c> structures, one per stream.
+    RmtToken   buffer[RMT_MAXIMUM_STREAMS];  ///< An array of <c><i>RmtToken</i></c> structures, one per stream.
     RmtToken*  tokens[RMT_MAXIMUM_STREAMS];  ///< An array of pointers to structures in <c><i>buffer</i></c>, the pointers are organised in min-heap order.
     size_t     current_size;                 ///< The current number of token pointers used in the heap.
     uint64_t   minimum_start_timestamp;      ///< The minimum start timestamp.
@@ -89,7 +89,7 @@ bool RmtStreamMergerIsEmpty(const RmtStreamMerger* token_heap);
 /// Get the next token from the stream merger.
 ///
 /// @param [in]     token_heap               An RmtStreamMerger structure defining the stream merger.
-/// #param [in]     local_heap_only          A flag indicating if only local memory is present on the GPU (SAM or GPU host aperture enabled).
+/// @param [in]     local_heap_only          A flag indicating if only local memory is present on the GPU (SAM or GPU host aperture enabled).
 /// @param [out]    out_token                An RmtToken structure receiving the token.
 ///
 /// @retval

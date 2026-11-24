@@ -870,7 +870,6 @@ void ELFWriter::writeSectionHeader(uint32_t GroupSymbolIndex, uint64_t Offset,
 
   switch(Section.getType()) {
   default:
-    // Nothing to do.
     break;
 
   case ELF::SHT_DYNAMIC:

@@ -582,7 +582,6 @@ void LoopIdiomRecognize::collectStores(BasicBlock *BB) {
     // Make sure this is a strided store with a constant stride.
     switch (isLegalStore(SI)) {
     case LegalStoreKind::None:
-      // Nothing to do
       break;
     case LegalStoreKind::Memset: {
       // Find the base pointer.
@@ -1712,7 +1711,6 @@ bool LoopIdiomRecognize::optimizeCRCLoop(const PolynomialInfo &Info) {
                                                 CurLoop->getLoopLatch());
   }
 
-  // Cleanup.
   {
     for (PHINode *PN : Cleanup)
       RecursivelyDeleteDeadPHINode(PN);

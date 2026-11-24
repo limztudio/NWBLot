@@ -66,7 +66,7 @@ typedef enum RmtTokenType
 typedef enum RmtUserdataType
 {
     kRmtUserdataTypeName                 = 0,  ///< The user data contains a string which is relevant to the following sequence of tokens.
-    kRmtUserdataTypeSnapshot             = 1,  ///< The user data contains a string which names a specific momemnt in time.
+    kRmtUserdataTypeSnapshot             = 1,  ///< The user data names a snapshot.
     kRmtUserdataTypeBinary               = 2,  ///< The user data contains a blind binary payload.
     kRmtUserdataTypeReserved             = 3,  ///< Reserved for future expansion.
     kRmtUserdataTypeCorrelation          = 4,  ///< The user data contains 2 32-bit handles for matching resource names to DX12 resources.
@@ -104,9 +104,9 @@ typedef enum RmtResourceType
     kRmtResourceTypeBuffer   = 1,  ///< A buffer.
     kRmtResourceTypeGpuEvent = 2,  ///< Used by the driver for finer-grained synchronization control.
     kRmtResourceTypeBorderColorPalette =
-        3,  ///< When indexing out of bounds of an image from a shader this palette image represents the color values during texture coordinate clamping.
+        3,  ///< Palette for out-of-bounds texture coordinates.
     kRmtResourceTypeIndirectCmdGenerator =
-        4,  ///< The resource is used to support indirectly generating command buffers from the GPU. Used to support some variants of ExecuteIndirect.
+        4,  ///< Supports GPU-generated command buffers, including some ExecuteIndirect variants.
     kRmtResourceTypeMotionEstimator = 5,   ///< Motion estimator video technology.
     kRmtResourceTypePerfExperiment  = 6,   ///< Used to perform performance experiments in the driver, including SQTT, SPM and traditional, sampled counters.
     kRmtResourceTypeQueryHeap       = 7,   ///< The resource is a heap which contains query results.
@@ -115,7 +115,7 @@ typedef enum RmtResourceType
     kRmtResourceTypeTimestamp       = 10,  ///< The resource is one or more timestamps.
     kRmtResourceTypeHeap            = 11,  ///< The resource is a heap, a larger allocation which can be used for sub-allocations.
     kRmtResourceTypePipeline =
-        12,  ///< The resource is a pipeline, i.e.: the combination of GCN/RDNA ISA code together with the state required to compile & use it.
+        12,  ///< GCN/RDNA ISA code and the state needed to compile and use it.
     kRmtResourceTypeDescriptorHeap   = 13,  ///< A specialised type of heap which holds descriptors only. [DX12 only]
     kRmtResourceTypeDescriptorPool   = 14,  ///< A specialised pool containing multiple heaps which hold descriptors only. [Vulkan only]
     kRmtResourceTypeCommandAllocator = 15,  ///< A command allocator resource.
@@ -197,17 +197,11 @@ typedef enum RmtImplicitResourceType
 /// An enumeration of the various commit types for a resource.
 typedef enum RmtCommitType
 {
-    kRmtCommitTypeCommitted = 0,  ///< The resource was requested to be committed. This means the resource was created with an implicit
-                                  ///< heap large enough to contain it. i.e.: The driver stack is being requested to create a full
-                                  ///< chain of memory mappings down to the physical page.
+    kRmtCommitTypeCommitted = 0,  ///< Requests an implicit heap with mappings to physical pages.
 
-    kRmtCommitTypePlaced = 1,  ///< The resource was requested to be a placed resource. This means the resource is bound to a
-                               ///< previously allocated heap of memory.
+    kRmtCommitTypePlaced = 1,  ///< Requests binding to a previously allocated heap.
 
-    kRmtCommitTypeVirtual = 2,  ///< The resource was requested to be a virtual resource. This means that there is no physical memory
-                                ///< backing the resource. The resource will have its own virtual address range allocated at the time
-                                ///< the resource is created, but that virtual address space will not be mapped to an underlaying
-                                ///< physical address range.
+    kRmtCommitTypeVirtual = 2,  ///< Requests a virtual address range without physical memory backing.
 
     kRmtCommitTypeReserved = 3,  ///< Reserved for future expansion.
 
@@ -218,196 +212,196 @@ typedef enum RmtCommitType
 /// An enumeration of texture formats.
 typedef enum RmtFormat
 {
-    kRmtFormatUndefined             = 0,    ///< Format is UNDEFINED.
-    kRmtFormatX1Unorm               = 1,    ///< Format is X1 UNORM.
-    kRmtFormatX1Uscaled             = 2,    ///< Format is X1 USCALED.
-    kRmtFormatX4Y4Unorm             = 3,    ///< Format is X4Y4 UNORM.
-    kRmtFormatX4Y4Uscaled           = 4,    ///< Format is X4Y4 USCALED.
-    kRmtFormatL4A4Unorm             = 5,    ///< Format is L4A4 UNORM.
-    kRmtFormatX4Y4Z4W4Unorm         = 6,    ///< Format is X4Y4Z4W4 UNORM.
-    kRmtFormatX4Y4Z4W4Uscaled       = 7,    ///< Format is X4Y4Z4W4 USCALED.
-    kRmtFormatX5Y6Z5Unorm           = 8,    ///< Format is X5Y6Z5 UNORM.
-    kRmtFormatX5Y6Z5Uscaled         = 9,    ///< Format is X5Y6Z5 USCALED.
-    kRmtFormatX5Y5Z5W1Unorm         = 10,   ///< Format is X5Y5Z5W1 UNORM.
-    kRmtFormatX5Y5Z5W1Uscaled       = 11,   ///< Format is X5Y5Z5W1 USCALED.
-    kRmtFormatX1Y5Z5W5Unorm         = 12,   ///< Format is X1Y5Z5W5 UNORM.
-    kRmtFormatX1Y5Z5W5Uscaled       = 13,   ///< Format is X1Y5Z5W5 USCALED.
-    kRmtFormatX8Unorm               = 14,   ///< Format is X8 UNORM.
-    kRmtFormatX8Snorm               = 15,   ///< Format is X8 SNORM.
-    kRmtFormatX8Uscaled             = 16,   ///< Format is X8 USCALED.
-    kRmtFormatX8Sscaled             = 17,   ///< Format is X8 SSCALED.
-    kRmtFormatX8Uint                = 18,   ///< Format is X8 UINT.
-    kRmtFormatX8Sint                = 19,   ///< Format is X8 SINT.
-    kRmtFormatX8Srgb                = 20,   ///< Format is X8 SRGB.
-    kRmtFormatA8Unorm               = 21,   ///< Format is A8 UNORM.
-    kRmtFormatL8Unorm               = 22,   ///< Format is L8 UNORM.
-    kRmtFormatP8Unorm               = 23,   ///< Format is P8 UNORM.
-    kRmtFormatX8Y8Unorm             = 24,   ///< Format is X8Y8 UNORM.
-    kRmtFormatX8Y8Snorm             = 25,   ///< Format is X8Y8 SNORM.
-    kRmtFormatX8Y8Uscaled           = 26,   ///< Format is X8Y8 USCALED.
-    kRmtFormatX8Y8Sscaled           = 27,   ///< Format is X8Y8 SSCALED.
-    kRmtFormatX8Y8Uint              = 28,   ///< Format is X8Y8 UINT.
-    kRmtFormatX8Y8Sint              = 29,   ///< Format is X8Y8 SINT.
-    kRmtFormatX8Y8Srgb              = 30,   ///< Format is X8Y8 SRGB.
-    kRmtFormatL8A8Unorm             = 31,   ///< Format is L8A8 UNORM.
-    kRmtFormatX8Y8Z8W8Unorm         = 32,   ///< Format is X8Y8Z8W8 UNORM.
-    kRmtFormatX8Y8Z8W8Snorm         = 33,   ///< Format is X8Y8Z8W8 SNORM.
-    kRmtFormatX8Y8Z8W8Uscaled       = 34,   ///< Format is X8Y8Z8W8 USCALED.
-    kRmtFormatX8Y8Z8W8Sscaled       = 35,   ///< Format is X8Y8Z8W8 SSCALED.
-    kRmtFormatX8Y8Z8W8Uint          = 36,   ///< Format is X8Y8Z8W8 UINT.
-    kRmtFormatX8Y8Z8W8Sint          = 37,   ///< Format is X8Y8Z8W8 SINT.
-    kRmtFormatX8Y8Z8W8Srgb          = 38,   ///< Format is X8Y8Z8W8 SRGB.
-    kRmtFormatU8V8SnormL8W8Unorm    = 39,   ///< Format is U8V8 SNORM L8W8 UNORM.
-    kRmtFormatX10Y11Z11Float        = 40,   ///< Format is X10Y11Z11 FLOAT.
-    kRmtFormatX11Y11Z10Float        = 41,   ///< Format is X11Y11Z10 FLOAT.
-    kRmtFormatX10Y10Z10W2Unorm      = 42,   ///< Format is X10Y10Z10W2 UNORM.
-    kRmtFormatX10Y10Z10W2Snorm      = 43,   ///< Format is X10Y10Z10W2 SNORM.
-    kRmtFormatX10Y10Z10W2Uscaled    = 44,   ///< Format is X10Y10Z10W2 USCALED.
-    kRmtFormatX10Y10Z10W2Sscaled    = 45,   ///< Format is X10Y10Z10W2 SSCALED.
-    kRmtFormatX10Y10Z10W2Uint       = 46,   ///< Format is X10Y10Z10W2 UINT.
-    kRmtFormatX10Y10Z10W2Sint       = 47,   ///< Format is X10Y10Z10W2 SINT.
-    kRmtFormatX10Y10Z10W2BiasUnorm  = 48,   ///< Format is X10Y10Z10W2BIAS UNORM.
-    kRmtFormatU10V10W10SnormA2Unorm = 49,   ///< Format is U10V10W10 SNORM A2 UNORM.
-    kRmtFormatX16Unorm              = 50,   ///< Format is X16 UNORM.
-    kRmtFormatX16Snorm              = 51,   ///< Format is X16 SNORM.
-    kRmtFormatX16Uscaled            = 52,   ///< Format is X16 USCALED.
-    kRmtFormatX16Sscaled            = 53,   ///< Format is X16 SSCALED.
-    kRmtFormatX16Uint               = 54,   ///< Format is X16 UINT.
-    kRmtFormatX16Sint               = 55,   ///< Format is X16 SINT.
-    kRmtFormatX16Float              = 56,   ///< Format is X16 FLOAT.
-    kRmtFormatL16Unorm              = 57,   ///< Format is L16 UNORM.
-    kRmtFormatX16Y16Unorm           = 58,   ///< Format is X16Y16 UNORM.
-    kRmtFormatX16Y16Snorm           = 59,   ///< Format is X16Y16 SNORM.
-    kRmtFormatX16Y16Uscaled         = 60,   ///< Format is X16Y16 USCALED.
-    kRmtFormatX16Y16Sscaled         = 61,   ///< Format is X16Y16 SSCALED.
-    kRmtFormatX16Y16Uint            = 62,   ///< Format is X16Y16 UINT.
-    kRmtFormatX16Y16Sint            = 63,   ///< Format is X16Y16 SINT.
-    kRmtFormatX16Y16Float           = 64,   ///< Format is X16Y16 FLOAT.
-    kRmtFormatX16Y16Z16W16Unorm     = 65,   ///< Format is X16Y16Z16W16 UNORM.
-    kRmtFormatX16Y16Z16W16Snorm     = 66,   ///< Format is X16Y16Z16W16 SNORM.
-    kRmtFormatX16Y16Z16W16Uscaled   = 67,   ///< Format is X16Y16Z16W16 USCALED.
-    kRmtFormatX16Y16Z16W16Sscaled   = 68,   ///< Format is X16Y16Z16W16 SSCALED.
-    kRmtFormatX16Y16Z16W16Uint      = 69,   ///< Format is X16Y16Z16W16 UINT.
-    kRmtFormatX16Y16Z16W16Sint      = 70,   ///< Format is X16Y16Z16W16 SINT.
-    kRmtFormatX16Y16Z16W16Float     = 71,   ///< Format is X16Y16Z16W16 FLOAT.
-    kRmtFormatX32Uint               = 72,   ///< Format is X32 UINT.
-    kRmtFormatX32Sint               = 73,   ///< Format is X32 SINT.
-    kRmtFormatX32Float              = 74,   ///< Format is X32 FLOAT.
-    kRmtFormatX32Y32Uint            = 75,   ///< Format is X32Y32 UINT.
-    kRmtFormatX32Y32Sint            = 76,   ///< Format is X32Y32 SINT.
-    kRmtFormatX32Y32Float           = 77,   ///< Format is X32Y32 FLOAT.
-    kRmtFormatX32Y32Z32Uint         = 78,   ///< Format is X32Y32Z32 UINT.
-    kRmtFormatX32Y32Z32Sint         = 79,   ///< Format is X32Y32Z32 SINT.
-    kRmtFormatX32Y32Z32Float        = 80,   ///< Format is X32Y32Z32 FLOAT.
-    kRmtFormatX32Y32Z32W32Uint      = 81,   ///< Format is X32Y32Z32W32 UINT.
-    kRmtFormatX32Y32Z32W32Sint      = 82,   ///< Format is X32Y32Z32W32 SINT.
-    kRmtFormatX32Y32Z32W32Float     = 83,   ///< Format is X32Y32Z32W32 FLOAT.
-    kRmtFormatD16UnormS8Uint        = 84,   ///< Format is D16 UNORM S8 UINT.
-    kRmtFormatD32FloatS8Uint        = 85,   ///< Format is D32 FLOAT S8 UINT.
-    kRmtFormatX9Y9Z9E5Float         = 86,   ///< Format is X9Y9Z9E5 FLOAT.
-    kRmtFormatBC1Unorm              = 87,   ///< Format is BC1 UNORM.
-    kRmtFormatBC1Srgb               = 88,   ///< Format is BC1 SRGB.
-    kRmtFormatBC2Unorm              = 89,   ///< Format is BC2 UNORM.
-    kRmtFormatBC2Srgb               = 90,   ///< Format is BC2 SRGB.
-    kRmtFormatBC3Unorm              = 91,   ///< Format is BC3 UNORM.
-    kRmtFormatBC3Srgb               = 92,   ///< Format is BC3 SRGB.
-    kRmtFormatBC4Unorm              = 93,   ///< Format is BC4 UNORM.
-    kRmtFormatBC4Snorm              = 94,   ///< Format is BC4 SNORM.
-    kRmtFormatBC5Unorm              = 95,   ///< Format is BC5 UNORM.
-    kRmtFormatBC5Snorm              = 96,   ///< Format is BC5 SNORM.
-    kRmtFormatBC6UFloat             = 97,   ///< Format is BC6 UFLOAT.
-    kRmtFormatBC6SFloat             = 98,   ///< Format is BC6 SFLOAT.
-    kRmtFormatBC7Unorm              = 99,   ///< Format is BC7 UNORM.
-    kRmtFormatBC7Srgb               = 100,  ///< Format is BC7 SRGB.
-    kRmtFormatEtC2X8Y8Z8Unorm       = 101,  ///< Format is ETC2X8Y8Z8 UNORM.
-    kRmtFormatEtC2X8Y8Z8Srgb        = 102,  ///< Format is ETC2X8Y8Z8 SRGB.
-    kRmtFormatEtC2X8Y8Z8W1Unorm     = 103,  ///< Format is ETC2X8Y8Z8W1 UNORM.
-    kRmtFormatEtC2X8Y8Z8W1Srgb      = 104,  ///< Format is ETC2X8Y8Z8W1 SRGB.
-    kRmtFormatEtC2X8Y8Z8W8Unorm     = 105,  ///< Format is ETC2X8Y8Z8W8 UNORM.
-    kRmtFormatEtC2X8Y8Z8W8Srgb      = 106,  ///< Format is ETC2X8Y8Z8W8 SRGB.
-    kRmtFormatEtC2X11Unorm          = 107,  ///< Format is ETC2X11 UNORM.
-    kRmtFormatEtC2X11Snorm          = 108,  ///< Format is ETC2X11 SNORM.
-    kRmtFormatEtC2X11Y11Unorm       = 109,  ///< Format is ETC2X11Y11 UNORM.
-    kRmtFormatEtC2X11Y11Snorm       = 110,  ///< Format is ETC2X11Y11 SNORM.
-    kRmtFormatAstcldR4X4Unorm       = 111,  ///< Format is ASTCLDR4X4 UNORM.
-    kRmtFormatAstcldR4X4Srgb        = 112,  ///< Format is ASTCLDR4X4 SRGB.
-    kRmtFormatAstcldR5X4Unorm       = 113,  ///< Format is ASTCLDR5X4 UNORM.
-    kRmtFormatAstcldR5X4Srgb        = 114,  ///< Format is ASTCLDR5X4 SRGB.
-    kRmtFormatAstcldR5X5Unorm       = 115,  ///< Format is ASTCLDR5X5 UNORM.
-    kRmtFormatAstcldR5X5Srgb        = 116,  ///< Format is ASTCLDR5X5 SRGB.
-    kRmtFormatAstcldR6X5Unorm       = 117,  ///< Format is ASTCLDR6X5 UNORM.
-    kRmtFormatAstcldR6X5Srgb        = 118,  ///< Format is ASTCLDR6X5 SRGB.
-    kRmtFormatAstcldR6X6Unorm       = 119,  ///< Format is ASTCLDR6X6 UNORM.
-    kRmtFormatAstcldR6X6Srgb        = 120,  ///< Format is ASTCLDR6X6 SRGB.
-    kRmtFormatAstcldR8X5Unorm       = 121,  ///< Format is ASTCLDR8X5 UNORM.
-    kRmtFormatAstcldR8X5Srgb        = 122,  ///< Format is ASTCLDR8X5 SRGB.
-    kRmtFormatAstcldR8X6Unorm       = 123,  ///< Format is ASTCLDR8X6 UNORM.
-    kRmtFormatAstcldR8X6Srgb        = 124,  ///< Format is ASTCLDR8X6 SRGB.
-    kRmtFormatAstcldR8X8Unorm       = 125,  ///< Format is ASTCLDR8X8 UNORM.
-    kRmtFormatAstcldR8X8Srgb        = 126,  ///< Format is ASTCLDR8X8 SRGB.
-    kRmtFormatAstcldR10X5Unorm      = 127,  ///< Format is ASTCLDR10X5 UNORM.
-    kRmtFormatAstcldR10X5Srgb       = 128,  ///< Format is ASTCLDR10X5 SRGB.
-    kRmtFormatAstcldR10X6Unorm      = 129,  ///< Format is ASTCLDR10X6 UNORM.
-    kRmtFormatAstcldR10X6Srgb       = 130,  ///< Format is ASTCLDR10X6 SRGB.
-    kRmtFormatAstcldR10X8Unorm      = 131,  ///< Format is ASTCLDR10X8 UNORM.
-    kRmtFormatAstcldR10X8Srgb       = 132,  ///< Format is ASTCLDR10X8 SRGB.
-    kRmtFormatAstcldR10X10Unorm     = 133,  ///< Format is ASTCLDR10X10 UNORM.
-    kRmtFormatAstcldR10X10Srgb      = 134,  ///< Format is ASTCLDR10X10 SRGB.
-    kRmtFormatAstcldR12X10Unorm     = 135,  ///< Format is ASTCLDR12X10 UNORM.
-    kRmtFormatAstcldR12X10Srgb      = 136,  ///< Format is ASTCLDR12X10 SRGB.
-    kRmtFormatAstcldR12X12Unorm     = 137,  ///< Format is ASTCLDR12X12 UNORM.
-    kRmtFormatAstcldR12X12Srgb      = 138,  ///< Format is ASTCLDR12X12 SRGB.
-    kRmtFormatAstchdR4x4Float       = 139,  ///< Format is ASTCHDR4X4 FLOAT.
-    kRmtFormatAstchdR5x4Float       = 140,  ///< Format is ASTCHDR5X4 FLOAT.
-    kRmtFormatAstchdR5x5Float       = 141,  ///< Format is ASTCHDR5X5 FLOAT.
-    kRmtFormatAstchdR6x5Float       = 142,  ///< Format is ASTCHDR6X5 FLOAT.
-    kRmtFormatAstchdR6x6Float       = 143,  ///< Format is ASTCHDR6X6 FLOAT.
-    kRmtFormatAstchdR8x5Float       = 144,  ///< Format is ASTCHDR8X5 FLOAT.
-    kRmtFormatAstchdR8x6Float       = 145,  ///< Format is ASTCHDR8X6 FLOAT.
-    kRmtFormatAstchdR8x8Float       = 146,  ///< Format is ASTCHDR8X8 FLOAT.
-    kRmtFormatAstchdR10x5Float      = 147,  ///< Format is ASTCHDR10X5 FLOAT.
-    kRmtFormatAstchdR10x6Float      = 148,  ///< Format is ASTCHDR10X6 FLOAT.
-    kRmtFormatAstchdR10x8Float      = 149,  ///< Format is ASTCHDR10X8 FLOAT.
-    kRmtFormatAstchdR10x10Float     = 150,  ///< Format is ASTCHDR10X10 FLOAT.
-    kRmtFormatAstchdR12x10Float     = 151,  ///< Format is ASTCHDR12X10 FLOAT.
-    kRmtFormatAstchdR12x12Float     = 152,  ///< Format is ASTCHDR12X12 FLOAT.
-    kRmtFormatX8Y8Z8Y8Unorm         = 153,  ///< Format is X8Y8 Z8Y8 UNORM.
-    kRmtFormatX8Y8Z8Y8Uscaled       = 154,  ///< Format is X8Y8 Z8Y8 USCALED.
-    kRmtFormatY8X8Y8Z8Unorm         = 155,  ///< Format is Y8X8 Y8Z8 UNORM.
-    kRmtFormatY8X8Y8Z8Uscaled       = 156,  ///< Format is Y8X8 Y8Z8 USCALED.
-    kRmtFormatAyuv                  = 157,  ///< Format is AYUV.
-    kRmtFormatUyvy                  = 158,  ///< Format is UYVY.
-    kRmtFormatVyuy                  = 159,  ///< Format is VYUY.
-    kRmtFormatYuY2                  = 160,  ///< Format is YUY2.
-    kRmtFormatYvY2                  = 161,  ///< Format is YVY2.
-    kRmtFormatYV12                  = 162,  ///< Format is YV12.
-    kRmtFormatNV11                  = 163,  ///< Format is NV11.
-    kRmtFormatNV12                  = 164,  ///< Format is NV12.
-    kRmtFormatNV21                  = 165,  ///< Format is NV21.
-    kRmtFormatP016                  = 166,  ///< Format is P016.
-    kRmtFormatP010                  = 167,  ///< Format is P010.
-    kRmtFormatP210                  = 168,  ///< Format is P210.
-    kRmtFormatX8MMUnorm             = 169,  ///< Format is X8 MM UNORM.
-    kRmtFormatX8MMUint              = 170,  ///< Format is X8 MM UINT.
-    kRmtFormatX8Y8MMUnorm           = 171,  ///< Format is X8Y8 MM UNORM.
-    kRmtFormatX8Y8MMUint            = 172,  ///< Format is X8Y8 MM UINT.
-    kRmtFormatX16MM10Unorm          = 173,  ///< Format is X16 MM10 UNORM.
-    kRmtFormatX16MM10Uint           = 174,  ///< Format is X16 MM10 UINT.
-    kRmtFormatX16Y16MM10Unorm       = 175,  ///< Format is X16Y16 MM10 UNORM.
-    kRmtFormatX16Y16MM10Uint        = 176,  ///< Format is X16Y16 MM10 UINT.
-    kRmtFormatP208                  = 177,  ///< Format is P208.
-    kRmtFormatX16MM12Unorm          = 178,  ///< Format is X16 MM12 UNORM.
-    kRmtFormatX16MM12Uint           = 179,  ///< Format is X16 MM12 UINT.
-    kRmtFormatX16Y16MM12Unorm       = 180,  ///< Format is X16Y16 MM12 UNORM.
-    kRmtFormatX16Y16MM12Uint        = 181,  ///< Format is X16Y16 MM12 UINT.
-    kRmtFormatP012                  = 182,  ///< Format is P012.
-    kRmtFormatP212                  = 183,  ///< Format is P212.
-    kRmtFormatP412                  = 184,  ///< Format is P412.
-    kRmtFormatX10Y10Z10W2Float      = 185,  ///< Format is X10Y10Z10W2 FLOAT.
-    kRmtFormatY216                  = 186,  ///< Format is Y216.
-    kRmtFormatY210                  = 187,  ///< Format is Y210.
-    kRmtFormatY416                  = 188,  ///< Format is Y416.
-    kRmtFormatY410                  = 189,  ///< Format is Y410.
+    kRmtFormatUndefined             = 0,
+    kRmtFormatX1Unorm               = 1,
+    kRmtFormatX1Uscaled             = 2,
+    kRmtFormatX4Y4Unorm             = 3,
+    kRmtFormatX4Y4Uscaled           = 4,
+    kRmtFormatL4A4Unorm             = 5,
+    kRmtFormatX4Y4Z4W4Unorm         = 6,
+    kRmtFormatX4Y4Z4W4Uscaled       = 7,
+    kRmtFormatX5Y6Z5Unorm           = 8,
+    kRmtFormatX5Y6Z5Uscaled         = 9,
+    kRmtFormatX5Y5Z5W1Unorm         = 10,
+    kRmtFormatX5Y5Z5W1Uscaled       = 11,
+    kRmtFormatX1Y5Z5W5Unorm         = 12,
+    kRmtFormatX1Y5Z5W5Uscaled       = 13,
+    kRmtFormatX8Unorm               = 14,
+    kRmtFormatX8Snorm               = 15,
+    kRmtFormatX8Uscaled             = 16,
+    kRmtFormatX8Sscaled             = 17,
+    kRmtFormatX8Uint                = 18,
+    kRmtFormatX8Sint                = 19,
+    kRmtFormatX8Srgb                = 20,
+    kRmtFormatA8Unorm               = 21,
+    kRmtFormatL8Unorm               = 22,
+    kRmtFormatP8Unorm               = 23,
+    kRmtFormatX8Y8Unorm             = 24,
+    kRmtFormatX8Y8Snorm             = 25,
+    kRmtFormatX8Y8Uscaled           = 26,
+    kRmtFormatX8Y8Sscaled           = 27,
+    kRmtFormatX8Y8Uint              = 28,
+    kRmtFormatX8Y8Sint              = 29,
+    kRmtFormatX8Y8Srgb              = 30,
+    kRmtFormatL8A8Unorm             = 31,
+    kRmtFormatX8Y8Z8W8Unorm         = 32,
+    kRmtFormatX8Y8Z8W8Snorm         = 33,
+    kRmtFormatX8Y8Z8W8Uscaled       = 34,
+    kRmtFormatX8Y8Z8W8Sscaled       = 35,
+    kRmtFormatX8Y8Z8W8Uint          = 36,
+    kRmtFormatX8Y8Z8W8Sint          = 37,
+    kRmtFormatX8Y8Z8W8Srgb          = 38,
+    kRmtFormatU8V8SnormL8W8Unorm    = 39,
+    kRmtFormatX10Y11Z11Float        = 40,
+    kRmtFormatX11Y11Z10Float        = 41,
+    kRmtFormatX10Y10Z10W2Unorm      = 42,
+    kRmtFormatX10Y10Z10W2Snorm      = 43,
+    kRmtFormatX10Y10Z10W2Uscaled    = 44,
+    kRmtFormatX10Y10Z10W2Sscaled    = 45,
+    kRmtFormatX10Y10Z10W2Uint       = 46,
+    kRmtFormatX10Y10Z10W2Sint       = 47,
+    kRmtFormatX10Y10Z10W2BiasUnorm  = 48,
+    kRmtFormatU10V10W10SnormA2Unorm = 49,
+    kRmtFormatX16Unorm              = 50,
+    kRmtFormatX16Snorm              = 51,
+    kRmtFormatX16Uscaled            = 52,
+    kRmtFormatX16Sscaled            = 53,
+    kRmtFormatX16Uint               = 54,
+    kRmtFormatX16Sint               = 55,
+    kRmtFormatX16Float              = 56,
+    kRmtFormatL16Unorm              = 57,
+    kRmtFormatX16Y16Unorm           = 58,
+    kRmtFormatX16Y16Snorm           = 59,
+    kRmtFormatX16Y16Uscaled         = 60,
+    kRmtFormatX16Y16Sscaled         = 61,
+    kRmtFormatX16Y16Uint            = 62,
+    kRmtFormatX16Y16Sint            = 63,
+    kRmtFormatX16Y16Float           = 64,
+    kRmtFormatX16Y16Z16W16Unorm     = 65,
+    kRmtFormatX16Y16Z16W16Snorm     = 66,
+    kRmtFormatX16Y16Z16W16Uscaled   = 67,
+    kRmtFormatX16Y16Z16W16Sscaled   = 68,
+    kRmtFormatX16Y16Z16W16Uint      = 69,
+    kRmtFormatX16Y16Z16W16Sint      = 70,
+    kRmtFormatX16Y16Z16W16Float     = 71,
+    kRmtFormatX32Uint               = 72,
+    kRmtFormatX32Sint               = 73,
+    kRmtFormatX32Float              = 74,
+    kRmtFormatX32Y32Uint            = 75,
+    kRmtFormatX32Y32Sint            = 76,
+    kRmtFormatX32Y32Float           = 77,
+    kRmtFormatX32Y32Z32Uint         = 78,
+    kRmtFormatX32Y32Z32Sint         = 79,
+    kRmtFormatX32Y32Z32Float        = 80,
+    kRmtFormatX32Y32Z32W32Uint      = 81,
+    kRmtFormatX32Y32Z32W32Sint      = 82,
+    kRmtFormatX32Y32Z32W32Float     = 83,
+    kRmtFormatD16UnormS8Uint        = 84,
+    kRmtFormatD32FloatS8Uint        = 85,
+    kRmtFormatX9Y9Z9E5Float         = 86,
+    kRmtFormatBC1Unorm              = 87,
+    kRmtFormatBC1Srgb               = 88,
+    kRmtFormatBC2Unorm              = 89,
+    kRmtFormatBC2Srgb               = 90,
+    kRmtFormatBC3Unorm              = 91,
+    kRmtFormatBC3Srgb               = 92,
+    kRmtFormatBC4Unorm              = 93,
+    kRmtFormatBC4Snorm              = 94,
+    kRmtFormatBC5Unorm              = 95,
+    kRmtFormatBC5Snorm              = 96,
+    kRmtFormatBC6UFloat             = 97,
+    kRmtFormatBC6SFloat             = 98,
+    kRmtFormatBC7Unorm              = 99,
+    kRmtFormatBC7Srgb               = 100,
+    kRmtFormatEtC2X8Y8Z8Unorm       = 101,
+    kRmtFormatEtC2X8Y8Z8Srgb        = 102,
+    kRmtFormatEtC2X8Y8Z8W1Unorm     = 103,
+    kRmtFormatEtC2X8Y8Z8W1Srgb      = 104,
+    kRmtFormatEtC2X8Y8Z8W8Unorm     = 105,
+    kRmtFormatEtC2X8Y8Z8W8Srgb      = 106,
+    kRmtFormatEtC2X11Unorm          = 107,
+    kRmtFormatEtC2X11Snorm          = 108,
+    kRmtFormatEtC2X11Y11Unorm       = 109,
+    kRmtFormatEtC2X11Y11Snorm       = 110,
+    kRmtFormatAstcldR4X4Unorm       = 111,
+    kRmtFormatAstcldR4X4Srgb        = 112,
+    kRmtFormatAstcldR5X4Unorm       = 113,
+    kRmtFormatAstcldR5X4Srgb        = 114,
+    kRmtFormatAstcldR5X5Unorm       = 115,
+    kRmtFormatAstcldR5X5Srgb        = 116,
+    kRmtFormatAstcldR6X5Unorm       = 117,
+    kRmtFormatAstcldR6X5Srgb        = 118,
+    kRmtFormatAstcldR6X6Unorm       = 119,
+    kRmtFormatAstcldR6X6Srgb        = 120,
+    kRmtFormatAstcldR8X5Unorm       = 121,
+    kRmtFormatAstcldR8X5Srgb        = 122,
+    kRmtFormatAstcldR8X6Unorm       = 123,
+    kRmtFormatAstcldR8X6Srgb        = 124,
+    kRmtFormatAstcldR8X8Unorm       = 125,
+    kRmtFormatAstcldR8X8Srgb        = 126,
+    kRmtFormatAstcldR10X5Unorm      = 127,
+    kRmtFormatAstcldR10X5Srgb       = 128,
+    kRmtFormatAstcldR10X6Unorm      = 129,
+    kRmtFormatAstcldR10X6Srgb       = 130,
+    kRmtFormatAstcldR10X8Unorm      = 131,
+    kRmtFormatAstcldR10X8Srgb       = 132,
+    kRmtFormatAstcldR10X10Unorm     = 133,
+    kRmtFormatAstcldR10X10Srgb      = 134,
+    kRmtFormatAstcldR12X10Unorm     = 135,
+    kRmtFormatAstcldR12X10Srgb      = 136,
+    kRmtFormatAstcldR12X12Unorm     = 137,
+    kRmtFormatAstcldR12X12Srgb      = 138,
+    kRmtFormatAstchdR4x4Float       = 139,
+    kRmtFormatAstchdR5x4Float       = 140,
+    kRmtFormatAstchdR5x5Float       = 141,
+    kRmtFormatAstchdR6x5Float       = 142,
+    kRmtFormatAstchdR6x6Float       = 143,
+    kRmtFormatAstchdR8x5Float       = 144,
+    kRmtFormatAstchdR8x6Float       = 145,
+    kRmtFormatAstchdR8x8Float       = 146,
+    kRmtFormatAstchdR10x5Float      = 147,
+    kRmtFormatAstchdR10x6Float      = 148,
+    kRmtFormatAstchdR10x8Float      = 149,
+    kRmtFormatAstchdR10x10Float     = 150,
+    kRmtFormatAstchdR12x10Float     = 151,
+    kRmtFormatAstchdR12x12Float     = 152,
+    kRmtFormatX8Y8Z8Y8Unorm         = 153,
+    kRmtFormatX8Y8Z8Y8Uscaled       = 154,
+    kRmtFormatY8X8Y8Z8Unorm         = 155,
+    kRmtFormatY8X8Y8Z8Uscaled       = 156,
+    kRmtFormatAyuv                  = 157,
+    kRmtFormatUyvy                  = 158,
+    kRmtFormatVyuy                  = 159,
+    kRmtFormatYuY2                  = 160,
+    kRmtFormatYvY2                  = 161,
+    kRmtFormatYV12                  = 162,
+    kRmtFormatNV11                  = 163,
+    kRmtFormatNV12                  = 164,
+    kRmtFormatNV21                  = 165,
+    kRmtFormatP016                  = 166,
+    kRmtFormatP010                  = 167,
+    kRmtFormatP210                  = 168,
+    kRmtFormatX8MMUnorm             = 169,
+    kRmtFormatX8MMUint              = 170,
+    kRmtFormatX8Y8MMUnorm           = 171,
+    kRmtFormatX8Y8MMUint            = 172,
+    kRmtFormatX16MM10Unorm          = 173,
+    kRmtFormatX16MM10Uint           = 174,
+    kRmtFormatX16Y16MM10Unorm       = 175,
+    kRmtFormatX16Y16MM10Uint        = 176,
+    kRmtFormatP208                  = 177,
+    kRmtFormatX16MM12Unorm          = 178,
+    kRmtFormatX16MM12Uint           = 179,
+    kRmtFormatX16Y16MM12Unorm       = 180,
+    kRmtFormatX16Y16MM12Uint        = 181,
+    kRmtFormatP012                  = 182,
+    kRmtFormatP212                  = 183,
+    kRmtFormatP412                  = 184,
+    kRmtFormatX10Y10Z10W2Float      = 185,
+    kRmtFormatY216                  = 186,
+    kRmtFormatY210                  = 187,
+    kRmtFormatY416                  = 188,
+    kRmtFormatY410                  = 189,
 
     // add above this.
     kRmtFormatCount
@@ -416,63 +410,63 @@ typedef enum RmtFormat
 /// An enumeration of the harware engine types
 typedef enum RmtEngineType
 {
-    kRmtEngineTypeUniversal        = 0,   ///< Engine type is universal.
-    kRmtEngineTypeCompute          = 1,   ///< Engine type is compute.
-    kRmtEngineTypeExclusiveCompute = 2,   ///< Engine type is exclusive compute.
-    kRmtEngineTypeDma              = 3,   ///< Engine type is DMA.
-    kRmtEngineTypeTimer            = 4,   ///< Engine type is timer.
-    kRmtEngineTypeVceEncode        = 5,   ///< Engine type is VCE encode.
-    kRmtEngineTypeUvdDecode        = 6,   ///< Engine type is UVD decode.
-    kRmtEngineTypeUvdEncode        = 7,   ///< Engine type is UVD encode.
-    kRmtEngineTypeVcnDecode        = 8,   ///< Engine type is VCN decode.
-    kRmtEngineTypeVcnEncode        = 9,   ///< Engine type is VCN encode.
-    kRmtEngineTypeHP3D             = 10,  ///< Engine type is HP3D.
+    kRmtEngineTypeUniversal        = 0,
+    kRmtEngineTypeCompute          = 1,
+    kRmtEngineTypeExclusiveCompute = 2,
+    kRmtEngineTypeDma              = 3,
+    kRmtEngineTypeTimer            = 4,
+    kRmtEngineTypeVceEncode        = 5,
+    kRmtEngineTypeUvdDecode        = 6,
+    kRmtEngineTypeUvdEncode        = 7,
+    kRmtEngineTypeVcnDecode        = 8,
+    kRmtEngineTypeVcnEncode        = 9,
+    kRmtEngineTypeHP3D             = 10,
 } RmtEngineType;
 
 /// An enumeration of video decoder types
 typedef enum RmtVideoDecoderType
 {
-    kRmtVideoDecoderTypeH264      = 0,   ///< Decoder type H.264.
-    kRmtVideoDecoderTypeVC1       = 1,   ///< Decoder type VC1.
-    kRmtVideoDecoderTypeMpeG2Idct = 2,   ///< Decoder type MPEG2 IDCT.
-    kRmtVideoDecoderTypeMpeG2Vld  = 3,   ///< Decoder type MPEG2 VLD.
-    kRmtVideoDecoderTypeMpeG4     = 4,   ///< Decoder type MPEG4.
-    kRmtVideoDecoderTypeWmV9      = 5,   ///< Decoder type WMV9.
-    kRmtVideoDecoderTypeMjpeg     = 6,   ///< Decoder type MJPEG.
-    kRmtVideoDecoderTypeHvec      = 7,   ///< Decoder type HVEC.
-    kRmtVideoDecoderTypeVP9       = 8,   ///< Decoder type VP9.
-    kRmtVideoDecoderTypeHevC10Bit = 9,   ///< Decoder type HEVC 10bit.
-    kRmtVideoDecoderTypeVP910Bit  = 10,  ///< Decoder type VP 910bit.
-    kRmtVideoDecoderTypeAV1       = 11,  ///< Decoder type AV1.
-    kRmtVideoDecoderTypeAV1_12Bit = 12,  ///< Decoder type AV1_12BIT.
+    kRmtVideoDecoderTypeH264      = 0,
+    kRmtVideoDecoderTypeVC1       = 1,
+    kRmtVideoDecoderTypeMpeG2Idct = 2,
+    kRmtVideoDecoderTypeMpeG2Vld  = 3,
+    kRmtVideoDecoderTypeMpeG4     = 4,
+    kRmtVideoDecoderTypeWmV9      = 5,
+    kRmtVideoDecoderTypeMjpeg     = 6,
+    kRmtVideoDecoderTypeHvec      = 7,
+    kRmtVideoDecoderTypeVP9       = 8,
+    kRmtVideoDecoderTypeHevC10Bit = 9,
+    kRmtVideoDecoderTypeVP910Bit  = 10,
+    kRmtVideoDecoderTypeAV1       = 11,
+    kRmtVideoDecoderTypeAV1_12Bit = 12,
 } RmtVideoDecoderType;
 
 /// An enumeration of video encoder types
 typedef enum RmtVideoEncoderType
 {
-    kRmtVideoEncoderTypeH264 = 0,  ///< Encoder type H.264.
-    kRmtVideoEncoderTypeH265 = 1,  ///< Encoder type H.265.
+    kRmtVideoEncoderTypeH264 = 0,
+    kRmtVideoEncoderTypeH265 = 1,
 } RmtVideoEncoderType;
 
 /// An enumeration of descriptor types
 typedef enum RmtDescriptorType
 {
-    kRmtDescriptorTypeCsvSrvUav             = 0,   ///< Descriptor type CSV, SRV UAV.
-    kRmtDescriptorTypeSampler               = 1,   ///< Descriptor type sampler.
-    kRmtDescriptorTypeRtv                   = 2,   ///< Descriptor type RTV.
-    kRmtDescriptorTypeDsv                   = 3,   ///< Descriptor type DSV.
-    kRmtDescriptorTypeCombinedImageSampler  = 4,   ///< Descriptor type combined image sampler.
-    kRmtDescriptorTypeSampledImage          = 5,   ///< Descriptor type sampled image.
-    kRmtDescriptorTypeStorageImage          = 6,   ///< Descriptor type storage image.
-    kRmtDescriptorTypeUniformTexelBuffer    = 7,   ///< Descriptor type uniform texel buffer.
-    kRmtDescriptorTypeStorageTexelBuffer    = 8,   ///< Descriptor type storage texel buffer.
-    kRmtDescriptorTypeUniformBuffer         = 9,   ///< Descriptor type uniform buffer.
-    kRmtDescriptorTypeStorageBuffer         = 10,  ///< Descriptor type storage buffer.
-    kRmtDescriptorTypeUniformBufferDynamic  = 11,  ///< Descriptor type uniform buffer dynamic.
-    kRmtDescriptorTypeStorageBufferDynamic  = 12,  ///< Descriptor type storage buffer dynamic.
-    kRmtDescriptorTypeInputAttachment       = 13,  ///< Descriptor type input attachment.
-    kRmtDescriptorTypeInlineUniformBlock    = 14,  ///< Descriptor type inline uniform block.
-    kRmtDescriptorTypeAccelerationStructure = 15,  ///< Descriptor type acceleration structure.
+    kRmtDescriptorTypeCsvSrvUav             = 0,
+    kRmtDescriptorTypeSampler               = 1,
+    kRmtDescriptorTypeRtv                   = 2,
+    kRmtDescriptorTypeDsv                   = 3,
+    kRmtDescriptorTypeCombinedImageSampler  = 4,
+    kRmtDescriptorTypeSampledImage          = 5,
+    kRmtDescriptorTypeStorageImage          = 6,
+    kRmtDescriptorTypeUniformTexelBuffer    = 7,
+    kRmtDescriptorTypeStorageTexelBuffer    = 8,
+    kRmtDescriptorTypeUniformBuffer         = 9,
+    kRmtDescriptorTypeStorageBuffer         = 10,
+    kRmtDescriptorTypeUniformBufferDynamic  = 11,
+    kRmtDescriptorTypeStorageBufferDynamic  = 12,
+    kRmtDescriptorTypeInputAttachment       = 13,
+    kRmtDescriptorTypeInlineUniformBlock    = 14,
+    kRmtDescriptorTypeAccelerationStructure = 15,
 } RmtDescriptorType;
 
 /// An structure encapsulating a descriptor pool description.
@@ -535,18 +529,18 @@ typedef enum RmtImageUsageFlagBits
     kRmtImageUsageFlagsDepthStencil       = (1 << 5),  ///< Image will be bound as a depth/stencil target.
     kRmtImageUsageFlagsNoStencilShaderRead =
         (1
-         << 6),  ///< Image will be neither read as stencil nor resolved on stencil aspect. Note that if RESOLVE_SOURCE bit has been set to indicate that the image could be adopted as a resolve source image and there could be stencil resolve, NO_STENCIL_SHADER_READ must be set to 0, since shader-read based stencil resolve might be performed.
+         << 6),  ///< Stencil is not read or resolved. Clear this flag if a resolve source may require shader-based stencil resolve.
     kRmtImageUsageFlagsHiZNeverInvalid =
         (1
-         << 7),  ///< Hint to PAL indicating the client will guarantee that no operations performed on this Image while it is in a decompressed state will cause Hi-Z metadata to become invalid. This allows PAL to avoid an expensive re-summarization blit in some resource barriers.
+         << 7),  ///< Guarantees decompressed operations will not invalidate Hi-Z metadata, allowing PAL to skip some re-summarization blits.
     kRmtImageUsageFlagsDepthAsZ24 =
         (1 << 8),  ///< Use a 24-bit format for HW programming of a native 32-bit surface. If set, border color and Z-reference values are treated as Z-24.
     kRmtImageUsageFlagsFirstShaderWritableMip =
         (1
-         << 9),  ///< Only relevant if the SHADER_WRITE flag is set. Typically set to 0 so entire image is writable. If non-zero, such as an image where only level 0 is used as a color target and compute is used to generate mipmaps, PAL may be able to enable additional compression on the baseLevels which are used exclusively as color target and shader read.
+         << 9),  ///< With SHADER_WRITE, a nonzero first writable mip may allow extra compression on lower mips used only as color targets and shader reads.
     kRmtImageUsageFlagsCornerSampling =
         (1
-         << 10),  ///< Set if this image will use corner sampling in image-read scenarios.  With corner sampling, the extent refers to the number of pixel corners which will be one more than the number of pixels.  Border color is ignored when corner sampling is enabled.
+         << 10),  ///< Corner sampling counts pixel corners in the extent, one more than pixels, and ignores border color.
     kRmtImageUsageFlagsVrsDepth = (1 << 11)  ///< Set if this depth image will be bound when VRS rendering is enabled.
 } RmtImageUsageFlagBits;
 
@@ -724,7 +718,7 @@ typedef struct RmtResourceDescriptionImage
 typedef struct RmtResourceDescriptionBuffer
 {
     uint32_t create_flags;   ///< Flags describing how the buffer was created.
-    uint32_t usage_flags;    ///< Flags describing how the image is used.
+    uint32_t usage_flags;    ///< Flags describing how the buffer is used.
     uint64_t size_in_bytes;  ///< The size (in bytes) of the buffer.
 } RmtResourceDescriptionBuffer;
 
@@ -774,7 +768,7 @@ typedef struct RmtResourceDescriptionVideoEncoder
     RmtImageFormat      format;        ///< The video image format.
 } RmtResourceDescriptionVideoEncoder;
 
-/// A structure encapsulating a resource description for an <c><i>kRmtResourceTypeDescriptorHeap</i></c>.
+/// A resource description for <c><i>kRmtResourceTypeHeap</i></c>.
 typedef struct RmtResourceDescriptionHeap
 {
     uint8_t     flags;          ///< The heap creation flags.

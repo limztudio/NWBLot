@@ -6057,8 +6057,6 @@ bool Sema::RequireNonAbstractType(SourceLocation Loc, QualType T,
 }
 
 void Sema::DiagnoseAbstractType(const CXXRecordDecl *RD) {
-  // Check if we've already emitted the list of pure virtual functions
-  // for this class.
   if (PureVirtualClassDiagSet && PureVirtualClassDiagSet->count(RD))
     return;
 
@@ -8994,7 +8992,6 @@ private:
       if (ReturnStmt.isInvalid())
         return StmtError();
 
-      // if (...)
       return S.ActOnIfStmt(Loc, IfStatementKind::Ordinary, Loc, InitStmt, Cond,
                            Loc, ReturnStmt.get(),
                            /*ElseLoc=*/SourceLocation(), /*Else=*/nullptr);

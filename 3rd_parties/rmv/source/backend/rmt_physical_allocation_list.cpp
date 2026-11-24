@@ -21,7 +21,6 @@ uint64_t RmtPhysicalAllocationGetSizeInBytes(const RmtPhysicalAllocation* physic
     return ((uint64_t)physical_allocation->size_in_4kb_page) << 12;
 }
 
-// NOTE: likely that we are going to do more queries than insert/delete, may want to accelerate the lookup using a tree.
 
 static int32_t FindAllocationIndexForAddress(const RmtPhysicalAllocationList* physical_allocation_list, RmtGpuAddress address)
 {
@@ -82,12 +81,10 @@ RmtErrorCode RmtPhysicalAllocationListAddAllocation(RmtPhysicalAllocationList* p
 
     const int32_t next_allocation_index = physical_allocation_list->allocation_count++;
 
-    // fill out the allocation interval
     RmtPhysicalAllocationInterval* allocation_interval = &physical_allocation_list->allocation_intervals[next_allocation_index];
     allocation_interval->base_address                  = address;
     allocation_interval->size_in_4kb_pages             = size_in_4kb_pages;
 
-    // fill out the details.
     RmtPhysicalAllocation* allocation_details = &physical_allocation_list->allocation_details[next_allocation_index];
     allocation_details->base_address          = address;
     allocation_details->size_in_4kb_page      = size_in_4kb_pages;
@@ -107,7 +104,6 @@ RmtErrorCode RmtPhysicalAllocationListDiscardAllocation(RmtPhysicalAllocationLis
     RMT_RETURN_ON_ERROR(physical_allocation_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(physical_allocation_list->allocation_count, kRmtErrorNoAllocationFound);
 
-    // find the allocation index.
     const int32_t index = FindAllocationIndexForAddress(physical_allocation_list, address);
     if (index < 0)
     {
@@ -123,7 +119,6 @@ RmtErrorCode RmtPhysicalAllocationListDiscardAllocation(RmtPhysicalAllocationLis
         return kRmtOk;
     }
 
-    // copy over.
     RmtPhysicalAllocation*       current_physical_allocation = &physical_allocation_list->allocation_details[index];
     const RmtPhysicalAllocation* last_physical_allocation    = &physical_allocation_list->allocation_details[last_physica_allocation_index];
     memcpy(current_physical_allocation, last_physical_allocation, sizeof(RmtPhysicalAllocation));

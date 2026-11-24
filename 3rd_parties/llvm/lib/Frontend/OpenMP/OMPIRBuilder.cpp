@@ -1551,7 +1551,6 @@ static Function *createTargetParallelWrapper(OpenMPIRBuilder *OMPIRBuilder,
         ArgsAlloca->getName() + ".ascast");
   }
 
-  // Initialization.
   Builder.CreateStore(WrapperFn->getArg(1), AddrAlloca);
   Builder.CreateStore(Builder.getInt32(0), ZeroAlloca);
   if (UseArgStruct) {
@@ -3562,7 +3561,6 @@ Expected<Function *> OpenMPIRBuilder::emitInterWarpCopyFunction(
       BasicBlock *ElseBB = BasicBlock::Create(Ctx, "else");
       BasicBlock *MergeBB = BasicBlock::Create(Ctx, "ifcont");
 
-      // if (lane_id  == 0)
       Value *IsWarpMaster = Builder.CreateIsNull(LaneID, "warp_master");
       Builder.CreateCondBr(IsWarpMaster, ThenBB, ElseBB);
       emitBlock(ThenBB, Builder.GetInsertBlock()->getParent());
@@ -7917,7 +7915,6 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::EmitOMPInlinedRegion(
 
 OpenMPIRBuilder::InsertPointTy OpenMPIRBuilder::emitCommonDirectiveEntry(
     Directive OMPD, Value *EntryCall, BasicBlock *ExitBB, bool Conditional) {
-  // if nothing to do, Return current insertion point.
   if (!Conditional || !EntryCall)
     return Builder.saveIP();
 
@@ -7941,7 +7938,6 @@ OpenMPIRBuilder::InsertPointTy OpenMPIRBuilder::emitCommonDirectiveEntry(
   UI->eraseFromParent();
   Builder.SetInsertPoint(ThenBB->getTerminator());
 
-  // return an insertion point to ExitBB.
   return IRBuilder<>::InsertPoint(ExitBB, ExitBB->getFirstInsertionPt());
 }
 

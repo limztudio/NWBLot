@@ -156,7 +156,6 @@ static CURLcode inflate_stream(struct Curl_easy *data,
   CURLcode result = CURLE_OK;   /* Curl_client_write status */
   int i = 0;
 
-  /* Check state. */
   if(zp->zlib_init != ZLIB_INIT &&
      zp->zlib_init != ZLIB_INFLATING &&
      zp->zlib_init != ZLIB_INIT_GZIP)
@@ -196,7 +195,6 @@ static CURLcode inflate_stream(struct Curl_easy *data,
       }
     }
 
-    /* Dispatch by inflate() status. */
     switch(status) {
     case Z_OK:
       /* Always loop: there may be unflushed latched data in zlib state. */
@@ -254,7 +252,6 @@ static CURLcode deflate_do_init(struct Curl_easy *data,
   struct zlib_writer *zp = (struct zlib_writer *)writer;
   z_stream *z = &zp->z; /* zlib state structure */
 
-  /* Initialize zlib */
   z->zalloc = (alloc_func)zalloc_cb;
   z->zfree = (free_func)zfree_cb;
 
@@ -281,7 +278,6 @@ static CURLcode deflate_do_write(struct Curl_easy *data,
   if(zp->zlib_init == ZLIB_EXTERNAL_TRAILER)
     return process_trailer(data, zp);
 
-  /* Now uncompress the data */
   return inflate_stream(data, writer, type, ZLIB_INFLATING);
 }
 
@@ -315,7 +311,6 @@ static CURLcode gzip_do_init(struct Curl_easy *data,
   struct zlib_writer *zp = (struct zlib_writer *)writer;
   z_stream *z = &zp->z; /* zlib state structure */
 
-  /* Initialize zlib */
   z->zalloc = (alloc_func)zalloc_cb;
   z->zfree = (free_func)zfree_cb;
 
@@ -340,7 +335,6 @@ static CURLcode gzip_do_write(struct Curl_easy *data,
     /* Let zlib handle the gzip decompression entirely */
     z->next_in = (z_const Bytef *)buf;
     z->avail_in = (uInt)nbytes;
-    /* Now uncompress the data */
     return inflate_stream(data, writer, type, ZLIB_INIT_GZIP);
   }
 

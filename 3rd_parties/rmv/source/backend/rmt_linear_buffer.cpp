@@ -22,7 +22,6 @@ void* RmtAllocLinearBufferAllocate(RmtAllocLinearBuffer* linear_buffer, size_t s
 {
     RMT_ASSERT_MESSAGE(linear_buffer, "Parameter linearBuffer is NULL.");
     RMT_RETURN_ON_ERROR(linear_buffer, NULL);
-    // check there is enough space in the buffer for the allocation.
     RMT_RETURN_ON_ERROR((linear_buffer->offset + size) <= linear_buffer->buffer_size, NULL);
 
     const uintptr_t address = (uintptr_t)linear_buffer->buffer_base + linear_buffer->offset;

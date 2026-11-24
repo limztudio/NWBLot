@@ -18,7 +18,7 @@
      Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 /**
- * @file digestauth.c
+ * @file digestauth.h
  * @brief Implements HTTP digest authentication
  * @author Amr Ali
  * @author Matthieu Speder

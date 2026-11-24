@@ -26,12 +26,8 @@
  *
  * ## What this is
  *
- * Almost every test in this directory starts its daemon with one hard-coded
- * set of options, so the whole test suite only ever exercises a single point
- * of a large configuration space.  This helper turns that space into a small
- * table of named *profiles* and lets the profile be selected from the
- * environment, so that an already built test binary can be re-run across the
- * whole matrix without recompiling anything (see contrib/run-option-matrix.sh).
+ * Tests can select named daemon option profiles from the environment without
+ * recompiling.
  *
  * The dimensions of the matrix are:
  *
@@ -40,13 +36,13 @@
  *   smallest value MHD accepts (anything below is rounded up to 64, see
  *   daemon.c).  Everything up to 2048 keeps the read buffer below
  *   #MHD_BUF_INC_SIZE (1500) resp. small enough to unlock the read-buffer
- *   "shift back" path fixed by commit 29eaa56b, 3072 and 4096 do not, so both
+ *   "shift back" path; 3072 and 4096 do not, so both
  *   sides of that boundary are in the sweep;
  * * #MHD_OPTION_CLIENT_DISCIPLINE_LVL in {-3 ... 3};
- * * #MHD_OPTION_STRICT_FOR_CLIENT, the older two-valued form of the same
+ * * #MHD_OPTION_STRICT_FOR_CLIENT, the older form of the same
  *   knob, so that its translation code is covered as well.  Beware: that
  *   option maps *every* value of -1 or below to client discipline level -3,
- *   the most permissive one (daemon.c:7102-7106), so an application asking
+ *   the most permissive one (see daemon.c), so an application asking
  *   for "slightly lenient" in fact selects the most lenient mode;
  * * the threading mode: external polling, internal polling thread,
  *   thread-per-connection and thread pool;
@@ -61,8 +57,7 @@
  * ## Environment variables
  *
  * * #MHD_OPT_MATRIX_PROFILE_ENV ("MHD_TEST_PROFILE") - the profile to use,
- *   given either by name ("mem-512") or by index ("4").  The special value
- *   "list" is not handled here; contrib/run-option-matrix.sh knows the names.
+ *   given either by name ("mem-512") or by index ("4").
  * * #MHD_OPT_MATRIX_MEM_ENV ("MHD_TEST_MEM_LIMIT") - override the connection
  *   memory limit of the selected profile.  "0" or "default" selects the
  *   library default.
@@ -76,8 +71,7 @@
  *   "epoll".
  *
  * If *none* of these variables is set, mhd_opt_matrix_from_env()
- * returns NULL and every test keeps its previous, hard-coded behaviour.  This
- * is what a stock "make check" does, so nothing regresses.
+ * returns NULL and each test keeps its configured behaviour.
  */
 
 #ifndef MHD_OPT_MATRIX_H
@@ -265,9 +259,8 @@ mhd_opt_matrix_from_env (void);
  * Get the client discipline level that MHD will *really* use for @a prof.
  *
  * This is not always @a prof->discipline_lvl: #MHD_OPTION_STRICT_FOR_CLIENT
- * only has two settings, and daemon.c:7102-7106 maps every value of -1 or
- * below to level -3 (the most permissive one) and every value of 1 or above
- * to level 1.  A caller that decides what a request must do therefore has to
+ * maps every value of -1 or below to level -3 (the most permissive one),
+ * zero to zero, and every value of 1 or above to level 1.  A caller that decides what a request must do therefore has to
  * ask for the effective level, not for the configured one - a test that
  * believes it asked for "slightly lenient" in fact runs at -3.
  *

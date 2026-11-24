@@ -38,7 +38,6 @@ namespace amdisa
     static const char* kJsonIdIdentifier        = "'id";
     static const char* kJsonCommentIdentifier   = ":comment";
 
-    // Return type.
     static const char* kReturnTypeIdentifier = "'ret";
 
     // XML leaf node identifiers.

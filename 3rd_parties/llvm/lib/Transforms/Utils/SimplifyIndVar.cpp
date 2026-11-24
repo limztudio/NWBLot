@@ -1985,8 +1985,6 @@ Instruction *WidenIV::widenIVUse(WidenIV::NarrowIVDefUse DU,
       return nullptr;
     };
 
-    // if we reached this point then we are going to replace
-    // DU.NarrowUse with WideUse. Reattach DbgValue then.
     replaceAllDbgUsesWith(*DU.NarrowUse, *WideUse, *WideUse, *DT);
 
     ExtendKindMap[DU.NarrowUse] = WideAddRec.second;

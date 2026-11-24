@@ -56,7 +56,6 @@ typedef struct {
 #endif
 #define ENOUGH (ENOUGH_LENS+ENOUGH_DISTS)
 
-/* Type of code to build for inflate_table() */
 typedef enum {
     CODES,
     LENS,

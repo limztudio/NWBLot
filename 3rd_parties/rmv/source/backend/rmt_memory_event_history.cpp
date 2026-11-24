@@ -20,7 +20,6 @@
 // A flag used to determine if implicit resources should be included in generated history instances.
 static bool hide_implicit_resources = false;
 
-// Memory Event History API Functions
 
 RmtErrorCode RmtMemoryEventHistorySetImplicitResourceFiltering(const bool enable_filtering)
 {
@@ -252,22 +251,18 @@ typedef struct MemoryBlock
     uint64_t      size;           ///< The size of the memory block.
 } MemoryBlock;
 
-// Type definition for a list of memory blocks.
 typedef std::vector<MemoryBlock> MemoryBlockList;
 
 // Structure used to determine if an address is located within a memory block range.
 typedef struct RangeComparator
 {
-    // Constructor
     RangeComparator(const RmtGpuAddress address)
         : address_to_find(address)
     {
     }
 
-    // Function operator
     bool operator()(const MemoryBlock& block)
     {
-        // Check to see if the specified address is within the range of a memory block.
         return RmtAllocationsOverlap(address_to_find, 1, block.start_address, block.size);
     }
 
@@ -277,16 +272,13 @@ typedef struct RangeComparator
 // Structure used to determine if an address matches the start of a memory block.
 typedef struct StartMatchComparator
 {
-    // Constructor
     StartMatchComparator(const RmtGpuAddress address)
         : address_to_find(address)
     {
     }
 
-    // Function operator
     bool operator()(const MemoryBlock& block)
     {
-        // Check to see if the specified address matches the start of a memory block.
         return (block.start_address == address_to_find);
     }
 
@@ -373,7 +365,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateResourceHistoryForId(RmtDataSet*      
         // First pass: build virtual allocation list and list of resource binds.
         while (!RmtStreamMergerIsEmpty(&data_set->stream_merger))
         {
-            // Grab the next token from the heap.
             RmtToken current_token;
             error_code = RmtStreamMergerAdvance(&data_set->stream_merger, data_set->flags.local_heap_only, &current_token);
             RMT_ASSERT(error_code == kRmtOk);
@@ -445,7 +436,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateResourceHistoryForId(RmtDataSet*      
             // Second pass: build the history for the resource.
             while (!RmtStreamMergerIsEmpty(&data_set->stream_merger))
             {
-                // Grab the next token from the heap.
                 RmtToken current_token;
                 error_code = RmtStreamMergerAdvance(&data_set->stream_merger, data_set->flags.local_heap_only, &current_token);
                 RMT_ASSERT(error_code == kRmtOk);
@@ -697,7 +687,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateFullAllocationHistory(RmtDataSet*     
         {
         case kRmtTokenTypeResourceBind:
         {
-            // If the API is configured to hide implicit resources and the resource is marked implicit, then don't include the event in history.  In all other cases, the event can be considered for inclusion.
             if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_bind_token.resource_identifier)))
             {
                 if (include_resources_in_all_allocations)
@@ -763,7 +752,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateFullAllocationHistory(RmtDataSet*     
     {
         while (!RmtStreamMergerIsEmpty(&data_set->stream_merger))
         {
-            // Grab the next token from the heap.
             RmtToken current_token;
             error_code = RmtStreamMergerAdvance(&data_set->stream_merger, data_set->flags.local_heap_only, &current_token);
             RMT_ASSERT(error_code == kRmtOk);
@@ -1117,7 +1105,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateResourceCreateHistoryForAddress(RmtDat
         {
         case kRmtTokenTypeResourceBind:
         {
-            // If the API is configured to hide implicit resources and the resource is marked implicit, then don't include the event in history.  In all other cases, the event can be considered for inclusion.
             if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_bind_token.resource_identifier)))
             {
                 if (include_resources_in_all_allocations)
@@ -1231,7 +1218,6 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
         // Build the resource history.
         while (!RmtStreamMergerIsEmpty(&data_set->stream_merger))
         {
-            // Grab the next token from the heap.
             RmtToken current_token;
             error_code = RmtStreamMergerAdvance(&data_set->stream_merger, data_set->flags.local_heap_only, &current_token);
             RMT_ASSERT(error_code == kRmtOk);
@@ -1240,8 +1226,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
             {
             case kRmtTokenTypeResourceCreate:
             {
-                // If the API is configured to hide implicit resources and the resource is marked implicit, then don't include the event in history.  In all other cases, the event can be included.
-                if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
+                    if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
                 {
                     history->AddEvent(current_token.resource_create_token);
                 }
@@ -1250,8 +1235,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
 
             case kRmtTokenTypeResourceBind:
             {
-                // If the API is configured to hide implicit resources and the resource is marked implicit, then don't include the event in history.  In all other cases, the event can be considered for inclusion.
-                if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
+                    if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
                 {
                     const RmtVirtualAllocation* virtual_allocation;
                     const RmtErrorCode          get_allocation_result = RmtVirtualAllocationListGetAllocationForAddress(
@@ -1297,8 +1281,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
 
             case kRmtTokenTypeResourceDestroy:
             {
-                // If the API is configured to hide implicit resources and the resource is marked implicit, then don't include the event in history.  In all other cases, the event can be included.
-                if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
+                    if (!hide_implicit_resources || (!RmtResourceUserDataIsResourceImplicit(current_token.resource_destroy_token.resource_identifier)))
                 {
                     history->AddEvent(current_token.resource_destroy_token);
                     // Remove the resource ID from the bound allocation in the bound_resources list.

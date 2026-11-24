@@ -165,7 +165,7 @@ INSTANTIATE_TYPED_TEST_SUITE_P(My, FooTest, MyTypes);
 //   INSTANTIATE_TYPED_TEST_SUITE_P(My, FooTest, int);
 //
 // Similar to the optional argument of TYPED_TEST_SUITE above,
-// INSTANTIATE_TEST_SUITE_P takes an optional fourth argument which allows to
+// INSTANTIATE_TYPED_TEST_SUITE_P takes an optional fourth argument to
 // generate custom names.
 //   INSTANTIATE_TYPED_TEST_SUITE_P(My, FooTest, MyTypes, MyTypeNames);
 

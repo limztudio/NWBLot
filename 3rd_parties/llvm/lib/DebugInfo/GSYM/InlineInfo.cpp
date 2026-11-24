@@ -80,7 +80,7 @@ static bool skip(GsymDataExtractor &Data, uint64_t &Offset,
   Data.getULEB128(&Offset); // Skip Inline.CallLine.
   if (HasChildren) {
     while (skip(Data, Offset, false /* SkippedRanges */))
-      /* Do nothing */;
+      ;
   }
   // We skipped a valid InlineInfo.
   return true;

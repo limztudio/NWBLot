@@ -142,9 +142,6 @@ class robin_map {
   using const_iterator = typename ht::const_iterator;
 
  public:
-  /*
-   * Constructors
-   */
   robin_map() : robin_map(ht::DEFAULT_INIT_BUCKETS_SIZE) {}
 
   explicit robin_map(size_type bucket_count, const Hash& hash = Hash(),
@@ -221,9 +218,6 @@ class robin_map {
 
   allocator_type get_allocator() const { return m_ht.get_allocator(); }
 
-  /*
-   * Iterators
-   */
   iterator begin() noexcept { return m_ht.begin(); }
   const_iterator begin() const noexcept { return m_ht.begin(); }
   const_iterator cbegin() const noexcept { return m_ht.cbegin(); }
@@ -232,16 +226,10 @@ class robin_map {
   const_iterator end() const noexcept { return m_ht.end(); }
   const_iterator cend() const noexcept { return m_ht.cend(); }
 
-  /*
-   * Capacity
-   */
   bool empty() const noexcept { return m_ht.empty(); }
   size_type size() const noexcept { return m_ht.size(); }
   size_type max_size() const noexcept { return m_ht.max_size(); }
 
-  /*
-   * Modifiers
-   */
   void clear() noexcept { m_ht.clear(); }
 
   std::pair<iterator, bool> insert(const value_type& value) {
@@ -398,9 +386,6 @@ class robin_map {
 
   void swap(robin_map& other) { other.m_ht.swap(m_ht); }
 
-  /*
-   * Lookup
-   */
   T& at(const Key& key) { return m_ht.at(key); }
 
   /**
@@ -688,15 +673,9 @@ class robin_map {
     return m_ht.equal_range(key, precalculated_hash);
   }
 
-  /*
-   * Bucket interface
-   */
   size_type bucket_count() const { return m_ht.bucket_count(); }
   size_type max_bucket_count() const { return m_ht.max_bucket_count(); }
 
-  /*
-   *  Hash policy
-   */
   float load_factor() const { return m_ht.load_factor(); }
 
   float min_load_factor() const { return m_ht.min_load_factor(); }
@@ -717,15 +696,9 @@ class robin_map {
   void rehash(size_type count_) { m_ht.rehash(count_); }
   void reserve(size_type count_) { m_ht.reserve(count_); }
 
-  /*
-   * Observers
-   */
   hasher hash_function() const { return m_ht.hash_function(); }
   key_equal key_eq() const { return m_ht.key_eq(); }
 
-  /*
-   * Other
-   */
 
   /**
    * Convert a const_iterator to an iterator.

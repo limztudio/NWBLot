@@ -4446,7 +4446,6 @@ static void RenderObjCOptions(const ToolChain &TC, const Driver &D,
     auto WeakArg =
         Args.getLastArg(options::OPT_fobjc_weak, options::OPT_fno_objc_weak);
     if (!WeakArg) {
-      // nothing to do
     } else if (!Runtime.allowsWeak()) {
       if (WeakArg->getOption().matches(options::OPT_fobjc_weak))
         D.Diag(diag::err_objc_weak_unsupported);

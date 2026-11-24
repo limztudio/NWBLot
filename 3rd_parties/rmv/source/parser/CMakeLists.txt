@@ -9,7 +9,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
 set(_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 
-# CMAKE_INCLUDE_CURRENT_DIR-style same-dir includes ("rmt_*.h") resolve via PROJECT_SOURCE_DIR below.
 file(GLOB RMV_PARSER_SRC "${PROJECT_SOURCE_DIR}/*.cpp")
 if(NOT WIN32)
     list(APPEND RMV_PARSER_SRC "${PROJECT_SOURCE_DIR}/linux/safe_crt.cpp")

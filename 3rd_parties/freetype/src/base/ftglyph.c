@@ -589,16 +589,13 @@
     if ( !library || !aglyph )
       return FT_THROW( Invalid_Argument );
 
-    /* if it is a bitmap, that's easy :-) */
     if ( format == FT_GLYPH_FORMAT_BITMAP )
       clazz = &ft_bitmap_glyph_class;
 
-    /* if it is an outline */
     else if ( format == FT_GLYPH_FORMAT_OUTLINE )
       clazz = &ft_outline_glyph_class;
 
 #ifdef FT_CONFIG_OPTION_SVG
-    /* if it is an SVG glyph */
     else if ( format == FT_GLYPH_FORMAT_SVG )
       clazz = &ft_svg_glyph_class;
 #endif

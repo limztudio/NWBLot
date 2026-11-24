@@ -52,8 +52,6 @@ inline unsigned CountDecimalDigit32(uint32_t n) {
     if (n < 10000000) return 7;
     if (n < 100000000) return 8;
     // Will not reach 10 digits in DigitGen()
-    //if (n < 1000000000) return 9;
-    //return 10;
     return 9;
 }
 

@@ -120,19 +120,8 @@ typedef struct RmtDataSet
 
 /// Initialize the RMT data set from a file path.
 ///
-/// In order to avoid accidental corruption of the file being opened. The RMT backend
-/// will make a temporary copy of the file with which to work. Modifications are done
-/// to this copy, and then calls to <c><i>rmtDataSetDestroy</i></c> will commit those
-/// edits back to the original by way of a file rename.
-///
-/// The reason for this implementation choice is because changes to the file system
-/// metadata are atomic, where as changes to the contents of the file are not. This
-/// means if a crash of the application (or wider system) where to happen during a
-/// change to the file, then the RMV file may be rendered corrupted and unusable. If
-/// we instead copy the file on load, and work in the temporary copy, and then, using
-/// only metadata edits (i.e.: rename and delete), place that back where the original
-/// file was. Then even if the system were to crash, the integrity of the original
-/// RMV file is always preserved.
+/// Editable traces use a temporary copy. Destroying the data set attempts
+/// to commit its edits to the original file.
 ///
 /// @param [in]  path                                       A pointer to a string containing the path to the RMT file that we would like to load to initialize the data set.
 /// @param [in]  data_set                                   A pointer to a <c><i>RmtDataSet</i></c> structure that will contain the data set.

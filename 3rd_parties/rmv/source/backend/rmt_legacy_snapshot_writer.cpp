@@ -38,10 +38,8 @@ RmtErrorCode RmtLegacySnapshotWriter::Add(const char* name, uint64_t timestamp, 
 {
     RMT_ASSERT(data_set_);
 
-    // Jump to the end of the file, and write a new snapshot out.
     fseek((FILE*)data_set_->file_handle, 0L, SEEK_END);
 
-    // Add the header.
     RmtFileChunkHeader chunk_header;
     chunk_header.chunk_identifier.chunk_info.chunk_type  = kRmtFileChunkTypeSnapshotInfo;
     chunk_header.chunk_identifier.chunk_info.chunk_index = 0;
@@ -55,7 +53,6 @@ RmtErrorCode RmtLegacySnapshotWriter::Add(const char* name, uint64_t timestamp, 
     size_t write_size = fwrite(&chunk_header, 1, sizeof(RmtFileChunkHeader), (FILE*)data_set_->file_handle);
     RMT_ASSERT(write_size == sizeof(RmtFileChunkHeader));
 
-    // Add the snapshot payload
     RmtFileChunkSnapshotInfo snapshot_info_chunk;
     snapshot_info_chunk.name_length_in_bytes             = name_length;
     snapshot_info_chunk.snapshot_time                    = timestamp;
@@ -63,14 +60,12 @@ RmtErrorCode RmtLegacySnapshotWriter::Add(const char* name, uint64_t timestamp, 
     write_size                                           = fwrite(&snapshot_info_chunk, 1, sizeof(RmtFileChunkSnapshotInfo), (FILE*)data_set_->file_handle);
     RMT_ASSERT(write_size == sizeof(RmtFileChunkSnapshotInfo));
 
-    // Write the name
     write_size = fwrite(name, 1, name_length, (FILE*)data_set_->file_handle);
     RMT_ASSERT(static_cast<int32_t>(write_size) == name_length);
 
     return kRmtOk;
 }
 
-// Updated the snapshot removed snapshot in the trace file.
 RmtErrorCode RmtLegacySnapshotWriter::Remove(const uint16_t removed_snapshot_index) const
 {
     const uint64_t offset_to_snapshot_chunk = data_set_->snapshots[removed_snapshot_index].file_offset;  // offset to snapshot info chunk.

@@ -69,7 +69,6 @@ namespace Log {
         __TBB_ASSERT(opcodeString, "Empty opcode");
         __TBB_ASSERT(record_number <= RECORDS_COUNT, "Incorrect record number");
 
-        //If some replacement failed -> set status to false
         replacement_status &= status;
 
         // If we reach the end of the log, write this message to the last line
@@ -132,10 +131,8 @@ private:
         UINT_PTR m_next;    // next free location in the buffer
         DWORD    m_size;    // size of buffer
 
-        // Default constructor
         MemoryBuffer() : m_base(0), m_next(0), m_size(0) {}
 
-        // Constructor
         MemoryBuffer(void *base, DWORD size)
         {
             m_base = Ptr2Addrint(base);
@@ -575,7 +572,6 @@ extern "C" __declspec(dllexport) int TBB_malloc_replacement_log(char *** functio
         *function_replacement_log_ptr = Log::records;
     }
 
-    // If we have no logs -> return false status
     return Log::replacement_status && Log::records[0] != nullptr ? 0 : -1;
 }
 

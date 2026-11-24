@@ -456,10 +456,8 @@ class [[nodiscard]] MatcherBase : private MatcherDescriberInterface {
 
 }  // namespace internal
 
-// A Matcher<T> is a copyable and IMMUTABLE (except by assignment)
-// object that can check whether a value of type T matches.  The
-// implementation of Matcher<T> is just a std::shared_ptr to const
-// MatcherInterface<T>.  Don't inherit from Matcher!
+// A Matcher<T> is copyable and immutable except by assignment.
+// Don't inherit from Matcher.
 template <typename T>
 class [[nodiscard]] Matcher : public internal::MatcherBase<T> {
  public:
@@ -940,11 +938,7 @@ Matcher<T>::Matcher(U, std::enable_if_t<std::is_same_v<U, std::nullptr_t>>*) {
 // TypedEq<T>(x) is just a convenient short-hand for Matcher<T>(Eq(x))
 // or Matcher<T>(x), but more readable than the latter.
 //
-// We could define similar monomorphic matchers for other comparison
-// operations (e.g. TypedLt, TypedGe, and etc), but decided not to do
-// it yet as those are used much less than Eq() in practice.  A user
-// can always write Matcher<T>(Lt(5)) to be explicit about the type,
-// for example.
+// For other comparisons, use Matcher<T>(Lt(5)).
 template <typename Lhs, typename Rhs>
 inline Matcher<Lhs> TypedEq(const Rhs& rhs) {
   return Eq(rhs);

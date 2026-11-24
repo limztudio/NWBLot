@@ -51,7 +51,7 @@ public:
     /// @retval
     /// kRmtErrorInvalidPointer                      Invalid <c><i>chunk_file</i></c>.
     /// @retval
-    /// kRmtMalformedData                            Failed to retrieve the chunk data from the RDF file.
+    /// kRmtErrorMalformedData                            Failed to retrieve the chunk data from the RDF file.
     /// @retVal
     /// kRmtEof                                      The chunk was not found in the RDF file.
     RmtErrorCode LoadChunk(rdfChunkFile* chunk_file, int chunk_index);
@@ -66,12 +66,12 @@ public:
     /// Retrieves number of snapshot info chunks in the trace.
     ///
     /// @param [in]  chunk_file                      A pointer to the chunk file.
-    /// @param [in]  out_chunk_count                 A pointer to the variable that receives the chunk count.
+    /// @param [out] out_chunk_count             A pointer to the variable that receives the chunk count.
     ///
     /// @retval
     /// kRmtOk                                       The operation completed successfully.
-    /// kRmtErrorInvalidPointer                      Invalid </i></c>chunk_file</i></c> or </i></c>out_chunk_count</i></c> pointer.
-    /// kRmtMalformedData                            Failed to retrieve the number of chunks in the RDF file.
+    /// kRmtErrorInvalidPointer                      Invalid chunk_file or out_chunk_count pointer.
+    /// kRmtErrorMalformedData                            Failed to retrieve the number of chunks in the RDF file.
     RmtErrorCode GetChunkCount(rdfChunkFile* chunk_file, uint16_t* out_chunk_count);
 
     /// Return the Snapshot Info chunk identifier.

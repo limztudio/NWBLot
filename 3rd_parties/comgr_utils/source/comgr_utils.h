@@ -35,52 +35,52 @@ namespace amdt
     /// @brief Singleton struct to hold the entry points of the comgr library.
     struct ComgrEntryPoints
     {
-        decltype(amd_comgr_status_string)*                          amd_comgr_status_string_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_get_version)*                            amd_comgr_get_version_fn;                             ///< comgr library entry point.
-        decltype(amd_comgr_get_isa_count)*                          amd_comgr_get_isa_count_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_get_isa_name)*                           amd_comgr_get_isa_name_fn;                            ///< comgr library entry point.
-        decltype(amd_comgr_get_isa_metadata)*                       amd_comgr_get_isa_metadata_fn;                        ///< comgr library entry point.
-        decltype(amd_comgr_create_data)*                            amd_comgr_create_data_fn;                             ///< comgr library entry point.
-        decltype(amd_comgr_release_data)*                           amd_comgr_release_data_fn;                            ///< comgr library entry point.
-        decltype(amd_comgr_get_data_kind)*                          amd_comgr_get_data_kind_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_set_data)*                               amd_comgr_set_data_fn;                                ///< comgr library entry point.
-        decltype(amd_comgr_set_data_name)*                          amd_comgr_set_data_name_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_get_data)*                               amd_comgr_get_data_fn;                                ///< comgr library entry point.
-        decltype(amd_comgr_get_data_name)*                          amd_comgr_get_data_name_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_get_data_isa_name)*                      amd_comgr_get_data_isa_name_fn;                       ///< comgr library entry point.
-        decltype(amd_comgr_get_data_metadata)*                      amd_comgr_get_data_metadata_fn;                       ///< comgr library entry point.
-        decltype(amd_comgr_destroy_metadata)*                       amd_comgr_destroy_metadata_fn;                        ///< comgr library entry point.
-        decltype(amd_comgr_create_data_set)*                        amd_comgr_create_data_set_fn;                         ///< comgr library entry point.
-        decltype(amd_comgr_destroy_data_set)*                       amd_comgr_destroy_data_set_fn;                        ///< comgr library entry point.
-        decltype(amd_comgr_data_set_add)*                           amd_comgr_data_set_add_fn;                            ///< comgr library entry point.
-        decltype(amd_comgr_data_set_remove)*                        amd_comgr_data_set_remove_fn;                         ///< comgr library entry point.
-        decltype(amd_comgr_action_data_count)*                      amd_comgr_action_data_count_fn;                       ///< comgr library entry point.
-        decltype(amd_comgr_action_data_get_data)*                   amd_comgr_action_data_get_data_fn;                    ///< comgr library entry point.
-        decltype(amd_comgr_create_action_info)*                     amd_comgr_create_action_info_fn;                      ///< comgr library entry point.
-        decltype(amd_comgr_destroy_action_info)*                    amd_comgr_destroy_action_info_fn;                     ///< comgr library entry point.
-        decltype(amd_comgr_action_info_set_isa_name)*               amd_comgr_action_info_set_isa_name_fn;                ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_isa_name)*               amd_comgr_action_info_get_isa_name_fn;                ///< comgr library entry point.
-        decltype(amd_comgr_action_info_set_language)*               amd_comgr_action_info_set_language_fn;                ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_language)*               amd_comgr_action_info_get_language_fn;                ///< comgr library entry point.
-        decltype(amd_comgr_action_info_set_option_list)*            amd_comgr_action_info_set_option_list_fn;             ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_option_list_count)*      amd_comgr_action_info_get_option_list_count_fn;       ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_option_list_item)*       amd_comgr_action_info_get_option_list_item_fn;        ///< comgr library entry point.
-        decltype(amd_comgr_action_info_set_working_directory_path)* amd_comgr_action_info_set_working_directory_path_fn;  ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_working_directory_path)* amd_comgr_action_info_get_working_directory_path_fn;  ///< comgr library entry point.
-        decltype(amd_comgr_action_info_set_logging)*                amd_comgr_action_info_set_logging_fn;                 ///< comgr library entry point.
-        decltype(amd_comgr_action_info_get_logging)*                amd_comgr_action_info_get_logging_fn;                 ///< comgr library entry point.
-        decltype(amd_comgr_do_action)*                              amd_comgr_do_action_fn;                               ///< comgr library entry point.
-        decltype(amd_comgr_get_metadata_kind)*                      amd_comgr_get_metadata_kind_fn;                       ///< comgr library entry point.
-        decltype(amd_comgr_get_metadata_string)*                    amd_comgr_get_metadata_string_fn;                     ///< comgr library entry point.
-        decltype(amd_comgr_get_metadata_map_size)*                  amd_comgr_get_metadata_map_size_fn;                   ///< comgr library entry point.
-        decltype(amd_comgr_iterate_map_metadata)*                   amd_comgr_iterate_map_metadata_fn;                    ///< comgr library entry point.
-        decltype(amd_comgr_metadata_lookup)*                        amd_comgr_metadata_lookup_fn;                         ///< comgr library entry point.
-        decltype(amd_comgr_get_metadata_list_size)*                 amd_comgr_get_metadata_list_size_fn;                  ///< comgr library entry point.
-        decltype(amd_comgr_index_list_metadata)*                    amd_comgr_index_list_metadata_fn;                     ///< comgr library entry point.
-        decltype(amd_comgr_iterate_symbols)*                        amd_comgr_iterate_symbols_fn;                         ///< comgr library entry point.
-        decltype(amd_comgr_symbol_lookup)*                          amd_comgr_symbol_lookup_fn;                           ///< comgr library entry point.
-        decltype(amd_comgr_symbol_get_info)*                        amd_comgr_symbol_get_info_fn;                         ///< comgr library entry point.
-        decltype(amd_comgr_demangle_symbol_name)*                   amd_comgr_demangle_symbol_name_fn;                    ///< comgr library entry point.
+        decltype(amd_comgr_status_string)*                          amd_comgr_status_string_fn;
+        decltype(amd_comgr_get_version)*                            amd_comgr_get_version_fn;
+        decltype(amd_comgr_get_isa_count)*                          amd_comgr_get_isa_count_fn;
+        decltype(amd_comgr_get_isa_name)*                           amd_comgr_get_isa_name_fn;
+        decltype(amd_comgr_get_isa_metadata)*                       amd_comgr_get_isa_metadata_fn;
+        decltype(amd_comgr_create_data)*                            amd_comgr_create_data_fn;
+        decltype(amd_comgr_release_data)*                           amd_comgr_release_data_fn;
+        decltype(amd_comgr_get_data_kind)*                          amd_comgr_get_data_kind_fn;
+        decltype(amd_comgr_set_data)*                               amd_comgr_set_data_fn;
+        decltype(amd_comgr_set_data_name)*                          amd_comgr_set_data_name_fn;
+        decltype(amd_comgr_get_data)*                               amd_comgr_get_data_fn;
+        decltype(amd_comgr_get_data_name)*                          amd_comgr_get_data_name_fn;
+        decltype(amd_comgr_get_data_isa_name)*                      amd_comgr_get_data_isa_name_fn;
+        decltype(amd_comgr_get_data_metadata)*                      amd_comgr_get_data_metadata_fn;
+        decltype(amd_comgr_destroy_metadata)*                       amd_comgr_destroy_metadata_fn;
+        decltype(amd_comgr_create_data_set)*                        amd_comgr_create_data_set_fn;
+        decltype(amd_comgr_destroy_data_set)*                       amd_comgr_destroy_data_set_fn;
+        decltype(amd_comgr_data_set_add)*                           amd_comgr_data_set_add_fn;
+        decltype(amd_comgr_data_set_remove)*                        amd_comgr_data_set_remove_fn;
+        decltype(amd_comgr_action_data_count)*                      amd_comgr_action_data_count_fn;
+        decltype(amd_comgr_action_data_get_data)*                   amd_comgr_action_data_get_data_fn;
+        decltype(amd_comgr_create_action_info)*                     amd_comgr_create_action_info_fn;
+        decltype(amd_comgr_destroy_action_info)*                    amd_comgr_destroy_action_info_fn;
+        decltype(amd_comgr_action_info_set_isa_name)*               amd_comgr_action_info_set_isa_name_fn;
+        decltype(amd_comgr_action_info_get_isa_name)*               amd_comgr_action_info_get_isa_name_fn;
+        decltype(amd_comgr_action_info_set_language)*               amd_comgr_action_info_set_language_fn;
+        decltype(amd_comgr_action_info_get_language)*               amd_comgr_action_info_get_language_fn;
+        decltype(amd_comgr_action_info_set_option_list)*            amd_comgr_action_info_set_option_list_fn;
+        decltype(amd_comgr_action_info_get_option_list_count)*      amd_comgr_action_info_get_option_list_count_fn;
+        decltype(amd_comgr_action_info_get_option_list_item)*       amd_comgr_action_info_get_option_list_item_fn;
+        decltype(amd_comgr_action_info_set_working_directory_path)* amd_comgr_action_info_set_working_directory_path_fn;
+        decltype(amd_comgr_action_info_get_working_directory_path)* amd_comgr_action_info_get_working_directory_path_fn;
+        decltype(amd_comgr_action_info_set_logging)*                amd_comgr_action_info_set_logging_fn;
+        decltype(amd_comgr_action_info_get_logging)*                amd_comgr_action_info_get_logging_fn;
+        decltype(amd_comgr_do_action)*                              amd_comgr_do_action_fn;
+        decltype(amd_comgr_get_metadata_kind)*                      amd_comgr_get_metadata_kind_fn;
+        decltype(amd_comgr_get_metadata_string)*                    amd_comgr_get_metadata_string_fn;
+        decltype(amd_comgr_get_metadata_map_size)*                  amd_comgr_get_metadata_map_size_fn;
+        decltype(amd_comgr_iterate_map_metadata)*                   amd_comgr_iterate_map_metadata_fn;
+        decltype(amd_comgr_metadata_lookup)*                        amd_comgr_metadata_lookup_fn;
+        decltype(amd_comgr_get_metadata_list_size)*                 amd_comgr_get_metadata_list_size_fn;
+        decltype(amd_comgr_index_list_metadata)*                    amd_comgr_index_list_metadata_fn;
+        decltype(amd_comgr_iterate_symbols)*                        amd_comgr_iterate_symbols_fn;
+        decltype(amd_comgr_symbol_lookup)*                          amd_comgr_symbol_lookup_fn;
+        decltype(amd_comgr_symbol_get_info)*                        amd_comgr_symbol_get_info_fn;
+        decltype(amd_comgr_demangle_symbol_name)*                   amd_comgr_demangle_symbol_name_fn;
 
         /// @brief Gets the static singleton instance.
         ///
@@ -160,14 +160,12 @@ namespace amdt
                 DWORD len                = GetModuleFileName(this_module, dll_path, MAX_PATH);
                 if (len > 0 && len < MAX_PATH)
                 {
-                    // Remove the DLL name to get the directory
                     TCHAR* last_backslash = _tcsrchr(dll_path, _T('\\'));
                     if (last_backslash)
                     {
                         *(last_backslash + 1) = _T('\0');
                     }
 
-                    // Append the comgr DLL name
                     _tcscat_s(dll_path, MAX_PATH, _T("amd_comgr_3.dll"));
                     module_ = LoadLibrary(dll_path);
                 }
@@ -232,7 +230,6 @@ namespace amdt
 #undef INIT_COMGR_ENTRY_POINT
         }
 
-        /// Destructor
         virtual ~ComgrEntryPoints()
         {
 #ifdef COMGR_DYNAMIC_LINKING
@@ -265,7 +262,6 @@ namespace amdt
         uint32_t major_version;  ///< Version major.
         uint32_t minor_version;  ///< Version minor.
 
-        /// @brief Default constructor
         PalPipelineVersion()
             : major_version(0)
             , minor_version(0)
@@ -279,7 +275,6 @@ namespace amdt
         uint32_t major_version;  ///< Version major.
         uint32_t minor_version;  ///< Version minor.
 
-        /// @brief Default constructor.
         HsaKernelVersion()
             : major_version(0)
             , minor_version(0)
@@ -902,88 +897,25 @@ namespace amdt
         /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
         uint8_t col_0_export_format;
         /// Specifies the format of color export 1.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_1_export_format;
         /// Specifies the format of color export 2.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_2_export_format;
         /// Specifies the format of color export 3.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_3_export_format;
         /// Specifies the format of color export 4.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_4_export_format;
         /// Specifies the format of color export 5.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_5_export_format;
         /// Specifies the format of color export 6.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_6_export_format;
         /// Specifies the format of color export 7.
-        /// - 0 - No exports done
-        /// - 1 - Can be FP32 or SINT32/UINT32 R Component
-        /// - 2 - Can be FP32 or SINT32/UINT32 GR components
-        /// - 3 - Can be FP32 or SINT32/UINT32 AR Components
-        /// - 4 - FP16 ABGR Components
-        /// - 5 - UNORM16 ABGR Components
-        /// - 6 - SNORM16 ABGR Components
-        /// - 7 - UINT16 ABGR Components
-        /// - 8 - SINT16 ABGR Components
-        /// - 9 - Can be FP32 or SINT32/UINT32 ABGR Components
+        /// Uses the values listed for color export 0.
         uint8_t col_7_export_format;
     };
 
@@ -1311,7 +1243,6 @@ namespace amdt
         uint32_t           num_pipelines;  ///< Number of pipelines.
         Pipeline*          pipelines;      ///< The list of pipelines.
 
-        /// @brief Default constructor
         PalPipelineData()
             : version()
             , num_pipelines(0)
@@ -1327,7 +1258,6 @@ namespace amdt
         uint32_t         num_kernels;  ///< Number of kernels.
         HsaKernel*       kernels;      ///< The HSA kernels.
 
-        /// @brief Default constructor.
         HsaKernelData()
             : version()
             , num_kernels(0)
@@ -1355,7 +1285,6 @@ namespace amdt
         uint64_t symbol_value;  ///< Symbol value.
         char*    name;          ///< Name of the symbol, null terminated.
 
-        /// @brief Default constructor
         CodeObjSymbolFunction()
             : symbol_size()
             , name_len(0)
@@ -1370,7 +1299,6 @@ namespace amdt
     {
         uint64_t data;  ///< Data for the symbol section.
 
-        /// @brief Default constructor
         CodeObjSymbolSection()
             : data(0)
         {
@@ -1387,7 +1315,6 @@ namespace amdt
             CodeObjSymbolSection  symbol_section;   ///< Section symbol.
         };
 
-        /// @brief Default constructor
         CodeObjSymbol()
             : type(kComgrUtilsSymbolTypeNoType)
             , symbol_function()
@@ -1401,7 +1328,6 @@ namespace amdt
         uint32_t       num_symbols;  ///< Number of symbols.
         CodeObjSymbol* symbols;      ///< The symbol list.
 
-        // @brief Default constructor
         CodeObjSymbolInfo()
             : num_symbols(0)
             , symbols(nullptr)
@@ -1409,71 +1335,71 @@ namespace amdt
         }
     };
 
-    extern const char* kHsaMdTagKernelVersion;         ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernels;               ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernelArgs;            ///< HSA metadata tag.
-    extern const char* kHsaMdTagGroupSegFixedSize;     ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernArgSegAlign;       ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernArgSegSize;        ///< HSA metadata tag.
-    extern const char* kHsaMdTagMaxFlatWorkgroupSize;  ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernalName;            ///< HSA metadata tag.
-    extern const char* kHsaMdTagPrivateSegFixedSize;   ///< HSA metadata tag.
-    extern const char* kHsaMdTagReqdWorkgroupSize;     ///< HSA metadata tag.
-    extern const char* kHsaMdTagSgprCount;             ///< HSA metadata tag.
-    extern const char* kHsaMdTagVgprCount;             ///< HSA metadata tag.
-    extern const char* kHsaMdTagSgprSpillCount;        ///< HSA metadata tag.
-    extern const char* kHsaMdTagVgprSpillCount;        ///< HSA metadata tag.
-    extern const char* kHsaMdTagWavefrontSize;         ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernelArgName;         ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernelArgTypeName;     ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernelArgOffset;       ///< HSA metadata tag.
-    extern const char* kHsaMdTagKernelArgSize;         ///< HSA metadata tag.
+    extern const char* kHsaMdTagKernelVersion;
+    extern const char* kHsaMdTagKernels;
+    extern const char* kHsaMdTagKernelArgs;
+    extern const char* kHsaMdTagGroupSegFixedSize;
+    extern const char* kHsaMdTagKernArgSegAlign;
+    extern const char* kHsaMdTagKernArgSegSize;
+    extern const char* kHsaMdTagMaxFlatWorkgroupSize;
+    extern const char* kHsaMdTagKernalName;
+    extern const char* kHsaMdTagPrivateSegFixedSize;
+    extern const char* kHsaMdTagReqdWorkgroupSize;
+    extern const char* kHsaMdTagSgprCount;
+    extern const char* kHsaMdTagVgprCount;
+    extern const char* kHsaMdTagSgprSpillCount;
+    extern const char* kHsaMdTagVgprSpillCount;
+    extern const char* kHsaMdTagWavefrontSize;
+    extern const char* kHsaMdTagKernelArgName;
+    extern const char* kHsaMdTagKernelArgTypeName;
+    extern const char* kHsaMdTagKernelArgOffset;
+    extern const char* kHsaMdTagKernelArgSize;
 
-    extern const char* kPalMdTagPipelineVersion;         ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelineMajor;           ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelineMinor;           ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelineName;            ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelineType;            ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelineHash;            ///< PAL metadata tag.
-    extern const char* kPalMdTagPipelines;               ///< PAL metadata tag.
-    extern const char* kPalMdTagShaders;                 ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderTypeVertex;        ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderTypeGeometry;      ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderTypePixel;         ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderTypeCompute;       ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderHash;              ///< PAL metadata tag.
-    extern const char* kPalMdTagShaderHardwareMapping;   ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStages;          ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageLs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageHs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageEs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageGs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageVs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStagePs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagHardwareStageCs;         ///< PAL metadata tag.
-    extern const char* kPalMdTagEntryPointSymbolName;    ///< PAL metadata tag.
-    extern const char* kPalMdTagScratchMemorySize;       ///< PAL metadata tag.
-    extern const char* kPalMdTagLocalDataShareSize;      ///< PAL metadata tag.
-    extern const char* kPalMdTagPerfDataBufferSize;      ///< PAL metadata tag.
-    extern const char* kPalMdTagNumUsedVgprs;            ///< PAL metadata tag.
-    extern const char* kPalMdTagNumUsedSgprs;            ///< PAL metadata tag.
-    extern const char* kPalMdTagNumAvailableVgprs;       ///< PAL metadata tag.
-    extern const char* kPalMdTagNumAvailableSgprs;       ///< PAL metadata tag.
-    extern const char* kPalMdTagWavesPerGroup;           ///< PAL metadata tag.
-    extern const char* kPalMdTagUsesUavs;                ///< PAL metadata tag.
-    extern const char* kPalMdTagUsesRovs;                ///< PAL metadata tag.
-    extern const char* kPalMdTagWritesUavs;              ///< PAL metadata tag.
-    extern const char* kPalMdTagWritesDepth;             ///< PAL metadata tag.
-    extern const char* kPalMdTagMaxPrimsPerPsWave;       ///< PAL metadata tag.
-    extern const char* kPalMdTagNumInterpolants;         ///< PAL metadata tag.
-    extern const char* kPalMdTagRegisters;               ///< PAL metadata tag.
-    extern const char* kPalMdTagUserDataLimit;           ///< PAL metadata tag.
-    extern const char* kPalMdTagSpillThreshold;          ///< PAL metadata tag.
-    extern const char* kPalMdTagUsesViewportArrayIndex;  ///< PAL metadata tag.
-    extern const char* kPalMdTagEsGsLocalDataShareSize;  ///< PAL metadata tag.
-    extern const char* kPalMdTagWavefrontSize;           ///< PAL metadata tag.
-    extern const char* kPalMdTagApi;                     ///< PAL metadata tag.
-    extern const char* kPalMdTagApiCreateInfo;           ///< PAL metadata tag.
+    extern const char* kPalMdTagPipelineVersion;
+    extern const char* kPalMdTagPipelineMajor;
+    extern const char* kPalMdTagPipelineMinor;
+    extern const char* kPalMdTagPipelineName;
+    extern const char* kPalMdTagPipelineType;
+    extern const char* kPalMdTagPipelineHash;
+    extern const char* kPalMdTagPipelines;
+    extern const char* kPalMdTagShaders;
+    extern const char* kPalMdTagShaderTypeVertex;
+    extern const char* kPalMdTagShaderTypeGeometry;
+    extern const char* kPalMdTagShaderTypePixel;
+    extern const char* kPalMdTagShaderTypeCompute;
+    extern const char* kPalMdTagShaderHash;
+    extern const char* kPalMdTagShaderHardwareMapping;
+    extern const char* kPalMdTagHardwareStages;
+    extern const char* kPalMdTagHardwareStageLs;
+    extern const char* kPalMdTagHardwareStageHs;
+    extern const char* kPalMdTagHardwareStageEs;
+    extern const char* kPalMdTagHardwareStageGs;
+    extern const char* kPalMdTagHardwareStageVs;
+    extern const char* kPalMdTagHardwareStagePs;
+    extern const char* kPalMdTagHardwareStageCs;
+    extern const char* kPalMdTagEntryPointSymbolName;
+    extern const char* kPalMdTagScratchMemorySize;
+    extern const char* kPalMdTagLocalDataShareSize;
+    extern const char* kPalMdTagPerfDataBufferSize;
+    extern const char* kPalMdTagNumUsedVgprs;
+    extern const char* kPalMdTagNumUsedSgprs;
+    extern const char* kPalMdTagNumAvailableVgprs;
+    extern const char* kPalMdTagNumAvailableSgprs;
+    extern const char* kPalMdTagWavesPerGroup;
+    extern const char* kPalMdTagUsesUavs;
+    extern const char* kPalMdTagUsesRovs;
+    extern const char* kPalMdTagWritesUavs;
+    extern const char* kPalMdTagWritesDepth;
+    extern const char* kPalMdTagMaxPrimsPerPsWave;
+    extern const char* kPalMdTagNumInterpolants;
+    extern const char* kPalMdTagRegisters;
+    extern const char* kPalMdTagUserDataLimit;
+    extern const char* kPalMdTagSpillThreshold;
+    extern const char* kPalMdTagUsesViewportArrayIndex;
+    extern const char* kPalMdTagEsGsLocalDataShareSize;
+    extern const char* kPalMdTagWavefrontSize;
+    extern const char* kPalMdTagApi;
+    extern const char* kPalMdTagApiCreateInfo;
 
 #define CheckStatusAlt(status, ret_val)     \
     if (status != AMD_COMGR_STATUS_SUCCESS) \
@@ -1591,7 +1517,7 @@ namespace amdt
         /// @return true if successful, false otherwise.
         bool ExtractAssemblySizeInBytes(const char* options, uint32_t* out_size_in_bytes);
 
-        /// @brief Extract the assembly size in bytes to a data buffer.
+        /// @brief Extract assembly data into a caller-provided buffer.
         ///
         /// @param [in]  options       The options for extracting assembly buffer.
         /// @param [in]  size_in_bytes The size in bytes of the input buffer, to validate memory is enough.
@@ -1640,8 +1566,6 @@ namespace amdt
         ///
         /// @param [in] err     The error status.
         /// @param [in] err_msg The error message string.
-        ///
-        /// @return true if successful, false otherwise.
         void SetError(amd_comgr_status_t err, const std::string& err_msg = "");
 
         /// @brief Constructor.
@@ -1660,7 +1584,7 @@ namespace amdt
 
         /// @brief Constructor for case where the data buffer is allocated and saved outside the scope of comgr_utils.
         ///
-        /// Used for the OpenRaw() function.
+        /// Used for OpenBufferRaw().
         ///
         /// @param [in] co_data     The amd_comgr_data_t type data.
         /// @param [in] co_data_set The amd_comgr_data_set_t data set.
@@ -1860,39 +1784,21 @@ namespace amdt
         CodeObj*                  current_code_object_;  ///< Current code object pointer.
     };
 
-    /// @brief Specialization of "value" function for std::string.
-    ///
-    /// @return The value string.
     template <>
     std::string MDNode::value<std::string>() const;
 
-    /// @brief Specialization of "value" function for bool.
-    ///
-    /// @return The bool value.
     template <>
     bool MDNode::value<bool>() const;
 
-    /// @brief Specialization of "value" function for uint8_t.
-    ///
-    /// @return The uint8_t value.
     template <>
     uint8_t MDNode::value<uint8_t>() const;
 
-    /// @brief Specialization of "value" function for uint16_t.
-    ///
-    /// @return The uint16_t value.
     template <>
     uint16_t MDNode::value<uint16_t>() const;
 
-    /// @brief Specialization of "value" function for uint32_t.
-    ///
-    /// @return The uint32_t value.
     template <>
     uint32_t MDNode::value<uint32_t>() const;
 
-    /// @brief Specialization of "value" function for uint64_t.
-    ///
-    /// @return The uint64_t value.
     template <>
     uint64_t MDNode::value<uint64_t>() const;
 

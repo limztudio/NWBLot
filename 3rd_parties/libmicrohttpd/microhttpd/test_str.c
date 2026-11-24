@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/unit_str_test.h
+ * @file microhttpd/test_str.c
  * @brief  Unit tests for mhd_str functions
  * @author Karlson2k (Evgeny Grin)
  */

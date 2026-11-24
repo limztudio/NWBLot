@@ -22,13 +22,11 @@ RmtErrorCode RmtProcessMapAddProcess(RmtProcessMap* process_map, uint64_t proces
     RMT_RETURN_ON_ERROR(process_map, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR((process_map->process_count + 1) < RMT_MAXIMUM_PROCESS_COUNT, kRmtErrorOutOfMemory);
 
-    // if the process is already in the map we're done.
     if (RmtProcessMapContainsProcessId(process_map, process_id))
     {
         return kRmtOk;
     }
 
-    // set into the next slot if not.
     process_map->process_identifiers[process_map->process_count++] = process_id;
     return kRmtOk;
 }

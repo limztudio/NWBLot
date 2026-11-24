@@ -220,7 +220,6 @@ public:
         my_queue_representation->clear(my_allocator);
     }
 
-    // Return allocator object
     allocator_type get_allocator() const { return my_allocator; }
 
     //------------------------------------------------------------------------
@@ -534,7 +533,6 @@ public:
         my_queue_representation->clear(my_allocator);
     }
 
-    // Return allocator object
     allocator_type get_allocator() const { return my_allocator; }
 
     //------------------------------------------------------------------------

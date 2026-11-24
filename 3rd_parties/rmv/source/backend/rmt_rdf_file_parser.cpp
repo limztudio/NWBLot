@@ -71,7 +71,6 @@ static RmtErrorCode LoadSnapshotChunks(rdfChunkFile* chunk_file, RmtDataSet* dat
 
     if (result == kRmtOk)
     {
-        // Loading the last RmvSnapshotIndex chunk succeeded.
         const std::vector<uint16_t>* indices;
         if (snapshot_index_chunk.GetChunkData(&indices))
         {
@@ -110,7 +109,6 @@ static RmtErrorCode LoadDriverOverridesChunk(rdfChunkFile* chunk_file, RmtDataSe
     RMT_ASSERT(data_set != nullptr);
     RmtErrorCode result = kRmtErrorMalformedData;
 
-    // Attempt to load Driver Overrides chunk.
     std::string json_text;
     if (driver_overrides_utils::DriverOverridesReader::Parse(chunk_file, json_text))
     {
@@ -141,7 +139,6 @@ static RmtErrorCode LoadSegmentChunk(rdfChunkFile* chunk_file, RmtDataSet* data_
             int32_t& count = data_set->segment_info_count;
             count          = 0;
 
-            // Fill out heap info.
             for (unsigned int index = 0; index < RmtHeapType::kRmtHeapTypeCount; index++)
             {
                 RmtRdfGpuMemSegmentInfo::RmtRdfTraceHeapInfo data = {};
@@ -201,12 +198,10 @@ static RmtErrorCode RdfDataStreamGetNextChunk(const RmtParser* rmt_parser, const
 
     RmtErrorCode result = kRmtErrorOutOfMemory;
 
-    // If there are more chunks in the queue, load the next one.
     if (data_stream->GetRemainingUnprocessedChunks() > 0)
     {
         if ((data_stream->LoadNextChunk(start_offset)))
         {
-            // If LoadNextChunk() succeeds, update the buffer pointer and buffer size.
             *out_rmt_buffer      = data_stream->GetBuffer();
             *out_rmt_buffer_size = data_stream->GetBufferFillSize();
             result               = kRmtOk;
@@ -281,7 +276,6 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
                         int32_t stream_index = stream_header.stream_index;
                         if ((stream_index < 0) || (stream_index >= RMT_MAXIMUM_STREAMS))
                         {
-                            // The stream index is out of range.
                             RMT_ASSERT(false);
                             result = kRmtErrorIndexOutOfRange;
                             break;
@@ -346,7 +340,6 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
                 }
                 else
                 {
-                    // Set the parser callback functions for RDF data stream processing.
                     RmtParserSetCallbacks(&parser, RdfDataStreamGetNextChunk, RdfDataStreamReset);
 
                     // Set the target process.
@@ -355,7 +348,6 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
                         data_set->target_process_id = data_stream->GetProcessId();
                     }
 
-                    // Increment the number of streams.
                     data_set->stream_count++;
                 }
             }
@@ -364,7 +356,6 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
 
     if (result != kRmtOk)
     {
-        // If any of the steps fail, delete the data streams.
         RmtRdfFileParserDestroyAllDataStreams();
     }
 
@@ -497,7 +488,6 @@ RmtErrorCode RmtRdfParserLoadStream(RmtErrorCode error_code, RmtDataSet* data_se
         RMT_ASSERT(error_code == kRmtOk);
         if (error_code == kRmtOk)
         {
-            // Set the flag indicating that the file is an RDF trace.
             data_set->flags.is_rdf_trace = true;
 
             RmtRdfSnapshotWriter* snapshot_writer = new RmtRdfSnapshotWriter(data_set, &global_data_stream);

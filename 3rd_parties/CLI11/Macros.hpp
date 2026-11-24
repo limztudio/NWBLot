@@ -92,7 +92,7 @@
 #if defined _GLIBCXX_RELEASE && _GLIBCXX_RELEASE >= 9
 #define CLI11_HAS_FILESYSTEM 1
 #elif defined(__GLIBCXX__)
-// if we are using gcc and Version <9 default to no filesystem
+// Disable filesystem for older or unidentified libstdc++ releases.
 #define CLI11_HAS_FILESYSTEM 0
 #else
 #define CLI11_HAS_FILESYSTEM 1

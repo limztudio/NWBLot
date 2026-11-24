@@ -95,10 +95,8 @@ namespace system_info_utils
     class SystemInfoParserV1
     {
     public:
-        /// @brief Constructor.
         SystemInfoParserV1() = default;
 
-        /// @brief Destructor.
         virtual ~SystemInfoParserV1() = default;
 
         /// @brief Process the System Info value JSON node.
@@ -692,7 +690,6 @@ namespace system_info_utils
             return false;
         }
 
-        // Process the 'system' node
         if (DoesNodeExist(structure, kNodeStringSystem))
         {
             return ProcessSystemNode(structure[kNodeStringSystem], system_info);
@@ -714,7 +711,6 @@ namespace system_info_utils
             return "";
         }
 
-        // Process the 'system' node
         if (DoesNodeExist(structure, kNodeStringSystem))
         {
             return DumpJson(structure[kNodeStringSystem]);
@@ -740,7 +736,6 @@ namespace system_info_utils
             return result;
         }
 
-        // Access system info chunk data
         uint32_t version{};
         rdfChunkFileGetChunkVersion(file, kSystemInfoChunkIdentifier, 0, &version);
         if (version > kSystemInfoChunkVersionMax)
@@ -748,7 +743,6 @@ namespace system_info_utils
             return result;
         }
 
-        // Access chunk data
         int64_t chunk_size{};
         rdfChunkFileGetChunkDataSize(file, kSystemInfoChunkIdentifier, 0, &chunk_size);
 

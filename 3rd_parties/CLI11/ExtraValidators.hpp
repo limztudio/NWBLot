@@ -250,11 +250,9 @@ class IsMember : public Validator {
                     input = detail::value_string(detail::pair_adaptor<element_t>::first(*(res.second)));
                 }
 
-                // Return empty error string (success)
                 return std::string{};
             }
 
-            // If you reach this point, the result was not found
             return input + " not in " + detail::generate_set(detail::smart_deref(*shared_set));
         };
     }

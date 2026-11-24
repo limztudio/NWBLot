@@ -1096,21 +1096,8 @@ CURLcode Curl_http_input_auth(struct Curl_easy *data, bool proxy,
     authp = &data->state.authhost;
   }
 
-  /*
-   * Here we check if we want the specific single authentication (using ==) and
-   * if we do, we initiate usage of it.
-   *
-   * If the provided authentication is wanted as one out of several accepted
-   * types (using &), we OR this authentication type to the authavail
-   * variable.
-   *
-   * Note:
-   *
-   * ->picked is first set to the 'want' value (one or more bits) before the
-   * request is sent, and then it is again set _after_ all response 401/407
-   * headers have been received but then only to a single preferred method
-   * (bit).
-   */
+  /* picked starts as the wanted mask; after the 401/407 headers, it holds
+   * one preferred method. */
 
   while(*auth) {
 #ifdef USE_SPNEGO
@@ -2419,7 +2406,6 @@ static CURLcode set_reader(struct Curl_easy *data, Curl_HttpReq httpreq)
     data->state.infilesize = 0;
     return Curl_creader_set_null(data);
   }
-  /* not reached */
 }
 
 static CURLcode http_resume(struct Curl_easy *data, Curl_HttpReq httpreq)
@@ -2678,7 +2664,6 @@ static CURLcode http_range(struct Curl_easy *data,
      */
     if(((httpreq == HTTPREQ_GET) || (httpreq == HTTPREQ_HEAD)) &&
        !Curl_checkheaders(data, STRCONST("Range"))) {
-      /* if a line like this was already allocated, free the previous one */
       curlx_free(data->state.rangeline);
       data->state.rangeline = curl_maprintf("Range: bytes=%s\r\n",
                                                  data->state.range);
@@ -2688,7 +2673,6 @@ static CURLcode http_range(struct Curl_easy *data,
     else if((httpreq == HTTPREQ_POST || httpreq == HTTPREQ_PUT) &&
             !Curl_checkheaders(data, STRCONST("Content-Range"))) {
       curl_off_t req_clen = Curl_creader_total_length(data);
-      /* if a line like this was already allocated, free the previous one */
       curlx_free(data->state.rangeline);
 
       if(data->set.set_resume_from < 0) {
@@ -3402,7 +3386,6 @@ static CURLcode http_header_c(struct Curl_easy *data,
     while(*ptr && !ISDIGIT(*ptr) && *ptr != '*')
       ptr++;
 
-    /* if it truly stopped on a digit */
     if(ISDIGIT(*ptr)) {
       if(!curlx_str_number(&ptr, &k->offset, CURL_OFF_T_MAX) &&
          (data->state.resume_from == k->offset))

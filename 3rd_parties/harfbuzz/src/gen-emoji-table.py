@@ -108,7 +108,6 @@ print ()
 print ("/* == End of generated table == */")
 
 
-# Generate test file.
 sequences = []
 with open(sys.argv[2]) as f:
     for line in f.readlines():

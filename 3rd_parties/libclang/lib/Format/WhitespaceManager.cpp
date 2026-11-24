@@ -1625,8 +1625,7 @@ void WhitespaceManager::generateChanges() {
       } else {
         appendNewlineText(ReplacementText, C);
       }
-      // FIXME: This assert should hold if we computed the column correctly.
-      // assert((int)C.StartOfTokenColumn >= C.Spaces);
+      // FIXME: A correct token column should be at least C.Spaces.
       unsigned IndentLevel = indentLevelFor(C);
       appendIndentText(ReplacementText, IndentLevel, std::max(0, C.Spaces),
                        std::max((int)C.StartOfTokenColumn, C.Spaces) -

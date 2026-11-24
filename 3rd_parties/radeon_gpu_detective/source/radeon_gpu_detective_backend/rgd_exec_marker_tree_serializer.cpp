@@ -141,7 +141,6 @@ void ExecMarkerTreeSerializer::UpdateMarkerInfo(uint32_t marker_value, const uin
             }
             else
             {
-                // Should not reach here.
                 assert(false);
             }
         }
@@ -484,7 +483,6 @@ void ExecMarkerTreeSerializer::TreeNodeToJson(const MarkerNode& node, nlohmann::
             case (uint32_t)CrashAnalysisExecutionMarkerSource::System:
                 break;
             default:
-                // Should not reach here.
                 assert(false);
             }
         }
@@ -791,7 +789,6 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
             case (uint32_t)CrashAnalysisExecutionMarkerSource::System:
                 break;
             default:
-                // Should not reach here.
                 assert(false);
             }
         }
@@ -832,7 +829,6 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
             }
             else
             {
-                // Should not reach here.
                 assert(false);
             }
             txt << ">";

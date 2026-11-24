@@ -63,7 +63,6 @@ void ManagedStaticBase::destroy() const {
   // Destroy memory.
   DeleterFn(Ptr);
 
-  // Cleanup.
   Ptr = nullptr;
   DeleterFn = nullptr;
 }

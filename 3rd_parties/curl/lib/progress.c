@@ -174,17 +174,6 @@ const struct curltime *Curl_pgrs_now(struct Curl_easy *data)
   return &data->progress.now;
 }
 
-/* New proposed interface, 9th of February 2000:
-
-   pgrsStartNow() - sets start time
-   pgrsSetDownloadSize(x) - known expected download size
-   pgrsSetUploadSize(x) - known expected upload size
-   pgrsSetDownloadCounter() - amount of data currently downloaded
-   pgrsSetUploadCounter() - amount of data currently uploaded
-   pgrsUpdate() - show progress
-   pgrsDone() - transfer complete
- */
-
 int Curl_pgrsDone(struct Curl_easy *data, const struct curltime *pnow)
 {
   int rc;
@@ -194,8 +183,6 @@ int Curl_pgrsDone(struct Curl_easy *data, const struct curltime *pnow)
     return rc;
 
   if(!data->progress.hide && !data->progress.callback)
-    /* only output if we do not use a progress callback and we are not
-     * hidden */
     curl_mfprintf(data->set.err, "\n");
 
   return 0;
@@ -212,7 +199,6 @@ void Curl_pgrsReset(struct Curl_easy *data)
   pgrs_speedinit(data);
 }
 
-/* reset the known transfer sizes */
 void Curl_pgrsResetTransferSizes(struct Curl_easy *data)
 {
   Curl_pgrsSetDownloadSize(data, -1);
@@ -340,8 +326,7 @@ void Curl_pgrsTimeWas(struct Curl_easy *data, timerid timer,
 }
 
 /*
- * Curl_pgrsTime(). Store the current time at the given label. This fetches a
- * fresh "now" and returns it.
+ * Store the current time at the given label.
  *
  * @unittest: 1399
  */
@@ -656,10 +641,6 @@ static void progress_meter(struct Curl_easy *data)
 #define progress_meter(x) Curl_nop_stmt
 #endif
 
-/*
- * Curl_pgrsUpdate() returns 0 for success or the value returned by the
- * progress callback!
- */
 static CURLcode pgrsupdate(struct Curl_easy *data, bool showprogress)
 {
   if(!data->progress.hide) {

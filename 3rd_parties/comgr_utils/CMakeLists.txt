@@ -10,10 +10,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 set (COMGR_UTILS_VERSION_MAJOR 1)
 set (COMGR_UTILS_VERSION_MINOR 0)
 
-# NWB: amd_comgr is loaded at runtime via dlopen/LoadLibrary (ComgrEntryPoints), so we vendor only its
-# header (the flattened top-level 3rd_parties/comgr) and never link the ~135 MB LLVM-based lib. Defining
-# COMGR_DYNAMIC_LINKING selects that runtime-loaded code path. (Upstream used FetchContent to download comgr;
-# that is removed here so the build is fully offline/vendored. The amd_comgr runtime lib is deployed separately.)
+# COMGR_DYNAMIC_LINKING loads the separately deployed amd_comgr runtime.
 add_library(${PROJECT_NAME} STATIC "source/comgr_utils.cpp")
 add_library(AMD::ComgrUtils ALIAS ${PROJECT_NAME})
 

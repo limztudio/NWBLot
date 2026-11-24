@@ -2,4 +2,4 @@ package: llvm_libc
 version: 23.1.5 (commit 392dfff97d29b59d77e5cac6d4b6ef2585fe7117)
 updated_utc: 2026-11-16T01:26:00Z
 source: https://github.com/llvm/llvm-project/tree/llvmorg-23.1.5/libc
-notes: Header-only LLVM libc shared utilities subset (hdr, include, shared, src/__support) required by LLVM Support/TargetParser, lifted out as its own top-level package exposing nwb::llvm_libc.
+notes: Header-only LLVM libc shared utilities subset (hdr, include, shared, src/__support) required by LLVM Support/TargetParser, lifted out as its own top-level package exposing nwb::llvm_libc. NWB-local maintenance trims stale and redundant source comments.

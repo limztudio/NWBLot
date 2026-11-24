@@ -50,7 +50,7 @@ private:
     struct sigaction m_value = {};
 };
 
-struct alignas(MaxAlign) StackMemory : Array<u8, 256u * 1024u>{};
+struct alignas(MaxAlign) AlternateSignalStackStorage : Array<u8, 256u * 1024u>{};
 
 [[nodiscard]] inline b8 TerminateMatches(TerminateHandler handler)noexcept{
     return QueryTerminateHandler() == handler;

@@ -16,12 +16,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 X11FilteredKeyHistory::Newer(const u32 timestamp, const u32 serial, const Stamp& previous)noexcept{
+b8 X11FilteredKeyHistory::IsNewerStamp(const u32 timestamp, const u32 serial, const Stamp& previous)noexcept{
     return timestamp == previous.timestamp ? IsNewerSerialU32(serial, previous.serial) : IsNewerSerialU32(timestamp, previous.timestamp);
 }
 
-b8 X11FilteredKeyHistory::Current(const Stamp& stamp, const u64 receivedAtMs)noexcept{
-    return stamp.valid && receivedAtMs >= stamp.receivedAtMs && receivedAtMs - stamp.receivedAtMs < s_HalfRange;
+b8 X11FilteredKeyHistory::IsRecentStamp(const Stamp& stamp, const u64 receivedAtMs)noexcept{
+    return stamp.valid && receivedAtMs >= stamp.receivedAtMs && receivedAtMs - stamp.receivedAtMs < s_StampExpirationMs;
 }
 
 void X11FilteredKeyHistory::synchronizeSession(const TextInputSessionToken session)noexcept{
@@ -31,7 +31,7 @@ void X11FilteredKeyHistory::synchronizeSession(const TextInputSessionToken sessi
         for(usize kind = 0u; kind < m_history[key].size(); ++kind){
             const Stamp& source = m_history[key][kind];
             Stamp& retired = m_retiredHistory[key][kind];
-            if(source.valid && (!retired.valid || source.receivedAtMs > retired.receivedAtMs || (source.receivedAtMs == retired.receivedAtMs && Newer(source.timestamp, source.serial, retired))))
+            if(source.valid && (!retired.valid || source.receivedAtMs > retired.receivedAtMs || (source.receivedAtMs == retired.receivedAtMs && IsNewerStamp(source.timestamp, source.serial, retired))))
                 retired = source;
         }
     }
@@ -41,23 +41,23 @@ void X11FilteredKeyHistory::synchronizeSession(const TextInputSessionToken sessi
 void X11FilteredKeyHistory::recordFiltered(const u32 keycode, const b8 released, const u32 timestamp, const u32 serial, const u64 receivedAtMs)noexcept{
     if(keycode == 0u || keycode >= s_KeyCount)
         return;
-    Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimeKindOffset : 0u)];
-    if(!Current(stamp, receivedAtMs) || Newer(timestamp, serial, stamp))
+    Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimestampKindOffset : 0u)];
+    if(!IsRecentStamp(stamp, receivedAtMs) || IsNewerStamp(timestamp, serial, stamp))
         stamp = { receivedAtMs, timestamp, serial, true };
 }
 
 b8 X11FilteredKeyHistory::isForwardedDuplicate(const u32 keycode, const b8 released, const u32 timestamp, const u32 serial, const b8 sent, const u64 receivedAtMs)const noexcept{
     if(keycode == 0u || keycode >= s_KeyCount || sent)
         return false;
-    const Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimeKindOffset : 0u)];
-    return Current(stamp, receivedAtMs) && !Newer(timestamp, serial, stamp);
+    const Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimestampKindOffset : 0u)];
+    return IsRecentStamp(stamp, receivedAtMs) && !IsNewerStamp(timestamp, serial, stamp);
 }
 
 b8 X11FilteredKeyHistory::isRetiredDuplicate(const u32 keycode, const b8 released, const u32 timestamp, const u32 serial, const b8 sent, const u64 receivedAtMs)const noexcept{
     if(keycode == 0u || keycode >= s_KeyCount || sent)
         return false;
-    const Stamp& stamp = m_retiredHistory[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimeKindOffset : 0u)];
-    return Current(stamp, receivedAtMs) && !Newer(timestamp, serial, stamp);
+    const Stamp& stamp = m_retiredHistory[keycode][(released ? 1u : 0u) + (timestamp == 0u ? s_ZeroTimestampKindOffset : 0u)];
+    return IsRecentStamp(stamp, receivedAtMs) && !IsNewerStamp(timestamp, serial, stamp);
 }
 
 void X11FilteredKeyHistory::reset()noexcept{

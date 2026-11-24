@@ -282,12 +282,12 @@ struct CachedFileStamp{
     outStamp.mtimeHigh = static_cast<u64>(data.ftLastWriteTime.dwHighDateTime);
     return true;
 #else
-    struct stat st{};
-    if(::stat(nativePath.c_str(), &st) != 0 || S_ISDIR(st.st_mode))
+    struct stat status{};
+    if(::stat(nativePath.c_str(), &status) != 0 || S_ISDIR(status.st_mode))
         return false;
     outStamp.path.assign(utf8Path.data(), utf8Path.size());
-    outStamp.fileSize = static_cast<u64>(st.st_size);
-    outStamp.mtimeLow = static_cast<u64>(st.st_mtime);
+    outStamp.fileSize = static_cast<u64>(status.st_size);
+    outStamp.mtimeLow = static_cast<u64>(status.st_mtime);
     outStamp.mtimeHigh = 0u;
     return true;
 #endif

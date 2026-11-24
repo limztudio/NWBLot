@@ -80,7 +80,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     RemoveTestArtifacts(group);
     UninstallCrashHandler();
     const Path spoolDirectory = SpoolDirectory(group);
-    SignalStackMemory memory;
+    AlternateSignalStackStorage memory;
     SignalEnvironment previous;
     ASSERT_TRUE(previous.save());
     PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));

@@ -120,7 +120,7 @@ b8 X11ClipboardService::handleEvent(const XEvent& event){
         if(event.xproperty.window == m_ownerWindow)
             return true;
         for(usize index = 0u; index < m_outgoing.size(); ++index){
-            if(event.xproperty.window == m_outgoing[index].requestor && event.xproperty.atom == m_outgoing[index].property){
+            if(event.xproperty.window == m_outgoing[index].requestorWindow && event.xproperty.atom == m_outgoing[index].property){
                 if(event.xproperty.state == PropertyDelete)
                     sendChunk(index);
                 return true;
@@ -135,7 +135,7 @@ b8 X11ClipboardService::handleEvent(const XEvent& event){
         }
         b8 consumed = false;
         for(usize index = m_outgoing.size(); index > 0u; --index){
-            if(m_outgoing[index - 1u].requestor == event.xdestroywindow.window){
+            if(m_outgoing[index - 1u].requestorWindow == event.xdestroywindow.window){
                 releaseTransfer(index - 1u, false);
                 consumed = true;
             }

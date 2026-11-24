@@ -44,13 +44,13 @@ inline constexpr TStringView s_LogFileNameBase = FOUNDATION_TEXT("logserver");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Log::CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, AStringView readinessToken, void* inst){
+static int RunLogServer(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Log::CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, AStringView readinessToken, void* nativeInstance){
     NWB::Log::Server logger;
     if(!logger.init(logPort, s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken, readinessToken))
         return NWB::Log::s_LogServerValueMainLoggerServerExitFailure;
 
     return ::InvokeTerminalEntry<GeneralException>([&](){
-        NWB::Log::Frame frame(inst);
+        NWB::Log::Frame frame(nativeInstance);
         if(!frame.init()){
             logger.enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Log server frame initialization failed")), NWB::Core::Common::LogType::Fatal);
             return NWB::Log::s_LogServerValueMainLoggerServerExitFailure;
@@ -74,7 +74,7 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(isize argc, tchar** argv, void* inst){
+static int EntryPoint(isize argc, tchar** argv, void* nativeInstance){
     NWB::Core::Alloc::ScratchArena commandLineArena(NWB::Log::s_LogServerArenaNameLoggerServerCommandLine);
     u16 logPort = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
     AString<NWB::Core::Alloc::ScratchArena> crashSymbolStoreDirectory(commandLineArena);
@@ -94,7 +94,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
-        return MainLogic(logPort, AStringView(crashSymbolStoreDirectory), crashRetentionConfig, AStringView(crashUploadToken), AStringView(readinessToken), inst);
+        return RunLogServer(logPort, AStringView(crashSymbolStoreDirectory), crashRetentionConfig, AStringView(crashUploadToken), AStringView(readinessToken), nativeInstance);
     }, [&](const CLI::ParseError& error){ return app.exit(error, FOUNDATION_COUT, FOUNDATION_CERR); }, []()noexcept{ return NWB::Log::s_LogServerValueMainLoggerServerExitFailure; });
 }
 
@@ -108,8 +108,8 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(isize argc, tchar** argv, void* inst){
-    return __hidden_logger_server_main::EntryPoint(argc, argv, inst);
+static int EntryPoint(isize argc, tchar** argv, void* nativeInstance){
+    return __hidden_logger_server_main::EntryPoint(argc, argv, nativeInstance);
 }
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)

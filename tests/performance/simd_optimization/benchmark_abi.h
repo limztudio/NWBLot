@@ -19,10 +19,10 @@ namespace SimdBenchmarkAbi{
 
 #if defined(FOUNDATION_PLATFORM_LINUX)
 inline constexpr b8 s_HasPosixFpTraps = true;
-inline volatile sig_atomic_t s_TrapExitOffset = 0;
-inline void FloatTrapExit(int, siginfo_t* information, void*)noexcept{ _exit(s_TrapExitOffset + information->si_code); }
+inline volatile sig_atomic_t g_TrapExitCodeBase = 0;
+inline void FloatTrapExit(int, siginfo_t* information, void*)noexcept{ _exit(g_TrapExitCodeBase + information->si_code); }
 inline b8 InstallFloatTrapExit(const i32 offset)noexcept{
-    s_TrapExitOffset = offset;
+    g_TrapExitCodeBase = offset;
     struct sigaction action{};
     action.sa_sigaction = FloatTrapExit;
     action.sa_flags = SA_SIGINFO;

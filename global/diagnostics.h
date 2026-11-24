@@ -136,7 +136,7 @@ public:
         return text.substr(0u, text.find('\0'));
     }
 
-    [[nodiscard]] const char* c_str()const noexcept{ return value.data(); }
+    [[nodiscard]] const char* nullTerminatedText()const noexcept{ return value.data(); }
 };
 
 

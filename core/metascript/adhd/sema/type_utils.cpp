@@ -521,15 +521,15 @@ private:
         outMtimeTicks = static_cast<i64>((static_cast<u64>(attrData.ftLastWriteTime.dwHighDateTime) << 32u) | static_cast<u64>(attrData.ftLastWriteTime.dwLowDateTime));
         return true;
 #else
-        struct stat st{};
-        if(::stat(diskPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+        struct stat status{};
+        if(::stat(diskPath.c_str(), &status) != 0 || !S_ISREG(status.st_mode))
             return false;
-        outSize = static_cast<u64>(st.st_size);
-        outMtimeTicks = static_cast<i64>(st.st_mtime) * 1000000000ll;
+        outSize = static_cast<u64>(status.st_size);
+        outMtimeTicks = static_cast<i64>(status.st_mtime) * 1000000000ll;
 #if defined(__APPLE__)
-        outMtimeTicks += static_cast<i64>(st.st_mtimespec.tv_nsec);
+        outMtimeTicks += static_cast<i64>(status.st_mtimespec.tv_nsec);
 #elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L
-        outMtimeTicks += static_cast<i64>(st.st_mtim.tv_nsec);
+        outMtimeTicks += static_cast<i64>(status.st_mtim.tv_nsec);
 #endif
         return true;
 #endif

@@ -20,13 +20,13 @@ usize ComputeAftermathBoundedJsonLength(in u32 jsonSize){
     usize jsonLength = 0u;
     if(jsonSize > 0u)
         jsonLength = cast<usize>(jsonSize) - 1u;
-    if(jsonLength > s_CrashSymbolicateAftermathAftermathMaxJsonBytes)
-        return s_CrashSymbolicateAftermathAftermathMaxJsonBytes;
+    if(jsonLength > s_CrashSymbolicateAftermathMaxJsonBytes)
+        return s_CrashSymbolicateAftermathMaxJsonBytes;
     return jsonLength;
 }
 
 StringView SelectAftermathLoadFailureHeader(in StringView operation){
-    if(operation == s_CrashSymbolicateAftermathAftermathLoadRuntimeOperation)
+    if(operation == s_CrashSymbolicateAftermathLoadRuntimeOperation)
         return s_AftermathSkippedSectionReport;
     return s_AftermathDecodeFailedSectionReport;
 }
@@ -40,7 +40,7 @@ StringView SelectAftermathDetailTruncatedSuffix(in b8 truncated){
 void AppendBoundedAftermathJson(in StringView jsonText, in u32 jsonSize, mut String outReport){
     const usize boundedLength = Min(jsonText.size(), ComputeAftermathBoundedJsonLength(jsonSize));
     const StringView boundedJson = jsonText.substr(0u, boundedLength);
-    outReport.append(s_CrashSymbolicateAftermathAftermathSectionHeader);
+    outReport.append(s_CrashSymbolicateAftermathSectionHeader);
     outReport.append(boundedJson);
     if(boundedJson.empty() || boundedJson.back() != 10u)
         outReport.append("\n");

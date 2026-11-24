@@ -188,7 +188,7 @@ void VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof(){
     const Expected<b8, ClipboardPipeReadFailure> finished = ctx.readPipe();
     ASSERT_FALSE(finished.has_value());
     EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
-    EXPECT_TRUE(finished.error().finished);
+    EXPECT_TRUE(finished.error().endOfStream);
 }
 
 void VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe(){

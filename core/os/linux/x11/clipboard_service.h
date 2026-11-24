@@ -47,7 +47,7 @@ private:
 
     struct OutgoingTransfer{
         AString<Alloc::GlobalArena> text;
-        Window requestor = 0u;
+        Window requestorWindow = 0u;
         Atom property = 0u;
         Atom type = 0u;
         long previousEventMask = 0;
@@ -104,9 +104,9 @@ private:
 private:
     void answerSelection(const XSelectionRequestEvent& event);
     [[nodiscard]] b8 convertTarget(const XSelectionRequestEvent& event, Atom target, Atom property, OwnedSelection& selection);
-    [[nodiscard]] b8 sendText(Window requestor, Atom property, Atom type, AStringView text);
+    [[nodiscard]] b8 sendText(Window requestorWindow, Atom property, Atom type, AStringView text);
     void sendChunk(usize index);
-    void releaseTransfer(usize index, b8 requestorAlive);
+    void releaseTransfer(usize index, b8 requestorWindowAlive);
 
 
 private:

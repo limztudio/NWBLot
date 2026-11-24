@@ -23,7 +23,7 @@ namespace __hidden_x11_checked{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local X11CheckedOperation* g_Operation = nullptr;
+thread_local X11CheckedOperation* g_ActiveCheckedOperation = nullptr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,7 @@ X11Property::~X11Property()noexcept{
 
 
 int X11CheckedOperation::OnError(Display* const display, XErrorEvent* const event){
-    X11CheckedOperation* const operation = __hidden_x11_checked::g_Operation;
+    X11CheckedOperation* const operation = __hidden_x11_checked::g_ActiveCheckedOperation;
     if(operation && display == &operation->m_display){
         operation->m_error = event->error_code;
         return 0;
@@ -65,16 +65,16 @@ X11CheckedOperation::X11CheckedOperation(Display& display)
     : m_display(display)
     , m_previous(nullptr)
 {
-    FOUNDATION_FATAL_ASSERT(!__hidden_x11_checked::g_Operation);
+    FOUNDATION_FATAL_ASSERT(!__hidden_x11_checked::g_ActiveCheckedOperation);
     XSync(&m_display, False);
-    __hidden_x11_checked::g_Operation = this;
+    __hidden_x11_checked::g_ActiveCheckedOperation = this;
     m_previous = XSetErrorHandler(&X11CheckedOperation::OnError);
 }
 
 X11CheckedOperation::~X11CheckedOperation()noexcept{
     XSync(&m_display, False);
     XSetErrorHandler(m_previous);
-    __hidden_x11_checked::g_Operation = nullptr;
+    __hidden_x11_checked::g_ActiveCheckedOperation = nullptr;
 }
 
 b8 X11CheckedOperation::succeeded(){
@@ -89,8 +89,8 @@ b8 X11CheckedOperation::succeeded(){
 Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const b8 remove, const usize maxBytes){
     X11Property result;
     X11CheckedOperation operation(display);
-    const long longLength = static_cast<long>(DivideUpWrapping(maxBytes, s_X11WireUnitBytes));
-    const int status = XGetWindowProperty(&display, window, property, 0, longLength, remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
+    const long maxWireUnits = static_cast<long>(DivideUpWrapping(maxBytes, s_X11WireUnitBytes));
+    const int status = XGetWindowProperty(&display, window, property, 0, maxWireUnits, remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
     if(!operation.succeeded() || status != 0)
         return MakeUnexpected(X11PropertyFailure{ .nativeStatus = status, .errorCode = operation.m_error, });
     return result;

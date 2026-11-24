@@ -161,7 +161,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         return false;
     }
 
-    if(item.type == ResourceType::Texture_SRV || item.type == ResourceType::Texture_UAV){
+    if(item.type == ResourceType::TextureSrv || item.type == ResourceType::TextureUav){
         auto* const texture = static_cast<Texture*>(writeItem.resourceHandle);
         if(!m_device.isTextureReadyForGpuUse(texture)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Texture."));

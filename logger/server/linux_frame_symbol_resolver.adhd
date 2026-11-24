@@ -12,9 +12,9 @@ b8 IsUnknownLinuxSymbolLine(in StringView line){
     const StringView trimmed = TrimView(line);
     if(trimmed.empty())
         return true;
-    if(trimmed == s_CrashSymbolicateLinuxLinuxUnknownSymbolText)
+    if(trimmed == s_CrashSymbolicateLinuxUnknownSymbolText)
         return true;
-    return trimmed.starts_with(s_CrashSymbolicateLinuxLinuxUnknownLocationPrefix);
+    return trimmed.starts_with(s_CrashSymbolicateLinuxUnknownLocationPrefix);
 }
 
 b8 IsRejectedLinuxModulePath(in StringView modulePathText){
@@ -40,7 +40,7 @@ Expected<String> ExtractLinuxSymbolizerResult(in StringView outputText){
             continue;
 
         if(!outSymbol.empty())
-            outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator);
+            outSymbol.append(s_CrashSymbolicateLinuxSymbolFrameSeparator);
         b8 wroteFrame = false;
         if(hasFunction){
             outSymbol.append(functionLine.value());
@@ -48,9 +48,9 @@ Expected<String> ExtractLinuxSymbolizerResult(in StringView outputText){
         }
         if(hasLocation){
             if(wroteFrame)
-                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator);
+                outSymbol.append(s_CrashSymbolicateLinuxSymbolLocationSeparator);
             else
-                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix);
+                outSymbol.append(s_CrashSymbolicateLinuxSymbolLocationBarePrefix);
             outSymbol.append(locationLine.value());
         }
     }

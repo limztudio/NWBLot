@@ -72,8 +72,8 @@ struct ArenaAllocatorTraits{
     using is_always_equal = FalseType;
 };
 
-usize CachelineSize()noexcept;
-[[nodiscard]] usize CacheAlignedAlignment(usize valueAlignment)noexcept;
+usize CacheLineSize()noexcept;
+[[nodiscard]] usize CacheLineAllocationAlignment(usize valueAlignment)noexcept;
 
 template<typename T>
 struct IsStdPair : FalseType{};
@@ -452,7 +452,7 @@ public:
 
 public:
     [[nodiscard]] static size_type Alignment()noexcept{
-        return AdaptorDetail::CacheAlignedAlignment(static_cast<size_type>(alignof(value_type)));
+        return AdaptorDetail::CacheLineAllocationAlignment(static_cast<size_type>(alignof(value_type)));
     }
 
 

@@ -73,7 +73,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     const b8 delivered = checked.succeeded() && sent != 0;
     if(!delivered){
         for(usize index = m_outgoing.size(); index > 0u; --index){
-            if(m_outgoing[index - 1u].requestor == event.requestor)
+            if(m_outgoing[index - 1u].requestorWindow == event.requestor)
                 m_outgoing[index - 1u].deadline = TimerNow();
         }
     }
@@ -104,21 +104,21 @@ b8 X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const
     return checked.succeeded();
 }
 
-b8 X11ClipboardService::sendText(const Window requestor, const Atom property, const Atom type, const AStringView text){
+b8 X11ClipboardService::sendText(const Window requestorWindow, const Atom property, const Atom type, const AStringView text){
     for(const OutgoingTransfer& active : m_outgoing){
-        if(active.requestor == requestor && active.property == property)
+        if(active.requestorWindow == requestorWindow && active.property == property)
             return false;
     }
     if(text.size() <= m_chunkBytes){
         X11CheckedOperation checked(m_display);
-        XChangeProperty(&m_display, requestor, property, type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(text.data()), static_cast<int>(text.size()));
+        XChangeProperty(&m_display, requestorWindow, property, type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(text.data()), static_cast<int>(text.size()));
         return checked.succeeded();
     }
     if(m_outgoing.size() == s_MaxTransfers)
         return false;
     OutgoingTransfer transfer(m_arena);
     transfer.text.assign(text.data(), text.size());
-    transfer.requestor = requestor;
+    transfer.requestorWindow = requestorWindow;
     transfer.property = property;
     transfer.type = type;
     transfer.deadline = TimerAddMS(TimerNow(), s_TransferTimeoutMs);
@@ -128,25 +128,25 @@ b8 X11ClipboardService::sendText(const Window requestor, const Atom property, co
     {
         X11CheckedOperation checked(m_display);
         XWindowAttributes attributes{};
-        const b8 exists = XGetWindowAttributes(&m_display, requestor, &attributes) != 0;
+        const b8 exists = XGetWindowAttributes(&m_display, requestorWindow, &attributes) != 0;
         if(exists){
             restoreMask = attributes.your_event_mask;
             transfer.previousEventMask = attributes.your_event_mask;
             for(const OutgoingTransfer& active : m_outgoing){
-                if(active.requestor == requestor)
+                if(active.requestorWindow == requestorWindow)
                     transfer.previousEventMask = active.previousEventMask;
             }
-            XSelectInput(&m_display, requestor, attributes.your_event_mask | PropertyChangeMask | StructureNotifyMask);
+            XSelectInput(&m_display, requestorWindow, attributes.your_event_mask | PropertyChangeMask | StructureNotifyMask);
             changedMask = true;
             const unsigned long lowerBound = text.size();
-            XChangeProperty(&m_display, requestor, property, m_incrementalAtom, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(&lowerBound), 1);
+            XChangeProperty(&m_display, requestorWindow, property, m_incrementalAtom, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(&lowerBound), 1);
         }
         succeeded = checked.succeeded() && exists;
     }
     if(!succeeded){
         if(changedMask){
             X11CheckedOperation rollback(m_display);
-            XSelectInput(&m_display, requestor, restoreMask);
+            XSelectInput(&m_display, requestorWindow, restoreMask);
             if(!rollback.succeeded())
                 return false;
         }
@@ -162,7 +162,7 @@ void X11ClipboardService::sendChunk(const usize index){
     b8 succeeded = false;
     {
         X11CheckedOperation checked(m_display);
-        XChangeProperty(&m_display, transfer.requestor, transfer.property, transfer.type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(transfer.text.data() + transfer.offset), static_cast<int>(count));
+        XChangeProperty(&m_display, transfer.requestorWindow, transfer.property, transfer.type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(transfer.text.data() + transfer.offset), static_cast<int>(count));
         succeeded = checked.succeeded();
     }
     if(!succeeded || count == 0u)
@@ -172,18 +172,18 @@ void X11ClipboardService::sendChunk(const usize index){
     XFlush(&m_display);
 }
 
-void X11ClipboardService::releaseTransfer(const usize index, const b8 requestorAlive){
-    const Window requestor = m_outgoing[index].requestor;
+void X11ClipboardService::releaseTransfer(const usize index, const b8 requestorWindowAlive){
+    const Window requestorWindow = m_outgoing[index].requestorWindow;
     const long previousMask = m_outgoing[index].previousEventMask;
     m_outgoing.erase(m_outgoing.begin() + static_cast<isize>(index));
-    if(!requestorAlive)
+    if(!requestorWindowAlive)
         return;
     for(const OutgoingTransfer& active : m_outgoing){
-        if(active.requestor == requestor)
+        if(active.requestorWindow == requestorWindow)
             return;
     }
     X11CheckedOperation checked(m_display);
-    XSelectInput(&m_display, requestor, previousMask);
+    XSelectInput(&m_display, requestorWindow, previousMask);
     const b8 restored = checked.succeeded();
     if(!restored)
         return;

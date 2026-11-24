@@ -53,7 +53,7 @@ inline constexpr TStringView s_FatalAssertLabel = FOUNDATION_TEXT("FATAL ASSERT 
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
         FOUNDATION_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
-        FOUNDATION_TCERR << label << FOUNDATION_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
+        FOUNDATION_TCERR << label << FOUNDATION_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.nullTerminatedText() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \
 }

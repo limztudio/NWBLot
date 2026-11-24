@@ -30,13 +30,13 @@ private:
 private:
     static constexpr usize s_KeyCount = 256u;
     static constexpr usize s_KindCount = 4u;
-    static constexpr u32 s_ZeroTimeKindOffset = 2u;
-    static constexpr u32 s_HalfRange = 1u << 31u;
+    static constexpr u32 s_ZeroTimestampKindOffset = 2u;
+    static constexpr u32 s_StampExpirationMs = 1u << 31u;
 
 
 private:
-    [[nodiscard]] static b8 Newer(u32 timestamp, u32 serial, const Stamp& previous)noexcept;
-    [[nodiscard]] static b8 Current(const Stamp& stamp, u64 receivedAtMs)noexcept;
+    [[nodiscard]] static b8 IsNewerStamp(u32 timestamp, u32 serial, const Stamp& previous)noexcept;
+    [[nodiscard]] static b8 IsRecentStamp(const Stamp& stamp, u64 receivedAtMs)noexcept;
 
 
 public:

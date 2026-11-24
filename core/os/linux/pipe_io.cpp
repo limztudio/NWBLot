@@ -82,7 +82,7 @@ Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, Clipboard
         else if(count == 0){
             const auto status = ValidateClipboardUtf8Text(text.text());
             if(status != ClipboardStatus::Success)
-                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status, .finished = true });
+                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status, .endOfStream = true });
             return true;
         }
         else if(errno == EAGAIN || errno == EWOULDBLOCK)

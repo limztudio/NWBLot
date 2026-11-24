@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::StackMemory"), cpp_flags(no_copy, no_assign)]
-extern class SignalStackMemory;
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateSignalStackStorage"), cpp_flags(no_copy, no_assign)]
+extern class AlternateSignalStackStorage;
 
 [cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateStack")]
 extern class AlternateStack{
@@ -12,7 +12,7 @@ extern class AlternateStack{
     void disable();
     b8 disabled()const;
     usize address()const;
-    void use(mut SignalStackMemory memory);
+    void use(mut AlternateSignalStackStorage memory);
 };
 
 [cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::SignalAction")]

@@ -165,7 +165,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_SysfsCapacityPathCapacity = 128u;
+static constexpr usize s_CpuCapacityPathBufferSize = 128u;
 static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 
@@ -188,8 +188,8 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 }
 
 
-[[nodiscard]] u32 QueryLinuxCapacity(u32 processorIndex){
-    Array<char, s_SysfsCapacityPathCapacity> path = {};
+[[nodiscard]] u32 QueryLinuxCpuCapacity(u32 processorIndex){
+    Array<char, s_CpuCapacityPathBufferSize> path = {};
     const int pathLength = FOUNDATION_SPRINTF(path.data(), path.size(), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
     if(pathLength <= 0 || static_cast<usize>(pathLength) >= path.size())
         return 0u;
@@ -216,7 +216,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
     for(usize processorIndex = 0u; processorIndex < byteCount * s_BitsPerByte; ++processorIndex){
         if(!CPU_ISSET_S(processorIndex, byteCount, affinity.get()))
             continue;
-        const u32 capacity = QueryLinuxCapacity(static_cast<u32>(processorIndex));
+        const u32 capacity = QueryLinuxCpuCapacity(static_cast<u32>(processorIndex));
         allCapacitiesKnown = allCapacitiesKnown && capacity != 0u;
         placements.push_back(CpuWorkerPlacement{ static_cast<u32>(processorIndex), 0u, capacity, CpuAffinity::Any });
     }

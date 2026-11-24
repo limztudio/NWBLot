@@ -186,7 +186,7 @@ b8 UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
     return logger && logger->enqueueTelemetry(bytes, byteCount);
 }
 
-int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
+int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* nativeInstance, NWB::Log::Client* telemetryClient){
     {
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(!ValidateProjectFrameClientSize(frameClientSize))
@@ -198,7 +198,7 @@ int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const Loader
             return s_LoaderExitFailure;
         }
 
-        NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+        NWB::Core::Frame frame(nativeInstance, frameClientSize.width, frameClientSize.height);
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
@@ -329,7 +329,7 @@ int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const Loader
     return s_LoaderExitSuccess;
 }
 
-int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* inst, const b8 crashReportingInstalled){
+int RunLoader(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions& options, void* nativeInstance, const b8 crashReportingInstalled){
     const AStringView logAddressView(options.logAddress.data(), options.logAddress.size());
     const AStringView crashTokenView(options.crashUploadToken.data(), options.crashUploadToken.size());
     const auto setUploadDestination = [](const AStringView url, const AStringView token) -> b8{
@@ -346,7 +346,7 @@ int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions&
         NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Loader: using standalone log output"));
         ConfigureCrashReporting(crashReportingInstalled, options.flags.useStandaloneLogger, logAddressView, crashTokenView, options.flags.enableGpuDebug, setUploadDestination, setCrashMetadata);
 
-        return RunProjectRuntime(scratchArena, options, inst, nullptr);
+        return RunProjectRuntime(scratchArena, options, nativeInstance, nullptr);
     }
 
     NWB::Log::Client logger;
@@ -356,11 +356,11 @@ int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions&
     NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
     ConfigureCrashReporting(crashReportingInstalled, options.flags.useStandaloneLogger, logAddressView, crashTokenView, options.flags.enableGpuDebug, setUploadDestination, setCrashMetadata);
 
-    return RunProjectRuntime(scratchArena, options, inst, &logger);
+    return RunProjectRuntime(scratchArena, options, nativeInstance, &logger);
 }
 
 template<typename CharT>
-int EntryPoint(const isize argc, CharT** argv, void* inst){
+int EntryPoint(const isize argc, CharT** argv, void* nativeInstance){
     const usize crashArenaReserveSize = CrashArena::StructureAlignedSize(s_CrashArenaPayloadSize);
     CrashArena crashArena(s_CrashReportingArena, crashArenaReserveSize);
     const b8 crashReportingInstalled = InstallCrashReporting(crashArena);
@@ -394,7 +394,7 @@ int EntryPoint(const isize argc, CharT** argv, void* inst){
         if(!options.flags.useStandaloneLogger)
             options.logAddress = StringFormat(commandLineArena, "{}:{}", addressView, port);
 
-        return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
+        return RunLoader(commandLineArena, options, nativeInstance, crashReportingInstalled);
     }, [&](const CLI::ParseError& parseError){ return app.exit(parseError, FOUNDATION_COUT, FOUNDATION_CERR); }, []()noexcept{ return s_LoaderExitFailure; });
 }
 

@@ -27,25 +27,25 @@ namespace VulkanDetail{
 
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept{
     switch(type){
-    case ResourceType::Texture_SRV:
+    case ResourceType::TextureSrv:
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case ResourceType::Texture_UAV:
+    case ResourceType::TextureUav:
         return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    case ResourceType::TypedBuffer_SRV:
+    case ResourceType::TypedBufferSrv:
         return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-    case ResourceType::TypedBuffer_UAV:
+    case ResourceType::TypedBufferUav:
         return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-    case ResourceType::StructuredBuffer_SRV:
+    case ResourceType::StructuredBufferSrv:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case ResourceType::StructuredBuffer_UAV:
+    case ResourceType::StructuredBufferUav:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case ResourceType::ConstantBuffer:
     case ResourceType::VolatileConstantBuffer:
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     case ResourceType::Sampler:
         return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
+    case ResourceType::RawBufferSrv:
+    case ResourceType::RawBufferUav:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case ResourceType::RayTracingAccelStruct:
         return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;

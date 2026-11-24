@@ -9,7 +9,7 @@
 
 
 b8 IsAndroidTombstoneFrameLine(in StringView trimmedLine){
-    if(trimmedLine.size() < s_CrashSymbolicateAndroidAndroidTombstoneFrameMinimumTextLength)
+    if(trimmedLine.size() < s_CrashSymbolicateAndroidTombstoneFrameMinimumTextLength)
         return false;
     if(trimmedLine.front() != 35u)
         return false;
@@ -18,19 +18,19 @@ b8 IsAndroidTombstoneFrameLine(in StringView trimmedLine){
 
 StringView SelectAndroidTombstoneStatusLine(in b8 hasFrames){
     if(hasFrames)
-        return s_CrashSymbolicateAndroidAndroidTombstoneParsedStatus;
-    return s_CrashSymbolicateAndroidAndroidTombstoneUndecodedStatus;
+        return s_CrashSymbolicateAndroidTombstoneParsedStatus;
+    return s_CrashSymbolicateAndroidTombstoneUndecodedStatus;
 }
 
 StringView SelectAndroidTombstoneDetailLine(in b8 hasFrames){
     if(hasFrames)
-        return s_CrashSymbolicateAndroidAndroidTombstoneFramesDetail;
-    return s_CrashSymbolicateAndroidAndroidTombstoneNoFramesDetail;
+        return s_CrashSymbolicateAndroidTombstoneFramesDetail;
+    return s_CrashSymbolicateAndroidTombstoneNoFramesDetail;
 }
 
 void AppendParsedAndroidTombstoneReport(in b8 tombstonePresent, in StringView tombstoneText, mut String outReport){
     if(!tombstonePresent || tombstoneText.empty()){
-        outReport.append(s_CrashSymbolicateAndroidAndroidTombstoneMissingReport);
+        outReport.append(s_CrashSymbolicateAndroidTombstoneMissingReport);
         return;
     }
 
@@ -51,8 +51,8 @@ void AppendParsedAndroidTombstoneReport(in b8 tombstonePresent, in StringView to
 
     const b8 hasFrames = !frames.empty();
     outReport.append(SelectAndroidTombstoneStatusLine(hasFrames));
-    outReport.append(s_CrashSymbolicateAndroidAndroidTombstoneResolverLine);
-    outReport.append(s_CrashSymbolicateAndroidAndroidTombstonePresentLine);
+    outReport.append(s_CrashSymbolicateAndroidTombstoneResolverLine);
+    outReport.append(s_CrashSymbolicateAndroidTombstonePresentLine);
     outReport.append(SelectAndroidTombstoneDetailLine(hasFrames));
 
     if(hasFrames){

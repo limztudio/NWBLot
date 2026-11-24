@@ -13,17 +13,17 @@ NWB_VULKAN_BEGIN
 
 ResourceType::Enum DescriptorClassPolicy::ClassToResourceType(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     switch(descriptorClass){
-    case GpuDescriptorClass::SampledImage:  return ResourceType::Texture_SRV;
-    case GpuDescriptorClass::StorageImage:  return ResourceType::Texture_UAV;
-    case GpuDescriptorClass::SampledBuffer: return ResourceType::TypedBuffer_SRV;
-    case GpuDescriptorClass::StorageBuffer: return ResourceType::StructuredBuffer_UAV;
+    case GpuDescriptorClass::SampledImage:  return ResourceType::TextureSrv;
+    case GpuDescriptorClass::StorageImage:  return ResourceType::TextureUav;
+    case GpuDescriptorClass::SampledBuffer: return ResourceType::TypedBufferSrv;
+    case GpuDescriptorClass::StorageBuffer: return ResourceType::StructuredBufferUav;
     case GpuDescriptorClass::UniformBuffer: return ResourceType::ConstantBuffer;
     case GpuDescriptorClass::AccelStruct:   return ResourceType::RayTracingAccelStruct;
     case GpuDescriptorClass::Sampler:       return ResourceType::Sampler;
-    case GpuDescriptorClass::SampledImage2DArray: return ResourceType::Texture_SRV;
-    case GpuDescriptorClass::SampledImage3D: return ResourceType::Texture_SRV;
-    case GpuDescriptorClass::SampledImage2DArrayUint: return ResourceType::Texture_SRV;
-    case GpuDescriptorClass::SampledImageCube: return ResourceType::Texture_SRV;
+    case GpuDescriptorClass::SampledImage2DArray: return ResourceType::TextureSrv;
+    case GpuDescriptorClass::SampledImage3D: return ResourceType::TextureSrv;
+    case GpuDescriptorClass::SampledImage2DArrayUint: return ResourceType::TextureSrv;
+    case GpuDescriptorClass::SampledImageCube: return ResourceType::TextureSrv;
     default:                                return ResourceType::None;
     }
 }
@@ -35,13 +35,13 @@ b8 DescriptorClassPolicy::IsResourceTypeCompatible(const GpuDescriptorClass::Enu
     case GpuDescriptorClass::SampledImage3D:
     case GpuDescriptorClass::SampledImage2DArrayUint:
     case GpuDescriptorClass::SampledImageCube:
-        return resourceType == ResourceType::Texture_SRV;
+        return resourceType == ResourceType::TextureSrv;
     case GpuDescriptorClass::StorageImage:
-        return resourceType == ResourceType::Texture_UAV;
+        return resourceType == ResourceType::TextureUav;
     case GpuDescriptorClass::SampledBuffer:
-        return resourceType == ResourceType::TypedBuffer_SRV;
+        return resourceType == ResourceType::TypedBufferSrv;
     case GpuDescriptorClass::StorageBuffer:
-        return resourceType == ResourceType::StructuredBuffer_SRV || resourceType == ResourceType::StructuredBuffer_UAV || resourceType == ResourceType::RawBuffer_SRV || resourceType == ResourceType::RawBuffer_UAV;
+        return resourceType == ResourceType::StructuredBufferSrv || resourceType == ResourceType::StructuredBufferUav || resourceType == ResourceType::RawBufferSrv || resourceType == ResourceType::RawBufferUav;
     case GpuDescriptorClass::UniformBuffer:
         return resourceType == ResourceType::ConstantBuffer;
     case GpuDescriptorClass::AccelStruct:

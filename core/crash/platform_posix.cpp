@@ -125,13 +125,13 @@ static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanup
 #endif
 
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-[[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
+[[noreturn]] static void ExitAfterChildStartupFailure(const int startupDescriptor, const int error)noexcept{
     if(!WriteAllFileDescriptor(startupDescriptor, &error, sizeof(error)))
         _exit(s_HandlerExecFailureExitCode);
     _exit(s_HandlerExecFailureExitCode);
 }
 
-[[nodiscard]] static b8 SilenceChildProcess(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
+[[nodiscard]] static b8 PrepareCrashHandlerChild(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
     if(!MoveFdAboveStdio(requestRead, s_FirstNonStdioFileDescriptor) || !MoveFdAboveStdio(ackWrite, s_FirstNonStdioFileDescriptor) || !MoveFdAboveStdio(startupWrite, s_FirstNonStdioFileDescriptor) || !SetCloseOnExec(startupWrite))
         return false;
     if(setsid() < 0)
@@ -368,16 +368,16 @@ Expected<void, PlatformFailure> StartDesktopHandler([[maybe_unused]] const ::Pat
         for(const NotNull<int*> descriptor : { MakeNotNull(&request[0u]), MakeNotNull(&ack[0u]), MakeNotNull(&startup[0u]) }){
             const auto released = ReleaseOwnedDescriptor(*descriptor);
             if(!released)
-                FailChild(startup[1u], static_cast<int>(released.error().code));
+                ExitAfterChildStartupFailure(startup[1u], static_cast<int>(released.error().code));
         }
-        if(!SilenceChildProcess(request[1u], ack[1u], startup[1u]))
-            FailChild(startup[1u], errno);
+        if(!PrepareCrashHandlerChild(request[1u], ack[1u], startup[1u]))
+            ExitAfterChildStartupFailure(startup[1u], errno);
         Array<char, s_HandlerArgumentTextCapacity> requestText = {};
         Array<char, s_HandlerArgumentTextCapacity> ackText = {};
         AppendUnsignedToFixedBuffer(requestText, static_cast<u64>(request[1u]));
         AppendUnsignedToFixedBuffer(ackText, static_cast<u64>(ack[1u]));
         execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), requestText.data(), s_AckFdArgument.data(), ackText.data(), nullptr);
-        FailChild(startup[1u], errno);
+        ExitAfterChildStartupFailure(startup[1u], errno);
     }
     for(const NotNull<int*> descriptor : { MakeNotNull(&request[1u]), MakeNotNull(&ack[1u]), MakeNotNull(&startup[1u]) }){
         const auto released = ReleaseOwnedDescriptor(*descriptor);

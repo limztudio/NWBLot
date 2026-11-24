@@ -25,16 +25,13 @@ enum<u8> AvboitTargetFramebufferKind{
 
 class AvboitComputeEmulationRecordTrait{
     public GpuTimingScopeDefinition timingScope;
-    public MaterialPipelinePass pipelinePass;
     public AvboitTargetFramebufferKind framebufferKind;
 
     public AvboitComputeEmulationRecordTrait(
         in GpuTimingScopeDefinition inTimingScope,
-        in MaterialPipelinePass inPipelinePass,
         in AvboitTargetFramebufferKind inFramebufferKind
     ){
         this.timingScope = inTimingScope;
-        this.pipelinePass = inPipelinePass;
         this.framebufferKind = inFramebufferKind;
     }
 }
@@ -182,11 +179,11 @@ FramebufferHandle SelectAvboitTargetFramebuffer(in AvboitFrameTargets targets, i
 
 AvboitComputeEmulationRecordTrait GetAvboitComputeEmulationRecordTrait(in MaterialPipelinePass pass){
     if(pass == MaterialPipelinePass::AvboitAccumulate)
-        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitAccumulate, pass, AvboitTargetFramebufferKind::Accumulation);
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitAccumulate, AvboitTargetFramebufferKind::Accumulation);
     if(pass == MaterialPipelinePass::AvboitExtinction)
-        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitExtinction, pass, AvboitTargetFramebufferKind::Low);
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitExtinction, AvboitTargetFramebufferKind::Low);
     assert(pass == MaterialPipelinePass::AvboitOccupancy);
-    return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitOccupancy, pass, AvboitTargetFramebufferKind::Low);
+    return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitOccupancy, AvboitTargetFramebufferKind::Low);
 }
 
 b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){

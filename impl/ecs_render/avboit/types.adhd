@@ -34,7 +34,6 @@ const usize s_AvboitEmulationBaseCount = 4u;
 const usize s_AvboitEmulationPlanUseCount = 8u;
 const usize s_AvboitMaterialResourceSetUseCapacity = 3u;
 const usize s_AvboitComputeEmulationResourceSetUseCapacity = 3u;
-const usize s_RefractionCaptureGeometryAndTextureSetUseCount = 2u;
 const usize s_RefractionCaptureCommonUseCapacity = 4u;
 const usize s_RefractionCaptureCsgUseCapacity = 8u;
 const usize s_RefractionCaptureDrawExtraUseCapacity = 7u;

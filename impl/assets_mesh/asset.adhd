@@ -24,23 +24,6 @@ class Mesh{
     private Vector<u8> m_meshletPrimitiveIndices;
     private Vector<u32> m_solidTriangleWords;
 
-    private b8 hasIncompleteGeometryPayload()const{
-        return HasIncompleteMeshGeometryPayload(
-            this.m_positionStream,
-            this.m_normalStream,
-            this.m_tangentStream,
-            this.m_uv0Stream,
-            this.m_colorStream,
-            this.m_meshlets,
-            this.m_meshletBounds,
-            this.m_meshletPositionRefDeltas,
-            this.m_meshletAttributeRefDeltas,
-            this.m_meshletLocalVertexRefs,
-            this.m_meshletPrimitiveIndices,
-            this.m_solidTriangleWords
-        );
-    }
-
     [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 

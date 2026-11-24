@@ -43,12 +43,6 @@ u64 ComputeJointPaletteBufferByteSize(in u32 jointCount, in usize jointMatrixByt
     return cast<u64>(jointCount) * cast<u64>(jointMatrixByteSize);
 }
 
-usize ResolvePreviousFrameStateSourceCount(in b8 hasAcceptedState, in usize sourceCapacity){
-    if(hasAcceptedState)
-        return sourceCapacity;
-    return 0u;
-}
-
 b8 ValidateCompiledSkinningGraphPlan(
     in b8 planValidForDeclarations,
     in usize packetCount,

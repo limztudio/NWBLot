@@ -35,7 +35,6 @@ class MeshCookEntry{
     public Vector<u8> meshletPrimitiveIndices;
 }
 
-
 [cpp_unwind]
 Expected<Vector<SkeletonJointMatrix>> ParseSkinCookInverseBindMatrices(in Path nwbFilePath, in MetascriptValue asset){
     Vector<SkeletonJointMatrix> values;
@@ -259,12 +258,6 @@ b8 CollectMeshletTriangleIndicesFromStreamRefs(in MeshCookEntry entry, mut Vecto
         }
     }
     return true;
-}
-
-[cpp_unwind]
-b8 BuildMeshSolidWords(in MeshCookEntry entry, mut Vector<u32> solidWords){
-    const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(entry.meshlets, entry.meshletLocalVertexRefs, entry.meshletPositionRefDeltas, entry.meshletPrimitiveIndices, entry.positions.size());
-    return indices.has_value() && BuildSolidTriangleWordsInto(entry.positions, indices.value(), solidWords);
 }
 
 [cpp_unwind]

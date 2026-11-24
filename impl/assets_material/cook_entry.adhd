@@ -52,18 +52,6 @@ class MaterialBindEntry{
         return ParseMaterialBindStruct(file, this.source, name, value);
     }
 
-    public Optional<in MaterialBindStruct> findStruct(in StringView name)const{
-        const Expected<usize> index = FindMaterialBindStructIndex(this.structs, name);
-        if(index.has_value())
-            return Optional<in MaterialBindStruct>(this.structs[index.value()]);
-        return Optional<in MaterialBindStruct>();
-    }
-    public Optional<in MaterialBindInstance> findInstance(in StringView name)const{
-        const Expected<usize> index = FindMaterialBindInstanceIndex(this.instances, name);
-        if(index.has_value())
-            return Optional<in MaterialBindInstance>(this.instances[index.value()]);
-        return Optional<in MaterialBindInstance>();
-    }
 }
 
 class GeneratedMaterialPixelShader{

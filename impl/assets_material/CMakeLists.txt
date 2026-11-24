@@ -33,7 +33,6 @@ if(NWB_BUILD_PIPELINE)
             "${CMAKE_CURRENT_LIST_DIR}/cook_entry.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_shader_*.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/bind.adhd"
-            "${CMAKE_CURRENT_LIST_DIR}/cook_private.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/material_avboit_shader_generator.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/material_shadow_dispatch.adhd"
     )

@@ -14,13 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_ModelAssetKindLabel = "model";
-const StringView s_ModelLoadBinaryContext = "Model::loadBinary";
-const StringView s_ModelSerializeContext = "ModelAssetCodec::serialize";
-const StringView s_ModelSkeletonObjectsPayloadLabel = "skeleton objects";
-const StringView s_ModelStaticMeshObjectsPayloadLabel = "static mesh objects";
-const StringView s_ModelSkinnedMeshObjectsPayloadLabel = "skinned mesh objects";
-
 type SkeletonObjectVector = Vector<ModelSkeletonObject>;
 type StaticMeshObjectVector = Vector<ModelStaticMeshObject>;
 type SkinnedMeshObjectVector = Vector<ModelSkinnedMeshObject>;
@@ -46,19 +39,6 @@ class Model{
         this.m_skeletonObjects = skeletonObjects;
         this.m_staticMeshObjects = staticMeshObjects;
         this.m_skinnedMeshObjects = skinnedMeshObjects;
-    }
-
-    public void takeObjects(
-        mut SkeletonObjectVector outSkeletonObjects,
-        mut StaticMeshObjectVector outStaticMeshObjects,
-        mut SkinnedMeshObjectVector outSkinnedMeshObjects
-    ){
-        outSkeletonObjects = this.m_skeletonObjects;
-        this.m_skeletonObjects.clear();
-        outStaticMeshObjects = this.m_staticMeshObjects;
-        this.m_staticMeshObjects.clear();
-        outSkinnedMeshObjects = this.m_skinnedMeshObjects;
-        this.m_skinnedMeshObjects.clear();
     }
 
     public in SkeletonObjectVector skeletonObjects()const{ return this.m_skeletonObjects; }

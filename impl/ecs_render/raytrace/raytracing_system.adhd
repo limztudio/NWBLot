@@ -114,7 +114,6 @@ class RendererRayTracingSystem : NoCopy{
     public b8 setSoftwareShadowSettings(in SoftwareShadowSettings settings);
     public b8 setShadowQualitySettings(in ShadowQualitySettings settings);
     public u32 requestedShadowReceiverFactor()const{ return RequestedShadowReceiverResolutionFactor(this.m_shadowQualitySettings.receiverResolution); }
-    public LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
     public in LightSpaceShadowSnapshot lightSpaceShadowSnapshotRef()const{ return this.m_lightSpaceShadow.m_snapshot; }
     public FrozenLightSpaceShadowHandle frozenLightSpaceShadowSnapshot()const{ return this.m_lightSpaceShadow.m_frozenSnapshot; }
     public PreflightedSceneLightsView preflightedSceneLights()const;

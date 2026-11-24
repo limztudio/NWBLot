@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/binary_payload_io.adhd>
 #include <impl/assets_mesh/cook.adhd>
 #include <impl/assets_mesh/cook_solid_topology.adhd>
 #include <impl/assets_mesh/meshlet_triangle_visit.adhd>
@@ -15,9 +14,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::ThrowingPositionStreamGeometry")]
-extern class ThrowingPositionStreamGeometry;
 
 [cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::NoThrowCornerVisitor")]
 extern class NoThrowCornerVisitor;
@@ -36,8 +32,6 @@ type OneMeshlet = Array<MeshletDesc, 1u>;
 type OneLocalVertex = Array<MeshletLocalVertexRef, 1u>;
 type OnePrimitive = Array<u8, 1u>;
 
-static_assert(is_nothrow_call<in Mesh, mut usize>(AddMeshBaseReserveBytes));
-static_assert(!is_nothrow_call<in ThrowingPositionStreamGeometry, mut usize>(AddMeshBaseReserveBytes));
 static_assert(is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut NoThrowCornerVisitor>(ForEachMeshletTriangleCorner));
 static_assert(!is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut ThrowingCornerVisitor>(ForEachMeshletTriangleCorner));
 

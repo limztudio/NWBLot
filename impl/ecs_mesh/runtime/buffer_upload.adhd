@@ -59,10 +59,6 @@ Expected<BufferHandle, BufferSetupFailure> SetupBuffer<T>(mut GraphicsRuntime gr
     return buffer.value();
 }
 
-Expected<BufferHandle, BufferSetupFailure> SetupBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload){
-    return SetupBuffer<T>(graphics, debugName, payload, BufferFlags());
-}
-
 Expected<BufferHandle, BufferSetupFailure> SetupRequiredBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);

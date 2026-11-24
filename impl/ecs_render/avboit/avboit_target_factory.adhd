@@ -5,10 +5,6 @@
 const Name s_AvboitTransmittanceVolumeTargetName = "engine/avboit/transmittance_volume";
 const u32 s_AvboitU32WordByteSize = 4u;
 
-u64 ComputeAvboitU32WordBytes(in u64 wordCount){
-    return wordCount * cast<u64>(s_AvboitU32WordByteSize);
-}
-
 Expected<TextureHandle> CreateAvboitRenderTarget(
     mut GraphicsRuntime graphics,
     in u32 width,

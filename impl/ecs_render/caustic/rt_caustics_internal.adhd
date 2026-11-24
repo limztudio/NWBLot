@@ -40,7 +40,6 @@ class CausticsResolveChainInputs{
     public GpuTaskId geometryTask;
     public GpuTaskSchedulingHint baseScheduling;
     public Span<GpuTaskExternalStateSource> stateSources;
-    public b8 applyStateSourcesToPrepareOnly = true;
     public mut b8 producerDispatched;
     public mut GpuTimingSubmissionTicket timingTicket;
     public mut Optional<GpuTimingMeasure> resolveTiming;
@@ -160,7 +159,6 @@ class CausticsResolveChainBuilder : NoCopy{
     [cpp_unwind]
     public Expected<CausticsResolveChainResult> declareSoftware(in CausticsResolveChainInputs inputs);
 }
-
 
 [modular]
 class CausticPipelineSet : NoCopy{

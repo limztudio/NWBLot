@@ -45,7 +45,6 @@ const u32 s_ReflectionMaxDepthMips = 32u;
 const u32 s_ReflectionHistoryDescriptorIndex = 0u;
 const u32 s_ReflectionSpatialDescriptorIndex = 2u;
 const usize s_ReflectionTemporalExtraResourceUseCount = 2u;
-const usize s_ReflectionSliceIndexTextBufferSize = 11u;
 const usize s_ReflectionUseCapacity = 12u;
 const usize s_ReflectionExtraHardwareReadCapacity = 2u;
 const u32 s_ReflectionCounterHighWordShiftBits = 32u;

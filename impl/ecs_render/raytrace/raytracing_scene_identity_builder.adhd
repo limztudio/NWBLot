@@ -135,13 +135,6 @@ class RayTracingSceneIdentityBuilder{
         inOutCaptureSceneIdentity = UpdateFnv64U64(inOutCaptureSceneIdentity, materialTypedHash);
     }
 
-    public void appendMaterialBytes(
-        in u32 instanceCount,
-        in Span<u8> shadowMaterialTypedBytes,
-        mut u64 inOutCaptureSceneIdentity
-    )const{
-        this.appendMaterialBytesHash(instanceCount, shadowMaterialTypedBytes.size(), UpdateFnv64(s_Fnv64OffsetBasis, shadowMaterialTypedBytes), inOutCaptureSceneIdentity);
-    }
 };
 
 

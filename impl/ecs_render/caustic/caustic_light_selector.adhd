@@ -18,26 +18,6 @@ class CausticLightSelector{
         return light.params.w >= s_CausticSlotEnabledThreshold;
     }
 
-    public u32 selectNext(in Span<SceneLightGpuData> lights, in Span<f32> causticImportance)const{
-        const u32 lightCount = cast<u32>(lights.size());
-        f32 bestImportance = -1.0f;
-        u32 bestIndex = lightCount;
-        for(u32 i = 0u; i < lightCount && i < cast<u32>(causticImportance.size()); ++i){
-            if(lights[i].params.w >= 0.0f)
-                continue;
-            if(!this.enabled(lights[i]))
-                continue;
-            if(!this.eligible(lights[i]))
-                continue;
-            const f32 importance = causticImportance[i];
-            if(importance > bestImportance){
-                bestImportance = importance;
-                bestIndex = i;
-            }
-        }
-        return bestIndex;
-    }
-
     public u32 assignSlots(
         in Span<f32> causticImportance,
         in u32 refractiveInstanceCount,

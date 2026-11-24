@@ -74,7 +74,6 @@ Expected<CausticsStageTargets> ImportCausticsStageTargets(
     );
 }
 
-
 usize ComputePhotonResourceUseCapacity(
     in usize baseCapacity,
     in b8 hasCsgTraceContextBuffer,
@@ -290,7 +289,6 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     this.m_deferredSoftwareCausticsTask = geometryAndResolveResult.value().causticsTask;
     return true;
 }
-
 
 [cpp_unwind]
 Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(in DeferredFrameTargets targets, in b8 hardwareCaustics){
@@ -559,7 +557,7 @@ Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(in Cau
                 activityUses[activityUseCount++] = WriteUse(activityResources[plan.writeBufferIndex], ResourceStates::UnorderedAccess);
             stageDesc.setResourceUses(Span<GpuTaskResourceUse>(activityUses).first(activityUseCount));
         }
-        if(!inputs.applyStateSourcesToPrepareOnly || stageIndex <= 1u)
+        if(stageIndex <= 1u)
             stageDesc.setExternalStateSources(inputs.stateSources);
         Expected<GpuTaskId> stageTask = MakeUnexpected(Failure());
         if(stageIndex == 0u)

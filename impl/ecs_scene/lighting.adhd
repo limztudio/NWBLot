@@ -52,10 +52,6 @@ usize GatherSceneLights(mut World world, in VectorSingle defaultForward, in usiz
     return count;
 }
 
-usize GatherSceneLights(mut World world, in VectorSingle defaultForward, mut Span<SceneLight> outLights){
-    return GatherSceneLights(world, defaultForward, outLights.size(), outLights);
-}
-
 EntityID CreateDirectionalLightEntity(mut World world, in f32 pitchRadians, in f32 yawRadians, in f32 rollRadians, in VectorSingle color, in f32 intensity){
     Entity lightEntity = world.createEntity();
     lightEntity.addComponent<TransformComponent>() = MakeEulerTransformComponent(pitchRadians, yawRadians, rollRadians);

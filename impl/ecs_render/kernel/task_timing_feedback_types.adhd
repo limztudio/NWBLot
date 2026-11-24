@@ -45,7 +45,6 @@ class RendererTaskTimingFeedbackState : NoCopy{
     }
 }
 
-
 RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy requestedPolicy, in b8 rendererActive, mut RendererTimingPolicy currentPolicy){
     RendererTaskTimingFeedbackPolicyTransition transition = RendererTaskTimingFeedbackPolicyTransition(
         currentPolicy,
@@ -65,16 +64,6 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(in RendererTaskTimingFeed
         currentPolicy = transition.requestedPolicy;
     else
         currentPolicy = transition.previousPolicy;
-}
-
-b8 IsAcceptedRendererTaskTimingSubmission(
-    in b8 feedbackActive,
-    in b8 tokenValid,
-    in b8 hasPhysicalQueueIdentity,
-    in b8 queueClassMatches,
-    in b8 physicalQueueMatches
-){
-    return feedbackActive && tokenValid && hasPhysicalQueueIdentity && queueClassMatches && physicalQueueMatches;
 }
 
 

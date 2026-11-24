@@ -198,59 +198,6 @@ void SetTransparentDrawPushConstants(
     commandList.setPushConstants(pushConstants);
 }
 
-void SetTransparentDrawPushConstants(
-    mut CommandList commandList,
-    in u32 meshletCount,
-    in u32 instanceIndex,
-    in u32 materialConstantByteOffset,
-    in ViewportState viewportState,
-    in AvboitFrameTargets targets,
-    in MeshFrameHeapSlots frameHeapSlots,
-    in u32 dispatchFlags,
-    in b8 hdr10OutputActive,
-    in u32 csgContextHeapSlot
-){
-    SetTransparentDrawPushConstants(
-        commandList,
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        targets,
-        frameHeapSlots,
-        dispatchFlags,
-        hdr10OutputActive,
-        csgContextHeapSlot,
-        false
-    );
-}
-
-void SetTransparentDrawPushConstants(
-    mut CommandList commandList,
-    in u32 meshletCount,
-    in u32 instanceIndex,
-    in u32 materialConstantByteOffset,
-    in ViewportState viewportState,
-    in AvboitFrameTargets targets,
-    in MeshFrameHeapSlots frameHeapSlots,
-    in u32 dispatchFlags,
-    in b8 hdr10OutputActive
-){
-    SetTransparentDrawPushConstants(
-        commandList,
-        meshletCount,
-        instanceIndex,
-        materialConstantByteOffset,
-        viewportState,
-        targets,
-        frameHeapSlots,
-        dispatchFlags,
-        hdr10OutputActive,
-        0u,
-        false
-    );
-}
-
 void SetEmulatedVertexAttribute(in Format format, in u32 offsetByteCount, in Name name, mut VertexAttributeDesc attribute){
     attribute.setFormat(format).setBufferIndex(s_EmulatedVertexBufferIndex).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(name);
 }

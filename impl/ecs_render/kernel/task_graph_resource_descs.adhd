@@ -103,16 +103,6 @@ Expected<GpuGraphResourceId> ImportExternalBuffer(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,
     in Name identity,
-    in StringView label,
-    in Optional<ResourceStates> initialState
-){
-    return ImportExternalBuffer(buffer, identity, label, initialState, Optional<ResourceStates>(), graph);
-}
-
-Expected<GpuGraphResourceId> ImportExternalBuffer(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in Name identity,
     in StringView label
 ){
     return ImportExternalBuffer(buffer, identity, label, Optional<ResourceStates>(), Optional<ResourceStates>(), graph);

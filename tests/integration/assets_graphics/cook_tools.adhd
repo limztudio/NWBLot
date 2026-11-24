@@ -22,7 +22,7 @@ class GraphicsMerge{
 }
 
 Path GraphicsRepoPath(){
-    return Path(s_CookTestRepoRoot);
+    return Path(s_CookTestRepoRoot).lexicallyNormal();
 }
 
 [cpp_unwind]

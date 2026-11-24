@@ -54,8 +54,6 @@ class MaterialPassDrawRecorder : NoCopy{
 
     public void setMaterialPassMeshBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh);
     public void setMaterialPassFrameBufferStates(mut MaterialPassDrawContext context);
-    public void setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh);
-    public b8 setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh);
     public void dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources);
     public void drawComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources);
     public void renderMaterialPassDrawItems(mut MaterialPassDrawContext context, in MaterialPassDrawItemsView drawItems);

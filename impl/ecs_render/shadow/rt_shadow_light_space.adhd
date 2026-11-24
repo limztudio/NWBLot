@@ -229,14 +229,6 @@ PreflightedSceneLightsView RendererRayTracingSystem::preflightedSceneLights()con
     return view;
 }
 
-LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const{
-    LightSpaceShadowSnapshot result = this.m_lightSpaceShadow.m_snapshot;
-    result.casters = this.m_lightSpaceShadow.m_casters;
-    result.csgContextBytes = this.m_lightSpaceShadow.m_csg.bytes;
-    result.csgDynamicBounds = this.m_lightSpaceShadow.m_csg.dynamicBounds;
-    return result;
-}
-
 void RendererRayTracingSystem::acceptLightSpaceShadowCapture(in LightSpaceCaptureTicket ticket, in b8 prepared){
     mut LightSpaceShadowState state = this.m_lightSpaceShadow;
     if(!prepared || !state.m_captureHistory.accept(ticket))

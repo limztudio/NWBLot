@@ -10,12 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_SkinAssetKindLabel = "skin";
-const StringView s_SkinLoadBinaryContext = "Skin::loadBinary";
-const StringView s_SkinSerializeContext = "SkinAssetCodec::serialize";
-const StringView s_SkinInfluencesPayloadLabel = "influences";
-const StringView s_SkinInverseBindMatricesPayloadLabel = "inverse bind matrices";
-
 type InfluenceVector = Vector<SkinInfluence4>;
 type InverseBindMatrixVector = Vector<SkeletonJointMatrix>;
 

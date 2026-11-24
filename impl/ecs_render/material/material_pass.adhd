@@ -122,11 +122,6 @@ void MaterialPassDrawRecorder::setMaterialPassFrameBufferStates(mut MaterialPass
     }
 }
 
-void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh){
-    this.setMaterialPassMeshBufferStates(context, mesh);
-    this.setMaterialPassFrameBufferStates(context);
-}
-
 b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstantsPrepared(
     mut MaterialPassDrawContext context,
     in MaterialPassDrawItem drawItem,
@@ -179,20 +174,6 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstantsPrepared(
 
     SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);
     return true;
-}
-
-b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh){
-    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
-    return this.setMaterialPassDrawPushConstantsPrepared(
-        context,
-        drawItem,
-        mesh,
-        ResolveMeshFrameHeapSlots(context.frameBindings),
-        MaterialPipelinePassUsesRendererAvboit(context.pass),
-        this.m_graphics.isHDR10OutputActive(),
-        context.pass == MaterialPipelinePass::AvboitRefractionCapture,
-        clipContextHeapSlot
-    );
 }
 
 void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItemPrepared(

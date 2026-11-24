@@ -94,29 +94,6 @@ Expected<MeshletRefChannelWidths> TryPrepareMeshletRefEncoding(
     return widths;
 }
 
-Expected<u16> TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, in MeshletPositionStreamRef targetRef){
-    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
-        if(refs[localIndex].position != targetRef.position || refs[localIndex].skin != targetRef.skin)
-            continue;
-
-        return cast<u16>(localIndex);
-    }
-
-    return MakeUnexpected(Failure());
-}
-
-Expected<u16> TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs, in MeshletAttributeStreamRef targetRef){
-    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
-        const MeshletAttributeStreamRef existing = refs[localIndex];
-        if(existing.normal != targetRef.normal || existing.tangent != targetRef.tangent || existing.uv0 != targetRef.uv0 || existing.color != targetRef.color)
-            continue;
-
-        return cast<u16>(localIndex);
-    }
-
-    return MakeUnexpected(Failure());
-}
-
 [cpp_unwind]
 b8 BuildZippedMeshletRefsFixed(
     in StringView metaKind,

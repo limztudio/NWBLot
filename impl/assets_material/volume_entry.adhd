@@ -9,10 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_MaterialCookEntryAssetTypeName = "material";
-const StringView s_MaterialNonStandaloneKindLabel = "material";
-const b8 s_MaterialLogCookBuildFailure = false;
-
 class MaterialStageDependency{
     public Name path = s_NameNone;
     public Name assetType = s_NameNone;

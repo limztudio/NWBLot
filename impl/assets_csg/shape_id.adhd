@@ -7,8 +7,6 @@ type CsgShapeTypeId = u32;
 const CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 const u32 s_CsgShapeHashFoldShiftBits = 32u;
 
-const Name s_CsgShapeCookIdArenaName = "AssetsCsgCook::AssignCsgShapeCookIds";
-
 const Name s_CsgPlaneShapeName = "engine/csg/plane";
 const Name s_CsgBoxShapeName = "engine/csg/box";
 const Name s_CsgSphereShapeName = "engine/csg/sphere";

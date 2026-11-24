@@ -18,7 +18,6 @@
 #include <impl/assets_graphics/csg_shader_variants.adhd>
 #include <impl/assets_graphics/gather.adhd>
 #include <impl/assets_material/cook.adhd>
-#include <impl/assets_material/cook_private.adhd>
 #include <impl/assets_material/cook_shader_generation.adhd>
 #include <impl/assets_material/cook_types.adhd>
 #include <impl/assets_material/material_avboit_shader_generator.adhd>

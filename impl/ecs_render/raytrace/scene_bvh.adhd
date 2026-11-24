@@ -76,16 +76,6 @@ b8 IsValidSceneBvhNodeChildren(in u32 leftChild, in u32 rightChild, in u32 nodeI
     return leftChild > nodeIndex && rightChild > nodeIndex && leftChild < nodeCount && rightChild < nodeCount;
 }
 
-NwbBvhNodeGpu PackSceneBvhNodeGpu(in SceneBvhNodeCalculation buildNode){
-    NwbBvhNodeGpu node;
-    node.aabbMinLeftChild = f32x3_u32(VectorSingle(buildNode.aabbMin), buildNode.leftChild);
-    u32 taggedRightChild = buildNode.rightChild;
-    if(buildNode.containsTransparentOccluder)
-        taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
-    node.aabbMaxRightChild = f32x3_u32(VectorSingle(buildNode.aabbMax), taggedRightChild);
-    return node;
-}
-
 SceneBvhPrimitiveCalculation MakeSceneBvhPrimitiveCalculation(in VectorSingle worldMin, in VectorSingle worldMax, in u32 materialFlags){
     SceneBvhPrimitiveCalculation bvhPrimitive;
     bvhPrimitive.aabbMin = f32x4(worldMin);

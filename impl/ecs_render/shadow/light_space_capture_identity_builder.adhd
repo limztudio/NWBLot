@@ -136,25 +136,6 @@ class LightSpaceCaptureIdentityBuilder{
         return UpdateFnv64U64(identity, cast<u64>(textureCount));
     }
 
-    public u64 buildCsgBaseIdentity(
-        in u64 captureGeometryIdentity,
-        in u64 snapshotContentIdentity,
-        in Span<NwbRtInstanceMaterialGpu> materials,
-        in Span<InstanceGpuData> instances,
-        in Span<u8> materialBytes,
-        in usize textureCount
-    )const{
-        return this.buildCsgBaseIdentityWithMaterialHash(
-            captureGeometryIdentity,
-            snapshotContentIdentity,
-            materials,
-            instances,
-            materialBytes.size(),
-            UpdateFnv64(s_Fnv64OffsetBasis, materialBytes),
-            textureCount
-        );
-    }
-
     public void updateCsgInstances(
         in Span<LightSpaceCsgInstanceGpu> instances,
         mut u64 inOutIdentity

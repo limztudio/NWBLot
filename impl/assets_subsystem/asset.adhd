@@ -10,7 +10,6 @@
 
 const StringView s_SubsystemAssetKindLabel = "subsystem";
 
-type SubsystemTypeAutoRegistrar = AssetFamilyTypes<ISubsystem>;
 type SubsystemAssetCodec = FamilyAssetCodec<ISubsystem, SubsystemAssetPolicy>;
 type TypedSubsystemAssetCodec<T> = FamilyMemberAssetCodec<ISubsystem, T, SubsystemAssetPolicy>;
 type TypedSubsystemAutoRegistrar<T> = TypedAssetRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>>;

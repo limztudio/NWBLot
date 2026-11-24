@@ -75,20 +75,6 @@ b8 ValidatePairedFontSourceMetrics(in Path path, in b8 valid){
 }
 
 [cpp_unwind]
-void CopySourceGroups(in PreparedFontSource source, mut FontAtlasPayload payload){
-    payload.groups.reserve(source.groups.size());
-    for(in PreparedFontImageGroup prepared : source.groups){
-        payload.groups.emplace_back();
-        mut FontAtlasGroup group = payload.groups.back();
-        group.width = prepared.width;
-        group.height = prepared.height;
-        group.channelCount = prepared.channelCount;
-        group.sha256 = prepared.sha256;
-        group.pixels = prepared.pixels;
-    }
-}
-
-[cpp_unwind]
 void MoveSourceGroups(mut PreparedFontSource source, mut FontAtlasPayload payload){
     payload.groups.reserve(source.groups.size());
     for(usize index = 0u; index < source.groups.size(); ++index){
@@ -262,11 +248,6 @@ Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtual
 }
 
 [cpp_unwind]
-Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload){
-    return BuildFontAtlasAssetFromPayloadWithValidation(virtualPath, payload, true);
-}
-
-[cpp_unwind]
 b8 FinalizeFontAtlasPayloadFromPreparedSource(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -301,19 +282,6 @@ b8 FinalizeFontAtlasPayloadFromPreparedSource(
 }
 
 [cpp_unwind]
-b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
-    in Path nwbFilePath,
-    in MetascriptValue asset,
-    in PreparedFontSource source,
-    in Font font,
-    in b8 verifyPixelDigests,
-    mut FontAtlasPayload inOutPayload
-){
-    CopySourceGroups(source, inOutPayload);
-    return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
-}
-
-[cpp_unwind]
 b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -324,24 +292,6 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
 ){
     MoveSourceGroups(source, inOutPayload);
     return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
-}
-
-[cpp_unwind]
-b8 PopulateFontAtlasPayloadFromPreparedSource(
-    in Path nwbFilePath,
-    in MetascriptValue asset,
-    in PreparedFontSource source,
-    in Font font,
-    mut FontAtlasPayload inOutPayload
-){
-    return PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
-        nwbFilePath,
-        asset,
-        source,
-        font,
-        true,
-        inOutPayload
-    );
 }
 
 
@@ -382,13 +332,6 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_unwind]
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<FontAtlasCookEntry>(root, virtualRoot, file, document, s_FontAtlasMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<FontAtlasCookEntry>{
-        return ParseFontAtlasCookMetadataValue(path, file, value);
-    });
-}
 
 [cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAsset(in FontAtlasCookEntry entry){

@@ -17,33 +17,6 @@ const usize s_ModelSkinnedMeshObjectBinaryBytes = 304u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void PackModelSkeletonObjectBinaries(
-    in Span<ModelSkeletonObject> objects,
-    mut Vector<ModelSkeletonObjectBinary> outBinaries
-){
-    outBinaries.reserve(objects.size());
-    for(in ModelSkeletonObject object : objects)
-        outBinaries.push_back(PackModelSkeletonObjectBinary(object));
-}
-
-void PackModelStaticMeshObjectBinaries(
-    in Span<ModelStaticMeshObject> objects,
-    mut Vector<ModelStaticMeshObjectBinary> outBinaries
-){
-    outBinaries.reserve(objects.size());
-    for(in ModelStaticMeshObject object : objects)
-        outBinaries.push_back(PackModelStaticMeshObjectBinary(object));
-}
-
-void PackModelSkinnedMeshObjectBinaries(
-    in Span<ModelSkinnedMeshObject> objects,
-    mut Vector<ModelSkinnedMeshObjectBinary> outBinaries
-){
-    outBinaries.reserve(objects.size());
-    for(in ModelSkinnedMeshObject object : objects)
-        outBinaries.push_back(PackModelSkinnedMeshObjectBinary(object));
-}
-
 b8 IsAllowedModelMetadataField(in StringView fieldName){
     return
         fieldName == s_ModelSkeletonsField

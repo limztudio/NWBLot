@@ -76,14 +76,6 @@ GpuGraphResourceId SelectSoftShadowGraphResource(in b8 firstSelected, in GpuGrap
     return second;
 }
 
-b8 HasSoftShadowGraphResource(in Span<GpuGraphResourceId> resources, in GpuGraphResourceId resource){
-    for(in GpuGraphResourceId existing : resources){
-        if(existing == resource)
-            return true;
-    }
-    return false;
-}
-
 Expected<GpuGraphResourceId> ImportSoftShadowSoftwareBuffer(mut GpuTaskGraph graph, in b8 hardwareTransparentTrace, in BufferHandle buffer, in Name identity, in StringView label){
     if(hardwareTransparentTrace)
         return GpuGraphResourceId();

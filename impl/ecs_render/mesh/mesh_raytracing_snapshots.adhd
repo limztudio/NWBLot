@@ -33,10 +33,6 @@ b8 ShouldFreeUnreferencedSwBvhHandle(in b8 heapInitialized, in b8 handleValid, i
     return heapInitialized && handleValid && !matchesRef0 && !matchesRef1 && !matchesRef2 && !matchesRef3;
 }
 
-usize ReservedRetainedAccelerationBufferCapacity(in usize meshCount, in usize buffersPerMesh){
-    return meshCount * buffersPerMesh;
-}
-
 b8 MatchesRenderableRuntimeMeshRevisions(
     in b8 runtimeMesh,
     in u64 meshVersion,

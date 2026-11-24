@@ -394,14 +394,6 @@ usize FindRendererTaskTimingPendingSample(
     return pendingSamples.size();
 }
 
-void RetireRendererTaskTimingPendingSample(in usize pendingIndex, mut Vector<RendererTaskTimingPendingSample> pendingSamples){
-    assert(pendingIndex < pendingSamples.size());
-    const usize lastIndex = pendingSamples.size() - 1u;
-    for(usize index = pendingIndex; index < lastIndex; ++index)
-        pendingSamples[index] = pendingSamples[index + 1u];
-    pendingSamples.pop_back();
-}
-
 b8 TrackRendererTaskTimingSample(
     in GpuTimingSampleAttribution attribution,
     in Name scopeName,
@@ -570,10 +562,6 @@ b8 CanBeginGraphClearTimingState(in b8 hasGraphics, in b8 hasTiming, in b8 hasTi
 
 b8 CanEndGraphClearTimingState(in b8 hasTiming, in b8 timingActive, in b8 hasTicket){
     return hasTiming && timingActive && hasTicket;
-}
-
-b8 CanRecordFloatTextureClear(in b8 hasDestination, in b8 renderPassActive){
-    return hasDestination && !renderPassActive;
 }
 
 b8 CanBuildPacketSubmissionTelemetry(in b8 statisticsValid, in u32 ownerNodeIndex){

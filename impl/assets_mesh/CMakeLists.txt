@@ -45,14 +45,6 @@ nwb_target_adhd_sources(nwb_assets_mesh
         "${CMAKE_CURRENT_LIST_DIR}/skin_asset.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
 )
-nwb_target_adhd_sources(nwb_assets_mesh
-    NAMESPACE "NWB::Impl::MeshAssetBinaryPayload"
-    SOURCES "${CMAKE_CURRENT_LIST_DIR}/binary_payload_io.adhd"
-)
-nwb_target_adhd_sources(nwb_assets_mesh
-    NAMESPACE "NWB::Impl::MeshBinaryPayload"
-    SOURCES "${CMAKE_CURRENT_LIST_DIR}/binary_payload_labels.adhd"
-)
 target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_subsystem nwb_assets_skeleton nwb_mesh nwb_assets_skeleton_types nwb_assets_mesh_types)
 
 if(NWB_BUILD_PIPELINE)
@@ -64,7 +56,6 @@ if(NWB_BUILD_PIPELINE)
             "${CMAKE_CURRENT_LIST_DIR}/meshlet_vertex_attributes.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
-            "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_candidates.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_growth.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_triangles.adhd"

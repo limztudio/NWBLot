@@ -10,7 +10,6 @@
 
 
 const StringView s_MeshMetaText = "Mesh meta";
-const usize s_IndexedLabelBracketReserve = 2u;
 const StringView s_MeshIndicesFieldNameView = "indices";
 const StringView s_MeshVertexRefsFieldNameView = "vertex_refs";
 const StringView s_MeshPositionsFieldNameView = "positions";
@@ -19,7 +18,6 @@ const StringView s_MeshTangentsFieldNameView = "tangents";
 const StringView s_MeshUv0FieldNameView = "uv0";
 const StringView s_MeshColorsFieldNameView = "colors";
 const usize s_VertexRefComponentCount = 5u;
-const usize s_ComponentLabelExtraCharCount = 2u;
 const StringView s_SkinMetaDiagnosticPrefix = "Skin meta";
 const StringView s_SkinMetaMeshField = "mesh";
 const StringView s_SkinMetaSkeletonField = "skeleton";

@@ -105,7 +105,6 @@ const u32 s_HwTransparentCrossingsBufferIndex = 0u;
 const u32 s_HwTransparentOverflowListBufferIndex = 1u;
 const u32 s_HwTransparentOverflowArgsBufferIndex = 2u;
 const usize s_HwTransparentReceiverFactorByteOffset = 48u;
-const usize s_HwTransparentStageCount = 3u;
 const u32 s_ShadowTracePositionMember = 0u;
 const u32 s_ShadowTraceIndexMember = 1u;
 const u32 s_ShadowTraceAttributeMember = 2u;
@@ -129,7 +128,6 @@ const StringView s_ShadowResolveWaveletVariant = "NWB_SHADOW_RESOLVE_COMPILED_ST
 const StringView s_ShadowResolveUpsampleVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2";
 const usize s_ShadowPrepareResourceSetUseCapacity = 3u;
 const usize s_ShadowPrepareResourceUseCapacity = 19u;
-const usize s_ShadowPrepareSingleDependencyCount = 1u;
 const usize s_ShadowVisibilityStateSourceCapacity = 2u;
 const usize s_ShadowVisibilityResourceUseCapacity = 40u;
 const u32 s_ShadowHistorySelectorCount = 2u;

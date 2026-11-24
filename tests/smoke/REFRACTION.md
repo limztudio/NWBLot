@@ -264,9 +264,10 @@ the same fixture and toolchain before launching either arm:
    reference. Keep compilation and cooking separate from measured acquisition.
 
 Use `git apply --check tests/smoke/refraction_direct_reference.patch` before
-applying the reference; a context failure requires updating and reviewing that
-experimental patch against the current renderer. Git attributes keep the reference
-patch in LF format for application on Windows. The manifest records the compiled
+applying the reference. On the current main branch the check fails for
+`rt_refraction.adhd` and `rt_refraction_targets_and_tasks.adhd`; update and review
+the experimental patch against the renderer before using the full-frame reference.
+Git attributes keep the reference patch in LF format for application on Windows. The manifest records the compiled
 source state, including the reference differences. Source manifests
 are checked against saved file bytes. The runner also requires identical
 compiled density fixture hashes from the same source generation, distinct executable/runtime directories, and

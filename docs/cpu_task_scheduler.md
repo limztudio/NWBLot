@@ -1,6 +1,6 @@
 # Shared CPU task scheduling
 
-NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. The standalone `asset_builder` tool constructs its own scheduler once at entry (`pipeline/asset_builder/module.adhd`).
+NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Worlds and projects own task scopes; systems own their data and borrow the execution service. The standalone `asset_builder` tool constructs its own scheduler once at entry (`pipeline/asset_builder/module.adhd`).
 
 The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task/cpu` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
 

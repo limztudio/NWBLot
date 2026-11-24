@@ -640,13 +640,15 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
     const u32 frameWidth = extent.width;
     const u32 frameHeight = extent.height;
 
-    const f32 frameWidthFloat = cast<f32>(frameWidth);
-    const f32 frameHeightFloat = cast<f32>(frameHeight);
+    const VectorSingle frameExtent(cast<f32>(frameWidth), cast<f32>(frameHeight), 0.0f, 0.0f);
+    const f32 frameWidthFloat = frameExtent.x;
+    const f32 frameHeightFloat = frameExtent.y;
     const f32 aspect = frameWidthFloat / frameHeightFloat;
-    const f32 tangent = Tan(s_RefractionPi / 6.0f);
-    const f32 fractionEdge = Sqrt(cast<f32>(percent) * 0.01f);
-    const u32 coveredWidth = Min(frameWidth, 2u * cast<u32>(frameWidthFloat * fractionEdge * 0.5f + 0.5f));
-    const u32 coveredHeight = Min(frameHeight, 2u * cast<u32>(frameHeightFloat * fractionEdge * 0.5f + 0.5f));
+    const f32 tangent = VectorTan(VectorSingle(s_RefractionPi / 6.0f)).x;
+    const f32 fractionEdge = VectorSqrt(VectorSingle(cast<f32>(percent) * 0.01f)).x;
+    const VectorSingle covered = (frameExtent * VectorSingle(fractionEdge)) * VectorSingle(0.5f) + VectorSingle(0.5f);
+    const u32 coveredWidth = Min(frameWidth, 2u * cast<u32>(covered.x));
+    const u32 coveredHeight = Min(frameHeight, 2u * cast<u32>(covered.y));
     u32 left = 0u;
     u32 top = 0u;
     if(percent != 0u){
@@ -704,21 +706,19 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
     }
 
     f32 frontDepthValue = 0.0f;
-    if(percent == 0u)
+    if(percent == 0u){
         frontDepthValue = 4.0f;
+    }
     f32 projectedWidth = cast<f32>(coveredWidth);
     f32 projectedHeight = cast<f32>(coveredHeight);
     if(percent == 0u || percent == 100u){
-        projectedWidth = frameWidthFloat + 2.0f;
-        projectedHeight = frameHeightFloat + 2.0f;
+        const VectorSingle fullProj = frameExtent + VectorSingle(2.0f);
+        projectedWidth = fullProj.x;
+        projectedHeight = fullProj.y;
     }
     const f32 halfHeight = (6.0f + frontDepthValue) * tangent;
-    const VectorSingle scale = VectorSingle(
-        (halfHeight * 2.0f * aspect * projectedWidth) / frameWidthFloat,
-        (halfHeight * 2.0f * projectedHeight) / frameHeightFloat,
-        0.2f,
-        0.0f
-    );
+    const VectorSingle xyScale = VectorSingle(((halfHeight * 2.0f) * aspect) * projectedWidth, (halfHeight * 2.0f) * projectedHeight, 0.0f, 0.0f) / frameExtent;
+    const VectorSingle scale = VectorSingle(xyScale.x, xyScale.y, 0.2f, 0.0f);
     const EntityID glass = CreateTintedStaticMeshEntity(
         s_RefractionSceneCubeMesh,
         s_RefractionSceneClearMaterial,

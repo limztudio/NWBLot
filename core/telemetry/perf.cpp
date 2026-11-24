@@ -5,7 +5,7 @@
 #include "perf.h"
 
 #include <global/binary.h>
-#include <global/simplemath.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +28,7 @@ namespace __hidden_telemetry_perf{
 }
 
 [[nodiscard]] static b8 TimingDurationsAreFinite(const f64 seconds, const f64 minSeconds, const f64 maxSeconds, const f64 lastSeconds)noexcept{
-    return IsFinite(seconds) && IsFinite(minSeconds) && IsFinite(maxSeconds) && IsFinite(lastSeconds);
+    return VectorDoubleIsFinite(VectorDoubleSet(seconds, minSeconds, maxSeconds, lastSeconds), VectorDoubleComponentMask::s_DoubleXYZW);
 }
 
 [[nodiscard]] static b8 ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{

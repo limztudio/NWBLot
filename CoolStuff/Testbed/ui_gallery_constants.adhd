@@ -165,7 +165,9 @@ Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferre
     const VectorSingle size(s_SelectorWidth, height, s_SelectorWidth, height);
     const VectorSingle margin(s_GalleryMargin);
     const VectorSingle available = (displayExtent - size) - margin;
-    const VectorSingle candidate(available.x, Min(preferredTop, available.y), available.x, available.y);
+    const VectorSingle prefTop(preferredTop);
+    const VectorSingle availY(available.y);
+    const VectorSingle candidate(available.x, VectorSelect(availY, prefTop, VectorLess(prefTop, availY)).x, available.x, available.y);
     const VectorSingle resolvedOrigin = Max(margin, candidate);
     return Rect(resolvedOrigin.x, resolvedOrigin.y, s_SelectorWidth, height);
 }
@@ -278,7 +280,9 @@ f32 ResolveSkinGalleryPreferredTop(in f32 captionHeight){
 }
 
 f32 ResolveSkinGalleryOriginX(in f32 logicalWidth){
-    return Max(s_GalleryMargin, (logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+    const VectorSingle margin(s_GalleryMargin);
+    const VectorSingle origin((logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+    return VectorSelect(margin, origin, VectorGreater(origin, margin)).x;
 }
 
 f32 ResolveSkinGalleryCenteredTextY(in f32 originY, in f32 boxOffsetY, in f32 boxHeight, in f32 textHeight){

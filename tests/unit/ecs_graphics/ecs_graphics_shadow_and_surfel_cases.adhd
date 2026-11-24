@@ -253,11 +253,10 @@ f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
                 continue;
             if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
                 continue;
-            const f32 dx = biasedPosition.x - record.position.x;
-            const f32 dy = biasedPosition.y - record.position.y;
-            const f32 dz = biasedPosition.z - record.position.z;
-            const f32 distance = Sqrt(dx * dx + dy * dy + dz * dz);
-            const f32 weight = Max(1.0f - (distance / s_ShaderSurfelDefaultRadius), 0.0f);
+            const VectorSingle delta = VectorSingle(biasedPosition.x, biasedPosition.y, biasedPosition.z, 0.0f) - VectorSingle(record.position.x, record.position.y, record.position.z, 0.0f);
+            const f32 distance = VectorSqrt(Vector3LengthSq(delta)).x;
+            const VectorSingle rawWeight(1.0f - (distance / s_ShaderSurfelDefaultRadius));
+            const f32 weight = VectorSelect(VectorSingle(0.0f), rawWeight, VectorGreater(rawWeight, VectorSingle(0.0f))).x;
             irradiance += record.radiance * weight;
             totalWeight += weight;
         }
@@ -970,7 +969,7 @@ void VerifySurfelHash_NeighborCellBoundaryPreservesTheNormalizedField(){
     const f32x3u after = f32x3u(1.2f + 1e-6f, 0.61f, 0.0f);
     ASSERT_EQ(nwbSurfelCellCoord(before, s_ShaderSurfelCellSize).x, 1);
     ASSERT_EQ(nwbSurfelCellCoord(after, s_ShaderSurfelCellSize).x, 2);
-    EXPECT_GT(Abs(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false)), 0.1f);
+    EXPECT_GT(VectorAbs(VectorSingle(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false))).x, 0.1f);
     EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
 }
 

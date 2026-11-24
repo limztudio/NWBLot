@@ -78,10 +78,7 @@ void InitializeSkeletonPoseFromJoints(in Span<SkeletonJoint> joints, mut Skeleto
 
 b8 IsAffineSkeletonJointRow3(in VectorSingle row3){
     return IsFiniteSkeletonJointRow(row3)
-        && Abs(row3.x) <= s_SkeletonAffineEpsilon
-        && Abs(row3.y) <= s_SkeletonAffineEpsilon
-        && Abs(row3.z) <= s_SkeletonAffineEpsilon
-        && Abs(row3.w - 1.0f) <= s_SkeletonAffineEpsilon;
+        && Vector4LessOrEqual(Abs(row3 - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)), VectorSingle(s_SkeletonAffineEpsilon));
 }
 
 b8 IsFiniteJointMatrix3x4(in MatrixSingle matrix){
@@ -103,7 +100,7 @@ b8 IsInvertibleAffineJointMatrix3x4(in MatrixSingle matrix, in f32 determinantEp
     if(!IsFiniteSkeletonJointRow(row0) || !IsFiniteSkeletonJointRow(row1) || !IsFiniteSkeletonJointRow(row2))
         return false;
     const f32 determinant = Vector3Dot(row0, Vector3Cross(row1, row2)).x;
-    return IsFinite(determinant) && Abs(determinant) > determinantEpsilon;
+    return IsFinite(VectorSingle(determinant)) && Abs(VectorSingle(determinant)).x > determinantEpsilon;
 }
 
 MatrixSingle MultiplyAffineJointMatrix3x4(in MatrixSingle lhs, in MatrixSingle rhs){

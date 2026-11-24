@@ -51,7 +51,7 @@ u64 PositionSkinKey(in u32 position, in u32 skin){
 }
 
 f32 CleanFloat(in f32 value){
-    if(Abs(value) < s_CleanFloatEpsilon)
+    if(Abs(VectorSingle(value)).x < s_CleanFloatEpsilon)
         return 0.0f;
     return value;
 }
@@ -98,7 +98,7 @@ b8 HasSourceMeshStreamValueCapacity(in usize count){
 }
 
 b8 HasUsableSourceTriangleArea(in f64 areaLengthSquared, in f64 minimumAreaLengthSquared){
-    return IsFinite(areaLengthSquared) && !(areaLengthSquared <= minimumAreaLengthSquared);
+    return IsFinite(VectorDouble(areaLengthSquared)) && !(areaLengthSquared <= minimumAreaLengthSquared);
 }
 
 SourceTangentMode ResolveGeneratedSourceTangentMode(in b8 usedDefaultUvs, in u32 degenerateUvTriangleCount, in u32 fallbackTangentVertexCount){

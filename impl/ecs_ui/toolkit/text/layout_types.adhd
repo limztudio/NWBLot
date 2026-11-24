@@ -98,7 +98,8 @@ Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
     if(!FitsTextCoordinate(xy.x + wh.x) || !FitsTextCoordinate(xy.y + wh.y))
         return MakeUnexpected(Failure());
     const VectorSingle rounded(cast<f32>(xy.x), cast<f32>(xy.y), cast<f32>(wh.x), cast<f32>(wh.y));
-    if(!IsFinite(rounded) || !(IsFinite(rounded.x + rounded.z) && IsFinite(rounded.y + rounded.w)))
+    const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
+    if(!IsFinite(rounded) || !IsFinite(roundedEnds.xy))
         return MakeUnexpected(Failure());
     return VectorDouble(rounded);
 }
@@ -115,7 +116,7 @@ TextGlyphIntersection IntersectTextCoverageInk(
     in Point pixelScale
 ){
     const f64 fontSizeF64 = cast<f64>(fontSize);
-    const f64 shapedSize = Floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
+    const f64 shapedSize = VectorDoubleFloor(VectorDouble((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel)).x / s_TextFixedPointScaleF64;
     f64 correctionScalar = 1.0;
     if(!coverageKnown)
         correctionScalar = fontSizeF64 / shapedSize;
@@ -123,7 +124,7 @@ TextGlyphIntersection IntersectTextCoverageInk(
     f64 outlineAllowance = 0.0;
     if(!coverageKnown)
         outlineAllowance = fontSizeF64 / cast<f64>(unitsPerEm);
-    const f64 rasterMarginScalar = ((Max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
+    const f64 rasterMarginScalar = ((UiSimdMaxF64(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
     const VectorDouble margin = VectorDouble(rasterMarginScalar) + (VectorDouble(s_TextHalfPixel) / VectorDouble(cast<f64>(pixelScale.x), cast<f64>(pixelScale.y), cast<f64>(pixelScale.x), cast<f64>(pixelScale.y)));
     const VectorDouble inkOrigin(cast<f64>(ink.x), cast<f64>(ink.y), cast<f64>(ink.x), cast<f64>(ink.y));
     const VectorDouble inkEnd = inkOrigin + VectorDouble(cast<f64>(ink.width), cast<f64>(ink.height), cast<f64>(ink.width), cast<f64>(ink.height));
@@ -147,7 +148,7 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
 ){
     if(
         !IsValidTextGlyphLocation(glyphPosition, topLeft)
-        || !IsFinite(rasterScale) || rasterScale <= 0.0f
+        || !IsFinite(VectorSingle(rasterScale)) || rasterScale <= 0.0f
         || !IsValidUiRect(recordPixels)
         || !IsFinite(VectorSingle(pixelScale.x, pixelScale.y, pixelScale.x, pixelScale.y).xy) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
@@ -160,7 +161,7 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
     const VectorDouble pos = origin + VectorDouble(bearing.x, -bearing.y, bearing.x, -bearing.y);
     const VectorDouble scaleVec(cast<f64>(pixelScale.x), cast<f64>(pixelScale.y), cast<f64>(pixelScale.x), cast<f64>(pixelScale.y));
     const VectorDouble rounded = VectorDoubleMultiplyAddExpression(pos, scaleVec, VectorDouble(s_TextHalfPixel));
-    const VectorDouble aligned = VectorDouble(Floor(rounded.x), Floor(rounded.y), Floor(rounded.x), Floor(rounded.y)) / scaleVec;
+    const VectorDouble aligned = VectorDoubleFloor(rounded) / scaleVec;
     const f64 alignedX = aligned.x;
     const f64 alignedY = aligned.y;
     const VectorDouble size = VectorDouble(cast<f64>(recordPixels.width), cast<f64>(recordPixels.height), 0.0, 0.0) / invRasterScale;
@@ -190,9 +191,10 @@ TextGlyphIntersection ValidateTextGlyphCandidateInputs(
     in Point pixelScale
 ){
     if(
-        !IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || !IsFinite(physicalSize)
+        !IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize)
+        || !IsFinite(VectorSingle(physicalSize, pixelScale.x, pixelScale.y, 0.0f))
         || physicalSize < 1.0f || physicalSize > s_TextMaxRasterPpemF32 || !IsValidUiRect(clip)
-        || !IsFinite(VectorSingle(pixelScale.x, pixelScale.y, pixelScale.x, pixelScale.y).xy) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+        || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
         return TextGlyphIntersection::Invalid;
     if(clip.width <= 0.0f || clip.height <= 0.0f)

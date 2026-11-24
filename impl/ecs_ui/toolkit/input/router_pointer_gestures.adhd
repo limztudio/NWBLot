@@ -190,9 +190,9 @@ Expected<InputEvent> TryResolveRouterPointerEvent(
 ){
     if(!IsPointerInputEventType(event.type))
         return event;
-    if(!event.source.valid() || !IsFinite(event.position.x) || !IsFinite(event.position.y))
+    if(!event.source.valid() || !IsFinite(VectorSingle(event.position.x, event.position.y, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
-    if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
+    if(event.type == InputEventType::PointerWheel && !IsFinite(VectorSingle(event.scrollX, event.scrollY, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     InputEvent resolved = event;
     const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;

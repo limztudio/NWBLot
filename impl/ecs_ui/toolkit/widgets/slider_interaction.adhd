@@ -33,7 +33,7 @@ f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
     if(configuredStep > 0.0)
         return configuredStep;
     const f64 span = maximum - minimum;
-    if(IsFinite(span)){
+    if(IsFinite(VectorDouble(cast<f64>(span)))){
         const f64 step = span / s_SliderDefaultKeyStepDivisor;
         if(step == 0.0)
             return span;
@@ -71,7 +71,7 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     default:
         return currentValue;
     }
-    if(!IsFinite(value))
+    if(!IsFinite(VectorDouble(cast<f64>(value))))
         return MakeUnexpected(Failure());
     return value;
 }
@@ -80,7 +80,7 @@ Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGest
     const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
-        normalized = Min(1.0, normalizedValue);
+        normalized = UiSimdMinF64(1.0, normalizedValue);
     return InterpolateFiniteRange(options.minimum, options.maximum, normalized);
 }
 
@@ -101,7 +101,7 @@ Expected<SliderDragResult> TryComputeSliderDragValue(in f64 currentValue, in f64
     const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
-        dragged = Min(1.0, normalizedValue);
+        dragged = UiSimdMinF64(1.0, normalizedValue);
     const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
         return MakeUnexpected(Failure());

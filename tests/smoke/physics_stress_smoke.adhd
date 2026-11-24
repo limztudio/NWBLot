@@ -324,11 +324,11 @@ void ConfigureGpuParityWorld(mut PhysicsWorld w, in b8 useLbvh, in b8 residentMo
 
 f32 ComputeVec3MaxDiff(in VectorSingle a, in VectorSingle b){
     const VectorSingle d = Abs(a - b);
-    return Max(d.x, Max(d.y, d.z));
+    return Vector3MaxComponent(d).x;
 }
 
 f32 ComputeQuatAbsDot(in VectorSingle a, in VectorSingle b){
-    return Abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+    return Abs(Vector4Dot(a, b)).x;
 }
 
 b8 BuildNonBoxTaperedHull(mut HullShape outHull){
@@ -1258,7 +1258,7 @@ b8 RunGpuParitySpatialQueriesSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
         if(cpuHit.hit){
             if(
                 gr.hitIds.x != cpuHit.shapeId.index
-                || Abs(gr.hitPointFraction.w - cpuHit.fraction) >= 0.05f
+                || Abs(VectorSingle(gr.hitPointFraction.w - cpuHit.fraction)).x >= 0.05f
                 || ComputeVec3MaxDiff(VectorSingle(gr.hitPointFraction), VectorSingle(cpuHit.point)) >= 0.05f
             ){
                 error(

@@ -372,8 +372,9 @@ Expected<Rect> FindUiSkinSlotQuad(in DrawSnapshot snapshot, in u32 slot){
                 Rect bounds = Rect();
                 bounds.x = first.position.x;
                 bounds.y = first.position.y;
-                bounds.width = opposite.position.x - first.position.x;
-                bounds.height = opposite.position.y - first.position.y;
+                const VectorSingle size = VectorSingle(opposite.position.x, opposite.position.y, 0.0f, 0.0f) - VectorSingle(first.position.x, first.position.y, 0.0f, 0.0f);
+                bounds.width = size.x;
+                bounds.height = size.y;
                 return bounds;
             }
         }

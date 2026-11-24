@@ -16,11 +16,14 @@ class LayoutTreeArrangementStart{
 }
 
 Rect IntersectLayoutRectsScalar(in Rect lhs, in Rect rhs){
-    const f32 x0 = Max(lhs.x, rhs.x);
-    const f32 y0 = Max(lhs.y, rhs.y);
-    const f32 x1 = Min(lhs.x + lhs.width, rhs.x + rhs.width);
-    const f32 y1 = Min(lhs.y + lhs.height, rhs.y + rhs.height);
-    return Rect(x0, y0, Max(0.0f, x1 - x0), Max(0.0f, y1 - y0));
+    const VectorSingle lhsBox(lhs.x, lhs.y, lhs.x + lhs.width, lhs.y + lhs.height);
+    const VectorSingle rhsBox(rhs.x, rhs.y, rhs.x + rhs.width, rhs.y + rhs.height);
+    const VectorSingle origin = VectorSelect(rhsBox, lhsBox, VectorGreater(lhsBox, rhsBox));
+    const VectorSingle end = VectorSelect(rhsBox, lhsBox, VectorLess(lhsBox, rhsBox));
+    const VectorSingle extent = end.zwxy - origin;
+    const VectorSingle zero(0.0f);
+    const VectorSingle size = VectorSelect(zero, extent, VectorGreater(extent, zero));
+    return Rect(origin.x, origin.y, size.x, size.y);
 }
 
 Expected<LayoutTreeArrangementStart> TryBeginArrangeLayoutTreeNode(
@@ -36,19 +39,19 @@ Expected<LayoutTreeArrangementStart> TryBeginArrangeLayoutTreeNode(
     in LayoutTreeNode node = nodes[cast<usize>(index)];
     in LayoutNodeDesc description = node.description;
     in Rect inheritedClip = inheritedClips[cast<usize>(index)];
-    const f64 boxWidth = cast<f64>(inoutBox.rectangle.width);
-    const f64 boxHeight = cast<f64>(inoutBox.rectangle.height);
-    const f64 padLeft = Min(cast<f64>(description.padding.left), boxWidth);
-    const f64 padTop = Min(cast<f64>(description.padding.top), boxHeight);
-    const f64 remWidth = boxWidth - padLeft;
-    const f64 remHeight = boxHeight - padTop;
-    const f64 padRight = Min(cast<f64>(description.padding.right), remWidth);
-    const f64 padBottom = Min(cast<f64>(description.padding.bottom), remHeight);
+    const VectorDouble boxSize(cast<f64>(inoutBox.rectangle.width), cast<f64>(inoutBox.rectangle.height), 0.0, 0.0);
+    const VectorDouble padLeadingRaw(cast<f64>(description.padding.left), cast<f64>(description.padding.top), 0.0, 0.0);
+    const VectorDouble padLeading = VectorDoubleSelect(boxSize, padLeadingRaw, VectorDoubleLess(padLeadingRaw, boxSize));
+    const VectorDouble remSize = boxSize - padLeading;
+    const VectorDouble padTrailingRaw(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), 0.0, 0.0);
+    const VectorDouble padTrailing = VectorDoubleSelect(remSize, padTrailingRaw, VectorDoubleLess(padTrailingRaw, remSize));
+    const VectorDouble contentOrigin = VectorDouble(cast<f64>(inoutBox.rectangle.x), cast<f64>(inoutBox.rectangle.y), 0.0, 0.0) + padLeading;
+    const VectorDouble contentExtent = remSize - padTrailing;
     inoutBox.content = Rect(
-        cast<f32>(cast<f64>(inoutBox.rectangle.x) + padLeft),
-        cast<f32>(cast<f64>(inoutBox.rectangle.y) + padTop),
-        cast<f32>(remWidth - padRight),
-        cast<f32>(remHeight - padBottom)
+        cast<f32>(contentOrigin.x),
+        cast<f32>(contentOrigin.y),
+        cast<f32>(contentExtent.x),
+        cast<f32>(contentExtent.y)
     );
     inoutBox.clip = IntersectLayoutRectsScalar(inoutBox.rectangle, inheritedClip);
     inoutBox.hit = inoutBox.clip;
@@ -88,7 +91,7 @@ Expected<LayoutTreeArrangementStart> TryBeginArrangeLayoutTreeNode(
     f32 mainExtent = inoutBox.content.height;
     if(row)
         mainExtent = inoutBox.content.width;
-    result.available = Max(0.0, (cast<f64>(mainExtent) - consumed) - spacing);
+    result.available = UiSimdMaxF64(0.0, (cast<f64>(mainExtent) - consumed) - spacing);
     if(weight > 0.0)
         result.invWeight = 1.0 / weight;
     f32 startCoord = inoutBox.content.y;

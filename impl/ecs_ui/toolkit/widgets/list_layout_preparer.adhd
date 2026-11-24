@@ -116,7 +116,7 @@ class ListLayoutPreparer{
                     ++cursor;
                 }
             }
-            if(!IsFinite(height) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
+            if(!IsFinite(VectorSingle(height)) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
                 return MakeUnexpected(Failure());
             if(height == frame.rowHeight){
                 frame.scrollOffset = candidate.value().offset;
@@ -146,7 +146,7 @@ class ListLayoutPreparer{
 Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
     const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
     const f64 end = start + cast<f64>(rowHeight);
-    if(!IsFinite(start) || !IsFinite(end) || end <= start)
+    if(!IsFinite(VectorSingle(start, end, 0.0f, 0.0f)) || end <= start)
         return MakeUnexpected(Failure());
     return f64x2u(start, end);
 }

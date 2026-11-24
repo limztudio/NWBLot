@@ -52,17 +52,17 @@ CameraProjection MakeFallbackCameraProjection(){
 }
 
 Expected<f32> TryComputeCameraTanHalfVerticalFov(in f32 verticalFovRadians){
-    if(!IsFinite(verticalFovRadians) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
+    if(!IsFinite(VectorSingle(verticalFovRadians)) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
         return MakeUnexpected(Failure());
 
-    const f32 halfFov = verticalFovRadians * s_HalfFovWeight;
-    const f32 sinHalfFov = Sin(halfFov);
-    const f32 cosHalfFov = Cos(halfFov);
-    if(!IsFinite(sinHalfFov) || !IsFinite(cosHalfFov) || !(Abs(cosHalfFov) >= s_CameraFovCosEpsilon))
+    const VectorDouble halfFovVec(cast<f64>(verticalFovRadians) * cast<f64>(s_HalfFovWeight));
+    const f32 sinHalfFov = cast<f32>(Sin(halfFovVec).x);
+    const f32 cosHalfFov = cast<f32>(Cos(halfFovVec).x);
+    if(!IsFinite(VectorSingle(sinHalfFov, cosHalfFov, 0.0f, 0.0f)) || !(Abs(VectorSingle(cosHalfFov)).x >= s_CameraFovCosEpsilon))
         return MakeUnexpected(Failure());
 
     const f32 tanHalfFov = sinHalfFov / cosHalfFov;
-    if(!IsFinite(tanHalfFov) || !(tanHalfFov > 0.0f))
+    if(!IsFinite(VectorSingle(tanHalfFov)) || !(tanHalfFov > 0.0f))
         return MakeUnexpected(Failure());
 
     return tanHalfFov;
@@ -75,9 +75,9 @@ b8 CameraClipRangeValid(in f32 nearPlane, in f32 farPlane){
 
 f32 ResolveCameraAspectRatio(in f32 cameraAspectRatio, in f32 fallbackAspectRatio){
     f32 resolvedFallback = 1.0f;
-    if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
+    if(IsFinite(VectorSingle(fallbackAspectRatio)) && fallbackAspectRatio > 0.0f)
         resolvedFallback = fallbackAspectRatio;
-    if(IsFinite(cameraAspectRatio) && cameraAspectRatio > 0.0f)
+    if(IsFinite(VectorSingle(cameraAspectRatio)) && cameraAspectRatio > 0.0f)
         return cameraAspectRatio;
     return resolvedFallback;
 }
@@ -149,7 +149,7 @@ b8 IsValidCameraTransformVectors(in VectorSingle position, in VectorSingle rotat
         return false;
 
     const f32 rotationLengthSquared = LengthSq(rotation);
-    return IsFinite(rotationLengthSquared) && Abs(rotationLengthSquared - 1.0f) <= s_CameraRotationUnitLengthSquaredTolerance;
+    return IsFinite(VectorSingle(rotationLengthSquared)) && Abs(VectorSingle(rotationLengthSquared - 1.0f)).x <= s_CameraRotationUnitLengthSquaredTolerance;
 }
 
 b8 IsValidSceneCameraViewProjection(

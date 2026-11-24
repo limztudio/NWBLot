@@ -112,8 +112,9 @@ class EditBoxLayoutTests{
         auto rect = this.m_view.caretGeometry().rangeOnLine(range, 0u, this.m_placement.caret.width);
         if(!rect.has_value())
             return MakeUnexpected(Failure());
-        rect.value().x += this.m_placement.textOrigin.x;
-        rect.value().y += this.m_placement.textOrigin.y;
+        const VectorSingle origin = VectorSingle(rect.value().x, rect.value().y, 0.0f, 0.0f) + VectorSingle(this.m_placement.textOrigin.x, this.m_placement.textOrigin.y, 0.0f, 0.0f);
+        rect.value().x = origin.x;
+        rect.value().y = origin.y;
         return rect;
     }
 }
@@ -828,7 +829,9 @@ void VerifyEditBoxLayoutTests_PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAn
     EXPECT_FLOAT_EQ(selection.value().width, 10.0f);
     EXPECT_FLOAT_EQ(preedit.value().x, 20.0f);
     EXPECT_FLOAT_EQ(preedit.value().width, 20.0f);
-    EXPECT_FLOAT_EQ(Min(self.m_placement.caret.width, preedit.value().height), 1.0f);
+    const VectorSingle caretW(self.m_placement.caret.width);
+    const VectorSingle preeditH(preedit.value().height);
+    EXPECT_FLOAT_EQ(VectorSelect(preeditH, caretW, VectorLess(caretW, preeditH)).x, 1.0f);
     const Expected<usize> hit = self.m_view.hitTest(Point(39.0f, 24.0f), self.m_placement);
     ASSERT_TRUE(hit.has_value());
     EXPECT_EQ(hit.value(), 2u);

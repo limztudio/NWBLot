@@ -1168,8 +1168,7 @@ void VerifyUiTextAreaNavigationTests_FiniteExtremeViewportHeightClampsToDocument
     const auto first = self.resolve(EditNavigationDirection::PageUp, f32.max);
     ASSERT_TRUE(first.has_value());
     EXPECT_EQ(first.value().committedByte, 2u);
-    EXPECT_TRUE(IsFinite(first.value().preferredX));
-    EXPECT_TRUE(IsFinite(last.value().preferredX));
+    EXPECT_TRUE(IsFinite(VectorDouble(cast<f64>(first.value().preferredX), cast<f64>(last.value().preferredX), 0.0, 0.0)));
 }
 
 void VerifyUiTextAreaNavigationTests_PageReachesTheTrailingEmptyLine(mut UiTextAreaNavigationTests self){

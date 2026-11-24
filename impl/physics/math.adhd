@@ -154,6 +154,25 @@ SymMat3 InvertSymMat3(in SymMat3 a){
 }
 
 
+f32 SimdMin(in f32 a, in f32 b){
+    const VectorSingle va(a);
+    const VectorSingle vb(b);
+    return VectorSelect(vb, va, VectorLess(va, vb)).x;
+}
+
+f32 SimdMax(in f32 a, in f32 b){
+    const VectorSingle va(a);
+    const VectorSingle vb(b);
+    return VectorSelect(vb, va, VectorGreater(va, vb)).x;
+}
+
+f32 SimdClamp(in f32 v, in f32 lo, in f32 hi){
+    const VectorSingle vv(v);
+    const VectorSingle vlo(lo);
+    const VectorSingle vhi(hi);
+    return VectorSelect(vlo, VectorSelect(vv, vhi, VectorGreater(vv, vhi)), VectorGreater(vv, vlo)).x;
+}
+
 b8 IsFiniteVec3(in VectorSingle v){
     return IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
 }

@@ -104,9 +104,11 @@ class UiBuilderTests : ContextTestFixture{
             for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
                 in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
                 in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(Abs(first.texCoord.x - firstU) < 1e-6f && Abs(last.texCoord.x - lastU) < 1e-6f &&
-                    Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f)
-                    return Rect(first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y);
+                const VectorSingle texDelta = VectorAbs(VectorSingle(first.texCoord.x, last.texCoord.x, first.texCoord.y, last.texCoord.y) - VectorSingle(firstU, lastU, 0.0f, 0.5f));
+                if(Vector4Less(texDelta, VectorSingle(1e-6f))){
+                    const VectorSingle size = VectorSingle(last.position.x, last.position.y, 0.0f, 0.0f) - VectorSingle(first.position.x, first.position.y, 0.0f, 0.0f);
+                    return Rect(first.position.x, first.position.y, size.x, size.y);
+                }
             }
         }
         return MakeUnexpected(Failure());

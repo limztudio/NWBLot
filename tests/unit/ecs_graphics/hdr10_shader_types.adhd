@@ -17,9 +17,11 @@ ShaderFloat3 HdrDivide(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(Hd
 f64 HdrDot(in ShaderFloat3 a, in ShaderFloat3 b){ return (a.x * b.x + a.y * b.y) + a.z * b.z; }
 ShaderFloat3 HdrMax(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(Max(HdrLanes(a, 0.0), HdrLanes(b, 0.0))); }
 f32 HdrSaturateScalar(in f32 a){
-    if(a > 0.0f)
-        return Min(1.0f, a);
-    return 0.0f;
+    const VectorSingle zero(0.0f);
+    const VectorSingle one(1.0f);
+    const VectorSingle v(a);
+    const VectorSingle clampedLow = VectorSelect(zero, v, VectorGreater(v, zero));
+    return VectorSelect(clampedLow, one, VectorGreater(clampedLow, one)).x;
 }
 ShaderFloat3 HdrSaturate(in ShaderFloat3 a){
     const VectorDouble lower = Max(HdrLanes(a, 0.0), VectorDouble(0.0));

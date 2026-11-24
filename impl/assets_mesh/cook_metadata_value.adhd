@@ -73,7 +73,7 @@ enum<u8> SourceIndexStreamFailure{
 Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Number(in b8 isNumeric, in f64 numericValue){
     if(!isNumeric)
         return MakeUnexpected(MetadataF32ValueFailure::NotNumeric);
-    if(!IsFinite(numericValue))
+    if(!IsFinite(VectorDouble(numericValue)))
         return MakeUnexpected(MetadataF32ValueFailure::NonFinite);
     if(numericValue < cast<f64>(f32.min) || numericValue > cast<f64>(f32.max))
         return MakeUnexpected(MetadataF32ValueFailure::OutOfRange);
@@ -83,7 +83,8 @@ Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Number(in b8 isN
 Expected<u32, MetadataU32ValueFailure> ValidateMetadataU32Number(in b8 isNumeric, in f64 numericValue){
     if(!isNumeric)
         return MakeUnexpected(MetadataU32ValueFailure::NotNumeric);
-    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue))
+    const VectorDouble numVec(numericValue);
+    if(!IsFinite(numVec) || numericValue < 0.0 || numericValue != VectorDoubleFloor(numVec).x)
         return MakeUnexpected(MetadataU32ValueFailure::NonIntegerOrNegative);
     if(numericValue > cast<f64>(u32.max))
         return MakeUnexpected(MetadataU32ValueFailure::OutOfRange);

@@ -4,7 +4,7 @@
 
 #include "frame_graph_statistics_validator.h"
 
-#include <global/simd/vector_arithmetic.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,8 +118,9 @@ b8 FrameGraphStatisticsValidator::AccumulatePacketSubmissionStatistics(const Fra
     ))
         return false;
 
-    total.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(total.submissionSeconds), VectorDoubleReplicate(statistics.submissionSeconds)));
-    return IsFinite(total.submissionSeconds);
+    const SIMDVectorDouble totalSeconds = VectorDoubleAdd(VectorDoubleReplicate(total.submissionSeconds), VectorDoubleReplicate(statistics.submissionSeconds));
+    total.submissionSeconds = VectorDoubleGetX(totalSeconds);
+    return VectorDoubleIsFinite(totalSeconds, VectorDoubleComponentMask::s_DoubleXYZW);
 }
 
 b8 FrameGraphStatisticsValidator::PacketSubmissionDurationSumsMatch(const f64 lhs, const f64 rhs, const u64 submissionCount)noexcept{
@@ -128,12 +129,20 @@ b8 FrameGraphStatisticsValidator::PacketSubmissionDurationSumsMatch(const f64 lh
     if(submissionCount == 0u)
         return false;
 
-    const f64 roundingFactor = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(submissionCount)), VectorDoubleReplicate(s_DoublePrecisionEpsilon)));
-    if(roundingFactor >= s_SubmissionRoundingLimit)
+    const SIMDVectorDouble roundingFactorVec = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(submissionCount)), VectorDoubleReplicate(s_DoublePrecisionEpsilon));
+    if(VectorDoubleGetX(roundingFactorVec) >= s_SubmissionRoundingLimit)
         return false;
-    const f64 magnitude = Max(lhs, rhs);
-    const f64 difference = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(magnitude), VectorDoubleReplicate(Min(rhs, lhs))));
-    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(difference), VectorDoubleReplicate(magnitude))) <= VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(s_SubmissionRoundingScale), VectorDoubleReplicate(roundingFactor)))), VectorDoubleReplicate(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(1.0), VectorDoubleReplicate(roundingFactor))))));
+    const SIMDVectorDouble lhsVec = VectorDoubleReplicate(lhs);
+    const SIMDVectorDouble rhsVec = VectorDoubleReplicate(rhs);
+    const SIMDVectorDouble magnitudeVec = VectorDoubleSelect(rhsVec, lhsVec, VectorDoubleGreater(lhsVec, rhsVec));
+    const SIMDVectorDouble minimumVec = VectorDoubleSelect(lhsVec, rhsVec, VectorDoubleLess(rhsVec, lhsVec));
+    const SIMDVectorDouble differenceVec = VectorDoubleSubtract(magnitudeVec, minimumVec);
+    const SIMDVectorDouble actualRatio = VectorDoubleDivide(differenceVec, magnitudeVec);
+    const SIMDVectorDouble allowedRatio = VectorDoubleDivide(
+        VectorDoubleMultiply(VectorDoubleReplicate(s_SubmissionRoundingScale), roundingFactorVec),
+        VectorDoubleSubtract(VectorDoubleSplatOne(), roundingFactorVec)
+    );
+    return VectorDouble4LessOrEqual(actualRatio, allowedRatio);
 }
 
 

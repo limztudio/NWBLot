@@ -874,7 +874,9 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     if(metrics.logicalWidth <= 0.0f || metrics.logicalHeight <= 0.0f)
         return PhysicsDebugDrawStats();
 
-    const SceneCameraView cameraView = ResolveSceneCameraView(world, metrics.logicalWidth / Max(metrics.logicalHeight, 1.0f));
+    const VectorSingle hVec(metrics.logicalHeight);
+    const VectorSingle oneVec(1.0f);
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, metrics.logicalWidth / VectorSelect(oneVec, hVec, VectorGreater(hVec, oneVec)).x);
     if(!cameraView.valid())
         return PhysicsDebugDrawStats();
 

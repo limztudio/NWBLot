@@ -7,6 +7,8 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -272,7 +274,7 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
         m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("stencil attachment actions requested for an attachment without stencil"));
         return false;
     }
-    if(clearDepth && (!IsFinite(params.depthClearValue) || params.depthClearValue < 0.0f || params.depthClearValue > 1.0f)){
+    if(clearDepth && (!VectorIsFinite(VectorReplicate(params.depthClearValue), VectorComponentMask::s_XYZW) || params.depthClearValue < 0.0f || params.depthClearValue > 1.0f)){
         m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("depth clear value is outside the normalized depth range"));
         return false;
     }

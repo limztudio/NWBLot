@@ -31,7 +31,7 @@ class MeshViewStatePolicy{
     private VectorSingle frustumPlane(in VectorSingle normal, in VectorSingle point)const{
         const f32 lengthSquared = LengthSq(normal.xyz);
         VectorSingle unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
-        if(IsFinite(lengthSquared) && lengthSquared > 0.0f){
+        if(IsFinite(VectorSingle(lengthSquared)) && lengthSquared > 0.0f){
             const VectorSingle scaled = normal * Rsqrt(VectorSingle(lengthSquared));
             unitNormal = VectorSingle(scaled, 0.0f);
         }

@@ -259,7 +259,7 @@ class ReflectionSmokeConfiguration{
             const Expected<String> roughnessText = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_ROUGHNESS");
             if(roughnessText.has_value()){
                 const Expected<f32> roughness = ParseF32(StringView(roughnessText.value()));
-                if(!roughness.has_value() || !IsFinite(roughness.value()) || roughness.value() < 0.0f || roughness.value() > 1.0f)
+                if(!roughness.has_value() || !IsFinite(VectorSingle(roughness.value())) || roughness.value() < 0.0f || roughness.value() > 1.0f)
                     return false;
                 this.m_authoredRoughness = roughness.value();
             }
@@ -480,7 +480,7 @@ class ReflectionSpatialOwnerProbe{
             (this.m_hasPublication && work.publishFrameIndex < this.m_lastPublish)
             || work.firstSampleFrameIndex > work.lastSampleFrameIndex
             || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u
-            || !IsFinite(work.seconds)
+            || !IsFinite(VectorDouble(work.seconds))
             || work.seconds < 0.0
         ){
             error("ReflectionSpatialOwner: invalid completed spatial window");

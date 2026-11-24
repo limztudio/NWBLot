@@ -227,7 +227,7 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     line.advance = pen;
     line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
     inOutLines.push_back(line);
-    inOutMeasure = Point(Max(inOutMeasure.x, pen), nextHeight);
+    inOutMeasure = Point(UiSimdMax(inOutMeasure.x, pen), nextHeight);
     return TextLayoutStatus::Success;
 }
 

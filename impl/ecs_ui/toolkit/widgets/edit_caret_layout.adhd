@@ -54,8 +54,8 @@ b8 ValidateEditCaretLayout(
     if(
         lines.empty() || lines.size() > s_TextMaxBytes + 1u || clusters.size() > s_TextMaxBytes
         || glyphCount > s_TextMaxBytes || (mode == EditTextMode::SingleLine && lines.size() != 1u)
-        || !IsFinite(measure.x) || !IsFinite(measure.y) || measure.x < 0.0f || measure.y <= 0.0f
-        || !IsFinite(ink.x) || !IsFinite(ink.y) || !IsFinite(ink.width) || !IsFinite(ink.height)
+        || !IsFinite(VectorSingle(measure.x, measure.y, 0.0f, 0.0f)) || measure.x < 0.0f || measure.y <= 0.0f
+        || !IsFinite(VectorSingle(ink.x, ink.y, ink.width, ink.height))
         || ink.width < 0.0f || ink.height < 0.0f
     )
         return false;
@@ -77,12 +77,12 @@ b8 ValidateEditCaretLayout(
             lineByteBegin != previousBreak || lineByteEnd < lineByteBegin || lineBreakEnd < lineByteEnd
             || lineBreakEnd > text.size() || lineFirstCluster != nextCluster || lineFirstGlyph != nextGlyph
             || lineClusterCount > clusters.size() - nextCluster || lineGlyphCount > glyphCount - nextGlyph
-            || !IsFinite(line.top) || !IsFinite(line.height) || !IsFinite(line.advance) || !IsFinite(line.baseline)
+            || !IsFinite(VectorSingle(line.top, line.height, line.advance, line.baseline))
             || line.top != previousBottom || line.height <= 0.0f || line.advance < 0.0f
         )
             return false;
         const f32 bottom = line.top + line.height;
-        if(!IsFinite(bottom) || line.baseline < line.top || line.baseline > bottom)
+        if(!IsFinite(VectorSingle(bottom)) || line.baseline < line.top || line.baseline > bottom)
             return false;
         for(usize byte = lineByteBegin; byte < lineByteEnd; ++byte){
             if(text[byte] == '\n')
@@ -111,7 +111,7 @@ b8 ValidateEditCaretLayout(
                 || !IsUtf8ScalarBoundary(text, clusterByteBegin)
                 || !IsUtf8ScalarBoundary(text, clusterByteEnd)
                 || clusterFirstGlyph != nextGlyph || clusterGlyphCount == 0u || clusterGlyphCount > glyphEnd - nextGlyph
-                || !IsFinite(cluster.leadingX) || !IsFinite(cluster.trailingX)
+                || !IsFinite(VectorSingle(cluster.leadingX, cluster.trailingX, 0.0f, 0.0f))
                 || cluster.leadingX != previousX || cluster.trailingX < cluster.leadingX || cluster.trailingX > line.advance
             )
                 return false;
@@ -124,13 +124,13 @@ b8 ValidateEditCaretLayout(
             return false;
         previousBreak = lineBreakEnd;
         previousBottom = bottom;
-        maximumAdvance = Max(maximumAdvance, line.advance);
+        maximumAdvance = UiSimdMax(maximumAdvance, line.advance);
     }
     return nextCluster == clusters.size() && nextGlyph == glyphCount && measure.x == maximumAdvance && measure.y == previousBottom;
 }
 
 b8 IsValidEditCaretClusterGlyph(in u32 glyphByteBegin, in u32 glyphByteEnd, in Point glyphPosition, in TextCluster cluster){
-    return glyphByteBegin == cluster.byteBegin && glyphByteEnd == cluster.byteEnd && IsFinite(glyphPosition.x) && IsFinite(glyphPosition.y);
+    return glyphByteBegin == cluster.byteBegin && glyphByteEnd == cluster.byteEnd && IsFinite(VectorSingle(glyphPosition.x, glyphPosition.y, 0.0f, 0.0f));
 }
 
 b8 ValidateEditCaretAdoptionRequest(

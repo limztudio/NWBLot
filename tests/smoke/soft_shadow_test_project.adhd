@@ -274,8 +274,11 @@ f32 ConfiguredAngularRadius(){
     const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
     if(!parsed.has_value())
         return s_SoftShadowDefaultAngularRadius;
-    if(parsed.value() > 0.0f)
-        return Min(0.2f, parsed.value());
+    if(parsed.value() > 0.0f){
+        const VectorSingle limit(0.2f);
+        const VectorSingle parsedVec(parsed.value());
+        return VectorSelect(parsedVec, limit, VectorLess(limit, parsedVec)).x;
+    }
     return 0.0f;
 }
 
@@ -283,8 +286,11 @@ f32 ConfiguredSourceRadius(){
     const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
     if(!parsed.has_value())
         return s_SoftShadowDefaultSourceRadius;
-    if(parsed.value() > 0.0f)
-        return Min(1.0f, parsed.value());
+    if(parsed.value() > 0.0f){
+        const VectorSingle limit(1.0f);
+        const VectorSingle parsedVec(parsed.value());
+        return VectorSelect(parsedVec, limit, VectorLess(limit, parsedVec)).x;
+    }
     return 0.0f;
 }
 

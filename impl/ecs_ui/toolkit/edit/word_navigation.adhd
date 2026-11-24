@@ -130,7 +130,7 @@ Expected<usize> TryResolveEditMoveTarget(
 }
 
 Expected<f32> TryResolveEditNavigationPreferredX(in f32 preferredX){
-    if(!IsFinite(preferredX))
+    if(!IsFinite(VectorSingle(preferredX)))
         return MakeUnexpected(Failure());
     return preferredX;
 }

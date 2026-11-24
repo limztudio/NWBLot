@@ -103,7 +103,7 @@ b8 ValidSnapshotImageCounts(in usize glyphPageCount, in usize sdfPageCount, in u
 
 b8 IsValidPaintUvRect(in Rect uv){
     return
-        IsFinite(uv.x) && IsFinite(uv.y) && IsFinite(uv.width) && IsFinite(uv.height)
+        IsFinite(VectorSingle(uv.x, uv.y, uv.width, uv.height))
         && uv.x >= 0.0f && uv.y >= 0.0f && uv.width > 0.0f && uv.height > 0.0f
         && uv.x + uv.width <= 1.0f && uv.y + uv.height <= 1.0f
     ;

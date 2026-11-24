@@ -155,7 +155,9 @@ class UiTextRegionTests : WidgetFixture{
             ASSERT_TRUE(layout.has_value());
             const auto visual = this.m_text.measure(layout.value(), display);
             ASSERT_TRUE(visual.has_value());
-            expectedHeight = Max(expectedHeight, visual.value().height + rowMetrics.value().padding.top + rowMetrics.value().padding.bottom);
+            const VectorSingle candidateRowHeight(visual.value().height + rowMetrics.value().padding.top + rowMetrics.value().padding.bottom);
+            const VectorSingle prevHeight(expectedHeight);
+            expectedHeight = VectorSelect(candidateRowHeight, prevHeight, VectorGreater(prevHeight, candidateRowHeight)).x;
         }
         EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
         const f64 rowHeight64 = cast<f64>(rowHeight);
@@ -181,7 +183,9 @@ class UiTextRegionTests : WidgetFixture{
             const f32 paddedHeight = visual.value().height + padding.top + padding.bottom;
             EXPECT_GE(rowHeight + 0.0001f, paddedHeight);
             const f32 contentHeight = rowHeight - padding.top - padding.bottom;
-            const f32 centering = Max(0.0f, (contentHeight - visual.value().height) * 0.5f);
+            const VectorSingle rawCentering((contentHeight - visual.value().height) * 0.5f);
+            const VectorSingle zero(0.0f);
+            const f32 centering = VectorSelect(rawCentering, zero, VectorGreater(zero, rawCentering)).x;
             const Point origin(row.value().rectangle.x + padding.left - visual.value().x, row.value().rectangle.y + padding.top + centering - visual.value().y);
             ASSERT_TRUE(this.m_text.paint(reference, layout.value(), origin, this.m_builder.style().text));
         }
@@ -191,7 +195,9 @@ class UiTextRegionTests : WidgetFixture{
         ASSERT_TRUE(expectedCoverage.has_value());
         ASSERT_TRUE(actualCoverage.has_value());
         ASSERT_GT(expectedCoverage.value(), 0.0);
-        EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+        const VectorDouble minTol(0.00001);
+        const VectorDouble relTol(expectedCoverage.value() * 0.000002);
+        EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), VectorDoubleSelect(relTol, minTol, VectorDoubleGreater(minTol, relTol)).x);
     }
     public void checkContentButtonRow(in StringView firstText, in StringView secondText, in f32 fontSize, in f32 scale, in u64 generation){ this.checkContentButtonRow(firstText, secondText, fontSize, scale, generation, false); }
     public void checkContentButtonRow(in StringView firstText, in StringView secondText, in f32 fontSize, in f32 scale, in u64 generation, in b8 fixedHeight){
@@ -217,8 +223,11 @@ class UiTextRegionTests : WidgetFixture{
         f32 firstHeight = 32.0f;
         f32 secondHeight = 32.0f;
         if(!fixedHeight){
-            firstHeight = Max(32.0f, firstMeasured.value().height + 8.0f + 8.0f);
-            secondHeight = Max(32.0f, secondMeasured.value().height + 8.0f + 8.0f);
+            const VectorSingle minHeight(32.0f);
+            const VectorSingle measuredHeights = (VectorSingle(firstMeasured.value().height, secondMeasured.value().height, 0.0f, 0.0f) + VectorSingle(8.0f)) + VectorSingle(8.0f);
+            const VectorSingle rowHeights = VectorSelect(measuredHeights, minHeight, VectorGreater(minHeight, measuredHeights));
+            firstHeight = rowHeights.x;
+            secondHeight = rowHeights.y;
         }
         ASSERT_TRUE(this.begin(generation, display));
         ASSERT_TRUE(this.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 740.0f, 480.0f)));
@@ -227,7 +236,12 @@ class UiTextRegionTests : WidgetFixture{
             row.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
         ASSERT_TRUE(this.m_builder.beginRow("navigation", row));
         WidgetOptions navigation;
-        navigation.width = LayoutSize(LayoutSizePolicy::Fixed, Max(100.0f, Max(firstMeasured.value().width, secondMeasured.value().width) + 16.0f));
+        const VectorSingle firstWidth(firstMeasured.value().width);
+        const VectorSingle secondWidth(secondMeasured.value().width);
+        const f32 maxMeasuredWidth = VectorSelect(secondWidth, firstWidth, VectorGreater(firstWidth, secondWidth)).x;
+        const VectorSingle minNav(100.0f);
+        const VectorSingle calcNav(maxMeasuredWidth + 16.0f);
+        navigation.width = LayoutSize(LayoutSizePolicy::Fixed, VectorSelect(calcNav, minNav, VectorGreater(minNav, calcNav)).x);
         if(fixedHeight)
             navigation.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
         EXPECT_FALSE(this.m_builder.button("previous", firstText, navigation));
@@ -250,7 +264,9 @@ class UiTextRegionTests : WidgetFixture{
         EXPECT_FLOAT_EQ(first.value().rectangle.height, firstHeight);
         EXPECT_FLOAT_EQ(second.value().rectangle.height, secondHeight);
         EXPECT_FLOAT_EQ(second.value().rectangle.y, first.value().rectangle.y);
-        EXPECT_FLOAT_EQ(after.value().rectangle.y, first.value().rectangle.y + Max(firstHeight, secondHeight) + this.m_builder.style().gap);
+        const VectorSingle firstHVec(firstHeight);
+        const VectorSingle secondHVec(secondHeight);
+        EXPECT_FLOAT_EQ(after.value().rectangle.y, first.value().rectangle.y + VectorSelect(secondHVec, firstHVec, VectorGreater(firstHVec, secondHVec)).x + this.m_builder.style().gap);
         ExpectUiRect(first.value().clip, first.value().rectangle);
         ExpectUiRect(second.value().clip, second.value().rectangle);
         PaintBuilder reference;
@@ -260,10 +276,12 @@ class UiTextRegionTests : WidgetFixture{
         for(u32 index = 0u; index < 2u; ++index){
             in Rect bounds = controls[index];
             in Rect visual = measured[index];
-            const f32 slackX = (bounds.width - 16.0f) - visual.width;
-            const f32 slackY = (bounds.height - 16.0f) - visual.height;
-            const f32 centeredX = bounds.x + 8.0f + Max(0.0f, slackX * 0.5f);
-            const f32 centeredY = bounds.y + 8.0f + Max(0.0f, slackY * 0.5f);
+            const VectorSingle zero(0.0f);
+            const VectorSingle rawSlack = ((VectorSingle(bounds.width, bounds.height, 0.0f, 0.0f) - VectorSingle(16.0f)) - VectorSingle(visual.width, visual.height, 0.0f, 0.0f)) * VectorSingle(0.5f);
+            const VectorSingle clampedSlack = VectorSelect(rawSlack, zero, VectorGreater(zero, rawSlack));
+            const VectorSingle centered = VectorSingle(bounds.x, bounds.y, 0.0f, 0.0f) + VectorSingle(8.0f) + clampedSlack;
+            const f32 centeredX = centered.x;
+            const f32 centeredY = centered.y;
             const Point origin(centeredX - visual.x, centeredY - visual.y);
             if(index == 0u)
                 ASSERT_TRUE(this.m_text.paint(reference, firstLayout.value(), origin, this.m_builder.style().text));
@@ -278,8 +296,11 @@ class UiTextRegionTests : WidgetFixture{
         ASSERT_GT(expectedCoverage.value(), 0.0);
         if(fixedHeight)
             EXPECT_LT(actualCoverage.value(), expectedCoverage.value() * 0.999);
-        else
-            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+        else{
+            const VectorDouble minTol(0.00001);
+            const VectorDouble relTol(expectedCoverage.value() * 0.000002);
+            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), VectorDoubleSelect(relTol, minTol, VectorDoubleGreater(minTol, relTol)).x);
+        }
     }
 }
 
@@ -313,10 +334,13 @@ class TextVisibleBakedTests : TextVisibleFixture{
                 continue;
             if(payload.groups.size() == s_FontAtlasMaxGroupCount)
                 return false;
-            const f32 startX = Floor(placed.ink.x) - 8.0f;
-            const f32 startY = Floor(placed.ink.y) - 8.0f;
-            const f32 extentX = Ceil(placed.ink.x + placed.ink.width) - startX + 8.0f;
-            const f32 extentY = Ceil(placed.ink.y + placed.ink.height) - startY + 8.0f;
+            const VectorSingle inkOrigin = VectorFloor(VectorSingle(placed.ink.x, placed.ink.y, 0.0f, 0.0f)) - VectorSingle(8.0f);
+            const VectorSingle inkEnd = VectorCeiling(VectorSingle(placed.ink.x + placed.ink.width, placed.ink.y + placed.ink.height, 0.0f, 0.0f));
+            const f32 startX = inkOrigin.x;
+            const f32 startY = inkOrigin.y;
+            const VectorSingle inkExtent = (inkEnd - inkOrigin) + VectorSingle(8.0f);
+            const f32 extentX = inkExtent.x;
+            const f32 extentY = inkExtent.y;
             const u32 width = cast<u32>(extentX);
             const u32 height = cast<u32>(extentY);
             if(width > 62u || height > 62u)
@@ -327,10 +351,12 @@ class TextVisibleBakedTests : TextVisibleFixture{
             glyph.y = 1u;
             glyph.width = width;
             glyph.height = height;
-            glyph.planeLeft = startX * unitsPerPixel;
-            glyph.planeTop = startY * unitsPerPixel;
-            glyph.planeRight = glyph.planeLeft + extentX * unitsPerPixel;
-            glyph.planeBottom = glyph.planeTop + extentY * unitsPerPixel;
+            const VectorSingle planeOrigin = VectorSingle(startX, startY, 0.0f, 0.0f) * VectorSingle(unitsPerPixel);
+            const VectorSingle planeEnd = planeOrigin + VectorSingle(extentX, extentY, 0.0f, 0.0f) * VectorSingle(unitsPerPixel);
+            glyph.planeLeft = planeOrigin.x;
+            glyph.planeTop = planeOrigin.y;
+            glyph.planeRight = planeEnd.x;
+            glyph.planeBottom = planeEnd.y;
             AppendArenaElement<FontAtlasGroup>(payload.groups);
             mut FontAtlasGroup group = payload.groups.back();
             group.width = 64u;
@@ -385,8 +411,9 @@ class TextVisibleCoverageTests : TextVisibleFixture{
         glyph.planeLeft = -1000.0f;
         glyph.planeTop = -2000.0f;
         const f32 bakeScale = cast<f32>(payload.unitsPerEm) / cast<f32>(payload.bakePpem);
-        glyph.planeRight = glyph.planeLeft + cast<f32>(glyph.width) * bakeScale;
-        glyph.planeBottom = glyph.planeTop + cast<f32>(glyph.height) * bakeScale;
+        const VectorSingle planeEnd = VectorSingle(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f) + VectorSingle(cast<f32>(glyph.width), cast<f32>(glyph.height), 0.0f, 0.0f) * VectorSingle(bakeScale);
+        glyph.planeRight = planeEnd.x;
+        glyph.planeBottom = planeEnd.y;
         AppendArenaElement<FontAtlasGroup>(payload.groups);
         mut FontAtlasGroup group = payload.groups.back();
         group.width = 64u;
@@ -437,24 +464,35 @@ Expected<f64> UiTextRegionGlyphCoverageArea(in DrawSnapshot snapshot){
             const f64 top = texel.y;
             const f64 right = texel.z;
             const f64 bottom = texel.w;
-            if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
+            if(!IsFinite(texel) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
                 return MakeUnexpected(Failure());
-            const f64 width = cast<f64>(last.position.x) - cast<f64>(first.position.x);
-            const f64 height = cast<f64>(last.position.y) - cast<f64>(first.position.y);
-            if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
+            const VectorDouble extent = VectorDouble(cast<f64>(last.position.x), cast<f64>(last.position.y), 0.0, 0.0) - VectorDouble(cast<f64>(first.position.x), cast<f64>(first.position.y), 0.0, 0.0);
+            const f64 width = extent.x;
+            const f64 height = extent.y;
+            if(!IsFinite(extent.xy) || width <= 0.0 || height <= 0.0)
                 return MakeUnexpected(Failure());
             const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
-            const u32 endX = cast<u32>(Ceil(texel.z));
-            const u32 endY = cast<u32>(Ceil(texel.w));
-            for(u32 y = cast<u32>(Floor(texel.y)); y < endY; ++y){
+            const VectorDouble snappedEnd = VectorDoubleCeiling(texel);
+            const VectorDouble snappedBegin = VectorDoubleFloor(texel);
+            const u32 endX = cast<u32>(snappedEnd.z);
+            const u32 endY = cast<u32>(snappedEnd.w);
+            for(u32 y = cast<u32>(snappedBegin.y); y < endY; ++y){
                 const f64 row = cast<f64>(y);
-                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
-                for(u32 x = cast<u32>(Floor(texel.x)); x < endX; ++x){
+                const VectorDouble topRow(top);
+                const VectorDouble bottomVec(bottom);
+                const VectorDouble rowPlusOne(row + 1.0);
+                const VectorDouble rowVec(row);
+                const f64 visibleHeight = VectorDoubleSelect(rowPlusOne, bottomVec, VectorDoubleLess(bottomVec, rowPlusOne)).x - VectorDoubleSelect(rowVec, topRow, VectorDoubleGreater(topRow, rowVec)).x;
+                for(u32 x = cast<u32>(snappedBegin.x); x < endX; ++x){
                     const u8 coverage = page.pixels()[cast<usize>(y) * binding.width + x];
                     if(coverage == 0u)
                         continue;
                     const f64 column = cast<f64>(x);
-                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
+                    const VectorDouble colPlusOne(column + 1.0);
+                    const VectorDouble colVec(column);
+                    const VectorDouble leftVec(left);
+                    const VectorDouble rightVec(right);
+                    const f64 visibleWidth = VectorDoubleSelect(colPlusOne, rightVec, VectorDoubleLess(rightVec, colPlusOne)).x - VectorDoubleSelect(colVec, leftVec, VectorDoubleGreater(leftVec, colVec)).x;
                     area += (cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
                 }
             }
@@ -473,8 +511,9 @@ f32 SampleUiSdfChannel(in SdfAtlasPage page, in u32 channel, in i32 column, in i
 f32 SampleUiMeasuredSdfDistance(in SharedSdfAtlasPage handle, in u32 channel, in VectorSingle texel){
     in SdfAtlasPage page = handle.deref();
     const VectorSingle position = texel - VectorSingle(0.5f);
-    const i32 x = cast<i32>(Floor(position.x));
-    const i32 y = cast<i32>(Floor(position.y));
+    const VectorSingle cell = VectorFloor(position);
+    const i32 x = cast<i32>(cell.x);
+    const i32 y = cast<i32>(cell.y);
     const VectorSingle fraction = position - VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f);
     const VectorSingle remainder = VectorSingle(1.0f) - fraction;
     const VectorSingle samples = VectorSingle(SampleUiSdfChannel(page, channel, x, y), SampleUiSdfChannel(page, channel, x, y + 1),
@@ -512,8 +551,7 @@ usize CountUiTextRegionGlyphIndices(in DrawSnapshot snapshot){
 }
 
 void ExpectUiTextGlyphRegion(in DrawSnapshot snapshot, in Rect expected){
-    const f32 expectedEndX = expected.x + expected.width;
-    const f32 expectedEndY = expected.y + expected.height;
+    const VectorSingle expectedEnd = VectorSingle(expected.x, expected.y, 0.0f, 0.0f) + VectorSingle(expected.width, expected.height, 0.0f, 0.0f);
     usize count = 0u;
     const usize commandCount = snapshot.commands().size();
     for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
@@ -526,9 +564,9 @@ void ExpectUiTextGlyphRegion(in DrawSnapshot snapshot, in Rect expected){
             ASSERT_LT(snapshot.indices()[index], snapshot.vertices().size());
             const Point position = snapshot.vertices()[snapshot.indices()[index]].position;
             EXPECT_GE(position.x, expected.x);
-            EXPECT_LE(position.x, expectedEndX);
+            EXPECT_LE(position.x, expectedEnd.x);
             EXPECT_GE(position.y, expected.y);
-            EXPECT_LE(position.y, expectedEndY);
+            EXPECT_LE(position.y, expectedEnd.y);
         }
         count += command.indexCount;
     }
@@ -538,12 +576,9 @@ void ExpectUiTextGlyphRegion(in DrawSnapshot snapshot, in Rect expected){
 Rect UiTextVisibleBakedRect(in PlacedGlyph glyph, in Point origin){
     const FontAtlasGlyph record = FontFaceBakedGlyph(glyph.face, glyph.glyphId);
     const f32 scale = 32.0f / cast<f32>(FontFaceBakedUnitsPerEm(glyph.face));
-    return Rect(
-        origin.x + glyph.position.x + record.planeLeft * scale,
-        origin.y + glyph.position.y + record.planeTop * scale,
-        (record.planeRight - record.planeLeft) * scale,
-        (record.planeBottom - record.planeTop) * scale
-    );
+    const VectorSingle originPos = VectorSingle(origin.x, origin.y, 0.0f, 0.0f) + VectorSingle(glyph.position.x, glyph.position.y, 0.0f, 0.0f);
+    const VectorSingle plane = originPos + VectorSingle(record.planeLeft, record.planeTop, record.planeRight - record.planeLeft, record.planeBottom - record.planeTop) * VectorSingle(scale);
+    return Rect(plane.x, plane.y, plane.z, plane.w);
 }
 
 b8 PaintUiTextVisibleClipped(mut TextVisibleCoverageTests self, in TextLayout layout, in Rect clip, in Point origin){
@@ -554,15 +589,19 @@ b8 PaintUiTextVisibleClipped(mut TextVisibleCoverageTests self, in TextLayout la
 }
 
 Expected<Rect> ComputeUiTextVisibleRasterRect(mut TextVisibleCoverageTests self, in PlacedGlyph glyph, in f32 fontSize, in DisplayMetrics display, in Point origin){
-    const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
+    const VectorSingle scaleX(display.pixelScaleX);
+    const VectorSingle scaleY(display.pixelScaleY);
+    const f32 physicalSize = VectorCeiling(VectorSingle(fontSize * VectorSelect(scaleY, scaleX, VectorGreater(scaleX, scaleY)).x)).x;
     if(!FontFaceRasterize(glyph.face, glyph.glyphId, cast<u32>(physicalSize), self.m_bitmap))
         return MakeUnexpected(Failure());
     const f32 scale = physicalSize / fontSize;
     const f64 scaleDouble = cast<f64>(scale);
-    const f64 unsnappedX = cast<f64>(origin.x) + cast<f64>(glyph.position.x) + cast<f64>(self.m_bitmap.bearingX) / scaleDouble;
-    const f64 unsnappedY = cast<f64>(origin.y) + cast<f64>(glyph.position.y) - cast<f64>(self.m_bitmap.bearingY) / scaleDouble;
-    const f64 snappedX = Floor(unsnappedX * cast<f64>(display.pixelScaleX) + 0.5) / cast<f64>(display.pixelScaleX);
-    const f64 snappedY = Floor(unsnappedY * cast<f64>(display.pixelScaleY) + 0.5) / cast<f64>(display.pixelScaleY);
+    const VectorDouble bearingOffset = VectorDouble(cast<f64>(self.m_bitmap.bearingX), -cast<f64>(self.m_bitmap.bearingY), 0.0, 0.0) / VectorDouble(scaleDouble);
+    const VectorDouble unsnapped = (VectorDouble(cast<f64>(origin.x), cast<f64>(origin.y), 0.0, 0.0) + VectorDouble(cast<f64>(glyph.position.x), cast<f64>(glyph.position.y), 0.0, 0.0)) + bearingOffset;
+    const VectorDouble pixelScale(cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY), 1.0, 1.0);
+    const VectorDouble snapped = VectorDoubleFloor(unsnapped * pixelScale + VectorDouble(0.5)) / pixelScale;
+    const f64 snappedX = snapped.x;
+    const f64 snappedY = snapped.y;
     const Rect rectangle = Rect(cast<f32>(snappedX), cast<f32>(snappedY), cast<f32>(self.m_bitmap.width) / scale, cast<f32>(self.m_bitmap.height) / scale);
     if(!(rectangle.width > 0.0f && rectangle.height > 0.0f))
         return MakeUnexpected(Failure());
@@ -584,21 +623,25 @@ Rect UiTextVisibleBakedOutlineCenterClip(in PlacedGlyph glyph, in Point origin){
 }
 
 Rect ComputeUiTextVisibleRasterFringe(in Rect raster, in Rect outline){
-    if(raster.x + 0.001f < outline.x)
-        return Rect(raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height);
-    if(raster.y + 0.001f < outline.y)
-        return Rect(raster.x, raster.y, raster.width, Min(0.05f, (outline.y - raster.y) * 0.5f));
-    const f32 rasterRight = raster.x + raster.width;
-    const f32 rasterBottom = raster.y + raster.height;
-    const f32 outlineRight = outline.x + outline.width;
-    const f32 outlineBottom = outline.y + outline.height;
-    if(rasterRight > outlineRight + 0.001f){
-        const f32 fringe = Min(0.05f, (rasterRight - outlineRight) * 0.5f);
-        return Rect(rasterRight - fringe, raster.y, fringe, raster.height);
+    const VectorSingle fringeCap(0.05f);
+    if(raster.x + 0.001f < outline.x){
+        const VectorSingle diff((outline.x - raster.x) * 0.5f);
+        return Rect(raster.x, raster.y, VectorSelect(diff, fringeCap, VectorLess(fringeCap, diff)).x, raster.height);
     }
-    if(rasterBottom > outlineBottom + 0.001f){
-        const f32 fringe = Min(0.05f, (rasterBottom - outlineBottom) * 0.5f);
-        return Rect(raster.x, rasterBottom - fringe, raster.width, fringe);
+    if(raster.y + 0.001f < outline.y){
+        const VectorSingle diff((outline.y - raster.y) * 0.5f);
+        return Rect(raster.x, raster.y, raster.width, VectorSelect(diff, fringeCap, VectorLess(fringeCap, diff)).x);
+    }
+    const VectorSingle ends = VectorSingle(raster.x, raster.y, outline.x, outline.y) + VectorSingle(raster.width, raster.height, outline.width, outline.height);
+    if(ends.x > ends.z + 0.001f){
+        const VectorSingle diff((ends.x - ends.z) * 0.5f);
+        const f32 fringe = VectorSelect(diff, fringeCap, VectorLess(fringeCap, diff)).x;
+        return Rect(ends.x - fringe, raster.y, fringe, raster.height);
+    }
+    if(ends.y > ends.w + 0.001f){
+        const VectorSingle diff((ends.y - ends.w) * 0.5f);
+        const f32 fringe = VectorSelect(diff, fringeCap, VectorLess(fringeCap, diff)).x;
+        return Rect(raster.x, ends.y - fringe, raster.width, fringe);
     }
     return Rect();
 }
@@ -863,7 +906,9 @@ void VerifyUiTextRegionTests_WindowTitleInkKeepsPaddingAndCollapseReservationWhe
             if(collapsible)
                 collapseOffset = 28.0f;
             const f32 left = titleStart + collapseOffset;
-            const f32 right = Min(width, header.x + header.width - 7.0f);
+            const VectorSingle wVec(width);
+            const VectorSingle hVec(header.x + header.width - 7.0f);
+            const f32 right = VectorSelect(hVec, wVec, VectorLess(wVec, hVec)).x;
             const f32 inkTop = header.y + 6.0f;
             const f32 inkHeight = header.height - 14.0f;
             ExpectUiTextGlyphRegion(snapshot, Rect(left, inkTop, right - left, inkHeight));
@@ -983,7 +1028,9 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             ASSERT_TRUE(self.finishPanel());
             const DrawSnapshot actual = self.m_paint.freeze();
             ASSERT_TRUE(self.m_context.commitFrame(generation));
-            const f32 expectedHeight = Max(32.0f, measured.value().height + 8.0f + 8.0f);
+            const VectorSingle minH(32.0f);
+            const VectorSingle measH(measured.value().height + 8.0f + 8.0f);
+            const f32 expectedHeight = VectorSelect(measH, minH, VectorGreater(minH, measH)).x;
             EXPECT_FLOAT_EQ(state.placement.bounds.height, expectedHeight);
             EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
             const f32 inkTop = state.placement.textOrigin.y + measured.value().y;
@@ -999,7 +1046,9 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             ASSERT_TRUE(expectedCoverage.has_value());
             ASSERT_TRUE(actualCoverage.has_value());
             ASSERT_GT(expectedCoverage.value(), 0.0);
-            const f64 coverageTolerance = Max(0.00001, expectedCoverage.value() * 0.000002);
+            const VectorDouble minTol(0.00001);
+            const VectorDouble relTol(expectedCoverage.value() * 0.000002);
+            const f64 coverageTolerance = VectorDoubleSelect(relTol, minTol, VectorDoubleGreater(minTol, relTol)).x;
             EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), coverageTolerance);
         }
     }
@@ -1505,7 +1554,9 @@ void VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndE
     const auto mark = self.rasterRectangle(self.m_layout.glyphs()[1u], self.m_layout.fontSize(), display, origin);
     ASSERT_TRUE(mark.has_value());
     ASSERT_LT(mark.value().y, base.value().y);
-    const Rect clip = Rect(mark.value().x, mark.value().y, mark.value().width, Min(mark.value().height, base.value().y - mark.value().y) * 0.5f);
+    const VectorSingle markH(mark.value().height);
+    const VectorSingle gapH(base.value().y - mark.value().y);
+    const Rect clip = Rect(mark.value().x, mark.value().y, mark.value().width, VectorSelect(gapH, markH, VectorLess(markH, gapH)).x * 0.5f);
     self.beginPaint(1u, display);
     ASSERT_TRUE(self.paintClipped(self.m_layout, clip, origin));
     const DrawSnapshot snapshot = self.m_paint.freeze();
@@ -1594,13 +1645,14 @@ void VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbac
                 const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale.x, scale.y);
                 const auto measured = self.m_text.measure(layout.value(), display);
                 ASSERT_TRUE(measured.has_value());
-                const u32 presetSize = cast<u32>(Ceil(size * Max(scale.x, scale.y)));
+                const VectorSingle scaleX(scale.x);
+                const VectorSingle scaleY(scale.y);
+                const u32 presetSize = cast<u32>(VectorCeiling(VectorSingle(size * VectorSelect(scaleY, scaleX, VectorGreater(scaleX, scaleY)).x)).x);
                 for(usize phaseIndex = 0u; phaseIndex < phases.size(); ++phaseIndex){
                     const f32 phase = phases[phaseIndex];
                     const Rect content = Rect(32.0f + phase, 24.0f + phase, measured.value().width, measured.value().height);
                     const Point origin = Point(content.x - measured.value().x, content.y - measured.value().y);
-                    const f32 contentLimitX = content.x + content.width + 0.0001f;
-                    const f32 contentLimitY = content.y + content.height + 0.0001f;
+                    const VectorSingle contentLimit = VectorSingle(content.x, content.y, 0.0f, 0.0f) + VectorSingle(content.width, content.height, 0.0f, 0.0f) + VectorSingle(0.0001f);
                     const usize glyphCount = layout.value().glyphs().size();
                     for(usize glyphIndex = 0u; glyphIndex < glyphCount; ++glyphIndex){
                         const PlacedGlyph glyph = layout.value().glyphs()[glyphIndex];
@@ -1613,8 +1665,8 @@ void VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbac
                         ASSERT_TRUE(raster.has_value());
                         EXPECT_GE(raster.value().x + 0.0001f, content.x);
                         EXPECT_GE(raster.value().y + 0.0001f, content.y);
-                        EXPECT_LE(raster.value().x + raster.value().width, contentLimitX);
-                        EXPECT_LE(raster.value().y + raster.value().height, contentLimitY);
+                        EXPECT_LE(raster.value().x + raster.value().width, contentLimit.x);
+                        EXPECT_LE(raster.value().y + raster.value().height, contentLimit.y);
                     }
                 }
             }
@@ -1654,7 +1706,9 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
         const SharedSdfAtlasPage page = FontFaceBakedPage(placed.face, record.group);
         for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
             const Point scale = scales[scaleIndex];
-            const f32 physicalSize = fontSize * Max(scale.x, scale.y);
+            const VectorSingle scaleX(scale.x);
+            const VectorSingle scaleY(scale.y);
+            const f32 physicalSize = fontSize * VectorSelect(scaleY, scaleX, VectorGreater(scaleX, scaleY)).x;
             if(physicalSize < 24.0f || physicalSize > 48.0f)
                 continue;
             const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale.x, scale.y);
@@ -1674,10 +1728,13 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
                 ASSERT_TRUE(plane.has_value());
                 const f32 planeRight = plane.value().x + plane.value().width;
                 const f32 planeBottom = plane.value().y + plane.value().height;
-                const i32 firstX = cast<i32>(Floor(plane.value().x * scale.x));
-                const i32 firstY = cast<i32>(Floor(plane.value().y * scale.y));
-                const i32 lastX = cast<i32>(Ceil(planeRight * scale.x));
-                const i32 lastY = cast<i32>(Ceil(planeBottom * scale.y));
+                const VectorSingle scaledPlane = VectorSingle(plane.value().x, plane.value().y, planeRight, planeBottom) * VectorSingle(scale.x, scale.y, scale.x, scale.y);
+                const VectorSingle firstCoords = VectorFloor(scaledPlane);
+                const VectorSingle lastCoords = VectorCeiling(scaledPlane);
+                const i32 firstX = cast<i32>(firstCoords.x);
+                const i32 firstY = cast<i32>(firstCoords.y);
+                const i32 lastX = cast<i32>(lastCoords.z);
+                const i32 lastY = cast<i32>(lastCoords.w);
                 const VectorSingle planeStart = VectorSingle(plane.value().x, plane.value().y, 0.0f, 0.0f);
                 const VectorSingle pixelScale = VectorSingle(scale.x, scale.y, 1.0f, 1.0f);
                 const VectorSingle recordStart = VectorSingle(cast<f32>(record.x), cast<f32>(record.y), 0.0f, 0.0f);
@@ -1686,8 +1743,9 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
                 const VectorSingle halfPixel = VectorSingle(0.5f, 0.5f, 0.5f, 0.5f);
                 for(i32 y = firstY; y < lastY; ++y){
                     for(i32 x = firstX; x < lastX; ++x){
-                        const f32 pointX = (cast<f32>(x) + 0.5f) / scale.x;
-                        const f32 pointY = (cast<f32>(y) + 0.5f) / scale.y;
+                        const VectorSingle pointCoords = (VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f) + halfPixel) / pixelScale;
+                        const f32 pointX = pointCoords.x;
+                        const f32 pointY = pointCoords.y;
                         if(pointX < plane.value().x || pointY < plane.value().y || pointX >= planeRight || pointY >= planeBottom)
                             continue;
                         const VectorSingle centerCur = (VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f) + halfPixel) / pixelScale;
@@ -1696,8 +1754,11 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
                         const f32 current = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerCur - planeStart) * recordSize) / planeSize);
                         const f32 partnerX = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerX - planeStart) * recordSize) / planeSize);
                         const f32 partnerY = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerY - planeStart) * recordSize) / planeSize);
-                        const f32 derivative = Abs(partnerX - current) + Abs(partnerY - current);
-                        if(0.5f + current / Max(derivative, 0.001f) <= 0.0f)
+                        const VectorSingle grad = VectorAbs(VectorSingle(partnerX, partnerY, 0.0f, 0.0f) - VectorSingle(current));
+                        const f32 derivative = grad.x + grad.y;
+                        const VectorSingle derivVec(derivative);
+                        const VectorSingle minDeriv(0.001f);
+                        if(0.5f + current / VectorSelect(minDeriv, derivVec, VectorGreater(derivVec, minDeriv)).x <= 0.0f)
                             continue;
                         ++visibleSamples;
                         EXPECT_GE(pointX + 0.0001f, content.x);

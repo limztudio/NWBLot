@@ -655,9 +655,13 @@ b8 SameSmokeRectSpan(in Span<Rect> left, in Span<Rect> right){
 
 PassiveSmokeColumns ResolvePassiveSmokeColumns(in DisplayMetrics display){
     PassiveSmokeColumns result();
-    result.mainWidth = Max(300.0f, display.logicalWidth * 0.5f - 40.0f);
+    const VectorSingle minMain(300.0f);
+    const VectorSingle calcMain(display.logicalWidth * 0.5f - 40.0f);
+    result.mainWidth = VectorSelect(calcMain, minMain, VectorGreater(minMain, calcMain)).x;
     result.rightColumn = 24.0f + result.mainWidth + 32.0f;
-    result.rightWidth = Max(220.0f, display.logicalWidth - result.rightColumn - 24.0f);
+    const VectorSingle minRight(220.0f);
+    const VectorSingle calcRight(display.logicalWidth - result.rightColumn - 24.0f);
+    result.rightWidth = VectorSelect(calcRight, minRight, VectorGreater(minRight, calcRight)).x;
     return result;
 }
 
@@ -672,7 +676,10 @@ Color EncodeSmokeColor(in u32 value){
 }
 
 Color EncodeSmokeColor(in f32 value){
-    return EncodeSmokeColor(cast<u64>(Max(0.0f, value) + 0.5f));
+    const VectorSingle v(value);
+    const VectorSingle zero(0.0f);
+    const f32 clamped = VectorSelect(v, zero, VectorGreater(zero, v)).x;
+    return EncodeSmokeColor(cast<u64>(clamped + 0.5f));
 }
 
 Rect ScaleSmokeSceneRect(in VectorSingle extent, in f32 x, in f32 y, in f32 w, in f32 h){

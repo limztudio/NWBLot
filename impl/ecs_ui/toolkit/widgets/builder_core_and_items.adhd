@@ -24,7 +24,7 @@ b8 IsValidPanelDirection(in LayoutDirection direction){
 }
 
 b8 IsValidSeparatorDeclaration(in SeparatorOptions options){
-    return options.direction <= SeparatorDirection::Vertical && IsFinite(options.thickness) && options.thickness >= 0.0f;
+    return options.direction <= SeparatorDirection::Vertical && IsFinite(VectorSingle(options.thickness)) && options.thickness >= 0.0f;
 }
 
 b8 IsBasicControlInteractive(in WidgetKind kind){

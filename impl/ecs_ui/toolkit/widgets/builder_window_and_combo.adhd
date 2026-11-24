@@ -15,7 +15,10 @@
 
 
 Rect ResolveWindowFirstUseViewport(in Rect bounds, in DisplayMetrics display){
-    return Rect(bounds.x, bounds.y, Max(display.logicalWidth, bounds.width), Max(display.logicalHeight, bounds.height));
+    const VectorSingle dispDim(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f);
+    const VectorSingle boundDim(bounds.width, bounds.height, 0.0f, 0.0f);
+    const VectorSingle size = VectorSelect(boundDim, dispDim, VectorGreater(dispDim, boundDim));
+    return Rect(bounds.x, bounds.y, size.x, size.y);
 }
 
 Rect ResolveWindowHeaderBounds(in Rect windowBounds, in f32 titleHeight){

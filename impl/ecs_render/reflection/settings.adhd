@@ -140,12 +140,10 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
     if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Confidence))
         return false;
     if(
-        !IsFinite(settings.maxRayDistance)
+        !IsFinite(VectorSingle(settings.maxRayDistance, settings.distanceFadeStart, settings.roughnessCutoff, 0.0f))
         || settings.maxRayDistance <= 0.0f
-        || !IsFinite(settings.distanceFadeStart)
         || settings.distanceFadeStart < 0.0f
         || settings.distanceFadeStart >= settings.maxRayDistance
-        || !IsFinite(settings.roughnessCutoff)
         || settings.roughnessCutoff < 0.0f
         || settings.roughnessCutoff > 1.0f
     )
@@ -156,23 +154,17 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
     if(
         settings.screenMaxSteps < minScreenSteps
         || settings.screenMaxSteps > maxScreenSteps
-        || !IsFinite(settings.screenThickness)
+        || !IsFinite(VectorSingle(settings.screenThickness, settings.screenConfidenceThreshold, settings.screenEdgeFade, 0.0f))
         || settings.screenThickness <= 0.0f
-        || !IsFinite(settings.screenConfidenceThreshold)
         || settings.screenConfidenceThreshold <= 0.0f
         || settings.screenConfidenceThreshold > 1.0f
-        || !IsFinite(settings.screenEdgeFade)
         || settings.screenEdgeFade < 0.0f
         || settings.screenEdgeFade > maxScreenEdgeFade
     )
         return false;
     return
-        IsFinite(settings.environmentTop.x)
-        && IsFinite(settings.environmentTop.y)
-        && IsFinite(settings.environmentTop.z)
-        && IsFinite(settings.environmentBottom.x)
-        && IsFinite(settings.environmentBottom.y)
-        && IsFinite(settings.environmentBottom.z)
+        IsFinite(VectorSingle(settings.environmentTop.x, settings.environmentTop.y, settings.environmentTop.z, 0.0f))
+        && IsFinite(VectorSingle(settings.environmentBottom.x, settings.environmentBottom.y, settings.environmentBottom.z, 0.0f))
         && settings.environmentTop.x >= 0.0f
         && settings.environmentTop.y >= 0.0f
         && settings.environmentTop.z >= 0.0f

@@ -26,7 +26,10 @@ NWB_CORE_BEGIN
 f64 GpuTaskGraphRecordingStatistics::readyFrontierWorkerUtilization()const noexcept{
     if(!(readyFrontierWorkerCapacitySeconds > 0.0))
         return 0.0;
-    return Saturate(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds))));
+    const SIMDVectorDouble ratio = VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds));
+    const SIMDVectorDouble clampedLow = VectorDoubleSelect(ratio, VectorDoubleZero(), VectorDoubleLess(ratio, VectorDoubleZero()));
+    const SIMDVectorDouble one = VectorDoubleSplatOne();
+    return VectorDoubleGetX(VectorDoubleSelect(clampedLow, one, VectorDoubleGreater(clampedLow, one)));
 }
 
 

@@ -110,7 +110,7 @@ class CsgFrameWorkRegion{
             const VectorSingle worldPosition(wx, wy, wz, 1.0f);
             const VectorSingle clipPosition = Mul(worldPosition, worldToClip);
             const f32 clipW = clipPosition.w;
-            if(!IsFinite(clipW) || clipW <= s_MinClipWForWorkRegion){
+            if(!IsFinite(clipPosition.wwww) || clipW <= s_MinClipWForWorkRegion){
                 this.expandFull();
                 return;
             }

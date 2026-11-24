@@ -179,7 +179,9 @@ b8 BuildPhysicsStressScene(mut PhysicsWorld world, in u32 targetDynamicBodies, i
     sphereSd.material.friction = 0.4f;
     sphereSd.material.restitution = 0.35f;
 
-    const f32 scatterSpan = Max(6.0f, cast<f32>(gridCols) * towerPitch * 0.45f);
+    const VectorSingle minSpan(6.0f);
+    const VectorSingle calcSpan(cast<f32>(gridCols) * towerPitch * 0.45f);
+    const f32 scatterSpan = VectorSelect(calcSpan, minSpan, VectorGreater(minSpan, calcSpan)).x;
     for(u32 si = 0u; si < sphereCount; ++si){
         const f32 sx = NextStressRandRange(rng, -scatterSpan, scatterSpan);
         const f32 sy = NextStressRandRange(rng, 4.0f, 11.5f);
@@ -242,7 +244,8 @@ b8 VerifyPhysicsStressWorldState(in PhysicsWorld world, in Span<BodyId> dynamicB
         const VectorSingle rot = VectorSingle(xf.value().rotation);
         if(!IsValidPositionVec3(pos) || !IsFiniteQuat(rot) || !IsFiniteVec3(VectorSingle(lv.value())) || !IsFiniteVec3(VectorSingle(av.value())))
             return false;
-        if(Abs(pos.x) > 40.0f || Abs(pos.z) > 40.0f || pos.y < -5.0f || pos.y > 80.0f)
+        const VectorSingle absPos = VectorAbs(pos);
+        if(absPos.x > 40.0f || absPos.z > 40.0f || pos.y < -5.0f || pos.y > 80.0f)
             return false;
     }
     return true;

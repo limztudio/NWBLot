@@ -270,9 +270,11 @@ class UiRadioGroupBuilderTests : RadioGroupFixture{
             in RadioGroupChoicePlacement row = this.m_state.placement().rows[index];
             const auto measured = this.m_text.measure(layout.value(), reference.displayMetrics());
             ASSERT_TRUE(measured.has_value());
-            const f32 centering = Max(0.0f, (row.rectangle.height - measured.value().height) * 0.5f);
-            const f32 textStart = row.indicator.x + row.indicator.width + this.m_builder.radioGroupStyle().gap;
-            const Point origin = Point(textStart - measured.value().x, row.rectangle.y + centering - measured.value().y);
+            const VectorSingle rawCentering((row.rectangle.height - measured.value().height) * 0.5f);
+            const VectorSingle zero(0.0f);
+            const f32 centering = VectorSelect(rawCentering, zero, VectorGreater(zero, rawCentering)).x;
+            const VectorSingle rawOrigin = VectorSingle(row.indicator.x + row.indicator.width + this.m_builder.radioGroupStyle().gap, row.rectangle.y + centering, 0.0f, 0.0f) - VectorSingle(measured.value().x, measured.value().y, 0.0f, 0.0f);
+            const Point origin = Point(rawOrigin.x, rawOrigin.y);
             reference.pushClip(row.clip);
             reference.pushClip(row.textClip);
             Color color = this.m_builder.style().disabledText;

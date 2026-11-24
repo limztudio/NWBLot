@@ -12,8 +12,8 @@ Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bound
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
         || !IsValidUiExtent(contentMeasure) || !IsValidUiExtent(previousScroll)
-        || !IsFinite(caretWidth) || caretWidth <= 0.0f
-        || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
+        || !IsFinite(VectorSingle(caretWidth, thickness, minThumb, 0.0f)) || caretWidth <= 0.0f
+        || thickness < 0.0f || minThumb < 0.0f
     )
         return MakeUnexpected(Failure());
     const Expected<Rect> paddedOpt = TryInsetUiRect(bounds, padding, UiRectPrecision::RoundedEndpoints);
@@ -22,16 +22,13 @@ Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bound
     const Rect padded = paddedOpt.value();
     const f64 availableWidth = cast<f64>(padded.width);
     const f64 availableHeight = cast<f64>(padded.height);
-    const f64 thicknessF64 = cast<f64>(thickness);
-    f64 verticalWidth = availableWidth;
-    if(thicknessF64 < availableWidth)
-        verticalWidth = thicknessF64;
-    f64 horizontalHeight = availableHeight;
-    if(thicknessF64 < availableHeight)
-        horizontalHeight = thicknessF64;
-    const f64 contentWidth = cast<f64>(contentMeasure.x) + cast<f64>(caretWidth);
-    const f64 contentHeight = cast<f64>(contentMeasure.y);
-    if(!IsFinite(contentWidth))
+    const VectorDouble barExtent = Min(VectorDouble(cast<f64>(thickness)), VectorDouble(availableWidth, availableHeight, 0.0, 0.0));
+    const f64 verticalWidth = barExtent.x;
+    const f64 horizontalHeight = barExtent.y;
+    const VectorDouble contentExtent = VectorDouble(cast<f64>(contentMeasure.x), cast<f64>(contentMeasure.y), 0.0, 0.0) + VectorDouble(cast<f64>(caretWidth), 0.0, 0.0, 0.0);
+    const f64 contentWidth = contentExtent.x;
+    const f64 contentHeight = contentExtent.y;
+    if(!IsFinite(contentExtent.xy))
         return MakeUnexpected(Failure());
     b8 horizontal = false;
     b8 vertical = false;
@@ -126,11 +123,11 @@ b8 TryUpdateScrollViewportOffsets(in Point scroll, mut ScrollViewportPlacement p
 }
 
 Expected<f32> TryStepScrollbarOffset(in f64 offset, in f64 delta, in f64 step, in f64 maximum){
-    if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
+    if(!IsFinite(VectorDouble(offset, delta, step, maximum)) || step < 0.0 || maximum < 0.0)
         return MakeUnexpected(Failure());
     f64 next = 0.0;
     if(offset > 0.0)
-        next = Min(maximum, offset);
+        next = UiSimdMinF64(maximum, offset);
     if(step > 0.0 && delta > 0.0){
         const f64 distanceInSteps = (maximum - next) / step;
         if(delta >= distanceInSteps)
@@ -145,7 +142,7 @@ Expected<f32> TryStepScrollbarOffset(in f64 offset, in f64 delta, in f64 step, i
         else
             next = next + (delta * step);
     }
-    if(!IsFinite(next) || next > s_UiMaxFloatF64)
+    if(!IsFinite(VectorDouble(next)) || next > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     return cast<f32>(next);
 }
@@ -169,14 +166,14 @@ Expected<f32> TryDragScrollbarOffset(in PointerGesture gesture, in b8 horizontal
     const f64 pointerDelta = currentPointer - referencePointer;
     const f64 travel = referenceExtent - targetExtent;
     const f64 maximum = gesture.maximum;
-    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(startDelta) || !IsFinite(pointerDelta) || !IsFinite(maximum) || maximum < 0.0)
+    if(!IsFinite(VectorDouble(travel, startDelta, pointerDelta, maximum)) || travel <= 0.0 || maximum < 0.0)
         return MakeUnexpected(Failure());
     const f64 normalized = (startDelta + pointerDelta) / travel;
     f64 clamped = 0.0;
     if(normalized > 0.0)
-        clamped = Min(1.0, normalized);
+        clamped = UiSimdMinF64(1.0, normalized);
     const f64 next = clamped * maximum;
-    if(!IsFinite(next) || next > s_UiMaxFloatF64)
+    if(!IsFinite(VectorDouble(next)) || next > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     return cast<f32>(next);
 }
@@ -207,8 +204,16 @@ void ResolveScrollbarBeforeAfterRects(
         trackExtent = bar.track.width;
         thumbExtent = bar.thumb.width;
     }
-    const f32 before = Max(0.0f, thumbStart - start);
-    const f32 after = Max(0.0f, ((start + trackExtent) - thumbStart) - thumbExtent);
+    const VectorSingle zeroVec(0.0f);
+    const VectorSingle marginInputs(
+        thumbStart - start,
+        ((start + trackExtent) - thumbStart) - thumbExtent,
+        0.0f,
+        0.0f
+    );
+    const VectorSingle clampedMargins = VectorSelect(marginInputs, zeroVec, VectorGreater(zeroVec, marginInputs));
+    const f32 before = clampedMargins.x;
+    const f32 after = clampedMargins.y;
     outBeforeRect = bar.track;
     outAfterRect = bar.track;
     if(horizontal){

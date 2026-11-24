@@ -145,7 +145,7 @@ b8 ValidateUiSkinPayloadData(
     if(
         !texture.valid() || texture.name() == Name("")
         || atlasWidth == 0u || atlasHeight == 0u
-        || !IsFinite(referenceDensity) || referenceDensity <= 0.0f
+        || !IsFinite(VectorSingle(referenceDensity)) || referenceDensity <= 0.0f
         || !IsFinite((VectorSingle(cast<f32>(atlasWidth), cast<f32>(atlasHeight), cast<f32>(atlasWidth), cast<f32>(atlasHeight)) / VectorSingle(referenceDensity)).xy)
         || regions.empty()
     ){
@@ -177,7 +177,7 @@ b8 ValidateUiSkinPayloadData(
             return false;
         }
     }
-    if(!IsFinite(typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
+    if(!IsFinite(VectorSingle(typography.defaultFontSize)) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
         error("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]");
         return false;
     }

@@ -156,11 +156,11 @@ class FbxMeshSkinningSummary{
 
 
 b8 IsValidFbxImportScale(in f64 value){
-    return IsFinite(value) && value > 0.0;
+    return IsFinite(VectorDouble(value)) && value > 0.0;
 }
 
 b8 IsValidFbxTriangleAreaEpsilon(in f64 value){
-    return IsFinite(value) && !(value < 0.0);
+    return IsFinite(VectorDouble(value)) && !(value < 0.0);
 }
 
 Expected<usize> TryComputeMeshRefreshReplacementCapacity(in usize declarationCount){
@@ -246,7 +246,7 @@ StringView ResolveFbxMeshDisplayName(in StringView meshName){
 }
 
 Expected<Vec4> TryMakeFiniteColorVec4(in f32 red, in f32 green, in f32 blue, in f32 alpha){
-    if(!IsFinite(red) || !IsFinite(green) || !IsFinite(blue) || !IsFinite(alpha))
+    if(!IsFinite(VectorSingle(red, green, blue, alpha)))
         return MakeUnexpected(Failure());
     return Vec4(red, green, blue, alpha);
 }

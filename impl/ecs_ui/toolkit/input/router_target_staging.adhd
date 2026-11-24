@@ -66,19 +66,16 @@ b8 StageRouterHitTargets(
         in HitTarget target = targets[index];
         const b8 validRect = target.rectangle.width >= 0.0f
             && target.rectangle.height >= 0.0f
-            && IsFinite(target.rectangle.x + target.rectangle.width)
-            && IsFinite(target.rectangle.y + target.rectangle.height);
+            && IsFinite(VectorSingle(target.rectangle.x, target.rectangle.y, 0.0f, 0.0f) + VectorSingle(target.rectangle.width, target.rectangle.height, 0.0f, 0.0f));
         const b8 validClip = target.clip.width >= 0.0f
             && target.clip.height >= 0.0f
-            && IsFinite(target.clip.x + target.clip.width)
-            && IsFinite(target.clip.y + target.clip.height);
+            && IsFinite(VectorSingle(target.clip.x, target.clip.y, 0.0f, 0.0f) + VectorSingle(target.clip.width, target.clip.height, 0.0f, 0.0f));
         const b8 gestureZero = target.gestureReference.x == 0.0f && target.gestureReference.y == 0.0f && target.gestureReference.width == 0.0f && target.gestureReference.height == 0.0f;
         const b8 validGestureRef = gestureZero || (
             target.gestureReference.width >= 0.0f
             && target.gestureReference.height >= 0.0f
             && (target.gestureReference.width == 0.0f) == (target.gestureReference.height == 0.0f)
-            && IsFinite(target.gestureReference.x + target.gestureReference.width)
-            && IsFinite(target.gestureReference.y + target.gestureReference.height)
+            && IsFinite(VectorSingle(target.gestureReference.x, target.gestureReference.y, 0.0f, 0.0f) + VectorSingle(target.gestureReference.width, target.gestureReference.height, 0.0f, 0.0f))
         );
         b8 validPopup = false;
         if(!target.popup.widget.valid())
@@ -92,10 +89,11 @@ b8 StageRouterHitTargets(
                 && target.ownerDeclarationGeneration == 0u
                 && target.commandOwnerDeclarationGeneration == 0u
                 && target.commandControl.empty()
-                && IsFinite(target.scrollStep) && target.scrollStep >= 0.0
-                && IsFinite(target.scrollStepX) && target.scrollStepX >= 0.0
-                && IsFinite(target.gestureMaximum) && target.gestureMaximum >= 0.0 && target.pageRows != 0u
-                && IsFinite(target.gestureMaximumX) && target.gestureMaximumX >= 0.0
+                && IsFinite(VectorDouble(target.scrollStep, target.scrollStepX, target.gestureMaximum, target.gestureMaximumX))
+                && target.scrollStep >= 0.0
+                && target.scrollStepX >= 0.0
+                && target.gestureMaximum >= 0.0 && target.pageRows != 0u
+                && target.gestureMaximumX >= 0.0
                 && ((!target.navigable && !target.scrollable) || (target.control.valid() && target.focusable))
                 && (!target.horizontalNavigation || target.navigable)
                 && (!target.focusOnCommit || target.focusable);

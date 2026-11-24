@@ -241,8 +241,8 @@ void ApplySkinPaletteToEditBoxStyle(in UiSkinPalette palette, mut EditBoxStyle s
 
 void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect segment){
     if(segment.width > 0.0f){
-        const f32 thickness = Min(caretWidth, segment.height);
-        const f32 verticalOffset = textOrigin.y + Max(0.0f, segment.height - thickness);
+        const f32 thickness = UiSimdMin(caretWidth, segment.height);
+        const f32 verticalOffset = textOrigin.y + UiSimdMax(0.0f, segment.height - thickness);
         const VectorSingle shifted = VectorSingle(segment.x, segment.y, segment.x, segment.y) + VectorSingle(textOrigin.x, verticalOffset, textOrigin.x, verticalOffset);
         segment.x = shifted.x;
         segment.y = shifted.y;
@@ -251,7 +251,7 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
 }
 
 Expected<Rect> TryComputeEditBoxViewport(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth){
-    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !IsFinite(caretWidth) || caretWidth <= 0.0f)
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !IsFinite(VectorSingle(caretWidth)) || caretWidth <= 0.0f)
         return MakeUnexpected(Failure());
     const VectorSingle origin(bounds.x, bounds.y, bounds.x, bounds.y);
     const VectorSingle size(bounds.width, bounds.height, bounds.width, bounds.height);
@@ -265,7 +265,7 @@ b8 ValidateEditBoxViewportArrangeInputs(in Rect bounds, in Rect viewport, in Rec
     if(!IsValidUiRect(bounds) || !IsValidUiRect(viewport) || !IsValidUiRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y)
         return false;
     const VectorSingle end = VectorSingle(viewport.x, viewport.y, bounds.x, bounds.y) + VectorSingle(viewport.width, viewport.height, bounds.width, bounds.height);
-    return end.x <= end.z && end.y <= end.w && IsValidUiExtent(previousScroll) && IsFinite(caretWidth) && caretWidth > 0.0f;
+    return end.x <= end.z && end.y <= end.w && IsValidUiExtent(previousScroll) && IsFinite(VectorSingle(caretWidth)) && caretWidth > 0.0f;
 }
 
 

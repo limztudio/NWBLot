@@ -55,7 +55,7 @@ f32 ComputeWorldToShapeScaleBound(in MatrixSingle worldToShape){
     const VectorSingle row2 = Mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), transposed);
     const VectorSingle rowLengthsSq(LengthSq(row0.xyz), LengthSq(row1.xyz), LengthSq(row2.xyz), 0.0f);
     const VectorSingle lengthSquared = (rowLengthsSq.xxxx + rowLengthsSq.yyyy) + rowLengthsSq.zzzz;
-    return Sqrt(lengthSquared.x);
+    return Sqrt(lengthSquared).x;
 }
 
 void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuData inOutCutter){
@@ -115,7 +115,7 @@ CsgCutterGpuData BuildCsgCutterGpuData(
     outCutter.shapeType = shapeType;
     outCutter.worldToShape = f32x3x4(worldToShape);
     const f32 scaleBound = ComputeWorldToShapeScaleBound(worldToShape);
-    if(IsFinite(scaleBound) && scaleBound > 0.0f)
+    if(IsFinite(VectorSingle(scaleBound)) && scaleBound > 0.0f)
         outCutter.worldToShapeScaleBound = scaleBound;
     CopyCsgCutterInlineParameters(parameterBytes, outCutter);
     return outCutter;

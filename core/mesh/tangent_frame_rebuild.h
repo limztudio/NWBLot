@@ -143,7 +143,7 @@ template<typename ScratchArenaT>
         || indexCount == 0u
         || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u
         || vertexCount > static_cast<usize>(Limit<u32>::s_Max)
-        || !IsFinite(minimumTriangleAreaLengthSquared)
+        || !VectorDoubleIsFinite(VectorDoubleReplicate(minimumTriangleAreaLengthSquared), VectorDoubleComponentMask::s_DoubleXYZW)
         || minimumTriangleAreaLengthSquared < 0.0
     )
         return MakeUnexpected(Failure{});

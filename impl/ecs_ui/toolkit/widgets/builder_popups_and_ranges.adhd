@@ -456,8 +456,11 @@ b8 Builder::prepareRadioGroup(mut RadioGroupFrame frame){
         const auto measuredLabel = this.m_text.layoutAndMeasureShared(this.textShapeRequest(text, frame.m_widgetStyle.fontSize), this.m_paint.displayMetrics());
         if(!measuredLabel.has_value() || !this.radioGroupMatches(frame))
             return false;
-        maximumLabel.x = Max(maximumLabel.x, measuredLabel.value().bounds.width);
-        maximumLabel.y = Max(maximumLabel.y, measuredLabel.value().bounds.height);
+        const VectorSingle curMax(maximumLabel.x, maximumLabel.y, 0.0f, 0.0f);
+        const VectorSingle measuredDim(measuredLabel.value().bounds.width, measuredLabel.value().bounds.height, 0.0f, 0.0f);
+        const VectorSingle nextMax = VectorSelect(measuredDim, curMax, VectorGreater(curMax, measuredDim));
+        maximumLabel.x = nextMax.x;
+        maximumLabel.y = nextMax.y;
         frame.m_labels.emplace_back(measuredLabel.value().layout, measuredLabel.value().bounds);
     }
     if(!this.m_skin.has_value())

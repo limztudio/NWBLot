@@ -161,12 +161,17 @@ Expected<usize> TryFindUiSkinRegionIndex(
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){
-    return Max(minimumExtent, Max(region.minimumWidth, region.minimumHeight));
+    const VectorSingle vMin(minimumExtent);
+    const VectorSingle vW(region.minimumWidth);
+    const VectorSingle vH(region.minimumHeight);
+    const VectorSingle maxSize = VectorSelect(vW, vH, VectorLess(vW, vH));
+    return VectorSelect(vMin, maxSize, VectorLess(vMin, maxSize)).x;
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f32 density){
+    const VectorSingle baseExtent(ResolveUiSkinSquareExtent(minimumExtent, region));
     const VectorSingle sourceExtent = VectorSingle(cast<f32>(Max(region.rectangle.width, region.rectangle.height))) / VectorSingle(density);
-    return Max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent.x);
+    return VectorSelect(baseExtent, sourceExtent, VectorLess(baseExtent, sourceExtent)).x;
 }
 
 void RebuildUiSkinRegionIndex(in Span<UiSkinRegion> regions, mut Vector<u32> outIndex){

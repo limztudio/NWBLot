@@ -74,7 +74,7 @@ Expected<Rect> ResolveEditCaretRect(
             x = cluster.leadingX + ((span * ordinal) / cast<f32>(intervals));
         }
     }
-    if(!IsFinite(x))
+    if(!IsFinite(VectorSingle(x)))
         return MakeUnexpected(Failure());
     return Rect(x, line.top, 0.0f, line.height);
 }
@@ -129,7 +129,7 @@ Expected<usize> ResolveEditCaretVerticalTarget(
     in b8 down,
     in f32 preferredX
 ){
-    if(!IsFinite(preferredX))
+    if(!IsFinite(VectorSingle(preferredX)))
         return MakeUnexpected(Failure());
     const Expected<Rect> caret = ResolveEditCaretRect(text, textLines, clusters, boundaries, displayCaret);
     if(!caret.has_value())
@@ -172,7 +172,7 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
 ){
     if(
         cast<usize>(lineIndex) >= caretLines.size() || range.begin > range.end || range.end > text.size()
-        || !IsFinite(breakWidth) || breakWidth < 0.0f
+        || !IsFinite(VectorSingle(breakWidth)) || breakWidth < 0.0f
         || !IsUtf8ScalarBoundary(text, range.begin)
     )
         return MakeUnexpected(Failure());
@@ -196,8 +196,8 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     f32 breakCap = 0.0f;
     if(selectedBreak)
         breakCap = breakWidth;
-    const f32 width = Max(0.0f, last.value().x - firstX) + breakCap;
-    if(!IsFinite(width) || !IsFinite(firstX + width))
+    const f32 width = UiSimdMax(0.0f, last.value().x - firstX) + breakCap;
+    if(!IsFinite(VectorSingle(width)) || !IsFinite(VectorSingle(firstX + width)))
         return MakeUnexpected(Failure());
     return Rect(firstX, line.top, width, line.height);
 }
@@ -372,7 +372,7 @@ Expected<usize> TryHitTestEditBoxView(
     in Span<EditCaretLine> lines,
     in Span<EditBoxCaretStop> stops
 ){
-    if(!viewReady || !geometryReady || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
+    if(!viewReady || !geometryReady || !IsFinite(VectorSingle(point.x, point.y, placement.textOrigin.x, placement.textOrigin.y)))
         return MakeUnexpected(Failure());
     const VectorSingle local = VectorSingle(point.x, point.y, point.x, point.y) - VectorSingle(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y);
     return HitEditCaretGeometry(lines, stops, Point(local.x, local.y));

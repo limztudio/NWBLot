@@ -127,7 +127,9 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
 
         const f32 safeDelta = SafeRendererBaselineDelta(delta);
         this.m_fpsProbe.recordFrame(safeDelta);
-        this.m_animationTime = Min(safeDelta, s_CsgSkinnedMaxAnimationDelta) * s_CsgSkinnedCutterAnimationSpeed + this.m_animationTime;
+        const VectorSingle safeVec(safeDelta);
+        const VectorSingle maxVec(s_CsgSkinnedMaxAnimationDelta);
+        this.m_animationTime = VectorSelect(maxVec, safeVec, VectorLess(safeVec, maxVec)).x * s_CsgSkinnedCutterAnimationSpeed + this.m_animationTime;
 
         const VectorSingle receiverRotation = BuildCsgSkinnedReceiverRotation(this.m_animationTime);
         this.updateSceneTransforms(receiverRotation, LoadFloat(this.m_cutterLocalCenter));

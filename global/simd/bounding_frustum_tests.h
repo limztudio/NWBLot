@@ -97,8 +97,7 @@ inline void FOUNDATION_SIMD_CALL Transform(
 )noexcept{
     outOrigin = VectorAdd(Vector3Rotate(VectorScale(frustumOrigin, scale), rotation), translation);
     outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, frustumOrientation));
-    const f32 absScale = Abs(scale);
-    const SIMDVectorSingle scaledPlanes = VectorScale(VectorSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), absScale);
+    const SIMDVectorSingle scaledPlanes = VectorMultiply(VectorSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), VectorAbs(VectorReplicate(scale)));
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
     outTopSlope = topSlopeValue;
@@ -371,8 +370,7 @@ inline void FOUNDATION_SIMD_CALL Transform(
 )noexcept{
     outOrigin = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(frustumOrigin, scale), rotation), translation);
     outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, frustumOrientation));
-    const f64 absScale = Abs(scale);
-    const SIMDVectorDouble scaledPlanes = VectorDoubleScale(VectorDoubleSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), absScale);
+    const SIMDVectorDouble scaledPlanes = VectorDoubleMultiply(VectorDoubleSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), VectorDoubleAbs(VectorDoubleReplicate(scale)));
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
     outTopSlope = topSlopeValue;

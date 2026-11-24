@@ -347,9 +347,10 @@ b8 IsPureTranslationMatrix(in MatrixSingle matrix){
     const VectorSingle r1 = matrix[1u];
     const VectorSingle r2 = matrix[2u];
     return
-        r0.x == 1.0f && r0.y == 0.0f && r0.z == 0.0f && IsFinite(r0.w)
-        && r1.x == 0.0f && r1.y == 1.0f && r1.z == 0.0f && IsFinite(r1.w)
-        && r2.x == 0.0f && r2.y == 0.0f && r2.z == 1.0f && IsFinite(r2.w)
+        r0.x == 1.0f && r0.y == 0.0f && r0.z == 0.0f
+        && r1.x == 0.0f && r1.y == 1.0f && r1.z == 0.0f
+        && r2.x == 0.0f && r2.y == 0.0f && r2.z == 1.0f
+        && IsFinite(VectorSingle(r0.w, r1.w, r2.w, 0.0f))
     ;
 }
 
@@ -382,8 +383,8 @@ void UpdateNonStaticModelObjectTransform(in World world, in ModelObjectComponent
             && ownerScale.y >= s_SceneMatrixDecomposeEpsilon
             && ownerScale.z >= s_SceneMatrixDecomposeEpsilon
             && IsFinite(ownerRot)
-            && IsFinite(rotLenSq)
-            && Abs(rotLenSq - 1.0f) <= s_SceneMatrixDecomposeEpsilon * 0.01f
+            && IsFinite(VectorSingle(rotLenSq))
+            && Abs(VectorSingle(rotLenSq - 1.0f)).x <= s_SceneMatrixDecomposeEpsilon * 0.01f
         ){
             if(localPos.x == 0.0f && localPos.y == 0.0f && localPos.z == 0.0f){
                 AssignDecomposedTransformComponent(ownerPos, ownerRot, ownerScale, outTransform);

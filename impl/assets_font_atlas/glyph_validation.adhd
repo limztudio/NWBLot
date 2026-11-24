@@ -67,11 +67,8 @@ b8 ValidateFontAtlasGlyphRecord(
     if(
         cast<usize>(glyph.glyphId) != expectedIndex
         || glyph.drawable > 1u
-        || !IsFinite(glyph.advanceUnits)
-        || !IsFinite(glyph.planeLeft)
-        || !IsFinite(glyph.planeTop)
-        || !IsFinite(glyph.planeRight)
-        || !IsFinite(glyph.planeBottom)
+        || !IsFinite(VectorSingle(glyph.advanceUnits, glyph.planeLeft, glyph.planeTop, glyph.planeRight))
+        || !IsFinite(VectorSingle(glyph.planeBottom))
     ){
         error("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}", expectedIndex);
         return false;

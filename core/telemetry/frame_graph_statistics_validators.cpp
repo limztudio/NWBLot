@@ -69,20 +69,21 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 
 [[nodiscard]] static b8 DurationsAreValid(const Span<const SIMDVectorDouble> durations)noexcept{
 #pragma STDC FENV_ACCESS ON
+    const SIMDVectorDouble zero = VectorDoubleZero();
     for(const SIMDVectorDouble pack : durations)
-        if(pack[0] < 0.0 || pack[1] < 0.0 || pack[2] < 0.0 || pack[3] < 0.0)
+        if(!VectorDouble4GreaterOrEqual(pack, zero))
             return false;
     return true;
 }
 
 [[nodiscard]] static b8 DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
 #pragma STDC FENV_ACCESS ON
-    return !(durations[0] > limits[0] || durations[1] > limits[1] || durations[2] > limits[2] || durations[3] > limits[3]);
+    return VectorDouble4LessOrEqual(durations, limits);
 }
 
 [[nodiscard]] static b8 DurationsAreZero(const SIMDVectorDouble durations)noexcept{
 #pragma STDC FENV_ACCESS ON
-    return durations[0] == 0.0 && durations[1] == 0.0 && durations[2] == 0.0 && durations[3] == 0.0;
+    return VectorDouble4Equal(durations, VectorDoubleZero());
 }
 
 
@@ -509,6 +510,7 @@ b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysi
 }
 
 b8 IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
+    const SIMDVectorDouble submissionVec = VectorDoubleReplicate(statistics.submissionSeconds);
     if(
         statistics.ownerNodeIndex == Limit<u32>::s_Max
         || statistics.packetIndex == Limit<u32>::s_Max
@@ -519,8 +521,8 @@ b8 IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionS
         || statistics.commandListCount == 0u
         || (statistics.recoverySubmission && !statistics.joinsAcceptedQueueFrontier)
         || !__hidden_frame_graph_statistics_validators::TimelineWaitTokenCountsAreValid(statistics)
-        || statistics.submissionSeconds < 0.0
-        || !IsFinite(statistics.submissionSeconds)
+        || !VectorDoubleIsFinite(submissionVec, VectorDoubleComponentMask::s_DoubleXYZW)
+        || VectorDouble4Less(submissionVec, VectorDoubleZero())
     )
         return false;
     return true;

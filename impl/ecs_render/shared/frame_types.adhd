@@ -108,7 +108,8 @@ TransparentDrawPushConstants ResolveTransparentDrawPushConstants(
 
 f32 SceneLightRadiantImportance(in VectorSingle colorIntensity){
     const f32 luminance = Dot(colorIntensity, VectorSingle(0.2126f, 0.7152f, 0.0722f, 0.0f));
-    const f32 intensity = Max(colorIntensity.w, 0.0f);
+    const VectorSingle zero(0.0f);
+    const f32 intensity = VectorSelect(zero, colorIntensity, VectorGreater(colorIntensity, zero)).w;
     return luminance * intensity;
 }
 
@@ -163,7 +164,7 @@ RendererTaskTimingFeedbackCollectionAction ResolveRendererTaskTimingFeedbackColl
 }
 
 b8 IsValidRendererTaskTimingSampleDuration(in f64 durationSeconds){
-    return IsFinite(durationSeconds) && durationSeconds > 0.0 && durationSeconds < f64.max;
+    return IsFinite(VectorDouble(durationSeconds)) && durationSeconds > 0.0 && durationSeconds < f64.max;
 }
 
 b8 ContainsRendererTaskTimingFeedbackScope(in Span<Name> scopes, in Name scopeName){

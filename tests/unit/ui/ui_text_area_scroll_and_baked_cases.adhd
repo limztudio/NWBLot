@@ -118,8 +118,9 @@ class TextBakedTests{
             glyph.height = 2u;
             glyph.planeLeft = -125.0f;
             glyph.planeTop = -875.0f;
-            glyph.planeRight = glyph.planeLeft + cast<f32>(glyph.width * payload.unitsPerEm) / cast<f32>(payload.bakePpem);
-            glyph.planeBottom = glyph.planeTop + cast<f32>(glyph.height * payload.unitsPerEm) / cast<f32>(payload.bakePpem);
+            const VectorSingle planeEnd = VectorSingle(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f) + VectorSingle(cast<f32>(glyph.width * payload.unitsPerEm), cast<f32>(glyph.height * payload.unitsPerEm), 0.0f, 0.0f) / VectorSingle(cast<f32>(payload.bakePpem));
+            glyph.planeRight = planeEnd.x;
+            glyph.planeBottom = planeEnd.y;
         }
         this.m_atlas.setPayload(payload);
         ASSERT_TRUE(this.m_atlas.validatePayload());

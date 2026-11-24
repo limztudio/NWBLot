@@ -54,7 +54,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
             const Expected<String> settleValue = ReadSmokeEnvironmentString("NWB_GI_SMOKE_MIN_SETTLE_SECONDS");
             if(settleValue.has_value()){
                 const Expected<f32> requestedSettleSeconds = ParseF32(StringView(settleValue.value()));
-                if(!requestedSettleSeconds.has_value() || !IsFinite(requestedSettleSeconds.value()) || requestedSettleSeconds.value() < s_GiComplexMinLiveWarmupSeconds){
+                if(!requestedSettleSeconds.has_value() || !IsFinite(VectorSingle(requestedSettleSeconds.value())) || requestedSettleSeconds.value() < s_GiComplexMinLiveWarmupSeconds){
                     error("GiTestSmokeProject: NWB_GI_SMOKE_MIN_SETTLE_SECONDS requires at least 30 live seconds after the presentation warmup");
                     return false;
                 }

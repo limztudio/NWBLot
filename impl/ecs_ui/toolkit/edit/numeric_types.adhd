@@ -63,7 +63,7 @@ b8 ValidateIntegerBounds(in IntegerBounds bounds){
 }
 
 b8 ValidateFloatBounds(in FloatBounds bounds){
-    return IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
+    return IsFinite(VectorDouble(bounds.minimum, bounds.maximum, 0.0, 0.0)) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 NumericParseStatus ToNumericParseStatus(in u8 status){
@@ -97,7 +97,7 @@ Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
     if(trimmed.front() == '+')
         number = trimmed.substr(1u);
     const Expected<f64> value = ParseF64(number);
-    if(!value.has_value() || !IsFinite(value.value()))
+    if(!value.has_value() || !IsFinite(VectorDouble(value.value())))
         return MakeUnexpected(NumericParseStatus::OutOfRange);
     return value.value();
 }

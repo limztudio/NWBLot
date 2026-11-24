@@ -25,8 +25,10 @@ class FlyCameraPointerDelta{
 
 class FlyCameraMotion{
     public f32 sanitizeDelta(in f32 deltaSeconds)const{
-        if(IsFinite(deltaSeconds))
-            return Max(deltaSeconds, 0.0f);
+        const VectorSingle ds(deltaSeconds);
+        const VectorSingle zero(0.0f);
+        if(IsFinite(ds))
+            return VectorSelect(ds, zero, VectorLess(ds, zero)).x;
         return 0.0f;
     }
 
@@ -125,34 +127,36 @@ class FlyCameraMotion{
         const VectorSingle localForward(0.0f, 0.0f, 1.0f, 0.0f);
         const VectorSingle rotated = this.rotateVector3(localForward, rotation);
         const f32 lenSq = LengthSq(rotated.xyz);
-        if(!IsFinite(lenSq) || !(lenSq > s_CameraMoveEpsilon))
+        if(!IsFinite(VectorSingle(lenSq)) || !(lenSq > s_CameraMoveEpsilon))
             return localForward;
         const VectorSingle normalized = rotated * Rsqrt(VectorSingle(lenSq));
         return Clamp(VectorSingle(normalized, 0.0f), VectorSingle(-1.0f, -1.0f, -1.0f, -1.0f), VectorSingle(1.0f, 1.0f, 1.0f, 1.0f));
     }
 
     private VectorSingle sanitizeAngles(in f32 yawRadians, in f32 pitchRadians)const{
+        const VectorSingle lim(s_FlyCameraPitchLimitRadians);
+        const VectorSingle pVec(pitchRadians);
         f32 yaw = 0.0f;
-        if(IsFinite(yawRadians))
+        if(IsFinite(VectorSingle(yawRadians)))
             yaw = yawRadians;
         f32 pitch = 0.0f;
-        if(IsFinite(pitchRadians))
-            pitch = Clamp(pitchRadians, -s_FlyCameraPitchLimitRadians, s_FlyCameraPitchLimitRadians);
+        if(IsFinite(pVec))
+            pitch = VectorSelect(-lim, VectorSelect(pVec, lim, VectorGreater(pVec, lim)), VectorGreater(pVec, -lim)).x;
         return VectorSingle(yaw, pitch, 0.0f, 0.0f);
     }
 
     private VectorSingle resolveRotationAngles(in VectorSingle currentAngles, in VectorSingle mouseDelta)const{
         f32 curYaw = 0.0f;
-        if(IsFinite(currentAngles.x))
+        if(IsFinite(VectorSingle(currentAngles.x)))
             curYaw = currentAngles.x;
         f32 curPitch = 0.0f;
-        if(IsFinite(currentAngles.y))
+        if(IsFinite(VectorSingle(currentAngles.y)))
             curPitch = currentAngles.y;
         f32 deltaX = 0.0f;
-        if(IsFinite(mouseDelta.x))
+        if(IsFinite(VectorSingle(mouseDelta.x)))
             deltaX = mouseDelta.x;
         f32 deltaY = 0.0f;
-        if(IsFinite(mouseDelta.y))
+        if(IsFinite(VectorSingle(mouseDelta.y)))
             deltaY = mouseDelta.y;
         const VectorSingle scaledDelta = VectorSingle(deltaX, deltaY, 0.0f, 0.0f) * s_FlyCameraMouseSensitivityRadiansPerPixel;
         const VectorSingle updated = VectorSingle(curYaw, curPitch, 0.0f, 0.0f) + scaledDelta;
@@ -172,10 +176,10 @@ class FlyCameraMotion{
             outPosition = currentPosition;
 
         f32 rawAxisX = 0.0f;
-        if(IsFinite(moveAxes.x))
+        if(IsFinite(VectorSingle(moveAxes.x)))
             rawAxisX = moveAxes.x;
         f32 rawAxisY = 0.0f;
-        if(IsFinite(moveAxes.y))
+        if(IsFinite(VectorSingle(moveAxes.y)))
             rawAxisY = moveAxes.y;
         const VectorSingle axes = Clamp(VectorSingle(rawAxisX, rawAxisY, 0.0f, 0.0f), VectorSingle(-1.0f), VectorSingle(1.0f));
         const f32 moveLengthSq = LengthSq(axes.xy);
@@ -188,7 +192,7 @@ class FlyCameraMotion{
             boost = s_FlyCameraBoostMultiplier;
         const f32 speedDelta = (s_FlyCameraMoveSpeed * boost) * safeDelta;
         const VectorSingle moveScale = VectorSingle(speedDelta) * Rsqrt(VectorSingle(moveLengthSq));
-        if(!IsFinite(moveScale.x))
+        if(!IsFinite(moveScale))
             return outPosition;
 
         const VectorSingle localMove = VectorSingle(axes.x, 0.0f, axes.y, 0.0f) * moveScale;
@@ -204,8 +208,8 @@ class FlyCameraMotion{
 
     private VectorSingle resolveAnglesFromRotation(in VectorSingle rotation)const{
         const VectorSingle forwardVector = this.resolveForwardVector(rotation);
-        const f32 yaw = ATan2(forwardVector.x, forwardVector.z);
-        const f32 pitch = -ASin(forwardVector.y);
+        const f32 yaw = ATan2(VectorSingle(forwardVector.x), VectorSingle(forwardVector.z)).x;
+        const f32 pitch = -ASin(VectorSingle(forwardVector.y)).x;
         return this.sanitizeAngles(yaw, pitch);
     }
 

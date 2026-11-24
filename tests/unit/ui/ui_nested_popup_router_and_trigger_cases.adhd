@@ -600,9 +600,8 @@ HitTarget MakeUiNestedPopupRouterChild(in PopupScope scope, in u64 offset, in u3
     HitTarget target;
     target.id = WidgetId(scope.token.widget.value + offset);
     target.declarationGeneration = 10u;
-    const f32 insetX = scope.bounds.x + 4.0f;
-    const f32 insetY = scope.bounds.y + 4.0f;
-    target.rectangle = Rect(cast<f32>(offset - 1u) * 35.0f + insetX, insetY, 24.0f, 18.0f);
+    const VectorSingle inset = VectorSingle(scope.bounds.x, scope.bounds.y, 0.0f, 0.0f) + VectorSingle(4.0f, 4.0f, 0.0f, 0.0f);
+    target.rectangle = Rect(cast<f32>(offset - 1u) * 35.0f + inset.x, inset.y, 24.0f, 18.0f);
     target.clip = scope.bounds;
     target.paintOrder = order;
     target.popup = scope.token;

@@ -26,7 +26,8 @@ Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
     if(!FitsTextCoordinates(VectorDouble(origin.x, origin.y, end.x, end.y)))
         return MakeUnexpected(Failure());
     const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), ink.width, ink.height);
-    if(!(IsFinite(rounded.x + rounded.z) && IsFinite(rounded.y + rounded.w)))
+    const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
+    if(!IsFinite(roundedEnds.xy))
         return MakeUnexpected(Failure());
     return VectorDouble(rounded);
 }
@@ -49,7 +50,8 @@ b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 i
     if(!FitsTextCoordinate(size.x) || !FitsTextCoordinate(size.y))
         return false;
     const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), cast<f32>(size.x), cast<f32>(size.y));
-    if(!(IsFinite(rounded.x + rounded.z) && IsFinite(rounded.y + rounded.w)))
+    const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
+    if(!IsFinite(roundedEnds.xy))
         return false;
     inoutBounds = VectorDouble(rounded);
     return true;
@@ -105,7 +107,7 @@ Expected<SdfGlyphSupportOffset> TryComputeSdfGlyphSupportOffset(
     const VectorDouble weightedGradient = VectorDouble(cast<f64>(gradientX), cast<f64>(gradientY), 0.0, 0.0) * VectorDouble(physicalStep.x, physicalStep.y, 0.0, 0.0);
     const f64 derivative = weightedGradient.x + weightedGradient.y;
     const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
-    const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
+    const f64 halfWidth = s_TextHalfPixel * UiSimdMaxF64(derivative, minimumDerivative);
     const VectorDouble zeroVec(0.0);
     const VectorDouble halfPixelVec(s_TextHalfPixel);
     VectorDouble supportMin = glyphExtent;

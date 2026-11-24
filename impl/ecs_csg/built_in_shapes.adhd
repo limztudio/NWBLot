@@ -72,9 +72,12 @@ class CsgBoxShape : ICsgShape{
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
         const VectorSingle halfExtents(parameters.parameter0, s_CsgShapeBoundsW);
+        const VectorSingle zero(s_CsgZeroShapeParameter);
         const VectorSingle q = Abs(shapePosition) - halfExtents;
-        const f32 outside = Length(Max(q, VectorSingle(s_CsgZeroShapeParameter)).xyz);
-        const f32 inside = Min(Min(q.x, Min(q.y, q.z)), 0.0f);
+        const f32 outside = Length(Max(q, zero).xyz);
+        const VectorSingle minYZ = VectorSelect(q.zzzz, q.yyyy, VectorLess(q.yyyy, q.zzzz));
+        const VectorSingle minXYZ = VectorSelect(minYZ, q.xxxx, VectorLess(q.xxxx, minYZ));
+        const f32 inside = VectorSelect(zero, minXYZ, VectorLess(minXYZ, zero)).x;
         return outside + inside;
     }
 }
@@ -127,7 +130,9 @@ class CsgCapsuleShape : ICsgShape{
 
     public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
         const f32 halfHeight = parameters.parameter0.y;
-        const f32 clampedY = Clamp(shapePosition.y, -halfHeight, halfHeight);
+        const VectorSingle py(shapePosition.y);
+        const VectorSingle limit(halfHeight);
+        const f32 clampedY = VectorSelect(-limit, VectorSelect(py, limit, VectorGreater(py, limit)), VectorGreater(py, -limit)).x;
         const VectorSingle delta = shapePosition - VectorSingle(0.0f, clampedY, 0.0f, 0.0f);
         return Length(delta.xyz) - parameters.parameter0.x;
     }

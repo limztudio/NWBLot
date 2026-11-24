@@ -162,24 +162,19 @@ b8 IsFiniteSourceTriangleCornerValues(
     in b8 wantsSkinning
 ){
     if(
-        !IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z)
-        || !IsFinite(normal.x) || !IsFinite(normal.y) || !IsFinite(normal.z)
-        || !IsFinite(corner.uv0.x) || !IsFinite(corner.uv0.y)
-        || !IsFinite(corner.color.x) || !IsFinite(corner.color.y) || !IsFinite(corner.color.z) || !IsFinite(corner.color.w)
+        !IsFinite(position.xyz)
+        || !IsFinite(normal.xyz)
+        || !IsFinite(VectorSingle(corner.uv0.x, corner.uv0.y, 0.0f, 0.0f))
+        || !IsFinite(VectorSingle(corner.color.x, corner.color.y, corner.color.z, corner.color.w))
     )
         return false;
     if(
         corner.hasTangent
-        && (!IsFinite(corner.tangent.x) || !IsFinite(corner.tangent.y) || !IsFinite(corner.tangent.z) || !IsFinite(corner.tangent.w))
+        && !IsFinite(VectorSingle(corner.tangent.x, corner.tangent.y, corner.tangent.z, corner.tangent.w))
     )
         return false;
     return !wantsSkinning
-        || (
-            IsFinite(corner.skin.weight[0u])
-            && IsFinite(corner.skin.weight[1u])
-            && IsFinite(corner.skin.weight[2u])
-            && IsFinite(corner.skin.weight[3u])
-        );
+        || IsFinite(VectorSingle(corner.skin.weight[0u], corner.skin.weight[1u], corner.skin.weight[2u], corner.skin.weight[3u]));
 }
 
 SourceMeshStreamCounts MakeSourceMeshStreamCounts(

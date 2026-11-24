@@ -191,8 +191,9 @@ b8 ExtractTextAreaSmokeCaretGeometry(
         Rect selected = rectangle.value();
         if(selected.width == 0.0f)
             continue;
-        selected.x += placement.textOrigin.x;
-        selected.y += placement.textOrigin.y;
+        const VectorSingle origin = VectorSingle(selected.x, selected.y, 0.0f, 0.0f) + VectorSingle(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f);
+        selected.x = origin.x;
+        selected.y = origin.y;
         current.selections[current.selectionCount] = selected;
         ++current.selectionCount;
     }
@@ -380,10 +381,9 @@ void ReadSmokeTextureGenerations(
 
 Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics){
     const Rect content = ResolveWindowContentBounds(state, metrics);
-    const f32 originX = content.x + metrics.contentPadding.left;
-    const f32 originY = content.y + metrics.contentPadding.top;
-    const f32 buttonY = originY + s_UiWindowSmokeLabelHeight + s_UiWindowSmokeSeparatorHeight + 2.0f * s_UiWindowSmokeGap;
-    return Rect(originX, buttonY, s_UiWindowSmokeControlWidth, s_UiWindowSmokeControlHeight);
+    const VectorSingle origin = VectorSingle(content.x, content.y, 0.0f, 0.0f) + VectorSingle(metrics.contentPadding.left, metrics.contentPadding.top, 0.0f, 0.0f);
+    const f32 buttonY = origin.y + s_UiWindowSmokeLabelHeight + s_UiWindowSmokeSeparatorHeight + 2.0f * s_UiWindowSmokeGap;
+    return Rect(origin.x, buttonY, s_UiWindowSmokeControlWidth, s_UiWindowSmokeControlHeight);
 }
 
 
@@ -532,8 +532,9 @@ b8 UiTextAreaSmokeScene::observeState(mut UiPaintContext context){
     current.rectangles[14u] = scrollbars.vertical.thumb;
     current.rectangles[15u] = scrollbars.corner;
 
-    const f32 caretErrorX = Abs((placement.caret.x - placement.textOrigin.x) - localCaret.x);
-    const f32 caretErrorY = Abs((placement.caret.y - placement.textOrigin.y) - localCaret.y);
+    const VectorSingle caretDelta = VectorAbs((VectorSingle(placement.caret.x, placement.caret.y, 0.0f, 0.0f) - VectorSingle(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f)) - VectorSingle(localCaret.x, localCaret.y, 0.0f, 0.0f));
+    const f32 caretErrorX = caretDelta.x;
+    const f32 caretErrorY = caretDelta.y;
     const b8 coherent = caretErrorX < 0.02f
         && caretErrorY < 0.02f
         && current.scroll.x == placement.scroll

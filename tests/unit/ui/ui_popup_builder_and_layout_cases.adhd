@@ -215,8 +215,9 @@ Expected<PopupFrame> PrepareUiPopupContextFrame(
     if(open || keepClosedChild){
         EXPECT_TRUE(self.m_context.pushScope("popup"));
         Rect childBounds = Rect();
-        childBounds.x = bounds.x + 10.0f;
-        childBounds.y = bounds.y + 10.0f;
+        const VectorSingle childOrigin = VectorSingle(bounds.x, bounds.y, 0.0f, 0.0f) + VectorSingle(10.0f, 10.0f, 0.0f, 0.0f);
+        childBounds.x = childOrigin.x;
+        childBounds.y = childOrigin.y;
         childBounds.width = 60.0f;
         childBounds.height = 24.0f;
         const auto frameChildResult = DeclareUiPopupContextButton(self, "child", childBounds, open);
@@ -476,8 +477,9 @@ void VerifyUiPopupBuilderTests_ClosingAfterTheFirstQueuedButtonPreventsLaterQueu
     const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
-    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
-    self.click(Point(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
+    const VectorSingle clickPts = VectorSingle(closeTarget.value().rectangle.x, closeTarget.value().rectangle.y, laterTarget.value().rectangle.x, laterTarget.value().rectangle.y) + VectorSingle(4.0f);
+    self.click(Point(clickPts.x, clickPts.y));
+    self.click(Point(clickPts.z, clickPts.w));
     ASSERT_EQ(self.m_context.input().actions().size(), 2u);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
@@ -565,8 +567,9 @@ void VerifyUiPopupBuilderTests_CloseAndReopenInTheBodySkipsOldEpochPaintAndActio
     const auto laterTarget = self.tryTarget(self.id(s_UiPopupBuilderLaterKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     ASSERT_TRUE(laterTarget.has_value());
-    self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
-    self.click(Point(laterTarget.value().rectangle.x + 4.0f, laterTarget.value().rectangle.y + 4.0f));
+    const VectorSingle clickPts = VectorSingle(closeTarget.value().rectangle.x, closeTarget.value().rectangle.y, laterTarget.value().rectangle.x, laterTarget.value().rectangle.y) + VectorSingle(4.0f);
+    self.click(Point(clickPts.x, clickPts.y));
+    self.click(Point(clickPts.z, clickPts.w));
     ASSERT_EQ(self.m_context.input().actions().size(), 2u);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));

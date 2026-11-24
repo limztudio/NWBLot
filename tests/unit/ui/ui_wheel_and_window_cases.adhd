@@ -843,7 +843,7 @@ void VerifyUiWindowBehaviorTests_PairedGeometryPreservesSignedZeroAndFloatingPoi
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
     const Rect corner = ResolveWindowResizeBounds(state, metrics);
     const i32 overflowExceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-    EXPECT_FALSE(IsFinite(corner.x));
+    EXPECT_FALSE(IsFinite(VectorSingle(corner.x)));
     EXPECT_FALSE(SignBit(corner.y));
     EXPECT_EQ(overflowExceptions, FE_OVERFLOW);
 }

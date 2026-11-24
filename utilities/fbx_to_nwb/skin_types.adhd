@@ -79,7 +79,7 @@ b8 TryAccumulateFbxSkinWeight(
     mut f64 inOutWeightSum,
     mut MeshSkinInfluence inOutResult
 ){
-    if(!IsFinite(value)){
+    if(!IsFinite(VectorDouble(value))){
         error("Failed to build mesh: skin contains a non-finite weight");
         return false;
     }
@@ -98,7 +98,7 @@ b8 TryAccumulateFbxSkinWeight(
 }
 
 b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){
-    if(!IsFinite(weightSum) || weightSum <= 0.0){
+    if(!IsFinite(VectorDouble(weightSum)) || weightSum <= 0.0){
         error("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights");
         return false;
     }

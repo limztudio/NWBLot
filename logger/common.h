@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <global/simd/vector_arithmetic.h>
+#include <global/simd/vector_rounding.h>
 
 #include <global/filesystem/executable_paths.h>
 #include <global/binary.h>
@@ -210,7 +211,7 @@ private:
                 const f32 remainingSeconds = VectorGetX(VectorSubtract(VectorReplicate(UpdateIntervalSeconds), VectorReplicate(elapsedSeconds)));
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
-                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(VectorGetX(VectorMultiply(VectorReplicate(remainingSeconds), VectorReplicate(s_MillisecondsPerSecondF))))));
+                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(VectorGetX(VectorCeiling(VectorMultiply(VectorReplicate(remainingSeconds), VectorReplicate(s_MillisecondsPerSecondF))))));
                 SleepMS(sleepMilliseconds);
                 continue;
             }

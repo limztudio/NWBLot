@@ -56,7 +56,7 @@ The builder only parses selected inputs; it does not expand their dependencies.
 Related assets required by metadata validation must be included in the inputs.
 
 ```console
-python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root project/assets --output-directory built --configuration dbg
+python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root impl/assets project/assets --output-directory built --configuration dbg
 ```
 
 Standalone `.nwb` cooked assets are published directly under `__asset_cache/` as `<sha1(lower(absolute path))>.nwba` so projects share cached cooked assets. `assets.list` in the output directory references those shared `__asset_cache/*.nwba` paths alongside relative filenames for project-scoped `.nwba` files built in the output directory. When a standalone asset (or cached shader bytecode variant) is already cached and up to date, the cook notifies via `info(...)`.

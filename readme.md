@@ -128,7 +128,9 @@ The runtime texture loader selects formats according to device support, includin
 
 The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor attaches the graphics runtime and asset manager; a world-only constructor is available for CPU use.
 
-Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes; automatic dispatch considers the configured body threshold. Testbed integrates `PhysicsSystem`, and physics tests live under `tests/unit/physics` in target `nwb_physics_tests`.
+Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes; automatic dispatch considers the configured body threshold. The asset layer also provides physics materials, collision-layer matrices, convex hulls, and collision meshes.
+
+The ECS integration includes character controllers, vehicles, ragdolls, articulations, soft bodies, fluid volumes, and force fields. `PhysicsWorld` exposes ray casts, shape casts, overlap queries, and closest-point queries, with optional GPU collision and resident-mode settings. Testbed integrates `PhysicsSystem`, and physics tests live under `tests/unit/physics` in target `nwb_physics_tests`.
 
 ## Macro and namespace ownership
 

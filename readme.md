@@ -126,7 +126,7 @@ The runtime texture loader selects formats according to device support, includin
 
 ## Physics
 
-The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor attaches the graphics runtime and asset manager; a world-only constructor is available for CPU use.
+The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor takes the graphics runtime, asset manager, and shader-path resolver; a world-only constructor is available for CPU use.
 
 Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes; automatic dispatch considers the configured body threshold. The asset layer also provides physics materials, collision-layer matrices, convex hulls, and collision meshes.
 

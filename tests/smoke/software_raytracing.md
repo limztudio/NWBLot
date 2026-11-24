@@ -120,7 +120,8 @@ control. The oracle checks passage coverage and GI, red floor light from retaine
 open triangles, visible retained-surface brightness, and RGB agreement that rejects
 light from removed green triangles.
 
-Captures wait for 360 successful presentations and retain the three images,
+Captures wait for at least 360 successful presentations, then at least 30 live
+steady-clock seconds with further presentation progress. They retain the three images,
 runtime logs, and regional color metrics under
 `Testing/smoke/<configuration>/csg_gi_<route>`. The harness rejects runtime and
 validation warnings through the existing capture workflow. Natural policy

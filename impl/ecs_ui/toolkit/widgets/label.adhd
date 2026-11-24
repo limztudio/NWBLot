@@ -96,6 +96,9 @@ class Label : NoCopy{
         assert(this.m_layout.has_value(), "Label::layout() requires a successful measure() first");
         return this.m_layout.value();
     }
+    public b8 measuredNeedsAtlasRecheck()const{
+        return this.m_measuredNeedsAtlasRecheck;
+    }
 }
 
 

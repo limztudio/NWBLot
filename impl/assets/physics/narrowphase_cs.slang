@@ -952,53 +952,107 @@ void nwbPhysicsSolveSimplex4(
     }
 }
 
-float3 nwbPhysicsSupportWorld(
+struct NwbPhysicsGpuSupportCache{
+    uint shapeType;
+    uint vCount;
+    uint vOffset;
+    bool isBox;
+    float3 p0OrCenter;
+    float3 p1OrExtent;
+    float3 axX;
+    float3 axY;
+    float3 axZ;
+    float2 extraParams;
+};
+
+NwbPhysicsGpuSupportCache nwbPhysicsBuildSupportCache(
     const NwbPhysicsGpuShapeProxy proxy,
     const float3 origin,
-    const float4 rot,
+    const float4 rot
+){
+    NwbPhysicsGpuSupportCache cache;
+    const uint shapeType = proxy.bodyIndexTypeShape.y;
+    const bool isBox = (shapeType == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
+    cache.shapeType = shapeType;
+    cache.vCount = 0u;
+    cache.vOffset = 0u;
+    cache.isBox = isBox;
+    cache.p0OrCenter = float3(0.0f, 0.0f, 0.0f);
+    cache.p1OrExtent = float3(0.0f, 0.0f, 0.0f);
+    cache.axX = float3(1.0f, 0.0f, 0.0f);
+    cache.axY = float3(0.0f, 1.0f, 0.0f);
+    cache.axZ = float3(0.0f, 0.0f, 1.0f);
+    cache.extraParams = float2(0.0f, 0.0f);
+
+    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
+        cache.p0OrCenter = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+    }
+    else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+        cache.p0OrCenter = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+        cache.p1OrExtent = origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot);
+    }
+    else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
+        cache.p0OrCenter = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+        cache.p1OrExtent = origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot);
+        cache.extraParams = float2(proxy.localRotationOrMeta.x, proxy.localRotationOrMeta.y);
+    }
+    else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER || shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
+        const float4 qShape = (proxy.localRotationOrMeta.w >= 0.999999f)
+            ? rot
+            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
+        cache.p0OrCenter = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+        nwbPhysicsQuatToAxes(qShape, cache.axX, cache.axY, cache.axZ);
+        cache.extraParams = float2(proxy.localExtentOrP1.x, proxy.localExtentOrP1.y);
+    }
+    else if(isBox){
+        const float4 qBox = (proxy.localRotationOrMeta.w >= 0.999999f)
+            ? rot
+            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
+        cache.p0OrCenter = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+        cache.p1OrExtent = proxy.localExtentOrP1.xyz;
+        nwbPhysicsQuatToAxes(qBox, cache.axX, cache.axY, cache.axZ);
+    }
+    else{
+        cache.vOffset = proxy.filterData.w;
+        cache.vCount = min(asuint(proxy.localRotationOrMeta.x) & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
+        cache.p0OrCenter = origin;
+        nwbPhysicsQuatToAxes(rot, cache.axX, cache.axY, cache.axZ);
+    }
+    return cache;
+}
+
+float3 nwbPhysicsSupportCached(
+    const NwbPhysicsGpuSupportCache cache,
     const uint hullVertexSlot,
     const float3 worldDir,
     out uint outIdx
 ){
-    const uint shapeType = proxy.bodyIndexTypeShape.y;
-    const bool isBox = (shapeType == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
         outIdx = 0u;
-        return origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
+        return cache.p0OrCenter;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
-        const float3 p0 = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 p1 = origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot);
-        if(dot(p0, worldDir) >= dot(p1, worldDir)){
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+        if(dot(cache.p0OrCenter, worldDir) >= dot(cache.p1OrExtent, worldDir)){
             outIdx = 0u;
-            return p0;
+            return cache.p0OrCenter;
         }
         outIdx = 1u;
-        return p1;
+        return cache.p1OrExtent;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
-        const float3 p0 = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 p1 = origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot);
-        const float dr0 = proxy.localRotationOrMeta.x;
-        const float dr1 = proxy.localRotationOrMeta.y;
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
         const float dirLen = length(worldDir);
         const float3 uDir = (dirLen > 1.0e-6f) ? (worldDir / dirLen) : float3(0.0f, 1.0f, 0.0f);
-        const float3 s0 = p0 + uDir * dr0;
-        const float3 s1 = p1 + uDir * dr1;
+        const float3 s0 = cache.p0OrCenter + uDir * cache.extraParams.x;
+        const float3 s1 = cache.p1OrExtent + uDir * cache.extraParams.y;
         outIdx = 0x8000u;
         if(dot(s1, worldDir) > dot(s0, worldDir))
             return s1;
         return s0;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER){
-        const float4 qCyl = (proxy.localRotationOrMeta.w >= 0.999999f)
-            ? rot
-            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
-        const float3 cCyl = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 ld = nwbPhysicsQuatInvRotate(worldDir, qCyl);
-        const float rCyl = proxy.localExtentOrP1.x;
-        const float hhCyl = proxy.localExtentOrP1.y;
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER){
+        const float3 ld = float3(dot(cache.axX, worldDir), dot(cache.axY, worldDir), dot(cache.axZ, worldDir));
+        const float rCyl = cache.extraParams.x;
+        const float hhCyl = cache.extraParams.y;
         const float sy = (ld.y < 0.0f) ? -hhCyl : hhCyl;
         const float radSq = ld.x * ld.x + ld.z * ld.z;
         float3 sLoc = float3(0.0f, sy, 0.0f);
@@ -1007,16 +1061,12 @@ float3 nwbPhysicsSupportWorld(
             sLoc = float3(ld.x * scale, sy, ld.z * scale);
         }
         outIdx = 0x8000u;
-        return cCyl + nwbPhysicsQuatRotate(sLoc, qCyl);
+        return cache.p0OrCenter + cache.axX * sLoc.x + cache.axY * sLoc.y + cache.axZ * sLoc.z;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
-        const float4 qCone = (proxy.localRotationOrMeta.w >= 0.999999f)
-            ? rot
-            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
-        const float3 cCone = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 ld = nwbPhysicsQuatInvRotate(worldDir, qCone);
-        const float rCone = proxy.localExtentOrP1.x;
-        const float hhCone = proxy.localExtentOrP1.y;
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
+        const float3 ld = float3(dot(cache.axX, worldDir), dot(cache.axY, worldDir), dot(cache.axZ, worldDir));
+        const float rCone = cache.extraParams.x;
+        const float hhCone = cache.extraParams.y;
         const float radSq = ld.x * ld.x + ld.z * ld.z;
         const float radLen = sqrt(radSq);
         const float apexDot = ld.y * hhCone;
@@ -1032,33 +1082,26 @@ float3 nwbPhysicsSupportWorld(
             }
         }
         outIdx = 0x8000u;
-        return cCone + nwbPhysicsQuatRotate(sLoc, qCone);
+        return cache.p0OrCenter + cache.axX * sLoc.x + cache.axY * sLoc.y + cache.axZ * sLoc.z;
     }
-    if(isBox){
-        const float4 qBox = (proxy.localRotationOrMeta.w >= 0.999999f)
-            ? rot
-            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
-        const float3 cBox = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 ld = nwbPhysicsQuatInvRotate(worldDir, qBox);
-        const float3 h = proxy.localExtentOrP1.xyz;
+    if(cache.isBox){
+        const float3 ld = float3(dot(cache.axX, worldDir), dot(cache.axY, worldDir), dot(cache.axZ, worldDir));
+        const float3 h = cache.p1OrExtent;
         const float3 s = float3(ld.x >= 0.0f ? h.x : -h.x, ld.y >= 0.0f ? h.y : -h.y, ld.z >= 0.0f ? h.z : -h.z);
         outIdx = (ld.x >= 0.0f ? 1u : 0u) | (ld.y >= 0.0f ? 2u : 0u) | (ld.z >= 0.0f ? 4u : 0u);
-        return cBox + nwbPhysicsQuatRotate(s, qBox);
+        return cache.p0OrCenter + cache.axX * s.x + cache.axY * s.y + cache.axZ * s.z;
     }
 
-    const uint vOffset = proxy.filterData.w;
-    const uint metaPack = asuint(proxy.localRotationOrMeta.x);
-    const uint vCount = min(metaPack & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
-    if(vCount == 0u){
+    if(cache.vCount == 0u){
         outIdx = 0u;
-        return origin;
+        return cache.p0OrCenter;
     }
-    const float3 localDir = nwbPhysicsQuatInvRotate(worldDir, rot);
+    const float3 localDir = float3(dot(cache.axX, worldDir), dot(cache.axY, worldDir), dot(cache.axZ, worldDir));
     uint bestIdx = 0u;
-    float3 bestLocal = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset].xyz;
+    float3 bestLocal = g_NwbPhysicsFloat4Buffers[hullVertexSlot][cache.vOffset].xyz;
     float bestDot = dot(bestLocal, localDir);
-    for(uint i = 1u; i < vCount; ++i){
-        const float3 v = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + i].xyz;
+    for(uint i = 1u; i < cache.vCount; ++i){
+        const float3 v = g_NwbPhysicsFloat4Buffers[hullVertexSlot][cache.vOffset + i].xyz;
         const float d = dot(v, localDir);
         if(d > bestDot){
             bestDot = d;
@@ -1067,79 +1110,78 @@ float3 nwbPhysicsSupportWorld(
         }
     }
     outIdx = bestIdx;
-    return origin + nwbPhysicsQuatRotate(bestLocal, rot);
+    return cache.p0OrCenter + cache.axX * bestLocal.x + cache.axY * bestLocal.y + cache.axZ * bestLocal.z;
 }
 
 #if NWB_PHYSICS_NP_PROFILE == 1
-void nwbPhysicsSupportMinMaxWorld(
-    const NwbPhysicsGpuShapeProxy proxy,
-    const float3 origin,
-    const float4 rot,
+void nwbPhysicsSupportMinMaxCached(
+    const NwbPhysicsGpuSupportCache cache,
     const uint hullVertexSlot,
     const float3 axis,
     out float outMin,
     out float outMax
 ){
-    const uint shapeType = proxy.bodyIndexTypeShape.y;
-    const bool isBox = (shapeType == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
-        const float p = dot(origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot), axis);
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
+        const float p = dot(cache.p0OrCenter, axis);
         outMin = p;
         outMax = p;
         return;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
-        const float d0 = dot(origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot), axis);
-        const float d1 = dot(origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot), axis);
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+        const float d0 = dot(cache.p0OrCenter, axis);
+        const float d1 = dot(cache.p1OrExtent, axis);
         outMin = min(d0, d1);
         outMax = max(d0, d1);
         return;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
         const float axisLen = length(axis);
-        const float d0 = dot(origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot), axis);
-        const float d1 = dot(origin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, rot), axis);
-        const float r0 = proxy.localRotationOrMeta.x * axisLen;
-        const float r1 = proxy.localRotationOrMeta.y * axisLen;
+        const float d0 = dot(cache.p0OrCenter, axis);
+        const float d1 = dot(cache.p1OrExtent, axis);
+        const float r0 = cache.extraParams.x * axisLen;
+        const float r1 = cache.extraParams.y * axisLen;
         outMin = min(d0 - r0, d1 - r1);
         outMax = max(d0 + r0, d1 + r1);
         return;
     }
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER || shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
-        uint tmpIdx = 0u;
-        outMax = dot(nwbPhysicsSupportWorld(proxy, origin, rot, hullVertexSlot, axis, tmpIdx), axis);
-        outMin = dot(nwbPhysicsSupportWorld(proxy, origin, rot, hullVertexSlot, -axis, tmpIdx), axis);
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER){
+        const float3 ld = float3(dot(cache.axX, axis), dot(cache.axY, axis), dot(cache.axZ, axis));
+        const float c = dot(cache.p0OrCenter, axis);
+        const float ext = abs(ld.y) * cache.extraParams.y + cache.extraParams.x * sqrt(ld.x * ld.x + ld.z * ld.z);
+        outMin = c - ext;
+        outMax = c + ext;
         return;
     }
-    if(isBox){
-        const float4 qBox = (proxy.localRotationOrMeta.w >= 0.999999f)
-            ? rot
-            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotationOrMeta));
-        const float3 cBox = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
-        const float3 ld = abs(nwbPhysicsQuatInvRotate(axis, qBox));
-        const float c = dot(cBox, axis);
-        const float r = dot(ld, proxy.localExtentOrP1.xyz);
+    if(cache.shapeType == NWB_PHYSICS_SHAPE_TYPE_CONE){
+        const float3 ld = float3(dot(cache.axX, axis), dot(cache.axY, axis), dot(cache.axZ, axis));
+        const float c = dot(cache.p0OrCenter, axis);
+        const float apexProj = ld.y * cache.extraParams.y;
+        const float radExt = cache.extraParams.x * sqrt(ld.x * ld.x + ld.z * ld.z);
+        outMin = c + min(apexProj, -apexProj - radExt);
+        outMax = c + max(apexProj, -apexProj + radExt);
+        return;
+    }
+    if(cache.isBox){
+        const float3 ld = abs(float3(dot(cache.axX, axis), dot(cache.axY, axis), dot(cache.axZ, axis)));
+        const float c = dot(cache.p0OrCenter, axis);
+        const float r = dot(ld, cache.p1OrExtent);
         outMin = c - r;
         outMax = c + r;
         return;
     }
 
-    const uint vOffset = proxy.filterData.w;
-    const uint metaPack = asuint(proxy.localRotationOrMeta.x);
-    const uint vCount = min(metaPack & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
-    const float baseOff = dot(origin, axis);
-    if(vCount == 0u){
+    const float baseOff = dot(cache.p0OrCenter, axis);
+    if(cache.vCount == 0u){
         outMin = baseOff;
         outMax = baseOff;
         return;
     }
-    const float3 localDir = nwbPhysicsQuatInvRotate(axis, rot);
-    const float dFirst = dot(g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset].xyz, localDir);
+    const float3 localDir = float3(dot(cache.axX, axis), dot(cache.axY, axis), dot(cache.axZ, axis));
+    const float dFirst = dot(g_NwbPhysicsFloat4Buffers[hullVertexSlot][cache.vOffset].xyz, localDir);
     float dMin = dFirst;
     float dMax = dFirst;
-    for(uint i = 1u; i < vCount; ++i){
-        const float d = dot(g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + i].xyz, localDir);
+    for(uint i = 1u; i < cache.vCount; ++i){
+        const float d = dot(g_NwbPhysicsFloat4Buffers[hullVertexSlot][cache.vOffset + i].xyz, localDir);
         dMin = min(dMin, d);
         dMax = max(dMax, d);
     }
@@ -1148,14 +1190,18 @@ void nwbPhysicsSupportMinMaxWorld(
 }
 
 void nwbPhysicsReduceManifoldTo4(
-    const float3 clipRefN,
-    const float3 candWRef[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES],
-    const float3 candWInc[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES],
+    const float3 worldOriginA,
+    const float4 worldRotA,
+    const float3 clipRefNLocal,
+    const float3 clipRefNWorld,
     const float3 candPos[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES],
     const float candSep[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES],
     const uint candFeat[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES],
     const uint candCount,
     const bool refIsA,
+    const float refR,
+    const float incR,
+    const float totalR,
     const float3 bodyPosA,
     const float3 bodyPosB,
     inout NwbPhysicsGpuNarrowphaseManifold result
@@ -1188,7 +1234,7 @@ void nwbPhysicsReduceManifoldTo4(
         for(uint i = 0u; i < candCount; ++i){
             if(i == idx0 || i == idx1)
                 continue;
-            const float area = abs(dot(cross(e01, candPos[i] - p0), clipRefN));
+            const float area = abs(dot(cross(e01, candPos[i] - p0), clipRefNLocal));
             if(area > bestArea2){
                 bestArea2 = area;
                 idx2 = i;
@@ -1200,14 +1246,14 @@ void nwbPhysicsReduceManifoldTo4(
         uint fallbackIdx3 = 0u;
         float bestFallbackArea = -1.0f;
         const float3 p2 = candPos[idx2];
-        const float baseSign = dot(cross(e01, p2 - p0), clipRefN);
+        const float baseSign = dot(cross(e01, p2 - p0), clipRefNLocal);
         for(uint i = 0u; i < candCount; ++i){
             if(i == idx0 || i == idx1 || i == idx2)
                 continue;
             const float3 pi = candPos[i];
-            const float a0 = dot(cross(p1 - p0, pi - p0), clipRefN);
-            const float a1 = dot(cross(p2 - p1, pi - p1), clipRefN);
-            const float a2 = dot(cross(p0 - p2, pi - p2), clipRefN);
+            const float a0 = dot(cross(p1 - p0, pi - p0), clipRefNLocal);
+            const float a1 = dot(cross(p2 - p1, pi - p1), clipRefNLocal);
+            const float a2 = dot(cross(p0 - p2, pi - p2), clipRefNLocal);
             const float maxAbs = max(abs(a0), max(abs(a1), abs(a2)));
             if(maxAbs > bestFallbackArea){
                 bestFallbackArea = maxAbs;
@@ -1241,10 +1287,14 @@ void nwbPhysicsReduceManifoldTo4(
 
     for(uint k = 0u; k < outCount; ++k){
         const uint ci = outIndices[k];
-        const float3 wA = refIsA ? candWRef[ci] : candWInc[ci];
-        const float3 wB = refIsA ? candWInc[ci] : candWRef[ci];
+        const float3 ptW = worldOriginA + nwbPhysicsQuatRotate(candPos[ci], worldRotA);
+        const float sep = candSep[ci];
+        const float3 wRef = ptW - clipRefNWorld * (sep + totalR - refR);
+        const float3 wInc = ptW - clipRefNWorld * incR;
+        const float3 wA = refIsA ? wRef : wInc;
+        const float3 wB = refIsA ? wInc : wRef;
         result.anchorAFeature[k] = float4(wA - bodyPosA, asfloat(candFeat[ci]));
-        result.anchorBSeparation[k] = float4(wB - bodyPosB, candSep[ci]);
+        result.anchorBSeparation[k] = float4(wB - bodyPosB, sep);
     }
     result.pairInfo.z = outCount;
 }
@@ -1287,10 +1337,8 @@ float3 nwbPhysicsClosestPointOnTriangle(const float3 p, const float3 a, const fl
 }
 #endif
 
-void nwbPhysicsSupportProxyOrTri(
-    const NwbPhysicsGpuShapeProxy proxy,
-    const float3 origin,
-    const float4 rot,
+void nwbPhysicsSupportCachedOrTri(
+    const NwbPhysicsGpuSupportCache cache,
     const uint hullVertexSlot,
     const bool useTri,
     const float3 tv0,
@@ -1318,20 +1366,16 @@ void nwbPhysicsSupportProxyOrTri(
         }
         return;
     }
-    outPt = nwbPhysicsSupportWorld(proxy, origin, rot, hullVertexSlot, worldDir, outIdx);
+    outPt = nwbPhysicsSupportCached(cache, hullVertexSlot, worldDir, outIdx);
 }
 
-bool nwbPhysicsRunGjkDistanceEx(
-    const NwbPhysicsGpuShapeProxy proxyA,
-    const float3 originA,
-    const float4 rotA,
+bool nwbPhysicsRunGjkDistanceCached(
+    const NwbPhysicsGpuSupportCache cacheA,
     const bool triA,
     const float3 av0,
     const float3 av1,
     const float3 av2,
-    const NwbPhysicsGpuShapeProxy proxyB,
-    const float3 originB,
-    const float4 rotB,
+    const NwbPhysicsGpuSupportCache cacheB,
     const bool triB,
     const float3 bv0,
     const float3 bv1,
@@ -1358,8 +1402,8 @@ bool nwbPhysicsRunGjkDistanceEx(
     }
 
     uint sCount = 1u;
-    nwbPhysicsSupportProxyOrTri(proxyA, originA, rotA, hullVertexSlot, triA, av0, av1, av2, float3(1.0f, 0.0f, 0.0f), sIdxA[0], sWA[0]);
-    nwbPhysicsSupportProxyOrTri(proxyB, originB, rotB, hullVertexSlot, triB, bv0, bv1, bv2, float3(-1.0f, 0.0f, 0.0f), sIdxB[0], sWB[0]);
+    nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlot, triA, av0, av1, av2, float3(1.0f, 0.0f, 0.0f), sIdxA[0], sWA[0]);
+    nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlot, triB, bv0, bv1, bv2, float3(-1.0f, 0.0f, 0.0f), sIdxB[0], sWB[0]);
     sW[0] = sWB[0] - sWA[0];
     sU[0] = 1.0f;
 
@@ -1394,8 +1438,8 @@ bool nwbPhysicsRunGjkDistanceEx(
         uint idxB = 0u;
         float3 wA = float3(0.0f, 0.0f, 0.0f);
         float3 wB = float3(0.0f, 0.0f, 0.0f);
-        nwbPhysicsSupportProxyOrTri(proxyA, originA, rotA, hullVertexSlot, triA, av0, av1, av2, -d, idxA, wA);
-        nwbPhysicsSupportProxyOrTri(proxyB, originB, rotB, hullVertexSlot, triB, bv0, bv1, bv2, d, idxB, wB);
+        nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlot, triA, av0, av1, av2, -d, idxA, wA);
+        nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlot, triB, bv0, bv1, bv2, d, idxB, wB);
 
         bool dup = false;
         if(idxA < 0x8000u && idxB < 0x8000u){
@@ -1451,17 +1495,27 @@ bool nwbPhysicsRunGjkDistance(
     out float outDist,
     out bool outHitDeep
 ){
-    return nwbPhysicsRunGjkDistanceEx(
-        proxyA,
-        originA,
-        rotA,
+    const NwbPhysicsGpuSupportCache cacheA = nwbPhysicsBuildSupportCache(proxyA, originA, rotA);
+    NwbPhysicsGpuSupportCache cacheB;
+    cacheB.shapeType = 0u;
+    cacheB.vCount = 0u;
+    cacheB.vOffset = 0u;
+    cacheB.isBox = false;
+    cacheB.p0OrCenter = float3(0.0f, 0.0f, 0.0f);
+    cacheB.p1OrExtent = float3(0.0f, 0.0f, 0.0f);
+    cacheB.axX = float3(1.0f, 0.0f, 0.0f);
+    cacheB.axY = float3(0.0f, 1.0f, 0.0f);
+    cacheB.axZ = float3(0.0f, 0.0f, 1.0f);
+    cacheB.extraParams = float2(0.0f, 0.0f);
+    if(!triB)
+        cacheB = nwbPhysicsBuildSupportCache(proxyB, originB, rotB);
+    return nwbPhysicsRunGjkDistanceCached(
+        cacheA,
         false,
         float3(0.0f, 0.0f, 0.0f),
         float3(0.0f, 0.0f, 0.0f),
         float3(0.0f, 0.0f, 0.0f),
-        proxyB,
-        originB,
-        rotB,
+        cacheB,
         triB,
         tv0,
         tv1,
@@ -2056,38 +2110,27 @@ void nwbPhysicsSolveCapsuleHullDeep(
             const uint v1Idx = (packE >> 8u) & 0xffu;
             if(v0Idx >= vCount || v1Idx >= vCount)
                 continue;
-            const float3 e0 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v0Idx);
-            const float3 e1 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v1Idx);
-            const float3 eDir = e1 - e0;
-            const float3 cr = cross(dSegHull, eDir);
-            const float crLenSq = dot(cr, cr);
-            const float normTol = NWB_PHYSICS_PARALLEL_EDGE_TOL * NWB_PHYSICS_PARALLEL_EDGE_TOL * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
-            if(crLenSq <= normTol)
-                continue;
+            const uint f0Idx = (packE >> 16u) & 0xffu;
+            const uint f1Idx = (packE >> 24u) & 0xffu;
+            if(f0Idx < fCount && f1Idx < fCount){
+                const float3 n0 = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, f0Idx).xyz;
+                const float3 n1 = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, f1Idx).xyz;
+                if(dot(n0, dSegHull) * dot(n1, dSegHull) > 0.0f)
+                    continue;
+                const float3 e0 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v0Idx);
+                const float3 e1 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v1Idx);
+                const float3 eDir = e1 - e0;
+                const float3 cr = cross(dSegHull, eDir);
+                const float crLenSq = dot(cr, cr);
+                const float normTol = NWB_PHYSICS_PARALLEL_EDGE_TOL * NWB_PHYSICS_PARALLEL_EDGE_TOL * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
+                if(crLenSq <= normTol)
+                    continue;
 
-            const float3 axis = cr * rsqrt(crLenSq);
-            float hMax = -1.0e20f;
-            float hMin = 1.0e20f;
-            for(uint vi = 0u; vi < vCount; ++vi){
-                const float p = dot(axis, nwbPhysicsHullLocalVertex(pH, hullVertexSlot, vi));
-                hMax = max(hMax, p);
-                hMin = min(hMin, p);
-            }
-            const float cProj = dot(axis, l0);
-            const float sPos = cProj - hMax;
-            const float sNeg = hMin - cProj;
-
-            float sepE = sPos;
-            float3 outAxis = axis;
-            float supVal = hMax;
-            if(sNeg > sPos){
-                sepE = sNeg;
-                outAxis = -axis;
-                supVal = -hMin;
-            }
-            if(sepE - totalR > maxDist)
-                return;
-            if(abs(dot(outAxis, e0) - supVal) <= 1.0e-4f){
+                const float3 axis = cr * rsqrt(crLenSq);
+                const float3 outAxis = (dot(axis, n0 + n1) < 0.0f) ? -axis : axis;
+                const float sepE = dot(outAxis, l0 - e0);
+                if(sepE - totalR > maxDist)
+                    return;
                 if(!hasEdgeCandidate || sepE > bestEdgeSep){
                     hasEdgeCandidate = true;
                     bestEdgeSep = sepE;
@@ -2095,6 +2138,49 @@ void nwbPhysicsSolveCapsuleHullDeep(
                     bestEdgeV0 = e0;
                     bestEdgeV1 = e1;
                     bestHullEdge = ei;
+                }
+            }
+            else{
+                const float3 e0 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v0Idx);
+                const float3 e1 = nwbPhysicsHullLocalVertex(pH, hullVertexSlot, v1Idx);
+                const float3 eDir = e1 - e0;
+                const float3 cr = cross(dSegHull, eDir);
+                const float crLenSq = dot(cr, cr);
+                const float normTol = NWB_PHYSICS_PARALLEL_EDGE_TOL * NWB_PHYSICS_PARALLEL_EDGE_TOL * max(segHullLenSq * dot(eDir, eDir), 1.0e-12f);
+                if(crLenSq <= normTol)
+                    continue;
+
+                const float3 axis = cr * rsqrt(crLenSq);
+                float hMax = -1.0e20f;
+                float hMin = 1.0e20f;
+                for(uint vi = 0u; vi < vCount; ++vi){
+                    const float p = dot(axis, nwbPhysicsHullLocalVertex(pH, hullVertexSlot, vi));
+                    hMax = max(hMax, p);
+                    hMin = min(hMin, p);
+                }
+                const float cProj = dot(axis, l0);
+                const float sPos = cProj - hMax;
+                const float sNeg = hMin - cProj;
+
+                float sepE = sPos;
+                float3 outAxis = axis;
+                float supVal = hMax;
+                if(sNeg > sPos){
+                    sepE = sNeg;
+                    outAxis = -axis;
+                    supVal = -hMin;
+                }
+                if(sepE - totalR > maxDist)
+                    return;
+                if(abs(dot(outAxis, e0) - supVal) <= 1.0e-4f){
+                    if(!hasEdgeCandidate || sepE > bestEdgeSep){
+                        hasEdgeCandidate = true;
+                        bestEdgeSep = sepE;
+                        bestEdgeOut = outAxis;
+                        bestEdgeV0 = e0;
+                        bestEdgeV1 = e1;
+                        bestHullEdge = ei;
+                    }
                 }
             }
         }
@@ -2192,45 +2278,54 @@ void nwbPhysicsSolveHullHullDeep(
         return;
     }
 
+    const float4 invRotA = float4(-rotA.xyz, rotA.w);
+    const float3 originBInA = nwbPhysicsQuatRotate(originB - originA, invRotA);
+    const float4 rotBToA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(invRotA, rotB));
+    float3 bAxX;
+    float3 bAxY;
+    float3 bAxZ;
+    nwbPhysicsQuatToAxes(rotBToA, bAxX, bAxY, bAxZ);
+
+    const NwbPhysicsGpuSupportCache cacheA = nwbPhysicsBuildSupportCache(proxyA, float3(0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 1.0f));
+    const NwbPhysicsGpuSupportCache cacheBInA = nwbPhysicsBuildSupportCache(proxyB, originBInA, rotBToA);
+
     float bestSepA = -1.0e20f;
     uint bestFaceA = 0u;
-    float3 bestWorldNA = float3(0.0f, 1.0f, 0.0f);
+    float3 bestLocalNA = float3(0.0f, 1.0f, 0.0f);
     for(uint i = 0u; i < fCountA; ++i){
         const float4 lp = nwbPhysicsHullLocalFacePlane(proxyA, hullVertexSlot, i);
-        const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, rotA), float3(0.0f, 1.0f, 0.0f));
-        const float wOff = lp.w + dot(wN, originA);
         uint tmpIdx = 0u;
-        const float3 supB = nwbPhysicsSupportWorld(proxyB, originB, rotB, hullVertexSlot, -wN, tmpIdx);
-        const float sep = dot(wN, supB) - wOff - totalR;
+        const float3 supBInA = nwbPhysicsSupportCached(cacheBInA, hullVertexSlot, -lp.xyz, tmpIdx);
+        const float sep = dot(lp.xyz, supBInA) - lp.w - totalR;
         if(sep > maxDist)
             return;
         if(sep > bestSepA){
             bestSepA = sep;
             bestFaceA = i;
-            bestWorldNA = wN;
+            bestLocalNA = lp.xyz;
         }
     }
 
     float bestSepB = -1.0e20f;
     uint bestFaceB = 0u;
-    float3 bestWorldNB = float3(0.0f, 1.0f, 0.0f);
+    float3 bestLocalNB = float3(0.0f, 1.0f, 0.0f);
     for(uint i = 0u; i < fCountB; ++i){
         const float4 lp = nwbPhysicsHullLocalFacePlane(proxyB, hullVertexSlot, i);
-        const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, rotB), float3(0.0f, 1.0f, 0.0f));
-        const float wOff = lp.w + dot(wN, originB);
+        const float3 nBInA = bAxX * lp.x + bAxY * lp.y + bAxZ * lp.z;
+        const float offBInA = lp.w + dot(nBInA, originBInA);
         uint tmpIdx = 0u;
-        const float3 supA = nwbPhysicsSupportWorld(proxyA, originA, rotA, hullVertexSlot, -wN, tmpIdx);
-        const float sep = dot(wN, supA) - wOff - totalR;
+        const float3 supAInA = nwbPhysicsSupportCached(cacheA, hullVertexSlot, -nBInA, tmpIdx);
+        const float sep = dot(nBInA, supAInA) - offBInA - totalR;
         if(sep > maxDist)
             return;
         if(sep > bestSepB){
             bestSepB = sep;
             bestFaceB = i;
-            bestWorldNB = wN;
+            bestLocalNB = nBInA;
         }
     }
 
-    const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
+    const float3 cAInA = proxyA.localCenterRadius.xyz;
     float bestEdgeSep = -1.0e20f;
     float3 bestEdgeAxis = float3(0.0f, 1.0f, 0.0f);
     float3 bestEA0 = float3(0.0f, 0.0f, 0.0f);
@@ -2248,13 +2343,16 @@ void nwbPhysicsSolveHullHullDeep(
         const uint fA1Idx = (packA >> 24u) & 0xffu;
         if(vA0Idx >= vCountA || vA1Idx >= vCountA || fA0Idx >= fCountA || fA1Idx >= fCountA)
             continue;
-        const float3 pA0 = originA + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(proxyA, hullVertexSlot, vA0Idx), rotA);
-        const float3 pA1 = originA + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(proxyA, hullVertexSlot, vA1Idx), rotA);
+        const float3 pA0 = nwbPhysicsHullLocalVertex(proxyA, hullVertexSlot, vA0Idx);
+        const float3 pA1 = nwbPhysicsHullLocalVertex(proxyA, hullVertexSlot, vA1Idx);
         const float3 dirA = pA1 - pA0;
         const float dirALenSq = dot(dirA, dirA);
-        const float3 nA0 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(proxyA, hullVertexSlot, fA0Idx).xyz, rotA), float3(1.0f, 0.0f, 0.0f));
-        const float3 nA1 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(proxyA, hullVertexSlot, fA1Idx).xyz, rotA), float3(0.0f, 1.0f, 0.0f));
+        const float3 nA0 = nwbPhysicsHullLocalFacePlane(proxyA, hullVertexSlot, fA0Idx).xyz;
+        const float3 nA1 = nwbPhysicsHullLocalFacePlane(proxyA, hullVertexSlot, fA1Idx).xyz;
         const float3 edgeBA = cross(nA0, nA1);
+        const float3 nA0InB = float3(dot(bAxX, nA0), dot(bAxY, nA0), dot(bAxZ, nA0));
+        const float3 nA1InB = float3(dot(bAxX, nA1), dot(bAxY, nA1), dot(bAxZ, nA1));
+        const float3 edgeBAInB = float3(dot(bAxX, edgeBA), dot(bAxY, edgeBA), dot(bAxZ, edgeBA));
 
         for(uint eB = 0u; eB < eCountB; ++eB){
             const uint packB = nwbPhysicsHullEdgePacked(proxyB, hullVertexSlot, eB);
@@ -2264,15 +2362,17 @@ void nwbPhysicsSolveHullHullDeep(
             const uint fB1Idx = (packB >> 24u) & 0xffu;
             if(vB0Idx >= vCountB || vB1Idx >= vCountB || fB0Idx >= fCountB || fB1Idx >= fCountB)
                 continue;
-            const float3 nB0 = nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(proxyB, hullVertexSlot, fB0Idx).xyz, rotB);
-            const float3 nB1 = nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(proxyB, hullVertexSlot, fB1Idx).xyz, rotB);
-            const float3 edgeDC = cross(nB0, nB1);
+            const float3 lnB0 = nwbPhysicsHullLocalFacePlane(proxyB, hullVertexSlot, fB0Idx).xyz;
+            const float3 lnB1 = nwbPhysicsHullLocalFacePlane(proxyB, hullVertexSlot, fB1Idx).xyz;
+            const float3 edgeDC = cross(lnB0, lnB1);
 
-            if(!nwbPhysicsIsMinkowskiFace(nA0, nA1, edgeBA, -nB0, -nB1, edgeDC))
+            if(!nwbPhysicsIsMinkowskiFace(nA0InB, nA1InB, edgeBAInB, -lnB0, -lnB1, edgeDC))
                 continue;
 
-            const float3 pB0 = originB + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(proxyB, hullVertexSlot, vB0Idx), rotB);
-            const float3 pB1 = originB + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(proxyB, hullVertexSlot, vB1Idx), rotB);
+            const float3 lvB0 = nwbPhysicsHullLocalVertex(proxyB, hullVertexSlot, vB0Idx);
+            const float3 lvB1 = nwbPhysicsHullLocalVertex(proxyB, hullVertexSlot, vB1Idx);
+            const float3 pB0 = originBInA + bAxX * lvB0.x + bAxY * lvB0.y + bAxZ * lvB0.z;
+            const float3 pB1 = originBInA + bAxX * lvB1.x + bAxY * lvB1.y + bAxZ * lvB1.z;
             const float3 dirB = pB1 - pB0;
 
             const float3 rawCross = cross(dirA, dirB);
@@ -2282,7 +2382,7 @@ void nwbPhysicsSolveHullHullDeep(
                 continue;
 
             float3 axis = rawCross * rsqrt(lenSq);
-            if(dot(axis, pA0 - cA) < 0.0f)
+            if(dot(axis, pA0 - cAInA) < 0.0f)
                 axis = -axis;
 
             const float sep = dot(axis, pB0 - pA0) - totalR;
@@ -2304,26 +2404,30 @@ void nwbPhysicsSolveHullHullDeep(
     if(bestEdgeSep > max(bestSepA, bestSepB) + 5.0e-4f){
         float sSeg = 0.0f;
         float tSeg = 0.0f;
-        float3 segPtA = float3(0.0f, 0.0f, 0.0f);
-        float3 segPtB = float3(0.0f, 0.0f, 0.0f);
-        nwbPhysicsClosestPointsSegments(bestEA0, bestEA1, bestEB0, bestEB1, sSeg, tSeg, segPtA, segPtB);
+        float3 segPtALoc = float3(0.0f, 0.0f, 0.0f);
+        float3 segPtBLoc = float3(0.0f, 0.0f, 0.0f);
+        nwbPhysicsClosestPointsSegments(bestEA0, bestEA1, bestEB0, bestEB1, sSeg, tSeg, segPtALoc, segPtBLoc);
+        const float3 worldAxis = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestEdgeAxis, rotA), float3(0.0f, 1.0f, 0.0f));
+        const float3 segPtA = originA + nwbPhysicsQuatRotate(segPtALoc, rotA);
+        const float3 segPtB = originA + nwbPhysicsQuatRotate(segPtBLoc, rotA);
         result.pairInfo.z = 1u;
-        result.normalPad = float4(bestEdgeAxis, 0.0f);
-        result.anchorAFeature[0] = float4(segPtA + bestEdgeAxis * rA - bodyPosA, asfloat(50u + (bestEdgeIdxA & 0xffu) + ((bestEdgeIdxB & 0xffu) << 8u)));
-        result.anchorBSeparation[0] = float4(segPtB - bestEdgeAxis * rB - bodyPosB, bestEdgeSep);
+        result.normalPad = float4(worldAxis, 0.0f);
+        result.anchorAFeature[0] = float4(segPtA + worldAxis * rA - bodyPosA, asfloat(50u + (bestEdgeIdxA & 0xffu) + ((bestEdgeIdxB & 0xffu) << 8u)));
+        result.anchorBSeparation[0] = float4(segPtB - worldAxis * rB - bodyPosB, bestEdgeSep);
         return;
     }
 
     const bool refIsA = (bestSepB <= bestSepA + 1.0e-4f);
     const NwbPhysicsGpuShapeProxy refProxy = refIsA ? proxyA : proxyB;
     const NwbPhysicsGpuShapeProxy incProxy = refIsA ? proxyB : proxyA;
-    const float3 refOrig = refIsA ? originA : originB;
-    const float4 refRot = refIsA ? rotA : rotB;
-    const float3 incOrig = refIsA ? originB : originA;
-    const float4 incRot = refIsA ? rotB : rotA;
+    const float3 refOrigLoc = refIsA ? float3(0.0f, 0.0f, 0.0f) : originBInA;
+    const float4 refRotLoc = refIsA ? float4(0.0f, 0.0f, 0.0f, 1.0f) : rotBToA;
+    const float3 incOrigLoc = refIsA ? originBInA : float3(0.0f, 0.0f, 0.0f);
+    const float4 incRotLoc = refIsA ? rotBToA : float4(0.0f, 0.0f, 0.0f, 1.0f);
     const uint refFace = refIsA ? bestFaceA : bestFaceB;
     const uint incFaceCount = refIsA ? fCountB : fCountA;
-    const float3 refWorldN = refIsA ? bestWorldNA : bestWorldNB;
+    const float3 refLocalN = refIsA ? bestLocalNA : bestLocalNB;
+    const float3 refNInInc = refIsA ? float3(dot(bAxX, bestLocalNA), dot(bAxY, bestLocalNA), dot(bAxZ, bestLocalNA)) : bestLocalNB;
     const float refR = refIsA ? rA : rB;
     const float incR = refIsA ? rB : rA;
 
@@ -2331,8 +2435,7 @@ void nwbPhysicsSolveHullHullDeep(
     float minIncDot = 2.0f;
     for(uint i = 0u; i < incFaceCount; ++i){
         const float4 lp = nwbPhysicsHullLocalFacePlane(incProxy, hullVertexSlot, i);
-        const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, incRot), float3(0.0f, 1.0f, 0.0f));
-        const float d = dot(wN, refWorldN);
+        const float d = dot(lp.xyz, refNInInc);
         if(d < minIncDot){
             minIncDot = d;
             incFace = i;
@@ -2340,17 +2443,15 @@ void nwbPhysicsSolveHullHullDeep(
     }
 
     float4 refPoly[16];
-    float3 refNUnused = refWorldN;
+    float3 refNUnused = refLocalN;
     float refOff = 0.0f;
-    const uint refPolyCount = nwbPhysicsGatherHullWorldFacePoly(refProxy, refOrig, refRot, hullVertexSlot, refFace, refPoly, refNUnused, refOff);
+    const uint refPolyCount = nwbPhysicsGatherHullWorldFacePoly(refProxy, refOrigLoc, refRotLoc, hullVertexSlot, refFace, refPoly, refNUnused, refOff);
 
     float4 poly0[16];
     float4 poly1[16];
-    for(uint k = 0u; k < 16u; ++k)
-        poly1[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float3 incNUnused = refWorldN;
+    float3 incNUnused = refLocalN;
     float incOffUnused = 0.0f;
-    uint polyCount = nwbPhysicsGatherHullWorldFacePoly(incProxy, incOrig, incRot, hullVertexSlot, incFace, poly0, incNUnused, incOffUnused);
+    uint polyCount = nwbPhysicsGatherHullWorldFacePoly(incProxy, incOrigLoc, incRotLoc, hullVertexSlot, incFace, poly0, incNUnused, incOffUnused);
 
     if(refPolyCount < 3u || polyCount < 3u){
         result.pairInfo.w = 1u;
@@ -2358,16 +2459,21 @@ void nwbPhysicsSolveHullHullDeep(
     }
 
     bool clipOverflow = false;
-    for(uint i = 0u; i < refPolyCount; ++i){
+    const float3 v0First = refPoly[0].xyz;
+    const float3 v1First = refPoly[1].xyz;
+    const float3 sideNFirst = nwbPhysicsSafeNormal(cross(v1First - v0First, refNUnused), float3(1.0f, 0.0f, 0.0f));
+    polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideNFirst, dot(sideNFirst, v0First), 0u, poly1, clipOverflow);
+    bool polyIn0 = false;
+    for(uint i = 1u; i < refPolyCount && !clipOverflow && polyCount > 0u; ++i){
         const float3 v0 = refPoly[i].xyz;
-        const float3 v1 = refPoly[(i + 1u) % refPolyCount].xyz;
+        const float3 v1 = refPoly[(i + 1u < refPolyCount) ? (i + 1u) : 0u].xyz;
         const float3 sideN = nwbPhysicsSafeNormal(cross(v1 - v0, refNUnused), float3(1.0f, 0.0f, 0.0f));
         const float sideOff = dot(sideN, v0);
-        polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, sideOff, i, poly1, clipOverflow);
-        if(clipOverflow || polyCount == 0u)
-            break;
-        for(uint k = 0u; k < polyCount; ++k)
-            poly0[k] = poly1[k];
+        if(polyIn0)
+            polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, sideOff, i, poly1, clipOverflow);
+        else
+            polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, sideN, sideOff, i, poly0, clipOverflow);
+        polyIn0 = !polyIn0;
     }
     if(clipOverflow || polyCount == 0u){
         result.pairInfo.w = 1u;
@@ -2375,25 +2481,22 @@ void nwbPhysicsSolveHullHullDeep(
     }
 
     const uint hullFacePack = ((refIsA ? 1u : 0u) << 28u) | ((refFace & 0x3fu) << 22u) | ((incFace & 0x3fu) << 16u);
-    float3 candWRef[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES];
-    float3 candWInc[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES];
     float3 candPos[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES];
     float candSep[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES];
     uint candFeat[NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES];
     uint candCount = 0u;
     for(uint k = 0u; k < polyCount; ++k){
-        const float3 pt = poly0[k].xyz;
+        const float4 clipped = polyIn0 ? poly0[k] : poly1[k];
+        const float3 pt = clipped.xyz;
         const float sep = dot(refNUnused, pt) - refOff - totalR;
         if(sep <= maxDist){
             if(candCount >= NWB_PHYSICS_GPU_MAX_MESH_CANDIDATES){
                 clipOverflow = true;
             }
             else{
-                candWRef[candCount] = pt - refNUnused * (sep + totalR - refR);
-                candWInc[candCount] = pt - refNUnused * incR;
                 candPos[candCount] = pt;
                 candSep[candCount] = sep;
-                candFeat[candCount] = hullFacePack | (asuint(poly0[k].w) & 0xffffu);
+                candFeat[candCount] = hullFacePack | (asuint(clipped.w) & 0xffffu);
                 ++candCount;
             }
         }
@@ -2403,8 +2506,9 @@ void nwbPhysicsSolveHullHullDeep(
         return;
     }
 
-    result.normalPad = float4(refIsA ? refNUnused : -refNUnused, 0.0f);
-    nwbPhysicsReduceManifoldTo4(refNUnused, candWRef, candWInc, candPos, candSep, candFeat, candCount, refIsA, bodyPosA, bodyPosB, result);
+    const float3 worldRefN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(refNUnused, rotA), float3(0.0f, 1.0f, 0.0f));
+    result.normalPad = float4(refIsA ? worldRefN : -worldRefN, 0.0f);
+    nwbPhysicsReduceManifoldTo4(originA, rotA, refNUnused, worldRefN, candPos, candSep, candFeat, candCount, refIsA, refR, incR, totalR, bodyPosA, bodyPosB, result);
 }
 
 void nwbPhysicsPushMeshCand(
@@ -2548,15 +2652,18 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
     bool found = false;
     float bestDistSq = 1.0e30f;
     uint stack[32];
+    float stackDistSq[32];
     uint sp = 0u;
-    stack[sp++] = 0u;
+    stack[0] = 0u;
+    stackDistSq[0] = 0.0f;
+    sp = 1u;
     while(sp > 0u){
-        const uint nodeRel = stack[--sp];
+        --sp;
+        if(stackDistSq[sp] >= bestDistSq)
+            continue;
+        const uint nodeRel = stack[sp];
         const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 0u];
         const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 1u];
-        const float3 dAabb = max(float3(0.0f, 0.0f, 0.0f), max(n0.xyz - localPoint, localPoint - n1.xyz));
-        if(dot(dAabb, dAabb) >= bestDistSq)
-            continue;
 
         const uint meta = asuint(n1.w);
         if((meta & 0x80000000u) != 0u){
@@ -2602,14 +2709,18 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
                         outOverflow = true;
                         return false;
                     }
-                    stack[sp++] = rightRel;
+                    stack[sp] = rightRel;
+                    stackDistSq[sp] = dRightSq;
+                    ++sp;
                 }
                 if(dLeftSq < bestDistSq){
                     if(sp >= 32u){
                         outOverflow = true;
                         return false;
                     }
-                    stack[sp++] = leftRel;
+                    stack[sp] = leftRel;
+                    stackDistSq[sp] = dLeftSq;
+                    ++sp;
                 }
             }
             else{
@@ -2618,14 +2729,18 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
                         outOverflow = true;
                         return false;
                     }
-                    stack[sp++] = leftRel;
+                    stack[sp] = leftRel;
+                    stackDistSq[sp] = dLeftSq;
+                    ++sp;
                 }
                 if(dRightSq < bestDistSq){
                     if(sp >= 32u){
                         outOverflow = true;
                         return false;
                     }
-                    stack[sp++] = rightRel;
+                    stack[sp] = rightRel;
+                    stackDistSq[sp] = dRightSq;
+                    ++sp;
                 }
             }
         }
@@ -2692,13 +2807,25 @@ void nwbPhysicsCollideMeshMeshPair(
     const float4 invRotA = float4(-rotA.xyz, rotA.w);
     const float3 posBInA = nwbPhysicsQuatRotate(originB - originA, invRotA);
     const float4 rotBToA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(invRotA, rotB));
-    float3 bAxX;
-    float3 bAxY;
-    float3 bAxZ;
-    nwbPhysicsQuatToAxes(rotBToA, bAxX, bAxY, bAxZ);
-    bAxX = abs(bAxX);
-    bAxY = abs(bAxY);
-    bAxZ = abs(bAxZ);
+    float3 sBAxX;
+    float3 sBAxY;
+    float3 sBAxZ;
+    nwbPhysicsQuatToAxes(rotBToA, sBAxX, sBAxY, sBAxZ);
+    const float3 bAxX = abs(sBAxX);
+    const float3 bAxY = abs(sBAxY);
+    const float3 bAxZ = abs(sBAxZ);
+
+    NwbPhysicsGpuSupportCache dummyCache;
+    dummyCache.shapeType = 0u;
+    dummyCache.vCount = 0u;
+    dummyCache.vOffset = 0u;
+    dummyCache.isBox = false;
+    dummyCache.p0OrCenter = float3(0.0f, 0.0f, 0.0f);
+    dummyCache.p1OrExtent = float3(0.0f, 0.0f, 0.0f);
+    dummyCache.axX = float3(1.0f, 0.0f, 0.0f);
+    dummyCache.axY = float3(0.0f, 1.0f, 0.0f);
+    dummyCache.axZ = float3(0.0f, 0.0f, 1.0f);
+    dummyCache.extraParams = float2(0.0f, 0.0f);
 
     float3 candWA[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
     float3 candWB[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
@@ -2731,7 +2858,7 @@ void nwbPhysicsCollideMeshMeshPair(
 
         const float3 bMid = (nB0.xyz + nB1.xyz) * 0.5f;
         const float3 bHalf = (nB1.xyz - nB0.xyz) * 0.5f;
-        const float3 bCenterA = posBInA + nwbPhysicsQuatRotate(bMid, rotBToA);
+        const float3 bCenterA = posBInA + sBAxX * bMid.x + sBAxY * bMid.y + sBAxZ * bMid.z;
         const float3 bExtA = bAxX * bHalf.x + bAxY * bHalf.y + bAxZ * bHalf.z + marginVec;
         if(!nwbPhysicsAabbOverlaps(nA0.xyz, nA1.xyz, bCenterA - bExtA, bCenterA + bExtA))
             continue;
@@ -2790,21 +2917,18 @@ void nwbPhysicsCollideMeshMeshPair(
                 const float3 av0 = aT0.xyz;
                 const float3 av1 = aT1.xyz;
                 const float3 av2 = aT2.xyz;
-                const uint meshFlagsA = asuint(aT1.w);
-                const bool closedA = (meshFlagsA & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
-                const bool cullBackA = closedA || ((meshFlagsA & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u);
                 const float3 tMinA = min(av0, min(av1, av2));
                 const float3 tMaxA = max(av0, max(av1, av2));
                 if(!nwbPhysicsAabbOverlaps(tMinA, tMaxA, nodeBMinA, nodeBMaxA))
                     continue;
 
+                const uint meshFlagsA = asuint(aT1.w);
+                const bool closedA = (meshFlagsA & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+                const bool cullBackA = closedA || ((meshFlagsA & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u);
                 const uint edgeFlagsA = asuint(aT0.w);
                 const float3 rawTriNA = nwbPhysicsSafeNormal(cross(av1 - av0, av2 - av0), float3(0.0f, 1.0f, 0.0f));
-                const float3 wA0 = originA + nwbPhysicsQuatRotate(av0, rotA);
-                const float3 wA1 = originA + nwbPhysicsQuatRotate(av1, rotA);
-                const float3 wA2 = originA + nwbPhysicsQuatRotate(av2, rotA);
-                const float3 rawWTriNA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(rawTriNA, rotA), float3(0.0f, 1.0f, 0.0f));
-                const float3 wCA = (wA0 + wA1 + wA2) * (1.0f / 3.0f);
+                const float3 edgesA[3] = { av1 - av0, av2 - av1, av0 - av2 };
+                const float3 vertsA[3] = { av0, av1, av2 };
 
                 for(uint tiB = 0u; tiB < triCountB; ++tiB){
                     const uint localTriB = firstTriB + tiB;
@@ -2815,43 +2939,39 @@ void nwbPhysicsCollideMeshMeshPair(
                     const float3 bv0 = bT0.xyz;
                     const float3 bv1 = bT1.xyz;
                     const float3 bv2 = bT2.xyz;
-                    const uint meshFlagsB = asuint(bT1.w);
-                    const bool closedB = (meshFlagsB & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
-                    const bool cullBackB = closedB || ((meshFlagsB & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u);
 
-                    const float3 b0InA = posBInA + nwbPhysicsQuatRotate(bv0, rotBToA);
-                    const float3 b1InA = posBInA + nwbPhysicsQuatRotate(bv1, rotBToA);
-                    const float3 b2InA = posBInA + nwbPhysicsQuatRotate(bv2, rotBToA);
+                    const float3 b0InA = posBInA + sBAxX * bv0.x + sBAxY * bv0.y + sBAxZ * bv0.z;
+                    const float3 b1InA = posBInA + sBAxX * bv1.x + sBAxY * bv1.y + sBAxZ * bv1.z;
+                    const float3 b2InA = posBInA + sBAxX * bv2.x + sBAxY * bv2.y + sBAxZ * bv2.z;
                     const float3 tMinBInA = min(b0InA, min(b1InA, b2InA)) - marginVec;
                     const float3 tMaxBInA = max(b0InA, max(b1InA, b2InA)) + marginVec;
                     if(!nwbPhysicsAabbOverlaps(tMinA, tMaxA, tMinBInA, tMaxBInA))
                         continue;
 
+                    const uint meshFlagsB = asuint(bT1.w);
+                    const bool closedB = (meshFlagsB & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+                    const bool cullBackB = closedB || ((meshFlagsB & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u);
                     const uint edgeFlagsB = asuint(bT0.w);
-                    const float3 rawTriNB = nwbPhysicsSafeNormal(cross(bv1 - bv0, bv2 - bv0), float3(0.0f, 1.0f, 0.0f));
-                    const float3 wB0 = originB + nwbPhysicsQuatRotate(bv0, rotB);
-                    const float3 wB1 = originB + nwbPhysicsQuatRotate(bv1, rotB);
-                    const float3 wB2 = originB + nwbPhysicsQuatRotate(bv2, rotB);
-                    const float3 rawWTriNB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(rawTriNB, rotB), float3(0.0f, 1.0f, 0.0f));
-                    const float3 wCB = (wB0 + wB1 + wB2) * (1.0f / 3.0f);
+                    const float3 rawTriNBInA = nwbPhysicsSafeNormal(cross(b1InA - b0InA, b2InA - b0InA), float3(0.0f, 1.0f, 0.0f));
 
                     float3 gjkPtA = float3(0.0f, 0.0f, 0.0f);
                     float3 gjkPtB = float3(0.0f, 0.0f, 0.0f);
                     float gjkDist = 0.0f;
                     bool gjkDeep = false;
-                    nwbPhysicsRunGjkDistanceEx(proxyA, originA, rotA, true, wA0, wA1, wA2, proxyB, originB, rotB, true, wB0, wB1, wB2, hullVertexSlot, gjkPtA, gjkPtB, gjkDist, gjkDeep);
+                    nwbPhysicsRunGjkDistanceCached(dummyCache, true, av0, av1, av2, dummyCache, true, b0InA, b1InA, b2InA, hullVertexSlot, gjkPtA, gjkPtB, gjkDist, gjkDeep);
 
                     if(!gjkDeep && gjkDist > 1.0e-5f){
-                        float sep = gjkDist - totalR;
+                        const float sep = gjkDist - totalR;
                         if(sep > maxDist)
                             continue;
-                        float3 nAtoB = nwbPhysicsSafeNormal(gjkPtB - gjkPtA, rawWTriNA);
-                        if(cullBackA && dot(nAtoB, rawWTriNA) <= 0.0f)
+                        const float3 nAtoBInA = nwbPhysicsSafeNormal(gjkPtB - gjkPtA, rawTriNA);
+                        if(cullBackA && dot(nAtoBInA, rawTriNA) <= 0.0f)
                             continue;
-                        if(cullBackB && dot(nAtoB, rawWTriNB) >= 0.0f)
+                        if(cullBackB && dot(nAtoBInA, rawTriNBInA) >= 0.0f)
                             continue;
-                        const float3 wAOut = gjkPtA + nAtoB * rA;
-                        const float3 wBOut = gjkPtB - nAtoB * rB;
+                        const float3 nAtoB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nAtoBInA, rotA), float3(0.0f, -1.0f, 0.0f));
+                        const float3 wAOut = originA + nwbPhysicsQuatRotate(gjkPtA, rotA) + nAtoB * rA;
+                        const float3 wBOut = originA + nwbPhysicsQuatRotate(gjkPtB, rotA) - nAtoB * rB;
                         if(sep < bestSep){
                             bestSep = sep;
                             chosenWorldN = nAtoB;
@@ -2859,11 +2979,11 @@ void nwbPhysicsCollideMeshMeshPair(
                         nwbPhysicsPushMeshCand(wAOut, wBOut, nAtoB, sep, nwbPhysicsMakeFeatureId(3u, localTriA & 0xffu, 3u, localTriB & 0xffu), candWA, candWB, candNorm, candSep, candFeat, candCount);
                     }
                     else{
-                        float3 wTriNA = rawWTriNA;
-                        const float dA = dot(rawWTriNA, wA0);
-                        const float b0A = dot(rawWTriNA, wB0);
-                        const float b1A = dot(rawWTriNA, wB1);
-                        const float b2A = dot(rawWTriNA, wB2);
+                        float3 triNA = rawTriNA;
+                        const float dA = dot(rawTriNA, av0);
+                        const float b0A = dot(rawTriNA, b0InA);
+                        const float b1A = dot(rawTriNA, b1InA);
+                        const float b2A = dot(rawTriNA, b2InA);
                         const float minBOnA = min(b0A, min(b1A, b2A));
                         float sepA = minBOnA - dA - totalR;
                         if(!cullBackA){
@@ -2871,17 +2991,17 @@ void nwbPhysicsCollideMeshMeshPair(
                             const float sepANeg = dA - maxBOnA - totalR;
                             if(sepANeg > sepA){
                                 sepA = sepANeg;
-                                wTriNA = -rawWTriNA;
+                                triNA = -rawTriNA;
                             }
                         }
                         if(sepA > maxDist)
                             continue;
 
-                        float3 nBtoA = -rawWTriNB;
-                        const float dB = dot(nBtoA, wB0);
-                        const float a0B = dot(nBtoA, wA0);
-                        const float a1B = dot(nBtoA, wA1);
-                        const float a2B = dot(nBtoA, wA2);
+                        float3 nBtoA = -rawTriNBInA;
+                        const float dB = dot(nBtoA, b0InA);
+                        const float a0B = dot(nBtoA, av0);
+                        const float a1B = dot(nBtoA, av1);
+                        const float a2B = dot(nBtoA, av2);
                         const float maxAOnB = max(a0B, max(a1B, a2B));
                         float sepB = dB - maxAOnB - totalR;
                         if(!cullBackB){
@@ -2889,19 +3009,17 @@ void nwbPhysicsCollideMeshMeshPair(
                             const float sepBNeg = minAOnB - dB - totalR;
                             if(sepBNeg > sepB){
                                 sepB = sepBNeg;
-                                nBtoA = rawWTriNB;
+                                nBtoA = rawTriNBInA;
                             }
                         }
                         if(sepB > maxDist)
                             continue;
 
-                        const float3 edgesA[3] = { wA1 - wA0, wA2 - wA1, wA0 - wA2 };
-                        const float3 vertsA[3] = { wA0, wA1, wA2 };
-                        const float3 edgesB[3] = { wB1 - wB0, wB2 - wB1, wB0 - wB2 };
-                        const float3 vertsB[3] = { wB0, wB1, wB2 };
+                        const float3 edgesB[3] = { b1InA - b0InA, b2InA - b1InA, b0InA - b2InA };
+                        const float3 vertsB[3] = { b0InA, b1InA, b2InA };
 
                         float bestEdgeSep = -1.0e20f;
-                        float3 bestEdgeAxis = wTriNA;
+                        float3 bestEdgeAxis = triNA;
                         uint bestEA = 0u;
                         uint bestEB = 0u;
                         bool separated = false;
@@ -2916,14 +3034,14 @@ void nwbPhysicsCollideMeshMeshPair(
                                 if(lenSq <= normTol)
                                     continue;
                                 const float3 axis = rawCross * rsqrt(lenSq);
-                                const float a0 = dot(axis, wA0);
-                                const float a1 = dot(axis, wA1);
-                                const float a2 = dot(axis, wA2);
+                                const float a0 = dot(axis, av0);
+                                const float a1 = dot(axis, av1);
+                                const float a2 = dot(axis, av2);
                                 const float minA = min(a0, min(a1, a2));
                                 const float maxA = max(a0, max(a1, a2));
-                                const float b0 = dot(axis, wB0);
-                                const float b1 = dot(axis, wB1);
-                                const float b2 = dot(axis, wB2);
+                                const float b0 = dot(axis, b0InA);
+                                const float b1 = dot(axis, b1InA);
+                                const float b2 = dot(axis, b2InA);
                                 const float minB = min(b0, min(b1, b2));
                                 const float maxB = max(b0, max(b1, b2));
                                 const float sepPos = minB - maxA - totalR;
@@ -2953,11 +3071,11 @@ void nwbPhysicsCollideMeshMeshPair(
 
                         uint winKind = 0u;
                         float winSep = sepA;
-                        float3 winN = wTriNA;
+                        float3 winNInA = triNA;
                         if(sepB > winSep + 1.0e-4f){
                             winKind = 1u;
                             winSep = sepB;
-                            winN = nBtoA;
+                            winNInA = nBtoA;
                         }
                         if(bestEdgeSep > winSep + 5.0e-4f){
                             const bool internalA = (edgeFlagsA & (1u << bestEA)) != 0u;
@@ -2965,25 +3083,26 @@ void nwbPhysicsCollideMeshMeshPair(
                             if(internalA && sepA >= bestEdgeSep - 0.05f){
                                 winKind = 0u;
                                 winSep = sepA;
-                                winN = wTriNA;
+                                winNInA = triNA;
                             }
                             else if(internalB && sepB >= bestEdgeSep - 0.05f){
                                 winKind = 1u;
                                 winSep = sepB;
-                                winN = nBtoA;
+                                winNInA = nBtoA;
                             }
                             else{
                                 winKind = 2u;
                                 winSep = bestEdgeSep;
-                                winN = bestEdgeAxis;
+                                winNInA = bestEdgeAxis;
                             }
                         }
 
-                        if(cullBackA && dot(winN, rawWTriNA) <= 0.0f)
+                        if(cullBackA && dot(winNInA, rawTriNA) <= 0.0f)
                             continue;
-                        if(cullBackB && dot(winN, rawWTriNB) >= 0.0f)
+                        if(cullBackB && dot(winNInA, rawTriNBInA) >= 0.0f)
                             continue;
 
+                        const float3 winN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(winNInA, rotA), float3(0.0f, -1.0f, 0.0f));
                         if(winKind == 2u){
                             const float3 a0 = vertsA[bestEA];
                             const float3 a1 = vertsA[(bestEA + 1u) % 3u];
@@ -2994,8 +3113,8 @@ void nwbPhysicsCollideMeshMeshPair(
                             float3 cA = float3(0.0f, 0.0f, 0.0f);
                             float3 cB = float3(0.0f, 0.0f, 0.0f);
                             nwbPhysicsClosestPointsSegments(a0, a1, b0, b1, sSeg, tSeg, cA, cB);
-                            const float3 wAOut = cA + winN * rA;
-                            const float3 wBOut = cB - winN * rB;
+                            const float3 wAOut = originA + nwbPhysicsQuatRotate(cA, rotA) + winN * rA;
+                            const float3 wBOut = originA + nwbPhysicsQuatRotate(cB, rotA) - winN * rB;
                             if(winSep < bestSep){
                                 bestSep = winSep;
                                 chosenWorldN = winN;
@@ -3007,24 +3126,28 @@ void nwbPhysicsCollideMeshMeshPair(
                         else if(winKind == 0u){
                             float4 poly0[NWB_PHYSICS_GPU_MAX_CLIP_POINTS];
                             float4 poly1[NWB_PHYSICS_GPU_MAX_CLIP_POINTS];
-                            poly0[0] = float4(wB0, 0.0f);
-                            poly0[1] = float4(wB1, 0.0f);
-                            poly0[2] = float4(wB2, 0.0f);
-                            uint polyCount = 3u;
-                            for(uint i = 0u; i < 3u && !overflow && polyCount > 0u; ++i){
-                                const float3 sideN = nwbPhysicsSafeNormal(cross(edgesA[i], rawWTriNA), float3(1.0f, 0.0f, 0.0f));
-                                polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, dot(sideN, vertsA[i]) + 5.0e-3f, i, poly1, overflow);
-                                for(uint k = 0u; k < polyCount; ++k)
-                                    poly0[k] = poly1[k];
+                            poly0[0] = float4(b0InA, 0.0f);
+                            poly0[1] = float4(b1InA, 0.0f);
+                            poly0[2] = float4(b2InA, 0.0f);
+                            const float3 sN0 = nwbPhysicsSafeNormal(cross(edgesA[0], rawTriNA), float3(1.0f, 0.0f, 0.0f));
+                            uint polyCount = nwbPhysicsClipPolygonPlane(poly0, 3u, sN0, dot(sN0, vertsA[0]) + 5.0e-3f, 0u, poly1, overflow);
+                            if(!overflow && polyCount > 0u){
+                                const float3 sN1 = nwbPhysicsSafeNormal(cross(edgesA[1], rawTriNA), float3(1.0f, 0.0f, 0.0f));
+                                polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, sN1, dot(sN1, vertsA[1]) + 5.0e-3f, 1u, poly0, overflow);
+                            }
+                            if(!overflow && polyCount > 0u){
+                                const float3 sN2 = nwbPhysicsSafeNormal(cross(edgesA[2], rawTriNA), float3(1.0f, 0.0f, 0.0f));
+                                polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sN2, dot(sN2, vertsA[2]) + 5.0e-3f, 2u, poly1, overflow);
                             }
                             if(!overflow){
                                 for(uint k = 0u; k < polyCount && !overflow; ++k){
-                                    const float3 ptB = poly0[k].xyz;
-                                    const float sep = dot(winN, ptB - wA0) - totalR;
+                                    const float3 ptB = poly1[k].xyz;
+                                    const float sep = dot(winNInA, ptB - av0) - totalR;
                                     if(sep > maxDist)
                                         continue;
-                                    const float3 wAOut = ptB - winN * (sep + rB);
-                                    const float3 wBOut = ptB - winN * rB;
+                                    const float3 wPtB = originA + nwbPhysicsQuatRotate(ptB, rotA);
+                                    const float3 wAOut = wPtB - winN * (sep + rB);
+                                    const float3 wBOut = wPtB - winN * rB;
                                     if(sep < bestSep){
                                         bestSep = sep;
                                         chosenWorldN = winN;
@@ -3038,24 +3161,28 @@ void nwbPhysicsCollideMeshMeshPair(
                         else{
                             float4 poly0[NWB_PHYSICS_GPU_MAX_CLIP_POINTS];
                             float4 poly1[NWB_PHYSICS_GPU_MAX_CLIP_POINTS];
-                            poly0[0] = float4(wA0, 0.0f);
-                            poly0[1] = float4(wA1, 0.0f);
-                            poly0[2] = float4(wA2, 0.0f);
-                            uint polyCount = 3u;
-                            for(uint i = 0u; i < 3u && !overflow && polyCount > 0u; ++i){
-                                const float3 sideN = nwbPhysicsSafeNormal(cross(edgesB[i], rawWTriNB), float3(1.0f, 0.0f, 0.0f));
-                                polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, dot(sideN, vertsB[i]) + 5.0e-3f, i, poly1, overflow);
-                                for(uint k = 0u; k < polyCount; ++k)
-                                    poly0[k] = poly1[k];
+                            poly0[0] = float4(av0, 0.0f);
+                            poly0[1] = float4(av1, 0.0f);
+                            poly0[2] = float4(av2, 0.0f);
+                            const float3 sN0 = nwbPhysicsSafeNormal(cross(edgesB[0], rawTriNBInA), float3(1.0f, 0.0f, 0.0f));
+                            uint polyCount = nwbPhysicsClipPolygonPlane(poly0, 3u, sN0, dot(sN0, vertsB[0]) + 5.0e-3f, 0u, poly1, overflow);
+                            if(!overflow && polyCount > 0u){
+                                const float3 sN1 = nwbPhysicsSafeNormal(cross(edgesB[1], rawTriNBInA), float3(1.0f, 0.0f, 0.0f));
+                                polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, sN1, dot(sN1, vertsB[1]) + 5.0e-3f, 1u, poly0, overflow);
+                            }
+                            if(!overflow && polyCount > 0u){
+                                const float3 sN2 = nwbPhysicsSafeNormal(cross(edgesB[2], rawTriNBInA), float3(1.0f, 0.0f, 0.0f));
+                                polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sN2, dot(sN2, vertsB[2]) + 5.0e-3f, 2u, poly1, overflow);
                             }
                             if(!overflow){
                                 for(uint k = 0u; k < polyCount && !overflow; ++k){
-                                    const float3 ptA = poly0[k].xyz;
-                                    const float sep = dot(winN, wB0 - ptA) - totalR;
+                                    const float3 ptA = poly1[k].xyz;
+                                    const float sep = dot(winNInA, b0InA - ptA) - totalR;
                                     if(sep > maxDist)
                                         continue;
-                                    const float3 wAOut = ptA + winN * rA;
-                                    const float3 wBOut = ptA + winN * (sep + rA);
+                                    const float3 wPtA = originA + nwbPhysicsQuatRotate(ptA, rotA);
+                                    const float3 wAOut = wPtA + winN * rA;
+                                    const float3 wBOut = wPtA + winN * (sep + rA);
                                     if(sep < bestSep){
                                         bestSep = sep;
                                         chosenWorldN = winN;
@@ -3199,21 +3326,24 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
     const float3 relOrig = nwbPhysicsQuatRotate(otherOrig - meshOrig, meshInvRot);
     const float4 relRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(meshInvRot, otherRot));
 
-    float3 wOtherCenter = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
+    const NwbPhysicsGpuSupportCache otherCache = nwbPhysicsBuildSupportCache(otherP, relOrig, relRot);
     float3 sphereLc = float3(0.0f, 0.0f, 0.0f);
+    float3 wSphereCenter = float3(0.0f, 0.0f, 0.0f);
     float3 capL0 = float3(0.0f, 0.0f, 0.0f);
     float3 capL1 = float3(0.0f, 0.0f, 0.0f);
+    float3 capMidL = float3(0.0f, 0.0f, 0.0f);
     float3 queryMin = float3(0.0f, 0.0f, 0.0f);
     float3 queryMax = float3(0.0f, 0.0f, 0.0f);
     if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
-        sphereLc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
+        sphereLc = otherCache.p0OrCenter;
+        wSphereCenter = meshOrig + nwbPhysicsQuatRotate(sphereLc, meshRot);
         queryMin = sphereLc - float3(queryR, queryR, queryR);
         queryMax = sphereLc + float3(queryR, queryR, queryR);
     }
     else{
-        capL0 = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-        capL1 = relOrig + nwbPhysicsQuatRotate(otherP.localExtentOrP1.xyz, relRot);
-        wOtherCenter = otherOrig + nwbPhysicsQuatRotate((otherP.localCenterRadius.xyz + otherP.localExtentOrP1.xyz) * 0.5f, otherRot);
+        capL0 = otherCache.p0OrCenter;
+        capL1 = otherCache.p1OrExtent;
+        capMidL = (capL0 + capL1) * 0.5f;
         queryMin = min(capL0, capL1) - float3(queryR, queryR, queryR);
         queryMax = max(capL0, capL1) + float3(queryR, queryR, queryR);
     }
@@ -3226,10 +3356,22 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
     float3 bestTriV1 = float3(0.0f, 0.0f, 0.0f);
     float3 bestTriV2 = float3(0.0f, 0.0f, 0.0f);
     float3 bestTriRawN = float3(0.0f, 1.0f, 0.0f);
-    float3 bestNOtherToMesh = float3(0.0f, -1.0f, 0.0f);
+    float3 bestLocalOtherToMesh = float3(0.0f, -1.0f, 0.0f);
     uint bestLocalTriIdx = NWB_PHYSICS_INVALID_INDEX;
     bool foundSingle = false;
     bool anyClosedMesh = false;
+
+    const float queryRSq = queryR * queryR;
+    const float probeRBound = max(queryR - 1.0e-4f, 0.0f);
+    const float probeRBoundSq = probeRBound * probeRBound;
+    bool hasProbeClosest[3] = { false, false, false };
+    bool hasProbeFrontTie[3] = { false, false, false };
+    bool hasProbeBackTie[3] = { false, false, false };
+    float probeClosestDistSq[3] = { probeRBoundSq, probeRBoundSq, probeRBoundSq };
+    float3 probeClosestPt[3] = { float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f) };
+    float3 probeClosestN[3] = { float3(0.0f, 1.0f, 0.0f), float3(0.0f, 1.0f, 0.0f), float3(0.0f, 1.0f, 0.0f) };
+    uint probeClosestTri[3] = { 0u, 0u, 0u };
+    const float3 capProbes[3] = { capMidL, capL0, capL1 };
 
     uint stack[32];
     uint sp = 0u;
@@ -3254,6 +3396,11 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                 const float3 v0 = mt0.xyz;
                 const float3 v1 = mt1.xyz;
                 const float3 v2 = mt2.xyz;
+                const float3 tMin = min(v0, min(v1, v2));
+                const float3 tMax = max(v0, max(v1, v2));
+                if(!nwbPhysicsAabbOverlaps(tMin, tMax, queryMin, queryMax))
+                    continue;
+
                 const uint edgeFlags = asuint(mt0.w);
                 const uint meshFlags = asuint(mt1.w);
                 const bool isClosed = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
@@ -3261,20 +3408,54 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                 if(isClosed)
                     anyClosedMesh = true;
                 const float3 triN = nwbPhysicsSafeNormal(cross(v1 - v0, v2 - v0), float3(0.0f, 1.0f, 0.0f));
-                const float3 tMin = min(v0, min(v1, v2));
-                const float3 tMax = max(v0, max(v1, v2));
-                if(!nwbPhysicsAabbOverlaps(tMin, tMax, queryMin, queryMax))
-                    continue;
 
                 if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
                     const float3 lc = sphereLc;
-                    if(cullBackfaces && dot(triN, lc - v0) < -NWB_PHYSICS_LINEAR_SLOP)
+                    const float side = dot(triN, lc - v0);
+                    float3 qL = float3(0.0f, 0.0f, 0.0f);
+                    float dSq = 1.0e30f;
+                    bool hasClosestPt = false;
+                    if(isClosed){
+                        qL = nwbPhysicsClosestPointOnTriangle(lc, v0, v1, v2);
+                        const float3 dLProbe = qL - lc;
+                        dSq = dot(dLProbe, dLProbe);
+                        hasClosestPt = true;
+                        if(dSq <= probeRBoundSq){
+                            const bool front = side >= -1.0e-5f;
+                            const bool back = side <= 1.0e-5f;
+                            if(!hasProbeClosest[0] || dSq < probeClosestDistSq[0] - 1.0e-5f){
+                                hasProbeClosest[0] = true;
+                                probeClosestDistSq[0] = dSq;
+                                probeClosestPt[0] = qL;
+                                probeClosestN[0] = triN;
+                                probeClosestTri[0] = localTriIdx;
+                                hasProbeFrontTie[0] = front;
+                                hasProbeBackTie[0] = back;
+                            }
+                            else if(dSq <= probeClosestDistSq[0] + 1.0e-5f){
+                                if(front)
+                                    hasProbeFrontTie[0] = true;
+                                if(back)
+                                    hasProbeBackTie[0] = true;
+                                if(dSq < probeClosestDistSq[0]){
+                                    probeClosestDistSq[0] = dSq;
+                                    probeClosestPt[0] = qL;
+                                    probeClosestN[0] = triN;
+                                    probeClosestTri[0] = localTriIdx;
+                                }
+                            }
+                        }
+                    }
+                    if(cullBackfaces && side < -NWB_PHYSICS_LINEAR_SLOP)
                         continue;
-                    float3 qL = nwbPhysicsClosestPointOnTriangle(lc, v0, v1, v2);
+                    if(!hasClosestPt){
+                        qL = nwbPhysicsClosestPointOnTriangle(lc, v0, v1, v2);
+                        const float3 dL = qL - lc;
+                        dSq = dot(dL, dL);
+                    }
+                    if(dSq > queryRSq)
+                        continue;
                     const float3 dL = qL - lc;
-                    const float dSq = dot(dL, dL);
-                    if(dSq > queryR * queryR)
-                        continue;
                     const float dist = sqrt(dSq);
                     float sep = dist - totalR;
                     float3 nL = -triN;
@@ -3297,67 +3478,98 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                     if(cullBackfaces && dot(nL, triN) >= 0.0f)
                         continue;
                     const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
-                    const float3 wc = wOtherCenter;
                     const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
                     if(!foundSingle || sep < bestSep){
                         foundSingle = true;
                         bestSep = sep;
                         chosenWorldN = meshIsA ? -wN : wN;
-                        bestNOtherToMesh = wN;
-                        bestWorldOther = wc + wN * otherR;
+                        bestLocalOtherToMesh = nL;
+                        bestWorldOther = wSphereCenter + wN * otherR;
                         bestWorldMesh = wQ - wN * meshR;
                         bestLocalTriIdx = localTriIdx;
                     }
                 }
                 else{
-                    const float3 wV0 = meshOrig + nwbPhysicsQuatRotate(v0, meshRot);
-                    const float3 wV1 = meshOrig + nwbPhysicsQuatRotate(v1, meshRot);
-                    const float3 wV2 = meshOrig + nwbPhysicsQuatRotate(v2, meshRot);
-                    float3 wTriN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(triN, meshRot), float3(0.0f, 1.0f, 0.0f));
-                    float3 triNLocal = triN;
-                    if(!cullBackfaces && dot(wOtherCenter - wV0, wTriN) < 0.0f){
-                        wTriN = -wTriN;
-                        triNLocal = -triN;
+                    if(isClosed){
+                        for(uint pi = 0u; pi < 3u; ++pi){
+                            const float3 pL = capProbes[pi];
+                            const float3 dTri = max(float3(0.0f, 0.0f, 0.0f), max(tMin - pL, pL - tMax));
+                            if(dot(dTri, dTri) > probeClosestDistSq[pi] + 1.0e-5f)
+                                continue;
+                            const float3 qProbe = nwbPhysicsClosestPointOnTriangle(pL, v0, v1, v2);
+                            const float3 diffProbe = pL - qProbe;
+                            const float dProbeSq = dot(diffProbe, diffProbe);
+                            if(dProbeSq <= probeRBoundSq){
+                                const float side = dot(triN, pL - v0);
+                                const bool front = side >= -1.0e-5f;
+                                const bool back = side <= 1.0e-5f;
+                                if(!hasProbeClosest[pi] || dProbeSq < probeClosestDistSq[pi] - 1.0e-5f){
+                                    hasProbeClosest[pi] = true;
+                                    probeClosestDistSq[pi] = dProbeSq;
+                                    probeClosestPt[pi] = qProbe;
+                                    probeClosestN[pi] = triN;
+                                    probeClosestTri[pi] = localTriIdx;
+                                    hasProbeFrontTie[pi] = front;
+                                    hasProbeBackTie[pi] = back;
+                                }
+                                else if(dProbeSq <= probeClosestDistSq[pi] + 1.0e-5f){
+                                    if(front)
+                                        hasProbeFrontTie[pi] = true;
+                                    if(back)
+                                        hasProbeBackTie[pi] = true;
+                                    if(dProbeSq < probeClosestDistSq[pi]){
+                                        probeClosestDistSq[pi] = dProbeSq;
+                                        probeClosestPt[pi] = qProbe;
+                                        probeClosestN[pi] = triN;
+                                        probeClosestTri[pi] = localTriIdx;
+                                    }
+                                }
+                            }
+                        }
                     }
+
+                    float3 triNLocal = triN;
+                    if(!cullBackfaces && dot(capMidL - v0, triN) < 0.0f)
+                        triNLocal = -triN;
                     const float capD0 = dot(triNLocal, capL0 - v0);
                     const float capD1 = dot(triNLocal, capL1 - v0);
                     if(cullBackfaces && capD0 < -NWB_PHYSICS_LINEAR_SLOP && capD1 < -NWB_PHYSICS_LINEAR_SLOP)
                         continue;
 
-                    float3 gjkPtOther = float3(0.0f, 0.0f, 0.0f);
-                    float3 gjkPtTri = float3(0.0f, 0.0f, 0.0f);
+                    float3 gjkPtOtherL = float3(0.0f, 0.0f, 0.0f);
+                    float3 gjkPtTriL = float3(0.0f, 0.0f, 0.0f);
                     float gjkDist = 0.0f;
                     bool gjkDeep = false;
-                    nwbPhysicsRunGjkDistance(otherP, otherOrig, otherRot, otherP, meshOrig, meshRot, true, wV0, wV1, wV2, hullVertexSlot, gjkPtOther, gjkPtTri, gjkDist, gjkDeep);
+                    nwbPhysicsRunGjkDistanceCached(otherCache, false, float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), otherCache, true, v0, v1, v2, hullVertexSlot, gjkPtOtherL, gjkPtTriL, gjkDist, gjkDeep);
 
                     if(!gjkDeep && gjkDist > 1.0e-5f){
                         float sep = gjkDist - totalR;
                         if(sep > maxDist)
                             continue;
-                        float3 nOtherToMesh = nwbPhysicsSafeNormal(gjkPtTri - gjkPtOther, -wTriN);
-                        const float3 localPtM = nwbPhysicsQuatInvRotate(gjkPtTri - meshOrig, meshRot);
-                        const float3 rawMeshToOtherL = nwbPhysicsQuatInvRotate(-nOtherToMesh, meshRot);
-                        float3 smoothedL = rawMeshToOtherL;
-                        float3 wO = gjkPtOther + nOtherToMesh * otherR;
-                        float3 wM = gjkPtTri - nOtherToMesh * meshR;
-                        if(nwbPhysicsSmoothMeshNormal(triN, edgeFlags, localPtM, v0, v1, v2, rawMeshToOtherL, smoothedL)){
-                            const float3 localPtO = nwbPhysicsQuatInvRotate(gjkPtOther - meshOrig, meshRot);
-                            const float planeDist = dot(smoothedL, localPtO - v0);
+                        float3 nOtherToMeshL = nwbPhysicsSafeNormal(gjkPtTriL - gjkPtOtherL, -triNLocal);
+                        float3 smoothedL = -nOtherToMeshL;
+                        float3 mPtL = gjkPtTriL;
+                        const bool smoothed = nwbPhysicsSmoothMeshNormal(triN, edgeFlags, gjkPtTriL, v0, v1, v2, -nOtherToMeshL, smoothedL);
+                        if(smoothed){
+                            const float planeDist = dot(smoothedL, gjkPtOtherL - v0);
                             if(planeDist - totalR > maxDist)
                                 continue;
                             sep = planeDist - totalR;
-                            nOtherToMesh = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(-smoothedL, meshRot), -wTriN);
-                            wO = gjkPtOther + nOtherToMesh * otherR;
-                            wM = wO + nOtherToMesh * sep;
+                            nOtherToMeshL = -smoothedL;
                         }
-                        if(cullBackfaces && dot(nOtherToMesh, wTriN) >= 0.0f)
+                        if(cullBackfaces && dot(nOtherToMeshL, triN) >= 0.0f)
                             continue;
+                        const float3 nOtherToMesh = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nOtherToMeshL, meshRot), float3(0.0f, -1.0f, 0.0f));
+                        const float3 wO = meshOrig + nwbPhysicsQuatRotate(gjkPtOtherL, meshRot) + nOtherToMesh * otherR;
+                        const float3 wM = smoothed
+                            ? (wO + nOtherToMesh * sep)
+                            : (meshOrig + nwbPhysicsQuatRotate(mPtL, meshRot) - nOtherToMesh * meshR);
                         const float3 wNOut = meshIsA ? -nOtherToMesh : nOtherToMesh;
                         if(!foundSingle || sep < bestSep){
                             foundSingle = true;
                             bestSep = sep;
                             chosenWorldN = wNOut;
-                            bestNOtherToMesh = nOtherToMesh;
+                            bestLocalOtherToMesh = nOtherToMeshL;
                             bestWorldOther = wO;
                             bestWorldMesh = wM;
                             bestTriV0 = v0;
@@ -3371,13 +3583,14 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                         const float3 deepL = cullBackfaces ? ((capD0 < capD1) ? capL0 : capL1) : (abs(capD1) < abs(capD0) ? capL1 : capL0);
                         const float sep = cullBackfaces ? (min(capD0, capD1) - totalR) : (-min(abs(capD0), abs(capD1)) - totalR);
                         const float3 deepW = meshOrig + nwbPhysicsQuatRotate(deepL, meshRot);
-                        const float3 nOtherToMesh = -wTriN;
+                        const float3 nOtherToMeshL = -triNLocal;
+                        const float3 nOtherToMesh = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nOtherToMeshL, meshRot), float3(0.0f, -1.0f, 0.0f));
                         const float3 wNOut = meshIsA ? -nOtherToMesh : nOtherToMesh;
                         if(!foundSingle || sep < bestSep){
                             foundSingle = true;
                             bestSep = sep;
                             chosenWorldN = wNOut;
-                            bestNOtherToMesh = nOtherToMesh;
+                            bestLocalOtherToMesh = nOtherToMeshL;
                             bestWorldOther = deepW + nOtherToMesh * otherR;
                             bestWorldMesh = deepW + nOtherToMesh * (otherR + sep);
                             bestTriV0 = v0;
@@ -3407,17 +3620,41 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
             bool meshOverflow = false;
             if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
                 const float3 lc = sphereLc;
-                const bool insideSphere = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, meshOverflow);
-                if(meshOverflow){
-                    result.pairInfo.w = 1u;
-                    return;
+                bool insideSphere = false;
+                bool usedCachedClosest = false;
+                float3 qL = float3(0.0f, 0.0f, 0.0f);
+                float3 triNL = float3(0.0f, 1.0f, 0.0f);
+                uint localTri = 0u;
+                float dist = 0.0f;
+                if(hasProbeClosest[0] && hasProbeFrontTie[0] && !hasProbeBackTie[0]){
+                    insideSphere = false;
+                }
+                else if(hasProbeClosest[0] && hasProbeBackTie[0] && !hasProbeFrontTie[0]){
+                    insideSphere = true;
+                    usedCachedClosest = true;
+                    qL = probeClosestPt[0];
+                    triNL = probeClosestN[0];
+                    localTri = probeClosestTri[0];
+                    dist = sqrt(probeClosestDistSq[0]);
+                }
+                else{
+                    insideSphere = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, meshOverflow);
+                    if(meshOverflow){
+                        result.pairInfo.w = 1u;
+                        return;
+                    }
+                    if(insideSphere && hasProbeClosest[0]){
+                        usedCachedClosest = true;
+                        qL = probeClosestPt[0];
+                        triNL = probeClosestN[0];
+                        localTri = probeClosestTri[0];
+                        dist = sqrt(probeClosestDistSq[0]);
+                    }
                 }
                 if(insideSphere){
-                    float3 qL = float3(0.0f, 0.0f, 0.0f);
-                    float3 triNL = float3(0.0f, 1.0f, 0.0f);
-                    uint localTri = 0u;
-                    float dist = 0.0f;
-                    const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, qL, triNL, localTri, dist, meshOverflow);
+                    const bool foundClosest = usedCachedClosest
+                        ? true
+                        : nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, lc, qL, triNL, localTri, dist, meshOverflow);
                     if(meshOverflow){
                         result.pairInfo.w = 1u;
                         return;
@@ -3427,14 +3664,13 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                         const float sep = -dist - totalR;
                         if(sep <= maxDist && (!foundSingle || sep < bestSep)){
                             const float3 wN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nL, meshRot), float3(0.0f, -1.0f, 0.0f));
-                            const float3 wc = wOtherCenter;
                             const float3 wQ = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
                             foundSingle = true;
                             usedInterior = true;
                             bestSep = sep;
                             chosenWorldN = meshIsA ? -wN : wN;
-                            bestNOtherToMesh = wN;
-                            bestWorldOther = wc + wN * otherR;
+                            bestLocalOtherToMesh = nL;
+                            bestWorldOther = wSphereCenter + wN * otherR;
                             bestWorldMesh = wQ - wN * meshR;
                             bestLocalTriIdx = localTri;
                         }
@@ -3442,22 +3678,44 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                 }
             }
             else{
-                const float3 lMid = (capL0 + capL1) * 0.5f;
-                const float3 capPts[3] = { lMid, capL0, capL1 };
                 for(uint pi = 0u; pi < 3u; ++pi){
-                    const float3 pL = capPts[pi];
-                    const bool insidePt = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, meshOverflow);
-                    if(meshOverflow){
-                        result.pairInfo.w = 1u;
-                        return;
-                    }
-                    if(!insidePt)
-                        continue;
+                    const float3 pL = capProbes[pi];
+                    bool insidePt = false;
+                    bool usedCachedClosest = false;
                     float3 qL = float3(0.0f, 0.0f, 0.0f);
                     float3 triNL = float3(0.0f, 1.0f, 0.0f);
                     uint localTri = 0u;
                     float dist = 0.0f;
-                    const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, qL, triNL, localTri, dist, meshOverflow);
+                    if(hasProbeClosest[pi] && hasProbeFrontTie[pi] && !hasProbeBackTie[pi]){
+                        insidePt = false;
+                    }
+                    else if(hasProbeClosest[pi] && hasProbeBackTie[pi] && !hasProbeFrontTie[pi]){
+                        insidePt = true;
+                        usedCachedClosest = true;
+                        qL = probeClosestPt[pi];
+                        triNL = probeClosestN[pi];
+                        localTri = probeClosestTri[pi];
+                        dist = sqrt(probeClosestDistSq[pi]);
+                    }
+                    else{
+                        insidePt = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, meshOverflow);
+                        if(meshOverflow){
+                            result.pairInfo.w = 1u;
+                            return;
+                        }
+                        if(insidePt && hasProbeClosest[pi]){
+                            usedCachedClosest = true;
+                            qL = probeClosestPt[pi];
+                            triNL = probeClosestN[pi];
+                            localTri = probeClosestTri[pi];
+                            dist = sqrt(probeClosestDistSq[pi]);
+                        }
+                    }
+                    if(!insidePt)
+                        continue;
+                    const bool foundClosest = usedCachedClosest
+                        ? true
+                        : nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, pL, qL, triNL, localTri, dist, meshOverflow);
                     if(meshOverflow){
                         result.pairInfo.w = 1u;
                         return;
@@ -3473,7 +3731,7 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
                             usedInterior = true;
                             bestSep = sep;
                             chosenWorldN = meshIsA ? -wN : wN;
-                            bestNOtherToMesh = wN;
+                            bestLocalOtherToMesh = nL;
                             bestWorldOther = wP + wN * otherR;
                             bestWorldMesh = wQ - wN * meshR;
                             bestLocalTriIdx = localTri;
@@ -3484,10 +3742,10 @@ void nwbPhysicsCollideSphereCapsuleMeshPair(
         }
     }
     if(foundSingle && !usedInterior && (otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || otherType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT)){
-        const float3 nL = nwbPhysicsSafeNormal(nwbPhysicsQuatInvRotate(-bestNOtherToMesh, meshRot), bestTriRawN);
+        const float3 nL = nwbPhysicsSafeNormal(-bestLocalOtherToMesh, bestTriRawN);
         if(abs(dot(nL, bestTriRawN)) > 0.99f){
-            const float3 l0 = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-            const float3 l1 = relOrig + nwbPhysicsQuatRotate(otherP.localExtentOrP1.xyz, relRot);
+            const float3 l0 = capL0;
+            const float3 l1 = capL1;
             const float3 segDir = l1 - l0;
             const float segLenSq = dot(segDir, segDir);
             if(segLenSq > 2.5e-5f && abs(dot(nL, segDir)) <= 0.1f * sqrt(segLenSq)){
@@ -3605,18 +3863,18 @@ void nwbPhysicsCollideMeshPair(
     const float3 relOrig = nwbPhysicsQuatRotate(otherOrig - meshOrig, meshInvRot);
     const float4 relRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(meshInvRot, otherRot));
 
-    const float3 wOtherCenter = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
-    const float4 localBoxRot = ((otherP.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u && otherP.localRotationOrMeta.w < 0.999999f)
-        ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(relRot, otherP.localRotationOrMeta))
-        : relRot;
-    const float3 lc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-    float3 axX;
-    float3 axY;
-    float3 axZ;
-    nwbPhysicsQuatToAxes(localBoxRot, axX, axY, axZ);
-    axX = abs(axX);
-    axY = abs(axY);
-    axZ = abs(axZ);
+    const NwbPhysicsGpuSupportCache otherCache = nwbPhysicsBuildSupportCache(otherP, relOrig, relRot);
+    const bool otherIsBox = otherCache.isBox;
+    float3 relAxX = otherCache.axX;
+    float3 relAxY = otherCache.axY;
+    float3 relAxZ = otherCache.axZ;
+    if(otherIsBox && otherP.localRotationOrMeta.w < 0.999999f)
+        nwbPhysicsQuatToAxes(relRot, relAxX, relAxY, relAxZ);
+
+    const float3 lc = relOrig + relAxX * otherP.localCenterRadius.x + relAxY * otherP.localCenterRadius.y + relAxZ * otherP.localCenterRadius.z;
+    const float3 axX = abs(otherCache.axX);
+    const float3 axY = abs(otherCache.axY);
+    const float3 axZ = abs(otherCache.axZ);
     const float3 h = otherP.localExtentOrP1.xyz;
     const float3 ext = axX * h.x + axY * h.y + axZ * h.z + float3(queryR, queryR, queryR);
     const float3 queryMin = lc - ext;
@@ -3626,6 +3884,16 @@ void nwbPhysicsCollideMeshPair(
     float3 chosenWorldN = float3(0.0f, -1.0f, 0.0f);
     uint bestLocalTri = NWB_PHYSICS_INVALID_INDEX;
     bool anyClosedMesh = false;
+
+    const float hullProbeBound = max(min(ext.x, min(ext.y, ext.z)) - 1.0e-4f, 0.0f);
+    const float hullProbeBoundSq = hullProbeBound * hullProbeBound;
+    bool hasHullClosest = false;
+    bool hasHullFrontTie = false;
+    bool hasHullBackTie = false;
+    float closestHullDistSq = hullProbeBoundSq;
+    float3 closestHullPt = float3(0.0f, 0.0f, 0.0f);
+    float3 closestHullN = float3(0.0f, 1.0f, 0.0f);
+    uint closestHullTri = 0u;
 
     float3 candWA[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
     float3 candWB[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
@@ -3665,6 +3933,11 @@ void nwbPhysicsCollideMeshPair(
                 const float3 v0 = mt0.xyz;
                 const float3 v1 = mt1.xyz;
                 const float3 v2 = mt2.xyz;
+                const float3 tMin = min(v0, min(v1, v2));
+                const float3 tMax = max(v0, max(v1, v2));
+                if(!nwbPhysicsAabbOverlaps(tMin, tMax, queryMin, queryMax))
+                    continue;
+
                 const uint edgeFlags = asuint(mt0.w);
                 const uint meshFlags = asuint(mt1.w);
                 const bool isClosed = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
@@ -3672,49 +3945,107 @@ void nwbPhysicsCollideMeshPair(
                 if(isClosed)
                     anyClosedMesh = true;
                 const float3 triN = nwbPhysicsSafeNormal(cross(v1 - v0, v2 - v0), float3(0.0f, 1.0f, 0.0f));
-                const float3 tMin = min(v0, min(v1, v2));
-                const float3 tMax = max(v0, max(v1, v2));
-                if(!nwbPhysicsAabbOverlaps(tMin, tMax, queryMin, queryMax))
-                    continue;
 
-                const float3 wV0 = meshOrig + nwbPhysicsQuatRotate(v0, meshRot);
-                const float3 wV1 = meshOrig + nwbPhysicsQuatRotate(v1, meshRot);
-                const float3 wV2 = meshOrig + nwbPhysicsQuatRotate(v2, meshRot);
-                float3 wTriN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(triN, meshRot), float3(0.0f, 1.0f, 0.0f));
-                float3 triNLocal = triN;
-                if(!cullBackfaces && dot(wOtherCenter - wV0, wTriN) < 0.0f){
-                    wTriN = -wTriN;
-                    triNLocal = -triN;
+                if(isClosed){
+                    const float3 dTri = max(float3(0.0f, 0.0f, 0.0f), max(tMin - lc, lc - tMax));
+                    if(dot(dTri, dTri) <= closestHullDistSq + 1.0e-5f){
+                        const float3 qHull = nwbPhysicsClosestPointOnTriangle(lc, v0, v1, v2);
+                        const float3 diffHull = lc - qHull;
+                        const float dHullSq = dot(diffHull, diffHull);
+                        if(dHullSq <= hullProbeBoundSq){
+                            const float side = dot(triN, lc - v0);
+                            const bool front = side >= -1.0e-5f;
+                            const bool back = side <= 1.0e-5f;
+                            if(!hasHullClosest || dHullSq < closestHullDistSq - 1.0e-5f){
+                                hasHullClosest = true;
+                                closestHullDistSq = dHullSq;
+                                closestHullPt = qHull;
+                                closestHullN = triN;
+                                closestHullTri = localTriIdx;
+                                hasHullFrontTie = front;
+                                hasHullBackTie = back;
+                            }
+                            else if(dHullSq <= closestHullDistSq + 1.0e-5f){
+                                if(front)
+                                    hasHullFrontTie = true;
+                                if(back)
+                                    hasHullBackTie = true;
+                                if(dHullSq < closestHullDistSq){
+                                    closestHullDistSq = dHullSq;
+                                    closestHullPt = qHull;
+                                    closestHullN = triN;
+                                    closestHullTri = localTriIdx;
+                                }
+                            }
+                        }
+                    }
                 }
 
-                float3 gjkPtOther = float3(0.0f, 0.0f, 0.0f);
-                float3 gjkPtTri = float3(0.0f, 0.0f, 0.0f);
+                if(otherIsBox){
+                    const float3 bh = otherCache.p1OrExtent;
+                    const float boxProjN =
+                        abs(dot(otherCache.axX, triN)) * bh.x
+                        + abs(dot(otherCache.axY, triN)) * bh.y
+                        + abs(dot(otherCache.axZ, triN)) * bh.z;
+                    if(abs(dot(otherCache.p0OrCenter - v0, triN)) - boxProjN > queryR)
+                        continue;
+
+                    const float3 d0 = v0 - otherCache.p0OrCenter;
+                    const float3 d1 = v1 - otherCache.p0OrCenter;
+                    const float3 d2 = v2 - otherCache.p0OrCenter;
+                    const float px0 = dot(d0, otherCache.axX);
+                    const float px1 = dot(d1, otherCache.axX);
+                    const float px2 = dot(d2, otherCache.axX);
+                    const float limX = bh.x + queryR;
+                    if(min(px0, min(px1, px2)) > limX || max(px0, max(px1, px2)) < -limX)
+                        continue;
+
+                    const float py0 = dot(d0, otherCache.axY);
+                    const float py1 = dot(d1, otherCache.axY);
+                    const float py2 = dot(d2, otherCache.axY);
+                    const float limY = bh.y + queryR;
+                    if(min(py0, min(py1, py2)) > limY || max(py0, max(py1, py2)) < -limY)
+                        continue;
+
+                    const float pz0 = dot(d0, otherCache.axZ);
+                    const float pz1 = dot(d1, otherCache.axZ);
+                    const float pz2 = dot(d2, otherCache.axZ);
+                    const float limZ = bh.z + queryR;
+                    if(min(pz0, min(pz1, pz2)) > limZ || max(pz0, max(pz1, pz2)) < -limZ)
+                        continue;
+                }
+
+                float3 triNLocal = triN;
+                if(!cullBackfaces && dot(lc - v0, triN) < 0.0f)
+                    triNLocal = -triN;
+
+                float3 gjkPtOtherL = float3(0.0f, 0.0f, 0.0f);
+                float3 gjkPtTriL = float3(0.0f, 0.0f, 0.0f);
                 float gjkDist = 0.0f;
                 bool gjkDeep = false;
-                nwbPhysicsRunGjkDistance(otherP, otherOrig, otherRot, otherP, meshOrig, meshRot, true, wV0, wV1, wV2, hullVertexSlot, gjkPtOther, gjkPtTri, gjkDist, gjkDeep);
+                nwbPhysicsRunGjkDistanceCached(otherCache, false, float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), otherCache, true, v0, v1, v2, hullVertexSlot, gjkPtOtherL, gjkPtTriL, gjkDist, gjkDeep);
 
                 if(!gjkDeep && gjkDist > 1.0e-5f){
                     float sep = gjkDist - totalR;
                     if(sep > maxDist)
                         continue;
-                    float3 nOtherToMesh = nwbPhysicsSafeNormal(gjkPtTri - gjkPtOther, -wTriN);
-                    const float3 localPtM = nwbPhysicsQuatInvRotate(gjkPtTri - meshOrig, meshRot);
-                    const float3 rawMeshToOtherL = nwbPhysicsQuatInvRotate(-nOtherToMesh, meshRot);
-                    float3 smoothedL = rawMeshToOtherL;
-                    float3 wO = gjkPtOther + nOtherToMesh * otherR;
-                    float3 wM = gjkPtTri - nOtherToMesh * meshR;
-                    if(nwbPhysicsSmoothMeshNormal(triN, edgeFlags, localPtM, v0, v1, v2, rawMeshToOtherL, smoothedL)){
-                        const float3 localPtO = nwbPhysicsQuatInvRotate(gjkPtOther - meshOrig, meshRot);
-                        const float planeDist = dot(smoothedL, localPtO - v0);
+                    float3 nOtherToMeshL = nwbPhysicsSafeNormal(gjkPtTriL - gjkPtOtherL, -triNLocal);
+                    float3 smoothedL = -nOtherToMeshL;
+                    const bool smoothed = nwbPhysicsSmoothMeshNormal(triN, edgeFlags, gjkPtTriL, v0, v1, v2, -nOtherToMeshL, smoothedL);
+                    if(smoothed){
+                        const float planeDist = dot(smoothedL, gjkPtOtherL - v0);
                         if(planeDist - totalR > maxDist)
                             continue;
                         sep = planeDist - totalR;
-                        nOtherToMesh = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(-smoothedL, meshRot), -wTriN);
-                        wO = gjkPtOther + nOtherToMesh * otherR;
-                        wM = wO + nOtherToMesh * sep;
+                        nOtherToMeshL = -smoothedL;
                     }
-                    if(cullBackfaces && dot(nOtherToMesh, wTriN) >= 0.0f)
+                    if(cullBackfaces && dot(nOtherToMeshL, triN) >= 0.0f)
                         continue;
+                    const float3 nOtherToMesh = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(nOtherToMeshL, meshRot), float3(0.0f, -1.0f, 0.0f));
+                    const float3 wO = meshOrig + nwbPhysicsQuatRotate(gjkPtOtherL, meshRot) + nOtherToMesh * otherR;
+                    const float3 wM = smoothed
+                        ? (wO + nOtherToMesh * sep)
+                        : (meshOrig + nwbPhysicsQuatRotate(gjkPtTriL, meshRot) - nOtherToMesh * meshR);
                     const float3 wNOut = meshIsA ? -nOtherToMesh : nOtherToMesh;
                     if(sep < bestSep){
                         bestSep = sep;
@@ -3735,7 +4066,7 @@ void nwbPhysicsCollideMeshPair(
                     }
 
                     uint tmpIdx = 0u;
-                    const float3 supInB = nwbPhysicsSupportWorld(otherP, relOrig, relRot, hullVertexSlot, -triNLocal, tmpIdx);
+                    const float3 supInB = nwbPhysicsSupportCached(otherCache, hullVertexSlot, -triNLocal, tmpIdx);
                     const float sepTri = dot(triNLocal, supInB - v0) - totalR;
                     if(sepTri > maxDist)
                         continue;
@@ -3747,7 +4078,7 @@ void nwbPhysicsCollideMeshPair(
                     bool separated = false;
                     for(uint fi = 0u; fi < fCountO; ++fi){
                         const float4 pl = nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fi);
-                        const float3 fNLocal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(pl.xyz, relRot), float3(0.0f, 1.0f, 0.0f));
+                        const float3 fNLocal = nwbPhysicsSafeNormal(relAxX * pl.x + relAxY * pl.y + relAxZ * pl.z, float3(0.0f, 1.0f, 0.0f));
                         const float fOff = pl.w + dot(fNLocal, relOrig);
                         const float d0 = dot(fNLocal, v0);
                         const float d1 = dot(fNLocal, v1);
@@ -3787,11 +4118,15 @@ void nwbPhysicsCollideMeshPair(
                         float3 nA0 = float3(0.0f, 0.0f, 0.0f);
                         float3 nA1 = float3(0.0f, 0.0f, 0.0f);
                         if(cullMinkowski){
-                            nA0 = nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fA0Idx).xyz, relRot);
-                            nA1 = nwbPhysicsQuatRotate(nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fA1Idx).xyz, relRot);
+                            const float3 ln0 = nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fA0Idx).xyz;
+                            const float3 ln1 = nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fA1Idx).xyz;
+                            nA0 = relAxX * ln0.x + relAxY * ln0.y + relAxZ * ln0.z;
+                            nA1 = relAxX * ln1.x + relAxY * ln1.y + relAxZ * ln1.z;
                         }
-                        const float3 eA0 = relOrig + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA0Idx), relRot);
-                        const float3 eA1 = relOrig + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA1Idx), relRot);
+                        const float3 lv0 = nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA0Idx);
+                        const float3 lv1 = nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA1Idx);
+                        const float3 eA0 = relOrig + relAxX * lv0.x + relAxY * lv0.y + relAxZ * lv0.z;
+                        const float3 eA1 = relOrig + relAxX * lv1.x + relAxY * lv1.y + relAxZ * lv1.z;
                         const float3 dirA = eA1 - eA0;
                         const float dirALenSq = dot(dirA, dirA);
 
@@ -3812,7 +4147,7 @@ void nwbPhysicsCollideMeshPair(
                             const float3 axis = rawCross * rsqrt(lenSq);
                             float minA = 0.0f;
                             float maxA = 0.0f;
-                            nwbPhysicsSupportMinMaxWorld(otherP, relOrig, relRot, hullVertexSlot, axis, minA, maxA);
+                            nwbPhysicsSupportMinMaxCached(otherCache, hullVertexSlot, axis, minA, maxA);
                             const float dB0 = dot(axis, v0);
                             const float dB1 = dot(axis, v1);
                             const float dB2 = dot(axis, v2);
@@ -3868,15 +4203,17 @@ void nwbPhysicsCollideMeshPair(
                     if(cullBackfaces && dot(winNInB, triNLocal) >= 0.0f)
                         continue;
 
-                    const float3 worldWinN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(winNInB, meshRot), -wTriN);
+                    const float3 worldWinN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(winNInB, meshRot), float3(0.0f, -1.0f, 0.0f));
                     const float3 wNOut = meshIsA ? -worldWinN : worldWinN;
 
                     if(winKind == 2u){
                         const uint edgePack = nwbPhysicsHullEdgePacked(otherP, hullVertexSlot, bestEdgeHullIdx);
                         const uint vA0Idx = edgePack & 0xffu;
                         const uint vA1Idx = (edgePack >> 8u) & 0xffu;
-                        const float3 eA0 = relOrig + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA0Idx), relRot);
-                        const float3 eA1 = relOrig + nwbPhysicsQuatRotate(nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA1Idx), relRot);
+                        const float3 lv0 = nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA0Idx);
+                        const float3 lv1 = nwbPhysicsHullLocalVertex(otherP, hullVertexSlot, vA1Idx);
+                        const float3 eA0 = relOrig + relAxX * lv0.x + relAxY * lv0.y + relAxZ * lv0.z;
+                        const float3 eA1 = relOrig + relAxX * lv1.x + relAxY * lv1.y + relAxZ * lv1.z;
                         float3 eB0 = v0;
                         float3 eB1 = v1;
                         if(bestEdgeTriIdx == 1u){
@@ -3918,18 +4255,25 @@ void nwbPhysicsCollideMeshPair(
                             poly0[1] = float4(v1, 0.0f);
                             poly0[2] = float4(v2, 0.0f);
                             uint polyCount = 3u;
-                            for(uint i = 0u; i < refPolyCount && !overflow && polyCount > 0u; ++i){
+                            const float3 rv0First = refPoly[0].xyz;
+                            const float3 rv1First = refPoly[1].xyz;
+                            const float3 sideNFirst = nwbPhysicsSafeNormal(cross(rv1First - rv0First, refNUnused), float3(1.0f, 0.0f, 0.0f));
+                            polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideNFirst, dot(sideNFirst, rv0First), 0u, poly1, overflow);
+                            bool polyIn0 = false;
+                            for(uint i = 1u; i < refPolyCount && !overflow && polyCount > 0u; ++i){
                                 const float3 rv0 = refPoly[i].xyz;
-                                const float3 rv1 = refPoly[(i + 1u) % refPolyCount].xyz;
+                                const float3 rv1 = refPoly[(i + 1u < refPolyCount) ? (i + 1u) : 0u].xyz;
                                 const float3 sideN = nwbPhysicsSafeNormal(cross(rv1 - rv0, refNUnused), float3(1.0f, 0.0f, 0.0f));
                                 const float sideOff = dot(sideN, rv0);
-                                polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, sideOff, i, poly1, overflow);
-                                for(uint k = 0u; k < polyCount; ++k)
-                                    poly0[k] = poly1[k];
+                                if(polyIn0)
+                                    polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sideN, sideOff, i, poly1, overflow);
+                                else
+                                    polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, sideN, sideOff, i, poly0, overflow);
+                                polyIn0 = !polyIn0;
                             }
                             if(!overflow){
                                 for(uint k = 0u; k < polyCount && !overflow; ++k){
-                                    const float3 ptB = poly0[k].xyz;
+                                    const float3 ptB = polyIn0 ? poly0[k].xyz : poly1[k].xyz;
                                     const float sep = dot(bestHullN, ptB) - bestHullOff - totalR;
                                     if(sep > maxDist)
                                         continue;
@@ -3948,12 +4292,12 @@ void nwbPhysicsCollideMeshPair(
                         }
                     }
                     else{
+                        const float3 triNInOther = float3(dot(relAxX, triNLocal), dot(relAxY, triNLocal), dot(relAxZ, triNLocal));
                         uint incFaceIdx = 0u;
                         float minDot = 2.0f;
                         for(uint fi = 0u; fi < fCountO; ++fi){
                             const float4 lp = nwbPhysicsHullLocalFacePlane(otherP, hullVertexSlot, fi);
-                            const float3 fNInB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, relRot), float3(0.0f, 1.0f, 0.0f));
-                            const float d = dot(fNInB, triNLocal);
+                            const float d = dot(lp.xyz, triNInOther);
                             if(d < minDot){
                                 minDot = d;
                                 incFaceIdx = fi;
@@ -3969,13 +4313,15 @@ void nwbPhysicsCollideMeshPair(
                         }
                         else{
                             const float3 sn0 = nwbPhysicsSafeNormal(cross(te0, triN), float3(1.0f, 0.0f, 0.0f));
-                            const float3 sn1 = nwbPhysicsSafeNormal(cross(te1, triN), float3(1.0f, 0.0f, 0.0f));
-                            const float3 sn2 = nwbPhysicsSafeNormal(cross(te2, triN), float3(1.0f, 0.0f, 0.0f));
                             polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sn0, dot(sn0, v0) + 5.0e-3f, 0u, poly1, overflow);
-                            if(!overflow && polyCount > 0u)
+                            if(!overflow && polyCount > 0u){
+                                const float3 sn1 = nwbPhysicsSafeNormal(cross(te1, triN), float3(1.0f, 0.0f, 0.0f));
                                 polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, sn1, dot(sn1, v1) + 5.0e-3f, 1u, poly0, overflow);
-                            if(!overflow && polyCount > 0u)
+                            }
+                            if(!overflow && polyCount > 0u){
+                                const float3 sn2 = nwbPhysicsSafeNormal(cross(te2, triN), float3(1.0f, 0.0f, 0.0f));
                                 polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, sn2, dot(sn2, v2) + 5.0e-3f, 2u, poly1, overflow);
+                            }
                             if(!overflow){
                                 for(uint k = 0u; k < polyCount && !overflow; ++k){
                                     const float3 ptB = poly1[k].xyz;
@@ -4014,22 +4360,47 @@ void nwbPhysicsCollideMeshPair(
     if(!overflow && (candCount == 0u || bestSep > 0.0f)){
         const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
         if(anyClosedMesh || ((asuint(firstTri1.w) & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u)){
-            const float3 hullCenterL = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-            const bool insideHullCenter = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, overflow);
+            const float3 hullCenterL = lc;
+            bool insideHullCenter = false;
+            bool usedCachedClosest = false;
+            float3 qL = float3(0.0f, 0.0f, 0.0f);
+            float3 triNL = float3(0.0f, 1.0f, 0.0f);
+            uint localTri = 0u;
+            float dist = 0.0f;
+            if(hasHullClosest && hasHullFrontTie && !hasHullBackTie){
+                insideHullCenter = false;
+            }
+            else if(hasHullClosest && hasHullBackTie && !hasHullFrontTie){
+                insideHullCenter = true;
+                usedCachedClosest = true;
+                qL = closestHullPt;
+                triNL = closestHullN;
+                localTri = closestHullTri;
+                dist = sqrt(closestHullDistSq);
+            }
+            else{
+                insideHullCenter = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, overflow);
+                if(!overflow && insideHullCenter && hasHullClosest){
+                    usedCachedClosest = true;
+                    qL = closestHullPt;
+                    triNL = closestHullN;
+                    localTri = closestHullTri;
+                    dist = sqrt(closestHullDistSq);
+                }
+            }
             if(!overflow && insideHullCenter){
-                float3 qL = float3(0.0f, 0.0f, 0.0f);
-                float3 triNL = float3(0.0f, 1.0f, 0.0f);
-                uint localTri = 0u;
-                float dist = 0.0f;
-                const bool foundClosest = nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, qL, triNL, localTri, dist, overflow);
+                const bool foundClosest = usedCachedClosest
+                    ? true
+                    : nwbPhysicsFindClosestPointOnClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, hullCenterL, qL, triNL, localTri, dist, overflow);
                 if(!overflow && foundClosest){
+                    uint tmpSupIdx = 0u;
+                    const float3 supL = nwbPhysicsSupportCached(otherCache, hullVertexSlot, -triNL, tmpSupIdx);
+                    const float depth = dot(qL - supL, triNL);
+                    const float sep = -(max(depth, 0.0f) + totalR);
                     const float3 worldOut = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(triNL, meshRot), float3(0.0f, 1.0f, 0.0f));
                     const float3 wNOut = meshIsA ? worldOut : -worldOut;
-                    uint tmpSupIdx = 0u;
-                    const float3 supW = nwbPhysicsSupportWorld(otherP, otherOrig, otherRot, hullVertexSlot, -worldOut, tmpSupIdx);
+                    const float3 supW = meshOrig + nwbPhysicsQuatRotate(supL, meshRot);
                     const float3 closeW = meshOrig + nwbPhysicsQuatRotate(qL, meshRot);
-                    const float depth = dot(closeW - supW, worldOut);
-                    const float sep = -(max(depth, 0.0f) + totalR);
                     const float3 wO = supW - worldOut * otherR;
                     const float3 wM = closeW + worldOut * meshR;
                     const float3 wAOut = meshIsA ? wM : wO;
@@ -4088,35 +4459,25 @@ void nwbPhysicsCollidePlaneConvexPair(
     nwbPhysicsQuatToAxes(planeWorldQ, t1W, t2W, nPlaneW);
 
     const float otherR = otherP.localCenterRadius.w;
-    uint supIdx = 0u;
-    const float3 coreDeep = nwbPhysicsSupportWorld(otherP, otherOrig, otherRot, hullVertexSlot, -nPlaneW, supIdx);
-    const float minSep = dot(coreDeep - pPlaneW, nPlaneW) - otherR;
-    if(minSep > maxDist)
-        return;
-
-    const bool isFinitePlane = (planeP.localExtentOrP1.x > 0.0f) && (planeP.localExtentOrP1.z > 0.0f);
-    if(isFinitePlane){
-        float minT1 = 0.0f;
-        float maxT1 = 0.0f;
-        float minT2 = 0.0f;
-        float maxT2 = 0.0f;
-        nwbPhysicsSupportMinMaxWorld(otherP, otherOrig, otherRot, hullVertexSlot, t1W, minT1, maxT1);
-        nwbPhysicsSupportMinMaxWorld(otherP, otherOrig, otherRot, hullVertexSlot, t2W, minT2, maxT2);
-        const float pT1 = dot(pPlaneW, t1W);
-        const float pT2 = dot(pPlaneW, t2W);
-        const float limX = planeP.localExtentOrP1.x - 1.0e-3f;
-        const float limZ = planeP.localExtentOrP1.z - 1.0e-3f;
-        if((minT1 - otherR < pT1 - limX) || (maxT1 + otherR > pT1 + limX) || (minT2 - otherR < pT2 - limZ) || (maxT2 + otherR > pT2 + limZ)){
-            result.pairInfo.w = 1u;
-            return;
-        }
-    }
-
     const float3 wNormal = planeIsA ? nPlaneW : -nPlaneW;
+    const bool isFinitePlane = (planeP.localExtentOrP1.x > 0.0f) && (planeP.localExtentOrP1.z > 0.0f);
+    const float limX = planeP.localExtentOrP1.x - 1.0e-3f;
+    const float limZ = planeP.localExtentOrP1.z - 1.0e-3f;
     const bool otherIsBox = (otherType == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((otherP.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     if(otherType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
         const float3 cO = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
         const float sep = dot(cO - pPlaneW, nPlaneW) - otherR;
+        if(sep > maxDist)
+            return;
+        if(isFinitePlane){
+            const float3 rel = cO - pPlaneW;
+            const float cT1 = dot(rel, t1W);
+            const float cT2 = dot(rel, t2W);
+            if((cT1 - otherR < -limX) || (cT1 + otherR > limX) || (cT2 - otherR < -limZ) || (cT2 + otherR > limZ)){
+                result.pairInfo.w = 1u;
+                return;
+            }
+        }
         const float3 wO = cO - nPlaneW * otherR;
         const float3 wPl = wO - nPlaneW * sep;
         result.pairInfo.z = 1u;
@@ -4140,53 +4501,41 @@ void nwbPhysicsCollidePlaneConvexPair(
     }
     uint candCount = 0u;
 
-    if(otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || otherType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
-        const float3 pts[2] = {
-            otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot),
-            otherOrig + nwbPhysicsQuatRotate(otherP.localExtentOrP1.xyz, otherRot)
-        };
-        for(uint k = 0u; k < 2u; ++k){
-            const float sep = dot(pts[k] - pPlaneW, nPlaneW) - otherR;
-            if(sep <= maxDist){
-                const float3 wO = pts[k] - nPlaneW * otherR;
-                const float3 wPl = wO - nPlaneW * sep;
-                nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
-            }
-        }
-    }
-    else if(otherType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
-        const float3 pts[2] = {
-            otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot),
-            otherOrig + nwbPhysicsQuatRotate(otherP.localExtentOrP1.xyz, otherRot)
-        };
-        const float effRs[2] = {
-            otherR + otherP.localRotationOrMeta.x,
-            otherR + otherP.localRotationOrMeta.y
-        };
-        for(uint k = 0u; k < 2u; ++k){
-            const float sep = dot(pts[k] - pPlaneW, nPlaneW) - effRs[k];
-            if(sep <= maxDist){
-                const float3 wO = pts[k] - nPlaneW * effRs[k];
-                const float3 wPl = wO - nPlaneW * sep;
-                nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
-            }
-        }
-    }
-    else if(otherIsBox){
+    if(otherIsBox){
         const float4 qBox = (otherP.localRotationOrMeta.w >= 0.999999f)
             ? otherRot
             : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(otherRot, otherP.localRotationOrMeta));
         const float3 cBox = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
+        float3 bx;
+        float3 by;
+        float3 bz;
+        nwbPhysicsQuatToAxes(qBox, bx, by, bz);
         const float3 h = otherP.localExtentOrP1.xyz;
+        const float3 relC = cBox - pPlaneW;
+        const float3 nInBox = float3(dot(bx, nPlaneW), dot(by, nPlaneW), dot(bz, nPlaneW));
+        const float centerDist = dot(relC, nPlaneW);
+        const float minSep = centerDist - dot(abs(nInBox), h) - otherR;
+        if(minSep > maxDist)
+            return;
+        if(isFinitePlane){
+            const float3 t1InBox = float3(dot(bx, t1W), dot(by, t1W), dot(bz, t1W));
+            const float3 t2InBox = float3(dot(bx, t2W), dot(by, t2W), dot(bz, t2W));
+            const float cT1 = dot(relC, t1W);
+            const float eT1 = dot(abs(t1InBox), h) + otherR;
+            const float cT2 = dot(relC, t2W);
+            const float eT2 = dot(abs(t2InBox), h) + otherR;
+            if((cT1 - eT1 < -limX) || (cT1 + eT1 > limX) || (cT2 - eT2 < -limZ) || (cT2 + eT2 > limZ)){
+                result.pairInfo.w = 1u;
+                return;
+            }
+        }
         for(uint k = 0u; k < 8u; ++k){
-            const float3 sLoc = float3(
-                ((k & 1u) != 0u) ? h.x : -h.x,
-                ((k & 2u) != 0u) ? h.y : -h.y,
-                ((k & 4u) != 0u) ? h.z : -h.z
-            );
-            const float3 wPt = cBox + nwbPhysicsQuatRotate(sLoc, qBox);
-            const float sep = dot(wPt - pPlaneW, nPlaneW) - otherR;
+            const float sx = ((k & 1u) != 0u) ? h.x : -h.x;
+            const float sy = ((k & 2u) != 0u) ? h.y : -h.y;
+            const float sz = ((k & 4u) != 0u) ? h.z : -h.z;
+            const float sep = (centerDist + nInBox.x * sx + nInBox.y * sy + nInBox.z * sz) - otherR;
             if(sep <= maxDist){
+                const float3 wPt = cBox + bx * sx + by * sy + bz * sz;
                 const float3 wO = wPt - nPlaneW * otherR;
                 const float3 wPl = wO - nPlaneW * sep;
                 nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, 4u, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
@@ -4201,45 +4550,121 @@ void nwbPhysicsCollidePlaneConvexPair(
             result.pairInfo.w = 1u;
             return;
         }
+        float3 hAxX;
+        float3 hAxY;
+        float3 hAxZ;
+        nwbPhysicsQuatToAxes(otherRot, hAxX, hAxY, hAxZ);
+        const float3 relH = otherOrig - pPlaneW;
+        const float3 nPlaneLocal = float3(dot(hAxX, nPlaneW), dot(hAxY, nPlaneW), dot(hAxZ, nPlaneW));
+        const float baseN = dot(relH, nPlaneW) - otherR;
+        float3 t1Local = float3(0.0f, 0.0f, 0.0f);
+        float3 t2Local = float3(0.0f, 0.0f, 0.0f);
+        float baseT1 = 0.0f;
+        float baseT2 = 0.0f;
+        if(isFinitePlane){
+            t1Local = float3(dot(hAxX, t1W), dot(hAxY, t1W), dot(hAxZ, t1W));
+            t2Local = float3(dot(hAxX, t2W), dot(hAxY, t2W), dot(hAxZ, t2W));
+            baseT1 = dot(relH, t1W);
+            baseT2 = dot(relH, t2W);
+        }
+        float minSep = 1.0e20f;
+        bool outOfFiniteBounds = false;
         for(uint k = 0u; k < vCount; ++k){
             const float3 vL = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + k].xyz;
-            const float3 wPt = otherOrig + nwbPhysicsQuatRotate(vL, otherRot);
-            const float sep = dot(wPt - pPlaneW, nPlaneW) - otherR;
+            const float sep = baseN + dot(nPlaneLocal, vL);
+            minSep = min(minSep, sep);
+            if(isFinitePlane){
+                const float u1 = baseT1 + dot(t1Local, vL);
+                const float u2 = baseT2 + dot(t2Local, vL);
+                if((u1 - otherR < -limX) || (u1 + otherR > limX) || (u2 - otherR < -limZ) || (u2 + otherR > limZ))
+                    outOfFiniteBounds = true;
+            }
             if(sep <= maxDist){
+                const float3 wPt = otherOrig + hAxX * vL.x + hAxY * vL.y + hAxZ * vL.z;
                 const float3 wO = wPt - nPlaneW * otherR;
                 const float3 wPl = wO - nPlaneW * sep;
                 nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, 4u, k & 0xffu), candWA, candWB, candNorm, candSep, candFeat, candCount);
             }
         }
+        if(minSep > maxDist)
+            return;
+        if(outOfFiniteBounds){
+            result.pairInfo.w = 1u;
+            return;
+        }
     }
-    else if(otherType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER || otherType == NWB_PHYSICS_SHAPE_TYPE_CONE){
-        const float4 qPar = (otherP.localRotationOrMeta.w >= 0.999999f)
-            ? otherRot
-            : nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(otherRot, otherP.localRotationOrMeta));
-        const float3 cPar = otherOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, otherRot);
-        const float3 axY = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qPar);
-        const float rPar = otherP.localExtentOrP1.x;
-        const float hhPar = otherP.localExtentOrP1.y;
-        const float align = dot(axY, nPlaneW);
-        const bool flatCap = (otherType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER) ? (abs(align) > 0.995f) : (align > 0.995f);
-        if(flatCap){
-            const float3 capCenter = cPar + axY * ((align >= 0.0f) ? -hhPar : hhPar);
-            const float3 rad0 = nwbPhysicsQuatRotate(float3(rPar, 0.0f, 0.0f), qPar);
-            const float3 rad1 = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, rPar), qPar);
-            const float3 rimPts[4] = { capCenter + rad0, capCenter - rad0, capCenter + rad1, capCenter - rad1 };
-            for(uint k = 0u; k < 4u; ++k){
-                const float sep = dot(rimPts[k] - pPlaneW, nPlaneW) - otherR;
+    else{
+        const NwbPhysicsGpuSupportCache otherCache = nwbPhysicsBuildSupportCache(otherP, otherOrig, otherRot);
+        uint supIdx = 0u;
+        const float3 coreDeep = nwbPhysicsSupportCached(otherCache, hullVertexSlot, -nPlaneW, supIdx);
+        const float minSep = dot(coreDeep - pPlaneW, nPlaneW) - otherR;
+        if(minSep > maxDist)
+            return;
+
+        if(isFinitePlane){
+            float minT1 = 0.0f;
+            float maxT1 = 0.0f;
+            float minT2 = 0.0f;
+            float maxT2 = 0.0f;
+            nwbPhysicsSupportMinMaxCached(otherCache, hullVertexSlot, t1W, minT1, maxT1);
+            nwbPhysicsSupportMinMaxCached(otherCache, hullVertexSlot, t2W, minT2, maxT2);
+            const float pT1 = dot(pPlaneW, t1W);
+            const float pT2 = dot(pPlaneW, t2W);
+            if((minT1 - otherR < pT1 - limX) || (maxT1 + otherR > pT1 + limX) || (minT2 - otherR < pT2 - limZ) || (maxT2 + otherR > pT2 + limZ)){
+                result.pairInfo.w = 1u;
+                return;
+            }
+        }
+
+        if(otherType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || otherType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+            const float3 pts[2] = { otherCache.p0OrCenter, otherCache.p1OrExtent };
+            for(uint k = 0u; k < 2u; ++k){
+                const float sep = dot(pts[k] - pPlaneW, nPlaneW) - otherR;
                 if(sep <= maxDist){
-                    const float3 wO = rimPts[k] - nPlaneW * otherR;
+                    const float3 wO = pts[k] - nPlaneW * otherR;
                     const float3 wPl = wO - nPlaneW * sep;
                     nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
                 }
             }
         }
-        else{
-            const float3 wO = coreDeep - nPlaneW * otherR;
-            const float3 wPl = wO - nPlaneW * minSep;
-            nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, minSep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, 0u), candWA, candWB, candNorm, candSep, candFeat, candCount);
+        else if(otherType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
+            const float3 pts[2] = { otherCache.p0OrCenter, otherCache.p1OrExtent };
+            const float effRs[2] = { otherR + otherCache.extraParams.x, otherR + otherCache.extraParams.y };
+            for(uint k = 0u; k < 2u; ++k){
+                const float sep = dot(pts[k] - pPlaneW, nPlaneW) - effRs[k];
+                if(sep <= maxDist){
+                    const float3 wO = pts[k] - nPlaneW * effRs[k];
+                    const float3 wPl = wO - nPlaneW * sep;
+                    nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
+                }
+            }
+        }
+        else if(otherType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER || otherType == NWB_PHYSICS_SHAPE_TYPE_CONE){
+            const float3 cPar = otherCache.p0OrCenter;
+            const float3 axY = otherCache.axY;
+            const float rPar = otherCache.extraParams.x;
+            const float hhPar = otherCache.extraParams.y;
+            const float align = dot(axY, nPlaneW);
+            const bool flatCap = (otherType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER) ? (abs(align) > 0.995f) : (align > 0.995f);
+            if(flatCap){
+                const float3 capCenter = cPar + axY * ((align >= 0.0f) ? -hhPar : hhPar);
+                const float3 rad0 = otherCache.axX * rPar;
+                const float3 rad1 = otherCache.axZ * rPar;
+                const float3 rimPts[4] = { capCenter + rad0, capCenter - rad0, capCenter + rad1, capCenter - rad1 };
+                for(uint k = 0u; k < 4u; ++k){
+                    const float sep = dot(rimPts[k] - pPlaneW, nPlaneW) - otherR;
+                    if(sep <= maxDist){
+                        const float3 wO = rimPts[k] - nPlaneW * otherR;
+                        const float3 wPl = wO - nPlaneW * sep;
+                        nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, sep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, k), candWA, candWB, candNorm, candSep, candFeat, candCount);
+                    }
+                }
+            }
+            else{
+                const float3 wO = coreDeep - nPlaneW * otherR;
+                const float3 wPl = wO - nPlaneW * minSep;
+                nwbPhysicsPushMeshCand(planeIsA ? wPl : wO, planeIsA ? wO : wPl, wNormal, minSep, nwbPhysicsMakeFeatureId(8u, 0u, otherType & 0xfu, 0u), candWA, candWB, candNorm, candSep, candFeat, candCount);
+            }
         }
     }
 
@@ -4356,23 +4781,33 @@ void nwbPhysicsSolveBulletToi(
 
         float3 queryMin = float3(1.0e20f, 1.0e20f, 1.0e20f);
         float3 queryMax = float3(-1.0e20f, -1.0e20f, -1.0e20f);
-        const float sampleTs[3] = { 0.0f, 0.5f, 1.0f };
-        for(uint si = 0u; si < 3u; ++si){
-            const float st = sampleTs[si];
-            float3 oAt;
-            float4 rAt;
-            nwbPhysicsEvalBulletSweep(bodyA, st, oAt, rAt);
-            float3 oBt = staticOB;
-            float4 rBt = staticRB;
-            if(bMoved)
-                nwbPhysicsEvalBulletSweep(bodyB, st, oBt, rBt);
-            const float3 cAt = lerp(bodyA.forceLinearDamping.xyz, bodyA.positionInvMass.xyz, st);
-            const float4 bInvRot = float4(-rBt.xyz, rBt.w);
-            const float3 cAInB = nwbPhysicsQuatRotate(cAt - oBt, bInvRot);
-            queryMin = min(queryMin, cAInB);
-            queryMax = max(queryMax, cAInB);
+        float boundR = bodyA.forceLinearDamping.w + totalRadius + linearSlop;
+        if(!bMoved){
+            const float4 staticInvRB = float4(-staticRB.xyz, staticRB.w);
+            const float3 cA0InB = nwbPhysicsQuatRotate(bodyA.forceLinearDamping.xyz - staticOB, staticInvRB);
+            const float3 cA1InB = nwbPhysicsQuatRotate(bodyA.positionInvMass.xyz - staticOB, staticInvRB);
+            queryMin = min(cA0InB, cA1InB);
+            queryMax = max(cA0InB, cA1InB);
         }
-        const float boundR = bodyA.forceLinearDamping.w + bodyB.forceLinearDamping.w + totalRadius + linearSlop + angSpeedBound;
+        else{
+            const float sampleTs[3] = { 0.0f, 0.5f, 1.0f };
+            float maxRelDist = 0.0f;
+            for(uint si = 0u; si < 3u; ++si){
+                const float st = sampleTs[si];
+                float3 oBt = staticOB;
+                float4 rBt = staticRB;
+                nwbPhysicsEvalBulletSweep(bodyB, st, oBt, rBt);
+                const float3 cAt = lerp(bodyA.forceLinearDamping.xyz, bodyA.positionInvMass.xyz, st);
+                const float3 cBt = lerp(bodyB.forceLinearDamping.xyz, bodyB.positionInvMass.xyz, st);
+                maxRelDist = max(maxRelDist, length(cAt - cBt));
+                const float4 bInvRot = float4(-rBt.xyz, rBt.w);
+                const float3 cAInB = nwbPhysicsQuatRotate(cAt - oBt, bInvRot);
+                queryMin = min(queryMin, cAInB);
+                queryMax = max(queryMax, cAInB);
+            }
+            const float thetaB = nwbPhysicsQuatAngle(bodyB.torqueAngularDamping, bodyB.rotation);
+            boundR += min(0.5f * thetaB, 2.0f) * maxRelDist;
+        }
         queryMin -= float3(boundR, boundR, boundR);
         queryMax += float3(boundR, boundR, boundR);
 
@@ -4698,38 +5133,29 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             handled = true;
                         }
                         else{
-                            const float3 wP0 = origC + nwbPhysicsQuatRotate(pC.localCenterRadius.xyz, qC);
-                            const float3 wP1 = origC + nwbPhysicsQuatRotate(pC.localExtentOrP1.xyz, qC);
-                            const float3 l0 = nwbPhysicsQuatInvRotate(wP0 - origH, qH);
-                            const float3 l1 = nwbPhysicsQuatInvRotate(wP1 - origH, qH);
-                            float maxFaceSep = -1.0e20f;
+                            const float3 worldOut = capIsA ? -n : n;
+                            const float3 localOut = nwbPhysicsSafeNormal(nwbPhysicsQuatInvRotate(worldOut, qH), float3(0.0f, 1.0f, 0.0f));
+                            bool foundAlignedFace = false;
                             uint bestFace = 0u;
                             float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
                             float bestFaceOff = 0.0f;
-                            bool faceSeparated = false;
                             for(uint fi = 0u; fi < fCount; ++fi){
                                 const float4 pl = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, fi);
-                                const float d0 = dot(pl.xyz, l0) - pl.w;
-                                const float d1 = dot(pl.xyz, l1) - pl.w;
-                                const float faceSep = min(d0, d1);
-                                if(faceSep > totalR + maxDist){
-                                    faceSeparated = true;
-                                    break;
-                                }
-                                if(faceSep > maxFaceSep){
-                                    maxFaceSep = faceSep;
+                                if(dot(pl.xyz, localOut) > 0.995f){
+                                    foundAlignedFace = true;
                                     bestFace = fi;
                                     bestLocalN = pl.xyz;
                                     bestFaceOff = pl.w;
+                                    break;
                                 }
                             }
-                            if(faceSeparated){
-                                handled = true;
-                            }
-                            else{
-                                const float3 worldOut = capIsA ? -n : n;
-                                const float3 bestWorldFaceN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, qH), float3(0.0f, 1.0f, 0.0f));
-                                if(dot(bestWorldFaceN, worldOut) > 0.995f && maxFaceSep <= totalR + maxDist){
+                            if(foundAlignedFace){
+                                const float3 wP0 = origC + nwbPhysicsQuatRotate(pC.localCenterRadius.xyz, qC);
+                                const float3 wP1 = origC + nwbPhysicsQuatRotate(pC.localExtentOrP1.xyz, qC);
+                                const float3 l0 = nwbPhysicsQuatInvRotate(wP0 - origH, qH);
+                                const float3 l1 = nwbPhysicsQuatInvRotate(wP1 - origH, qH);
+                                const float faceSep = min(dot(bestLocalN, l0) - bestFaceOff, dot(bestLocalN, l1) - bestFaceOff);
+                                if(faceSep <= totalR + maxDist){
                                     handled = nwbPhysicsTryClipCapsuleAgainstHullFace(
                                         capIsA,
                                         pH,

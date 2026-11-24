@@ -165,11 +165,6 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
             return MakeUnexpected(Failure());
         }
         const Span<MetascriptValue> items = extraOpt.value().listView();
-        entry.extraMeshAssets.reserve(items.size());
-        entry.extraMaterialAssets.reserve(items.size());
-        entry.extraConvexHullAssets.reserve(items.size());
-        entry.extraCollisionMeshAssets.reserve(items.size());
-        entry.extraHeightfieldAssets.reserve(items.size());
         for(usize i = 0u; i < items.size(); ++i){
             in MetascriptValue item = items[i];
             if(!item.isMap()){
@@ -189,11 +184,16 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
                 || !ReadOptionalColliderDepRef<HeightfieldAsset>(file, item, "heightfield_asset", extraHeightfield)
             )
                 return MakeUnexpected(Failure());
-            entry.extraMeshAssets.push_back(extraMesh);
-            entry.extraMaterialAssets.push_back(extraMat);
-            entry.extraConvexHullAssets.push_back(extraHull);
-            entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
-            entry.extraHeightfieldAssets.push_back(extraHeightfield);
+            if(extraMesh.valid())
+                entry.extraMeshAssets.push_back(extraMesh);
+            if(extraMat.valid())
+                entry.extraMaterialAssets.push_back(extraMat);
+            if(extraHull.valid())
+                entry.extraConvexHullAssets.push_back(extraHull);
+            if(extraCollisionMesh.valid())
+                entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
+            if(extraHeightfield.valid())
+                entry.extraHeightfieldAssets.push_back(extraHeightfield);
         }
     }
     return entry;
@@ -267,7 +267,23 @@ b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mu
     if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.collisionMeshAsset, dep.heightfieldAsset, collector))
         return false;
     for(usize i = 0u; i < dep.extraMeshAssets.size(); ++i){
-        if(!CollectColliderAssetDependencies(dep.extraMeshAssets[i], dep.extraMaterialAssets[i], dep.extraConvexHullAssets[i], dep.extraCollisionMeshAssets[i], dep.extraHeightfieldAssets[i], collector))
+        if(!collector.addAssetDependency(dep.extraMeshAssets[i].name(), Mesh::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraMaterialAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraMaterialAssets[i].name(), PhysicsMaterialAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraConvexHullAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraConvexHullAssets[i].name(), ConvexHullAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraCollisionMeshAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraCollisionMeshAssets[i].name(), CollisionMeshAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraHeightfieldAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraHeightfieldAssets[i].name(), HeightfieldAsset::AssetTypeName()))
             return false;
     }
     return true;

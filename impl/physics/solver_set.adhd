@@ -400,6 +400,10 @@ class JointExtraData{
     public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 pulleyConstant = 0.0f;
     public Vector<f32x4> pathPoints;
+    public Vector<f32x4> pathSegVecs;
+    public Vector<f32x4> pathSegTangentsInvLenSq;
+    public Vector<f32> pathSegCumLens;
+    public f32 pathTotalLen = 0.0f;
     public b8 pathClosed = false;
     public b8 pathLockRotation = false;
     public b8 alive = false;
@@ -411,6 +415,48 @@ class JointExtraData{
             this.sixDofMotorImpulses[i] = 0.0f;
             this.sixDofSpringImpulses[i] = 0.0f;
         }
+    }
+
+    public void rebuildPathCache(){
+        this.pathSegVecs.clear();
+        this.pathSegTangentsInvLenSq.clear();
+        this.pathSegCumLens.clear();
+        this.pathTotalLen = 0.0f;
+        const usize n = this.pathPoints.size();
+        if(n < 2u)
+            return;
+
+        usize segCount = n - 1u;
+        if(this.pathClosed)
+            ++segCount;
+        this.pathSegVecs.reserve(segCount);
+        this.pathSegTangentsInvLenSq.reserve(segCount);
+        this.pathSegCumLens.reserve(segCount);
+
+        f32 accumLen = 0.0f;
+        for(usize si = 0u; si < segCount; ++si){
+            usize i1 = si + 1u;
+            if(i1 >= n)
+                i1 = 0u;
+            const VectorSingle p0(this.pathPoints[si], 0.0f);
+            const VectorSingle p1(this.pathPoints[i1], 0.0f);
+            const VectorSingle seg = VectorSingle(p1 - p0, 0.0f);
+            const f32 segLenSq = Vector3LengthSq(seg).x;
+            f32 segLen = 0.0f;
+            f32 invLenSq = 0.0f;
+            VectorSingle tan(0.0f);
+            if(segLenSq > 1.0e-12f){
+                const f32 invLen = Rsqrt(VectorSingle(segLenSq)).x;
+                segLen = segLenSq * invLen;
+                invLenSq = 1.0f / segLenSq;
+                tan = VectorSingle(seg * invLen, 0.0f);
+            }
+            this.pathSegVecs.push_back(f32x4(seg, segLen));
+            this.pathSegTangentsInvLenSq.push_back(f32x4(tan, invLenSq));
+            this.pathSegCumLens.push_back(accumLen);
+            accumLen += segLen;
+        }
+        this.pathTotalLen = accumLen;
     }
 }
 

@@ -49,15 +49,12 @@ class FluidVolume{
         return SafeNormalizeVec3(VectorSingle(this.surfaceNormalOffset, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     }
 
-    public f32 signedDepthWithNormalAtTime(in VectorSingle p, in VectorSingle surfNorm, in f32 timeSec)const{
+    public f32 signedDepthWithWaveBasis(in VectorSingle p, in VectorSingle surfNorm, in VectorSingle waveT1, in VectorSingle waveT2, in f32 timeSec)const{
         if(this.shape == FluidVolumeShape::HalfSpacePlane){
             f32 surfaceOff = this.surfaceNormalOffset.w;
             if(this.waveAmplitude > 0.0f){
-                VectorSingle t1(0.0f);
-                VectorSingle t2(0.0f);
-                ComputeTangentBasisFromUnitNormal(surfNorm, t1, t2);
-                const f32 u = Vector3Dot(p, t1).x * this.waveFrequency + timeSec * this.waveSpeed;
-                const f32 v = Vector3Dot(p, t2).x * (this.waveFrequency * 0.77f) - timeSec * (this.waveSpeed * 0.83f);
+                const f32 u = Vector3Dot(p, waveT1).x * this.waveFrequency + timeSec * this.waveSpeed;
+                const f32 v = Vector3Dot(p, waveT2).x * (this.waveFrequency * 0.77f) - timeSec * (this.waveSpeed * 0.83f);
                 VectorSingle sinWave(0.0f);
                 VectorSingle cosWave(0.0f);
                 VectorSinCos(sinWave, cosWave, VectorSingle(u, v, 0.0f, 0.0f));
@@ -72,6 +69,14 @@ class FluidVolume{
         }
         const VectorSingle d = Min(p - VectorSingle(this.bounds.lowerBound), VectorSingle(this.bounds.upperBound) - p);
         return -Vector3MaxComponent(-d).x;
+    }
+
+    public f32 signedDepthWithNormalAtTime(in VectorSingle p, in VectorSingle surfNorm, in f32 timeSec)const{
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        if(this.shape == FluidVolumeShape::HalfSpacePlane && this.waveAmplitude > 0.0f)
+            ComputeTangentBasisFromUnitNormal(surfNorm, t1, t2);
+        return this.signedDepthWithWaveBasis(p, surfNorm, t1, t2, timeSec);
     }
 
     public f32 signedDepthWithNormal(in VectorSingle p, in VectorSingle surfNorm)const{
@@ -188,49 +193,10 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
     }
     else if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size()){
         in HullShape hull = world.m_hullShapes[shape.geometryIndex];
-        if(hull.isBox()){
-            const VectorSingle he = hull.halfExtents();
-            shapeVol = 8.0f * he.x * he.y * he.z;
-        }
-        else if(!hull.faceTopologies.empty() && !hull.vertices.empty()){
-            const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
-            f32 volume6 = 0.0f;
-            const f32 r = hull.radius();
-            f32 skinVol = 0.0f;
-            for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
-                in HullFaceTopology face = hull.faceTopologies[fIdx];
-                if(face.vertexCount < 3u)
-                    continue;
-                u8 eIdx = face.edge;
-                const VectorSingle w0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-                const VectorSingle v0 = w0 - refPoint;
-                eIdx = hull.halfEdges[eIdx].next;
-                VectorSingle wPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-                VectorSingle vPrev = wPrev - refPoint;
-                for(u8 t = 2u; t < face.vertexCount; ++t){
-                    eIdx = hull.halfEdges[eIdx].next;
-                    const VectorSingle wCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-                    const VectorSingle vCurr = wCurr - refPoint;
-                    volume6 += Vector3Dot(v0, Cross(vPrev, vCurr)).x;
-                    if(r > 0.0f){
-                        const f32 twiceArea = Vector3Length(Cross(VectorSingle(wPrev - w0, 0.0f), VectorSingle(wCurr - w0, 0.0f))).x;
-                        if(twiceArea > 1.0e-10f)
-                            skinVol += 0.5f * twiceArea * r;
-                    }
-                    wPrev = wCurr;
-                    vPrev = vCurr;
-                }
-            }
-            if(volume6 <= 1.0e-12f){
-                if(r > 0.0f)
-                    shapeVol = (4.0f / 3.0f) * s_Pi * r * r * r;
-            }
-            else{
-                shapeVol = volume6 / 6.0f;
-                if(r > 0.0f)
-                    shapeVol += skinVol + (4.0f / 3.0f) * s_Pi * r * r * r;
-            }
-        }
+        if(hull.cachedBuoyancyVolume >= 0.0f)
+            shapeVol = hull.cachedBuoyancyVolume;
+        else
+            shapeVol = ComputeHullBuoyancyVolume(hull);
     }
     else if(shape.type == ShapeType::Plane){
         const PlaneShape pl = shape.planeShape();
@@ -244,39 +210,10 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
     }
     else if(shape.type == ShapeType::Mesh && shape.geometryIndex < world.m_meshShapes.size()){
         in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
-        if(!mesh.triangles.empty()){
-            const f32 r = mesh.radius();
-            if(mesh.isClosed()){
-                const VectorSingle refPt = VectorSingle(mesh.triangles[0u].v0, 0.0f);
-                f32 volume6 = 0.0f;
-                f32 skinVol = 0.0f;
-                for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
-                    in MeshTriangle tri = mesh.triangles[ti];
-                    const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
-                    const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
-                    const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
-                    volume6 += Vector3Dot(tv0 - refPt, Cross(tv1 - refPt, tv2 - refPt)).x;
-                    if(r > 0.0f){
-                        const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
-                        if(twiceArea > 1.0e-10f)
-                            skinVol += 0.5f * twiceArea * r;
-                    }
-                }
-                shapeVol = Abs(VectorSingle(volume6)).x / 6.0f + skinVol;
-            }
-            else{
-                f32 surfArea = 0.0f;
-                for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
-                    in MeshTriangle tri = mesh.triangles[ti];
-                    const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
-                    const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
-                    const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
-                    const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
-                    surfArea += 0.5f * twiceArea;
-                }
-                shapeVol = surfArea * SimdMax(2.0f * r, 0.02f);
-            }
-        }
+        if(mesh.cachedBuoyancyVolume >= 0.0f)
+            shapeVol = mesh.cachedBuoyancyVolume;
+        else
+            shapeVol = ComputeMeshBuoyancyVolume(mesh);
     }
     else if(shape.type == ShapeType::Heightfield && shape.geometryIndex < world.m_heightfieldShapes.size()){
         in HeightfieldShape hf = world.m_heightfieldShapes[shape.geometryIndex];
@@ -300,6 +237,10 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
     f32 areaEst = 0.0f;
     FixedVector<u32, 16u> skippedDryShapes;
     b8 overflowDryShapes = false;
+    VectorSingle waveT1(0.0f);
+    VectorSingle waveT2(0.0f);
+    if(fluid.shape == FluidVolumeShape::HalfSpacePlane && fluid.waveAmplitude > 0.0f)
+        ComputeTangentBasisFromUnitNormal(surfNorm, waveT1, waveT2);
 
     u32 shapeIdx = body.headShapeId;
     while(shapeIdx != s_NullIndex){
@@ -323,7 +264,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             const f32 r = SimdMax(1.0e-3f, s.radius());
             const f32 v = (4.0f / 3.0f) * s_Pi * r * r * r;
             const VectorSingle wc = TransformPointValues(xfPos, xfRot, s.center());
-            const f32 d = fluid.signedDepthWithNormalAtTime(wc, surfNorm, timeSec);
+            const f32 d = fluid.signedDepthWithWaveBasis(wc, surfNorm, waveT1, waveT2, timeSec);
             totalVol += v;
             if(d + r <= 0.0f)
                 continue;
@@ -409,32 +350,53 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
                 continue;
             }
 
+            VectorSingle shapePos(0.0f);
+            VectorSingle shapeRot(0.0f, 0.0f, 0.0f, 1.0f);
+            shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), shapePos, shapeRot);
+            const VectorSingle stepW = span * (1.0f / 3.0f);
+            const VectorSingle baseW = bMin + stepW * 0.5f;
+            const VectorSingle localBase = InverseTransformPointValues(shapePos, shapeRot, baseW);
+            const VectorSingle localStepX = Vector3InverseRotate(VectorSingle(stepW.x, 0.0f, 0.0f, 0.0f), shapeRot);
+            const VectorSingle localStepY = Vector3InverseRotate(VectorSingle(0.0f, stepW.y, 0.0f, 0.0f), shapeRot);
+            const VectorSingle localStepZ = Vector3InverseRotate(VectorSingle(0.0f, 0.0f, stepW.z, 0.0f), shapeRot);
+            const VectorSingle stepXVec(stepW.x, 0.0f, 0.0f, 0.0f);
+            const VectorSingle stepYVec(0.0f, stepW.y, 0.0f, 0.0f);
+            const VectorSingle stepZVec(0.0f, 0.0f, stepW.z, 0.0f);
+
             u32 insideCount = 0u;
             u32 insideSubCount = 0u;
             VectorSingle insideSubSum(0.0f);
             u32 rawSubCount = 0u;
             VectorSingle rawSubSum(0.0f);
+            VectorSingle worldZ = baseW;
+            VectorSingle localZ = localBase;
             for(u32 iz = 0u; iz < 3u; ++iz){
-                const f32 fz = (cast<f32>(iz) + 0.5f) / 3.0f;
+                VectorSingle worldY = worldZ;
+                VectorSingle localY = localZ;
                 for(u32 iy = 0u; iy < 3u; ++iy){
-                    const f32 fy = (cast<f32>(iy) + 0.5f) / 3.0f;
+                    VectorSingle pt = worldY;
+                    VectorSingle localPt = localY;
                     for(u32 ix = 0u; ix < 3u; ++ix){
-                        const f32 fx = (cast<f32>(ix) + 0.5f) / 3.0f;
-                        const VectorSingle pt = bMin + span * VectorSingle(fx, fy, fz, 0.0f);
-                        const b8 isSub = (fluid.signedDepthWithNormalAtTime(pt, surfNorm, timeSec) > 0.0f);
+                        const b8 isSub = (fluid.signedDepthWithWaveBasis(pt, surfNorm, waveT1, waveT2, timeSec) > 0.0f);
                         if(isSub){
                             ++rawSubCount;
                             rawSubSum = rawSubSum + pt;
                         }
-                        if(world.testPointInShape(shape, VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), pt)){
+                        if(world.testLocalPointInShape(shape, localPt)){
                             ++insideCount;
                             if(isSub){
                                 ++insideSubCount;
                                 insideSubSum = insideSubSum + pt;
                             }
                         }
+                        pt = pt + stepXVec;
+                        localPt = localPt + localStepX;
                     }
+                    worldY = worldY + stepYVec;
+                    localY = localY + localStepY;
                 }
+                worldZ = worldZ + stepZVec;
+                localZ = localZ + localStepZ;
             }
             if(insideCount > 0u){
                 if(insideSubCount > 0u){
@@ -808,9 +770,12 @@ void PrepareFluidEnvironmentCandidates(
     mut usize outWorkCount
 ){
     outWorkCount = 0u;
-    Vector<u32> wakeQueue;
-    Vector<f32x4> wakeForces;
-    Vector<f32x4> wakeTorques;
+    mut Vector<u32> wakeQueue = world.m_cpuScratch.envWakeQueue;
+    mut Vector<f32x4> wakeForces = world.m_cpuScratch.envWakeForces;
+    mut Vector<f32x4> wakeTorques = world.m_cpuScratch.envWakeTorques;
+    wakeQueue.clear();
+    wakeForces.clear();
+    wakeTorques.clear();
 
     if(useBroadphase){
         const u32 queryMask = world.broadPhaseQueryMask(fluid.filter);
@@ -818,12 +783,13 @@ void PrepareFluidEnvironmentCandidates(
             return;
         GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, s_TreeNodeHasNonSensor);
         const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
-        Vector<u8> preAwake(candCount, 0u);
+        usize preAwakeCount = 0u;
         for(usize ci = 0u; ci < candCount; ++ci){
             const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
             in Body b = world.m_bodies[bIdx];
             if(b.setIndex == s_AwakeSetIndex){
-                preAwake[ci] = 1u;
+                world.m_cpuScratch.envCandidateBodies[preAwakeCount] = bIdx;
+                ++preAwakeCount;
             }
             else if(b.setIndex > s_AwakeSetIndex){
                 VectorSingle wf(0.0f);
@@ -847,9 +813,7 @@ void PrepareFluidEnvironmentCandidates(
             }
         }
         usize awakeCount = 0u;
-        for(usize ci = 0u; ci < candCount; ++ci){
-            if(preAwake[ci] == 0u)
-                continue;
+        for(usize ci = 0u; ci < preAwakeCount; ++ci){
             const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
             if(bIdx < world.m_bodies.size() && world.m_bodies[bIdx].alive && world.m_bodies[bIdx].setIndex == s_AwakeSetIndex){
                 world.m_cpuScratch.envCandidateBodies[awakeCount] = world.m_bodies[bIdx].localIndex;
@@ -898,8 +862,10 @@ void PrepareForceFieldEnvironmentCandidates(
     mut usize outWorkCount
 ){
     outWorkCount = 0u;
-    Vector<u32> wakeQueue;
-    Vector<f32x4> wakeForces;
+    mut Vector<u32> wakeQueue = world.m_cpuScratch.envWakeQueue;
+    mut Vector<f32x4> wakeForces = world.m_cpuScratch.envWakeForces;
+    wakeQueue.clear();
+    wakeForces.clear();
 
     if(useBroadphase){
         const u32 queryMask = world.broadPhaseQueryMask(field.filter);
@@ -907,12 +873,13 @@ void PrepareForceFieldEnvironmentCandidates(
             return;
         GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, 0u);
         const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
-        Vector<u8> preAwake(candCount, 0u);
+        usize preAwakeCount = 0u;
         for(usize ci = 0u; ci < candCount; ++ci){
             const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
             in Body b = world.m_bodies[bIdx];
             if(b.setIndex == s_AwakeSetIndex){
-                preAwake[ci] = 1u;
+                world.m_cpuScratch.envCandidateBodies[preAwakeCount] = bIdx;
+                ++preAwakeCount;
             }
             else if(b.setIndex > s_AwakeSetIndex){
                 VectorSingle wf(0.0f);
@@ -933,9 +900,7 @@ void PrepareForceFieldEnvironmentCandidates(
             }
         }
         usize awakeCount = 0u;
-        for(usize ci = 0u; ci < candCount; ++ci){
-            if(preAwake[ci] == 0u)
-                continue;
+        for(usize ci = 0u; ci < preAwakeCount; ++ci){
             const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
             if(bIdx < world.m_bodies.size() && world.m_bodies[bIdx].alive && world.m_bodies[bIdx].setIndex == s_AwakeSetIndex){
                 world.m_cpuScratch.envCandidateBodies[awakeCount] = world.m_bodies[bIdx].localIndex;

@@ -6047,7 +6047,15 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         qShapes.push_back(PackGpuShapeProxy(pw.m_shapes[sphShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, sphShape.index, 0.0f, 0u, 0u));
         VectorSingle lbMin(0.0f);
         VectorSingle lbInvExt(0.0f);
-        ComputeQuerySceneBoundsForLbvh(Span<GpuPhysicsBodyPose>(qPoses), Span<GpuPhysicsShapeProxy>(qShapes), lbMin, lbInvExt);
+        VectorSingle bMin(s_MaxF32);
+        VectorSingle bMax(-s_MaxF32);
+        b8 hasBounds = false;
+        VectorSingle fullMin(s_MaxF32);
+        VectorSingle fullMax(-s_MaxF32);
+        b8 hasFull = false;
+        for(usize qi = 0u; qi < qShapes.size(); ++qi)
+            AccumulateQueryShapeBounds(qPoses[qShapes[qi].bodyIndexTypeShape.x], qShapes[qi], bMin, bMax, hasBounds, fullMin, fullMax, hasFull);
+        FinalizeQuerySceneBoundsForLbvh(bMin, bMax, hasBounds, fullMin, fullMax, hasFull, lbMin, lbInvExt);
         EXPECT_GE(lbMin.x, 9.0f);
         EXPECT_LT(lbMin.x, 10.0f);
 

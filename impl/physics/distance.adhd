@@ -585,22 +585,10 @@ void SolveSimplex4(mut Simplex s){
     const f32 dABCD_B = sign * Vector3Dot(c, Cross(d, a)).x;
     const f32 dABCD_A = sign * Vector3Dot(b, Cross(d, c)).x;
 
-    const f32 testABC = Vector3Dot(VectorSingle(d - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
-    const f32 oriABC = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
-
-    const f32 testABD = Vector3Dot(VectorSingle(c - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-    const f32 oriABD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-
-    const f32 testACD = Vector3Dot(VectorSingle(b - a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-    const f32 oriACD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-
-    const f32 testBCD = Vector3Dot(VectorSingle(a - b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
-    const f32 oriBCD = Vector3Dot(VectorSingle(-b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
-
-    b8 outABC = (oriABC * testABC) < 0.0f;
-    b8 outABD = (oriABD * testABD) < 0.0f;
-    b8 outACD = (oriACD * testACD) < 0.0f;
-    b8 outBCD = (oriBCD * testBCD) < 0.0f;
+    b8 outABC = (dABCD_D > 0.0f);
+    b8 outABD = (dABCD_C > 0.0f);
+    b8 outACD = (dABCD_B > 0.0f);
+    b8 outBCD = (dABCD_A > 0.0f);
 
     if(Abs(VectorSingle(signDet)).x <= 1.0e-10f){
         outABC = true;
@@ -2227,13 +2215,22 @@ LocalRayHit ShapeCastMesh(
     return ShapeCastMeshView(MakeShapeProxyView(queryProxy), queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction);
 }
 
-TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
+TimeOfImpactOutput ComputeMeshTimeOfImpactViewsPrecomputed(
     in ShapeProxyView proxyA,
     in Sweep3D sweepA,
     in MeshShape meshB,
     in Sweep3D sweepB,
     in f32 tMax,
-    in b8 forSensor
+    in b8 forSensor,
+    in f32 angA,
+    in f32 angB,
+    in f32 meshRad,
+    in Array<f32x4, 3u> sampleRelPos,
+    in Array<f32x4, 3u> sampleRelRot,
+    in VectorSingle posBStart,
+    in VectorSingle rotBStart,
+    in VectorSingle relStartPos,
+    in VectorSingle relStartRot
 ){
     TimeOfImpactOutput bestOut;
     if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA) || tMax <= 0.0f)
@@ -2243,60 +2240,15 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
     VectorSingle pMax(0.0f);
     ComputeProxyViewLocalBounds(proxyA, pMin, pMax);
 
-    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
-    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
     const f32 radA = ComputeProxyViewBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
-    const Aabb3D meshLocalBox = meshB.localAabb();
-    VectorSingle meshExt(0.0f);
-    for(u32 mask = 0u; mask < 8u; ++mask){
-        f32 cx = meshLocalBox.lowerBound.x;
-        f32 cy = meshLocalBox.lowerBound.y;
-        f32 cz = meshLocalBox.lowerBound.z;
-        if((mask & 1u) != 0u) cx = meshLocalBox.upperBound.x;
-        if((mask & 2u) != 0u) cy = meshLocalBox.upperBound.y;
-        if((mask & 4u) != 0u) cz = meshLocalBox.upperBound.z;
-        meshExt = Max(meshExt, Abs(VectorSingle(cx, cy, cz, 0.0f) - VectorSingle(sweepB.localCenter)));
-    }
-    const f32 meshRad = Vector3Length(meshExt).x;
-
     VectorSingle queryMin(s_MaxF32);
     VectorSingle queryMax(-s_MaxF32);
-    Array<f32, 3u> sampleTs;
-    sampleTs[0u] = 0.0f;
-    sampleTs[1u] = 0.5f * tMax;
-    sampleTs[2u] = tMax;
-    const VectorSingle cA0 = VectorSingle(sweepA.c0);
-    const VectorSingle cA1 = VectorSingle(sweepA.c1);
-    const VectorSingle qA0 = VectorSingle(sweepA.q0);
-    const VectorSingle qA1 = VectorSingle(sweepA.q1);
-    const VectorSingle lcA = VectorSingle(sweepA.localCenter);
-    const VectorSingle cB0 = VectorSingle(sweepB.c0);
-    const VectorSingle cB1 = VectorSingle(sweepB.c1);
-    const VectorSingle qB0 = VectorSingle(sweepB.q0);
-    const VectorSingle qB1 = VectorSingle(sweepB.q1);
-    const VectorSingle lcB = VectorSingle(sweepB.localCenter);
-    VectorSingle posAt(0.0f);
-    VectorSingle rotAt(0.0f, 0.0f, 0.0f, 1.0f);
-    VectorSingle posBt(0.0f);
-    VectorSingle rotBt(0.0f, 0.0f, 0.0f, 1.0f);
-    VectorSingle relPos(0.0f);
-    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
     for(usize si = 0u; si < 3u; ++si){
-        const f32 t = sampleTs[si];
-        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t, posAt, rotAt);
-        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t, posBt, rotBt);
-        RelativeTransformValues(posBt, rotBt, posAt, rotAt, relPos, relRot);
-        for(u32 mask = 0u; mask < 8u; ++mask){
-            f32 cx = pMin.x;
-            f32 cy = pMin.y;
-            f32 cz = pMin.z;
-            if((mask & 1u) != 0u) cx = pMax.x;
-            if((mask & 2u) != 0u) cy = pMax.y;
-            if((mask & 4u) != 0u) cz = pMax.z;
-            const VectorSingle lp = TransformPointValues(relPos, relRot, VectorSingle(cx, cy, cz, 0.0f));
-            queryMin = Min(queryMin, lp);
-            queryMax = Max(queryMax, lp);
-        }
+        VectorSingle sampleMin(0.0f);
+        VectorSingle sampleMax(0.0f);
+        TransformLocalAabbValuesToWorld(pMin, pMax, 0.0f, VectorSingle(sampleRelPos[si]), VectorSingle(sampleRelRot[si]), sampleMin, sampleMax);
+        queryMin = Min(queryMin, sampleMin);
+        queryMax = Max(queryMax, sampleMax);
     }
 
     const f32 arcPad = angA * radA * 0.25f + angB * meshRad * 0.25f + proxyA.radius + meshB.radius() + s_LinearSlop;
@@ -2306,15 +2258,6 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
     const f32 meshRadius = meshB.radius();
 
     if(meshB.isClosed()){
-        VectorSingle posBStart(0.0f);
-        VectorSingle rotBStart(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle posAStart(0.0f);
-        VectorSingle rotAStart(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle relStartPos(0.0f);
-        VectorSingle relStartRot(0.0f, 0.0f, 0.0f, 1.0f);
-        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, 0.0f, posBStart, rotBStart);
-        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, 0.0f, posAStart, rotAStart);
-        RelativeTransformValues(posBStart, rotBStart, posAStart, rotAStart, relStartPos, relStartRot);
         const VectorSingle startCenterB = TransformPointValues(relStartPos, relStartRot, ComputeProxyViewCenter(proxyA));
         if(IsPointInsideClosedMesh(meshB, startCenterB)){
             VectorSingle closePt(0.0f);
@@ -2402,6 +2345,84 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
         }
     }
     return bestOut;
+}
+
+TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax,
+    in b8 forSensor
+){
+    TimeOfImpactOutput emptyOut;
+    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA) || tMax <= 0.0f)
+        return emptyOut;
+
+    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
+    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
+    const Aabb3D meshLocalBox = meshB.localAabb();
+    const VectorSingle lcB = VectorSingle(sweepB.localCenter);
+    const VectorSingle meshExt = Max(
+        Abs(VectorSingle(meshLocalBox.lowerBound) - lcB),
+        Abs(VectorSingle(meshLocalBox.upperBound) - lcB)
+    );
+    const f32 meshRad = Vector3Length(meshExt).x;
+
+    Array<f32x4, 3u> sampleRelPos;
+    Array<f32x4, 3u> sampleRelRot;
+    VectorSingle posBStart(0.0f);
+    VectorSingle rotBStart(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle relStartPos(0.0f);
+    VectorSingle relStartRot(0.0f, 0.0f, 0.0f, 1.0f);
+
+    const VectorSingle cA0 = VectorSingle(sweepA.c0);
+    const VectorSingle cA1 = VectorSingle(sweepA.c1);
+    const VectorSingle qA0 = VectorSingle(sweepA.q0);
+    const VectorSingle qA1 = VectorSingle(sweepA.q1);
+    const VectorSingle lcA = VectorSingle(sweepA.localCenter);
+    const VectorSingle cB0 = VectorSingle(sweepB.c0);
+    const VectorSingle cB1 = VectorSingle(sweepB.c1);
+    const VectorSingle qB0 = VectorSingle(sweepB.q0);
+    const VectorSingle qB1 = VectorSingle(sweepB.q1);
+    VectorSingle posAt(0.0f);
+    VectorSingle rotAt(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle posBt(0.0f);
+    VectorSingle rotBt(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle relPos(0.0f);
+    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
+    for(usize si = 0u; si < 3u; ++si){
+        const f32 t = 0.5f * cast<f32>(si) * tMax;
+        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t, posAt, rotAt);
+        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t, posBt, rotBt);
+        RelativeTransformValues(posBt, rotBt, posAt, rotAt, relPos, relRot);
+        sampleRelPos[si] = f32x4(relPos, 0.0f);
+        sampleRelRot[si] = f32x4(relRot);
+        if(si == 0u){
+            posBStart = posBt;
+            rotBStart = rotBt;
+            relStartPos = relPos;
+            relStartRot = relRot;
+        }
+    }
+
+    return ComputeMeshTimeOfImpactViewsPrecomputed(
+        proxyA,
+        sweepA,
+        meshB,
+        sweepB,
+        tMax,
+        forSensor,
+        angA,
+        angB,
+        meshRad,
+        sampleRelPos,
+        sampleRelRot,
+        posBStart,
+        rotBStart,
+        relStartPos,
+        relStartRot
+    );
 }
 
 TimeOfImpactOutput ComputeMeshTimeOfImpactViews(

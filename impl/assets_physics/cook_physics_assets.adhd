@@ -419,12 +419,10 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
         error("{} '{}': failed to construct heightfield", s_HeightfieldDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
-    mut HeightfieldShape hf = built.value();
-    hf.thickness = thickness;
-    hf.materials = materials;
-    hf.cellMaterialIndices = cellMaterialIndices;
-    hf.updateHeightRange();
-    entry.heightfield = hf;
+    entry.heightfield = built.value();
+    entry.heightfield.thickness = thickness;
+    entry.heightfield.materials = materials;
+    entry.heightfield.cellMaterialIndices = cellMaterialIndices;
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateHeightfield(entry.heightfield, entry.virtualPath))
         return MakeUnexpected(Failure());

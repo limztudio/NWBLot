@@ -206,7 +206,7 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 validColliderEntryArrayFields(
+    private b8 validColliderEntryNonMaterialArrayFields(
         in ShapeType shapeType,
         in b8 isBox,
         in b8 convexHullAssetValid,
@@ -242,11 +242,6 @@ class PhysicsComponentBinaryCodec{
             if(!IsFinite(VectorSingle(h)) && h == h)
                 return false;
         }
-        PhysicsAssetBinaryCodec assetCodec;
-        for(usize i = 0u; i < heightfieldMaterials.size(); ++i){
-            if(!assetCodec.validSurfaceMaterial(heightfieldMaterials[i]))
-                return false;
-        }
         const usize matCount = heightfieldMaterials.size();
         for(usize i = 0u; i < heightfieldCellMaterialIndices.size(); ++i){
             if(cast<usize>(heightfieldCellMaterialIndices[i]) >= matCount)
@@ -254,6 +249,39 @@ class PhysicsComponentBinaryCodec{
         }
         for(usize i = 0u; i < chainPoints.size(); ++i){
             if(!IsValidPositionVec3(VectorSingle(chainPoints[i])))
+                return false;
+        }
+        return true;
+    }
+
+    private b8 validColliderEntryArrayFields(
+        in ShapeType shapeType,
+        in b8 isBox,
+        in b8 convexHullAssetValid,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices,
+        in Vector<f32> heightfieldHeights,
+        in Vector<SurfaceMaterial> heightfieldMaterials,
+        in Vector<u16> heightfieldCellMaterialIndices,
+        in Vector<f32x4> chainPoints
+    )const{
+        if(!this.validColliderEntryNonMaterialArrayFields(
+            shapeType,
+            isBox,
+            convexHullAssetValid,
+            hullPoints,
+            meshVertices,
+            meshIndices,
+            heightfieldHeights,
+            heightfieldMaterials,
+            heightfieldCellMaterialIndices,
+            chainPoints
+        ))
+            return false;
+        PhysicsAssetBinaryCodec assetCodec;
+        for(usize i = 0u; i < heightfieldMaterials.size(); ++i){
+            if(!assetCodec.validSurfaceMaterial(heightfieldMaterials[i]))
                 return false;
         }
         return true;
@@ -1225,7 +1253,7 @@ class PhysicsComponentBinaryCodec{
         )
             return false;
 
-        return this.validColliderEntryArrayFields(
+        return this.validColliderEntryNonMaterialArrayFields(
             outShapeType,
             outIsBox,
             outConvexHullAsset.valid(),

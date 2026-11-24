@@ -59,6 +59,7 @@ class PhysicsSystem{
     private b8 m_useDirectWorldEvents = false;
     private b8 m_ecsEventsPopulated = false;
     private b8 m_pendingSingleStep = false;
+    private b8 m_hasAnyPhysicsParents = false;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
@@ -1160,7 +1161,7 @@ class PhysicsSystem{
         SetBodyTransformSnapshotBoth(bodyId, normXf, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
         ClearStaticBodyPoseCacheIfMatches(bodyId, this.m_syncScratch.staticBodyPoseCache);
         if(this.m_world.alive(entity)){
-            WriteWorldPoseBackToEntityTransform(entity, normXf, this.m_world);
+            WriteWorldPoseBackToEntityTransform(entity, normXf, this.m_hasAnyPhysicsParents, this.m_world, this.m_syncScratch.writeBackPoseCache);
             this.syncEcsRigidBodyRuntimeState(entity, bodyId);
         }
         return true;
@@ -1250,13 +1251,16 @@ class PhysicsSystem{
         this.m_jointIndexToEntity.clear();
         this.m_jointIndexToEntity.resize(jointCount);
 
-        Vector<EntityID> removeRecs;
+        this.m_syncScratch.writeBackPoseCache.clear();
+        this.m_syncScratch.restoreRemoveRecsScratch.clear();
+        mut Vector<EntityID> removeRecs = this.m_syncScratch.restoreRemoveRecsScratch;
+        mut Vector<ShapeId> validExtras = this.m_syncScratch.restoreValidExtrasScratch;
         for(in auto kv : this.m_entityRecords){
             const EntityID entity = kv.first;
             mut EcsEntityPhysicsRecord rec = this.m_entityRecords.at(entity);
             const b8 validBody = rec.bodyId.valid() && this.m_physicsWorld.isValidBody(rec.bodyId);
             const b8 validPrimary = rec.primaryShapeId.valid() && this.m_physicsWorld.isValidShape(rec.primaryShapeId);
-            Vector<ShapeId> validExtras;
+            validExtras.clear();
             for(usize si = 0u; si < rec.extraShapeIds.size(); ++si){
                 const ShapeId sId = rec.extraShapeIds[si];
                 if(sId.valid() && this.m_physicsWorld.isValidShape(sId))
@@ -1305,7 +1309,7 @@ class PhysicsSystem{
                 if(entityAlive){
                     const Expected<Transform3D> xf = this.m_physicsWorld.tryGetBodyTransform(rec.bodyId);
                     if(xf.has_value())
-                        WriteWorldPoseBackToEntityTransform(entity, xf.value(), this.m_world);
+                        WriteWorldPoseBackToEntityTransform(entity, xf.value(), this.m_hasAnyPhysicsParents, this.m_world, this.m_syncScratch.writeBackPoseCache);
                     const Optional<mut RigidBodyComponent> rbOpt = this.m_world.borrowComponent<RigidBodyComponent>(entity);
                     if(rbOpt.has_value()){
                         mut RigidBodyComponent rb = rbOpt.value();
@@ -1367,8 +1371,11 @@ class PhysicsSystem{
         }
         for(usize ri = 0u; ri < removeRecs.size(); ++ri)
             this.m_entityRecords.erase(removeRecs[ri]);
+        removeRecs.clear();
+        validExtras.clear();
 
-        Vector<EntityID> removeJoints;
+        this.m_syncScratch.restoreRemoveJointsScratch.clear();
+        mut Vector<EntityID> removeJoints = this.m_syncScratch.restoreRemoveJointsScratch;
         for(in auto kv : this.m_entityJoints){
             const EntityID entity = kv.first;
             mut EcsJointSyncRecord jRec = this.m_entityJoints.at(entity);
@@ -1432,8 +1439,10 @@ class PhysicsSystem{
         }
         for(usize ri = 0u; ri < removeJoints.size(); ++ri)
             this.m_entityJoints.erase(removeJoints[ri]);
+        removeJoints.clear();
 
-        Vector<EntityID> removeRagdolls;
+        this.m_syncScratch.restoreRemoveRagdollsScratch.clear();
+        mut Vector<EntityID> removeRagdolls = this.m_syncScratch.restoreRemoveRagdollsScratch;
         for(in auto kv : this.m_activeRagdolls){
             const EntityID entity = kv.first;
             in EcsTrackedRagdoll tracked = kv.second;
@@ -1453,7 +1462,7 @@ class PhysicsSystem{
                     if(rcOpt.has_value()){
                         rcOpt.value().initialized = false;
                         rcOpt.value().dirty = true;
-                        rcOpt.value().instance = RagdollInstance();
+                        rcOpt.value().instance.reset();
                     }
                 }
                 continue;
@@ -1485,7 +1494,8 @@ class PhysicsSystem{
         }
         for(usize ri = 0u; ri < removeRagdolls.size(); ++ri)
             this.m_activeRagdolls.erase(removeRagdolls[ri]);
-        WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, this.m_world);
+        removeRagdolls.clear();
+        WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, this.m_hasAnyPhysicsParents, this.m_world, this.m_syncScratch.writeBackPoseCache);
 
         this.m_bodyTransformSnapshots.resize(bodyCount);
         this.m_bodyTransformSnapshotMeta.resize(bodyCount, 0u);
@@ -1503,12 +1513,10 @@ class PhysicsSystem{
                 this.m_bodyTransformSnapshotMeta[bi] = 0u;
             }
         }
-        Vector<ContactEndTouchEvent> discardCE;
-        Vector<SensorEndTouchEvent> discardSE;
-        Vector<BodyWakeEvent> discardBW;
-        this.m_physicsWorld.consumePendingEndEvents(discardCE, discardSE);
-        this.m_physicsWorld.consumePendingWakeEvents(discardBW);
+        this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
+        this.m_physicsWorld.consumePendingWakeEvents(this.m_frameBodyWakeEvents);
         this.clearFrameEvents();
+        this.m_syncScratch.writeBackPoseCache.clear();
         this.m_gpuDispatcher.invalidateWorldCaches();
         ClearDestroyedSlotOwners(this.m_syncScratch);
         this.m_syncScratch.bodySyncedPoses.clear();
@@ -1601,6 +1609,7 @@ class PhysicsSystem{
         this.m_accumulator = 0.0f;
         this.m_interpolationAlpha = 1.0f;
         this.m_pendingSingleStep = false;
+        this.m_hasAnyPhysicsParents = false;
         this.m_lastStepStats = WorldStepStats();
         this.m_lastStepMs = 0.0;
         this.m_lastStepTopologyVersion = 0u;
@@ -1693,6 +1702,7 @@ class PhysicsSystem{
             hasAnyPhysicsParents,
             hasDrivenKinematic
         );
+        this.m_hasAnyPhysicsParents = hasAnyPhysicsParents;
         PruneRemovedEcsRagdolls(
             world,
             this.m_physicsWorld,
@@ -1752,7 +1762,7 @@ class PhysicsSystem{
         if(useCollectedEnv){
             if(hasDrivenKinematic)
                 SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_syncScratch.kinematicTargets);
-            CollectEcsPhysicsEnvironment(world, this.m_environmentScratch);
+            CollectEcsPhysicsEnvironment(hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_environmentScratch);
         }
 
         mut CpuTaskScheduler scheduler = world.taskScheduler();
@@ -1763,7 +1773,8 @@ class PhysicsSystem{
             else
                 this.m_accumulator = 0.0f;
 
-            if(stepsExecuted + 1u == plannedSteps)
+            const b8 isFinalStep = ((stepsExecuted + 1u) == plannedSteps);
+            if(isFinalStep)
                 PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.bodyMoveEvents(), this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_syncScratch.snapshotBodyStamps, this.m_syncScratch.snapshotStamp, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
             if(hasDrivenKinematic){
                 if(plannedSteps <= 1u)
@@ -1772,7 +1783,7 @@ class PhysicsSystem{
                     ApplyInterpolatedKinematicTargets(this.m_syncScratch.kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
             }
 
-            const b8 writeBackCharacters = ((stepsExecuted + 1u) == plannedSteps) && !interpolateTransforms;
+            const b8 writeBackCharacters = isFinalStep && !interpolateTransforms;
             StepEcsPhysicsSubsystemBridges(
                 world,
                 this.m_physicsWorld,
@@ -1784,6 +1795,8 @@ class PhysicsSystem{
                 fixedDt,
                 useCollectedEnv,
                 writeBackCharacters,
+                hasAnyPhysicsParents,
+                isFinalStep,
                 this.m_environmentScratch,
                 this.m_activeRagdolls,
                 this.m_syncScratch,
@@ -1843,9 +1856,9 @@ class PhysicsSystem{
                     this.m_bodyTransformSnapshotMeta
                 );
             }
-            WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, world);
+            WriteBackEcsRagdollRootPoses(this.m_physicsWorld, this.m_namedEntities, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache);
             if(interpolateTransforms)
-                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha);
+                ApplyInterpolatedCharacterTransformsToEcs(this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache);
         }
         else{
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
@@ -1861,7 +1874,7 @@ class PhysicsSystem{
                     world,
                     this.m_syncScratch
                 );
-                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha);
+                ApplyInterpolatedCharacterTransformsToEcs(this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache);
             }
         }
 

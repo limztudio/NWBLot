@@ -55,6 +55,19 @@ VectorSingle HullSupportVertex(in HullShape hull, in VectorSingle dir){
     return VectorSingle(hull.vertices[best], 0.0f);
 }
 
+f32 HullSupportDot(in HullShape hull, in VectorSingle dir){
+    if(hull.vertices.empty())
+        return 0.0f;
+    const VectorSingle dirZero = VectorSingle(dir, 0.0f);
+    f32 bestDot = Vector3Dot(VectorSingle(hull.vertices[0u], 0.0f), dirZero).x;
+    for(usize i = 1u; i < hull.vertices.size(); ++i){
+        const f32 d = Vector3Dot(VectorSingle(hull.vertices[i], 0.0f), dirZero).x;
+        if(d > bestDot)
+            bestDot = d;
+    }
+    return bestDot;
+}
+
 b8 IsMinkowskiFace(in VectorSingle a, in VectorSingle b, in VectorSingle edgeBA, in VectorSingle c, in VectorSingle d, in VectorSingle edgeDC){
     const f32 cba = Vector3Dot(c, edgeBA).x;
     const f32 dba = Vector3Dot(d, edgeBA).x;
@@ -70,9 +83,7 @@ void QueryFaceAxesA(in HullShape hullA, in HullShape hullB, in VectorSingle relP
         const VectorSingle nA = VectorSingle(hullA.facePlanes[i].normalOffset, 0.0f);
         const f32 offsetA = hullA.facePlanes[i].normalOffset.w;
         const VectorSingle dirInB = Vector3InverseRotate(-nA, relRotBtoA);
-        const VectorSingle supInB = HullSupportVertex(hullB, dirInB);
-        const VectorSingle supInA = TransformPointValues(relPosBtoA, relRotBtoA, supInB);
-        const f32 sep = Vector3Dot(nA, supInA).x - offsetA;
+        const f32 sep = Vector3Dot(nA, relPosBtoA).x - HullSupportDot(hullB, dirInB) - offsetA;
         if(sep > outBest.separation){
             outBest.separation = sep;
             outBest.indexA = cast<u32>(i);
@@ -86,16 +97,11 @@ void QueryFaceAxesA(in HullShape hullA, in HullShape hullB, in VectorSingle relP
 void QueryFaceAxesB(in HullShape hullA, in HullShape hullB, in VectorSingle relPosBtoA, in VectorSingle relRotBtoA, in f32 cullDist, mut SeparatingAxisResult outBest){
     outBest.kind = SeparatingFeatureKind::FaceAxisB;
     outBest.separation = -s_MaxF32;
-    VectorSingle relPosAtoB(0.0f);
-    VectorSingle relRotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(relPosBtoA, relRotBtoA, VectorSingle(0.0f), QuaternionIdentity(), relPosAtoB, relRotAtoB);
     for(usize i = 0u; i < hullB.facePlanes.size(); ++i){
         const VectorSingle nB = VectorSingle(hullB.facePlanes[i].normalOffset, 0.0f);
         const f32 offsetB = hullB.facePlanes[i].normalOffset.w;
         const VectorSingle nBInA = Vector3Rotate(nB, relRotBtoA);
-        const VectorSingle supA = HullSupportVertex(hullA, -nBInA);
-        const VectorSingle supAInB = TransformPointValues(relPosAtoB, relRotAtoB, supA);
-        const f32 sep = Vector3Dot(nB, supAInB).x - offsetB;
+        const f32 sep = -HullSupportDot(hullA, -nBInA) - Vector3Dot(nBInA, relPosBtoA).x - offsetB;
         if(sep > outBest.separation){
             outBest.separation = sep;
             outBest.indexB = cast<u32>(i);
@@ -112,6 +118,16 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in VectorSingle relPo
 
     const VectorSingle cA = hullA.centroid();
 
+    const usize bVertCount = Min(hullB.vertices.size(), s_MaxHullVertices);
+    Array<f32x4, s_MaxHullVertices> bVerts;
+    for(usize vi = 0u; vi < bVertCount; ++vi)
+        bVerts[vi] = f32x4(TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[vi], 0.0f)), 0.0f);
+
+    const usize bFaceCount = Min(hullB.facePlanes.size(), s_MaxHullFaces);
+    Array<f32x4, s_MaxHullFaces> bFaceNormals;
+    for(usize fi = 0u; fi < bFaceCount; ++fi)
+        bFaceNormals[fi] = f32x4(Vector3Rotate(VectorSingle(hullB.facePlanes[fi].normalOffset, 0.0f), relRotBtoA), 0.0f);
+
     Array<f32x4, s_MaxHullEdges> bP0;
     Array<f32x4, s_MaxHullEdges> bDir;
     Array<f32x4, s_MaxHullEdges> bN0;
@@ -125,11 +141,27 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in VectorSingle relPo
         if(cast<usize>(heB.twin) < eB)
             continue;
         in HalfEdge twinB = hullB.halfEdges[heB.twin];
-        const VectorSingle pB0 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[heB.tail], 0.0f));
-        const VectorSingle pB1 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[twinB.tail], 0.0f));
+        VectorSingle pB0(0.0f);
+        if(cast<usize>(heB.tail) < bVertCount)
+            pB0 = VectorSingle(bVerts[heB.tail]);
+        else
+            pB0 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[heB.tail], 0.0f));
+        VectorSingle pB1(0.0f);
+        if(cast<usize>(twinB.tail) < bVertCount)
+            pB1 = VectorSingle(bVerts[twinB.tail]);
+        else
+            pB1 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[twinB.tail], 0.0f));
         const VectorSingle dirB = VectorSingle(pB1 - pB0, 0.0f);
-        const VectorSingle nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), relRotBtoA);
-        const VectorSingle nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), relRotBtoA);
+        VectorSingle nB0(0.0f);
+        if(cast<usize>(heB.face) < bFaceCount)
+            nB0 = VectorSingle(bFaceNormals[heB.face]);
+        else
+            nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), relRotBtoA);
+        VectorSingle nB1(0.0f);
+        if(cast<usize>(twinB.face) < bFaceCount)
+            nB1 = VectorSingle(bFaceNormals[twinB.face]);
+        else
+            nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), relRotBtoA);
         bP0[bCount] = f32x4(pB0, 0.0f);
         bDir[bCount] = f32x4(dirB, 0.0f);
         bN0[bCount] = f32x4(nB0, 0.0f);

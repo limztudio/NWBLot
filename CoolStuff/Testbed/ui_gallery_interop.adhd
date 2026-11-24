@@ -37,8 +37,8 @@ class UiPopupToolsStatusLabelCache{
 }
 
 class UiProgressPercentLabelCache{
-    public String text;
-    public u64 percentBits = 0u;
+    public CompactString text;
+    public i64 roundedPercent = -1;
     public b8 valid = false;
 }
 
@@ -91,13 +91,21 @@ b8 DeclarePopupToolsStatusLabel(mut Builder ui, in u64 commandKey, in u32 anchor
 }
 
 b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent, mut UiProgressPercentLabelCache cache){
-    const u64 percentBits = bit_cast<u64>(percent);
-    if(!cache.valid || cache.percentBits != percentBits){
-        cache.text = StringFormat("Completed: {:.0f}%", percent);
-        cache.percentBits = percentBits;
-        cache.valid = true;
+    f64 clamped = 0.0;
+    if(IsFinite(VectorDouble(percent)) && percent > 0.0){
+        const VectorDouble pVec(percent);
+        const VectorDouble maxVec(1.0e9);
+        clamped = VectorDoubleSelect(maxVec, pVec, VectorDoubleLess(pVec, maxVec)).x;
     }
-    return ui.label("value", StringView(cache.text));
+    const i64 rounded = cast<i64>(clamped + 0.5);
+    if(!cache.valid || cache.roundedPercent != rounded){
+        b8 ok = cache.text.assign("Completed: ");
+        AppendUnsignedU64Text(cache.text, cast<u64>(rounded));
+        ok = cache.text.append("%") && ok;
+        cache.roundedPercent = rounded;
+        cache.valid = ok;
+    }
+    return ui.label("value", cache.text.view());
 }
 
 b8 DeclareGallerySectionLabel(mut Builder ui, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName, mut UiGallerySectionLabelCache cache){

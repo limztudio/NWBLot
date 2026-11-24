@@ -323,17 +323,28 @@ void ComputeSphericalConeSwingAxisAndViolation(
     mut VectorSingle outSwingAxis,
     mut f32 outViolation
 ){
+    const f32 swingAngle = ACos(VectorSingle(SimdClamp(Vector3Dot(axisA, axisB).x, -1.0f, 1.0f))).x;
+    if(jc.swingLimitY <= 0.0f){
+        const VectorSingle rawCross = Cross(axisA, axisB);
+        const f32 rawLenSq = Vector3LengthSq(rawCross).x;
+        if(rawLenSq > s_NormalizeEpsilonSq){
+            outSwingAxis = rawCross * Rsqrt(VectorSingle(rawLenSq)).x;
+        }
+        else{
+            VectorSingle locU1(0.0f);
+            VectorSingle locU2(0.0f);
+            ComputeTangentBasisFromUnitNormal(jc.localAxisA(), locU1, locU2);
+            outSwingAxis = SafeNormalizeVec3(Vector3Rotate(locU1, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+        }
+        outViolation = swingAngle - jc.swingLimit;
+        return;
+    }
+
     VectorSingle locU1(0.0f);
     VectorSingle locU2(0.0f);
     ComputeTangentBasisFromUnitNormal(jc.localAxisA(), locU1, locU2);
     const VectorSingle u1 = SafeNormalizeVec3(Vector3Rotate(locU1, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     const VectorSingle u2 = SafeNormalizeVec3(Vector3Rotate(locU2, qA), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-    const f32 swingAngle = ACos(VectorSingle(SimdClamp(Vector3Dot(axisA, axisB).x, -1.0f, 1.0f))).x;
-    if(jc.swingLimitY <= 0.0f){
-        outSwingAxis = SafeNormalizeVec3(Cross(axisA, axisB), u1);
-        outViolation = swingAngle - jc.swingLimit;
-        return;
-    }
 
     const f32 px = Vector3Dot(axisB, u1).x;
     const f32 py = Vector3Dot(axisB, u2).x;
@@ -367,8 +378,7 @@ void ComputeSphericalConeSwingAxisAndViolation(
 }
 
 void EvaluatePathClosestPoint(
-    in Vector<f32x4> pts,
-    in b8 closed,
+    in JointExtraData extra,
     in VectorSingle localPt,
     mut VectorSingle outClosest,
     mut VectorSingle outTangent,
@@ -378,45 +388,39 @@ void EvaluatePathClosestPoint(
     outClosest = VectorSingle(0.0f);
     outTangent = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
     outArcPos = 0.0f;
-    outTotalLen = 0.0f;
-    const usize n = pts.size();
+    outTotalLen = extra.pathTotalLen;
+    const usize n = extra.pathPoints.size();
     if(n == 0u)
         return;
     if(n == 1u){
-        outClosest = VectorSingle(pts[0u], 0.0f);
+        outClosest = VectorSingle(extra.pathPoints[0u], 0.0f);
         return;
     }
 
-    usize segCount = n - 1u;
-    if(closed)
-        ++segCount;
+    const usize segCount = extra.pathSegVecs.size();
+    if(segCount == 0u)
+        return;
 
     f32 bestDistSq = s_MaxF32;
-    f32 accumLen = 0.0f;
     for(usize si = 0u; si < segCount; ++si){
-        const usize i0 = si;
-        usize i1 = si + 1u;
-        if(i1 >= n)
-            i1 = 0u;
-        const VectorSingle p0(pts[i0], 0.0f);
-        const VectorSingle p1(pts[i1], 0.0f);
-        const VectorSingle seg = VectorSingle(p1 - p0, 0.0f);
-        const f32 segLenSq = Vector3LengthSq(seg).x;
-        const f32 segLen = SqrtFast(segLenSq);
+        const VectorSingle p0(extra.pathPoints[si], 0.0f);
+        const VectorSingle segVecLen = VectorSingle(extra.pathSegVecs[si]);
+        const VectorSingle seg = VectorSingle(segVecLen, 0.0f);
+        const VectorSingle tanInv = VectorSingle(extra.pathSegTangentsInvLenSq[si]);
+        const f32 invLenSq = tanInv.w;
         f32 t = 0.0f;
-        if(segLenSq > 1.0e-12f)
-            t = SimdClamp(Vector3Dot(VectorSingle(localPt - p0, 0.0f), seg).x / segLenSq, 0.0f, 1.0f);
+        if(invLenSq > 0.0f)
+            t = SimdClamp(Vector3Dot(VectorSingle(localPt - p0, 0.0f), seg).x * invLenSq, 0.0f, 1.0f);
         const VectorSingle cp = p0 + seg * t;
         const f32 dSq = Vector3LengthSq(VectorSingle(localPt - cp, 0.0f)).x;
         if(dSq < bestDistSq){
             bestDistSq = dSq;
             outClosest = cp;
-            outTangent = SafeNormalizeVec3(seg, outTangent);
-            outArcPos = accumLen + t * segLen;
+            if(invLenSq > 0.0f)
+                outTangent = VectorSingle(tanInv, 0.0f);
+            outArcPos = extra.pathSegCumLens[si] + t * segVecLen.w;
         }
-        accumLen += segLen;
     }
-    outTotalLen = accumLen;
 }
 
 VectorSingle LengthAndNormalizeVec3(in VectorSingle v, in VectorSingle fallback, mut f32 outDist){
@@ -601,7 +605,7 @@ void Solve2DLinearPlaneRows(
 void Solve3DAngularLockRow(
     in MatrixSingle invIA,
     in MatrixSingle invIB,
-    in MatrixSingle kAngInv,
+    in SymMat3 kAngInv,
     in VectorSingle qA,
     in VectorSingle qB,
     in VectorSingle refQ,
@@ -626,14 +630,14 @@ void Solve3DAngularLockRow(
         bias = thetaErr * soft.biasRate;
         const f32 bLenSq = Vector3LengthSq(bias).x;
         if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-            bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
+            bias = bias * (s_MaxJointBiasSpeed * Rsqrt(VectorSingle(bLenSq)).x);
         mScale = soft.massScale;
         iScale = soft.impulseScale;
     }
 
     const VectorSingle oldL = VectorSingle(inOutImpulse, 0.0f);
     const VectorSingle relW = VectorSingle(wB - wA, 0.0f);
-    const VectorSingle deltaL = Matrix3MulVec(kAngInv, -(relW + bias)) * mScale - oldL * iScale;
+    const VectorSingle deltaL = SymMat3MulVec(kAngInv, -(relW + bias)) * mScale - oldL * iScale;
     inOutImpulse = VectorSingle(oldL + deltaL, 0.0f);
 
     wA = wA - Matrix3MulVec(invIA, deltaL);
@@ -866,7 +870,7 @@ void ComputeSixDofBasis(in JointConstraint jc, in VectorSingle qA, mut VectorSin
         b2 = SafeNormalizeVec3(Cross(b0, b1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
     }
     else{
-        ComputeTangentBasis(b0, b1, b2);
+        ComputeTangentBasisFromUnitNormal(b0, b1, b2);
     }
     outE0 = SafeNormalizeVec3(Vector3Rotate(b0, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     outE1 = SafeNormalizeVec3(Vector3Rotate(b1, qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -973,7 +977,7 @@ void WarmStartJointConstraintWithExtra(
         VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
         f32 arcPos = 0.0f;
         f32 totalLen = 0.0f;
-        EvaluatePathClosestPoint(extra.pathPoints, extra.pathClosed, Vector3InverseRotate(d0, qA0), cpLocal, tanLocal, arcPos, totalLen);
+        EvaluatePathClosestPoint(extra, Vector3InverseRotate(d0, qA0), cpLocal, tanLocal, arcPos, totalLen);
         const VectorSingle cpWorldOff = Vector3Rotate(cpLocal, qA0);
         const VectorSingle tanWorld0 = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA0), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
         const f32 axialLin = jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse;
@@ -1188,7 +1192,7 @@ void ComputeJointConstraintTotalImpulsesWithExtra(
                 VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
                 f32 arcPos = 0.0f;
                 f32 totalLen = 0.0f;
-                EvaluatePathClosestPoint(extra.pathPoints, extra.pathClosed, Vector3InverseRotate(d0, qA), cpLocal, tanLocal, arcPos, totalLen);
+                EvaluatePathClosestPoint(extra, Vector3InverseRotate(d0, qA), cpLocal, tanLocal, arcPos, totalLen);
                 const VectorSingle tanW = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 outLinP = outLinP + tanW * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
             }
@@ -1370,8 +1374,6 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
 
     const MatrixSingle invIAMat = Matrix3FromSymMat3(jc.invIA);
     const MatrixSingle invIBMat = Matrix3FromSymMat3(jc.invIB);
-    const MatrixSingle sumInvIMat = Matrix3FromSymMat3(cache.sumInvI);
-    const MatrixSingle kAngInvMat = Matrix3FromSymMat3(cache.kAngInv);
     const f32 invMassA = jc.invMassA();
     const f32 invMassB = jc.invMassB();
     const b8 zeroDeltaRot =
@@ -1513,7 +1515,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed * Rsqrt(VectorSingle(bLenSq)).x);
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1532,7 +1534,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 f32 swingViol = 0.0f;
                 ComputeSphericalConeSwingAxisAndViolation(jc, qA, axisA, axisB, swingAxis, swingViol);
                 if(swingViol > 0.0f){
-                    const f32 kSwing = Vector3Dot(swingAxis, Matrix3MulVec(sumInvIMat, swingAxis)).x;
+                    const f32 kSwing = Vector3Dot(swingAxis, SymMat3MulVec(cache.sumInvI, swingAxis)).x;
                     f32 swingMass = 0.0f;
                     if(kSwing > 1.0e-12f)
                         swingMass = 1.0f / kSwing;
@@ -1566,9 +1568,8 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 if(qErr.w < 0.0f)
                     qErr = -qErr;
                 const f32 projSin = Vector3Dot(VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f), axisB).x;
-                const VectorSingle qTwist = SafeNormalizeQuat(VectorSingle(axisB * projSin, qErr.w));
-                const f32 twistAngle = 2.0f * ATan2(Vector3Dot(VectorSingle(qTwist.x, qTwist.y, qTwist.z, 0.0f), axisB), VectorSingle(qTwist.w)).x;
-                const f32 kTwist = Vector3Dot(axisB, Matrix3MulVec(sumInvIMat, axisB)).x;
+                const f32 twistAngle = 2.0f * ATan2(VectorSingle(projSin), VectorSingle(qErr.w)).x;
+                const f32 kTwist = Vector3Dot(axisB, SymMat3MulVec(cache.sumInvI, axisB)).x;
                 f32 twistMass = 0.0f;
                 if(kTwist > 1.0e-12f)
                     twistMass = 1.0f / kTwist;
@@ -1633,7 +1634,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 bias = d * jc.linearSoftness.biasRate;
                 const f32 bLenSq = Vector3LengthSq(bias).x;
                 if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                    bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
+                    bias = bias * (s_MaxJointBiasSpeed * Rsqrt(VectorSingle(bLenSq)).x);
                 mScale = jc.linearSoftness.massScale;
                 iScale = jc.linearSoftness.impulseScale;
             }
@@ -1648,7 +1649,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             Solve3DAngularLockRow(
                 invIAMat,
                 invIBMat,
-                kAngInvMat,
+                cache.kAngInv,
                 qA,
                 qB,
                 VectorSingle(jc.referenceRotation),
@@ -1673,7 +1674,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             bias = d * jc.linearSoftness.biasRate;
             const f32 bLenSq = Vector3LengthSq(bias).x;
             if(bLenSq > s_MaxJointBiasSpeed * s_MaxJointBiasSpeed && bLenSq > s_NormalizeEpsilonSq)
-                bias = bias * (s_MaxJointBiasSpeed / SqrtFast(bLenSq));
+                bias = bias * (s_MaxJointBiasSpeed * Rsqrt(VectorSingle(bLenSq)).x);
             mScale = jc.linearSoftness.massScale;
             iScale = jc.linearSoftness.impulseScale;
         }
@@ -1686,7 +1687,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         VectorSingle u1(0.0f);
         VectorSingle u2(0.0f);
-        ComputeTangentBasis(axisA, u1, u2);
+        ComputeTangentBasisFromUnitNormal(axisA, u1, u2);
 
         VectorSingle crossAB = Cross(axisA, axisB);
         if(Vector3Dot(axisA, axisB).x < -0.99f && Vector3LengthSq(crossAB).x < 1.0e-4f)
@@ -1694,8 +1695,8 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
 
         const f32 e1 = Vector3Dot(crossAB, u1).x;
         const f32 e2 = Vector3Dot(crossAB, u2).x;
-        const VectorSingle su1 = Matrix3MulVec(sumInvIMat, u1);
-        const VectorSingle su2 = Matrix3MulVec(sumInvIMat, u2);
+        const VectorSingle su1 = SymMat3MulVec(cache.sumInvI, u1);
+        const VectorSingle su2 = SymMat3MulVec(cache.sumInvI, u2);
         const f32 m00 = Vector3Dot(u1, su1).x;
         const f32 m01 = Vector3Dot(u1, su2).x;
         const f32 m11 = Vector3Dot(u2, su2).x;
@@ -1742,7 +1743,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         if((flagsB & 0x38u) != 0u)
             wB = ApplyAngularLocks(wB, flagsB);
 
-        const f32 kAxis = Vector3Dot(axisA, Matrix3MulVec(sumInvIMat, axisA)).x;
+        const f32 kAxis = Vector3Dot(axisA, SymMat3MulVec(cache.sumInvI, axisA)).x;
         f32 axialMass = 0.0f;
         if(kAxis > 1.0e-12f)
             axialMass = 1.0f / kAxis;
@@ -1846,7 +1847,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         VectorSingle u1(0.0f);
         VectorSingle u2(0.0f);
-        ComputeTangentBasis(axisA, u1, u2);
+        ComputeTangentBasisFromUnitNormal(axisA, u1, u2);
         const VectorSingle rAEff = rA + d;
 
         VectorSingle linImp = jc.linearImpulse();
@@ -1877,7 +1878,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         Solve3DAngularLockRow(
             invIAMat,
             invIBMat,
-            kAngInvMat,
+            cache.kAngInv,
             qA,
             qB,
             VectorSingle(jc.referenceRotation),
@@ -1976,7 +1977,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             const f32 maxP = jc.maxMotorForce * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newP, 0.0f)).x;
             if(lenSq > maxP * maxP && lenSq > s_NormalizeEpsilonSq)
-                newP = newP * (maxP / SqrtFast(lenSq));
+                newP = newP * (maxP * Rsqrt(VectorSingle(lenSq)).x);
             const VectorSingle appliedP = newP - oldP;
             jc.setLinearImpulse(newP);
             ApplyLinearImpulsePair(invMassA, invMassB, invIAMat, invIBMat, rA, rB, appliedP, flagsA, flagsB, vA, wA, vB, wB);
@@ -1990,12 +1991,12 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             const VectorSingle thetaErr = VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f) * 2.0f;
             const VectorSingle angBias = thetaErr * corrRate;
             const VectorSingle oldL = jc.angularImpulse();
-            const VectorSingle dL = Matrix3MulVec(kAngInvMat, -(VectorSingle(wB - wA, 0.0f) + angBias));
+            const VectorSingle dL = SymMat3MulVec(cache.kAngInv, -(VectorSingle(wB - wA, 0.0f) + angBias));
             VectorSingle newL = oldL + dL;
             const f32 maxL = jc.maxTorque * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newL, 0.0f)).x;
             if(lenSq > maxL * maxL && lenSq > s_NormalizeEpsilonSq)
-                newL = newL * (maxL / SqrtFast(lenSq));
+                newL = newL * (maxL * Rsqrt(VectorSingle(lenSq)).x);
             const VectorSingle appliedL = newL - oldL;
             jc.setAngularImpulse(newL);
             wA = wA - Matrix3MulVec(invIAMat, appliedL);
@@ -2010,7 +2011,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         const VectorSingle suspAxis = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         VectorSingle u1(0.0f);
         VectorSingle u2(0.0f);
-        ComputeTangentBasis(suspAxis, u1, u2);
+        ComputeTangentBasisFromUnitNormal(suspAxis, u1, u2);
         const VectorSingle rAEff = rA + d;
 
         if(!jc.isSpring() || useBias){
@@ -2095,7 +2096,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         const VectorSingle axleB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
         VectorSingle wU1(0.0f);
         VectorSingle wU2(0.0f);
-        ComputeTangentBasis(axleA, wU1, wU2);
+        ComputeTangentBasisFromUnitNormal(axleA, wU1, wU2);
 
         VectorSingle crossAB = Cross(axleA, axleB);
         if(Vector3Dot(axleA, axleB).x < -0.99f && Vector3LengthSq(crossAB).x < 1.0e-4f)
@@ -2103,8 +2104,8 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
 
         const f32 e1 = Vector3Dot(crossAB, wU1).x;
         const f32 e2 = Vector3Dot(crossAB, wU2).x;
-        const VectorSingle su1 = Matrix3MulVec(sumInvIMat, wU1);
-        const VectorSingle su2 = Matrix3MulVec(sumInvIMat, wU2);
+        const VectorSingle su1 = SymMat3MulVec(cache.sumInvI, wU1);
+        const VectorSingle su2 = SymMat3MulVec(cache.sumInvI, wU2);
         const f32 m00 = Vector3Dot(wU1, su1).x;
         const f32 m01 = Vector3Dot(wU1, su2).x;
         const f32 m11 = Vector3Dot(wU2, su2).x;
@@ -2151,7 +2152,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         if((flagsB & 0x38u) != 0u)
             wB = ApplyAngularLocks(wB, flagsB);
 
-        const f32 kAxle = Vector3Dot(axleA, Matrix3MulVec(sumInvIMat, axleA)).x;
+        const f32 kAxle = Vector3Dot(axleA, SymMat3MulVec(cache.sumInvI, axleA)).x;
         if(jc.enableMotor() && jc.maxMotorForce > 0.0f && kAxle > 1.0e-12f){
             const f32 axleMass = 1.0f / kAxle;
             const f32 wAxle = Vector3Dot(VectorSingle(wB - wA, 0.0f), axleA).x;
@@ -2193,10 +2194,16 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             linLockImps[0u] = jc.linearImpulseMax.x;
             linLockImps[1u] = jc.linearImpulseMax.y;
             linLockImps[2u] = jc.linearImpulseMax.z;
+            b8 needRelVel = true;
+            VectorSingle relPointVel(0.0f);
             for(usize k = 0u; k < 3u; ++k){
                 in SixDofAxisConfig cfg = extra.sixDofAxes[k];
                 if(cfg.motion == JointMotion::Free && !cfg.enableMotor && !cfg.enableSpring)
                     continue;
+                if(needRelVel){
+                    relPointVel = (vB + Cross(wB, rB)) - (vA + Cross(wA, rAEff));
+                    needRelVel = false;
+                }
                 const VectorSingle axis(axes[k]);
                 const VectorSingle rnA = Cross(rAEff, axis);
                 const VectorSingle rnB = Cross(rB, axis);
@@ -2210,7 +2217,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 if(kLin > 1.0e-12f)
                     effM = 1.0f / kLin;
                 const f32 posErr = Vector3Dot(d, axis).x;
-                const f32 vRel = Vector3Dot((vB + Cross(wB, rB)) - (vA + Cross(wA, rAEff)), axis).x;
+                const f32 vRel = Vector3Dot(relPointVel, axis).x;
                 f32 dAxisImp = 0.0f;
                 SolveSixDofAxisConstraint(
                     cfg.motion,
@@ -2238,79 +2245,91 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                     extra.sixDofSpringImpulses[k],
                     dAxisImp
                 );
-                if(dAxisImp != 0.0f)
+                if(dAxisImp != 0.0f){
                     ApplyLinearImpulsePair(invMassA, invMassB, invIAMat, invIBMat, rAEff, rB, axis * dAxisImp, flagsA, flagsB, vA, wA, vB, wB);
+                    needRelVel = true;
+                }
             }
             jc.linearImpulseMax.x = linLockImps[0u];
             jc.linearImpulseMax.y = linLockImps[1u];
             jc.linearImpulseMax.z = linLockImps[2u];
 
-            const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
-            VectorSingle qErr = QuaternionMultiply(qB, QuaternionConjugate(qTarget));
-            if(qErr.w < 0.0f)
-                qErr = -qErr;
-            const VectorSingle qVec = VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f);
-            const f32 qVecLen = Vector3Length(qVec).x;
-            VectorSingle thetaWorld = qVec * 2.0f;
-            if(qVecLen > 1.0e-7f)
-                thetaWorld = qVec * ((2.0f * ATan2(VectorSingle(qVecLen), VectorSingle(qErr.w)).x) / qVecLen);
-
-                        Array<f32, 3u> angLockImps;
-            angLockImps[0u] = jc.angularImpulseMax.x;
-            angLockImps[1u] = jc.angularImpulseMax.y;
-            angLockImps[2u] = jc.angularImpulseMax.z;
+            b8 anySixDofAngActive = false;
             for(usize k = 0u; k < 3u; ++k){
-                const usize axIdx = 3u + k;
-                in SixDofAxisConfig cfg = extra.sixDofAxes[axIdx];
-                if(cfg.motion == JointMotion::Free && !cfg.enableMotor && !cfg.enableSpring)
-                    continue;
-                const VectorSingle axis(axes[k]);
-                const f32 kAng = Vector3Dot(axis, Matrix3MulVec(sumInvIMat, axis)).x;
-                f32 effM = 0.0f;
-                if(kAng > 1.0e-12f)
-                    effM = 1.0f / kAng;
-                const f32 posErr = Vector3Dot(thetaWorld, axis).x;
-                const f32 wRel = Vector3Dot(VectorSingle(wB - wA, 0.0f), axis).x;
-                f32 dAxisImp = 0.0f;
-                SolveSixDofAxisConstraint(
-                    cfg.motion,
-                    cfg.lowerLimit,
-                    cfg.upperLimit,
-                    cfg.enableMotor,
-                    cfg.motorTargetVelocity,
-                    cfg.enableSpring,
-                    cfg.motorTargetPosition,
-                    cfg.maxMotorForce,
-                    cfg.springHertz,
-                    cache.sixDofSpringSoftness[axIdx],
-                    jc.angularSoftness,
-                    jc.limitSoftness,
-                    jc.limitRestitution,
-                    posErr,
-                    wRel,
-                    effM,
-                    h,
-                    useBias,
-                    angLockImps[k],
-                    extra.sixDofLowerImpulses[axIdx],
-                    extra.sixDofUpperImpulses[axIdx],
-                    extra.sixDofMotorImpulses[axIdx],
-                    extra.sixDofSpringImpulses[axIdx],
-                    dAxisImp
-                );
-                if(dAxisImp != 0.0f){
-                    const VectorSingle angP = axis * dAxisImp;
-                    wA = wA - Matrix3MulVec(invIAMat, angP);
-                    wB = wB + Matrix3MulVec(invIBMat, angP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = ApplyAngularLocks(wA, flagsA);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = ApplyAngularLocks(wB, flagsB);
+                in SixDofAxisConfig cfg = extra.sixDofAxes[3u + k];
+                if(cfg.motion != JointMotion::Free || cfg.enableMotor || cfg.enableSpring){
+                    anySixDofAngActive = true;
+                    break;
                 }
             }
-            jc.angularImpulseMax.x = angLockImps[0u];
-            jc.angularImpulseMax.y = angLockImps[1u];
-            jc.angularImpulseMax.z = angLockImps[2u];
+            if(anySixDofAngActive){
+                const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
+                VectorSingle qErr = QuaternionMultiply(qB, QuaternionConjugate(qTarget));
+                if(qErr.w < 0.0f)
+                    qErr = -qErr;
+                const VectorSingle qVec = VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f);
+                const f32 qVecLen = Vector3Length(qVec).x;
+                VectorSingle thetaWorld = qVec * 2.0f;
+                if(qVecLen > 1.0e-7f)
+                    thetaWorld = qVec * ((2.0f * ATan2(VectorSingle(qVecLen), VectorSingle(qErr.w)).x) / qVecLen);
+
+                Array<f32, 3u> angLockImps;
+                angLockImps[0u] = jc.angularImpulseMax.x;
+                angLockImps[1u] = jc.angularImpulseMax.y;
+                angLockImps[2u] = jc.angularImpulseMax.z;
+                for(usize k = 0u; k < 3u; ++k){
+                    const usize axIdx = 3u + k;
+                    in SixDofAxisConfig cfg = extra.sixDofAxes[axIdx];
+                    if(cfg.motion == JointMotion::Free && !cfg.enableMotor && !cfg.enableSpring)
+                        continue;
+                    const VectorSingle axis(axes[k]);
+                    const f32 kAng = Vector3Dot(axis, SymMat3MulVec(cache.sumInvI, axis)).x;
+                    f32 effM = 0.0f;
+                    if(kAng > 1.0e-12f)
+                        effM = 1.0f / kAng;
+                    const f32 posErr = Vector3Dot(thetaWorld, axis).x;
+                    const f32 wRel = Vector3Dot(VectorSingle(wB - wA, 0.0f), axis).x;
+                    f32 dAxisImp = 0.0f;
+                    SolveSixDofAxisConstraint(
+                        cfg.motion,
+                        cfg.lowerLimit,
+                        cfg.upperLimit,
+                        cfg.enableMotor,
+                        cfg.motorTargetVelocity,
+                        cfg.enableSpring,
+                        cfg.motorTargetPosition,
+                        cfg.maxMotorForce,
+                        cfg.springHertz,
+                        cache.sixDofSpringSoftness[axIdx],
+                        jc.angularSoftness,
+                        jc.limitSoftness,
+                        jc.limitRestitution,
+                        posErr,
+                        wRel,
+                        effM,
+                        h,
+                        useBias,
+                        angLockImps[k],
+                        extra.sixDofLowerImpulses[axIdx],
+                        extra.sixDofUpperImpulses[axIdx],
+                        extra.sixDofMotorImpulses[axIdx],
+                        extra.sixDofSpringImpulses[axIdx],
+                        dAxisImp
+                    );
+                    if(dAxisImp != 0.0f){
+                        const VectorSingle angP = axis * dAxisImp;
+                        wA = wA - Matrix3MulVec(invIAMat, angP);
+                        wB = wB + Matrix3MulVec(invIBMat, angP);
+                        if((flagsA & 0x38u) != 0u)
+                            wA = ApplyAngularLocks(wA, flagsA);
+                        if((flagsB & 0x38u) != 0u)
+                            wB = ApplyAngularLocks(wB, flagsB);
+                    }
+                }
+                jc.angularImpulseMax.x = angLockImps[0u];
+                jc.angularImpulseMax.y = angLockImps[1u];
+                jc.angularImpulseMax.z = angLockImps[2u];
+            }
         }
     }
     else if(jc.type == JointType::Gear){
@@ -2464,7 +2483,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
                 f32 arcPos = 0.0f;
                 f32 totalLen = 0.0f;
-                EvaluatePathClosestPoint(extra.pathPoints, extra.pathClosed, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+                EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
                 const VectorSingle cpWorldOff = Vector3Rotate(cpLocal, qA);
                 const VectorSingle tanWorld = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 cache.cachedPathTanW = f32x4(tanWorld, 0.0f);
@@ -2473,7 +2492,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                 const VectorSingle rAEff = rA + cpWorldOff;
                 VectorSingle u1(0.0f);
                 VectorSingle u2(0.0f);
-                ComputeTangentBasis(tanWorld, u1, u2);
+                ComputeTangentBasisFromUnitNormal(tanWorld, u1, u2);
 
                 VectorSingle linImp = jc.linearImpulse();
                 Solve2DLinearPlaneRows(
@@ -2566,19 +2585,16 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
 
                 if(extra.pathLockRotation){
                     const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                    VectorSingle pU1(0.0f);
-                    VectorSingle pU2(0.0f);
-                    ComputeTangentBasis(tanWorld, pU1, pU2);
                     VectorSingle crossTB = Cross(tanWorld, axisB);
                     if(Vector3Dot(tanWorld, axisB).x < -0.99f && Vector3LengthSq(crossTB).x < 1.0e-4f)
-                        crossTB = pU1;
-                    const f32 e1 = Vector3Dot(crossTB, pU1).x;
-                    const f32 e2 = Vector3Dot(crossTB, pU2).x;
-                                        const VectorSingle su1 = Matrix3MulVec(sumInvIMat, pU1);
-                    const VectorSingle su2 = Matrix3MulVec(sumInvIMat, pU2);
-                    const f32 m00 = Vector3Dot(pU1, su1).x;
-                    const f32 m01 = Vector3Dot(pU1, su2).x;
-                    const f32 m11 = Vector3Dot(pU2, su2).x;
+                        crossTB = u1;
+                    const f32 e1 = Vector3Dot(crossTB, u1).x;
+                    const f32 e2 = Vector3Dot(crossTB, u2).x;
+                    const VectorSingle su1 = SymMat3MulVec(cache.sumInvI, u1);
+                    const VectorSingle su2 = SymMat3MulVec(cache.sumInvI, u2);
+                    const f32 m00 = Vector3Dot(u1, su1).x;
+                    const f32 m01 = Vector3Dot(u1, su2).x;
+                    const f32 m11 = Vector3Dot(u2, su2).x;
                     const f32 det = m00 * m11 - m01 * m01;
                     f32 angBias1 = 0.0f;
                     f32 angBias2 = 0.0f;
@@ -2592,11 +2608,11 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                         angIScale = jc.angularSoftness.impulseScale;
                     }
                     const VectorSingle oldAng = jc.angularImpulse();
-                    const f32 oldL1 = Vector3Dot(oldAng, pU1).x;
-                    const f32 oldL2 = Vector3Dot(oldAng, pU2).x;
+                    const f32 oldL1 = Vector3Dot(oldAng, u1).x;
+                    const f32 oldL2 = Vector3Dot(oldAng, u2).x;
                     const VectorSingle relW = VectorSingle(wB - wA, 0.0f);
-                    const f32 rhs1 = -(Vector3Dot(relW, pU1).x + angBias1);
-                    const f32 rhs2 = -(Vector3Dot(relW, pU2).x + angBias2);
+                    const f32 rhs1 = -(Vector3Dot(relW, u1).x + angBias1);
+                    const f32 rhs2 = -(Vector3Dot(relW, u2).x + angBias2);
                     f32 dL1 = 0.0f;
                     f32 dL2 = 0.0f;
                     if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
@@ -2610,8 +2626,8 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
                         if(m11 > 1.0e-12f)
                             dL2 = (rhs2 / m11) * angMScale - angIScale * oldL2;
                     }
-                    const VectorSingle angDelta = pU1 * dL1 + pU2 * dL2;
-                    jc.setAngularImpulse(pU1 * (oldL1 + dL1) + pU2 * (oldL2 + dL2));
+                    const VectorSingle angDelta = u1 * dL1 + u2 * dL2;
+                    jc.setAngularImpulse(u1 * (oldL1 + dL1) + u2 * (oldL2 + dL2));
                     wA = wA - Matrix3MulVec(invIAMat, angDelta);
                     wB = wB + Matrix3MulVec(invIBMat, angDelta);
                     if((flagsA & 0x38u) != 0u)
@@ -2676,12 +2692,20 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
     }
 
     if(jc.indexA != s_NullIndex && (flagsA & cast<u32>(BodyFlags::Dynamic)) != 0u){
-        states[jc.indexA].linearVelocity = f32x4(ApplyLinearLocks(vA, flagsA), 0.0f);
-        states[jc.indexA].angularVelocity = f32x4(ApplyAngularLocks(wA, flagsA), 0.0f);
+        if((flagsA & 0x07u) != 0u)
+            vA = ApplyLinearLocks(vA, flagsA);
+        if((flagsA & 0x38u) != 0u)
+            wA = ApplyAngularLocks(wA, flagsA);
+        states[jc.indexA].linearVelocity = f32x4(vA, 0.0f);
+        states[jc.indexA].angularVelocity = f32x4(wA, 0.0f);
     }
     if(jc.indexB != s_NullIndex && (flagsB & cast<u32>(BodyFlags::Dynamic)) != 0u){
-        states[jc.indexB].linearVelocity = f32x4(ApplyLinearLocks(vB, flagsB), 0.0f);
-        states[jc.indexB].angularVelocity = f32x4(ApplyAngularLocks(wB, flagsB), 0.0f);
+        if((flagsB & 0x07u) != 0u)
+            vB = ApplyLinearLocks(vB, flagsB);
+        if((flagsB & 0x38u) != 0u)
+            wB = ApplyAngularLocks(wB, flagsB);
+        states[jc.indexB].linearVelocity = f32x4(vB, 0.0f);
+        states[jc.indexB].angularVelocity = f32x4(wB, 0.0f);
     }
 }
 
@@ -2820,7 +2844,7 @@ void ProjectJointConstraintWithKinematics(
             VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
             f32 arcPos = 0.0f;
             f32 totalLen = 0.0f;
-            EvaluatePathClosestPoint(extra.pathPoints, extra.pathClosed, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+            EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
             const VectorSingle cpWorldOff = Vector3Rotate(cpLocal, qA);
             const VectorSingle tanWorld = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
             linErr = VectorSingle(d - cpWorldOff, 0.0f);
@@ -3019,7 +3043,7 @@ void ProjectJointConstraintWithKinematics(
         if(ang > 1.0e-6f){
             VectorSingle u1(0.0f);
             VectorSingle u2(0.0f);
-            ComputeTangentBasis(axisA, u1, u2);
+            ComputeTangentBasisFromUnitNormal(axisA, u1, u2);
             angErr = SafeNormalizeVec3(Cross(axisA, axisB), u1) * ang;
         }
         if(jc.enableLimit() && jc.lowerLimit <= jc.upperLimit){
@@ -3042,14 +3066,14 @@ void ProjectJointConstraintWithKinematics(
             VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
             f32 arcPos = 0.0f;
             f32 totalLen = 0.0f;
-            EvaluatePathClosestPoint(extra.pathPoints, extra.pathClosed, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+            EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
             const VectorSingle tanWorld = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
             const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
             const f32 ang = ACos(VectorSingle(SimdClamp(Vector3Dot(tanWorld, axisB).x, -1.0f, 1.0f))).x;
             if(ang > 1.0e-6f){
                 VectorSingle pU1(0.0f);
                 VectorSingle pU2(0.0f);
-                ComputeTangentBasis(tanWorld, pU1, pU2);
+                ComputeTangentBasisFromUnitNormal(tanWorld, pU1, pU2);
                 VectorSingle crossTB = Cross(tanWorld, axisB);
                 if(Vector3Dot(tanWorld, axisB).x < -0.99f && Vector3LengthSq(crossTB).x < 1.0e-4f)
                     crossTB = pU1;
@@ -3065,7 +3089,7 @@ void ProjectJointConstraintWithKinematics(
         if(ang > 1.0e-6f){
             VectorSingle u1(0.0f);
             VectorSingle u2(0.0f);
-            ComputeTangentBasis(axleA, u1, u2);
+            ComputeTangentBasisFromUnitNormal(axleA, u1, u2);
             angErr = SafeNormalizeVec3(Cross(axleA, axleB), u1) * ang;
         }
     }

@@ -122,7 +122,9 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
     }
 
     public void reserve(in usize capacity)override{
-        this.m_outLines.reserve(capacity);
+        const usize capped = Min(cast<usize>(this.m_maxLines), capacity);
+        if(capped > this.m_outLines.capacity())
+            this.m_outLines.reserve(Min(cast<usize>(this.m_maxLines), Max(capped, this.m_outLines.capacity() * 2u)));
     }
 
     public b8 full()const override{
@@ -142,6 +144,141 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
             return true;
         }
         return false;
+    }
+
+    private b8 emitViewSegment(in VectorSingle v0, in VectorSingle v1, in Color lineColor, mut PhysicsDebugPhaseBudget budget){
+        if(budget.limitReached() || this.m_outLines.size() >= cast<usize>(this.m_maxLines)){
+            budget.noteOverflow();
+            return false;
+        }
+        VectorSingle seg(0.0f);
+        if(this.m_projector.projectViewSpaceSegment(v0, v1, seg)){
+            PaintLineSegment batchLine;
+            batchLine.start = Point(seg.x, seg.y);
+            batchLine.end = Point(seg.z, seg.w);
+            batchLine.color = lineColor;
+            this.m_outLines.push_back(batchLine);
+            budget.recordEmitted();
+        }
+        return true;
+    }
+
+    public void emitOrientedBox(in VectorSingle center, in VectorSingle ex, in VectorSingle ey, in VectorSingle ez, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
+        const Color lineColor(color.x, color.y, color.z, color.w);
+        const VectorSingle vc = this.m_projector.projectPointToView(center);
+        const VectorSingle vx = this.m_projector.projectDirToView(ex);
+        const VectorSingle vy = this.m_projector.projectDirToView(ey);
+        const VectorSingle vz = this.m_projector.projectDirToView(ez);
+        const VectorSingle c0 = vc - vx - vy - vz;
+        const VectorSingle c1 = vc + vx - vy - vz;
+        const VectorSingle c2 = vc - vx + vy - vz;
+        const VectorSingle c3 = vc + vx + vy - vz;
+        const VectorSingle c4 = vc - vx - vy + vz;
+        const VectorSingle c5 = vc + vx - vy + vz;
+        const VectorSingle c6 = vc - vx + vy + vz;
+        const VectorSingle c7 = vc + vx + vy + vz;
+        if(!this.emitViewSegment(c0, c1, lineColor, budget)) return;
+        if(!this.emitViewSegment(c2, c3, lineColor, budget)) return;
+        if(!this.emitViewSegment(c4, c5, lineColor, budget)) return;
+        if(!this.emitViewSegment(c6, c7, lineColor, budget)) return;
+        if(!this.emitViewSegment(c0, c2, lineColor, budget)) return;
+        if(!this.emitViewSegment(c1, c3, lineColor, budget)) return;
+        if(!this.emitViewSegment(c4, c6, lineColor, budget)) return;
+        if(!this.emitViewSegment(c5, c7, lineColor, budget)) return;
+        if(!this.emitViewSegment(c0, c4, lineColor, budget)) return;
+        if(!this.emitViewSegment(c1, c5, lineColor, budget)) return;
+        if(!this.emitViewSegment(c2, c6, lineColor, budget)) return;
+        this.emitViewSegment(c3, c7, lineColor, budget);
+    }
+
+    public void emitCircleAxes(in VectorSingle center, in VectorSingle uR, in VectorSingle vR, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
+        const Color lineColor(color.x, color.y, color.z, color.w);
+        const VectorSingle vc = this.m_projector.projectPointToView(center);
+        const VectorSingle vu = this.m_projector.projectDirToView(uR);
+        const VectorSingle vv = this.m_projector.projectDirToView(vR);
+        const f32 c30 = 0.86602540378f;
+        const f32 s30 = 0.5f;
+        const VectorSingle uC = vu * c30;
+        const VectorSingle uS = vu * s30;
+        const VectorSingle vS = vv * s30;
+        const VectorSingle vC = vv * c30;
+        const VectorSingle d1 = uC + vS;
+        const VectorSingle d2 = uS + vC;
+        const VectorSingle d4 = vC - uS;
+        const VectorSingle d5 = vS - uC;
+
+        const VectorSingle p0 = vc + vu;
+        const VectorSingle p1 = vc + d1;
+        const VectorSingle p2 = vc + d2;
+        const VectorSingle p3 = vc + vv;
+        const VectorSingle p4 = vc + d4;
+        const VectorSingle p5 = vc + d5;
+        const VectorSingle p6 = vc - vu;
+        const VectorSingle p7 = vc - d1;
+        const VectorSingle p8 = vc - d2;
+        const VectorSingle p9 = vc - vv;
+        const VectorSingle p10 = vc - d4;
+        const VectorSingle p11 = vc - d5;
+        if(!this.emitViewSegment(p0, p1, lineColor, budget)) return;
+        if(!this.emitViewSegment(p1, p2, lineColor, budget)) return;
+        if(!this.emitViewSegment(p2, p3, lineColor, budget)) return;
+        if(!this.emitViewSegment(p3, p4, lineColor, budget)) return;
+        if(!this.emitViewSegment(p4, p5, lineColor, budget)) return;
+        if(!this.emitViewSegment(p5, p6, lineColor, budget)) return;
+        if(!this.emitViewSegment(p6, p7, lineColor, budget)) return;
+        if(!this.emitViewSegment(p7, p8, lineColor, budget)) return;
+        if(!this.emitViewSegment(p8, p9, lineColor, budget)) return;
+        if(!this.emitViewSegment(p9, p10, lineColor, budget)) return;
+        if(!this.emitViewSegment(p10, p11, lineColor, budget)) return;
+        this.emitViewSegment(p11, p0, lineColor, budget);
+    }
+
+    public void emitLoop(in Span<f32x4> points, in b8 closed, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
+        if(points.size() < 2u)
+            return;
+        const Color lineColor(color.x, color.y, color.z, color.w);
+        VectorSingle prevV = this.m_projector.projectPointToView(VectorSingle(points[0u]));
+        const VectorSingle firstV = prevV;
+        for(usize i = 1u; i < points.size(); ++i){
+            const VectorSingle currV = this.m_projector.projectPointToView(VectorSingle(points[i]));
+            if(!this.emitViewSegment(prevV, currV, lineColor, budget))
+                return;
+            prevV = currV;
+        }
+        if(closed)
+            this.emitViewSegment(prevV, firstV, lineColor, budget);
+    }
+
+    public void emitIndexedEdges(in Span<f32x4> points, in Span<u32> edgePairs, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
+        if(points.empty() || edgePairs.size() < 2u)
+            return;
+        const Color lineColor(color.x, color.y, color.z, color.w);
+        if(points.size() <= 256u){
+            FixedVector<f32x4, 256u> viewPts;
+            for(usize pi = 0u; pi < points.size(); ++pi)
+                viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
+            for(usize ei = 0u; ei + 1u < edgePairs.size(); ei += 2u){
+                const u32 i0 = edgePairs[ei];
+                const u32 i1 = edgePairs[ei + 1u];
+                if(cast<usize>(i0) >= points.size() || cast<usize>(i1) >= points.size())
+                    continue;
+                if(!this.emitViewSegment(VectorSingle(viewPts[i0]), VectorSingle(viewPts[i1]), lineColor, budget))
+                    return;
+            }
+            return;
+        }
+        Vector<f32x4> viewPts;
+        viewPts.reserve(points.size());
+        for(usize pi = 0u; pi < points.size(); ++pi)
+            viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
+        for(usize ei = 0u; ei + 1u < edgePairs.size(); ei += 2u){
+            const u32 i0 = edgePairs[ei];
+            const u32 i1 = edgePairs[ei + 1u];
+            if(cast<usize>(i0) >= points.size() || cast<usize>(i1) >= points.size())
+                continue;
+            if(!this.emitViewSegment(VectorSingle(viewPts[i0]), VectorSingle(viewPts[i1]), lineColor, budget))
+                return;
+        }
     }
 }
 
@@ -629,15 +766,22 @@ void UpdateTestbedGrab(
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
     if(!physicsSystem.has_value())
         return;
-    const Expected<Transform3D> bodyXfRes = physicsSystem.value().tryGetBodyTransform(inOutGrab.entity);
-    if(!bodyXfRes.has_value()){
+    in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(inOutGrab.entity);
+    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
+    if(!rb.runtimeBodyId.valid() || rb.runtimeBodyId.index >= pw.m_bodies.size()){
         inOutGrab.active = false;
         inOutGrab.entity = s_InvalidEntityId;
         return;
     }
-    in Transform3D bodyXf = bodyXfRes.value();
-    const VectorSingle bodyPos = VectorSingle(bodyXf.position);
-    const VectorSingle bodyRot = SafeNormalizeQuat(VectorSingle(bodyXf.rotation));
+    in Body b = pw.m_bodies[rb.runtimeBodyId.index];
+    if(!b.alive || b.generation != rb.runtimeBodyId.generation || b.setIndex >= pw.m_solverSets.size() || b.localIndex >= pw.m_solverSets[b.setIndex].sims.size()){
+        inOutGrab.active = false;
+        inOutGrab.entity = s_InvalidEntityId;
+        return;
+    }
+    in BodySim sim = pw.m_solverSets[b.setIndex].sims[b.localIndex];
+    const VectorSingle bodyPos = VectorSingle(sim.transform.position);
+    const VectorSingle bodyRot = SafeNormalizeQuat(VectorSingle(sim.transform.rotation));
     const VectorSingle anchorW = TransformPointValues(bodyPos, bodyRot, VectorSingle(inOutGrab.localAnchor));
     inOutGrab.grabWorldPoint = f32x4(anchorW, 0.0f);
 
@@ -650,25 +794,17 @@ void UpdateTestbedGrab(
 
     const f32 safeDt = SimdClamp(dt, 1.0e-4f, 0.05f);
     f32 mass = 1.0f;
-    in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(inOutGrab.entity);
-    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
-    if(rb.runtimeBodyId.valid() && rb.runtimeBodyId.index < pw.m_bodies.size()){
-        in Body b = pw.m_bodies[rb.runtimeBodyId.index];
-        if(b.alive && b.setIndex < pw.m_solverSets.size() && b.localIndex < pw.m_solverSets[b.setIndex].sims.size()){
-            const f32 invM = pw.m_solverSets[b.setIndex].sims[b.localIndex].centerInvMass.w;
-            if(invM > 1.0e-6f)
-                mass = 1.0f / invM;
-        }
-    }
+    const f32 invM = sim.centerInvMass.w;
+    if(invM > 1.0e-6f)
+        mass = 1.0f / invM;
 
     VectorSingle linVel(0.0f);
     VectorSingle angVel(0.0f);
-    const Expected<f32x4> lvRes = physicsSystem.value().tryGetLinearVelocity(inOutGrab.entity);
-    if(lvRes.has_value())
-        linVel = VectorSingle(lvRes.value());
-    const Expected<f32x4> avRes = physicsSystem.value().tryGetAngularVelocity(inOutGrab.entity);
-    if(avRes.has_value())
-        angVel = VectorSingle(avRes.value());
+    if(b.localIndex < pw.m_solverSets[b.setIndex].states.size()){
+        in BodyState st = pw.m_solverSets[b.setIndex].states[b.localIndex];
+        linVel = VectorSingle(st.linearVelocity);
+        angVel = VectorSingle(st.angularVelocity);
+    }
 
     const VectorSingle anchorVel = linVel + Cross(angVel, VectorSingle(anchorW - bodyPos, 0.0f));
     const VectorSingle err = VectorSingle(targetW - anchorW, 0.0f);

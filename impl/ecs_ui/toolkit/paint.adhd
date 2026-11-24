@@ -52,23 +52,21 @@ class PaintTransformStackEntry{
 
 Rect ComputeTransformedPaintRectBounds(in PaintTransform2D xf, in Rect rect){
     const VectorSingle endXY = VectorSingle(rect.x + rect.width, rect.y + rect.height, 0.0f, 0.0f);
-    if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(endXY.xy))
+    if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(VectorSingle(rect.x, rect.y, endXY.x, endXY.y)))
         return Rect(0.0f, 0.0f, 0.0f, 0.0f);
-    const Point p00 = ApplyPaintTransform(xf, Point(rect.x, rect.y));
-    const Point p10 = ApplyPaintTransform(xf, Point(endXY.x, rect.y));
-    const Point p11 = ApplyPaintTransform(xf, Point(endXY.x, endXY.y));
-    const Point p01 = ApplyPaintTransform(xf, Point(rect.x, endXY.y));
-    const VectorSingle v01(p00.x, p00.y, p10.x, p10.y);
-    const VectorSingle v23(p11.x, p11.y, p01.x, p01.y);
-    if(!IsFinite(v01) || !IsFinite(v23))
+    const f32 hw = 0.5f * rect.width;
+    const f32 hh = 0.5f * rect.height;
+    const f32 cx = rect.x + hw;
+    const f32 cy = rect.y + hh;
+    const VectorSingle absM = Abs(VectorSingle(xf.m00, xf.m10, xf.m01, xf.m11));
+    const f32 tcx = xf.m00 * cx + xf.m01 * cy + xf.tx;
+    const f32 tcy = xf.m10 * cx + xf.m11 * cy + xf.ty;
+    const f32 ex = absM.x * hw + absM.z * hh;
+    const f32 ey = absM.y * hw + absM.w * hh;
+    const VectorSingle outBounds(tcx - ex, tcy - ey, 2.0f * ex, 2.0f * ey);
+    if(!IsFinite(outBounds) || !IsFinite(VectorSingle(outBounds.x + outBounds.z, outBounds.y + outBounds.w, 0.0f, 0.0f).xy))
         return Rect(0.0f, 0.0f, 0.0f, 0.0f);
-    const VectorSingle pairMin = Min(v01, v23);
-    const VectorSingle pairMax = Max(v01, v23);
-    const f32 minX = UiSimdMin(pairMin.x, pairMin.z);
-    const f32 maxX = UiSimdMax(pairMax.x, pairMax.z);
-    const f32 minY = UiSimdMin(pairMin.y, pairMin.w);
-    const f32 maxY = UiSimdMax(pairMax.y, pairMax.w);
-    return Rect(minX, minY, maxX - minX, maxY - minY);
+    return Rect(outBounds.x, outBounds.y, outBounds.z, outBounds.w);
 }
 
 class PaintBuilder : NoCopy{
@@ -80,12 +78,15 @@ class PaintBuilder : NoCopy{
     private Array<PaintTransformStackEntry, s_PaintMaxTransformDepth> m_transforms;
     private Vector<DrawCommand> m_sortScratch;
     private Vector<Point> m_polyScratch;
+    private Vector<Point> m_xfPolyScratch;
     private usize m_overlayDepth = 0u;
     private usize m_transformBase = 0u;
     private usize m_transformDepth = 0u;
     private u64 m_cachedSkinRegionVersion = 0u;
+    private u64 m_regionsCacheStamp = 0u;
     private u64 m_ownerIdentity = AllocateServiceIdentity();
     private u32 m_layer = 0u;
+    private f32 m_cachedAaWidth = 1.0f;
     private b8 m_commandsOrdered = true;
     private b8 m_commandsStrictlyDescending = true;
     private b8 m_recording = false;
@@ -99,10 +100,15 @@ class PaintBuilder : NoCopy{
         this.m_snapshot.m_generation = generation;
         this.m_snapshot.m_displayMetrics = metrics;
         this.m_snapshot.m_images.clear();
-        if(this.m_cachedSkinRegionVersion != skin.regionVersion() || this.m_regions.size() != skin.regions().size()){
+        if(this.m_regionsCacheStamp == 0u || this.m_cachedSkinRegionVersion != skin.regionVersion() || this.m_regions.size() != skin.regions().size()){
             RefreshPaintBuilderSkinRegions(Span<UiSkinRegion>(skin.regions()), this.m_regions, this.m_regionLookup);
             this.m_cachedSkinRegionVersion = skin.regionVersion();
+            ++this.m_regionsCacheStamp;
         }
+        f32 aaScale = 1.0f;
+        if(IsFinite(VectorSingle(metrics.pixelScaleX, metrics.pixelScaleY, 0.0f, 0.0f).xy))
+            aaScale = UiSimdMax(1.0f, UiSimdMax(metrics.pixelScaleX, metrics.pixelScaleY));
+        this.m_cachedAaWidth = 1.0f / aaScale;
         this.m_transformBase = 0u;
         this.m_transformDepth = 0u;
         this.m_hasActiveTransform = false;
@@ -112,6 +118,7 @@ class PaintBuilder : NoCopy{
             this.m_clips, this.m_overlayDepth, this.m_layer, this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_recording
         );
     }
+    public u64 regionsCacheStamp()const{ return this.m_regionsCacheStamp; }
     [cpp_unwind]
     public void reserve(in usize quadCount){ this.reserve(quadCount, s_PaintDefaultClipDepth); }
     [cpp_unwind]
@@ -313,12 +320,7 @@ class PaintBuilder : NoCopy{
         return this.activeTransformScale();
     }
     private f32 activeAaWidth()const{
-        const f32 px = this.m_snapshot.m_displayMetrics.pixelScaleX;
-        const f32 py = this.m_snapshot.m_displayMetrics.pixelScaleY;
-        f32 scale = 1.0f;
-        if(IsFinite(VectorSingle(px, py, 0.0f, 0.0f).xy))
-            scale = UiSimdMax(1.0f, UiSimdMax(px, py));
-        return 1.0f / scale;
+        return this.m_cachedAaWidth;
     }
 
     [cpp_unwind]
@@ -517,7 +519,7 @@ class PaintBuilder : NoCopy{
                 scale = this.activeTransformScale();
             EmitPaintPolylineTransformed(
                 this.m_recording, this.m_clips.back(), points, closed, xf, entry.uniformScale, scale, style, aaWidth, color, this.m_layer,
-                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                this.m_xfPolyScratch, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
@@ -557,7 +559,7 @@ class PaintBuilder : NoCopy{
         }
         this.m_polyScratch.push_back(pt);
     }
-    private b8 buildRoundedRectPoints(in Rect rectangle, in f32 radius){
+    private b8 buildRoundedRectPoints(in Rect rectangle, in f32 radius, in b8 applyTransform){
         if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
             return false;
         if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(VectorSingle(radius)))
@@ -568,7 +570,8 @@ class PaintBuilder : NoCopy{
             return false;
 
         this.m_polyScratch.clear();
-        const usize segPerCorner = cast<usize>(UiSimdClamp(r * this.currentTransformScale() * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
+        const f32 scale = this.currentTransformScale();
+        const usize segPerCorner = cast<usize>(UiSimdClamp(r * scale * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
         const f32 stepAngle = (s_Pi * 0.5f) / cast<f32>(segPerCorner);
         VectorSingle sStepVec(0.0f);
         VectorSingle cStepVec(0.0f);
@@ -576,28 +579,88 @@ class PaintBuilder : NoCopy{
         const f32 ds = sStepVec.x;
         const f32 dc = cStepVec.x;
 
+        this.m_polyScratch.reserve(4u * (segPerCorner + 1u));
+        Array<f32, 17u> arcCos;
+        Array<f32, 17u> arcSin;
+        f32 c = 1.0f;
+        f32 s = 0.0f;
+        for(usize si = 0u; si < segPerCorner; ++si){
+            arcCos[si] = c * r;
+            arcSin[si] = s * r;
+            const f32 nextC = c * dc - s * ds;
+            const f32 nextS = c * ds + s * dc;
+            c = nextC;
+            s = nextS;
+        }
+        arcCos[segPerCorner] = 0.0f;
+        arcSin[segPerCorner] = r;
+
         Array<Point, 4u> centers;
         centers[0u] = Point(rectangle.x + r, rectangle.y + r);
         centers[1u] = Point(rectangle.x + rectangle.width - r, rectangle.y + r);
         centers[2u] = Point(rectangle.x + rectangle.width - r, rectangle.y + rectangle.height - r);
         centers[3u] = Point(rectangle.x + r, rectangle.y + rectangle.height - r);
-        Array<Point, 4u> startDirs;
-        startDirs[0u] = Point(-1.0f, 0.0f);
-        startDirs[1u] = Point(0.0f, -1.0f);
-        startDirs[2u] = Point(1.0f, 0.0f);
-        startDirs[3u] = Point(0.0f, 1.0f);
 
-        for(usize ci = 0u; ci < 4u; ++ci){
-            f32 ux = startDirs[ci].x;
-            f32 uy = startDirs[ci].y;
-            for(usize si = 0u; si <= segPerCorner; ++si){
-                this.pushScratchUniquePoint(Point(centers[ci].x + ux * r, centers[ci].y + uy * r));
-                const f32 nextUx = ux * dc - uy * ds;
-                const f32 nextUy = ux * ds + uy * dc;
-                ux = nextUx;
-                uy = nextUy;
+        if(applyTransform && this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            for(usize ci = 0u; ci < 4u; ++ci)
+                centers[ci] = ApplyPaintTransform(xf, centers[ci]);
+            Array<f32, 4u> uSignX(-1.0f, 0.0f, 1.0f, 0.0f);
+            Array<f32, 4u> uSignY(0.0f, -1.0f, 0.0f, 1.0f);
+            Array<f32, 4u> vSignX(0.0f, 1.0f, 0.0f, -1.0f);
+            Array<f32, 4u> vSignY(-1.0f, 0.0f, 1.0f, 0.0f);
+            const b8 checkInterior = r * ds * scale <= 1.1e-3f;
+            for(usize ci = 0u; ci < 4u; ++ci){
+                in Point cen = centers[ci];
+                const f32 ux = xf.m00 * uSignX[ci] + xf.m01 * uSignY[ci];
+                const f32 uy = xf.m10 * uSignX[ci] + xf.m11 * uSignY[ci];
+                const f32 vx = xf.m00 * vSignX[ci] + xf.m01 * vSignY[ci];
+                const f32 vy = xf.m10 * vSignX[ci] + xf.m11 * vSignY[ci];
+                for(usize si = 0u; si <= segPerCorner; ++si){
+                    const f32 ac = arcCos[si];
+                    const f32 as = arcSin[si];
+                    const Point pt(cen.x + ux * ac + vx * as, cen.y + uy * ac + vy * as);
+                    if(si == 0u || checkInterior)
+                        this.pushScratchUniquePoint(pt);
+                    else
+                        this.m_polyScratch.push_back(pt);
+                }
             }
         }
+        else{
+            const b8 checkInterior = r * ds <= 1.1e-3f;
+            for(usize ci = 0u; ci < 4u; ++ci){
+                in Point cen = centers[ci];
+                for(usize si = 0u; si <= segPerCorner; ++si){
+                    const f32 ac = arcCos[si];
+                    const f32 as = arcSin[si];
+                    f32 ox = 0.0f;
+                    f32 oy = 0.0f;
+                    if(ci == 0u){
+                        ox = -ac;
+                        oy = -as;
+                    }
+                    else if(ci == 1u){
+                        ox = as;
+                        oy = -ac;
+                    }
+                    else if(ci == 2u){
+                        ox = ac;
+                        oy = as;
+                    }
+                    else{
+                        ox = -as;
+                        oy = ac;
+                    }
+                    const Point pt(cen.x + ox, cen.y + oy);
+                    if(si == 0u || checkInterior)
+                        this.pushScratchUniquePoint(pt);
+                    else
+                        this.m_polyScratch.push_back(pt);
+                }
+            }
+        }
+
         if(this.m_polyScratch.size() >= 2u){
             in Point firstPt = this.m_polyScratch[0u];
             in Point lastPt = this.m_polyScratch[this.m_polyScratch.size() - 1u];
@@ -608,7 +671,7 @@ class PaintBuilder : NoCopy{
         }
         return this.m_polyScratch.size() >= 3u;
     }
-    private b8 buildEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY){
+    private b8 buildEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY, in b8 applyTransform){
         if(!IsFinite(VectorSingle(center.x, center.y, radiusX, radiusY)) || !(radiusX > 0.0f) || !(radiusY > 0.0f))
             return false;
         const f32 maxR = UiSimdMax(radiusX, radiusY);
@@ -623,23 +686,33 @@ class PaintBuilder : NoCopy{
         this.m_polyScratch.reserve(segCount);
         f32 ux = 1.0f;
         f32 uy = 0.0f;
-        for(usize i = 0u; i < segCount; ++i){
-            this.m_polyScratch.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
-            const f32 nextUx = ux * dc - uy * ds;
-            const f32 nextUy = ux * ds + uy * dc;
-            ux = nextUx;
-            uy = nextUy;
+        if(applyTransform && this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const Point tc = ApplyPaintTransform(xf, center);
+            const Point basisU(xf.m00 * radiusX, xf.m10 * radiusX);
+            const Point basisV(xf.m01 * radiusY, xf.m11 * radiusY);
+            for(usize i = 0u; i < segCount; ++i){
+                this.m_polyScratch.push_back(Point(tc.x + basisU.x * ux + basisV.x * uy, tc.y + basisU.y * ux + basisV.y * uy));
+                const f32 nextUx = ux * dc - uy * ds;
+                const f32 nextUy = ux * ds + uy * dc;
+                ux = nextUx;
+                uy = nextUy;
+            }
+        }
+        else{
+            for(usize i = 0u; i < segCount; ++i){
+                this.m_polyScratch.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
+                const f32 nextUx = ux * dc - uy * ds;
+                const f32 nextUy = ux * ds + uy * dc;
+                ux = nextUx;
+                uy = nextUy;
+            }
         }
         return true;
     }
-    private void emitFilledScratchPolygon(in Color color){
+    private void emitFilledScratchPolygonDirect(in Color color){
         if(this.m_polyScratch.size() < 3u)
             return;
-        if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
-            for(usize i = 0u; i < this.m_polyScratch.size(); ++i)
-                this.m_polyScratch[i] = ApplyPaintTransform(xf, this.m_polyScratch[i]);
-        }
         EmitPaintFilledConvexPolygon(
             this.m_recording, this.m_clips.back(), Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()),
             color, this.activeAaWidth(), this.m_layer,
@@ -651,19 +724,19 @@ class PaintBuilder : NoCopy{
         assert(this.m_recording);
         if(!this.m_recording)
             return;
-        if(!this.buildRoundedRectPoints(rectangle, radius)){
+        if(!this.buildRoundedRectPoints(rectangle, radius, true)){
             if(rectangle.width > 0.0f && rectangle.height > 0.0f && IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
                 this.fillRect(rectangle, color);
             return;
         }
-        this.emitFilledScratchPolygon(color);
+        this.emitFilledScratchPolygonDirect(color);
     }
     [cpp_unwind]
     public void strokeRoundedRect(in Rect rectangle, in f32 radius, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording)
             return;
-        if(!this.buildRoundedRectPoints(rectangle, radius)){
+        if(!this.buildRoundedRectPoints(rectangle, radius, false)){
             this.strokeRect(rectangle, style, color);
             return;
         }
@@ -680,14 +753,14 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public void fillEllipse(in Point center, in f32 radiusX, in f32 radiusY, in Color color){
         assert(this.m_recording);
-        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, true))
             return;
-        this.emitFilledScratchPolygon(color);
+        this.emitFilledScratchPolygonDirect(color);
     }
     [cpp_unwind]
     public void strokeEllipse(in Point center, in f32 radiusX, in f32 radiusY, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
-        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, false))
             return;
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
     }
@@ -705,17 +778,14 @@ class PaintBuilder : NoCopy{
         const usize segCount = cast<usize>(UiSimdClamp(absSweep * radius * this.currentTransformScale() / 3.0f, 4.0f, 64.0f));
         const f32 stepAngle = sweep / cast<f32>(segCount);
 
-        VectorSingle sStartVec(0.0f);
-        VectorSingle cStartVec(0.0f);
-        VectorSinCos(sStartVec, cStartVec, VectorSingle(startAngleRadians));
-        VectorSingle sStepVec(0.0f);
-        VectorSingle cStepVec(0.0f);
-        VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+        VectorSingle sVec(0.0f);
+        VectorSingle cVec(0.0f);
+        VectorSinCos(sVec, cVec, VectorSingle(startAngleRadians, stepAngle, 0.0f, 0.0f));
 
-        const f32 ds = sStepVec.x;
-        const f32 dc = cStepVec.x;
-        f32 ux = cStartVec.x;
-        f32 uy = sStartVec.x;
+        f32 ux = cVec.x;
+        f32 uy = sVec.x;
+        const f32 ds = sVec.y;
+        const f32 dc = cVec.y;
         this.m_polyScratch.clear();
         usize emitCount = segCount + 1u;
         if(closed)
@@ -762,19 +832,44 @@ class PaintBuilder : NoCopy{
         const f32 devY = p1.y - 0.5f * (p0.y + p2.y);
         const f32 chordX = p2.x - p0.x;
         const f32 chordY = p2.y - p0.y;
-        const f32 dev = Sqrt(VectorSingle(devX * devX + devY * devY)).x;
-        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
-        const usize steps = cast<usize>(UiSimdClamp((dev * 2.0f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 32.0f));
+        const VectorSingle lens = Sqrt(VectorSingle(devX * devX + devY * devY, chordX * chordX + chordY * chordY, 0.0f, 0.0f));
+        const usize steps = cast<usize>(UiSimdClamp((lens.x * 2.0f + lens.y * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 32.0f));
         this.m_polyScratch.clear();
         this.m_polyScratch.reserve(steps + 1u);
         const f32 invSteps = 1.0f / cast<f32>(steps);
-        for(usize i = 0u; i <= steps; ++i){
+        const VectorSingle invStepsVec(invSteps);
+        const VectorSingle oneVec(1.0f);
+        const VectorSingle twoVec(2.0f);
+        const VectorSingle p0x(p0.x);
+        const VectorSingle p0y(p0.y);
+        const VectorSingle p1x(p1.x);
+        const VectorSingle p1y(p1.y);
+        const VectorSingle p2x(p2.x);
+        const VectorSingle p2y(p2.y);
+        usize i = 0u;
+        while(i + 4u <= steps + 1u){
+            const f32 f0 = cast<f32>(i);
+            const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+            const VectorSingle uVec = oneVec - tVec;
+            const VectorSingle w0 = uVec * uVec;
+            const VectorSingle w1 = twoVec * uVec * tVec;
+            const VectorSingle w2 = tVec * tVec;
+            const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x;
+            const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y;
+            this.m_polyScratch.push_back(Point(rx.x, ry.x));
+            this.m_polyScratch.push_back(Point(rx.y, ry.y));
+            this.m_polyScratch.push_back(Point(rx.z, ry.z));
+            this.m_polyScratch.push_back(Point(rx.w, ry.w));
+            i += 4u;
+        }
+        while(i <= steps){
             const f32 t = cast<f32>(i) * invSteps;
             const f32 u = 1.0f - t;
             const f32 w0 = u * u;
             const f32 w1 = 2.0f * u * t;
             const f32 w2 = t * t;
             this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y));
+            ++i;
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
@@ -787,15 +882,45 @@ class PaintBuilder : NoCopy{
         const f32 d1y = p1.y - (p0.y + (p3.y - p0.y) * (1.0f / 3.0f));
         const f32 d2x = p2.x - (p0.x + (p3.x - p0.x) * (2.0f / 3.0f));
         const f32 d2y = p2.y - (p0.y + (p3.y - p0.y) * (2.0f / 3.0f));
-        const f32 dev = Sqrt(VectorSingle(d1x * d1x + d1y * d1y)).x + Sqrt(VectorSingle(d2x * d2x + d2y * d2y)).x;
         const f32 chordX = p3.x - p0.x;
         const f32 chordY = p3.y - p0.y;
-        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
-        const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 48.0f));
+        const VectorSingle lens = Sqrt(VectorSingle(d1x * d1x + d1y * d1y, d2x * d2x + d2y * d2y, chordX * chordX + chordY * chordY, 0.0f));
+        const f32 dev = lens.x + lens.y;
+        const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + lens.z * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 48.0f));
         this.m_polyScratch.clear();
         this.m_polyScratch.reserve(steps + 1u);
         const f32 invSteps = 1.0f / cast<f32>(steps);
-        for(usize i = 0u; i <= steps; ++i){
+        const VectorSingle invStepsVec(invSteps);
+        const VectorSingle oneVec(1.0f);
+        const VectorSingle threeVec(3.0f);
+        const VectorSingle p0x(p0.x);
+        const VectorSingle p0y(p0.y);
+        const VectorSingle p1x(p1.x);
+        const VectorSingle p1y(p1.y);
+        const VectorSingle p2x(p2.x);
+        const VectorSingle p2y(p2.y);
+        const VectorSingle p3x(p3.x);
+        const VectorSingle p3y(p3.y);
+        usize i = 0u;
+        while(i + 4u <= steps + 1u){
+            const f32 f0 = cast<f32>(i);
+            const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+            const VectorSingle uVec = oneVec - tVec;
+            const VectorSingle uu = uVec * uVec;
+            const VectorSingle tt = tVec * tVec;
+            const VectorSingle w0 = uu * uVec;
+            const VectorSingle w1 = threeVec * uu * tVec;
+            const VectorSingle w2 = threeVec * uVec * tt;
+            const VectorSingle w3 = tt * tVec;
+            const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x + w3 * p3x;
+            const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y + w3 * p3y;
+            this.m_polyScratch.push_back(Point(rx.x, ry.x));
+            this.m_polyScratch.push_back(Point(rx.y, ry.y));
+            this.m_polyScratch.push_back(Point(rx.z, ry.z));
+            this.m_polyScratch.push_back(Point(rx.w, ry.w));
+            i += 4u;
+        }
+        while(i <= steps){
             const f32 t = cast<f32>(i) * invSteps;
             const f32 u = 1.0f - t;
             const f32 uu = u * u;
@@ -805,6 +930,7 @@ class PaintBuilder : NoCopy{
             const f32 w2 = 3.0f * u * tt;
             const f32 w3 = tt * t;
             this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y));
+            ++i;
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
@@ -1140,14 +1266,14 @@ b8 EmitPaintResolvedGlyphBatchCore(
         && glyphs.size() <= (cast<usize>(u32.max) - vertices.size()) / cast<usize>(s_PaintQuadVertexCount)
         && glyphs.size() <= (cast<usize>(u32.max) - indices.size()) / cast<usize>(s_PaintQuadIndexCount)
     ){
-        vertices.reserve(vertices.size() + glyphs.size() * cast<usize>(s_PaintQuadVertexCount));
-        indices.reserve(indices.size() + glyphs.size() * cast<usize>(s_PaintQuadIndexCount));
+        ReservePaintVectorGeometric(vertices.size() + glyphs.size() * cast<usize>(s_PaintQuadVertexCount), vertices);
+        ReservePaintVectorGeometric(indices.size() + glyphs.size() * cast<usize>(s_PaintQuadIndexCount), indices);
     }
-    Color premultiplied = tint;
-    if(tint.a != 1.0f){
-        const VectorSingle premul = VectorSingle(tint.r, tint.g, tint.b, 1.0f) * VectorSingle(tint.a);
-        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
-    }
+    const Color premultiplied = PremultiplyPaintColor(tint);
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    u32 lastValidatedSdfPage = u32.max;
+    u32 lastSdfChannelCount = 0u;
     b8 hasMergedRun = false;
     usize mergedCommandIndex = 0u;
     PaintMaterial mergedMaterial = PaintMaterial::Solid;
@@ -1164,8 +1290,14 @@ b8 EmitPaintResolvedGlyphBatchCore(
         if(glyph.isSdf){
             if(cast<usize>(glyph.pageIndex) >= sdfPages.size())
                 return false;
-            in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
-            if(!page.valid() || !IsValidPaintSdfGlyphRequest(glyph.channel, page.deref().binding().channelCount, glyph.uv))
+            if(glyph.pageIndex != lastValidatedSdfPage){
+                in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
+                if(!page.valid())
+                    return false;
+                lastValidatedSdfPage = glyph.pageIndex;
+                lastSdfChannelCount = page.deref().binding().channelCount;
+            }
+            if(!IsValidPaintSdfGlyphRequest(glyph.channel, lastSdfChannelCount, glyph.uv))
                 return false;
             material = PaintMaterial::SdfGlyph;
             glyphPageIndex = u32.max;
@@ -1227,8 +1359,6 @@ b8 EmitPaintResolvedGlyphBatchCore(
             const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
             if(!IsFinite(rectEnd.xy))
                 continue;
-            const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
-            const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
             const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
             const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
             const VectorSingle visSize = clippedEnd - clippedOrigin;
@@ -1238,11 +1368,8 @@ b8 EmitPaintResolvedGlyphBatchCore(
             const f32 visH = visSize.y;
             if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy))
                 continue;
-            const VectorSingle visEnd = clippedOrigin + visSize;
-            const f32 visEndX = visEnd.x;
-            const f32 visEndY = visEnd.y;
-            if(!IsFinite(visEnd.xy))
-                continue;
+            const f32 visEndX = clippedEnd.x;
+            const f32 visEndY = clippedEnd.y;
             if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
                 assert(false);
                 continue;
@@ -1251,7 +1378,7 @@ b8 EmitPaintResolvedGlyphBatchCore(
             f32 top = 0.0f;
             f32 right = 0.0f;
             f32 bottom = 0.0f;
-            if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectEnd.x && visEndY == rectEnd.y){
+            if(x0 == rectangle.x && y0 == rectangle.y && visEndX == rectEnd.x && visEndY == rectEnd.y){
                 left = uv.x;
                 top = uv.y;
                 right = uv.x + uv.width;

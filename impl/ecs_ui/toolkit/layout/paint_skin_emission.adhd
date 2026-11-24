@@ -107,9 +107,7 @@ void EmitPaintNineSliceCore(
     v[2u] = vNormVec.z;
     v[3u] = vNormVec.w;
 
-    Color premultiplied = tint;
-    if(tint.a != 1.0f)
-        premultiplied = Color(tint.r * tint.a, tint.g * tint.a, tint.b * tint.a, tint.a);
+    const Color premultiplied = PremultiplyPaintColor(tint);
 
     if(!hasTransform || axisAlignedPositive){
         if(hasTransform){
@@ -228,8 +226,8 @@ void EmitPaintNineSliceCore(
             assert(false);
             return;
         }
-        vertices.reserve(vertices.size() + addedVertices);
-        indices.reserve(indices.size() + addedIndices);
+        ReservePaintVectorGeometric(vertices.size() + addedVertices, vertices);
+        ReservePaintVectorGeometric(indices.size() + addedIndices, indices);
         const u32 firstIndex = cast<u32>(indices.size());
         for(u32 ri = 0u; ri < activeRowCount; ++ri){
             const usize rowIdx = cast<usize>(ri);
@@ -337,8 +335,8 @@ void EmitPaintNineSliceCore(
         assert(false);
         return;
     }
-    vertices.reserve(vertices.size() + addedVertices);
-    indices.reserve(indices.size() + addedIndices);
+    ReservePaintVectorGeometric(vertices.size() + addedVertices, vertices);
+    ReservePaintVectorGeometric(indices.size() + addedIndices, indices);
     const u32 firstIndex = cast<u32>(indices.size());
     for(usize qi = 0u; qi < emitCount; ++qi){
         const usize r = emitRows[qi];

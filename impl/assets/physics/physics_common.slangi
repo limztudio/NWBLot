@@ -109,7 +109,6 @@ struct NwbPhysicsGpuIslandSlice{
 struct NwbPhysicsGpuLbvhNode{
     float4 minLeft;
     float4 maxRight;
-    uint4 parentMeta;
 };
 
 struct NwbPhysicsGpuSpatialQuery{

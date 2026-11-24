@@ -59,6 +59,9 @@ extern const u32 s_GpuBroadphaseModeFinalizeIndirect;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_LARGE_PAIRS")]
 extern const u32 s_GpuBroadphaseModeGridEmitLargePairs;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_LARGE_INDIRECT")]
+extern const u32 s_GpuBroadphaseModeFinalizeLargeIndirect;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_CONTACTS")]
 extern const u32 s_GpuNarrowphaseModeContacts;
 
@@ -295,9 +298,6 @@ extern const u32 s_GpuContactAuxStrideFloat4;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON")]
 extern const u32 s_GpuLbvhModeComputeMorton;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_SORT")]
-extern const u32 s_GpuLbvhModeBitonicSort;
-
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BUILD_TREE")]
 extern const u32 s_GpuLbvhModeBuildTree;
 
@@ -310,11 +310,20 @@ extern const u32 s_GpuLbvhModeQueryPairs;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_SORT_LOCAL")]
 extern const u32 s_GpuLbvhModeBitonicSortLocal;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_MERGE_LOCAL")]
-extern const u32 s_GpuLbvhModeBitonicMergeLocal;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_RADIX_HISTOGRAM")]
+extern const u32 s_GpuLbvhModeRadixHistogram;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_RADIX_SCAN")]
+extern const u32 s_GpuLbvhModeRadixScan;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_RADIX_SCATTER")]
+extern const u32 s_GpuLbvhModeRadixScatter;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE")]
 extern const u32 s_GpuLbvhLocalSortSize;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE")]
+extern const u32 s_GpuLbvhRadixBlockSize;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_LBVH_NODE_BYTES")]
 extern const u32 s_GpuLbvhNodeBytes;
@@ -532,7 +541,6 @@ class GpuPhysicsJointConstraint{
 class GpuPhysicsLbvhNode{
     public f32x4 minLeft(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 maxRight(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32x4 parentMeta(s_GpuInvalidIndex, 0u, 0u, 0u);
 }
 
 [layout(16)]
@@ -645,7 +653,6 @@ static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts0) == 32u, "Isl
 static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts1) == 48u, "IslandSlice.contactColorCounts1 offset mismatch");
 static_assert(offset_of<GpuPhysicsLbvhNode>(minLeft) == 0u, "LbvhNode.minLeft offset mismatch");
 static_assert(offset_of<GpuPhysicsLbvhNode>(maxRight) == 16u, "LbvhNode.maxRight offset mismatch");
-static_assert(offset_of<GpuPhysicsLbvhNode>(parentMeta) == 32u, "LbvhNode.parentMeta offset mismatch");
 static_assert(offset_of<GpuPhysicsSpatialQuery>(originMin) == 0u, "SpatialQuery.originMin offset mismatch");
 static_assert(offset_of<GpuPhysicsSpatialQuery>(dirMax) == 16u, "SpatialQuery.dirMax offset mismatch");
 static_assert(offset_of<GpuPhysicsSpatialQuery>(params) == 32u, "SpatialQuery.params offset mismatch");

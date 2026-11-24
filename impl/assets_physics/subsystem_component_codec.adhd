@@ -781,7 +781,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         return v;
     }
 
-    public b8 validRagdollData(in RagdollComponent r)const{
+    public b8 validRagdollDataWithMaterials(in RagdollComponent r, in b8 validateMaterials)const{
         if(!IsFinite(VectorSingle(r.driveStrengthMultiplier)) || r.driveStrengthMultiplier < 0.0f)
             return false;
         if(r.bones.size() > cast<usize>(u32.max)
@@ -813,7 +813,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 || !IsFinite(VectorSingle(b.shapeDef.localTransform.rotation))
                 || LengthSq(VectorSingle(b.shapeDef.localTransform.rotation)) <= s_NormalizeEpsilonSq)
                 return false;
-            if(!IsFinite(VectorSingle(b.shapeDef.density)) || b.shapeDef.density < 0.0f || !assetCodec.validSurfaceMaterial(b.shapeDef.material))
+            if(!IsFinite(VectorSingle(b.shapeDef.density)) || b.shapeDef.density < 0.0f || (validateMaterials && !assetCodec.validSurfaceMaterial(b.shapeDef.material)))
                 return false;
             if(!IsValidPositionVec3(VectorSingle(b.jointAnchorWorld))
                 || !IsFinite(VectorSingle(b.jointAxisWorld))
@@ -843,6 +843,10 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return false;
         }
         return true;
+    }
+
+    public b8 validRagdollData(in RagdollComponent r)const{
+        return this.validRagdollDataWithMaterials(r, true);
     }
 
     public b8 validateRagdoll(in RagdollComponent r, in Name virtualPath)const{
@@ -1115,7 +1119,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         r.dirty = true;
         r.initialized = false;
-        if(!this.validRagdollData(r)){
+        if(!this.validRagdollDataWithMaterials(r, false)){
             error("RagdollComponentAsset::loadComponentPayload failed: invalid ragdoll fields");
             return MakeUnexpected(Failure());
         }
@@ -1827,8 +1831,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!ReadBinaryVectorPayload(payload, hdr.triCount, cursor, s.surfaceTriangles).has_value())
             return MakeUnexpected(Failure());
         s.attachments.resize(hdr.attachCount);
-        sb.attachmentBodyEntityNames.resize(hdr.attachCount, s_NameNone);
-        b8 hasAnyAttachBodyName = false;
+        sb.attachmentBodyEntityNames.clear();
         for(u32 ai = 0u; ai < hdr.attachCount; ++ai){
             const Expected<SoftBodyAttachmentBinary> abRes = ReadPOD<SoftBodyAttachmentBinary>(payload, cursor);
             if(!abRes.has_value() || abRes.value().reserved0 != 0u)
@@ -1838,12 +1841,11 @@ class SubsystemPhysicsComponentBinaryCodec{
             a.localAnchor = abRes.value().localAnchor;
             a.compliance = abRes.value().compliance;
             if(abRes.value().bodyEntityNameHash != s_NameNone.hash()){
+                if(sb.attachmentBodyEntityNames.empty())
+                    sb.attachmentBodyEntityNames.resize(hdr.attachCount, s_NameNone);
                 sb.attachmentBodyEntityNames[ai] = Name(abRes.value().bodyEntityNameHash);
-                hasAnyAttachBodyName = true;
             }
         }
-        if(!hasAnyAttachBodyName)
-            sb.attachmentBodyEntityNames.clear();
         s.backstopConstraints.resize(hdr.backstopCount);
         for(u32 bsi = 0u; bsi < hdr.backstopCount; ++bsi){
             const Expected<SoftBodyBackstopBinary> bsRes = ReadPOD<SoftBodyBackstopBinary>(payload, cursor);

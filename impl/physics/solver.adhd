@@ -593,7 +593,7 @@ void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
                 if(isBullet)
                     maxDist = s_MaxBulletSweepDistance;
                 if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
-                    disp = disp * (maxDist / SqrtFast(dispLenSq));
+                    disp = disp * (maxDist * Rsqrt(VectorSingle(dispLenSq)).x);
                 enlarge = true;
             }
         }
@@ -662,7 +662,7 @@ void EnlargeFastAndBulletBroadphaseBoundsWithScheduler(mut PhysicsWorld world, i
                         if(isBullet)
                             maxDist = s_MaxBulletSweepDistance;
                         if(dispLenSq > maxDist * maxDist && dispLenSq > s_NormalizeEpsilonSq)
-                            disp = disp * (maxDist / SqrtFast(dispLenSq));
+                            disp = disp * (maxDist * Rsqrt(VectorSingle(dispLenSq)).x);
                         enlarge = true;
                     }
                 }
@@ -1222,6 +1222,28 @@ b8 SweepHeightfieldNonConvexPair(
 
     VectorSingle qMin(s_MaxF32);
     VectorSingle qMax(-s_MaxF32);
+    const f32 angHf = ComputeSweepAngularAngle(VectorSingle(hfSweep.q0), VectorSingle(hfSweep.q1));
+    const f32 angOther = ComputeSweepAngularAngle(VectorSingle(otherSweep.q0), VectorSingle(otherSweep.q1));
+    f32 otherSweepRad = 0.0f;
+    if(otherType == ShapeType::Mesh){
+        const VectorSingle lcOther = VectorSingle(otherSweep.localCenter);
+        const VectorSingle meshExt = Max(
+            Abs(VectorSingle(otherLocalBox.lowerBound) - lcOther),
+            Abs(VectorSingle(otherLocalBox.upperBound) - lcOther)
+        );
+        otherSweepRad = Vector3Length(meshExt).x;
+    }
+    else{
+        otherSweepRad = Vector3Length((VectorSingle(otherLocalBox.upperBound) - VectorSingle(otherLocalBox.lowerBound)) * 0.5f).x;
+    }
+
+    Array<f32x4, 3u> sampleRelToiPos;
+    Array<f32x4, 3u> sampleRelToiRot;
+    VectorSingle posOtStart(0.0f);
+    VectorSingle rotOtStart(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle relStartToiPos(0.0f);
+    VectorSingle relStartToiRot(0.0f, 0.0f, 0.0f, 1.0f);
+
     for(usize si = 0u; si < 3u; ++si){
         const f32 sampleT = 0.5f * cast<f32>(si) * maxFrac;
         VectorSingle posHf(0.0f);
@@ -1238,6 +1260,18 @@ b8 SweepHeightfieldNonConvexPair(
         TransformLocalAabbValuesToWorld(VectorSingle(otherLocalBox.lowerBound), VectorSingle(otherLocalBox.upperBound), hf.thickness + otherRad + s_SpeculativeDistance, relP, relR, bMin, bMax);
         qMin = Min(qMin, bMin);
         qMax = Max(qMax, bMax);
+
+        VectorSingle relToiP(0.0f);
+        VectorSingle relToiR(0.0f, 0.0f, 0.0f, 1.0f);
+        RelativeTransformValues(posOt, rotOt, posHf, rotHf, relToiP, relToiR);
+        sampleRelToiPos[si] = f32x4(relToiP, 0.0f);
+        sampleRelToiRot[si] = f32x4(relToiR);
+        if(si == 0u){
+            posOtStart = posOt;
+            rotOtStart = rotOt;
+            relStartToiPos = relToiP;
+            relStartToiRot = relToiR;
+        }
     }
 
     const Aabb3D queryBox(qMin, qMax);
@@ -1260,8 +1294,12 @@ b8 SweepHeightfieldNonConvexPair(
             VectorSingle v11(0.0f);
             if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
                 continue;
-            const f32 cellLoY = SimdMin(SimdMin(v00.y, v10.y), SimdMin(v01.y, v11.y)) - hf.thickness;
-            const f32 cellHiY = SimdMax(SimdMax(v00.y, v10.y), SimdMax(v01.y, v11.y)) + hf.thickness;
+            const VectorSingle hCol0(v00.y, v01.y, 0.0f, 0.0f);
+            const VectorSingle hCol1(v10.y, v11.y, 0.0f, 0.0f);
+            const VectorSingle hPairMin = Min(hCol0, hCol1);
+            const VectorSingle hPairMax = Max(hCol0, hCol1);
+            const f32 cellLoY = SimdMin(hPairMin.x, hPairMin.y) - hf.thickness;
+            const f32 cellHiY = SimdMax(hPairMax.x, hPairMax.y) + hf.thickness;
             if(cellHiY < qMin.y || cellLoY > qMax.y)
                 continue;
             const u32 cellIdx = cz * (hf.cols - 1u) + cx;
@@ -1285,13 +1323,38 @@ b8 SweepHeightfieldNonConvexPair(
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
                 TimeOfImpactOutput toi;
                 if(otherType == ShapeType::Mesh){
-                    if(forSensor)
-                        toi = ComputeSensorMeshTimeOfImpactViews(triView, hfSweep, meshShapes[otherGeom], otherSweep, curBest);
-                    else
-                        toi = ComputeMeshTimeOfImpactViews(triView, hfSweep, meshShapes[otherGeom], otherSweep, curBest);
+                    toi = ComputeMeshTimeOfImpactViewsPrecomputed(
+                        triView,
+                        hfSweep,
+                        meshShapes[otherGeom],
+                        otherSweep,
+                        curBest,
+                        forSensor,
+                        angHf,
+                        angOther,
+                        otherSweepRad,
+                        sampleRelToiPos,
+                        sampleRelToiRot,
+                        posOtStart,
+                        rotOtStart,
+                        relStartToiPos,
+                        relStartToiRot
+                    );
                 }
                 else{
-                    toi = ComputeHeightfieldTimeOfImpactViewsInternal(triView, hfSweep, heightfieldShapes[otherGeom], otherSweep, curBest, forSensor);
+                    toi = ComputeHeightfieldTimeOfImpactViewsPrecomputed(
+                        triView,
+                        hfSweep,
+                        heightfieldShapes[otherGeom],
+                        otherSweep,
+                        curBest,
+                        forSensor,
+                        angHf,
+                        angOther,
+                        otherSweepRad,
+                        sampleRelToiPos,
+                        sampleRelToiRot
+                    );
                 }
                 if(toi.hit() && !toi.initialOverlap() && toi.fraction() < curBest){
                     curBest = toi.fraction();
@@ -1344,7 +1407,7 @@ Manifold SweepContactPairAfterMiss(
     VectorSingle sweptDispA = dispA;
     VectorSingle sweptDispB = dispB;
     if(relDispLenSq > maxSweepDist * maxSweepDist){
-        const f32 sweepScale = maxSweepDist / SqrtFast(relDispLenSq);
+        const f32 sweepScale = maxSweepDist * Rsqrt(VectorSingle(relDispLenSq)).x;
         sweptDispA = dispA * sweepScale;
         sweptDispB = dispB * sweepScale;
     }
@@ -2364,8 +2427,11 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                                     aabbOverlap = AabbOverlapsValues(VectorSingle(fatA.lowerBound), VectorSingle(fatA.upperBound), VectorSingle(fatB.lowerBound), VectorSingle(fatB.upperBound));
                                 }
                                 if(aabbOverlap){
-                                    const u8 txFlags = CollideSingleContactNoPreSolveTx(contactsMut[ci], sA, sB, bA, bB, worldRef, gravity, dt, enableContinuous, enableWarmStarting);
+                                    mut Contact cMut = contactsMut[ci];
+                                    const u8 txFlags = CollideSingleContactNoPreSolveTx(cMut, sA, sB, bA, bB, worldRef, gravity, dt, enableContinuous, enableWarmStarting);
                                     status = cast<u8>(16u | txFlags);
+                                    if((cMut.flags & cast<u32>(ContactFlags::Sensor)) == 0u && cMut.manifold.pointCount() > 0u && (cMut.islandId == s_NullIndex || cMut.colorIndex == s_NullIndex))
+                                        status |= 64u;
                                 }
                             }
                         }
@@ -2382,8 +2448,12 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                 const u8 status = collectFlags[ci];
                 if((status & 32u) != 0u)
                     pruneContactIds.push_back(cast<u32>(ci));
-                else if((status & 7u) != 0u)
-                    txContactIds.push_back(cast<u32>(ci));
+                else{
+                    if((status & 7u) != 0u)
+                        txContactIds.push_back(cast<u32>(ci));
+                    if((status & 64u) != 0u)
+                        activeContactIds.push_back(cast<u32>(ci));
+                }
             }
             for(usize i = 0u; i < pruneContactIds.size(); ++i)
                 world.destroyContactInternal(pruneContactIds[i]);
@@ -2393,10 +2463,8 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                 ProcessSingleContactTransition(world, anyBodyWoke, cId, collectFlags[cId] & 7u);
             }
             if(anyBodyWoke){
-                for(usize ci = 0u; ci < contactCount; ++ci){
-                    if((collectFlags[ci] & 16u) != 0u)
-                        RelinkAwokenActiveContact(world, cast<u32>(ci));
-                }
+                for(usize ai = 0u; ai < activeContactIds.size(); ++ai)
+                    RelinkAwokenActiveContact(world, activeContactIds[ai]);
             }
             return;
         }
@@ -2435,6 +2503,8 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                             if(aabbOverlap){
                                 const u8 txFlags = CollideSingleContactNoPreSolveTx(cRef, sA, sB, bA, bB, world, gravity, dt, enableContinuous, enableWarmStarting);
                                 status = cast<u8>(16u | txFlags);
+                                if((cRef.flags & cast<u32>(ContactFlags::Sensor)) == 0u && cRef.manifold.pointCount() > 0u && (cRef.islandId == s_NullIndex || cRef.colorIndex == s_NullIndex))
+                                    status |= 64u;
                             }
                         }
                     }
@@ -2443,8 +2513,12 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             collectFlags[ci] = status;
             if((status & 32u) != 0u)
                 pruneContactIds.push_back(cast<u32>(ci));
-            else if((status & 7u) != 0u)
-                txContactIds.push_back(cast<u32>(ci));
+            else{
+                if((status & 7u) != 0u)
+                    txContactIds.push_back(cast<u32>(ci));
+                if((status & 64u) != 0u)
+                    activeContactIds.push_back(cast<u32>(ci));
+            }
         }
         for(usize i = 0u; i < pruneContactIds.size(); ++i)
             world.destroyContactInternal(pruneContactIds[i]);
@@ -2454,10 +2528,8 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             ProcessSingleContactTransition(world, anyBodyWoke, cId, collectFlags[cId] & 7u);
         }
         if(anyBodyWoke){
-            for(usize ci = 0u; ci < contactCount; ++ci){
-                if((collectFlags[ci] & 16u) != 0u)
-                    RelinkAwokenActiveContact(world, cast<u32>(ci));
-            }
+            for(usize ai = 0u; ai < activeContactIds.size(); ++ai)
+                RelinkAwokenActiveContact(world, activeContactIds[ai]);
         }
         return;
     }
@@ -2818,7 +2890,7 @@ void IntegrateBodyVelocitiesRange(
     u32 outFlags = stateFlags;
     const f32 speedSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
     if(speedSq > maxLinearVelocity * maxLinearVelocity && speedSq > s_NormalizeEpsilonSq){
-        v = v * (maxLinearVelocity / SqrtFast(speedSq));
+        v = v * (maxLinearVelocity * Rsqrt(VectorSingle(speedSq)).x);
         outFlags |= cast<u32>(BodyFlags::IsSpeedCapped);
     }
 
@@ -2844,7 +2916,7 @@ void IntegrateBodyStatePosition(in BodySim sim, in f32 h, in f32 defaultMaxAngSp
         if(maxAngSpeed > 0.0f){
             const f32 wLenSq = Vector3LengthSq(VectorSingle(w, 0.0f)).x;
             if(wLenSq > maxAngSpeed * maxAngSpeed && wLenSq > s_NormalizeEpsilonSq)
-                w = w * (maxAngSpeed / SqrtFast(wLenSq));
+                w = w * (maxAngSpeed * Rsqrt(VectorSingle(wLenSq)).x);
         }
     }
     state.setDeltaPosition(state.deltaPosition() + v * h);
@@ -2937,7 +3009,9 @@ void IntegrateFreeBodySubSteps(
     const f32 angDampScale = 1.0f / (1.0f + h * angDamp);
     const VectorSingle torque = sim.torque();
     const b8 hasTorque = torque.x != 0.0f || torque.y != 0.0f || torque.z != 0.0f;
-    const VectorSingle torqueImp = Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), torque) * h;
+    VectorSingle torqueImp(0.0f);
+    if(hasTorque)
+        torqueImp = SymMat3MulVec(sim.invInertiaWorld, torque) * h;
     const b8 hasGyro = (outFlags & cast<u32>(BodyFlags::EnableGyroscopicTorque)) != 0u;
     const b8 hasLinLocks = (outFlags & 0x07u) != 0u;
     const b8 hasAngLocks = (outFlags & 0x38u) != 0u;
@@ -2970,7 +3044,7 @@ void IntegrateFreeBodySubSteps(
                 w = ApplyAngularLocks(w, outFlags);
             const f32 speedSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
             if(speedSq > maxLinVelSq && speedSq > s_NormalizeEpsilonSq){
-                v = v * (maxLinearVelocity / SqrtFast(speedSq));
+                v = v * (maxLinearVelocity * Rsqrt(VectorSingle(speedSq)).x);
                 outFlags |= speedCapBit;
             }
         }
@@ -2985,7 +3059,7 @@ void IntegrateFreeBodySubSteps(
         if(maxAngSpeed > 0.0f){
             const f32 wLenSq = Vector3LengthSq(VectorSingle(wPos, 0.0f)).x;
             if(wLenSq > maxAngSpeedSq && wLenSq > s_NormalizeEpsilonSq)
-                wPos = wPos * (maxAngSpeed / SqrtFast(wLenSq));
+                wPos = wPos * (maxAngSpeed * Rsqrt(VectorSingle(wLenSq)).x);
         }
         deltaP = deltaP + v * h;
         deltaQ = IntegrateDeltaQuaternion(deltaQ, wPos, h);
@@ -3001,7 +3075,10 @@ void IntegrateFreeBodySubSteps(
     sim.rotation0 = sim.transform.rotation;
 
     const VectorSingle newCenter = prevCenter + deltaP;
-    const VectorSingle newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, VectorSingle(sim.transform.rotation)));
+    VectorSingle newRot = VectorSingle(sim.transform.rotation);
+    const b8 hasRotChange = (deltaQ.x != 0.0f || deltaQ.y != 0.0f || deltaQ.z != 0.0f);
+    if(hasRotChange)
+        newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, newRot));
     VectorSingle newPos = newCenter;
     const VectorSingle localCenter = VectorSingle(sim.localCenterMinExtent, 0.0f);
     if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
@@ -3009,7 +3086,8 @@ void IntegrateFreeBodySubSteps(
 
     sim.centerInvMass = f32x4(newCenter, sim.centerInvMass.w);
     sim.transform = Transform3D(newPos, newRot);
-    sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(newRot, Matrix3FromSymMat3(sim.invInertiaLocal)));
+    if(hasRotChange)
+        sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(newRot, Matrix3FromSymMat3(sim.invInertiaLocal)));
     sim.forceLinearDamping = f32x4(0.0f, 0.0f, 0.0f, sim.forceLinearDamping.w);
     sim.torqueAngularDamping = f32x4(0.0f, 0.0f, 0.0f, sim.torqueAngularDamping.w);
 
@@ -3051,7 +3129,10 @@ void FinalizeAwakeBodyAt(mut PhysicsWorld world, in f32 dt, in usize idx){
     sim.rotation0 = sim.transform.rotation;
 
     const VectorSingle newCenter = prevCenter + deltaP;
-    const VectorSingle newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, VectorSingle(sim.transform.rotation)));
+    VectorSingle newRot = VectorSingle(sim.transform.rotation);
+    const b8 hasRotChange = (deltaQ.x != 0.0f || deltaQ.y != 0.0f || deltaQ.z != 0.0f);
+    if(hasRotChange)
+        newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, newRot));
     VectorSingle newPos = newCenter;
     const VectorSingle localCenter = VectorSingle(sim.localCenterMinExtent, 0.0f);
     if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
@@ -3059,7 +3140,8 @@ void FinalizeAwakeBodyAt(mut PhysicsWorld world, in f32 dt, in usize idx){
 
     sim.centerInvMass = f32x4(newCenter, sim.centerInvMass.w);
     sim.transform = Transform3D(newPos, newRot);
-    sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(newRot, Matrix3FromSymMat3(sim.invInertiaLocal)));
+    if(hasRotChange)
+        sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(newRot, Matrix3FromSymMat3(sim.invInertiaLocal)));
     sim.forceLinearDamping = f32x4(0.0f, 0.0f, 0.0f, sim.forceLinearDamping.w);
     sim.torqueAngularDamping = f32x4(0.0f, 0.0f, 0.0f, sim.torqueAngularDamping.w);
 
@@ -4628,7 +4710,7 @@ void ResolveSortedBulletToiResultsForStep(mut PhysicsWorld world, in Span<Bullet
                 if(maxAngSpeed > 0.0f){
                     const f32 wSq = Vector3LengthSq(VectorSingle(w, 0.0f)).x;
                     if(wSq > maxAngSpeed * maxAngSpeed && wSq > s_NormalizeEpsilonSq)
-                        w = w * (maxAngSpeed / SqrtFast(wSq));
+                        w = w * (maxAngSpeed * Rsqrt(VectorSingle(wSq)).x);
                 }
             }
             const VectorSingle nextC = hitC + v * remDt;

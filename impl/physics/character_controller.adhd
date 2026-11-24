@@ -178,12 +178,18 @@ class CharacterController{
         return MakeCapsuleProxy(cap);
     }
 
+    private ShapeProxyView makeCapsuleProxyView(in f32 extraRadius, mut Array<f32x3u, 2u> outPts)const{
+        outPts[0u] = f32x3u(0.0f, -this.def.halfHeight, 0.0f);
+        outPts[1u] = f32x3u(0.0f, this.def.halfHeight, 0.0f);
+        return MakeSpanProxyView(Span<f32x3u>(outPts), this.def.radius + SimdMax(0.0f, extraRadius));
+    }
+
     private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
-        this.syncCachedProxies();
-        const ShapeProxy proxy = this.makeCapsuleProxy(extraRadius);
+        Array<f32x3u, 2u> pts;
+        const ShapeProxyView view = this.makeCapsuleProxyView(extraRadius, pts);
         const Transform3D xf(testPos, VectorSingle(this.rotation));
         if(!world.m_customFilterCallback.has_value()){
-            world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
+            world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
             return;
         }
         in PhysicsWorld worldRef = world;
@@ -191,11 +197,12 @@ class CharacterController{
         const ShapeQueryFilterCallback cb = lambda[in worldRef, in igShapeId](in ShapeId sId) -> b8{
             return worldRef.passesCustomFilter(igShapeId, sId);
         };
-        world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, cb, this.m_scratchHits);
+        world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, cb, this.m_scratchHits);
     }
 
     private ShapeCastHit castCapsule(in PhysicsWorld world, in VectorSingle fromPos, in VectorSingle delta)const{
-        const ShapeProxy proxy = this.makeCapsuleProxy(0.0f);
+        Array<f32x3u, 2u> pts;
+        const ShapeProxyView view = this.makeCapsuleProxyView(0.0f, pts);
         ShapeCastInput input;
         input.originTransform = Transform3D(fromPos, VectorSingle(this.rotation));
         input.translation = f32x4(delta, 0.0f);
@@ -206,7 +213,7 @@ class CharacterController{
         input.hitSensors = this.def.hitSensors;
         input.hasRotation = false;
         input.useCustomFilter = true;
-        return world.shapeCastClosest(proxy, input);
+        return world.shapeCastClosestView(view, input);
     }
 
     private void recordContactTo(
@@ -576,8 +583,10 @@ class CharacterController{
         }
 
         this.gatherOverlapsAt(world, curPos, this.def.skinWidth);
+        f32 minWalkCos = this.m_minWalkableCos;
+        if(this.def.maxSlopeAngleRad != this.m_cachedSlopeAngleRad)
+            minWalkCos = Cos(Clamp(VectorSingle(this.def.maxSlopeAngleRad), VectorSingle(0.0f), VectorSingle(1.56f))).x;
         b8 foundAny = false;
-        b8 foundWalkable = false;
         f32 bestDot = -2.0f;
         VectorSingle bestN = up;
         VectorSingle bestPt = curPos;
@@ -593,10 +602,10 @@ class CharacterController{
                 bestPt = VectorSingle(this.m_scratchHits[i].pointB);
                 bestShape = this.m_scratchHits[i].shapeId;
                 bestTriIdx = this.m_scratchHits[i].triangleIndex;
-                foundWalkable = this.isWalkableNormal(n);
             }
         }
         if(foundAny){
+            const b8 foundWalkable = (bestDot >= minWalkCos - 1.0e-4f);
             this.groundNormal = f32x4(bestN, 0.0f);
             this.groundPoint = f32x4(bestPt, 0.0f);
             this.groundShapeId = bestShape;

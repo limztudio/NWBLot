@@ -213,7 +213,12 @@ void nwbPhysicsStoreBodyVelocity(const uint bodyStateSlot, const uint bodyIdx, c
         return;
     const float3 maskedV = nwbPhysicsApplyLinearLocks(v, flags);
     const float3 maskedW = nwbPhysicsApplyAngularLocks(w, flags);
+#ifdef NWB_PHYSICS_USE_LDS_BODY_STATES
     nwbPhysicsWriteBodyVelocityFields(bodyStateSlot, bodyIdx, maskedV, maskedW);
+#else
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].linearVelocityPad = float4(maskedV, asfloat(flags));
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].angularVelocityPad = float4(maskedW, 0.0f);
+#endif
 }
 
 void nwbPhysicsApplyGyroscopicStep(

@@ -92,16 +92,11 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 GroupMemoryBarrierWithGroupSync();
         }
 
-        [loop]
-        for(uint phase = 0u; phase < 2u; ++phase){
-            const uint passMode = (phase == 0u) ? NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS : NWB_PHYSICS_SOLVER_MODE_RELAX;
-            nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, passMode, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u, hasRolling);
-            if(phase == 0u){
-                if(tid < bodyCount)
-                    nwbPhysicsIntegrateIslandBodyPosition(bodySimSlot, bodyOffset + tid, tid, h, maxAngSpeed);
-                GroupMemoryBarrierWithGroupSync();
-            }
-        }
+        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u, hasRolling);
+        if(tid < bodyCount)
+            nwbPhysicsIntegrateIslandBodyPosition(bodySimSlot, bodyOffset + tid, tid, h, maxAngSpeed);
+        GroupMemoryBarrierWithGroupSync();
+        nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseColorCount, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_RELAX, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u, hasRolling);
     }
 
     if((islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_RESTITUTION) != 0u)

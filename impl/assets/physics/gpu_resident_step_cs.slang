@@ -61,16 +61,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
     }
 
+    const bool rotChanged = any(bo.rotation != sim.rotation);
     float4 wI0 = sim.invInertiaWorld0;
     float2 wI1 = sim.invInertiaWorld1.xy;
-    if(any(bo.rotation != sim.rotation))
+    if(rotChanged)
         nwbPhysicsRotateSymMat3(bo.rotation, sim.invInertiaLocal0, sim.invInertiaLocal1.xy, wI0, wI1);
 
-    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].positionInvMass.xyz = bo.positionSleepTime.xyz;
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].positionInvMass = float4(bo.positionSleepTime.xyz, sim.positionInvMass.w);
     g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].rotation = bo.rotation;
-    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].forceLinearDamping.xyz = float3(0.0f, 0.0f, 0.0f);
-    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].torqueAngularDamping.xyz = float3(0.0f, 0.0f, 0.0f);
-    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld0 = wI0;
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].forceLinearDamping = float4(0.0f, 0.0f, 0.0f, sim.forceLinearDamping.w);
+    g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].torqueAngularDamping = float4(0.0f, 0.0f, 0.0f, sim.torqueAngularDamping.w);
+    if(rotChanged)
+        g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld0 = wI0;
     g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld1 = float4(wI1.x, wI1.y, sim.invInertiaWorld1.z, bo.positionSleepTime.w);
 
     NwbPhysicsGpuBodyState nextState;

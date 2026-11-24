@@ -1001,16 +1001,16 @@ Expected<SoftBodyComponentCookEntry> ParseSoftBodyComponentCookMetadata(in Name 
                 s.attachments.clear();
                 s.attachments.resize(items.size());
                 entry.component.attachmentBodyEntityNames.clear();
-                entry.component.attachmentBodyEntityNames.resize(items.size(), s_NameNone);
-                b8 hasAnyBodyName = false;
                 for(usize i = 0u; i < items.size(); ++i){
-                    if(!items[i].isMap() || !ParseSoftBodyAttachmentMap(file, items[i], s.attachments[i], entry.component.attachmentBodyEntityNames[i]))
+                    Name bodyName = s_NameNone;
+                    if(!items[i].isMap() || !ParseSoftBodyAttachmentMap(file, items[i], s.attachments[i], bodyName))
                         return false;
-                    if(entry.component.attachmentBodyEntityNames[i] != s_NameNone)
-                        hasAnyBodyName = true;
+                    if(bodyName != s_NameNone){
+                        if(entry.component.attachmentBodyEntityNames.empty())
+                            entry.component.attachmentBodyEntityNames.resize(items.size(), s_NameNone);
+                        entry.component.attachmentBodyEntityNames[i] = bodyName;
+                    }
                 }
-                if(!hasAnyBodyName)
-                    entry.component.attachmentBodyEntityNames.clear();
                 return true;
             }
             if(key == "backstop_constraints"){

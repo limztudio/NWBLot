@@ -294,7 +294,6 @@ b8 PrepareContactConstraintSetup(
     outN = SafeNormalizeVec3(VectorSingle(contact.manifold.normalTwist, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     outT1 = VectorSingle(0.0f);
     outT2 = VectorSingle(0.0f);
-    ComputeTangentBasisFromUnitNormal(outN, outT1, outT2);
     outConstraint.tangentVelocity1 = contact.tangentSpeed;
     outConstraint.tangentVelocity2 = 0.0f;
     outConstraint.staticFriction = -1.0f;
@@ -307,8 +306,11 @@ b8 PrepareContactConstraintSetup(
         const VectorSingle proj = VectorSingle(dir - outN * Vector3Dot(dir, outN).x, 0.0f);
         const b8 hasTangentProj = Vector3LengthSq(proj).x > 1.0e-10f;
         if(hasTangentProj){
-            outT1 = SafeNormalizeVec3(proj, outT1);
-            outT2 = SafeNormalizeVec3(Cross(outN, outT1), outT2);
+            outT1 = SafeNormalizeVec3(proj, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            outT2 = SafeNormalizeVec3(Cross(outN, outT1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        }
+        else{
+            ComputeTangentBasisFromUnitNormal(outN, outT1, outT2);
         }
         const VectorSingle afVec = Max(VectorSingle(contact.anisotropicFriction.x, contact.anisotropicFriction.y, contact.anisotropicFriction.z, 0.0f), VectorSingle(0.0f));
         const f32 ax = afVec.x;
@@ -334,6 +336,9 @@ b8 PrepareContactConstraintSetup(
             outConstraint.frictionScale1 = SqrtFast(ax * ax * c10 * c10 + ay * ay * c11 * c11 + az * az * c12 * c12);
             outConstraint.frictionScale2 = SqrtFast(ax * ax * c20 * c20 + ay * ay * c21 * c21 + az * az * c22 * c22);
         }
+    }
+    else{
+        ComputeTangentBasisFromUnitNormal(outN, outT1, outT2);
     }
     if((contact.flags & cast<u32>(ContactFlags::HasSurfaceVelocity)) != 0u){
         const VectorSingle sv(contact.surfaceVelocity.x, contact.surfaceVelocity.y, contact.surfaceVelocity.z, 0.0f);
@@ -1224,7 +1229,7 @@ void SolveContactConstraintCachedWithKinematics(
                 newFy = 0.0f;
             }
             else if(fLenSq > maxF * maxF && fLenSq > 1.0e-18f){
-                const f32 invLen = maxF / SqrtFast(fLenSq);
+                const f32 invLen = maxF * Rsqrt(VectorSingle(fLenSq)).x;
                 newFx *= invLen;
                 newFy *= invLen;
             }
@@ -1252,7 +1257,7 @@ void SolveContactConstraintCachedWithKinematics(
                 newFy = 0.0f;
             }
             else if(normSq > maxStat * maxStat && normSq > 1.0e-18f){
-                const f32 invLen = maxDyn / SqrtFast(normSq);
+                const f32 invLen = maxDyn * Rsqrt(VectorSingle(normSq)).x;
                 newFx = nx * invLen * sx;
                 newFy = ny * invLen * sy;
             }
@@ -1310,7 +1315,7 @@ void SolveContactConstraintCachedWithKinematics(
 
     if((c.rollingResistance > 0.0f && totalNormalImpulse > 0.0f) || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
         const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
-        const VectorSingle deltaR = -Matrix3MulVec(Matrix3FromSymMat3(cache.rollingMass), dw);
+        const VectorSingle deltaR = -SymMat3MulVec(cache.rollingMass, dw);
         const VectorSingle oldR(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         VectorSingle newR = oldR + deltaR;
         const f32 maxR = c.rollingResistance * totalNormalImpulse;
@@ -1320,19 +1325,19 @@ void SolveContactConstraintCachedWithKinematics(
         else{
             const f32 rLenSq = Vector3LengthSq(VectorSingle(newR, 0.0f)).x;
             if(rLenSq > maxR * maxR && rLenSq > 1.0e-18f)
-                newR = newR * (maxR / SqrtFast(rLenSq));
+                newR = newR * (maxR * Rsqrt(VectorSingle(rLenSq)).x);
         }
         const VectorSingle appliedR = newR - oldR;
         c.rollingImpulse = f32x3u(newR.x, newR.y, newR.z);
         if(appliedR.x != 0.0f || appliedR.y != 0.0f || appliedR.z != 0.0f){
             anyApplied = true;
             if(dynA){
-                wA = wA - Matrix3MulVec(Matrix3FromSymMat3(c.invIA), appliedR);
+                wA = wA - SymMat3MulVec(c.invIA, appliedR);
                 if(angLockedA)
                     wA = ApplyAngularLocks(wA, flagsA);
             }
             if(dynB){
-                wB = wB + Matrix3MulVec(Matrix3FromSymMat3(c.invIB), appliedR);
+                wB = wB + SymMat3MulVec(c.invIB, appliedR);
                 if(angLockedB)
                     wB = ApplyAngularLocks(wB, flagsB);
             }
@@ -1406,7 +1411,14 @@ void ApplyRestitutionContactConstraintCached(
 
     const b8 lockedA = (flagsA & 0x3Fu) != 0u;
     const b8 lockedB = (flagsB & 0x3Fu) != 0u;
+    const b8 linLocked = (((flagsA | flagsB) & 0x07u) != 0u);
+    f32 stepInvMassSum = 0.0f;
+    if(dynA)
+        stepInvMassSum += c.invMassA;
+    if(dynB)
+        stepInvMassSum += c.invMassB;
     const VectorSingle n = VectorSingle(c.normalFriction, 0.0f);
+    f32 vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
     b8 anyApplied = false;
 
     for(u32 i = 0u; i < c.pointCount; ++i){
@@ -1415,7 +1427,12 @@ void ApplyRestitutionContactConstraintCached(
         if(pt.totalNormalImpulse <= 0.0f || relVel > -restitutionThreshold)
             continue;
         in ContactPointStepCache ptCache = cache.points[i];
-        const f32 vn = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x + Vector3Dot(wB, VectorSingle(ptCache.rnB)).x - Vector3Dot(wA, VectorSingle(ptCache.rnACachedSep, 0.0f)).x;
+        f32 angRel = 0.0f;
+        if(hasB)
+            angRel += Vector3Dot(wB, VectorSingle(ptCache.rnB)).x;
+        if(hasA)
+            angRel -= Vector3Dot(wA, VectorSingle(ptCache.rnACachedSep, 0.0f)).x;
+        const f32 vn = vnLin + angRel;
         const f32 impulse = -pt.normalMass * (vn + restitution * relVel);
         if(impulse > 0.0f){
             anyApplied = true;
@@ -1438,6 +1455,10 @@ void ApplyRestitutionContactConstraintCached(
                     wB = ApplyAngularLocks(wB, flagsB);
                 }
             }
+            if(!linLocked)
+                vnLin += impulse * stepInvMassSum;
+            else
+                vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
         }
     }
 

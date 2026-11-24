@@ -9,7 +9,7 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. (The `.adhd` reference project `CoolStuff/Testbed` configures its namespace via `NAMESPACE "Testbed"` in `CoolStuff/Testbed/CMakeLists.txt` and implements `NWB::ConfigureProjectRuntime` in `CoolStuff/Testbed/project_world_interop.adhd` without `namespace.h`.) This handwritten C++ project example assumes `ExampleApp::ProjectPatchFilesystem` is declared in a project-owned `project_patch_filesystem.h` with `namespace.h` defining `PROJECT_BEGIN`/`PROJECT_END`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep project policy and filesystem implementation in the application namespace. The `.adhd` reference project `CoolStuff/Testbed` configures project sources with `NAMESPACE "NWB::Testbed"` and its loader entry with `NAMESPACE "NWB"` in `CoolStuff/Testbed/CMakeLists.txt`; `NWB::ConfigureProjectRuntime` is implemented in `CoolStuff/Testbed/project_entry.adhd`. This handwritten C++ project example assumes `ExampleApp::ProjectPatchFilesystem` is declared in a project-owned `project_patch_filesystem.h` with `namespace.h` defining `PROJECT_BEGIN`/`PROJECT_END`:
 
 ```cpp
 #include "namespace.h"

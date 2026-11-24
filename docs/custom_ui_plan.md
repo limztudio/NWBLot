@@ -61,7 +61,7 @@ Input, application callbacks, layout, and snapshot publication run on the main t
 
 Frame owns native windows, event pumping, and the borrowed clipboard/text-input service lifetime. Required service references flow through `ProjectRuntimeContext` to `UiLayerSystem` and `UiPaintContext`; native handles stay private to platform adapters. Native resources outlive services, and services outlive borrowers. The ECS adapter never destroys the shared native services.
 
-Engine declarations follow root `engine_namespace.h`; Testbed configures its generated `.adhd` namespace as `Testbed` in CMake. Loader entry functions delegate to project code. Neutral `global/` utility macros use `FOUNDATION_`, engine namespace and shader macros use `NWB_`, and Testbed macros use `TESTBED_`. Project-owned interfaces retain the lowercase `interface` annotation. Build configurations are `dbg`, `opt`, and `fin`, with utility and build commands routed through `python -m launcher`. Graphics callers use the selected public backend contracts.
+Engine declarations follow root `engine_namespace.h`; Testbed configures its project `.adhd` namespace as `NWB::Testbed` in CMake. Loader entry functions live in `NWB` and create or configure the project runtime. Neutral `global/` utility macros use `FOUNDATION_`, engine namespace and shader macros use `NWB_`, and Testbed macros use `TESTBED_`. Project-owned interfaces retain the lowercase `interface` annotation. Build configurations are `dbg`, `opt`, and `fin`, with utility and build commands routed through `python -m launcher`. Graphics callers use the selected public backend contracts.
 
 ## Identity, layout, input, and declaration loans
 

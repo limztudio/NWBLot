@@ -349,14 +349,13 @@ The interactive launcher also accepts `--reflection-case rough`,
 `--reflection-final-state`. Diagnostics can be disabled for timing runs;
 source-anchored acceptance captures require it enabled.
 
-History remains RGBA16F. Before writing an accumulated mean, the temporal shader
-stochastically rounds RGB to exact half-representable FP32 values using an
-independent pixel/channel/accepted-sample-index hash. This removes accumulated
-directed storage-rounding bias without another buffer or dispatch. The owned
+History remains RGBA16F. The temporal shader computes the accumulated mean
+using `half` RGB values and passes it to the history-rounding helper, which uses
+pixel, channel, sample-index and seed hashes before writing the result. The owned
 raw writer establishes nonnegative radiance, finite inputs are checked, and the
 validated 256-sample maximum bounds the integer rounding implementation. The
 sample index continues beyond the bounded history count. The spatial result is
-stored separately and cannot bias future temporal samples.
+stored separately and cannot feed future temporal samples.
 
 Stage six adds a separate `--suite optical` with 30 bounded captures. The
 camera and a smooth opaque mirror face forward; all transport-test glass and

@@ -467,7 +467,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - When the category change is minor, one blank line is enough.
 - Do not place `public:` before the leading friend block. Friends open the class with no label (`class X{` then `friend ...` directly, see `RendererRayTracingSystem` fix).
 - Keep a short friend `operator==` on one line with no space before qualifiers: `friend constexpr bool operator==(const T& lhs, const T& rhs)noexcept;`. Do not split it across lines (see `GpuTimingSampleAttribution` + `GpuTimingSampleSubscription` fix).
-- A lone `= delete` copy/move line that changes category still gets its own repeated label with two blank lines before it (see `BasisLibrary` copy-assign + `initialize` fix).
+- A lone `= delete` copy/move line that changes category still gets its own repeated label with two blank lines before it.
 - Static member variables are declared before non-static member variables.
 - Constructors/destructor are declared together with no empty line between them.
 - Regular member functions must be separated from the constructor/destructor block by reopening the access label (e.g. ctor block, then two blank lines, then `public:` regular-function block, see `DeferredFrameTailBuilder::declare`, `ShadowPreparePacketValidator::validate`, `AccumulationRecordBuilder::declare` fix).

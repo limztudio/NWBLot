@@ -17,6 +17,8 @@ every push must have a matching `popClip()` before `freeze()`. A pop at the init
 also records each command's logical clip and the display's pixel scales; the GPU renderer applies
 those scales when converting positions and scissors to framebuffer pixels.
 
+`PaintBuilder` also draws individual lines, line batches, and open or closed polylines. `PaintLineStyle` supplies thickness, cap and join styles, dash lengths and offset, and optional antialiasing. `pushTransform()`, `pushTranslate()`, `pushRotate()`, and `pushScale()` compose a 2D transform stack; balance each push with `popTransform()` before freezing. Transformed clip rectangles use their axis-aligned bounds. An overlay starts with its own transform scope, which must be balanced before `endOverlay()` restores the parent scope.
+
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
 
 ```cpp

@@ -49,8 +49,9 @@ $env:NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "100"
 python -m launcher renderer-baseline surfel-gi-complex --no-gpu-validation -- --startup-timeout 300
 ```
 
-Run this from a clean source revision to create an immutable reference, then repeat with `--reference-dir` pointing
-at that reference. Keep the settle override and GPU-validation choice identical for both runs. The formal
+Run this from a clean source revision to create an immutable reference. Comparison with `--reference-dir` currently
+rejects this profile: its manifest records `settled-readback`, but the reference loader expects `frame-locked` for
+its nonzero freeze-frame value. Update the loader before using these captures for comparisons. The formal
 `current-renderer-v1` corpus retains the original open-box `surfel-gi` profile; the complex A/B profile is separate.
 Its fixture-only GI materials are cooked only into `Testing/gi_smoke_runtime/<config>`, so `surfel-gi-complex` runs from
 that runtime while `surfel-gi` keeps the shared `skinning_culling_benchmark_runtime` cook.

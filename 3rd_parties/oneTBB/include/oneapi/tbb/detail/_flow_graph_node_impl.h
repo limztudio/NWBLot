@@ -86,7 +86,6 @@ public:
         my_aggregator.initialize_handler(handler_type(this));
     }
 
-    //! Copy constructor
     function_input_base( const function_input_base& src )
         : function_input_base(src.my_graph_ref, src.my_max_concurrency, src.my_priority, src.my_is_no_throw) {}
 
@@ -430,7 +429,6 @@ public:
     typedef function_input_base<Input, Policy, A, my_class> base_type;
     typedef function_input_queue<input_type, A> input_queue_type;
 
-    // constructor
     template<typename Body>
     function_input(
         graph &g, size_t max_concurrency, Body& body, node_priority_t a_priority )
@@ -439,7 +437,6 @@ public:
       , my_init_body( new function_body_leaf< input_type, output_type, Body>(body) ) {
     }
 
-    //! Copy constructor
     function_input( const function_input& src ) :
         base_type(src),
         my_body( src.my_init_body->clone() ),
@@ -564,7 +561,6 @@ public:
     typedef function_input_base<Input, Policy, A, my_class> base_type;
     typedef function_input_queue<input_type, A> input_queue_type;
 
-    // constructor
     template<typename Body>
     multifunction_input(graph &g, size_t max_concurrency,Body& body, node_priority_t a_priority )
       : base_type(g, max_concurrency, a_priority, noexcept(tbb::detail::invoke(body, input_type(), my_output_ports)))
@@ -573,7 +569,6 @@ public:
       , my_output_ports(init_output_ports<output_ports_type>::call(g, my_output_ports)){
     }
 
-    //! Copy constructor
     multifunction_input( const multifunction_input& src ) :
         base_type(src),
         my_body( src.my_init_body->clone() ),

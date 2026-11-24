@@ -923,7 +923,7 @@ void VerifyGpuResVersion_RejectsStaleRoleAccessAndRangeVersionUses(){
         GpuResVersionBufferRange(0u, 64u),
         GpuResVersionBufferRange(0u, 64u),
         GpuTaskResourceAccess::Read,
-        GpuTaskResourceVersionRole::Count
+        GpuTaskResourceVersionRole::kCount
     );
     GpuResVersionExpectInvalidBoundUse(
         s_GpuCaseTaskGraphResourceVersionImportedRootProducer,

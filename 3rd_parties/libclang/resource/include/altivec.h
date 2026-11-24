@@ -3089,7 +3089,6 @@ vec_xl_len_r(const unsigned char *__a, size_t __b) {
       (vector int)__res, (vector int)__res, __mask);
 }
 
-// vec_xst_len
 static __inline__ void __ATTRS_o_ai vec_xst_len(vector unsigned char __a,
                                                 unsigned char *__b,
                                                 size_t __c) {

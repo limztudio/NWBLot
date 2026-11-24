@@ -120,7 +120,8 @@ control. The oracle checks passage coverage and GI, red floor light from retaine
 open triangles, visible retained-surface brightness, and RGB agreement that rejects
 light from removed green triangles.
 
-Captures wait for 360 successful presentations and retain the three images,
+Captures wait for at least 360 successful presentations, then at least 30 live
+steady-clock seconds with further presentation progress. They retain the three images,
 runtime logs, and regional color metrics under
 `Testing/smoke/<configuration>/csg_gi_<route>`. The harness rejects runtime and
 validation warnings through the existing capture workflow. Natural policy
@@ -321,10 +322,10 @@ CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 
 The lighting sequences enable the quality gate; normal/position sequences enable
 the geometry gate; cap-state sequences enable the cap-state gate; overlapping
-span-state sequences enable the span gate. All request
-GPU validation, use the matching runtime directory
-and logserver when available, overwrite only their own known capture artifacts,
-and serialize display use through the test resource lock. Unsupported capture
+span-state sequences enable the span gate. They request GPU validation in `dbg`
+and `opt` and disable that request in `fin`. They use the matching runtime
+directory and logserver when available, overwrite only their own known capture
+artifacts, and serialize display use through the test resource lock. Unsupported capture
 environments may skip with exit 77. A passing gate verifies those finite
 regression conditions on the actual run; broader optical correctness and
 performance still require their own matched comparisons. Interval-1 GPU

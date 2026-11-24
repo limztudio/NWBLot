@@ -111,7 +111,7 @@ void GpuDescriptorHeap::collectRetired(){
             ){
                 releaseRetainedDescriptorResource(retired.handle);
                 allocator.slotStates[slot] = SlotState::Free;
-                allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::Count);
+                allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
                 allocator.freeList[allocator.freeCount] = retired.handle.slot();
                 ++allocator.freeCount;
             }
@@ -323,7 +323,7 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
 
         for(usize pendingIndex = 0u; pendingIndex < m_pendingRecordingCount; ++pendingIndex){
             const GpuDescriptorHandle handle = m_pendingRecording[pendingIndex];
-            if(!handle.valid() || handle.descriptorClass() >= GpuDescriptorClass::Count)
+            if(!handle.valid() || handle.descriptorClass() >= GpuDescriptorClass::kCount)
                 TerminateInvariant();
 
             SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());

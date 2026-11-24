@@ -238,7 +238,7 @@ namespace basist
 		basisu::packed_uint<4>      m_endpoint_cb_file_ofs;	// The compressed endpoint codebook's file offset relative to the start of the file
 		basisu::packed_uint<3>      m_endpoint_cb_file_size;	// The compressed endpoint codebook's size in bytes
 
-		basisu::packed_uint<2>      m_total_selectors;			// The number of selectors in the endpoint codebook 
+		basisu::packed_uint<2>      m_total_selectors;			// The number of selectors in the selector codebook
 		basisu::packed_uint<4>      m_selector_cb_file_ofs;	// The compressed selectors codebook's file offset relative to the start of the file
 		basisu::packed_uint<3>      m_selector_cb_file_size;	// The compressed selector codebook's size in bytes
 

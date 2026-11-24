@@ -282,7 +282,6 @@ public:
   /// The module destructor. This will dropAllReferences.
   ~Module();
 
-  /// Move assignment.
   Module &operator=(Module &&Other);
 
   /// @}

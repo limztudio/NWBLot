@@ -25,16 +25,13 @@
 
 #include "slist.h"
 
-/* returns last node in linked list */
 static struct curl_slist *slist_get_last(struct curl_slist *list)
 {
   struct curl_slist *item;
 
-  /* if caller passed us a NULL, return now */
   if(!list)
     return NULL;
 
-  /* loop through to find the last item */
   item = list;
   while(item->next) {
     item = item->next;
@@ -66,7 +63,6 @@ struct curl_slist *Curl_slist_append_nodup(struct curl_slist *list,
   new_item->next = NULL;
   new_item->data = CURL_UNCONST(data);
 
-  /* if this is the first item, then new_item *is* the list */
   if(!list)
     return new_item;
 

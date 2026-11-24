@@ -196,8 +196,6 @@ void ReportFailureInUnknownLocation(TestPartResult::Type result_type,
 std::set<std::string>* GetIgnoredParameterizedTestSuites();
 
 // A base class that prevents subclasses from being copyable.
-// We do this instead of using '= delete' so as to avoid triggering warnings
-// inside user code regarding any of our declarations.
 class [[nodiscard]] GTestNonCopyable {
  public:
   GTestNonCopyable() = default;
@@ -1621,7 +1619,6 @@ using GoogleTest_NotSupported_OnFunctionReturningNonVoid = void;
 // A class that enables one to stream messages to assertion macros
 class GTEST_API_ [[nodiscard]] AssertHelper {
  public:
-  // Constructor.
   AssertHelper(TestPartResult::Type type, const char* file, int line,
                const char* message);
   AssertHelper(TestPartResult::Type type, std::string_view file, int line,
@@ -1684,7 +1681,7 @@ class GTEST_API_ [[nodiscard]] AssertHelper {
 //   void SetUp() override {
 //     // Can use GetParam() here.
 //   }
-//   void TearDown override {
+//   void TearDown() override {
 //     // Can use GetParam() here.
 //   }
 // };

@@ -45,7 +45,7 @@
 #define _MHD_static_inline static
 #ifndef HAVE_INLINE_FUNCS
 #define HAVE_INLINE_FUNCS 1
-#endif /* !INLINE_FUNC */
+#endif /* !HAVE_INLINE_FUNCS */
 #endif /* MHD_FAVOR_SMALL_CODE */
 
 /*
@@ -638,7 +638,7 @@ charsequalcaseless (const char c1, const char c2)
  * Convert US-ASCII decimal digit to its value.
  *
  * @param c character to convert
- * @return value of hexadecimal digit or -1 if @ c is not hexadecimal digit
+ * @return value of decimal digit or -1 if @ c is not a decimal digit
  */
 #define todigitvalue(c) (isasciidigit (c) ? (int) (((char) (c)) - '0') : \
                          (int) (-1))
@@ -777,7 +777,7 @@ MHD_str_equal_caseless_bin_n_ (const char *const str1,
  * @param token the token to find
  * @param token_len length of token, not including optional terminating
  *                  null-character.
- * @return non-zero if two strings are equal, zero otherwise.
+ * @return non-zero if the token is present, zero otherwise.
  */
 bool
 MHD_str_has_token_caseless_ (const char *str,
@@ -794,7 +794,6 @@ MHD_str_has_token_caseless_ (const char *str,
     while (' ' == *str || '\t' == *str || ',' == *str)
       str++;
 
-    /* Check for token match. */
     i = 0;
     while (1)
     {
@@ -811,7 +810,6 @@ MHD_str_has_token_caseless_ (const char *str,
          * has additional unmatched chars at tail. */
         while (' ' == *str || '\t' == *str)
           str++;
-        /* End of (sub)string? */
         if ((0 == *str) || (',' == *str) )
           return true;
         /* Unmatched chars at end of substring. */
@@ -893,15 +891,10 @@ MHD_str_remove_token_caseless_ (const char *str,
             ((' ' == *s1) || ('\t' == *s1) || (',' == *s1)) )
       s1++;
 
-    /* 's1' points to the first char of token in the input string or
-     * points just beyond the end of the input string */
-
     if ((size_t) (s1 - str) >= str_len)
       break; /* Nothing to copy, end of the input string */
 
-    /* 's1' points to the first char of token in the input string */
-
-    cur_token = s1; /* the first char of input token */
+    cur_token = s1;
 
     /* Check the token with case-insensitive match */
     t_pos = 0;
@@ -919,9 +912,6 @@ MHD_str_remove_token_caseless_ (const char *str,
       while ( ((size_t) (s1 - str) < str_len) &&
               ((' ' == *s1) || ('\t' == *s1)) )
         s1++;
-      /* 's1' points to the first non-whitespace char after the token matched
-       * requested token or points just beyond the end of the input string after
-       * the requested token */
       if (((size_t) (s1 - str) == str_len) || (',' == *s1))
       {/* full token match, do not copy current token to the output */
         token_removed = true;
@@ -929,9 +919,6 @@ MHD_str_remove_token_caseless_ (const char *str,
       }
     }
 
-    /* 's1' points to first non-whitespace char, to some char after
-     * first non-whitespace char in the token in the input string, to
-     * the ',', or just beyond the end of the input string */
     /* The current token in the input string does not match the token
      * to exclude, it must be copied to the output string */
     /* the current token size excluding leading whitespaces and current char */
@@ -964,8 +951,6 @@ MHD_str_remove_token_caseless_ (const char *str,
 
     while ( ((size_t) (s1 - str) < str_len) && (',' != *s1))
     {
-      /* 's1' points to first non-whitespace char, to some char after
-       * first non-whitespace char in the token in the input string */
       /* Copy all non-whitespace chars from the current token in
        * the input string */
       while ( ((size_t) (s1 - str) < str_len) &&
@@ -979,16 +964,11 @@ MHD_str_remove_token_caseless_ (const char *str,
         }
         *(s2++) = *(s1++);
       }
-      /* 's1' points to some whitespace char in the token in the input
-       * string, to the ',', or just beyond the end of the input string */
       /* Skip all whitespaces */
       while ( ((size_t) (s1 - str) < str_len) &&
               ((' ' == *s1) || ('\t' == *s1)) )
         s1++;
 
-      /* 's1' points to the first non-whitespace char in the input string
-       * after whitespace chars, to the ',', or just beyond the end of
-       * the input string */
       if (((size_t) (s1 - str) < str_len) && (',' != *s1))
       { /* Not the end of the current token */
         mhd_assert (s2 >= buf);
@@ -1058,7 +1038,6 @@ MHD_str_remove_tokens_caseless_ (char *str,
     if (pt >= tokens_len)
       break; /* No more tokens, nothing to remove */
 
-    /* Found non-whitespace char which is not a comma */
     tkn = t + pt;
     do
     {
@@ -1067,16 +1046,13 @@ MHD_str_remove_tokens_caseless_ (char *str,
         pt++;
       } while (pt < tokens_len &&
                (' ' != t[pt] && '\t' != t[pt] && ',' != t[pt]));
-      /* Found end of the token string, space, tab, or comma */
       tkn_len = pt - (size_t) (tkn - t);
 
       /* Skip all spaces and tabs */
       while (pt < tokens_len && (' ' == t[pt] || '\t' == t[pt]))
         pt++;
-      /* Found end of the token string or non-whitespace char */
     } while (pt < tokens_len && ',' != t[pt]);
 
-    /* 'tkn' is the input token with 'tkn_len' chars */
     mhd_assert (0 != tkn_len);
 
     if (*str_len == tkn_len)
@@ -2083,15 +2059,15 @@ MHD_str_equal_quoted_bin_n (const char *quoted,
   {
     if ('\\' == quoted[i])
     {
-      i++; /* Advance to the next character */
+      i++;
       if (quoted_len == i)
         return false; /* No character after escaping backslash */
     }
     if (quoted[i] != unquoted[j])
-      return false; /* Different characters */
+      return false;
   }
   if ((quoted_len != i) || (unquoted_len != j))
-    return false; /* The strings have different length */
+    return false;
 
   return true;
 }
@@ -2113,15 +2089,15 @@ MHD_str_equal_caseless_quoted_bin_n (const char *quoted,
   {
     if ('\\' == quoted[i])
     {
-      i++; /* Advance to the next character */
+      i++;
       if (quoted_len == i)
         return false; /* No character after escaping backslash */
     }
     if (! charsequalcaseless (quoted[i], unquoted[j]))
-      return false; /* Different characters */
+      return false;
   }
   if ((quoted_len != i) || (unquoted_len != j))
-    return false; /* The strings have different length */
+    return false;
 
   return true;
 }
@@ -2358,7 +2334,7 @@ MHD_base64_to_bin_n (const char *base64,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  /* D0..DF */
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  /* E0..EF */
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  /* F0..FF */
-#endif /* ! MHD_BASE64_FUNC_VERSION == 3 */
+#endif /* MHD_BASE64_FUNC_VERSION == 3 */
   };
 #define base64_char_to_value_(c) map[(c)]
 #endif /* MHD_BASE64_FUNC_VERSION >= 2 */

@@ -4,7 +4,6 @@
 #ifndef API_VERSION_H_
 #define API_VERSION_H_
 
-// C++ libraries.
 #include <string>
 #include <sstream>
 
@@ -20,12 +19,10 @@
 
 namespace amdisa
 {
-    // Compatibility check related code.
     static const char* kStringErrorNotCompatibleXml = "Error: Unsupported XML schema version. Check for compatible XML schema. Please refer to XML schema changelog or API release notes for more details.";
     static const char* kStringWarningPartiallyCompatibleXmlPrefix = "Warning: detected XML schema version ";
     static const char* kStringWarningPartiallyCompatibleXmlSuffix = " which does not support certain features that are supported by this API version. Please refer to XML schema changelog or API release notes for more details.";
 
-    // Structure to return API version.
     class ApiVersion
     {
     public:
@@ -73,7 +70,6 @@ namespace amdisa
 
     namespace explorer
     {
-        // Structure to return API version.
         class ApiVersion
         {
         public:

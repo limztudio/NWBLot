@@ -173,7 +173,7 @@ typedef RmtMemoryEventHistoryCommonVirtualMemorySwappingEventInfo RmtMemoryEvent
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index_start/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index_start</i></c>.
 RmtErrorCode RmtMemoryEventHistoryFindNextEventIndex(const RmtMemoryEventHistoryHandle     history_handle,
                                                      const RmtMemoryEventHistoryEventIndex event_index_start,
                                                      const RmtResourceHistoryEventType     event_type_to_match,
@@ -224,7 +224,7 @@ RmtErrorCode RmtMemoryEventHistoryGetEventCount(const RmtMemoryEventHistoryHandl
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 RmtErrorCode RmtMemoryEventHistoryGetEventTimestamp(const RmtMemoryEventHistoryHandle     history_handle,
                                                     const RmtMemoryEventHistoryEventIndex event_index,
                                                     uint64_t*                             out_event_timestamp);
@@ -240,7 +240,7 @@ RmtErrorCode RmtMemoryEventHistoryGetEventTimestamp(const RmtMemoryEventHistoryH
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 RmtErrorCode RmtMemoryEventHistoryGetEventType(const RmtMemoryEventHistoryHandle     history_handle,
                                                const RmtMemoryEventHistoryEventIndex event_index,
                                                RmtResourceHistoryEventType*          out_event_type);
@@ -248,7 +248,7 @@ RmtErrorCode RmtMemoryEventHistoryGetEventType(const RmtMemoryEventHistoryHandle
 /// Retrieves a structure containing the parameters used for generating a history of events.
 ///
 /// @param [in]  history_handle                  The instance handle for a previously generated history of events.
-/// @param [out  out_parameters                  A pointer to the structure containing the parameters used when generating the history.
+/// @param [out] out_parameters                  A pointer to the structure containing the parameters used when generating the history.
 ///
 /// @retval
 /// kRmtOk                                       The operation completed successfully.
@@ -268,9 +268,9 @@ RmtErrorCode RmtMemoryEventHistoryGetUsageParameters(const RmtMemoryEventHistory
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetPhysicalMapToHostEventInfo(const RmtMemoryEventHistoryHandle                       history_handle,
                                                                 const RmtMemoryEventHistoryEventIndex                   event_index,
                                                                 const RmtMemoryEventHistoryPhysicalMapToHostEventInfo** out_event_info);
@@ -286,9 +286,9 @@ RmtErrorCode RmtMemoryEventHistoryGetPhysicalMapToHostEventInfo(const RmtMemoryE
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetPhysicalMemoryMapToLocalEventInfo(const RmtMemoryEventHistoryHandle                        history_handle,
                                                                        const RmtMemoryEventHistoryEventIndex                    event_index,
                                                                        const RmtMemoryEventHistoryPhysicalMapToLocalEventInfo** out_event_info);
@@ -304,9 +304,9 @@ RmtErrorCode RmtMemoryEventHistoryGetPhysicalMemoryMapToLocalEventInfo(const Rmt
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetPhysicalUnmapEventInfo(const RmtMemoryEventHistoryHandle                   history_handle,
                                                             const RmtMemoryEventHistoryEventIndex               event_index,
                                                             const RmtMemoryEventHistoryPhysicalUnmapEventInfo** out_event_info);
@@ -322,9 +322,9 @@ RmtErrorCode RmtMemoryEventHistoryGetPhysicalUnmapEventInfo(const RmtMemoryEvent
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetResourceBindEventInfo(const RmtMemoryEventHistoryHandle                  history_handle,
                                                            const RmtMemoryEventHistoryEventIndex              event_index,
                                                            const RmtMemoryEventHistoryResourceBindEventInfo** out_event_info);
@@ -340,9 +340,9 @@ RmtErrorCode RmtMemoryEventHistoryGetResourceBindEventInfo(const RmtMemoryEventH
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetResourceCreateEventInfo(const RmtMemoryEventHistoryHandle                    history_handle,
                                                              const RmtMemoryEventHistoryEventIndex                event_index,
                                                              const RmtMemoryEventHistoryResourceCreateEventInfo** out_event_info);
@@ -358,9 +358,9 @@ RmtErrorCode RmtMemoryEventHistoryGetResourceCreateEventInfo(const RmtMemoryEven
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetResourceDestroyEventInfo(const RmtMemoryEventHistoryHandle                     history_handle,
                                                               const RmtMemoryEventHistoryEventIndex                 event_index,
                                                               const RmtMemoryEventHistoryResourceDestroyEventInfo** out_event_info);
@@ -376,9 +376,9 @@ RmtErrorCode RmtMemoryEventHistoryGetResourceDestroyEventInfo(const RmtMemoryEve
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryAllocationEventInfo(const RmtMemoryEventHistoryHandle                             history_handle,
                                                                       const RmtMemoryEventHistoryEventIndex                         event_index,
                                                                       const RmtMemoryEventHistoryVirtualMemoryAllocationEventInfo** out_event_info);
@@ -394,9 +394,9 @@ RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryAllocationEventInfo(const RmtM
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryFreeEventInfo(const RmtMemoryEventHistoryHandle                       history_handle,
                                                                 const RmtMemoryEventHistoryEventIndex                   event_index,
                                                                 const RmtMemoryEventHistoryVirtualMemoryFreeEventInfo** out_event_info);
@@ -412,9 +412,9 @@ RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryFreeEventInfo(const RmtMemoryE
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryEvictEventInfo(const RmtMemoryEventHistoryHandle                        history_handle,
                                                                  const RmtMemoryEventHistoryEventIndex                    event_index,
                                                                  const RmtMemoryEventHistoryVirtualMemoryEvictEventInfo** out_event_info);
@@ -430,9 +430,9 @@ RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryEvictEventInfo(const RmtMemory
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryMakeResidentEventInfo(const RmtMemoryEventHistoryHandle                           history_handle,
                                                                         const RmtMemoryEventHistoryEventIndex                       event_index,
                                                                         const RmtMemoryEventHistoryVirtualMemoryResidentEventInfo** out_event_info);
@@ -448,9 +448,9 @@ RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryMakeResidentEventInfo(const Rm
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryMapEventInfo(const RmtMemoryEventHistoryHandle                      history_handle,
                                                                const RmtMemoryEventHistoryEventIndex                  event_index,
                                                                const RmtMemoryEventHistoryVirtualMemoryMapEventInfo** out_event_info);
@@ -466,9 +466,9 @@ RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryMapEventInfo(const RmtMemoryEv
 /// @retval
 /// kRmtErrorInvalidPointer                      Invalid <c><i>history_handle</i></c>.
 /// @retval
-/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index/i></c>.
+/// kRmtErrorIndexOutOfRange                     Invalid <c><i>event_index</i></c>.
 /// @retval
-/// kRmtMalformedData                            The event type for the requested event information at this index doesn't match.
+/// kRmtErrorMalformedData                            The event type for the requested event information at this index doesn't match.
 RmtErrorCode RmtMemoryEventHistoryGetVirtualMemoryUnmapEventInfo(const RmtMemoryEventHistoryHandle                        history_handle,
                                                                  const RmtMemoryEventHistoryEventIndex                    event_index,
                                                                  const RmtMemoryEventHistoryVirtualMemoryUnmapEventInfo** out_event_info);

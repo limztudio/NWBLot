@@ -26,7 +26,7 @@ struct ClipboardPipe{
 
 struct ClipboardPipeReadFailure{
     ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
-    b8 finished = false;
+    b8 endOfStream = false;
 };
 
 [[nodiscard]] Expected<ClipboardPipe> OpenClipboardPipe()noexcept;

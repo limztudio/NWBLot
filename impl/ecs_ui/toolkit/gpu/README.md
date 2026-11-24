@@ -5,7 +5,9 @@
 resolver, and `ActiveSceneSubsystemsRef` (supplied via `setActiveSceneSubsystems(...)`)
 while owning its internal storage in the caller's mother arena (`GlobalArena`, propagated
 automatically without an explicit arena parameter in `.adhd`, or passed as the hidden
-leading `::ArenaBase&` in generated C++); it has no ECS or ImGui dependency.
+leading `::ArenaBase&` in generated C++). It does not use ECS world APIs directly or
+use ImGui; its `nwb_assets_scene` dependency links the ECS and scene component targets
+transitively.
 
 Call `setActiveSceneSubsystems(...)` and ensure the graphics swap-chain framebuffers
 exist before calling `validateResources(width, height)` (resource creation fails if

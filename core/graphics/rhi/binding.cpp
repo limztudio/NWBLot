@@ -31,7 +31,7 @@ DescriptorWriteItem DescriptorWriteItem::Base(const u32 slot, const ResourceType
 }
 
 DescriptorWriteItem DescriptorWriteItem::TextureSrv(const u32 slot, Texture* const texture, const Format::Enum format, const TextureSubresourceSet subresources, const TextureDimension::Enum dimension)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
+    DescriptorWriteItem result = Base(slot, ResourceType::TextureSrv, texture, format, dimension);
     result.subresources = subresources;
     return result;
 }
@@ -43,19 +43,19 @@ DescriptorWriteItem DescriptorWriteItem::TextureUav(
     const TextureSubresourceSet subresources,
     const TextureDimension::Enum dimension
 )noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
+    DescriptorWriteItem result = Base(slot, ResourceType::TextureUav, texture, format, dimension);
     result.subresources = subresources;
     return result;
 }
 
 DescriptorWriteItem DescriptorWriteItem::TypedBufferSrv(const u32 slot, Buffer* const buffer, const Format::Enum format, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::TypedBufferSrv, buffer, format, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
 
 DescriptorWriteItem DescriptorWriteItem::TypedBufferUav(const u32 slot, Buffer* const buffer, const Format::Enum format, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::TypedBufferUav, buffer, format, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
@@ -69,25 +69,25 @@ DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(const u32 slot, Buffer* 
 }
 
 DescriptorWriteItem DescriptorWriteItem::StructuredBufferSrv(const u32 slot, Buffer* const buffer, const Format::Enum format, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::StructuredBufferSrv, buffer, format, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
 
 DescriptorWriteItem DescriptorWriteItem::StructuredBufferUav(const u32 slot, Buffer* const buffer, const Format::Enum format, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::StructuredBufferUav, buffer, format, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
 
 DescriptorWriteItem DescriptorWriteItem::RawBufferSrv(const u32 slot, Buffer* const buffer, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::RawBufferSrv, buffer, Format::UNKNOWN, TextureDimension::Unknown);
     result.range = range;
     return result;
 }
 
 DescriptorWriteItem DescriptorWriteItem::RawBufferUav(const u32 slot, Buffer* const buffer, const BufferRange range)noexcept{
-    DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    DescriptorWriteItem result = Base(slot, ResourceType::RawBufferUav, buffer, Format::UNKNOWN, TextureDimension::Unknown);
     result.range = range;
     return result;
 }

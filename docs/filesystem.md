@@ -9,7 +9,7 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. (The `.adhd` reference project `CoolStuff/Testbed` configures its namespace via `NAMESPACE "Testbed"` in `CoolStuff/Testbed/CMakeLists.txt` and implements `NWB::ConfigureProjectRuntime` in `CoolStuff/Testbed/project_world_interop.adhd` without `namespace.h`.) This handwritten C++ project example assumes `ExampleApp::ProjectPatchFilesystem` is declared in a project-owned `project_patch_filesystem.h` with `namespace.h` defining `PROJECT_BEGIN`/`PROJECT_END`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep project policy and filesystem implementation in the application namespace. The `.adhd` reference project `CoolStuff/Testbed` configures project sources with `NAMESPACE "NWB::Testbed"` and its loader entry with `NAMESPACE "NWB"` in `CoolStuff/Testbed/CMakeLists.txt`; `NWB::ConfigureProjectRuntime` is implemented in `CoolStuff/Testbed/project_entry.adhd`. This handwritten C++ project example assumes `ExampleApp::ProjectPatchFilesystem` is declared in a project-owned `project_patch_filesystem.h` with `namespace.h` defining `PROJECT_BEGIN`/`PROJECT_END`:
 
 ```cpp
 #include "namespace.h"
@@ -76,7 +76,10 @@ empty directory and only publishes it after successful finalization.
 `writeFile(path, data, bytes)` replaces the complete file; it does not write at a cursor. Empty files are valid
 and use a null pointer with zero bytes. `writeFileDeferred` has the same payload-copy contract, but can defer
 metadata publication until `flush` or `unmount`. Callers may reuse their buffer immediately after either
-write returns. `flush` persists pending writes; the volume backend also compacts and trims its segments.
+write returns. `writeFilesDeferred(items, count)` processes a batch of deferred writes; zero items succeed,
+and a nonzero count requires a valid item array. Failure can leave earlier items deferred, so the batch is
+not an atomic transaction. The volume backend holds its exclusive lock across the batch. `flush` persists
+pending writes; the volume backend also compacts and trims its segments.
 `unmount` persists pending metadata before releasing the mount and reports failure; a failed unmount keeps
 the mounted state and pending metadata available for an explicit retry. The volume backend also flushes
 pending metadata before a remount. Writable owners must check `flush` or `unmount` before reporting success
@@ -94,9 +97,15 @@ custom implementation and may be a no-op.
 
 `readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes; reading beyond EOF returns an unexpected failure. Check admission before reading the count; zero is a successful value. A nonzero capacity requires a valid buffer.
 
-`readFile(path, byteContainer)` obtains the file size, sizes the caller's container, and reads the complete
-payload through the virtual range operation. It clears the container on failure. Container overloads require
-one-byte element types.
+`readFile(path, byteContainer)` clears and sizes the caller's container through the virtual
+`readWholeFile` operation, then checks that the returned byte count matches. It clears the container on
+failure. The default `readWholeFile` implementation queries the size and calls the virtual range read;
+backends may override it. Container overloads require one-byte element types.
+
+`visitWholeFile` optionally lends a byte span to a synchronous visitor. The default implementation returns
+an empty `Optional` when it cannot provide a view. The volume backend can visit an empty file or a file
+contained in one mapped segment of a read-only mount; a present boolean carries the visitor's result or a
+read failure. A caller must not retain the borrowed span after the callback.
 
 `openFile(path)` returns `Expected<FileCursor>` bound to that filesystem without owning backend resources. Cursor reads return `Expected<usize>` and advance by
 the number of bytes actually read. `seekFile(cursor, offset, origin)` supports `Begin`, `Current`, and `End`,
@@ -104,10 +113,12 @@ permits positions from zero through EOF, and rejects invalid origins, overflow, 
 without changing the cursor. `closeFile` clears the cursor. Cursors do not retain their filesystem; discard
 all cursors when unmounting, remounting, or destroying it.
 
-The default backend serializes individual operations using its internal `Futex`. A cursor is caller-owned
-and requires caller synchronization when shared between threads. Whole-container reads consist of a size
-query followed by a range read; clients requiring a stable snapshot must prevent concurrent replacement or
-removal of that file for the complete operation. Runtime asset volumes are normally immutable while mounted.
+The default backend uses a reader/writer lock for mutable volume state: reads can share the lock and writes take it exclusively. Some read paths omit the lock for an immutable read-only mount. A cursor is caller-owned
+and requires caller synchronization when shared between threads. On mutable volume mounts, the volume
+backend holds its shared lock across whole-file lookup, buffer preparation, and copying. The interface's
+default implementation performs separate size and range operations, so clients using that implementation
+must prevent concurrent replacement or removal when they need a stable snapshot. Runtime asset volumes
+are normally immutable while mounted.
 Writable access to a volume requires one owner across filesystem instances and processes; their locks do not
 coordinate with one another. If compaction cannot restore a failed publication, it unmounts the affected
 instance and retains its stage and backup directories for recovery. A later operation using the same work

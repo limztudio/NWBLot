@@ -1,10 +1,7 @@
 # NVIDIA Nsight Aftermath GPU crash dump SDK (prebuilt, vendored).
 #
-# The SDK ships only as a runtime shared library (.dll / .so) plus headers; there is no static
-# library. The engine loads it dynamically (LoadLibrary / dlopen) so the dependency stays optional
-# and graceful: on non-NVIDIA GPUs, or when the runtime is absent, the engine simply skips Aftermath
-# instead of failing to launch. Consumers therefore link only the headers (nwb::aftermath_headers)
-# and call nwb_copy_aftermath_runtime() to place the runtime next to their executable.
+# The engine loads the SDK runtime dynamically, so Aftermath remains optional.
+# Consumers link nwb::aftermath_headers and use nwb_copy_aftermath_runtime().
 #
 # License: the .dll / .so are the redistributable portions per the bundled LICENSE; the headers and
 # import lib are build-time only. See LICENSE and nsight-aftermath-usage-guidelines.txt.

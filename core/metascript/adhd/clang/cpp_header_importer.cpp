@@ -282,12 +282,12 @@ struct CachedFileStamp{
     outStamp.mtimeHigh = static_cast<u64>(data.ftLastWriteTime.dwHighDateTime);
     return true;
 #else
-    struct stat st{};
-    if(::stat(nativePath.c_str(), &st) != 0 || S_ISDIR(st.st_mode))
+    struct stat status{};
+    if(::stat(nativePath.c_str(), &status) != 0 || S_ISDIR(status.st_mode))
         return false;
     outStamp.path.assign(utf8Path.data(), utf8Path.size());
-    outStamp.fileSize = static_cast<u64>(st.st_size);
-    outStamp.mtimeLow = static_cast<u64>(st.st_mtime);
+    outStamp.fileSize = static_cast<u64>(status.st_size);
+    outStamp.mtimeLow = static_cast<u64>(status.st_mtime);
     outStamp.mtimeHigh = 0u;
     return true;
 #endif
@@ -925,7 +925,7 @@ void ImporterContext::extractEnum(CXCursor enumCursor){
     if(!formatDeclName(enumCursor, adhdName, cppNs, cppExportName, isDirect, isFlag))
         return;
 
-    EnumDecl* decl = findExistingDeclForMerge(m_enumByExportName, m_enumByName, adhdName, cppExportName);
+    EnumDecl* decl = FindExistingDeclForMerge(m_enumByExportName, m_enumByName, adhdName, cppExportName);
     const b8 isNew = (decl == nullptr);
     if(isNew){
         decl = AllocateAstNode<EnumDecl>(m_arena);
@@ -987,7 +987,7 @@ void ImporterContext::extractTypeAlias(CXCursor aliasCursor){
     if(!formatDeclName(aliasCursor, adhdName, cppNs, cppExportName, dummyDirect, dummyFlag))
         return;
 
-    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || findExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, {}) != nullptr)
+    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || FindExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, {}) != nullptr)
         return;
 
     const CXType underlying = ::clang_getTypedefDeclUnderlyingType(aliasCursor);

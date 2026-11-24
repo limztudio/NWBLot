@@ -2,4 +2,4 @@ package: aftermath
 version: Windows x64 2026.3.0.26197; Linux x64 2026.3.1.26217 (GFSDK_Aftermath_Version_API 0x21B, API 2.27)
 updated_utc: 2026-08-31T17:52:49Z
 source: https://developer.nvidia.com/nsight-aftermath
-notes: NVIDIA Nsight Aftermath SDK headers plus x64 runtime libraries, loaded dynamically and Git LFS tracked. Windows x64 remains the currently published 2026.3.0.26197 archive; Linux x64 runtime is refreshed from 2026.3.1.26217. The headers are unchanged at API 2.27. ARM64 archives now exist upstream but are intentionally not vendored or enabled; NWB_WITH_AFTERMATH remains x64-only.
+notes: NVIDIA Nsight Aftermath SDK headers plus x64 runtime libraries, loaded dynamically and Git LFS tracked. Windows x64 remains the currently published 2026.3.0.26197 archive; Linux x64 runtime is refreshed from 2026.3.1.26217. The headers are unchanged at API 2.27. ARM64 archives now exist upstream but are intentionally not vendored or enabled; NWB_WITH_AFTERMATH remains x64-only. NWB-local maintenance trims stale and redundant source comments.

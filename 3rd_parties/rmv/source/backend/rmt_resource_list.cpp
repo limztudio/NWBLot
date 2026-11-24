@@ -135,26 +135,17 @@ bool RmtResourceOverlapsVirtualAddressRange(const RmtResource* resource, RmtGpuA
         return false;
     }
 
-    // Case 1: if the resource starts after the end of the range then it can't overlap
-    //
-    //  |--virtual address range--|
-    //                                 |--resource--|
     if (resource->address > address_end)
     {
         return false;
     }
 
-    // Case 2: if the resource ends before the start of the range then it can't overlap
-    //
-    //  |--resource--|
-    //                 |--virtual address range--|
     const RmtGpuAddress resource_address_end = resource->address + resource->size_in_bytes - 1;
     if (resource_address_end < address_start)
     {
         return false;
     }
 
-    // anything else must overlap.
     return true;
 }
 
@@ -177,13 +168,11 @@ RmtErrorCode RmtResourceGetBackingStorageHistogram(const RmtDataSnapshot* snapsh
         // Handle edge case where last page isn't 4KB in size.
         const uint64_t size = RMT_MINIMUM(end_virtual_address - current_virtual_address, size_of_minimum_page);
 
-        // get the physical address
         RmtGpuAddress      physical_address = 0;
         const RmtErrorCode error_code = RmtPageTableGetPhysicalAddressForVirtualAddress(&snapshot->page_table, current_virtual_address, &physical_address);
 
         if (error_code == kRmtOk)
         {
-            // remove bytes from unmapped count.
             if (size <= out_bytes_per_backing_storage_type[kRmtResourceBackingStorageUnmapped])
             {
                 out_bytes_per_backing_storage_type[kRmtResourceBackingStorageUnmapped] -= size;
@@ -225,7 +214,6 @@ bool RmtResourceIsCompletelyInPreferredHeap(const RmtDataSnapshot* snapshot, con
         // Handle edge case where last page isn't 4KB in size.
         const uint64_t size = RMT_MINIMUM(end_virtual_address - current_virtual_address, size_of_minimum_page);
 
-        // get the physical address
         RmtGpuAddress      physical_address = 0;
         const RmtErrorCode error_code = RmtPageTableGetPhysicalAddressForVirtualAddress(&snapshot->page_table, current_virtual_address, &physical_address);
         if (error_code != kRmtOk)
@@ -332,7 +320,6 @@ int32_t RmtResourceGetAliasCount(const RmtResource* resource)
             continue;
         }
 
-        // get the start and end address
         const RmtGpuAddress current_resource_start = current_resource->address;
         const RmtGpuAddress current_resource_end   = current_resource->address + current_resource->size_in_bytes;
         if (resource_start_address >= current_resource_end)
@@ -561,7 +548,6 @@ static RmtErrorCode DestroyResource(RmtResourceList* resource_list, RmtResource*
 
     RemoveResourceFromTree(resource_list, hashed_identifier);
 
-    // copy the tail into the target.
     if (tail_resource != resource)
     {
         memcpy(resource, tail_resource, sizeof(RmtResource));
@@ -620,7 +606,6 @@ RmtErrorCode RmtResourceListAddResourceCreate(RmtResourceList* resource_list, co
     RMT_RETURN_ON_ERROR(resource_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(resource_create, kRmtErrorInvalidPointer);
 
-    // Resource ID should be a thing.
     RMT_ASSERT(resource_create->resource_identifier);
 
     const uint64_t hashed_identifier = GenerateResourceHandle(resource_create->resource_identifier);
@@ -629,7 +614,6 @@ RmtErrorCode RmtResourceListAddResourceCreate(RmtResourceList* resource_list, co
     RmtResource* resource = FindResourceById(resource_list, hashed_identifier);
     if (resource != nullptr)
     {
-        // remove it
         if (resource->bound_allocation != nullptr)
         {
             if (resource->bound_allocation->resource_count > 0)
@@ -643,7 +627,6 @@ RmtErrorCode RmtResourceListAddResourceCreate(RmtResourceList* resource_list, co
         }
 
         // The current resource is being replaced with a new resource.
-        // Set the current resource destroy time.
         resource->destroy_time = resource_create->common.timestamp;
         DestroyResource(resource_list, resource);
     }
@@ -652,7 +635,6 @@ RmtErrorCode RmtResourceListAddResourceCreate(RmtResourceList* resource_list, co
     RMT_ASSERT(resource_list->resource_count + 1 <= resource_list->maximum_concurrent_resources);
     RMT_RETURN_ON_ERROR((resource_list->resource_count + 1) <= resource_list->maximum_concurrent_resources, kRmtErrorOutOfMemory);
 
-    // fill out the stuff we know.
     RmtResource* new_resource   = &resource_list->resources[resource_list->resource_count++];
     new_resource->name          = nullptr;
     new_resource->identifier    = resource_create->resource_identifier;
@@ -732,7 +714,6 @@ RmtErrorCode RmtResourceListAddResourceCreate(RmtResourceList* resource_list, co
         break;
 
     default:
-        // shouldn't reach here.
         RMT_ASSERT(0);
         break;
     }
@@ -910,7 +891,6 @@ RmtErrorCode RmtResourceListAddResourceDestroy(RmtResourceList* resource_list, c
         }
     }
 
-    // call destroy on it.
     DestroyResource(resource_list, resource);
     resource->destroy_time = resource_destroy->common.timestamp;
 

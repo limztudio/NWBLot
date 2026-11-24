@@ -229,7 +229,7 @@ namespace RmtMemoryAliasingTimelineAlgorithm
         {
             RMT_ASSERT(regions_slow_part_[region_index].counters_.counter_[res_usage_type] < std::numeric_limits<ResCountUsageType>::max());
             ++regions_slow_part_[region_index].counters_.counter_[res_usage_type];
-            regions_fast_part_[region_index].non_zero_counters_ |= (ResBitmaskUsageType)(1u << res_usage_type);  // Set the bit.
+            regions_fast_part_[region_index].non_zero_counters_ |= (ResBitmaskUsageType)(1u << res_usage_type);
         }
 
         /// @brief Internal, ancillary function that updates data structures accordingly.
@@ -243,7 +243,7 @@ namespace RmtMemoryAliasingTimelineAlgorithm
             RMT_ASSERT(regions_slow_part_[region_index].counters_.counter_[res_usage_type] > 0);
             if (--regions_slow_part_[region_index].counters_.counter_[res_usage_type] == 0)
             {
-                regions_fast_part_[region_index].non_zero_counters_ &= (ResBitmaskUsageType) ~(1u << res_usage_type);  // Clear the bit.
+                regions_fast_part_[region_index].non_zero_counters_ &= (ResBitmaskUsageType) ~(1u << res_usage_type);
             }
         }
 

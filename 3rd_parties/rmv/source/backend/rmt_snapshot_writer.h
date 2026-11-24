@@ -11,21 +11,17 @@
 #include "rmt_data_set.h"
 #include "rmt_error.h"
 
-// The base class that handles writing snapshot data.
 class RmtSnapshotWriter
 {
 public:
-    /// Constructor for the RmtSnapshotWriter
-    ///
-    /// @param [in]  data_set                             A pointer to the <c><i>RmtDataSetdata</i></c> object.
+    /// @param [in]  data_set                             A pointer to the <c><i>RmtDataSet</i></c> object.
     explicit RmtSnapshotWriter(RmtDataSet* data_set);
 
-    /// Destructor for the RmtSnapshotWriter
     virtual ~RmtSnapshotWriter();
 
     /// Add a snapshot to a trace file.
     ///
-    /// @param [in]  name                                 A pointer to the data set containing the events.
+    /// @param [in]  name                                 The name of the snapshot.
     /// @param [in]  timestamp                            The position on the timeline of the snapshot.
     /// @param [in]  new_snapshot_index                   The index of the snapshot in the data set to be added.
     ///
@@ -39,7 +35,7 @@ public:
 
     /// Remove a snapshot from a trace file.
     ///
-    /// @param [in]  new_snapshot_index                   The index of the snapshot in the data set to be removed.
+    /// @param [in]  removed_snapshot_index               The index of the snapshot to remove.
     ///
     /// @retval
     /// kRmtOk                                            The operation completed successfully.

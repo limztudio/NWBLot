@@ -12,7 +12,7 @@
 
 
 void nwbPhysicsApplyPointImpulse(
-    const float3 P,
+    const float3 pointImpulse,
     const float3 rA,
     const float3 rB,
     const float invMassA,
@@ -31,14 +31,14 @@ void nwbPhysicsApplyPointImpulse(
     inout float3 wB
 ){
     if(dynA){
-        vA -= invMassA * P;
-        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, P));
+        vA -= invMassA * pointImpulse;
+        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, pointImpulse));
         if((flagsA & 0x07u) != 0u)
             vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
     }
     if(dynB){
-        vB += invMassB * P;
-        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, P));
+        vB += invMassB * pointImpulse;
+        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, pointImpulse));
         if((flagsB & 0x07u) != 0u)
             vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
     }

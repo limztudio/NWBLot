@@ -92,10 +92,10 @@ int Curl_timeouts_next_ms(struct Curl_timeouts *timeouts,
 }
 
 /*
- * Splay using the key i (which may or may not be in the tree).
+ * Splay using a key that may or may not be in the tree.
  * This rotates the tree, so:
- * - root->smaller has all nodes smaller than `key`
- * - root->larger has all nodes larger than `key`
+ * - root->smaller has all nodes smaller than the root's key
+ * - root->larger has all nodes larger than the root's key
  * - root->key may equal `key` or not
  * <https://en.wikipedia.org/wiki/Splay_tree>
  */

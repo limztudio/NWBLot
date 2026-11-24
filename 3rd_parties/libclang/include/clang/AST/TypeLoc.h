@@ -312,11 +312,9 @@ public:
   /// Initializes the local data of this type source info block to
   /// provide no information.
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
-    // do nothing
   }
 
   void copyLocal(TypeLoc other) {
-    // do nothing
   }
 
   TypeLoc getNextTypeLoc() const {
@@ -1340,7 +1338,6 @@ public:
   TypeLoc getInnerLoc() const { return getInnerTypeLoc(); }
   QualType getInnerType() const { return getTypePtr()->desugar(); }
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
-    // nothing to do
   }
   // LocalData is empty and TypeLocBuilder doesn't handle DataSize 1.
   unsigned getLocalDataSize() const { return 0; }
@@ -1450,7 +1447,6 @@ public:
   }
 
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
-    // do nothing
   }
 
   QualType getInnerType() const {

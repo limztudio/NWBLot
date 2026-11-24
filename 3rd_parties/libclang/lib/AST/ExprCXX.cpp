@@ -229,7 +229,6 @@ SourceLocation CXXScalarValueInitExpr::getBeginLoc() const {
   return TypeInfo ? TypeInfo->getTypeLoc().getBeginLoc() : getRParenLoc();
 }
 
-// CXXNewExpr
 CXXNewExpr::CXXNewExpr(bool IsGlobalNew, FunctionDecl *OperatorNew,
                        FunctionDecl *OperatorDelete,
                        const ImplicitAllocationParameters &IAP,
@@ -411,7 +410,6 @@ static bool UnresolvedLookupExprIsVariableOrConceptParameterPack(
   return false;
 }
 
-// UnresolvedLookupExpr
 UnresolvedLookupExpr::UnresolvedLookupExpr(
     const ASTContext &Context, CXXRecordDecl *NamingClass,
     NestedNameSpecifierLoc QualifierLoc, SourceLocation TemplateKWLoc,
@@ -526,7 +524,6 @@ OverloadExpr::OverloadExpr(StmtClass SC, EmptyShell Empty, unsigned NumResults,
   OverloadExprBits.HasTemplateKWAndArgsInfo = HasTemplateKWAndArgsInfo;
 }
 
-// DependentScopeDeclRefExpr
 DependentScopeDeclRefExpr::DependentScopeDeclRefExpr(
     QualType Ty, NestedNameSpecifierLoc QualifierLoc,
     SourceLocation TemplateKWLoc, const DeclarationNameInfo &NameInfo,
@@ -1630,7 +1627,6 @@ UnresolvedMemberExpr::UnresolvedMemberExpr(
           ((Base && Base->isTypeDependent()) || BaseType->isDependentType()),
           ((Base && Base->isInstantiationDependent()) ||
            BaseType->isInstantiationDependentType()),
-          // Contains unexpanded parameter pack
           ((Base && Base->containsUnexpandedParameterPack()) ||
            BaseType->containsUnexpandedParameterPack())),
       Base(Base), BaseType(BaseType), OperatorLoc(OperatorLoc) {

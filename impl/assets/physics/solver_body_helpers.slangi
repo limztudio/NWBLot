@@ -307,17 +307,17 @@ void nwbPhysicsApplyGyroscopicStep(
     const float3 swI0 = -wLocal.z * i1 + wLocal.y * i2;
     const float3 swI1 = wLocal.z * i0 - wLocal.x * i2;
     const float3 swI2 = -wLocal.y * i0 + wLocal.x * i1;
-    const float3 J0 = i0 + h * (swI0 - float3(0.0f, -iOmega.z, iOmega.y));
-    const float3 J1 = i1 + h * (swI1 - float3(iOmega.z, 0.0f, -iOmega.x));
-    const float3 J2 = i2 + h * (swI2 - float3(-iOmega.y, iOmega.x, 0.0f));
+    const float3 jacobianRow0 = i0 + h * (swI0 - float3(0.0f, -iOmega.z, iOmega.y));
+    const float3 jacobianRow1 = i1 + h * (swI1 - float3(iOmega.z, 0.0f, -iOmega.x));
+    const float3 jacobianRow2 = i2 + h * (swI2 - float3(-iOmega.y, iOmega.x, 0.0f));
 
-    const float3 jc0 = cross(J1, J2);
-    const float detJ = dot(J0, jc0);
+    const float3 jc0 = cross(jacobianRow1, jacobianRow2);
+    const float detJ = dot(jacobianRow0, jc0);
     if(abs(detJ) <= 1.0e-30f)
         return;
 
-    const float3 jc1 = cross(J2, J0);
-    const float3 jc2 = cross(J0, J1);
+    const float3 jc1 = cross(jacobianRow2, jacobianRow0);
+    const float3 jc2 = cross(jacobianRow0, jacobianRow1);
     const float3 rhs = -residual;
     const float3 dw = float3(
         dot(rhs, float3(jc0.x, jc1.x, jc2.x)),

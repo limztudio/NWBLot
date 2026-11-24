@@ -313,7 +313,7 @@ void Queue::collectCompletedCommandBuffers(){
             break;
 
         TrackedCommandBufferPtr completed = Move(m_commandBuffersInFlight.front());
-        m_commandBuffersInFlight.pop_front();
+        m_commandBuffersInFlight.popFront();
         if(completed->m_recordingWorkerIndex == 0u && &completed->m_queue == this && &completed->m_context == &m_context){
             completed->clearTrackedReferences();
             if(completed->m_arenaState == TrackedCommandBufferArenaState::Pending){

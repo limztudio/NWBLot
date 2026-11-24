@@ -66,7 +66,7 @@ struct MHD_RqDAuth;
  * @param connection the connection to process
  * @return the pointer to structure with Authentication parameters,
  *         NULL if no memory in memory pool, if called too early (before
- *         header has been received) or if no valid Basic Authorisation header
+ *         header has been received) or if no valid Digest Authorisation header
  *         found.
  */
 const struct MHD_RqDAuth *

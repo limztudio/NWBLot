@@ -864,9 +864,7 @@ class [[nodiscard]] CartesianProductGenerator
     // so no component iterators must be beyond end of range, either.
     void Advance() override {
       assert(!AtEnd());
-      // Advance the last iterator.
       ++std::get<sizeof...(T) - 1>(current_);
-      // if that reaches end, propagate that up.
       AdvanceIfEnd<sizeof...(T) - 1>();
       ComputeCurrentValue();
     }

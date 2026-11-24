@@ -20,12 +20,6 @@
 #pragma warning (disable: 4127) //  conditional expression is constant
 #endif
 
-// v1.50: Added UASTC HDR 4x4 support
-// v1.60: Added RDO ASTC HDR 6x6 and intermediate support
-// v1.65: Added ASTC LDR 4x4-12x12 and XUASTC LDR 4x4-12x12 (not publically released)
-// v2.00: Added unified effort/quality options across all formats, fast direct transcoding of XUASTC 4x4/6x6/8x6 to BC7, adaptive deblocking, ZStd or arithmetic profiles, weight grid DCT
-// v2.10: Khronos modifications to KTX2 file format for UASTC HDR 6x6i support for KTX-Software compatiblity (we're also modifying how XUASTC LDR files use KTX2 to be compatible)
-// v2.50: SCD, in-loop deblocking, standardized deblocking operator astcf encoder, bc7->astc 4x4 transcoder, astc ldr 4x4 encoder using bc7f->transcoding, astc ldr encoder optimizations, XUBC7 format, DDS transcoding/unpacking/info support
 #define BASISD_LIB_VERSION 250
 #define BASISD_VERSION_STRING "02.50"
 
@@ -48,7 +42,6 @@ namespace basisu
 namespace basist
 {
 	// Low-level formats directly supported by the transcoder (other supported texture formats are combinations of these low-level block formats).
-	// You probably don't care about these enum's unless you are going pretty low-level and calling the transcoder to decode individual slices.
 	enum class block_format
 	{
 		cETC1,								// ETC1S RGB 
@@ -62,7 +55,7 @@ namespace basist
 		cBC7,								// Full BC7 block, any mode
 		cBC7_M5_COLOR,						// RGB BC7 mode 5 color (writes an opaque mode 5 block)
 		cBC7_M5_ALPHA,						// alpha portion of BC7 mode 5 (cBC7_M5_COLOR output data must have been written to the output buffer first to set the mode/rot fields etc.)
-		cETC2_EAC_A8,						// alpha block of ETC2 EAC (first 8 bytes of the 16-bit ETC2 EAC RGBA format)
+		cETC2_EAC_A8,						// alpha block of ETC2 EAC (first 8 bytes of the 16-byte ETC2 EAC RGBA block)
 		cASTC_LDR_4x4,						// ASTC LDR 4x4 (either color-only or color+alpha). Note that the transcoder always currently assumes sRGB decode mode is not enabled when outputting ASTC LDR for ETC1S/UASTC LDR 4x4.
 											// data. If you use a sRGB ASTC format you'll get ~1 LSB of additional error, because of the different way ASTC decoders scale 8-bit endpoints to 16-bits during unpacking.
 		
@@ -100,7 +93,6 @@ namespace basist
 		cASTC_HDR_4x4,
 		cASTC_HDR_6x6,
 
-		// The remaining ASTC LDR block sizes.
 		cASTC_LDR_5x4,
 		cASTC_LDR_5x5,
 		cASTC_LDR_6x5,
@@ -134,7 +126,6 @@ namespace basist
 		return false;
 	}
 
-	// LDR or HDR ASTC?
 	inline bool block_format_is_astc(block_format fmt)
 	{
 		switch (fmt)
@@ -258,9 +249,9 @@ namespace basist
 	const uint32_t ENDPOINT_PRED_MIN_REPEAT_COUNT = 3;
 	const uint32_t ENDPOINT_PRED_COUNT_VLC_BITS = 4;
 
-	const uint32_t NUM_ENDPOINT_PREDS = 3;// BASISU_ARRAY_SIZE(g_endpoint_preds);
+	const uint32_t NUM_ENDPOINT_PREDS = 3;
 	const uint32_t CR_ENDPOINT_PRED_INDEX = NUM_ENDPOINT_PREDS - 1;
-	const uint32_t NO_ENDPOINT_PRED_INDEX = 3;//NUM_ENDPOINT_PREDS;
+	const uint32_t NO_ENDPOINT_PRED_INDEX = 3;
 	const uint32_t MAX_SELECTOR_HISTORY_BUF_SIZE = 64;
 	const uint32_t SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH = 3;
 	const uint32_t SELECTOR_HISTORY_BUF_RLE_COUNT_BITS = 6;
@@ -893,7 +884,6 @@ namespace basist
 		{
 			if (index)
 			{
-				//std::swap(m_values[index / 2], m_values[index]);
 				int x = m_values[index / 2];
 				int y = m_values[index];
 				m_values[index / 2] = y;
@@ -955,7 +945,7 @@ namespace basist
 
 		color32() = default;
 
-		// both constructors are no clamping now (not this classes original intention - optimization)
+		// Both constructors truncate components to bytes.
 		color32(uint32_t vr, uint32_t vg, uint32_t vb, uint32_t va) { set(vr, vg, vb, va); }
 		color32(eNoClamp unused, uint32_t vr, uint32_t vg, uint32_t vb, uint32_t va) { (void)unused; set_noclamp_rgba(vr, vg, vb, va); }
 
@@ -965,7 +955,6 @@ namespace basist
 		void set_noclamp_rgb(uint32_t vr, uint32_t vg, uint32_t vb) { c[0] = static_cast<uint8_t>(vr); c[1] = static_cast<uint8_t>(vg); c[2] = static_cast<uint8_t>(vb); }
 		void set_noclamp_rgba(uint32_t vr, uint32_t vg, uint32_t vb, uint32_t va) { set(vr, vg, vb, va); }
 
-		// clamped to [0,255]
 		void set_clamped(int vr, int vg, int vb, int va) { c[0] = clamp255(vr); c[1] = clamp255(vg); c[2] = clamp255(vb); c[3] = clamp255(va); }
 
 		uint8_t operator[] (uint32_t idx) const { assert(idx < 4); return c[idx]; }
@@ -1368,7 +1357,6 @@ namespace basist
 		return x.f;
 	}
 
-	// Originally from bc6h_enc.h
 
 	void bc6h_enc_init();
 
@@ -1525,7 +1513,7 @@ namespace basist
 			
 			// Weight DPCM
 			basisu::packed_uint<4> m_weight2_bits_len; // 2-bit weights (4 per byte), up to BISE_4_LEVELS
-			basisu::packed_uint<4> m_weight3_bits_len; // 3-bit weights (4 per byte), up to BISE_8_LEVELS
+			basisu::packed_uint<4> m_weight3_bits_len; // 3-bit weights (2 per byte), up to BISE_8_LEVELS
 			basisu::packed_uint<4> m_weight4_bits_len; // 4-bit weights (2 per byte), up to BISE_16_LEVELS
 			basisu::packed_uint<4> m_weight8_bytes_len; // 8-bit weights (1 per byte), up to BISE_32_LEVELS
 
@@ -1612,7 +1600,6 @@ namespace basist
 			astc_block_grid_data(float weight_gamma) : m_weight_gamma(weight_gamma) {}
 		};
 
-		//typedef basisu::hash_map<astc_block_grid_config, astc_block_grid_data, bit_hasher<astc_block_grid_config> > astc_block_grid_data_hash_t;
 				
 		struct astc_block_grid_data_hash_t
 		{
@@ -1804,7 +1791,6 @@ namespace basist
 				coeff(uint16_t num_zeros, int16_t coeff) : m_num_zeros(num_zeros), m_coeff(coeff) {}
 			};
 
-			//basisu::static_vector<coeff, 65> m_coeffs;
 			basisu::vector<coeff> m_coeffs;
 
 			uint32_t m_max_coeff_mag;
@@ -1897,7 +1883,7 @@ namespace basist
 			// Adaptively compensate for weight level quantization noise being fed into the DCT. 
 			// The more coursely the weight levels are quantized, the more noise injected, and the more noise will be spread between multiple AC coefficients.
 			// This will cause some previously 0 coefficients to increase in mag, but they're likely noise. So carefully nudge the quant step size to compensate.
-			static float scale_quant_steps(int Q_astc, float gamma = 0.1f /*.13f*/, float clamp_max = 2.0f)
+			static float scale_quant_steps(int Q_astc, float gamma = 0.1f , float clamp_max = 2.0f)
 			{
 				assert(Q_astc >= 2);
 				float factor = 63.0f / (Q_astc - 1);
@@ -2021,7 +2007,7 @@ namespace basist
 		const uint32_t OTM_NUM_SUBSETS = 3; // 1-3
 		const uint32_t OTM_NUM_CCS = 5; // -1 to 3
 		const uint32_t OTM_NUM_GRID_SIZES = 2; // 0=small or 1=large (grid_w>=block_w-1 and grid_h>=block_h-1)
-		const uint32_t OTM_NUM_GRID_ANISOS = 3; // 0=W=H, 1=W>H, 2=W<H
+		const uint32_t OTM_NUM_GRID_ANISOS = 3; // 0=gw/bw=gh/bh, 1=gw/bw>gh/bh, 2=gw/bw<gh/bh
 				
 		inline uint32_t calc_grid_size_val(uint32_t grid_width, uint32_t grid_height, uint32_t block_width, uint32_t block_height)
 		{
@@ -2281,7 +2267,6 @@ namespace basist
 			bool& blue_contraction_clamped_flag, bool& base_ofs_clamped_flag);
 
 		uint32_t get_total_unique_patterns(uint32_t astc_block_size_index, uint32_t num_parts);
-		//uint16_t unique_pat_index_to_part_seed(uint32_t astc_block_size_index, uint32_t num_parts, uint32_t unique_pat_index);
 
 		typedef bool (*xuastc_decomp_image_init_callback_ptr)(uint32_t num_blocks_x, uint32_t num_blocks_y, uint32_t block_width, uint32_t block_height, bool srgb_decode_profile, float dct_q, bool has_alpha, void* pData);
 		typedef bool (*xuastc_decomp_image_block_callback_ptr)(uint32_t bx, uint32_t by, const astc_helpers::log_astc_block& log_blk, void* pData);
@@ -2398,7 +2383,7 @@ namespace basist
 				const float prob_0 = (float)m_bit0_prob / (float)BMMaxCount;
 				const float prob = bit ? (1.0f - prob_0) : prob_0;
 				const float bits = arith_fastbits_f32::bits_from_prob_linear(prob);
-				assert(fabs(bits - (-log2f(prob))) < .00125f); // basic sanity check
+				assert(fabs(bits - (-log2f(prob))) < .00125f);
 				return bits;
 			}
 
@@ -2567,7 +2552,7 @@ namespace basist
 				const float prob = (float)(m_cum_sym_freqs[sym_index + 1] - m_cum_sym_freqs[sym_index]) / (float)DMMaxCount;
 
 				const float bits = arith_fastbits_f32::bits_from_prob_linear(prob);
-				assert(fabs(bits - (-log2f(prob))) < .00125f); // basic sanity check
+				assert(fabs(bits - (-log2f(prob))) < .00125f);
 				return bits;
 			}
 
@@ -2623,12 +2608,6 @@ namespace basist
 				m_base = 0;
 				m_length = ArithMaxLen;
 
-				// Place 8-bit marker at beginning. 
-				// This virtually always guarantees no backwards carries can be lost at the very beginning of the stream. (Should be impossible with this design.)
-				// It always pushes out 1 0 byte at the very beginning to absorb future carries.
-				// Caller does this now, we send a tiny header anyway
-				//put_bits(0x1, 8);
-				//assert(m_data_buf[0] != 0xFF);
 			}
 
 			void put_bit(uint32_t bit)
@@ -2714,7 +2693,6 @@ namespace basist
 
 				uint32_t q = v >> m, r = v & ((1 << m) - 1);
 
-				// rice coding sanity check
 				assert(q <= 64);
 
 				uint32_t total_bits = q;
@@ -2741,7 +2719,6 @@ namespace basist
 
 				uint32_t q = v >> m;
 
-				// rice coding sanity check
 				assert(q <= 64);
 
 				uint32_t total_bits = q + 1 + m;
@@ -2938,7 +2915,7 @@ namespace basist
 
 				renorm();
 
-				// Pad output to min 5 bytes - quite conservative; we're typically compressing large streams so the overhead shouldn't matter.
+				// The decoder requires at least five bytes.
 				if (m_data_buf.size() < ArithMinExpectedDataBufSize)
 					m_data_buf.resize(ArithMinExpectedDataBufSize);
 			}
@@ -3008,10 +2985,6 @@ namespace basist
 				m_value = ((uint32_t)(pBuf[0]) << 24u) | ((uint32_t)(pBuf[1]) << 16u) | ((uint32_t)(pBuf[2]) << 8u) | (uint32_t)(pBuf[3]);
 				m_length = ArithMaxLen;
 
-				// Check for the 8-bit marker we always place at the beginning of the stream.
-				//uint32_t marker = get_bits(8);
-				//if (marker != 0x1)
-				//	return false;
 
 				return true;
 			}
@@ -3132,7 +3105,6 @@ namespace basist
 
 					if (k > 16)
 					{
-						// something is very wrong
 						assert(0);
 						return 0;
 					}
@@ -3244,7 +3216,6 @@ namespace basist
 
 			// For dual plane (mode 4-5): normally weight plane 0 is for RGB (vector plane) and weight plane 1 is for A (scalar plane), but for mode 4 this can be inverted.
 			// This is the vector plane's weight plane (BEFORE final component rotation/swapping).
-			// Could also be called "m_dp_rgb_vector_weight_plane_index".
 			uint8_t m_mode4_index_selector; // 0 or 1 for mode 4 (which weight plane's weights has RGB, the other plane has alpha), otherwise always 0
 
 			uint8_t m_endpoint_bits[2]; // [rgb or a], 0 or [4,7] - note for mode 4/5 (dual plane) this is BEFORE the component rotation/swapping at the end of decoding
@@ -3291,7 +3262,6 @@ namespace basist
 			{
 				assert(c <= 3);
 
-				// always 0 in SP
 				if (!is_dual_plane())
 					return 0;
 
@@ -3307,7 +3277,6 @@ namespace basist
 			{
 				assert(c <= 3);
 
-				// always 0 in SP
 				if (!is_dual_plane())
 					return 0; 
 
@@ -3322,7 +3291,6 @@ namespace basist
 			
 			bool has_alpha() const { return m_endpoint_bits[1] != 0; }
 
-			// this is the # of endpoint comps
 			uint32_t get_num_comps() const { return m_endpoint_bits[1] ? 4 : 3; }
 
 			uint32_t get_num_pbits_per_subset() const { return m_num_pbits ? (m_shared_pbits ? 1 : 2) : 0; }
@@ -3440,7 +3408,6 @@ namespace basist
 
 			cPackBC7FlagDisableRGBDualPlane = 8192, // don't use RGB dual plane channels (but A is OK)
 
-			// Default to use first:
 
 			// Decent analytical BC7 defaults
 			cPackBC7FlagDefaultFastest = cPackBC7FlagUseTrivialMode6, // very weak particularly on alpha, mode 6 only for RGB/RGBA, 
@@ -3496,7 +3463,6 @@ namespace basist
 		struct pack_etc1_state
 		{
 			uint64_t m_prev_solid_block;
-			//decoder_etc_block m_prev_solid_block;
 
 			int m_prev_solid_r8;
 			int m_prev_solid_g8;
@@ -3632,9 +3598,7 @@ namespace basist
 	};
 
 	// ---------------- Fixed-point math helpers ----------------
-	// Moved here from encoder/basisu_math.h (was namespace bu_math) so the
-	// transcoder + XBC7 decode path can use them. Pure integer Q(31-FRAC).FRAC;
-	// no encoder dependencies. The self-test still lives in basisu_math.h.
+	// Integer fixed-point helpers have no encoder dependencies.
 	namespace fixed_detail
 	{
 		constexpr int clz64(uint64_t x)   // x != 0
@@ -3642,12 +3606,7 @@ namespace basist
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(FIXED_PORTABLE_CLZ)
 			return __builtin_clzll(x);
 #else
-			// Portable constexpr binary search (6 compares). Used by MSVC on
-			// x86 / x64 / ARM / ARM64: the _BitScanReverse intrinsics are not
-			// usable in constexpr, and C++17 has no is_constant_evaluated() to
-			// split compile-time from runtime, so one standard-C++ path serves
-			// both. (If you move to /std:c++20 you could route the runtime path
-			// through the intrinsics; the gain is minor next to the divide.)
+			// Portable constexpr search: _BitScanReverse is not constexpr in C++17.
 			int n = 0;
 			if (x <= 0x00000000FFFFFFFFull) { n += 32; x <<= 32; }
 			if (x <= 0x0000FFFFFFFFFFFFull) { n += 16; x <<= 16; }
@@ -3674,13 +3633,9 @@ namespace basist
 			return r;
 		}
 
-		// Seed table for sqrt_fast: entry i ~ sqrt((i + 0.5) * 2^57) for the
-		// normalized argument X in [2^62, 2^64), indexed by its top 7 bits.
-		// Index = X >> 57, and X >= 2^62 means the index is always >= 32, so
-		// entries [0, 31] are unreachable; they stay zero-initialized, which
-		// fails loudly (divide by zero in the Newton step) if the normalization
-		// is ever broken. Burning 32 slots beats a subtract in the hot path.
-		// FRAC_BITS-independent, built at compile time from the exact isqrt.
+		// sqrt_fast uses the top seven bits of normalized X in [2^62, 2^64).
+		// Entries below 32 are unreachable and remain zero to expose bad normalization.
+		// Seeds are built from exact integer square roots and do not depend on FRAC_BITS.
 		struct sqrt_lut_t { uint32_t e[128]; };
 		constexpr sqrt_lut_t make_sqrt_lut()
 		{
@@ -3723,7 +3678,6 @@ namespace basist
 
 		static constexpr int32_t ONE = int32_t(1) << FRAC_BITS;
 
-		// ---- construction -------------------------------------------------
 
 		constexpr fixed() : v(0) {}
 
@@ -3731,8 +3685,7 @@ namespace basist
 
 		static constexpr fixed from_int(int32_t x)
 		{
-			// x * ONE instead of x << FRAC_BITS: shifting negatives is UB until
-			// C++20, and the multiply compiles to the same shift anyway.
+			// Multiplication avoids left-shifting negative values in C++17.
 			return fixed(checked32(int64_t(x) * ONE), raw_tag{});
 		}
 
@@ -3763,7 +3716,6 @@ namespace basist
 			return fixed(int32_t(scaled), raw_tag{});
 		}
 
-		// ---- conversion out ------------------------------------------------
 
 		constexpr float  to_float()  const { return float(v) / float(ONE); }
 		constexpr double to_double() const { return double(v) / double(ONE); }
@@ -3806,7 +3758,6 @@ namespace basist
 			return checked32(rounded_rshift(p, 2 * FRAC_BITS));
 		}
 
-		// ---- arithmetic ----------------------------------------------------
 
 		constexpr fixed operator+(fixed b) const
 		{
@@ -3855,10 +3806,7 @@ namespace basist
 
 		friend constexpr fixed operator*(int32_t s, fixed a) { return a * s; }
 
-		// ---- wide accumulate pattern -------------------------------------------
-		// For dot products / filters: sum mul_wide() products in an int64_t, then
-		// convert back with ONE rounding via from_sum. Far faster than rounding
-		// every multiply (vectorizes), same accuracy in practice.
+		// Sum wide products before rounding once with from_sum.
 		constexpr int64_t mul_wide(fixed b) const { return int64_t(v) * int64_t(b.v); }
 
 		static constexpr fixed from_sum(int64_t s)      // s in Q(2*FRAC_BITS)
@@ -3876,7 +3824,6 @@ namespace basist
 			return from_raw(checked32(a.v + rounded_rshift((int64_t(b.v) - a.v) * t.v, FRAC_BITS)));
 		}
 
-		// ---- fast (truncating) variants ---------------------------------------
 		// Skip the round-half-away-from-zero work: one multiply + one shift (or
 		// one divide). Result differs from the rounding versions by at most 1 ulp.
 		// Note the truncation directions differ, as is conventional:
@@ -3915,7 +3862,6 @@ namespace basist
 			return from_raw(v >> s);
 		}
 
-		// ---- compound assignment --------------------------------------------
 
 		constexpr fixed& operator+=(fixed b) { *this = *this + b; return *this; }
 		constexpr fixed& operator-=(fixed b) { *this = *this - b; return *this; }
@@ -3926,7 +3872,6 @@ namespace basist
 		constexpr fixed& operator<<=(int s) { *this = *this << s; return *this; }
 		constexpr fixed& operator>>=(int s) { *this = *this >> s; return *this; }
 
-		// ---- comparison ------------------------------------------------------
 
 		constexpr bool operator==(fixed b) const { return v == b.v; }
 		constexpr bool operator!=(fixed b) const { return v != b.v; }
@@ -3935,7 +3880,6 @@ namespace basist
 		constexpr bool operator> (fixed b) const { return v > b.v; }
 		constexpr bool operator>=(fixed b) const { return v >= b.v; }
 
-		// ---- misc helpers ------------------------------------------------------
 
 		constexpr fixed abs() const
 		{
@@ -3976,7 +3920,7 @@ namespace basist
 		}
 
 		// Approximate square root: LUT seed + one Newton-Raphson step.
-		// Pure integer, deterministic, constexpr, ~15x faster than sqrt().
+		// Pure integer, deterministic and constexpr.
 		// Relative error <= ~2^-15 (~0.003%) plus ~1 ulp of output quantization
 		// (which dominates for results near zero). Slight upward bias
 		// (Newton converges from above). v must be >= 0.
@@ -4001,7 +3945,6 @@ namespace basist
 		struct raw_tag {};
 		constexpr fixed(int32_t raw, raw_tag) : v(raw) {}
 
-		// Asserts that a widened intermediate fits back into int32_t.
 		static constexpr int32_t checked32(int64_t x)
 		{
 			assert(x >= INT32_MIN && x <= INT32_MAX && "fixed: overflow");
@@ -4031,7 +3974,6 @@ namespace basist
 		}
 	};
 
-	// Common instantiations
 	using fixed24_8 = fixed<8>;		// Q23.8
 	using fixed22_10 = fixed<10>;   // Q21.10
 	using fixed16_16 = fixed<16>;   // Q15.16

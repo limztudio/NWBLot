@@ -344,26 +344,7 @@ inline constexpr std::array<std::size_t (*)(std::size_t), TSL_RH_NB_PRIMES>
  * the values around better in the buckets with a poor hash function.
  *
  * To allow the compiler to optimize the modulo operation, a lookup table is
- * used with constant primes numbers.
- *
- * With a switch the code would look like:
- * \code
- * switch(iprime) { // iprime is the current prime of the hash table
- *     case 0: hash % 5ul;
- *             break;
- *     case 1: hash % 17ul;
- *             break;
- *     case 2: hash % 29ul;
- *             break;
- *     ...
- * }
- * \endcode
- *
- * Due to the constant variable in the modulo the compiler is able to optimize
- * the operation by a series of multiplications, substractions and shifts.
- *
- * The 'hash % 5' could become something like 'hash - (hash * 0xCCCCCCCD) >> 34)
- * * 5' in a 64 bits environment.
+ * used with constant prime numbers.
  */
 class prime_growth_policy {
  public:

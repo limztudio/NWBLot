@@ -188,7 +188,7 @@ namespace GpuTimingScopeSkipReason{
         QueryCapacityUnavailable,
         RecordingPositionUnavailable,
 
-        Count,
+        kCount,
     };
 };
 
@@ -207,7 +207,7 @@ struct GpuTimingRecorderStatistics{
     u64 quarantinedScopeCount = 0u;
     u64 beginFailureCount = 0u;
     u64 sampleListenerFailureCount = 0u;
-    Array<u64, GpuTimingScopeSkipReason::Count> skippedScopeCountByReason{};
+    Array<u64, GpuTimingScopeSkipReason::kCount> skippedScopeCountByReason{};
     u16 deviceGeneration = 0u;
     b8 queryCollectionEnabled = false;
     b8 timingSinkEnabled = false;

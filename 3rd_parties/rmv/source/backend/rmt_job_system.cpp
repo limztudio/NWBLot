@@ -41,7 +41,6 @@ static uint32_t RMT_THREAD_FUNC JobSystemThreadFunc(void* input_data)
         const RmtErrorCode error_code = RmtMutexLock(&thread_input->job_queue->queue_mutex);
         RMT_ASSERT(error_code == kRmtOk);
 
-        // if there is no work then reset the signal and release the mutex
         if (thread_input->job_queue->queue_size == 0)
         {
             RmtThreadEventReset(&thread_input->job_queue->signal);
@@ -59,7 +58,6 @@ static uint32_t RMT_THREAD_FUNC JobSystemThreadFunc(void* input_data)
             RmtJobFunction    func           = current_job->function;
             volatile int64_t* addr           = &current_job->completed_count;
 
-            // if we ran the last instance, then remove it from the queue
             if (current_job->run_count == current_job->count)
             {
                 thread_input->job_queue->queue_head_index = (thread_input->job_queue->queue_head_index + 1) % RMT_MAXIMUM_JOB_COUNT;

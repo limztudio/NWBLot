@@ -1052,7 +1052,6 @@ void BlockFrequencyInfoImpl<BT>::calculate(const FunctionT &F,
   RPOT.clear();
   Nodes.clear();
 
-  // Initialize.
   LLVM_DEBUG(dbgs() << "\nblock-frequency: " << F.getName()
                     << "\n================="
                     << std::string(F.getName().size(), '=') << "\n");

@@ -5,6 +5,7 @@ the `nwb_pipeline` CMake target to produce `adhd_compiler`, `dependency_computer
 `asset_builder`, and `asset_gatherer` (with `.exe` on Windows); `pipeline/launch.py`
 runs the three asset-cooking stages (`dependency_computer`, `asset_builder`, and
 `asset_gatherer`), while `adhd_compiler` compiles `.adhd` sources during the CMake build.
+The launcher requires Python 3.10 or newer when `--input` is supplied.
 `NWB_BUILD_PIPELINE` controls these targets and the asset build libraries.
 
 Run the complete pipeline through the repository launcher:
@@ -39,8 +40,8 @@ That resolution accepts `--repo-root` (default: the working directory) and repea
 unrelated asset documents, and provider ownership follows asset-root order. Unresolved,
 wrong-type, or ambiguous asset references fail before the output list is written.
 Paired encoded texture payloads stay with the texture cooker and are not added as
-separate inputs. Its `--output` is a UTF-8 file containing one resolved provider path
-per line.
+separate inputs. Its `--output` is a UTF-8 file containing one input path per line. Explicit seed paths
+are retained, and transitive dependencies add their resolved provider paths.
 
 ```console
 python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets project/assets --output dependencies.list
@@ -56,7 +57,7 @@ The builder only parses selected inputs; it does not expand their dependencies.
 Related assets required by metadata validation must be included in the inputs.
 
 ```console
-python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root project/assets --output-directory built --configuration dbg
+python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root impl/assets project/assets --output-directory built --configuration dbg
 ```
 
 Standalone `.nwb` cooked assets are published directly under `__asset_cache/` as `<sha1(lower(absolute path))>.nwba` so projects share cached cooked assets. `assets.list` in the output directory references those shared `__asset_cache/*.nwba` paths alongside relative filenames for project-scoped `.nwba` files built in the output directory. When a standalone asset (or cached shader bytecode variant) is already cached and up to date, the cook notifies via `info(...)`.

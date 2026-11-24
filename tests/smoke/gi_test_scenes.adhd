@@ -307,7 +307,7 @@ b8 ComplexSceneBoxesOverlap(in ComplexSceneBox a, in ComplexSceneBox b){
     if(a.position.y + aHalfY <= b.position.y - bHalfY || b.position.y + bHalfY <= a.position.y - aHalfY)
         return false;
 
-    const VectorSingle angles = VectorSingle(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f) * (s_PI / 180.0f);
+    const VectorSingle angles = VectorSingle(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f) * (s_Pi / 180.0f);
     const VectorSingle absoluteSine = Abs(Sin(angles));
     const VectorSingle absoluteCosine = Abs(Cos(angles));
     const VectorSingle cosineSine = VectorSingle(absoluteCosine.x, absoluteSine.x, absoluteCosine.y, absoluteSine.y);
@@ -336,7 +336,7 @@ b8 CreateComplexGiBoxEntity(in ComplexSceneBox box, mut World world){
     if(!entity.valid())
         return false;
     if(box.yawDegrees != 0.0f){
-        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, box.yawDegrees, 0.0f, 0.0f) * (s_PI / 180.0f));
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, box.yawDegrees, 0.0f, 0.0f) * (s_Pi / 180.0f));
         if(!SetSmokeEntityRotation(entity, rotation, world))
             return false;
     }

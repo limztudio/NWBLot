@@ -106,7 +106,7 @@ const char* RmtGetFormatNameFromFormat(RmtFormat format);
 
 /// Get the channel swizzle name as a string from the channel swizzle struct.
 ///
-/// @param [in]     channel_swizzle         An RmtChannelSwizzle defining the token type.
+/// @param [in]     channel_swizzle         The channel swizzle.
 /// @returns
 /// Pointer to the channel swizzle string.
 const char* RmtGetChannelSwizzleNameFromChannelSwizzle(RmtChannelSwizzle channel_swizzle);
@@ -196,9 +196,8 @@ void RmtGetPipelineStageNameFromPipelineStageFlags(int32_t flags, char* flag_tex
 ///                             May be useful to disable in case the backend is being used outside of RMV.
 void RmtSetPrintingCallback(RmtPrintingCallback callback_func, bool enable_printing);
 
-/// @brief Printing function to use. Will use printing function set with
-/// <c><i>RgpSetPrintingCallback</i></c>. If nothing is set, then
-/// printf will be used.
+/// @brief Print using the callback set by RmtSetPrintingCallback.
+/// If enabled without a callback, print to the debugger on Windows or stdout elsewhere.
 ///
 /// @param [in] log_level  The log message type (info, error, warning etc).
 /// @param [in] format     The formatting string.

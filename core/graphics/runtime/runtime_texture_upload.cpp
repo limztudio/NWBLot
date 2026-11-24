@@ -89,7 +89,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(textureDesc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count)){
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to upload texture batch '{}': texture format is invalid"), ConvertString(textureDesc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }

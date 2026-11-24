@@ -119,7 +119,7 @@ extern enum Format : u8{
     ASTC_12x12_UNORM,
     ASTC_12x12_UNORM_SRGB,
     ASTC_12x12_FLOAT,
-    Count
+    kCount
 };
 
 [cpp_header("<core/graphics/rhi/format.h>"), cpp_name("::NWB::Core::FormatKind::Enum")]
@@ -128,7 +128,7 @@ extern enum FormatKind : u8{
     Normalized,
     Float,
     DepthStencil,
-    Count
+    kCount
 };
 
 [cpp_header("<core/graphics/rhi/format.h>"), cpp_name("::NWB::Core::FormatSupport::Mask")]
@@ -154,7 +154,7 @@ extern enum TextureUploadAspect : u8{
     Color,
     Depth,
     Stencil,
-    Count
+    kCount
 };
 
 

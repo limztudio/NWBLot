@@ -1515,7 +1515,6 @@ static CURLcode cookielist(struct Curl_easy *data, const char *ptr)
   }
   else {
     if(!data->cookies) {
-      /* if cookie engine was not running, activate it */
       data->cookies = Curl_cookie_init();
       if(!data->cookies)
         return CURLE_OUT_OF_MEMORY;
@@ -2160,16 +2159,8 @@ static CURLcode setopt_cptr_ssh(struct Curl_easy *data, CURLoption option,
     s->ssh_keyfunc_userp = ptr;
     break;
   case CURLOPT_SSH_HOST_PUBLIC_KEY_MD5:
-    /*
-     * Option to allow for the MD5 of the host public key to be checked
-     * for validation purposes.
-     */
     return Curl_setstropt(data, STRING_SSH_HOST_PUBLIC_KEY_MD5, ptr);
   case CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256:
-    /*
-     * Option to allow for the SHA256 of the host public key to be checked
-     * for validation purposes.
-     */
     return Curl_setstropt(data, STRING_SSH_HOST_PUBLIC_KEY_SHA256, ptr);
   case CURLOPT_SSH_KNOWNHOSTS:
     /*

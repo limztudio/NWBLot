@@ -1,5 +1,7 @@
 # Renderer optimization follow-up
 
+> **Historical record:** This is a historical implementation and measurement record. Its statuses, instructions, and source references describe the recorded campaign rather than a current work queue.
+
 This pass starts at `296e8f485` after the completed ten-step evaluation in `RENDERER_OPTIMIZATION_STEPS.md`. The user authorized the additional source-review recommendations and retains the instruction to commit and push each completed step to `main`. Production code follows `.helper/standard.md` and `.helper/exception.md`; no unnamed namespaces are permitted.
 
 | Step | Candidate | Owner | Status |

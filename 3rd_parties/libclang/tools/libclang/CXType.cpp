@@ -976,9 +976,7 @@ long long clang_Type_getAlignOf(CXType T) {
   if (const auto *Deduced = dyn_cast<DeducedType>(QT))
     if (Deduced->getDeducedType().isNull())
       return CXTypeLayoutError_Undeduced;
-  // Exceptions by GCC extension - see ASTContext.cpp:1313 getTypeInfoImpl
-  // if (QT->isFunctionType()) return 4; // Bug #15511 - should be 1
-  // if (QT->isVoidType()) return 1;
+  // ASTContext handles the GCC alignment extensions for function and void types.
   return Ctx.getTypeAlignInChars(QT).getQuantity();
 }
 

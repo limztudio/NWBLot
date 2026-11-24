@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/mhd_mono_clock.h
+ * @file microhttpd/mhd_mono_clock.c
  * @brief  internal monotonic clock functions implementations
  * @author Karlson2k (Evgeny Grin)
  */
@@ -187,7 +187,7 @@ MHD_monotonic_sec_counter_init (void)
     mono_clock_source = _MHD_CLOCK_GETTIME;
   }
   else
-#endif /* CLOCK_MONOTONIC_COARSE */
+#endif /* CLOCK_MONOTONIC_FAST */
 #ifdef CLOCK_MONOTONIC_RAW_APPROX
   /* Darwin-specific clock */
   /* Not affected by frequency adjustment, returns clock value cached at
@@ -200,7 +200,7 @@ MHD_monotonic_sec_counter_init (void)
     mono_clock_source = _MHD_CLOCK_GETTIME;
   }
   else
-#endif /* CLOCK_MONOTONIC_RAW */
+#endif /* CLOCK_MONOTONIC_RAW_APPROX */
 #ifdef CLOCK_MONOTONIC_RAW
   /* Linux and Darwin clock */
   /* Not affected by frequency adjustment,
@@ -250,7 +250,7 @@ MHD_monotonic_sec_counter_init (void)
     mono_clock_source = _MHD_CLOCK_GETTIME;
   }
   else
-#endif /* CLOCK_BOOTTIME */
+#endif /* CLOCK_UPTIME */
 #endif /* HAVE_CLOCK_GETTIME */
 #ifdef HAVE_CLOCK_GET_TIME
   /* Darwin-specific monotonic clock */
@@ -434,7 +434,7 @@ MHD_monotonic_sec_counter (void)
  * Tries to be not affected by manually setting the system real time
  * clock or adjustments by NTP synchronization.
  *
- * @return number of microseconds from some fixed moment
+ * @return number of milliseconds from some fixed moment
  */
 uint64_t
 MHD_monotonic_msec_counter (void)

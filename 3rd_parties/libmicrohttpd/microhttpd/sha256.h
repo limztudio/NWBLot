@@ -70,7 +70,7 @@
 #define SHA256_BLOCK_SIZE (SHA256_BLOCK_SIZE_BITS / 8)
 
 /**
- * Size of single processing block in bytes
+ * Size of single processing block in words
  */
 #define SHA256_BLOCK_SIZE_WORDS (SHA256_BLOCK_SIZE_BITS / SHA256_WORD_SIZE_BITS)
 

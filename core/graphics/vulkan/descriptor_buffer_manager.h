@@ -132,7 +132,7 @@ private:
     b8 m_enabled = false;
     b8 m_lifecycleTransitioning = false;
     b8 m_bufferFormatFeaturesCached = false;
-    Array<VkFormatFeatureFlags, Format::Count> m_cachedBufferFormatFeatures{};
+    Array<VkFormatFeatureFlags, Format::kCount> m_cachedBufferFormatFeatures{};
     SegmentStorage m_resourceSegment;
     SegmentStorage m_samplerSegment;
 };

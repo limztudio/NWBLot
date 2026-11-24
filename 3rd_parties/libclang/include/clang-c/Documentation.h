@@ -615,5 +615,5 @@ CINDEX_LINKAGE CXString clang_getSymbolGraphForCursor(CXCursor cursor);
 
 LLVM_CLANG_C_EXTERN_C_END
 
-#endif /* CLANG_C_DOCUMENTATION_H */
+#endif /* LLVM_CLANG_C_DOCUMENTATION_H */
 

@@ -36,7 +36,6 @@ namespace rmt_tree
     class IntervalTreeNode
     {
     public:
-        /// @brief Constructor.
         inline IntervalTreeNode()
             : left_(nullptr)
             , right_(nullptr)
@@ -45,8 +44,6 @@ namespace rmt_tree
         {
         }
 
-        /// @brief Constructor.
-        ///
         /// @param [in] interval Current interval.
         inline IntervalTreeNode(const Interval<T1, T2>& interval)
             : left_(nullptr)
@@ -69,13 +66,11 @@ namespace rmt_tree
     class IntervalTree
     {
     public:
-        /// @brief Constructor.
         inline IntervalTree()
             : root_(nullptr)
         {
         }
 
-        /// @brief Destructor.
         inline ~IntervalTree()
         {
         }
@@ -91,7 +86,7 @@ namespace rmt_tree
         /// @brief Find all overlapping intervals for a given interval.
         ///
         /// @param [in] interval              Target interval.
-        /// @param [in] overlapping_intervals Vector containing all overlapping intervals.
+        /// @param [in,out] overlapping_intervals Vector to append overlapping intervals to.
         inline void FindOverlappingIntervals(const Interval<T1, T2>& interval, std::vector<Interval<T1, T2>>& overlapping_intervals) const
         {
             FindOverlappingIntervalsRecursive(root_, interval, overlapping_intervals, false);
@@ -100,7 +95,7 @@ namespace rmt_tree
         /// @brief Find all overlapping intervals for a given interval.
         ///
         /// @param [in] interval              Target interval.
-        /// @param [in] overlapping_intervals Queue containing all overlapping intervals.
+        /// @param [in,out] overlapping_intervals Queue to add overlapping intervals to.
         template <typename CompT>
         inline void FindOverlappingIntervals(const Interval<T1, T2>&                                                      interval,
                                              std::priority_queue<Interval<T1, T2>, std::vector<Interval<T1, T2>>, CompT>& overlapping_intervals) const
@@ -110,8 +105,8 @@ namespace rmt_tree
 
         /// @brief Merge all overlapping intervals into non-overlapping intervals.
         ///
-        /// @param [in] intervals             Queue of intervals.
-        /// @param [in] overlapping_intervals Queue containing merged non-overlapping intervals.
+        /// @param [in,out] intervals             Queue of intervals, consumed by the merge.
+        /// @param [in,out] merged_intervals      Vector to append merged intervals to.
         template <typename CompT>
         inline static void MergeAscendingOrderIntervals(std::priority_queue<Interval<T1, T2>, std::vector<Interval<T1, T2>>, CompT>& intervals,
                                                         std::vector<Interval<T1, T2>>&                                               merged_intervals)
@@ -143,7 +138,7 @@ namespace rmt_tree
         /// with the given interval.
         ///
         /// @param [in] interval                     Target interval.
-        /// @param [in] culled_overlapping_intervals Vector containing all culled overlapping intervals.
+        /// @param [in,out] culled_overlapping_intervals Vector to append culled intervals to.
         inline void FindCulledOverlappingIntervals(const Interval<T1, T2>& interval, std::vector<Interval<T1, T2>>& culled_overlapping_intervals) const
         {
             FindOverlappingIntervalsRecursive(root_, interval, culled_overlapping_intervals, true);
@@ -329,7 +324,7 @@ namespace rmt_tree
         ///
         /// @param [in] current_node          The current tree node.
         /// @param [in] interval              Target interval.
-        /// @param [in] overlapping_intervals Vector containing all overlapping intervals, the output intervals are culled if is_culled is set to true.
+        /// @param [in,out] overlapping_intervals Vector to add overlaps to; intervals are culled when is_culled is true.
         /// @param [in] is_culled             Flag indicating if the output intervals need to be culled.
         inline void FindOverlappingIntervalsRecursive(const std::shared_ptr<IntervalTreeNode<T1, T2>>& current_node,
                                                       const Interval<T1, T2>&                          interval,
@@ -371,7 +366,7 @@ namespace rmt_tree
         ///
         /// @param [in] current_node          The current tree node.
         /// @param [in] interval              Target interval.
-        /// @param [in] overlapping_intervals Queue containing all overlapping intervals, the output intervals are culled if is_culled is set to true.
+        /// @param [in,out] overlapping_intervals Queue to add overlaps to; intervals are culled when is_culled is true.
         /// @param [in] is_culled             Flag indicating if the output intervals need to be culled.
         template <typename CompT>
         inline void FindOverlappingIntervalsRecursive(const std::shared_ptr<IntervalTreeNode<T1, T2>>&                             current_node,

@@ -164,7 +164,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
         if(this.m_titleThrottle.shouldUpdate(safeDelta, this.m_yaw.manualControl(), false))
-            SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI));
+            SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_TwoPi));
         return TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world));
     }
 

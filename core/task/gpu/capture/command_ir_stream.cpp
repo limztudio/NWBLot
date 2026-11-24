@@ -57,7 +57,7 @@ namespace __hidden_gpu_command_ir_stream{
     if(
         record.destinationSubresources.numMipLevels == 0u
         || record.destinationSubresources.numArraySlices == 0u
-        || record.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::Count)
+        || record.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::kCount)
         || (clearFlags & ~s_AllowedFlags) != 0u
         || record.reserved != 0u
     )
@@ -323,7 +323,7 @@ b8 DecodeAndValidateBuiltinWireRecord(
             outDecoded.packet = context->packet;
             outDecoded.queue = context->queue;
         }
-        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.aspect < TextureUploadAspect::Count && record.reserved0 == 0u && record.reserved1 == 0u;
+        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.aspect < TextureUploadAspect::kCount && record.reserved0 == 0u && record.reserved1 == 0u;
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.sourceUploadBlob = GpuUploadBlobId{ .generation = graphGeneration, .index = record.sourceUploadBlobIndex, };

@@ -78,7 +78,7 @@
 #define _MHD_BYTE_ORDER _MHD_LITTLE_ENDIAN
 #elif defined(__ORDER_PDP_ENDIAN__) && __BYTE_ORDER__ == __ORDER_PDP_ENDIAN__
 #define _MHD_BYTE_ORDER _MHD_PDP_ENDIAN
-#endif /* __BYTE_ORDER__ == __ORDER_PDP_ENDIAN__ */
+#endif
 #elif defined(__BYTE_ORDER)
 #if defined(__BIG_ENDIAN) && __BYTE_ORDER == __BIG_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_BIG_ENDIAN
@@ -86,7 +86,7 @@
 #define _MHD_BYTE_ORDER _MHD_LITTLE_ENDIAN
 #elif defined(__PDP_ENDIAN) && __BYTE_ORDER == __PDP_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_PDP_ENDIAN
-#endif /* __BYTE_ORDER == __PDP_ENDIAN */
+#endif
 #elif defined(BYTE_ORDER)
 #if defined(BIG_ENDIAN) && BYTE_ORDER == BIG_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_BIG_ENDIAN
@@ -94,7 +94,7 @@
 #define _MHD_BYTE_ORDER _MHD_LITTLE_ENDIAN
 #elif defined(PDP_ENDIAN) && BYTE_ORDER == PDP_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_PDP_ENDIAN
-#endif /* __BYTE_ORDER == _PDP_ENDIAN */
+#endif
 #elif defined(_BYTE_ORDER)
 #if defined(_BIG_ENDIAN) && _BYTE_ORDER == _BIG_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_BIG_ENDIAN
@@ -102,8 +102,8 @@
 #define _MHD_BYTE_ORDER _MHD_LITTLE_ENDIAN
 #elif defined(_PDP_ENDIAN) && _BYTE_ORDER == _PDP_ENDIAN
 #define _MHD_BYTE_ORDER _MHD_PDP_ENDIAN
-#endif /* _BYTE_ORDER == _PDP_ENDIAN */
-#endif /* _BYTE_ORDER */
+#endif
+#endif
 
 #ifndef _MHD_BYTE_ORDER
 /* Byte order specification didn't detected in system headers */
@@ -151,7 +151,7 @@
 #elif defined(WORDS_BIGENDIAN)
 /* Use byte order detected by configure */
 #define _MHD_BYTE_ORDER _MHD_BIG_ENDIAN
-#endif /* _WIN32 */
+#endif
 
 #endif /* !_MHD_BYTE_ORDER */
 

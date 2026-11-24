@@ -1,5 +1,7 @@
 # Packed single-precision power qualification report
 
+> **Historical record:** This report preserves the qualification state and evidence from the recorded campaign. For the current implementation and operating procedure, see [the benchmark guide](README.md). The current dispatcher checks `FOUNDATION_DEBUG`, rather than the `_DEBUG` guard described in the recorded campaign.
+
 The replacement obligation remains **PARTIAL** across the entire supported source/platform scope. Native Windows ARM64 release-CRT profiles now use an admitted packed `VectorPow` implementation, with one explicit scalar fallback when native input-denormal traps are enabled. Debug CRT linkage (`_DEBUG`), ARM64EC, x64 and non-Windows profiles retain their original scalar calls. Linux execution and native x64 enabled-trap qualification were unavailable here. The earlier SIMD conversion commit `3299b121c` and completed alignment repairs remain retained evidence.
 
 ## Admitted native Windows ARM64 implementation

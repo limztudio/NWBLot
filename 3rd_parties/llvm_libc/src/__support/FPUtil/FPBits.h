@@ -832,7 +832,6 @@ struct FPBits final : public internal::FPRepImpl<get_fp_type<T>(), FPBits<T>> {
   using UP = internal::FPRepImpl<get_fp_type<T>(), FPBits<T>>;
   using StorageType = typename UP::StorageType;
 
-  // Constructors.
   LIBC_INLINE constexpr FPBits() = default;
 
   template <

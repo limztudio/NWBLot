@@ -3099,10 +3099,10 @@ inline void replace_substring(StringType& s, const StringType& f,
                               const StringType& t)
 {
     JSON_ASSERT(!f.empty());
-    for (auto pos = s.find(f);                // find first occurrence of f
-            pos != StringType::npos;          // make sure f was found
-            s.replace(pos, f.size(), t),      // replace with t, and
-            pos = s.find(f, pos + t.size()))  // find next occurrence of f
+    for (auto pos = s.find(f);
+            pos != StringType::npos;
+            s.replace(pos, f.size(), t),
+            pos = s.find(f, pos + t.size()))
     {}
 }
 
@@ -4041,7 +4041,6 @@ struct is_compatible_integer_type_impl <
     std::is_integral<CompatibleNumberIntegerType>::value&&
     !std::is_same<bool, CompatibleNumberIntegerType>::value >>
 {
-    // is there an assert somewhere on overflows?
     using RealLimits = std::numeric_limits<RealIntegerType>;
     using CompatibleLimits = std::numeric_limits<CompatibleNumberIntegerType>;
 
@@ -4194,7 +4193,6 @@ using all_signed = conjunction<std::is_signed<Types>...>;
 template<typename... Types>
 using all_unsigned = conjunction<std::is_unsigned<Types>...>;
 
-// there's a disjunction trait in another PR; replace when merged
 template<typename... Types>
 using same_sign = std::integral_constant < bool,
       all_signed<Types...>::value || all_unsigned<Types...>::value >;
@@ -7284,7 +7282,6 @@ class lexer : public lexer_base<BasicJsonType>
 
         while (true)
         {
-            // get next character
             switch (get())
             {
                 // end of file while parsing string
@@ -7367,7 +7364,6 @@ class lexer : public lexer_base<BasicJsonType>
                                     // check if codepoint2 is a low surrogate
                                     if (JSON_HEDLEY_LIKELY(0xDC00 <= codepoint2 && codepoint2 <= 0xDFFF))
                                     {
-                                        // overwrite codepoint
                                         codepoint = static_cast<int>(
                                                         // high surrogate occupies the most significant 22 bits
                                                         (static_cast<unsigned int>(codepoint1) << 10u)
@@ -7635,7 +7631,7 @@ class lexer : public lexer_base<BasicJsonType>
                     return token_type::parse_error;
                 }
 
-                // U+0020..U+007F (except U+0022 (quote) and U+005C (backspace))
+                // U+0020..U+007F, except quote and backslash.
                 case 0x20:
                 case 0x21:
                 case 0x23:
@@ -8484,7 +8480,6 @@ scan_number_done:
         {
             if (static_cast<unsigned char>(c) <= '\x1F')
             {
-                // escape control characters
                 std::array<char, 9> cs{{}};
                 const auto cs_size = (std::snprintf)(cs.data(), cs.size(), "<U+%.4X>", static_cast<unsigned char>(c)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 JSON_ASSERT(cs_size == 8);
@@ -8496,7 +8491,6 @@ scan_number_done:
             }
             else
             {
-                // add character as is
                 result.push_back(static_cast<std::string::value_type>(c));
             }
         }
@@ -8551,7 +8545,6 @@ scan_number_done:
             return token_type::parse_error;
         }
 
-        // read next character and ignore whitespace
         skip_whitespace();
 
         // ignore comments
@@ -8562,7 +8555,6 @@ scan_number_done:
                 return token_type::parse_error;
             }
 
-            // skip following whitespace
             skip_whitespace();
         }
 
@@ -8838,7 +8830,6 @@ class json_sax_dom_parser
         : root(r), allow_exceptions(allow_exceptions_), m_lexer_ref(lexer_)
     {}
 
-    // make class move-only
     json_sax_dom_parser(const json_sax_dom_parser&) = delete;
     json_sax_dom_parser(json_sax_dom_parser&&) = default; // NOLINT(hicpp-noexcept-move,performance-noexcept-move-constructor)
     json_sax_dom_parser& operator=(const json_sax_dom_parser&) = delete;
@@ -9146,7 +9137,6 @@ class json_sax_dom_callback_parser
         keep_stack.push_back(true);
     }
 
-    // make class move-only
     json_sax_dom_callback_parser(const json_sax_dom_callback_parser&) = delete;
     json_sax_dom_callback_parser(json_sax_dom_callback_parser&&) = default; // NOLINT(hicpp-noexcept-move,performance-noexcept-move-constructor)
     json_sax_dom_callback_parser& operator=(const json_sax_dom_callback_parser&) = delete;
@@ -9197,7 +9187,6 @@ class json_sax_dom_callback_parser
 
     bool start_object(std::size_t len)
     {
-        // check callback for object start
         const bool keep = callback(static_cast<int>(ref_stack.size()), parse_event_t::object_start, discarded);
         keep_stack.push_back(keep);
 
@@ -9231,7 +9220,6 @@ class json_sax_dom_callback_parser
     {
         BasicJsonType k = BasicJsonType(val);
 
-        // check callback for key
         const bool keep = callback(static_cast<int>(ref_stack.size()), parse_event_t::key, k);
         key_keep_stack.push_back(keep);
 
@@ -9867,7 +9855,6 @@ class binary_reader
         (void)detail::is_sax_static_asserts<SAX, BasicJsonType> {};
     }
 
-    // make class move-only
     binary_reader(const binary_reader&) = delete;
     binary_reader(binary_reader&&) = default; // NOLINT(hicpp-noexcept-move,performance-noexcept-move-constructor)
     binary_reader& operator=(const binary_reader&) = delete;
@@ -10636,14 +10623,7 @@ class binary_reader
                 const auto byte1 = static_cast<unsigned char>(byte1_raw);
                 const auto byte2 = static_cast<unsigned char>(byte2_raw);
 
-                // code from RFC 7049, Appendix D, Figure 3:
-                // As half-precision floating-point numbers were only added
-                // to IEEE 754 in 2008, today's programming platforms often
-                // still only have limited support for them. It is very
-                // easy to include at least decoding support for them even
-                // without such support. An example of a small decoder for
-                // half-precision floating-point numbers in the C language
-                // is shown in Fig. 3.
+                // Half-precision decoding follows RFC 7049, Appendix D, Figure 3.
                 const auto half = static_cast<unsigned int>((byte1 << 8u) + byte2);
                 const double val = [&half]
                 {
@@ -12193,14 +12173,7 @@ class binary_reader
                 const auto byte1 = static_cast<unsigned char>(byte1_raw);
                 const auto byte2 = static_cast<unsigned char>(byte2_raw);
 
-                // code from RFC 7049, Appendix D, Figure 3:
-                // As half-precision floating-point numbers were only added
-                // to IEEE 754 in 2008, today's programming platforms often
-                // still only have limited support for them. It is very
-                // easy to include at least decoding support for them even
-                // without such support. An example of a small decoder for
-                // half-precision floating-point numbers in the C language
-                // is shown in Fig. 3.
+                // Half-precision decoding follows RFC 7049, Appendix D, Figure 3.
                 const auto half = static_cast<unsigned int>((byte2 << 8u) + byte1);
                 const double val = [&half]
                 {
@@ -12947,7 +12920,6 @@ class parser
         , m_lexer(std::move(adapter), skip_comments)
         , allow_exceptions(allow_exceptions_)
     {
-        // read first token
         get_token();
     }
 
@@ -12977,7 +12949,6 @@ class parser
                                                     exception_message(token_type::end_of_input, "value"), nullptr));
             }
 
-            // in case of an error, return discarded value
             if (sdp.is_errored())
             {
                 result = value_t::discarded;
@@ -13004,7 +12975,6 @@ class parser
                                 parse_error::create(101, m_lexer.get_position(), exception_message(token_type::end_of_input, "value"), nullptr));
             }
 
-            // in case of an error, return discarded value
             if (sdp.is_errored())
             {
                 result = value_t::discarded;
@@ -14038,7 +14008,6 @@ class iter_impl // NOLINT(cppcoreguidelines-special-member-functions,hicpp-speci
     template < typename IterImpl, detail::enable_if_t < (std::is_same<IterImpl, iter_impl>::value || std::is_same<IterImpl, other_iter_impl>::value), std::nullptr_t > = nullptr >
     bool operator==(const IterImpl& other) const
     {
-        // if objects are not the same, the comparison is undefined
         if (JSON_HEDLEY_UNLIKELY(m_object != other.m_object))
         {
             JSON_THROW(invalid_iterator::create(212, "cannot compare iterators of different containers", m_object));
@@ -14087,7 +14056,6 @@ class iter_impl // NOLINT(cppcoreguidelines-special-member-functions,hicpp-speci
     */
     bool operator<(const iter_impl& other) const
     {
-        // if objects are not the same, the comparison is undefined
         if (JSON_HEDLEY_UNLIKELY(m_object != other.m_object))
         {
             JSON_THROW(invalid_iterator::create(212, "cannot compare iterators of different containers", m_object));
@@ -15176,7 +15144,7 @@ class json_pointer
     @note This function is only called by the json_pointer constructor.
           All exceptions below are documented there.
 
-    @throw parse_error.107  if the pointer is not empty or begins with '/'
+    @throw parse_error.107  if the pointer is not empty and does not begin with '/'
     @throw parse_error.108  if character '~' is not followed by '0' or '1'
     */
     static std::vector<string_t> split(const string_t& reference_string)
@@ -15189,7 +15157,6 @@ class json_pointer
             return result;
         }
 
-        // check if nonempty reference string begins with slash
         if (JSON_HEDLEY_UNLIKELY(reference_string[0] != '/'))
         {
             JSON_THROW(detail::parse_error::create(107, 1, detail::concat("JSON pointer must be empty or begin with '/' - was: '", reference_string, "'"), nullptr));
@@ -15199,16 +15166,13 @@ class json_pointer
         // - slash: position of the last read slash (or end of string)
         // - start: position after the previous slash
         for (
-            // search for the first slash after the first character
             std::size_t slash = reference_string.find_first_of('/', 1),
-            // set the beginning of the first reference token
             start = 1;
             // we can stop if start == 0 (if slash == string_t::npos)
             start != 0;
             // set the beginning of the next reference token
             // (will eventually be 0 if slash == string_t::npos)
             start = (slash == string_t::npos) ? 0 : slash + 1,
-            // find next slash
             slash = reference_string.find_first_of('/', start))
         {
             // use the text between the beginning of the reference token
@@ -15231,7 +15195,6 @@ class json_pointer
                 }
             }
 
-            // finally, store the reference token
             detail::unescape(reference_token);
             result.push_back(reference_token);
         }
@@ -15329,7 +15292,6 @@ class json_pointer
 
         BasicJsonType result;
 
-        // iterate the JSON object values
         for (const auto& element : *value.m_data.m_value.object)
         {
             if (JSON_HEDLEY_UNLIKELY(!element.second.is_primitive()))
@@ -15551,7 +15513,6 @@ class json_ref
         : owned_value(std::forward<Args>(args)...)
     {}
 
-    // class should be movable only
     json_ref(json_ref&&) noexcept = default;
     json_ref(const json_ref&) = delete;
     json_ref& operator=(const json_ref&) = delete;
@@ -16011,7 +15972,6 @@ class binary_writer
                 }
                 // LCOV_EXCL_STOP
 
-                // step 2: write the string
                 oa->write_characters(
                     reinterpret_cast<const CharType*>(j.m_data.m_value.string->c_str()),
                     j.m_data.m_value.string->size());
@@ -16049,7 +16009,6 @@ class binary_writer
                 }
                 // LCOV_EXCL_STOP
 
-                // step 2: write each element
                 for (const auto& el : *j.m_data.m_value.array)
                 {
                     write_cbor(el);
@@ -16112,7 +16071,6 @@ class binary_writer
                 }
                 // LCOV_EXCL_STOP
 
-                // step 2: write each element
                 oa->write_characters(
                     reinterpret_cast<const CharType*>(j.m_data.m_value.binary->data()),
                     N);
@@ -16151,7 +16109,6 @@ class binary_writer
                 }
                 // LCOV_EXCL_STOP
 
-                // step 2: write each element
                 for (const auto& el : *j.m_data.m_value.object)
                 {
                     write_cbor(el.first);
@@ -16331,7 +16288,6 @@ class binary_writer
                     write_number(static_cast<std::uint32_t>(N));
                 }
 
-                // step 2: write the string
                 oa->write_characters(
                     reinterpret_cast<const CharType*>(j.m_data.m_value.string->c_str()),
                     j.m_data.m_value.string->size());
@@ -16360,7 +16316,6 @@ class binary_writer
                     write_number(static_cast<std::uint32_t>(N));
                 }
 
-                // step 2: write each element
                 for (const auto& el : *j.m_data.m_value.array)
                 {
                     write_msgpack(el);
@@ -16370,8 +16325,6 @@ class binary_writer
 
             case value_t::binary:
             {
-                // step 0: determine if the binary type has a set subtype to
-                // determine whether to use the ext or fixext types
                 const bool use_ext = j.m_data.m_value.binary->has_subtype();
 
                 // step 1: write control byte and the byte string length
@@ -16437,13 +16390,11 @@ class binary_writer
                     write_number(static_cast<std::uint32_t>(N));
                 }
 
-                // step 1.5: if this is an ext type, write the subtype
                 if (use_ext)
                 {
                     write_number(static_cast<std::int8_t>(j.m_data.m_value.binary->subtype()));
                 }
 
-                // step 2: write the byte string
                 oa->write_characters(
                     reinterpret_cast<const CharType*>(j.m_data.m_value.binary->data()),
                     N);
@@ -16473,7 +16424,6 @@ class binary_writer
                     write_number(static_cast<std::uint32_t>(N));
                 }
 
-                // step 2: write each element
                 for (const auto& el : *j.m_data.m_value.object)
                 {
                     write_msgpack(el.first);
@@ -17508,14 +17458,11 @@ class binary_writer
     template<typename NumberType>
     void write_number(const NumberType n, const bool OutputIsLittleEndian = false)
     {
-        // step 1: write number to array of length NumberType
         std::array<CharType, sizeof(NumberType)> vec{};
         std::memcpy(vec.data(), &n, sizeof(NumberType));
 
-        // step 2: write array to output (with possible reordering)
         if (is_little_endian != OutputIsLittleEndian)
         {
-            // reverse byte order prior to conversion if necessary
             std::reverse(vec.begin(), vec.end());
         }
 
@@ -18222,10 +18169,6 @@ inline void grisu2_digit_gen(char* buffer, int& length, int& decimal_exponent,
     static_assert(kAlpha >= -60, "internal error");
     static_assert(kGamma <= -32, "internal error");
 
-    // Generates the digits (and the exponent) of a decimal floating-point
-    // number V = buffer * 10^decimal_exponent in the range [M-, M+]. The diyfp's
-    // w, M- and M+ share the same exponent e, which satisfies alpha <= e <= gamma.
-    //
     //               <--------------------------- delta ---->
     //                                  <---- dist --------->
     // --------------[------------------+-------------------]--------------
@@ -18358,7 +18301,7 @@ inline void grisu2_digit_gen(char* buffer, int& length, int& decimal_exponent,
     //          = p2 / 2^-e
     //          = d[-1] / 10^1 + d[-2] / 10^2 + ...
     //
-    // Now generate the digits d[-m] of p1 from left to right (m = 1,2,...)
+    // Now generate the digits d[-m] of p2 * 2^e from left to right (m = 1,2,...)
     //
     //      p2 * 2^e = d[-1]d[-2]...d[-m] * 10^-m
     //                      + 10^-m * (d[-m-1] / 10^1 + d[-m-2] / 10^2 + ...)
@@ -18528,15 +18471,6 @@ void grisu2(char* buf, int& len, int& decimal_exponent, FloatType value)
     // If the neighbors (and boundaries) of 'value' are always computed for double-precision
     // numbers, all float's can be recovered using strtod (and strtof). However, the resulting
     // decimal representations are not exactly "short".
-    //
-    // The documentation for 'std::to_chars' (https://en.cppreference.com/w/cpp/utility/to_chars)
-    // says "value is converted to a string as if by std::sprintf in the default ("C") locale"
-    // and since sprintf promotes floats to doubles, I think this is exactly what 'std::to_chars'
-    // does.
-    // On the other hand, the documentation for 'std::to_chars' requires that "parsing the
-    // representation using the corresponding std::from_chars function recovers value exactly". That
-    // indicates that single precision floating-point numbers should be recovered using
-    // 'std::strtof'.
     //
     // NB: If the neighbors are computed for single-precision numbers, there is a single float
     //     (7.0385307e-26f) which can't be recovered using strtod. The resulting double precision
@@ -18818,14 +18752,6 @@ class serializer
     /*!
     @brief internal implementation of the serialization function
 
-    This function is called by the public member function dump and organizes
-    the serialization internally. The indentation level is propagated as
-    additional parameter. In case of arrays and objects, the function is
-    called recursively.
-
-    - strings and object keys are escaped using `escape_string()`
-    - integer numbers are converted implicitly via `operator<<`
-    - floating-point numbers are converted to a string using `"%g"` format
     - binary values are serialized as objects containing the subtype and the
       byte array
 
@@ -19953,42 +19879,14 @@ template <class Key, class T, class IgnoredLess = std::less<Key>,
         const auto elements_affected = std::distance(first, last);
         const auto offset = std::distance(Container::begin(), first);
 
-        // This is the start situation. We need to delete elements_affected
-        // elements (3 in this example: e, f, g), and need to return an
-        // iterator past the last deleted element (h in this example).
-        // Note that offset is the distance from the start of the vector
-        // to first. We will need this later.
-
-        // [ a, b, c, d, e, f, g, h, i, j ]
-        //               ^        ^
-        //             first    last
-
-        // Since we cannot move const Keys, we re-construct them in place.
-        // We start at first and re-construct (viz. copy) the elements from
-        // the back of the vector. Example for first iteration:
-
-        //               ,--------.
-        //               v        |   destroy e and re-construct with h
-        // [ a, b, c, d, e, f, g, h, i, j ]
-        //               ^        ^
-        //               it       it + elements_affected
-
+        // Const keys must be reconstructed in place.
         for (auto it = first; std::next(it, elements_affected) != Container::end(); ++it)
         {
             it->~value_type(); // destroy but keep allocation
             new (&*it) value_type{std::move(*std::next(it, elements_affected))}; // "move" next element to it
         }
 
-        // [ a, b, c, d, h, i, j, h, i, j ]
-        //               ^        ^
-        //             first    last
-
-        // remove the unneeded elements at the end of the vector
         Container::resize(this->size() - static_cast<size_type>(elements_affected));
-
-        // [ a, b, c, d, h, i, j ]
-        //               ^        ^
-        //             first    last
 
         // first is now pointing past the last deleted element, but we cannot
         // use this iterator, because it may have been invalidated by the
@@ -20967,7 +20865,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 is_an_object = false;
             }
 
-            // if object is wanted but impossible, throw an exception
             if (JSON_HEDLEY_UNLIKELY(manual_type == value_t::object && !is_an_object))
             {
                 JSON_THROW(type_error::create(301, "cannot create object from initializer list", nullptr));
@@ -21267,7 +21164,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         , end_position(other.end_position) // cppcheck-suppress[accessForwarded] TODO check
 #endif
     {
-        // check that passed value is valid
         other.assert_invariant(false); // cppcheck-suppress[accessForwarded]
 
         // invalidate payload
@@ -21293,7 +21189,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         std::is_nothrow_move_assignable<json_base_class_t>::value
     )
     {
-        // check that passed value is valid
         other.assert_invariant();
 
         using std::swap;
@@ -21585,7 +21480,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     template<typename ReferenceType, typename ThisType>
     static ReferenceType get_ref_impl(ThisType& obj)
     {
-        // delegate the call to get_ptr<>()
         auto* ptr = obj.template get_ptr<typename std::add_pointer<ReferenceType>::type>();
 
         if (JSON_HEDLEY_LIKELY(ptr != nullptr))
@@ -21607,7 +21501,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                  std::is_pointer<PointerType>::value, int>::type = 0>
     auto get_ptr() noexcept -> decltype(std::declval<basic_json_t&>().get_impl_ptr(std::declval<PointerType>()))
     {
-        // delegate the call to get_impl_ptr<>()
         return get_impl_ptr(static_cast<PointerType>(nullptr));
     }
 
@@ -21618,7 +21511,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                    std::is_const<typename std::remove_pointer<PointerType>::type>::value, int >::type = 0 >
     constexpr auto get_ptr() const noexcept -> decltype(std::declval<const basic_json_t&>().get_impl_ptr(std::declval<PointerType>()))
     {
-        // delegate the call to get_impl_ptr<>() const
         return get_impl_ptr(static_cast<PointerType>(nullptr));
     }
 
@@ -21772,7 +21664,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     constexpr auto get_impl(detail::priority_tag<4> /*unused*/) const noexcept
     -> decltype(std::declval<const basic_json_t&>().template get_ptr<PointerType>())
     {
-        // delegate the call to get_ptr
         return get_ptr<PointerType>();
     }
 
@@ -21847,7 +21738,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                  std::is_pointer<PointerType>::value, int>::type = 0>
     auto get() noexcept -> decltype(std::declval<basic_json_t&>().template get_ptr<PointerType>())
     {
-        // delegate the call to get_ptr
         return get_ptr<PointerType>();
     }
 
@@ -21896,7 +21786,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                  std::is_reference<ReferenceType>::value, int>::type = 0>
     ReferenceType get_ref()
     {
-        // delegate call to get_ref_impl
         return get_ref_impl<ReferenceType>(*this);
     }
 
@@ -21907,7 +21796,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                    std::is_const<typename std::remove_reference<ReferenceType>::type>::value, int >::type = 0 >
     ReferenceType get_ref() const
     {
-        // delegate call to get_ref_impl
         return get_ref_impl<ReferenceType>(*this);
     }
 
@@ -21958,7 +21846,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                                                 >::value, int >::type = 0 >
                                         JSON_EXPLICIT operator ValueType() const
     {
-        // delegate the call to get<>() const
         return get<ValueType>();
     }
 
@@ -22291,7 +22178,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if key is found, return value and given default value otherwise
             const auto it = find(key);
             if (it != end())
             {
@@ -22316,7 +22202,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if key is found, return value and given default value otherwise
             const auto it = find(key);
             if (it != end())
             {
@@ -22342,7 +22227,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if key is found, return value and given default value otherwise
             const auto it = find(std::forward<KeyType>(key));
             if (it != end())
             {
@@ -22369,7 +22253,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if key is found, return value and given default value otherwise
             const auto it = find(std::forward<KeyType>(key));
             if (it != end())
             {
@@ -22392,7 +22275,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if pointer resolves a value, return it or use default value
             JSON_TRY
             {
                 return ptr.get_checked(this).template get<ValueType>();
@@ -22417,7 +22299,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // value only works for objects
         if (JSON_HEDLEY_LIKELY(is_object()))
         {
-            // if pointer resolves a value, return it or use default value
             JSON_TRY
             {
                 return ptr.get_checked(this).template get<ReturnType>();
@@ -22773,7 +22654,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     /// @sa https://json.nlohmann.me/api/basic_json/count/
     size_type count(const typename object_t::key_type& key) const
     {
-        // return 0 for all nonobject types
         return is_object() ? m_data.m_value.object->count(key) : 0;
     }
 
@@ -22783,7 +22663,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                  detail::is_usable_as_basic_json_key_type<basic_json_t, KeyType>::value, int> = 0>
     size_type count(KeyType && key) const
     {
-        // return 0 for all nonobject types
         return is_object() ? m_data.m_value.object->count(std::forward<KeyType>(key)) : 0;
     }
 
@@ -22978,13 +22857,11 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
 
             case value_t::array:
             {
-                // delegate call to array_t::empty()
                 return m_data.m_value.array->empty();
             }
 
             case value_t::object:
             {
-                // delegate call to object_t::empty()
                 return m_data.m_value.object->empty();
             }
 
@@ -23017,13 +22894,11 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
 
             case value_t::array:
             {
-                // delegate call to array_t::size()
                 return m_data.m_value.array->size();
             }
 
             case value_t::object:
             {
-                // delegate call to object_t::size()
                 return m_data.m_value.object->size();
             }
 
@@ -23050,13 +22925,11 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         {
             case value_t::array:
             {
-                // delegate call to array_t::max_size()
                 return m_data.m_value.array->max_size();
             }
 
             case value_t::object:
             {
-                // delegate call to object_t::max_size()
                 return m_data.m_value.object->max_size();
             }
 
@@ -23164,11 +23037,9 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
             assert_invariant();
         }
 
-        // add element to array (move semantics)
         const auto old_capacity = m_data.m_value.array->capacity();
         m_data.m_value.array->push_back(std::move(val));
         set_parent(m_data.m_value.array->back(), old_capacity);
-        // if val is moved from, basic_json move constructor marks it null, so we do not call the destructor
     }
 
     /// @brief add an object to an array
@@ -23296,7 +23167,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     template<class... Args>
     std::pair<iterator, bool> emplace(Args&& ... args)
     {
-        // emplace only works for null objects or arrays
         if (JSON_HEDLEY_UNLIKELY(!(is_null() || is_object())))
         {
             JSON_THROW(type_error::create(311, detail::concat("cannot use emplace() with ", type_name()), this));
@@ -23310,7 +23180,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
             assert_invariant();
         }
 
-        // add element to array (perfect forwarding)
         auto res = m_data.m_value.object->emplace(std::forward<Args>(args)...);
         set_parent(res.first->second);
 
@@ -23318,7 +23187,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         auto it = begin();
         it.m_it.object_iterator = res.first;
 
-        // return pair of iterator and boolean
         return {it, res.second};
     }
 
@@ -23602,7 +23470,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     /// @sa https://json.nlohmann.me/api/basic_json/swap/
     void swap(binary_t& other) // NOLINT(bugprone-exception-escape,cppcoreguidelines-noexcept-swap,performance-noexcept-swap)
     {
-        // swap only works for strings
         if (JSON_HEDLEY_LIKELY(is_binary()))
         {
             using std::swap;
@@ -23618,7 +23485,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     /// @sa https://json.nlohmann.me/api/basic_json/swap/
     void swap(typename binary_t::container_type& other) // NOLINT(bugprone-exception-escape)
     {
-        // swap only works for strings
         if (JSON_HEDLEY_LIKELY(is_binary()))
         {
             using std::swap;
@@ -24833,7 +24699,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 result.at(top_pointer);
             }
 
-            // get reference to parent of JSON pointer ptr
             const auto last_path = ptr.back();
             ptr.pop_back();
             // parent must exist when performing patch add per RFC6902 specs
@@ -24887,7 +24752,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
         // wrapper for "remove" operation; remove value at ptr
         const auto operation_remove = [this, & result](json_pointer & ptr)
         {
-            // get reference to parent of JSON pointer ptr
             const auto last_path = ptr.back();
             ptr.pop_back();
             basic_json& parent = result.at(ptr);
@@ -24957,7 +24821,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 JSON_THROW(parse_error::create(104, 0, "JSON patch must be an array of objects", &val));
             }
 
-            // collect mandatory members
             const auto op = get_value("op", "op", true).template get<string_t>();
             const auto path = get_value(op, "path", true).template get<string_t>();
             json_pointer ptr(path);
@@ -25064,10 +24927,8 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     static basic_json diff(const basic_json& source, const basic_json& target,
                            const string_t& path = "")
     {
-        // the patch
         basic_json result(value_t::array);
 
-        // if the values are the same, return empty patch
         if (source == target)
         {
             return result;
@@ -25075,7 +24936,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
 
         if (source.type() != target.type())
         {
-            // different types: replace value
             result.push_back(
             {
                 {"op", "replace"}, {"path", path}, {"value", target}
@@ -25091,16 +24951,12 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 std::size_t i = 0;
                 while (i < source.size() && i < target.size())
                 {
-                    // recursive call to compare array values at index i
                     auto temp_diff = diff(source[i], target[i], detail::concat<string_t>(path, '/', detail::to_string<string_t>(i)));
                     result.insert(result.end(), temp_diff.begin(), temp_diff.end());
                     ++i;
                 }
 
-                // We now reached the end of at least one array
-                // in a second pass, traverse the remaining elements
 
-                // remove my remaining elements
                 const auto end_index = static_cast<difference_type>(result.size());
                 while (i < source.size())
                 {
@@ -25114,7 +24970,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                     ++i;
                 }
 
-                // add other remaining elements
                 while (i < target.size())
                 {
                     result.push_back(
@@ -25134,18 +24989,15 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 // first pass: traverse this object's elements
                 for (auto it = source.cbegin(); it != source.cend(); ++it)
                 {
-                    // escape the key name to be used in a JSON patch
                     const auto path_key = detail::concat<string_t>(path, '/', detail::escape(it.key()));
 
                     if (target.find(it.key()) != target.end())
                     {
-                        // recursive call to compare object values at key it
                         auto temp_diff = diff(it.value(), target[it.key()], path_key);
                         result.insert(result.end(), temp_diff.begin(), temp_diff.end());
                     }
                     else
                     {
-                        // found a key that is not in o -> remove it
                         result.push_back(object(
                         {
                             {"op", "remove"}, {"path", path_key}
@@ -25158,7 +25010,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
                 {
                     if (source.find(it.key()) == source.end())
                     {
-                        // found a key that is not in this -> add it
                         const auto path_key = detail::concat<string_t>(path, '/', detail::escape(it.key()));
                         result.push_back(
                         {
@@ -25181,7 +25032,6 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
             case value_t::discarded:
             default:
             {
-                // both primitive type: replace value
                 result.push_back(
                 {
                     {"op", "replace"}, {"path", path}, {"value", target}

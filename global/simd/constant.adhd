@@ -26,24 +26,24 @@ extern class SIMDVectorDoubleConstI{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::s_1DIV2PI")]
-extern const f32 s_1DIV2PI;
-[cpp_name("::s_2PI")]
-extern const f32 s_2PI;
-[cpp_name("::s_3PIDIV4")]
-extern const f32 s_3PIDIV4;
-[cpp_name("::s_Double2PI")]
-extern const f64 s_Double2PI;
-[cpp_name("::s_DoublePI")]
-extern const f64 s_DoublePI;
-[cpp_name("::s_DoublePIDIV2")]
-extern const f64 s_DoublePIDIV2;
-[cpp_name("::s_DoublePIDIV4")]
-extern const f64 s_DoublePIDIV4;
-[cpp_name("::s_DoubleSELECT_0")]
-extern const u64 s_DoubleSELECT_0;
-[cpp_name("::s_DoubleSELECT_1")]
-extern const u64 s_DoubleSELECT_1;
+[cpp_name("::s_ReciprocalTwoPi")]
+extern const f32 s_ReciprocalTwoPi;
+[cpp_name("::s_TwoPi")]
+extern const f32 s_TwoPi;
+[cpp_name("::s_ThreePiOverFour")]
+extern const f32 s_ThreePiOverFour;
+[cpp_name("::s_DoubleTwoPi")]
+extern const f64 s_DoubleTwoPi;
+[cpp_name("::s_DoublePi")]
+extern const f64 s_DoublePi;
+[cpp_name("::s_DoubleHalfPi")]
+extern const f64 s_DoubleHalfPi;
+[cpp_name("::s_DoubleQuarterPi")]
+extern const f64 s_DoubleQuarterPi;
+[cpp_name("::s_SelectFalseMask64")]
+extern const u64 s_SelectFalseMask64;
+[cpp_name("::s_SelectTrueMask64")]
+extern const u64 s_SelectTrueMask64;
 [cpp_name("::s_DoubleSIMDAbsMask")]
 extern const SIMDVectorDoubleConstI s_DoubleSIMDAbsMask;
 [cpp_name("::s_DoubleSIMDEpsilon")]
@@ -132,16 +132,16 @@ extern const u64 s_F64OneBits;
 extern const u64 s_F64SignBitMask;
 [cpp_name("::s_F64SignBitShift")]
 extern const u32 s_F64SignBitShift;
-[cpp_name("::s_PI")]
-extern const f32 s_PI;
-[cpp_name("::s_PIDIV2")]
-extern const f32 s_PIDIV2;
-[cpp_name("::s_PIDIV4")]
-extern const f32 s_PIDIV4;
-[cpp_name("::s_SELECT_0")]
-extern const u32 s_SELECT_0;
-[cpp_name("::s_SELECT_1")]
-extern const u32 s_SELECT_1;
+[cpp_name("::s_Pi")]
+extern const f32 s_Pi;
+[cpp_name("::s_HalfPi")]
+extern const f32 s_HalfPi;
+[cpp_name("::s_QuarterPi")]
+extern const f32 s_QuarterPi;
+[cpp_name("::s_SelectFalseMask32")]
+extern const u32 s_SelectFalseMask32;
+[cpp_name("::s_SelectTrueMask32")]
+extern const u32 s_SelectTrueMask32;
 [cpp_name("::s_SIMD253")]
 extern const SIMDVectorConstI s_SIMD253;
 [cpp_name("::s_SIMDATanCoefficients0")]

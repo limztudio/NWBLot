@@ -60,7 +60,7 @@ b8 SwapChainLifecycle::destroy(){
 Expected<SwapChainTransitionTicket> SwapChainLifecycle::prepareSwapChainTransition(const SwapChainTransitionKind::Enum kind){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     SwapChainTransitionTicket ticket;
-    if(kind >= SwapChainTransitionKind::Count)
+    if(kind >= SwapChainTransitionKind::kCount)
         return MakeUnexpected(Failure{});
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
         if(kind != SwapChainTransitionKind::Destroy || m_swapChainLifecycleEpoch == 0u)

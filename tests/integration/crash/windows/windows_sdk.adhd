@@ -36,7 +36,7 @@ extern class WinThread;
 
 [cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::SuspendedThread"), cpp_flags(no_copy, no_assign)]
 extern class SuspendedThread{
-    u32 previous()const;
+    u32 previousSuspendCount()const;
     u32 resume();
 };
 

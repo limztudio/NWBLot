@@ -27,7 +27,7 @@ class RmtRdfSnapshotWriter : public RmtSnapshotWriter
 public:
     /// Constructor for the RmtRdfSnapshotWriter
     ///
-    /// @param [in]  data_set                             A pointer to the <c><i>RmtDataSetdata</i></c> object.
+    /// @param [in]  data_set                             A pointer to the <c><i>RmtDataSet</i></c> object.
     /// @param [in]  stream                               A pointer to a <c><i>rdfStream</i></c> pointer.
     explicit RmtRdfSnapshotWriter(RmtDataSet* data_set, rdfStream** stream);
 
@@ -36,7 +36,7 @@ public:
 
     /// Add a snapshot to a trace file.
     ///
-    /// @param [in]  name                                 A pointer to the data set containing the events.
+    /// @param [in]  name                                 The name of the snapshot.
     /// @param [in]  timestamp                            The position on the timeline of the snapshot.
     /// @param [in]  new_snapshot_index                   The index of the snapshot in the data set to be added.
     ///
@@ -50,7 +50,7 @@ public:
 
     /// Remove a snapshot from a trace file.
     ///
-    /// @param [in]  new_snapshot_index                   The index of the snapshot in the data set to be removed.
+    /// @param [in]  removed_snapshot_index               Unused; active snapshots are read from the data set.
     ///
     /// @retval
     /// kRmtOk                                            The operation completed successfully.

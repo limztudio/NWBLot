@@ -19,7 +19,7 @@
 */
 
 /**
- * @file microhttpd/mhd_sockets.c
+ * @file microhttpd/mhd_sockets.h
  * @brief  Header for platform-independent sockets abstraction
  * @author Karlson2k (Evgeny Grin)
  *

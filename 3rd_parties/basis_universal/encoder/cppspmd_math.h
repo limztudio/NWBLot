@@ -114,10 +114,8 @@ inline vfloat spmd_kernel::log2_est(vfloat v)
 	vfloat xm1 = signif;
 	vfloat xm1sqr = xm1 * xm1;
 
+	// FMA lowers accuracy on SSE4.1.
 	return fexp + ((a * (xm1sqr * xm1) + b * xm1sqr + c * xm1) / (xm1sqr + d * xm1 + e));
-
-	// fma lowers accuracy for SSE4.1 - no idea why (compiler reordering?)
-	//return fexp + ((vfma(a, (xm1sqr * xm1), vfma(b, xm1sqr, c * xm1))) / (xm1sqr + vfma(d, xm1, e)));
 }
 
 // Uses log2_est(), so this function must be <= the precision of that.
@@ -134,12 +132,10 @@ CPPSPMD_FORCE_INLINE void spmd_kernel::reduce_expb(vfloat& arg, vfloat& two_int_
 	// integer part of the input argument
 	vint int_arg = (vint)arg;
 
-	// if frac(arg) is in [0.5, 1.0]...
 	SPMD_SIF((arg - int_arg) > 0.5f)
 	{
 		store(adjustment, 1);
 
-		// then change it to [0.0, 0.5]
 		store(arg, arg - 0.5f);
 	}
 	SPMD_SENDIF
@@ -340,7 +336,6 @@ inline vfloat spmd_kernel::sincos_est_a(vfloat a, bool sin_flag)
 // positive values only
 CPPSPMD_FORCE_INLINE vfloat spmd_kernel::recip_est1(const vfloat& q)
 {
-	//const int mag = 0x7EF312AC; // 2 NR iters, 3 is  0x7EEEEBB3
 	const int mag = 0x7EF311C3;
 	const float fMinThresh = .0000125f;
 
@@ -355,7 +350,6 @@ CPPSPMD_FORCE_INLINE vfloat spmd_kernel::recip_est1(const vfloat& q)
 
 CPPSPMD_FORCE_INLINE vfloat spmd_kernel::recip_est1_pn(const vfloat& t)
 {
-	//const int mag = 0x7EF312AC; // 2 NR iters, 3 is  0x7EEEEBB3
 	const int mag = 0x7EF311C3;
 	const float fMinThresh = .0000125f;
 

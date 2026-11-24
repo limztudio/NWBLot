@@ -389,7 +389,6 @@ static CURLcode pubkey_pem_to_der(const char *pem,
   CURLcode result;
   struct dynbuf pbuf;
 
-  /* if no pem, exit. */
   if(!pem)
     return CURLE_BAD_CONTENT_ENCODING;
 
@@ -564,7 +563,6 @@ CURLcode Curl_pin_peer_pubkey(struct Curl_easy *data,
      * null-terminator
      */
     pem_read = pubkey_pem_to_der(curlx_dyn_ptr(&buf), &pem_ptr, &pem_len);
-    /* if it was not read successfully, exit */
     if(pem_read)
       goto end;
 

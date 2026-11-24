@@ -43,7 +43,7 @@ namespace basisu
 	// Given an ETC1 diff/inten_table/selector, and an 8-bit desired color, this table encodes the best packed_color in the low byte, and the abs error in the high byte.
 	static uint16_t g_etc1_inverse_lookup[2 * 8 * 4][256];      // [ diff/inten_table/selector][desired_color ]
 
-	// g_color8_to_etc_block_config[color][table_index] = Supplies for each 8-bit color value a list of packed ETC1 diff/intensity table/selectors/packed_colors that map to that color.
+	// These tables list packed ETC1 configurations for each 8-bit color.
 	// To pack: diff | (inten << 1) | (selector << 4) | (packed_c << 8)
 	static const uint16_t g_etc1_color8_to_etc_block_config_0_255[2][33] =
 	{
@@ -806,7 +806,6 @@ namespace basisu
 			return false;
 		}
 
-		//const uint8_t* pSelectors = &m_best_solution.m_selectors[0];
 		const uint8_t* pSelectors = m_pParams->m_pForce_selectors ? m_pParams->m_pForce_selectors : &m_best_solution.m_selectors[0];
 
 #if defined(DEBUG) || defined(_DEBUG)
@@ -846,22 +845,8 @@ namespace basisu
 
 	void etc1_optimizer::refine_solution(uint32_t max_refinement_trials)
 	{
-		// Now we have the input block, the avg. color of the input pixels, a set of trial selector indices, and the block color+intensity index.
-		// Now, for each component, attempt to refine the current solution by solving a simple linear equation. For example, for 4 colors:
-		// The goal is:
-		// pixel0 - (block_color+inten_table[selector0]) + pixel1 - (block_color+inten_table[selector1]) + pixel2 - (block_color+inten_table[selector2]) + pixel3 - (block_color+inten_table[selector3]) = 0
-		// Rearranging this:
-		// (pixel0 + pixel1 + pixel2 + pixel3) - (block_color+inten_table[selector0]) - (block_color+inten_table[selector1]) - (block_color+inten_table[selector2]) - (block_color+inten_table[selector3]) = 0
-		// (pixel0 + pixel1 + pixel2 + pixel3) - block_color - inten_table[selector0] - block_color-inten_table[selector1] - block_color-inten_table[selector2] - block_color-inten_table[selector3] = 0
-		// (pixel0 + pixel1 + pixel2 + pixel3) - 4*block_color - inten_table[selector0] - inten_table[selector1] - inten_table[selector2] - inten_table[selector3] = 0
-		// (pixel0 + pixel1 + pixel2 + pixel3) - 4*block_color - (inten_table[selector0] + inten_table[selector1] + inten_table[selector2] + inten_table[selector3]) = 0
-		// (pixel0 + pixel1 + pixel2 + pixel3)/4 - block_color - (inten_table[selector0] + inten_table[selector1] + inten_table[selector2] + inten_table[selector3])/4 = 0
-		// block_color = (pixel0 + pixel1 + pixel2 + pixel3)/4 - (inten_table[selector0] + inten_table[selector1] + inten_table[selector2] + inten_table[selector3])/4
-		// So what this means:
-		// optimal_block_color = avg_input - avg_inten_delta
-		// So the optimal block color can be computed by taking the average block color and subtracting the current average of the intensity delta.
-		// Unfortunately, optimal_block_color must then be quantized to 555 or 444 so it's not always possible to improve matters using this formula.
-		// Also, the above formula is for unclamped intensity deltas. The actual implementation takes into account clamping.
+		// The unclamped optimal block color is average input minus average intensity.
+		// Quantization can prevent improvement; the refinement also accounts for clamping.
 
 		const uint32_t n = m_pParams->m_num_src_pixels;
 
@@ -907,7 +892,6 @@ namespace basisu
 		if (m_best_solution.m_error == 0)
 			return;
 
-		//const uint32_t n = m_pParams->m_num_src_pixels;
 		const int scan_delta_size = m_pParams->m_scan_delta_size;
 
 		// Scan through a subset of the 3D lattice centered around the avg block color trying each 3D (555 or 444) lattice point as a potential block color.

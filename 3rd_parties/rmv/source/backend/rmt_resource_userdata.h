@@ -106,8 +106,6 @@ RmtErrorCode RmtResourceUserdataUpdateResourceName(const RmtResourceList*      r
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
 /// kRmtErrorInvalidPointer                     The operation failed due to <c><i>out_resource_history_list</i></c> being an invalid pointer.
-/// @retval
-/// kRmtErrorResourceNotFound                   The  internal resource ID specified could not be found.
 RmtErrorCode RmtResourceUserdataUpdateNamedResourceHistoryEvents(RmtResourceHistory* out_resource_history_list);
 
 /// @brief Track an implicit resource UserData token.
@@ -147,7 +145,7 @@ RmtErrorCode RmtResourceUserDataTrackBoundResource(const RmtResource* resource, 
 /// @retval
 /// kRmtErrorInvalidPointer                     The operation failed due to <c><i>out_resource_name</i></c> being an invalid pointer.
 /// @retval
-/// kRmtErrorResourceNotFound                   A resource name could not be found for the <c><i>internal_resource_id</i></c> specified.
+/// kRmtErrorNoResourceFound                    A resource name could not be found for the specified resource.
 RmtErrorCode RmtResourceUserdataGetResourceName(const RmtResourceIdentifier internal_resource_id, const char** out_resource_name);
 
 /// @brief Retrieve the resource name associated with a resource at a specified time.
@@ -160,9 +158,9 @@ RmtErrorCode RmtResourceUserdataGetResourceName(const RmtResourceIdentifier inte
 /// @retval
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                     The operation failed due to <c><i>out_resource_name</i> being an invalid pointer.
+/// kRmtErrorInvalidPointer                     The operation failed due to <c><i>out_resource_name</i></c> being an invalid pointer.
 /// @retval
-/// kRmtErrorResourceNotFound                   A resource name could not be found for the <c><i>internal_resource_id</i></c> specified.
+/// kRmtErrorNoResourceFound                    A resource name could not be found for the specified resource.
 RmtErrorCode RmtResourceUserdataGetResourceNameAtTimestamp(const RmtResourceIdentifier resource_id,
                                                            const RmtTimestamp          creation_time,
                                                            const RmtTimestamp          timestamp,
@@ -178,14 +176,12 @@ bool RmtResourceUserDataIsResourceImplicit(const RmtResourceIdentifier resource_
 /// @brief Retrieve the resource ID for a paired heap or image/buffer resource.
 ///
 /// @param [in]  internal_resource_id               The resource identifier to match against.
-/// @param [out] out_paired_internal_resource_id    The resource identifier of the paired heap or image/buffer resource.
+/// @param [out] out_paired_internal_resource_id    A valid pointer to receive the paired resource identifier.
 ///
 /// @retval
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                     The out_heap_internal_resource_id pointer is invalid.
-/// @retval
-/// kRmtErrorResourceNotFound                   A resource could not be found for the <c><i>internal_resource_id</i></c> specified.
+/// kRmtErrorNoResourceFound                    No paired resource was found.
 RmtErrorCode RmtResourceUserDataFindPairedResource(const RmtResourceIdentifier internal_resource_id, RmtResourceIdentifier* out_paired_internal_resource_id);
 
 /// @brief Clear internal UserData lookup maps.

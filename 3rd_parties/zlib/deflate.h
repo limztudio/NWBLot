@@ -103,7 +103,7 @@ typedef unsigned IPos;
 
 typedef struct internal_state {
     z_streamp strm;      /* pointer back to this zlib stream */
-    int   status;        /* as the name implies */
+    int   status;
     Bytef *pending_buf;  /* output still pending */
     ulg   pending_buf_size; /* size of pending_buf */
     Bytef *pending_out;  /* next pending byte to output to the stream */
@@ -247,7 +247,6 @@ typedef struct internal_state {
      *     a highly compressible string table.) Smaller buffer sizes give
      *     fast adaptation but have of course the overhead of transmitting
      *     trees more frequently.
-     *   - I can't count above 4
      */
 
     uInt sym_next;      /* running index in symbol buffer */

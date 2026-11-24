@@ -309,7 +309,6 @@ const char *curlx_strerror(int err, char *buf, size_t buflen)
 
 #endif /* _WIN32 */
 
-  /* strip trailing '\r\n' or '\n'. */
   p = strrchr(buf, '\n');
   if(p && (p - buf) >= 2)
     *p = '\0';

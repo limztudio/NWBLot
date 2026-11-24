@@ -205,7 +205,6 @@
 
 
   /* push (append) an element at the end of the list;         */
-  /* return false on memory error                             */
   /* TODO: should there be a length param for extra checking? */
   FT_LOCAL_DEF( void )
   cf2_arrstack_push( CF2_ArrStack  arrstack,

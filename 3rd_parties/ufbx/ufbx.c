@@ -1963,7 +1963,7 @@ typedef struct {
 //   lit_length.long_sym[]   N 1 0 0 0  // Long N bit code for end-of-block (256) symbol
 //   lit_length.long_sym[]   0 1 0 0 1  // Invalid lit_length code
 //
-//   dist.fast_sym[]         N 0 0 1 L  // Short N bit code (huff+extra bits) for distance index I
+//   dist.fast_sym[]         N 0 0 1 I  // Short N bit code (huff+extra bits) for distance index I
 //   dist.fast_sym[]         M 0 0 0 X  // Long code at `dist.long_sym[X*2 + ((bits>>FAST_BITS) & M)]`
 //   dist.fast_sym[]         0 0 0 0 R  // Extra long code with prefix R, use `dist.sorted_to_sym[]` to resolve (*1)
 //   dist.fast_sym[]         N 1 0 0 1  // Unused symbol 30-31 or invalid distance code
@@ -1972,7 +1972,7 @@ typedef struct {
 //   dist.long_sym[]         N 1 0 0 1  // Unused symbol 30-31 or invalid distance code
 //
 //   code_length.fast_sym[]  N 0 0 1 B  // Short N bit code (huff only, extra handled explicitly) for symbol bit count B
-//   code_length.fast_sym[]  M 0 0 0 X  // Long code at `dist.long_sym[X*2 + ((bits>>FAST_BITS) & M)]`
+//   code_length.fast_sym[]  M 0 0 0 X  // Long code at `code_length.long_sym[X*2 + ((bits>>FAST_BITS) & M)]`
 //   code_length.fast_sym[]  0 0 0 0 R  // Extra long code with prefix R, use `code_length.sorted_to_sym[]` to resolve (*1)
 //
 //   code_length.long_sym[]  N 0 0 0 B  // Long N bit code (huff only, extra handled explicitly) for symbol bit count B
@@ -4070,8 +4070,6 @@ static ufbxi_noinline void *ufbxi_push_size(ufbxi_buf *b, size_t size, size_t n)
 			return ufbxi_push_size_new_block(b, total);
 		}
 	} else {
-		// Try to push to the current block. Allocate a new block
-		// if the aligned size doesn't fit.
 		if (total <= b->size - pos) {
 			b->pos = pos + total;
 			return b->chunks[0]->data + pos;
@@ -4104,8 +4102,6 @@ static ufbxi_forceinline void *ufbxi_push_size_fast(ufbxi_buf *b, size_t size, s
 	size_t pos = b->pos;
 	ufbxi_regression_assert((pos & ufbxi_size_align_mask(size)) == 0);
 
-	// Try to push to the current block. Allocate a new block
-	// if the aligned size doesn't fit.
 	if (total <= b->size - pos) {
 		b->pos = pos + total;
 		return b->chunks[0]->data + pos;
@@ -5122,7 +5118,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_push_sanitized_string_entry(ufbx
 		uint8_t c = (uint8_t)str[index];
 		size_t left = length - index;
 
-		// Not optimal but not the worst thing ever
 		if (pool->temp_cap - dst_len < 16) {
 			ufbxi_check_err(pool->error, ufbxi_grow_array(pool->map.ator, &pool->temp_str, &pool->temp_cap, dst_len + 16));
 			dst = pool->temp_str;
@@ -6901,7 +6896,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_read_to(ufbxi_context *uc, void 
 	ptr += len;
 	size -= len;
 
-	// If there's data left to copy try to read from user IO
 	if (size > 0) {
 		uc->data_offset += ufbxi_to_size(uc->data - uc->data_begin);
 
@@ -8670,7 +8664,6 @@ ufbxi_nodiscard static ufbxi_noinline const char *ufbxi_swap_endian_value(ufbxi_
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_context *maybe_uc, char src_type, char dst_type, const void *src, void *dst, size_t size)
 {
 	// TODO: We might want to use the slow path if the machine float/double doesn't match IEEE 754!
-	// Convert commented out lines under some `#if UFBX_NON_IEE754` define or something.
 	if (src_type == dst_type) {
 		ufbx_assert(maybe_uc && maybe_uc->file_big_endian != maybe_uc->local_big_endian);
 		src = ufbxi_swap_endian_array(maybe_uc, src, size, src_type);
@@ -8701,7 +8694,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_conte
 
 	case 'c':
 		switch (src_type) {
-		// case 'c': ufbxi_convert_loop_fast(char, (char), 1, *val != 0); break;
 		case 'i': ufbxi_convert_loop_slow(uint8_t, (uint8_t), 4, (uint8_t)ufbxi_read_i32(val)); break;
 		case 'l': ufbxi_convert_loop_slow(uint8_t, (uint8_t), 8, (uint8_t)ufbxi_read_i64(val)); break;
 		case 'f': ufbxi_convert_loop_slow(uint8_t, (uint8_t), 4, (uint8_t)ufbxi_read_f32(val)); break;
@@ -8713,7 +8705,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_conte
 	case 'i':
 		switch (src_type) {
 		case 'c': ufbxi_convert_loop_slow(int32_t, (int32_t), 1, *val); break;
-		// case 'i': ufbxi_convert_loop_slow(int32_t, (int32_t), 4, ufbxi_read_i32(val)); break;
 		case 'l': ufbxi_convert_loop_slow(int32_t, (int32_t), 8, ufbxi_read_i64(val)); break;
 		case 'f': ufbxi_convert_loop_slow(int32_t, ufbxi_f64_to_i32, 4, ufbxi_read_f32(val)); break;
 		case 'd': ufbxi_convert_loop_slow(int32_t, ufbxi_f64_to_i32, 8, ufbxi_read_f64(val)); break;
@@ -8725,7 +8716,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_conte
 		switch (src_type) {
 		case 'c': ufbxi_convert_loop_slow(int64_t, (int64_t), 1, *val); break;
 		case 'i': ufbxi_convert_loop_slow(int64_t, (int64_t), 4, ufbxi_read_i32(val)); break;
-		// case 'l': ufbxi_convert_loop_slow(int64_t, (int64_t), 8, ufbxi_read_i64(val)); break;
 		case 'f': ufbxi_convert_loop_slow(int64_t, ufbxi_f64_to_i64, 4, ufbxi_read_f32(val)); break;
 		case 'd': ufbxi_convert_loop_slow(int64_t, ufbxi_f64_to_i64, 8, ufbxi_read_f64(val)); break;
 		default: if (maybe_uc) ufbxi_fail_err(&maybe_uc->error, "Bad array source type"); return 0;
@@ -8737,7 +8727,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_conte
 		case 'c': ufbxi_convert_loop_slow(float, (float), 1, *val); break;
 		case 'i': ufbxi_convert_loop_slow(float, (float), 4, ufbxi_read_i32(val)); break;
 		case 'l': ufbxi_convert_loop_slow(float, (float), 8, ufbxi_read_i64(val)); break;
-		// case 'f': ufbxi_convert_loop_slow(float, (float), 4, ufbxi_read_f32(val)); break;
 		case 'd': ufbxi_convert_loop_fast(float, (float), 8, ufbxi_read_f64(val)); break;
 		default: if (maybe_uc) ufbxi_fail_err(&maybe_uc->error, "Bad array source type"); return 0;
 		}
@@ -8749,7 +8738,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_binary_convert_array(ufbxi_conte
 		case 'i': ufbxi_convert_loop_slow(double, (double), 4, ufbxi_read_i32(val)); break;
 		case 'l': ufbxi_convert_loop_slow(double, (double), 8, ufbxi_read_i64(val)); break;
 		case 'f': ufbxi_convert_loop_fast(double, (double), 4, ufbxi_read_f32(val)); break;
-		// case 'd': ufbxi_convert_loop_slow(double, (double), 8, ufbxi_read_f64(val)); break;
 		default: if (maybe_uc) ufbxi_fail_err(&maybe_uc->error, "Bad array source type"); return 0;
 		}
 		break;
@@ -11207,8 +11195,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_begin_parse(ufbxi_context *uc)
 	const char *header = ufbxi_peek_bytes(uc, UFBXI_BINARY_HEADER_SIZE);
 	ufbxi_check(header);
 
-	// If the file starts with the binary magic parse it as binary, otherwise
-	// treat it as an ASCII file.
 	if (!memcmp(header, ufbxi_binary_magic, UFBXI_BINARY_MAGIC_SIZE)) {
 
 		// The byte after the magic indicates endianness
@@ -11236,7 +11222,6 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_begin_parse(ufbxi_context *uc)
 		uc->ascii.src_yield = uc->data + uc->yield_size;
 		uc->ascii.src_end = uc->data + uc->data_size + uc->yield_size;
 
-		// Initialize the first token
 		ufbxi_check(ufbxi_ascii_next_token(uc, &uc->ascii.token));
 
 		// Default to version 7400 if not found in header
@@ -11280,7 +11265,6 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_parse_toplevel(ufbxi_context *uc
 	}
 
 	for (;;) {
-		// Parse the next top-level node
 		bool end = false;
 		if (uc->from_ascii) {
 			ufbxi_check(ufbxi_ascii_parse_node(uc, 0, UFBXI_PARSE_ROOT, &end, &uc->tmp, false));
@@ -11311,7 +11295,6 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_parse_toplevel(ufbxi_context *uc
 			ufbxi_check(ufbxi_retain_toplevel(uc, node));
 		}
 
-		// Return if we parsed the right one
 		if (node->name == name) {
 			uc->top_node = node;
 			uc->top_child_index = SIZE_MAX;

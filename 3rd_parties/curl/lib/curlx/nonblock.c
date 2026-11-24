@@ -39,10 +39,9 @@
 
 /*
  * curlx_nonblock() set the given socket to either blocking or non-blocking
- * mode based on the 'nonblock' boolean argument. This function is highly
- * portable.
+ * mode based on the 'nonblock' boolean argument.
  */
-int curlx_nonblock(curl_socket_t sockfd,    /* operate on this */
+int curlx_nonblock(curl_socket_t sockfd,
                    int nonblock   /* TRUE or FALSE */)
 {
 #ifdef HAVE_FCNTL_O_NONBLOCK

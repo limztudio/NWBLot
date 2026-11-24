@@ -15,18 +15,13 @@ namespace tinyxml2
 
 namespace amdisa
 {
-    // Forward declarations.
     struct GenericExpressionNode;
 
     // Handles reading expression trees from XML parsed by tinyxml2.
     class XmlExpressionTreeReader
     {
     public:
-        // Reads an expression tree from XML element.
-        // Inputs xml_elem, the XML element containing the expression tree.
-        // Outputs expression_root, the root node of the parsed expression tree.
-        // Also outputs err_message, the error message if parsing fails.
-        // Returns true if successful, false otherwise.
+        // Reads the tree from the first child of xml_elem.
         static bool ReadExpressionTree(const tinyxml2::XMLElement* xml_elem,
                                        GenericExpressionNode& expression_root,
                                        std::string& err_message);

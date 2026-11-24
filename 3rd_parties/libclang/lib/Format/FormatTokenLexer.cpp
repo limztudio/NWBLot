@@ -1305,7 +1305,6 @@ FormatToken *FormatTokenLexer::getNextToken() {
         InEscape = true;
         break;
       default:
-        // This shouldn't happen.
         assert(false);
         break;
       }

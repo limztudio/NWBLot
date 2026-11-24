@@ -10728,7 +10728,6 @@ static bool CheckMemorySizeofForComparison(Sema &S, const Expr *E,
   if (!Size)
     return false;
 
-  // if E is binop and op is <=>, >, <, >=, <=, ==, &&, ||:
   if (!Size->isComparisonOp() && !Size->isLogicalOp())
     return false;
 

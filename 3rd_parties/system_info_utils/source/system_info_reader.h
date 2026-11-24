@@ -225,10 +225,8 @@ namespace system_info_utils
     class SystemInfoReader
     {
     public:
-        /// @brief Default constructor
         SystemInfoReader() = delete;
 
-        /// @brief Default destructor
         ~SystemInfoReader() = delete;
 
         /// @brief Parses system info JSON representation

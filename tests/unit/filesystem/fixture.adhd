@@ -18,7 +18,7 @@ class FilesystemVolumeTest{
     public Path m_directory("filesystem_unit_test_volume");
     public VolumeMountDesc m_desc(this.m_arena);
     public CapturingLogger m_logger;
-    private LoggerRegistrationGuard guard(this.m_logger, LoggerBreakPolicy::ReportOnly);
+    private LoggerRegistrationGuard m_guard(this.m_logger, LoggerBreakPolicy::ReportOnly);
 
     public void setup(){
         ASSERT_TRUE(RemoveAllIfExists(this.m_directory).has_value());
@@ -33,11 +33,11 @@ class FilesystemVolumeTest{
 }
 
 class CreatedFilesystem{
-    private Expected<UniquePtr<IFilesystem>> owner;
-    public CreatedFilesystem(mut HeapStorage storage, in VolumeMountDesc desc){ this.owner = CreateVolumeFilesystem(storage, desc); }
-    public b8 valid()const{ return this.owner.has_value() && cast<b8>(this.owner.value()); }
-    public mut IFilesystem get(){ return this.owner.value().deref(); }
-    public void reset(){ if(this.owner.has_value()) this.owner.value().reset(); }
+    private Expected<UniquePtr<IFilesystem>> m_owner;
+    public CreatedFilesystem(mut HeapStorage storage, in VolumeMountDesc desc){ this.m_owner = CreateVolumeFilesystem(storage, desc); }
+    public b8 valid()const{ return this.m_owner.has_value() && cast<b8>(this.m_owner.value()); }
+    public mut IFilesystem get(){ return this.m_owner.value().deref(); }
+    public void reset(){ if(this.m_owner.has_value()) this.m_owner.value().reset(); }
 }
 
 class ThrowingPublishLogger : Utf8LogSink{
@@ -46,30 +46,30 @@ class ThrowingPublishLogger : Utf8LogSink{
 }
 
 class BlockingRestoreLogger : Utf8LogSink{
-    private Path path;
-    private b8 throws;
-    private b8 received = false;
-    public BlockingRestoreLogger(in Path path, in b8 throws){ this.path = path; this.throws = throws; }
+    private Path m_path;
+    private b8 m_throws;
+    private b8 m_received = false;
+    public BlockingRestoreLogger(in Path path, in b8 throws){ this.m_path = path; this.m_throws = throws; }
     [cpp_unwind]
     public void receive(in StringView text, in LogType kind)override{
-        this.received = EnsureDirectories(this.path).has_value();
-        if(this.throws) ThrowTestException<i32>(s_FilesystemPublishLogFailure);
+        this.m_received = EnsureDirectories(this.m_path).has_value();
+        if(this.m_throws) ThrowTestException<i32>(s_FilesystemPublishLogFailure);
     }
-    public b8 blocked()const{ return this.received; }
+    public b8 blocked()const{ return this.m_received; }
 }
 
 class RestoreSegment{
-    private Path live;
-    private Path backup;
-    private mut b8 restored;
+    private Path m_live;
+    private Path m_backup;
+    private mut b8 m_restored;
     public RestoreSegment(in Path live, in Path backup, mut b8 restored){
-        this.live = live;
-        this.backup = backup;
-        this.restored = restored;
+        this.m_live = live;
+        this.m_backup = backup;
+        this.m_restored = restored;
     }
     public ~RestoreSegment(){
-        if(RemoveAllForCleanup(this.live).has_value())
-            this.restored = RenamePath(this.backup, this.live).has_value();
+        if(RemoveAllForCleanup(this.m_live).has_value())
+            this.m_restored = RenamePath(this.m_backup, this.m_live).has_value();
     }
 }
 

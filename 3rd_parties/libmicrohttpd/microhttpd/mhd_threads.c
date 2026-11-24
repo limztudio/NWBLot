@@ -231,7 +231,7 @@ MHD_create_thread_ (MHD_thread_handle_ID_ *handle_id,
 #if ! defined(MHD_thread_handle_ID_get_native_handle_ptr_)
   else
     MHD_thread_handle_ID_set_native_handle_ (handle_id, new_tid);
-#endif /* ! MHD_thread_handle_ID_set_current_thread_ID_ */
+#endif /* ! MHD_thread_handle_ID_get_native_handle_ptr_ */
 
   return ! res;
 #elif defined(MHD_USE_W32_THREADS)
@@ -374,7 +374,7 @@ MHD_create_named_thread_ (MHD_thread_handle_ID_ *handle_id,
 #if ! defined(MHD_thread_handle_ID_get_native_handle_ptr_)
   else
     MHD_thread_handle_ID_set_native_handle_ (handle_id, new_tid);
-#endif /* ! MHD_thread_handle_ID_set_current_thread_ID_ */
+#endif /* ! MHD_thread_handle_ID_get_native_handle_ptr_ */
 
   return ! res;
 #else  /* ! MHD_USE_THREAD_ATTR_SETNAME */

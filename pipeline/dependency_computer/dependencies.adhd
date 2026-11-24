@@ -73,13 +73,13 @@ class DependencyQueueState{
 }
 
 class DependencyProviderCatalog : NoCopy{
-    private mut AssetCookWorkspace workspace;
+    private mut AssetCookWorkspace m_workspace;
     public mut CookFileCatalog catalog;
     public mut CookDependencyAccess access;
     public Vector<Name> virtualPaths;
 
     public DependencyProviderCatalog(mut AssetCookWorkspace workspace, mut CookFileCatalog catalog, mut CookDependencyAccess access){
-        this.workspace = workspace;
+        this.m_workspace = workspace;
         this.catalog = catalog;
         this.access = access;
     }
@@ -92,7 +92,7 @@ class DependencyProviderCatalog : NoCopy{
         const auto roots = ResolvePipelineAssetRoots(repo.value(), options.inputs, options.assetRoots, AssetRootDuplicatePolicy::HostFilesystem, s_DiagnosticPrefix, "no asset roots available for dependency resolution");
         if(!roots.has_value())
             return false;
-        CookFileCatalog discovered(this.workspace);
+        CookFileCatalog discovered(this.m_workspace);
         discovered.setRepoRoot(repo.value());
         discovered.paths.assetRoots.reserve(roots.value().size());
         for(in PipelineAssetRoot root : roots.value())
@@ -202,33 +202,33 @@ class DependencyProviderCatalog : NoCopy{
 }
 
 class DependencyTraversal : NoCopy{
-    private in DependencyProviderCatalog providers;
-    private mut Vector<String> candidates;
-    private DependencyQueueState queue;
-    private DependencyPathHints hints;
+    private in DependencyProviderCatalog m_providers;
+    private mut Vector<String> m_candidates;
+    private DependencyQueueState m_queue;
+    private DependencyPathHints m_hints;
 
     public DependencyTraversal(in DependencyProviderCatalog providers, mut Vector<String> candidates){
-        this.providers = providers;
-        this.candidates = candidates;
+        this.m_providers = providers;
+        this.m_candidates = candidates;
     }
 
     [cpp_unwind]
     private b8 enqueue(in Name path, in Name type){
         if(path == s_NameNone)
             return false;
-        const auto found = this.providers.resolve(path, type, this.hints.lookup(path));
+        const auto found = this.m_providers.resolve(path, type, this.m_hints.lookup(path));
         if(!found.has_value())
             return false;
         const usize index = found.value();
-        if(this.queue.claimIncluded(index))
-            this.candidates.push_back(PathToString(this.providers.catalog.files[index].filePath.lexicallyNormal()));
-        this.queue.enqueueIfUnprocessed(index);
+        if(this.m_queue.claimIncluded(index))
+            this.m_candidates.push_back(PathToString(this.m_providers.catalog.files[index].filePath.lexicallyNormal()));
+        this.m_queue.enqueueIfUnprocessed(index);
         return true;
     }
 
     [cpp_unwind]
     private b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue value, in Optional<in MetascriptDocument> document){
-        return this.providers.access.extract(file, type, path, value, document, lambda[mut this](in Name dep, in Name expected) -> b8{ return this.enqueue(dep, expected); });
+        return this.m_providers.access.extract(file, type, path, value, document, lambda[mut this](in Name dep, in Name expected) -> b8{ return this.enqueue(dep, expected); });
     }
 
     [cpp_unwind]
@@ -236,11 +236,11 @@ class DependencyTraversal : NoCopy{
 
     [cpp_unwind]
     public b8 traverse(in DependencyInputSelection selected){
-        this.queue.initialize(this.providers.catalog.files.size(), selected.selected, selected.order);
-        this.hints.reserve(this.providers.catalog.files.size());
-        for(usize cursor = 0u; cursor < this.queue.fileQueue.size(); ++cursor){
-            const usize file = this.queue.fileQueue[cursor];
-            if(this.queue.claimProcessed(file) && !this.process(file))
+        this.m_queue.initialize(this.m_providers.catalog.files.size(), selected.selected, selected.order);
+        this.m_hints.reserve(this.m_providers.catalog.files.size());
+        for(usize cursor = 0u; cursor < this.m_queue.fileQueue.size(); ++cursor){
+            const usize file = this.m_queue.fileQueue[cursor];
+            if(this.m_queue.claimProcessed(file) && !this.process(file))
                 return false;
         }
         return true;
@@ -339,16 +339,16 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(in As
 
 [cpp_unwind]
 b8 DependencyTraversal::process(in usize index){
-    in DiscoveredNwbFile file = this.providers.catalog.files[index];
-    const auto doc = this.providers.access.read(file, s_DiagnosticPrefix);
+    in DiscoveredNwbFile file = this.m_providers.catalog.files[index];
+    const auto doc = this.m_providers.access.read(file, s_DiagnosticPrefix);
     if(!doc.has_value())
         return false;
     in MetascriptDocument document = doc.value();
-    CollectDocumentPathHints(document, this.hints);
-    const auto expanded = this.providers.access.expand(file, document);
+    CollectDocumentPathHints(document, this.m_hints);
+    const auto expanded = this.m_providers.access.expand(file, document);
     if(expanded.has_value()){
         for(in ExpandedAssetMetadata item : expanded.value())
-            CollectValuePathHints(item.value, this.hints);
+            CollectValuePathHints(item.value, this.m_hints);
         for(in ExpandedAssetMetadata item : expanded.value()){
             if(!this.extract(file, item.assetType, item.virtualPath, item.value, Optional<in MetascriptDocument>()))
                 return false;
@@ -374,7 +374,7 @@ b8 DependencyTraversal::process(in usize index){
     const Name declaredType = type.value();
     const Optional<in MetascriptDocument> owner(document);
     return document.visitVariable(s_MetadataAssetVariable, lambda[mut this, in index, in declaredType, in owner](in MetascriptValue value) -> b8{
-        return this.extract(this.providers.catalog.files[index], declaredType, this.providers.virtualPaths[index], value, owner);
+        return this.extract(this.m_providers.catalog.files[index], declaredType, this.m_providers.virtualPaths[index], value, owner);
     });
 }
 

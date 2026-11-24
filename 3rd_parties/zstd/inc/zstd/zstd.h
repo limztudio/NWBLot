@@ -2175,7 +2175,7 @@ ZSTDLIB_STATIC_API size_t ZSTD_CCtx_refPrefix_advanced(ZSTD_CCtx* cctx, const vo
  * calls. Specifically: (out.size - out.pos) will never grow. This gives the
  * compressor the freedom to say: If the compressed data doesn't fit in the
  * output buffer then return ZSTD_error_dstSizeTooSmall. This allows us to
- * always decompress directly into the output buffer, instead of decompressing
+ * always compress directly into the output buffer, instead of compressing
  * into an internal buffer and copying to the output buffer.
  *
  * When this flag is enabled zstd won't allocate an output buffer, because

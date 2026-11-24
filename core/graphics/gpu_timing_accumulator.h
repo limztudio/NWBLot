@@ -163,7 +163,7 @@ private:
     u64 m_unpublishedSampleCount = 0u;
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
-    Array<u64, GpuTimingScopeSkipReason::Count> m_skippedScopeCountByReason{};
+    Array<u64, GpuTimingScopeSkipReason::kCount> m_skippedScopeCountByReason{};
     Name m_scopeName = s_NameNone;
     u32 m_requestedQueryCount = 0u;
     u32 m_nextSearchIndex = 0u;

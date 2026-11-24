@@ -57,7 +57,7 @@ int64_t RmtThreadAtomicMax64(volatile int64_t* address, int64_t value)
 
 #else
 // Linux-specific atomic functions. Uses the extensions provided by gcc
-// The memory order parameter. Set to "sequentially consistent". See
+// The memory order is sequentially consistent.
 static const int memorder = __ATOMIC_SEQ_CST;
 uint64_t         RmtThreadAtomicRead(volatile uint64_t* address)
 {

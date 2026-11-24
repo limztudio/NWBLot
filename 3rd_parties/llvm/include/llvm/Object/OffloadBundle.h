@@ -143,7 +143,6 @@ struct OffloadBundleURI {
   StringRef FileName;
   UriTypeT URIType;
 
-  // Constructors
   // TODO: add a Copy ctor ?
   OffloadBundleURI(StringRef File, int64_t Off, int64_t Size)
       : Offset(Off), Size(Size), ProcessID(0), FileName(File),

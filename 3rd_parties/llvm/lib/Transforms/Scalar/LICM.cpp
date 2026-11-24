@@ -2428,7 +2428,6 @@ static bool hoistMinMax(Instruction &I, Loop &L, ICFLoopSafetyInfo &SafetyInfo,
   if (match(&I, m_LogicalOr(m_Value(Cond1), m_Value(Cond2)))) {
     Inverse = true;
   } else if (match(&I, m_LogicalAnd(m_Value(Cond1), m_Value(Cond2)))) {
-    // Do nothing
   } else
     return false;
 

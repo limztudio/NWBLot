@@ -84,7 +84,8 @@ clang_VirtualFileOverlay_writeToBuffer(CXVirtualFileOverlay, unsigned options,
 
 /**
  * free memory allocated by libclang, such as the buffer returned by
- * \c CXVirtualFileOverlay() or \c clang_ModuleMapDescriptor_writeToBuffer().
+ * \c clang_VirtualFileOverlay_writeToBuffer() or
+ * \c clang_ModuleMapDescriptor_writeToBuffer().
  *
  * \param buffer memory pointer to free.
  */
@@ -202,5 +203,5 @@ CINDEX_LINKAGE void clang_ModuleCache_pruneWithCallback(
 
 LLVM_CLANG_C_EXTERN_C_END
 
-#endif /* CLANG_C_BUILD_SYSTEM_H */
+#endif /* LLVM_CLANG_C_BUILDSYSTEM_H */
 

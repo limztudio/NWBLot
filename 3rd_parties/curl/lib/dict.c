@@ -89,7 +89,6 @@ static char *unescape_word(const char *input)
   return curlx_dyn_ptr(&out);
 }
 
-/* sendf() sends formatted data to the server */
 static CURLcode sendf(struct Curl_easy *data,
                       const char *fmt, ...) CURL_PRINTF(2, 3);
 
@@ -115,7 +114,6 @@ static CURLcode sendf(struct Curl_easy *data, const char *fmt, ...)
   sptr = s;
 
   for(;;) {
-    /* Write the buffer to the socket */
     result = Curl_xfer_send(data, sptr, write_len, FALSE, &bytes_written);
 
     if(result)
@@ -124,8 +122,6 @@ static CURLcode sendf(struct Curl_easy *data, const char *fmt, ...)
     Curl_debug(data, CURLINFO_DATA_OUT, sptr, bytes_written);
 
     if(bytes_written != write_len) {
-      /* if not all was written at once, we must advance the pointer, decrease
-         the size left and try again! */
       write_len -= bytes_written;
       sptr += bytes_written;
     }
@@ -140,11 +136,7 @@ static CURLcode sendf(struct Curl_easy *data, const char *fmt, ...)
     if(!timeout_ms)
       timeout_ms = TIMEDIFF_T_MAX;
 
-    /* Do not busyloop. The entire loop thing is a workaround as it causes a
-       BLOCKING behavior which is a NO-NO. This function should rather be
-       split up in a do and a doing piece where the pieces that are not
-       possible to send now will be sent in the doing function repeatedly
-       until the entire request is sent. */
+    /* Wait for writability to avoid a busy loop; this blocks the transfer. */
     what = SOCKET_WRITABLE(sockfd, timeout_ms);
     if(what < 0) {
       result = CURLE_SEND_ERROR;
@@ -156,7 +148,7 @@ static CURLcode sendf(struct Curl_easy *data, const char *fmt, ...)
     }
   }
 
-  curlx_free(s); /* free the output string */
+  curlx_free(s);
 
   return result;
 }

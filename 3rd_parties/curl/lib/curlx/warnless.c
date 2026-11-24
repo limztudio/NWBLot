@@ -53,27 +53,18 @@
 #pragma warning(disable:810) /* conversion may lose significant bits */
 #endif
 
-/*
- * unsigned long to unsigned char
- */
 unsigned char curlx_ultouc(unsigned long ulnum)
 {
   DEBUGASSERT(ulnum <= (unsigned long)CURL_MASK_UCHAR);
   return (unsigned char)(ulnum & (unsigned long)CURL_MASK_UCHAR);
 }
 
-/*
- * unsigned size_t to signed int
- */
 int curlx_uztosi(size_t uznum)
 {
   DEBUGASSERT(uznum <= (size_t)CURL_MASK_SINT);
   return (int)(uznum & (size_t)CURL_MASK_SINT);
 }
 
-/*
- * unsigned size_t to unsigned long
- */
 unsigned long curlx_uztoul(size_t uznum)
 {
 #if ULONG_MAX < SIZE_MAX
@@ -82,9 +73,6 @@ unsigned long curlx_uztoul(size_t uznum)
   return (unsigned long)(uznum & (size_t)CURL_MASK_ULONG);
 }
 
-/*
- * unsigned size_t to unsigned int
- */
 unsigned int curlx_uztoui(size_t uznum)
 {
 #if UINT_MAX < SIZE_MAX
@@ -93,9 +81,6 @@ unsigned int curlx_uztoui(size_t uznum)
   return (unsigned int)(uznum & (size_t)CURL_MASK_UINT);
 }
 
-/*
- * signed long to signed int
- */
 int curlx_sltosi(long slnum)
 {
   DEBUGASSERT(slnum >= 0);
@@ -105,9 +90,6 @@ int curlx_sltosi(long slnum)
   return (int)(slnum & (long)CURL_MASK_SINT);
 }
 
-/*
- * signed long to unsigned int
- */
 unsigned int curlx_sltoui(long slnum)
 {
   DEBUGASSERT(slnum >= 0);
@@ -117,9 +99,6 @@ unsigned int curlx_sltoui(long slnum)
   return (unsigned int)(slnum & (long)CURL_MASK_UINT);
 }
 
-/*
- * signed long to unsigned short
- */
 unsigned short curlx_sltous(long slnum)
 {
   DEBUGASSERT(slnum >= 0);
@@ -127,27 +106,18 @@ unsigned short curlx_sltous(long slnum)
   return (unsigned short)(slnum & (long)CURL_MASK_USHORT);
 }
 
-/*
- * unsigned size_t to signed ssize_t
- */
 ssize_t curlx_uztosz(size_t uznum)
 {
   DEBUGASSERT(uznum <= (size_t)CURL_MASK_SSIZE_T);
   return (ssize_t)(uznum & (size_t)CURL_MASK_SSIZE_T);
 }
 
-/*
- * signed curl_off_t to unsigned size_t
- */
 size_t curlx_sotouz(curl_off_t sonum)
 {
   DEBUGASSERT(sonum >= 0);
   return (size_t)(sonum & (curl_off_t)CURL_MASK_USIZE_T);
 }
 
-/*
- * signed ssize_t to signed int
- */
 int curlx_sztosi(ssize_t sznum)
 {
   DEBUGASSERT(sznum >= 0);
@@ -157,18 +127,12 @@ int curlx_sztosi(ssize_t sznum)
   return (int)(sznum & (ssize_t)CURL_MASK_SINT);
 }
 
-/*
- * unsigned int to unsigned short
- */
 unsigned short curlx_uitous(unsigned int uinum)
 {
   DEBUGASSERT(uinum <= (unsigned int)CURL_MASK_USHORT);
   return (unsigned short)(uinum & (unsigned int)CURL_MASK_USHORT);
 }
 
-/*
- * signed int to unsigned size_t
- */
 size_t curlx_sitouz(int sinum)
 {
   DEBUGASSERT(sinum >= 0);

@@ -893,7 +893,6 @@ namespace basisu
 			return color_rgba((uint8_t)br, (uint8_t)bg, (uint8_t)bb, 255);
 		}
 
-		// returns true if anything was clamped
 		inline void get_block_colors(color_rgba* pBlock_colors)
 		{
 			int br, bg, bb;

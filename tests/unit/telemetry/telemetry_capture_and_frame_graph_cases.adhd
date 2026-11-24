@@ -1076,7 +1076,7 @@ void VerifyTelemetry_FrameGraphCompiledTaskPayloadRejectsMalformedRecords(){
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
     ReadTelemetryPod(payload, compiledTaskOffset, first);
-    first.packetizationDecision = FrameGraphTaskPacketizationDecision::Count;
+    first.packetizationDecision = FrameGraphTaskPacketizationDecision::kCount;
     WriteTelemetryPod(payload, compiledTaskOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 

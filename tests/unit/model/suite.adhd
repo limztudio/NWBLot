@@ -41,8 +41,8 @@ class EmptyAssetSource : IAssetBinarySource{
 class RuntimeContext{
     public EcsTestWorld testWorld;
     public AssetRegistry registry = AssetRegistry(this.testWorld.arena);
-    private usize sourceReads = 0u;
-    public EmptyAssetSource source = EmptyAssetSource(this.sourceReads);
+    private usize m_sourceReads = 0u;
+    public EmptyAssetSource source = EmptyAssetSource(this.m_sourceReads);
     public AssetManager assetManager = AssetManager(this.testWorld.arena, this.registry, this.source);
     public ModelSystem system = ModelSystem(this.testWorld.world, this.assetManager);
 }

@@ -348,7 +348,6 @@ static RmtErrorCode ParseSegmentInfoChunk(RmtDataSet* data_set, RmtFileChunkHead
     RMT_ASSERT((data_set->segment_info_count + 1) < RMT_MAXIMUM_SEGMENTS);
     RMT_RETURN_ON_ERROR((data_set->segment_info_count + 1) < RMT_MAXIMUM_SEGMENTS, kRmtErrorInvalidSize);
 
-    // Read the RmtSegmentInfo from the file.
     RmtFileChunkSegmentInfo segment_info_chunk;
     const size_t            read_size = fread(&segment_info_chunk, 1, sizeof(RmtFileChunkSegmentInfo), (FILE*)data_set->file_handle);
     RMT_ASSERT(read_size == sizeof(RmtFileChunkSegmentInfo));
@@ -692,7 +691,6 @@ static RmtErrorCode BuildDataProfile(RmtDataSet* data_set)
 
     created_resources.clear();
 
-    // if the heap has something there, then add it.
     while (!RmtStreamMergerIsEmpty(&data_set->stream_merger))
     {
         // grab the next token from the heap.
@@ -780,7 +778,6 @@ static RmtErrorCode AllocateMemoryForSnapshot(RmtDataSet* data_set, RmtDataSnaps
     // Set a pointer to parent data set.
     out_snapshot->data_set = data_set;
 
-    // Initialize the virtual allocation list.
     const size_t virtual_allocation_buffer_size =
         RmtVirtualAllocationListGetBufferSize(data_set->data_profile.total_virtual_allocation_count, data_set->data_profile.max_concurrent_resources);
     if (virtual_allocation_buffer_size > 0)
@@ -852,7 +849,6 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
         }
         error_code = RmtVirtualAllocationListRemoveAllocation(&out_snapshot->virtual_allocation_list, current_token->virtual_free_token.virtual_address);
         RMT_ASSERT(error_code == kRmtOk);
-        //RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     }
     break;
 
@@ -950,8 +946,6 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
                                                                   current_token->resource_reference.virtual_address,
                                                                   current_token->resource_reference.residency_update_type,
                                                                   current_token->resource_reference.queue);
-        //RMT_ASSERT(error_code == kRmtOk);
-        //RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     }
     break;
 
@@ -1051,7 +1045,6 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
             }
 
             RMT_ASSERT(error_code == kRmtOk);
-            // RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
         }
     }
     break;
@@ -1087,7 +1080,6 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
         }
 
         RMT_ASSERT(error_code == kRmtOk);
-        //RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     }
     break;
 
@@ -1198,7 +1190,6 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
                 current_token->resource_create_token.resource_identifier;
         }
 
-        //RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     }
     break;
 
@@ -1210,9 +1201,7 @@ static RmtErrorCode ProcessTokenForSnapshot(RmtDataSet* data_set, RmtToken* curr
                                                          current_token->resource_destroy_token.common.timestamp);
 
             error_code = RmtResourceListAddResourceDestroy(&out_snapshot->resource_list, &current_token->resource_destroy_token);
-            //RMT_ASSERT(error_code == kRmtOk);
 
-            //RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
         }
     }
     break;
@@ -1358,7 +1347,6 @@ RmtErrorCode RmtDataSetInitializeFromMemory(uint8_t* bytes, size_t num_bytes, Rm
     RMT_RETURN_ON_ERROR(data_set, kRmtErrorInvalidPointer);
     RmtErrorCode error_code = kRmtOk;
 
-    // Initialize the Driver Overrides string.
     data_set->driver_overrides_json_text    = nullptr;
     data_set->resource_id_map_allocator     = nullptr;
     data_set->file_path[0]                  = '\0';
@@ -1411,7 +1399,6 @@ RmtErrorCode RmtDataSetInitialize(const char* path, RmtDataSet* data_set)
     RMT_RETURN_ON_ERROR(data_set, kRmtErrorInvalidPointer);
     RmtErrorCode error_code = kRmtOk;
 
-    // Initialize the Driver Overrides string.
     data_set->driver_overrides_json_text = nullptr;
     data_set->resource_id_map_allocator  = nullptr;
 
@@ -1530,7 +1517,6 @@ RmtErrorCode RmtDataSetInitialize(const char* path, RmtDataSet* data_set)
 
             if (error_code == kRmtOk)
             {
-                // Get the size of the file.
                 const size_t current_stream_offset = ftell((FILE*)data_set->file_handle);
                 if (fseek((FILE*)data_set->file_handle, 0L, SEEK_END) != 0)
                 {
@@ -1924,7 +1910,6 @@ static RmtErrorCode TimelineGeneratorParseData(RmtDataSet* data_set, RmtDataTime
     // will be updated to reflect the current state.
     unique_resource_id_lookup_map.clear();
 
-    // if the heap has something there, then add it.
     int32_t last_value_index = -1;
     while (!RmtStreamMergerIsEmpty(&data_set->stream_merger) && !RmtDataSetIsBackgroundTaskCancelled(data_set))
     {

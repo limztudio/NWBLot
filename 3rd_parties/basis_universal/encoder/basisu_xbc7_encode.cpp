@@ -452,8 +452,8 @@ struct xbc7_dct_stats
 	// Standalone: recompute the optimal per-texel weights of a BC7 logical block
 	// for its FIXED config + endpoints, ignoring its existing (possibly stale)
 	// weights. out_blk receives in_blk's config + endpoints with freshly optimized
-	// weights. comp_weights[4] are the per-channel RGBA error weights. No
-	// dependency on pack_options, so this can be lifted into shared code later.
+	// weights. comp_weights[4] are the per-channel RGBA error weights.
+	// This does not depend on pack_options.
 	//
 	// Per plane: each texel's weight independently selects its interpolation
 	// between the fixed endpoints, so setting all texels to the same value w and
@@ -571,7 +571,6 @@ struct xbc7_dct_stats
 			(ac_count == UINT32_MAX) ? g_xbc7_vis_na_color : g_xbc7_ac_count_vis_colors[xbc7_ac_count_bucket(ac_count)]);
 	}
 
-	// ---- legend drawn into a strip at the bottom of each debug image ----
 	const uint32_t XBC7_VIS_LEGEND_ROW_H = 10; // px per entry (8px glyph + 2px gap)
 
 	static inline uint32_t xbc7_vis_legend_height(uint32_t num_entries) { return num_entries * XBC7_VIS_LEGEND_ROW_H + 4; }
@@ -894,7 +893,6 @@ struct xbc7_dct_stats
 				fmt_debug_printf("{}\n", s);
 			}
 
-			// ---- per-blob byte accounting ----
 			fmt_debug_printf("\n---- blob accounting (raw -> stored after Zstd) ----\n");
 			fmt_debug_printf("{}{}{}{}{}{}\n",
 				pad("blob", 20), pad("raw", 10), pad("stored", 10), pad("ratio", 8), pad("%file", 8), "bits/blk");
@@ -1076,7 +1074,6 @@ struct xbc7_dct_stats
 				fmt_debug_printf("{}\n", tops);
 			}
 
-			// ---- commands / modes ----
 			fmt_debug_printf("\n---- COMMANDS: per-block command histogram ----\n");
 			for (uint32_t i = 0; i < 8; i++)
 				if (m_cmd_hist[i])
@@ -1087,7 +1084,6 @@ struct xbc7_dct_stats
 				if (m_mode_hist[i])
 					fmt_debug_printf("mode {}: {} ({.2}%)\n", i, m_mode_hist[i], (float)m_mode_hist[i] * inv_blocks);
 
-			// ---- endpoints ----
 			fmt_debug_printf("\n---- ENDPOINTS: predictor modes + residuals ----\n");
 			fmt_debug_printf("raw blocks: {}, dpcm blocks: {} ({} subsets)\n", m_ep_raw_blocks, m_ep_dpcm_blocks, m_ep_dpcm_subsets);
 			fmt_debug_printf("ep modes: raw {}, left {}, up {}, ldiag {}, rdiag {}, index {}, left_s1 {}, up_s1 {}\n",
@@ -1122,7 +1118,6 @@ struct xbc7_dct_stats
 				}
 			}
 
-			// ---- weight predictors (DCT-mode blocks; DPCM-mode predictors are in the next section) ----
 			fmt_debug_printf("\n---- WEIGHTS: DCT-mode predictors ----\n");
 			{
 				uint64_t class_totals[3] = { 0, 0, 0 }; // absolute / synthetic / dictionary
@@ -1187,7 +1182,6 @@ struct xbc7_dct_stats
 				}
 			}
 
-			// ---- weight coding mode ----
 			fmt_debug_printf("\n---- WEIGHTS: DCT vs lossless DPCM decision ----\n");
 			{
 				const uint64_t wt_coded = m_wt_dct_blocks + m_wt_dpcm_blocks;
@@ -1260,7 +1254,6 @@ struct xbc7_dct_stats
 				}
 			}
 
-			// ---- solid ----
 			if (m_cmd_hist[(uint32_t)xbc7_command_id::cCmdSolidDPCM])
 			{
 				fmt_debug_printf("\n---- SOLID: color deltas vs neighbor edge prediction ----\n");
@@ -1275,7 +1268,6 @@ struct xbc7_dct_stats
 				}
 			}
 
-			// ---- DCT coefficient stats ----
 			fmt_debug_printf("\n");
 			m_dct_stats.print();
 
@@ -1302,23 +1294,9 @@ struct xbc7_dct_stats
 	// (ERR_SWITCH_MARGIN_PERMILLE).
 	const uint32_t XBC7_SWEEP_SWITCH_MARGIN_PERMILLE = 30;
 
-	// ---- effort-driven weight-predictor pruning ----------------------------
-	// The per-block weight-grid sweeps (pack_weights / pack_weights_dpcm) try
-	// every (cand_index, amp_code) predictor; the DCT sweep re-runs a forward+
-	// inverse DCT per candidate, so it dominates encode time at Q < 100. The
-	// effort knob prunes WHICH candidates are tried (not the iteration ORDER --
-	// the sweeps still walk cand_index 0..cTotalCandidates and merely SKIP the
-	// disabled ones, so the earliest-candidate tie-break is preserved and effort
-	// 10 reproduces the pre-knob output exactly).
-	//
-	// g_xbc7_pred_priority lists candidates most-valuable first, derived from
-	// winning-predictor histograms across many images at Q=1/10/80 (opaque +
-	// alpha). The dictionary "copy(dx,dy)" predictors collectively win ~2/3 of
-	// blocks, so the high-value core deliberately mixes the strongest synthetic
-	// predictors (left/upper edge, diag avg) with the nearest causal copies.
-	// cCandAbsolute is first -- it's the no-prediction fallback and must always
-	// be available. Any candidate not listed here is appended in natural order
-	// by xbc7_build_pred_mask (so the table need only spell out the head).
+	// Effort prunes predictors without changing sweep order or tie-breaking.
+	// Keep the no-prediction fallback first; unlisted candidates follow in
+	// natural order when xbc7_build_pred_mask builds the mask.
 	static const uint8_t g_xbc7_pred_priority[] =
 	{
 		cCandAbsolute, cCandLeftEdge, cCandUpperEdge,
@@ -1370,10 +1348,7 @@ struct xbc7_dct_stats
 		return mask;
 	}
 
-	// Amp codes the per-block sweeps try, by effort [0,10]. The amp loop runs in
-	// descending win-share order (0=identity, 1=flip, 2=half-contrast, 3=half-
-	// flip -- confirmed by histograms), so trying the first N keeps the most
-	// valuable. effort 10 -> 4 (the full set -> output unchanged vs pre-knob).
+	// Effort selects a prefix: identity, flip, half-contrast, half-flip.
 	static uint32_t xbc7_amp_codes_for_effort(uint32_t effort)
 	{
 		static const uint8_t tbl[11] = { 1, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4 };
@@ -1641,7 +1616,7 @@ struct xbc7_dct_stats
 	// Optional block-reuse RDO pre-pass: runs after the BC7 base pack, BEFORE the
 	// endpoint RDO (once a whole block is reused there's no point trying cheaper
 	// endpoints). In raster order per stripe (honoring boundaries), for each
-	// non-solid block it tries the cheapest whole-block representations and adopts
+	// block it tries the cheapest whole-block representations and adopts
 	// the best acceptable one: a REPEAT (exact copy of the left/upper causal
 	// neighbor -> 1-byte command; preferred) or SOLID (the block's mean color ->
 	// cheap SolidDPCM). "Acceptable" = weighted RGBA PSNR >= the shared floor AND
@@ -1929,7 +1904,7 @@ struct xbc7_dct_stats
 
 #if defined(DEBUG) || defined(_DEBUG)
 		fmt_debug_printf("endpoint RDO weight re-opt: {} candidates, {} got WORSE (expected 0)\n", dbg_weight_opt_cands, dbg_weight_opt_worse);
-		// assert(!dbg_weight_opt_worse); // intentionally NOT asserted -- probably too strong; observe via the stat above instead
+		// Some candidates may get worse; check the statistic above.
 #endif
 
 		return true;
@@ -3504,15 +3479,10 @@ struct xbc7_dct_stats
 		if (opts.m_debug_output)
 			fmt_debug_printf("XBC7 progress: tiny-mip size check...\n");
 
-		// Tiny-mip fallback: for the smallest levels the blob container's fixed
-		// overhead can exceed a raw packed-BC7 encoding. If a tiny-mip stream --
-		// [marker][num_blocks_x:u8][num_blocks_y:u8] followed by 16 bytes per BC7
-		// block -- is smaller (and the block dims fit a byte), emit that instead.
-		// The decoder distinguishes streams by the leading byte: 0xB7 = blob,
-		// 0xB8 = tiny-mip without alpha, 0xB9 = tiny-mip with alpha (so the
-		// has_alpha bit rides in the marker). The packed blocks are the FINAL
-		// logical blocks (identical to pCoded_log_blocks), so the decode round-
-		// trips exactly (pack<->unpack of a logical block is lossless).
+		// Tiny mips store a marker, byte-sized block dimensions and raw BC7
+		// blocks. Markers 0xB8 and 0xB9 indicate absent or present alpha;
+		// 0xB7 identifies the regular blob format. Packed blocks preserve the
+		// final logical blocks.
 		if ((num_blocks_x <= 255) && (num_blocks_y <= 255))
 		{
 			const size_t tiny_size = 3 + (size_t)total_blocks * 16;

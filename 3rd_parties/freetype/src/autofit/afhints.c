@@ -1555,7 +1555,6 @@
             point->after[dim]  = after;
 #endif
 
-            /* assert( before && after && before != after ) */
             if ( before->scale == 0 )
               before->scale = FT_DivFix( after->pos - before->pos,
                                          after->fpos - before->fpos );

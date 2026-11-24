@@ -35,7 +35,7 @@ LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
-LIT_SKIP_REQUIRED_REFLECTION_HARDWARE_OR_F = "SKIP: required reflection hardware or framebuffer readback is unavailable"
+LIT_REFLECTION_HARDWARE_OR_READBACK_UNAVAILABLE = "SKIP: required reflection hardware or framebuffer readback is unavailable"
 LIT_FAIL = "FAIL: "
 LIT_STORE_TRUE = "store_true"
 
@@ -166,7 +166,7 @@ def run_suite(args, specs=CAPTURES):
         for spec in specs:
             result = capture(args, spec)
             if result is None:
-                print(LIT_SKIP_REQUIRED_REFLECTION_HARDWARE_OR_F, file=sys.stderr)
+                print(LIT_REFLECTION_HARDWARE_OR_READBACK_UNAVAILABLE, file=sys.stderr)
                 return SKIP_EXIT_CODE
             completed.append(spec)
             evidence[spec.name] = result
@@ -186,7 +186,7 @@ def run_queue_boundary_suite(args):
         for spec in QUEUE_BOUNDARY_CAPTURES:
             result = capture(args, spec)
             if result is None:
-                print(LIT_SKIP_REQUIRED_REFLECTION_HARDWARE_OR_F, file=sys.stderr)
+                print(LIT_REFLECTION_HARDWARE_OR_READBACK_UNAVAILABLE, file=sys.stderr)
                 return SKIP_EXIT_CODE
             completed.append(spec)
             evidence[spec.name] = result

@@ -226,7 +226,7 @@ namespace PixEventDecoder
         readInfo.IsAnsi = isAnsi;
         readInfo.BytesUsed = static_cast<UINT32>(r.BytesUsed());
 
-        assert(readInfo.BytesUsed % sizeof(UINT64) == 0); //has to be an even number of qwords
+        assert(readInfo.BytesUsed % sizeof(UINT64) == 0);
 
         return readInfo;
     }
@@ -316,7 +316,7 @@ namespace PixEventDecoder
             {
                 ++symbol;
             }
-            else //if (*symbol == T('%'))
+            else
             {
                 std::pair<FormatSpecifierDetection, UINT32> formatSpecifier = IsFormatSpecifier(symbol);
                 symbol += formatSpecifier.second;
@@ -373,7 +373,6 @@ namespace PixEventDecoder
     {
         EventData eventData = {};
 
-        // copy out context
         eventData.Context = *source++;
         eventData.TotalBytesUsed += sizeof(UINT64);
         
@@ -421,7 +420,6 @@ namespace PixEventDecoder
 
         if (bIsContextEvent)
         {
-            // copy out context
             eventData.Context = *source++;
             eventData.TotalBytesUsed += sizeof(UINT64);
         }
@@ -582,7 +580,6 @@ namespace PixEventDecoder
                     pArguments[8], pArguments[9], pArguments[10], pArguments[11], pArguments[12], pArguments[13], pArguments[14], pArguments[15]);
                 if(FAILED(hr))
                 {
-                    // return without string
                     assert(SUCCEEDED(hr));
                     return eventData;
                 }
@@ -614,7 +611,6 @@ namespace PixEventDecoder
                     pArguments[8], pArguments[9], pArguments[10], pArguments[11], pArguments[12], pArguments[13], pArguments[14], pArguments[15]);
                 if (FAILED(hr))
                 {
-                    // return without string
                     assert(SUCCEEDED(hr));
                     return eventData;
                 }

@@ -11,14 +11,14 @@
 
 
 class CausticAccumulatorDecayGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private MeshViewBufferSnapshot meshView;
-    private in b8 shadowVisibilityPrepared;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> causticPhotonTiming;
-    private b8 hardwareCaustics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private MeshViewBufferSnapshot m_meshView;
+    private in b8 m_shadowVisibilityPrepared;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_causticPhotonTiming;
+    private b8 m_hardwareCaustics;
 
     public CausticAccumulatorDecayGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -30,58 +30,58 @@ class CausticAccumulatorDecayGraphTask{
         mut Optional<GpuTimingMeasure> causticPhotonTiming,
         in b8 hardwareCaustics
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.meshView = meshView;
-        this.shadowVisibilityPrepared = shadowVisibilityPrepared;
-        this.timingTicket = timingTicket;
-        this.causticPhotonTiming = causticPhotonTiming;
-        this.hardwareCaustics = hardwareCaustics;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_meshView = meshView;
+        this.m_shadowVisibilityPrepared = shadowVisibilityPrepared;
+        this.m_timingTicket = timingTicket;
+        this.m_causticPhotonTiming = causticPhotonTiming;
+        this.m_hardwareCaustics = hardwareCaustics;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.shadowVisibilityPrepared)
+        if(!this.m_shadowVisibilityPrepared)
             return true;
         b8 hasWork = false;
-        if(this.hardwareCaustics)
-            hasWork = this.raytracingSystem.hasHwCausticWork(this.meshView);
+        if(this.m_hardwareCaustics)
+            hasWork = this.m_raytracingSystem.hasHwCausticWork(this.m_meshView);
         else
-            hasWork = this.raytracingSystem.hasCausticWork(this.meshView);
+            hasWork = this.m_raytracingSystem.hasCausticWork(this.m_meshView);
         if(!hasWork)
             return true;
 
-        DiscardGpuTimingMeasure(this.causticPhotonTiming);
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        this.causticPhotonTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticPhotons, this.graphics.getDevice(), commandList);
-        if(!FinishSplitGpuTimingMarker(this.causticPhotonTiming))
+        DiscardGpuTimingMeasure(this.m_causticPhotonTiming);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        this.m_causticPhotonTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeCausticPhotons, this.m_graphics.getDevice(), commandList);
+        if(!FinishSplitGpuTimingMarker(this.m_causticPhotonTiming))
             return false;
-        const b8 dispatched = this.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, this.targets);
+        const b8 dispatched = this.m_raytracingSystem.dispatchCausticAccumulatorDecay(commandList, this.m_targets);
         if(!dispatched){
-            DiscardGpuTimingMeasure(this.causticPhotonTiming);
+            DiscardGpuTimingMeasure(this.m_causticPhotonTiming);
             warning("RendererSystem: graph-owned caustic accumulator decay pass failed");
         }
         return true;
     }
 
     public void discarded(){
-        DiscardGpuTimingMeasure(this.causticPhotonTiming);
+        DiscardGpuTimingMeasure(this.m_causticPhotonTiming);
     }
 }
 
 class CausticProducerGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private MeshViewBufferSnapshot meshView;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private in b8 shadowVisibilityPrepared;
-    private mut Optional<GpuTimingMeasure> causticPhotonTiming;
-    private b8 graphOwnsAccumulatorBootstrapClear;
-    private mut b8 causticProducerDispatched;
-    private b8 hardware;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private MeshViewBufferSnapshot m_meshView;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in b8 m_shadowVisibilityPrepared;
+    private mut Optional<GpuTimingMeasure> m_causticPhotonTiming;
+    private b8 m_graphOwnsAccumulatorBootstrapClear;
+    private mut b8 m_causticProducerDispatched;
+    private b8 m_hardware;
 
     public CausticProducerGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -95,41 +95,41 @@ class CausticProducerGraphTask{
         mut b8 causticProducerDispatched,
         in b8 hardware
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.meshView = meshView;
-        this.timingTicket = timingTicket;
-        this.shadowVisibilityPrepared = shadowVisibilityPrepared;
-        this.causticPhotonTiming = causticPhotonTiming;
-        this.graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear;
-        this.causticProducerDispatched = causticProducerDispatched;
-        this.hardware = hardware;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_meshView = meshView;
+        this.m_timingTicket = timingTicket;
+        this.m_shadowVisibilityPrepared = shadowVisibilityPrepared;
+        this.m_causticPhotonTiming = causticPhotonTiming;
+        this.m_graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear;
+        this.m_causticProducerDispatched = causticProducerDispatched;
+        this.m_hardware = hardware;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        this.causticProducerDispatched = false;
-        if(!this.deferredLightingResources.valid())
+        this.m_causticProducerDispatched = false;
+        if(!this.m_deferredLightingResources.valid())
             return false;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(this.shadowVisibilityPrepared){
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(this.m_shadowVisibilityPrepared){
             b8 causticsDispatched = false;
-            if(this.hardware)
-                causticsDispatched = this.raytracingSystem.renderHwCaustics(commandList, this.meshView, this.targets, Optional<mut Optional<GpuTimingMeasure>>(this.causticPhotonTiming));
+            if(this.m_hardware)
+                causticsDispatched = this.m_raytracingSystem.renderHwCaustics(commandList, this.m_meshView, this.m_targets, Optional<mut Optional<GpuTimingMeasure>>(this.m_causticPhotonTiming));
             else
-                causticsDispatched = this.raytracingSystem.renderGpuBvhCaustics(commandList, this.meshView, this.targets, Optional<mut Optional<GpuTimingMeasure>>(this.causticPhotonTiming));
+                causticsDispatched = this.m_raytracingSystem.renderGpuBvhCaustics(commandList, this.m_meshView, this.m_targets, Optional<mut Optional<GpuTimingMeasure>>(this.m_causticPhotonTiming));
             if(!causticsDispatched)
-                DiscardGpuTimingMeasure(this.causticPhotonTiming);
-            this.causticProducerDispatched = causticsDispatched;
+                DiscardGpuTimingMeasure(this.m_causticPhotonTiming);
+            this.m_causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched){
-                if(this.hardware){
-                    if(this.raytracingSystem.hasHwCausticWork(this.meshView))
+                if(this.m_hardware){
+                    if(this.m_raytracingSystem.hasHwCausticWork(this.m_meshView))
                         warning("RendererSystem: hardware caustic render pass failed");
                 }
-                else if(this.raytracingSystem.hasCausticWork(this.meshView))
+                else if(this.m_raytracingSystem.hasCausticWork(this.m_meshView))
                     warning("RendererSystem: software caustic render pass failed");
             }
         }
@@ -137,25 +137,25 @@ class CausticProducerGraphTask{
     }
 
     public void accepted(in QueueSubmissionToken token){
-        if(ShouldConfirmCausticAccumulatorBootstrapClear(this.graphOwnsAccumulatorBootstrapClear, this.causticProducerDispatched))
-            this.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
-        if(this.causticProducerDispatched)
-            this.raytracingSystem.confirmRayTraceContextReadSubmission(token);
+        if(ShouldConfirmCausticAccumulatorBootstrapClear(this.m_graphOwnsAccumulatorBootstrapClear, this.m_causticProducerDispatched))
+            this.m_raytracingSystem.confirmCausticAccumulatorBootstrapClear();
+        if(this.m_causticProducerDispatched)
+            this.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
     }
 
     public void discarded(){
-        this.causticProducerDispatched = false;
-        DiscardGpuTimingMeasure(this.causticPhotonTiming);
+        this.m_causticProducerDispatched = false;
+        DiscardGpuTimingMeasure(this.m_causticPhotonTiming);
     }
 }
 
 class CausticGeometryDownsampleGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private in b8 causticProducerDispatched;
-    private mut Optional<GpuTimingMeasure> causticResolveTiming;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in b8 m_causticProducerDispatched;
+    private mut Optional<GpuTimingMeasure> m_causticResolveTiming;
 
     public CausticGeometryDownsampleGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -165,39 +165,39 @@ class CausticGeometryDownsampleGraphTask{
         in borrow b8 causticProducerDispatched,
         mut Optional<GpuTimingMeasure> causticResolveTiming
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.timingTicket = timingTicket;
-        this.causticProducerDispatched = causticProducerDispatched;
-        this.causticResolveTiming = causticResolveTiming;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_timingTicket = timingTicket;
+        this.m_causticProducerDispatched = causticProducerDispatched;
+        this.m_causticResolveTiming = causticResolveTiming;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        DiscardGpuTimingMeasure(this.causticResolveTiming);
-        if(!this.causticProducerDispatched)
+        DiscardGpuTimingMeasure(this.m_causticResolveTiming);
+        if(!this.m_causticProducerDispatched)
             return true;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        this.causticResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticResolve, this.graphics.getDevice(), commandList);
-        this.raytracingSystem.dispatchCausticGeometryDownsample(commandList, this.targets);
-        return FinishSplitGpuTimingMarker(this.causticResolveTiming);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        this.m_causticResolveTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeCausticResolve, this.m_graphics.getDevice(), commandList);
+        this.m_raytracingSystem.dispatchCausticGeometryDownsample(commandList, this.m_targets);
+        return FinishSplitGpuTimingMarker(this.m_causticResolveTiming);
     }
 
     public void discarded(){
-        DiscardGpuTimingMeasure(this.causticResolveTiming);
+        DiscardGpuTimingMeasure(this.m_causticResolveTiming);
     }
 }
 
 class CausticResolvePhaseGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut DeferredFrameTargets targets;
-    private in b8 causticProducerDispatched;
-    private CausticResolveActivitySnapshot activity;
-    private CausticResolveStage phase;
-    private u32 passIndex;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut DeferredFrameTargets m_targets;
+    private in b8 m_causticProducerDispatched;
+    private CausticResolveActivitySnapshot m_activity;
+    private CausticResolveStage m_phase;
+    private u32 m_passIndex;
 
     public CausticResolvePhaseGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -207,44 +207,44 @@ class CausticResolvePhaseGraphTask{
         in CausticResolveStage phase,
         in u32 passIndex
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.targets = targets;
-        this.causticProducerDispatched = causticProducerDispatched;
-        this.activity = activity;
-        this.phase = phase;
-        this.passIndex = passIndex;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_targets = targets;
+        this.m_causticProducerDispatched = causticProducerDispatched;
+        this.m_activity = activity;
+        this.m_phase = phase;
+        this.m_passIndex = passIndex;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.activity.matches(this.raytracingSystem.causticResolveActivitySnapshot(this.targets)))
+        if(!this.m_activity.matches(this.m_raytracingSystem.causticResolveActivitySnapshot(this.m_targets)))
             return false;
-        if(this.causticProducerDispatched){
-            if(this.phase == CausticResolveStage::PrepareDownsample)
-                this.raytracingSystem.dispatchCausticResolvePrepare(commandList, this.targets);
-            else if(this.phase == CausticResolveStage::Wavelet)
-                this.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, this.targets, this.passIndex);
+        if(this.m_causticProducerDispatched){
+            if(this.m_phase == CausticResolveStage::PrepareDownsample)
+                this.m_raytracingSystem.dispatchCausticResolvePrepare(commandList, this.m_targets);
+            else if(this.m_phase == CausticResolveStage::Wavelet)
+                this.m_raytracingSystem.dispatchCausticResolveWaveletPass(commandList, this.m_targets, this.m_passIndex);
             else
-                this.raytracingSystem.dispatchCausticResolveUpsample(commandList, this.targets);
+                this.m_raytracingSystem.dispatchCausticResolveUpsample(commandList, this.m_targets);
         }
         return true;
     }
 }
 
 class CausticResolveGraphTask{
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private in b8 causticProducerDispatched;
-    private mut Optional<GpuTimingMeasure> causticResolveTiming;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in b8 m_causticProducerDispatched;
+    private mut Optional<GpuTimingMeasure> m_causticResolveTiming;
 
     public CausticResolveGraphTask(
         mut GpuTimingSubmissionTicket timingTicket,
         in borrow b8 causticProducerDispatched,
         mut Optional<GpuTimingMeasure> causticResolveTiming
     ){
-        this.timingTicket = timingTicket;
-        this.causticProducerDispatched = causticProducerDispatched;
-        this.causticResolveTiming = causticResolveTiming;
+        this.m_timingTicket = timingTicket;
+        this.m_causticProducerDispatched = causticProducerDispatched;
+        this.m_causticResolveTiming = causticResolveTiming;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -252,21 +252,21 @@ class CausticResolveGraphTask{
     }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.causticProducerDispatched){
-            DiscardGpuTimingMeasure(this.causticResolveTiming);
+        if(!this.m_causticProducerDispatched){
+            DiscardGpuTimingMeasure(this.m_causticResolveTiming);
             return true;
         }
-        if(!this.causticResolveTiming.has_value())
+        if(!this.m_causticResolveTiming.has_value())
             return false;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        this.causticResolveTiming.value().finishTiming(commandList);
-        this.causticResolveTiming.reset();
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        this.m_causticResolveTiming.value().finishTiming(commandList);
+        this.m_causticResolveTiming.reset();
         return true;
     }
 
     public void discarded(){
-        DiscardGpuTimingMeasure(this.causticResolveTiming);
+        DiscardGpuTimingMeasure(this.m_causticResolveTiming);
     }
 }
 

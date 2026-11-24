@@ -63,17 +63,17 @@ struct DescriptorBufferStartupPrerequisites{
 [[nodiscard]] b8 IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept;
 [[nodiscard]] inline constexpr b8 IsSupportedDescriptorBindingType(const ResourceType::Enum type)noexcept{
     switch(type){
-    case ResourceType::Texture_SRV:
-    case ResourceType::Texture_UAV:
-    case ResourceType::TypedBuffer_SRV:
-    case ResourceType::TypedBuffer_UAV:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
+    case ResourceType::TextureSrv:
+    case ResourceType::TextureUav:
+    case ResourceType::TypedBufferSrv:
+    case ResourceType::TypedBufferUav:
+    case ResourceType::StructuredBufferSrv:
+    case ResourceType::StructuredBufferUav:
     case ResourceType::ConstantBuffer:
     case ResourceType::VolatileConstantBuffer:
     case ResourceType::Sampler:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
+    case ResourceType::RawBufferSrv:
+    case ResourceType::RawBufferUav:
     case ResourceType::RayTracingAccelStruct:
         return true;
     default:
@@ -106,10 +106,10 @@ inline u64 g_NextDescriptorBufferStorageIdentity = 1u;
 [[nodiscard]] inline constexpr b8 UsesDescriptorBufferInfo(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::ConstantBuffer:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
+    case ResourceType::StructuredBufferSrv:
+    case ResourceType::StructuredBufferUav:
+    case ResourceType::RawBufferSrv:
+    case ResourceType::RawBufferUav:
         return true;
     default:
         return false;

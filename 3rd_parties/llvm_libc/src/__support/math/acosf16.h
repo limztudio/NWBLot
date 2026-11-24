@@ -88,7 +88,6 @@ LIBC_INLINE constexpr float16 acosf16(float16 x) {
 
   // |x| <= 0x1p-1, |x| <= 0.5
   if (x_abs <= 0x3800) {
-    // if x is 0, return pi/2
     if (LIBC_UNLIKELY(x_abs == 0))
       return fputil::cast<float16>(PI_OVER_2);
 

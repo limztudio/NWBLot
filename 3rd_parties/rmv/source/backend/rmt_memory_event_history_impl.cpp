@@ -105,7 +105,6 @@ static void CopyResourceDescription(const RmtTokenResourceCreate& token, RmtMemo
         break;
 
     default:
-        // shouldn't reach here.
         RMT_ASSERT(0);
         break;
     }

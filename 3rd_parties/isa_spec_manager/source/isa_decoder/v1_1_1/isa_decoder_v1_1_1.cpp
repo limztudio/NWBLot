@@ -902,7 +902,6 @@ namespace
                                   InstructionInfo&             instruction_info,
                                   std::vector<std::string>&    log)
     {
-        // Get the fields info.
         for (const auto& field : bitmap)
         {
             Range range;
@@ -942,12 +941,10 @@ namespace
 
     static std::shared_ptr<Encoding> GetEncodingIterator(const IdToEncoding& id_to_encodings, uint64_t first_dword, const IsaSpec& spec_data)
     {
-        // Go over each encoding in the passed spec data.
         std::shared_ptr<Encoding> encoding          = nullptr;
         bool                      is_encoding_found = false;
         for (auto encoding_iterator = spec_data.encodings.begin(); !is_encoding_found && encoding_iterator != spec_data.encodings.end(); ++encoding_iterator)
         {
-            // Dereference the iterator.
             const auto& single_encoding = *encoding_iterator;
 
             // Mask the encoding identifier bits.
@@ -989,7 +986,6 @@ namespace
         return encoding;
     }
 
-    // Checks if the operand with the specific name present in the instruction encoding.
     static bool IsOperandPresent(const InstructionEncoding& instruction_encoding, const std::string& operand_name)
     {
         const auto& operand_iter = std::find_if(instruction_encoding.operands.begin(), instruction_encoding.operands.end(), [&](const Operand& operand) {
@@ -998,7 +994,6 @@ namespace
         return operand_iter != instruction_encoding.operands.end();
     }
 
-    // Gets the iterator to the field from the bitmap with a specific name.
     static FieldIterator GetFieldIterator(const MicrocodeFormat& microcode, const std::string& field_name)
     {
         return std::find_if(microcode.bit_map.begin(), microcode.bit_map.end(), [&](const Field& field) { return field.name == field_name; });
@@ -1194,11 +1189,9 @@ namespace
             {
                 auto& modifier_name = *modifier_name_iterator;
 
-                // Get modifier value.
                 uint64_t    modifier_value = 0;
                 const auto& field_iterator = GetFieldIterator(machine_code, modifier_name, encoding.microcode_format, modifier_value, log);
 
-                // Save the modifier.
                 if (field_iterator != encoding.microcode_format.bit_map.end())
                 {
                     operand_modifiers.push_back(OperandModifer());
@@ -1212,7 +1205,6 @@ namespace
                     should_abort = true;
                 }
 
-                // Success condition.
                 ++processed_modifiers;
                 if (processed_modifiers == modifiers.size())
                 {
@@ -1264,13 +1256,11 @@ namespace
 
         masked_machine_code = first_dword & (encoding.mask | opcode_mask | encoding.seg_mask);
 
-        // Get instruction pointer.
         if (id_to_inst.find(masked_machine_code) != id_to_inst.end())
         {
             found_ptrs.instruction_ptr = id_to_inst.at(masked_machine_code);
         }
 
-        // Get instruction encoding pointer.
         if (id_to_inst_enc.find(masked_machine_code) != id_to_inst_enc.end())
         {
             // FIXME: Make runtime calculation on the field values.
@@ -1368,10 +1358,8 @@ namespace
 
     static void GetFunctionalGroupSubgroupInfo(InstructionInfo& info, const std::string& functional_group, const std::vector<std::string>& functional_subgroup)
     {
-        // Assign functional group enum
         info.functional_group_subgroup_info.isa_functional_group = FunctionalGroupNameToEnum(functional_group);
 
-        // Assign functional subgroup enum
         for (const auto& subgroup : functional_subgroup)
         {
             info.functional_group_subgroup_info.isa_functional_subgroups.push_back(FunctionalSubgroupNameToEnum(subgroup));
@@ -1387,7 +1375,6 @@ namespace
     {
         bool is_success = true;
 
-        // Parse and decode the instructions in the disassembly file
         std::stringstream shader_text(shader_disassembly_text);
         std::string       line;
         std::string       label;
@@ -1396,7 +1383,6 @@ namespace
         {
             line = AmdIsaUtility::Strip(line);
 
-            // Go to the inline comment in the line read
             const char* kCodeCommentToken = "//";
             const char  kColumnToken      = ':';
             const char  kLlvmCommentToken = ';';
@@ -1408,7 +1394,6 @@ namespace
             bool is_code_line = false;
             if (pos_comment > 0 && pos_comment != std::string::npos)
             {
-                // Parse dword/s if match found
                 pos_comment = line.find(kColumnToken, pos_comment);
                 if (pos_comment != std::string::npos)
                 {
@@ -1426,11 +1411,9 @@ namespace
             is_code_line = is_code_line && (line.find(".ascii") == std::string::npos);
             is_code_line = is_code_line && (line.find(".byte") == std::string::npos);
 
-            // If parsing was successful, then decode the instructions
             std::string pc;
             if (is_code_line)
             {
-                // If resolve direct branch targets is enabled by the user
                 if (resolve_direct_branch_targets)
                 {
                     size_t location = line.find(kCodeCommentToken);
@@ -1443,7 +1426,6 @@ namespace
                     }
                 }
 
-                // Decode dword/s
                 std::stringstream stream;
                 stream << line.substr(pos_comment);
                 shader_disassembly += stream.str() + kShaderTextDelimiter;
@@ -1497,7 +1479,6 @@ namespace v1_1_1
 
         bool Initialize(std::string& err_message)
         {
-            // Check compatibility.
             const std::string& xml_schema_version = this->GetSpec().info.schema_version;
             bool               is_compatible      = amdisa::ApiVersion::IsCompatible(xml_schema_version, err_message);
             bool               is_isa_spec_parsed = true;
@@ -1545,7 +1526,6 @@ namespace v1_1_1
                         bool is_x_layout = IsOperandPresent(instruction_encoding, "VDSTX");
                         bool is_y_layout = IsOperandPresent(instruction_encoding, "VDSTY");
 
-                        // Form encoding identifier.
                         const auto& found_encoding_iterator = std::find_if(spec_data.encodings.begin(), spec_data.encodings.end(), [&](const Encoding& encoding) {
                             return encoding.name == instruction_encoding.name;
                         });
@@ -1631,7 +1611,6 @@ namespace v1_1_1
                             assert(instruction.name.find("EXP") != std::string::npos);
                         }
 
-                        // Map.
                         this->MapIdentifierToInstruction(identifier, std::make_shared<Instruction>(instruction));
                         this->MapIdentifierToInstructionEncoding(identifier, std::make_shared<InstructionEncoding>(instruction_encoding));
                     }
@@ -1782,11 +1761,9 @@ namespace v1_1_1
             bool                 is_decoded = false;
             if (stream.str().length() == kDwordByte)
             {
-                // Single machine code 64-bit
                 std::uint64_t                 machine_code_64         = 0;
                 amdisa::InstructionInfoBundle instruction_info_bundle = {};
 
-                // Convert instruction DWORD from hex to uint64_t
                 stream >> std::hex >> machine_code_64;
                 is_decoded = DecodeInstruction(machine_code_64, instruction_info_bundle, err_message);
 
@@ -1796,14 +1773,12 @@ namespace v1_1_1
                     instruction_info_bundle.bundle[0].instruction_semantic_info.branch_info.is_branch &&
                     instruction_info_bundle.bundle[0].instruction_semantic_info.branch_info.IsDirect())
                 {
-                    // Fetch the branch instruction's PC
                     std::stringstream pc_stream = std::stringstream(pc_to_index_map[instruction_info_stream.size()]);
                     std::uint64_t     target_pc = 0;
                     pc_stream >> std::hex >> target_pc;
                     target_pc += kInstructionBytes32 *
                                  (static_cast<uint64_t>(instruction_info_bundle.bundle[0].instruction_semantic_info.branch_info.branch_offset) + 1);
 
-                    // Store target_pc for branch resolution
                     instruction_info_bundle.bundle[0].instruction_semantic_info.branch_info.branch_target_index = target_pc;
                     direct_branch_indexes.push_back(instruction_info_stream.size());
                 }
@@ -1811,7 +1786,6 @@ namespace v1_1_1
             }
             else if (stream.str().length() > kDwordByte)
             {
-                // For 32-bit Instructions
                 std::uint32_t              machine_code_32  = 0;
                 std::vector<std::uint32_t> machine_codes_32 = {};
 
@@ -1833,7 +1807,6 @@ namespace v1_1_1
 
             if (!is_decoded)
             {
-                // For debugging - Store information of instructions that failed in decoding
                 amdisa::InstructionInfo ErrorInstructionInfo;
                 ErrorInstructionInfo.instruction_name        = kStringNa;
                 ErrorInstructionInfo.instruction_description = kStringNa;
@@ -1865,7 +1838,6 @@ namespace v1_1_1
         {
             for (const auto& index : direct_branch_indexes)
             {
-                // Fetch InstructionInfo for the index
                 amdisa::InstructionInfo& inst_info = instruction_info_stream[index].bundle[0];
 
                 // Target pc conversion and lookup in pc_index_map
@@ -1873,7 +1845,6 @@ namespace v1_1_1
                 pc_formatter << std::uppercase << std::hex << std::setfill('0') << std::setw(12)
                              << inst_info.instruction_semantic_info.branch_info.branch_target_index;
 
-                // Lookup for the target index in PC to Index Map
                 const auto& target_index_iter = std::find(pc_to_index_map.begin(), pc_to_index_map.end(), pc_formatter.str());
                 const auto& target_label_iter = pc_to_label_map.find(pc_formatter.str());
                 const bool  is_label_found    = (!pc_to_label_map.empty() && target_label_iter != pc_to_label_map.end());
@@ -1934,7 +1905,6 @@ namespace v1_1_1
                 ExtractDisassembly(disassembly_text, shader_disassembly_text, err_message, resolve_direct_branch_targets, pc_to_index_map, pc_to_label_map);
         }
 
-        // Decode the extracted instructions
         if (is_success)
         {
             is_success = DecodeShaderDisassembly(disassembly_text,
@@ -1984,7 +1954,6 @@ namespace v1_1_1
             err_message.append(e.what());
         }
 
-        // Parse the instructions from the shader disassembly file
         std::string shader_disassembly_text;
         if (is_success)
         {
@@ -1992,7 +1961,6 @@ namespace v1_1_1
                 shader_disassembly_text, shader_disassembly_file_text, err_message, resolve_direct_branch_targets, pc_to_index_map, pc_to_label_map);
         }
 
-        // Decode the extracted instructions
         if (is_success)
         {
             is_success = DecodeShaderDisassembly(shader_disassembly_text,
@@ -2027,12 +1995,10 @@ namespace v1_1_1
                 working_dwords.clear();
                 working_dwords.push_back(stream.GetNextDword(data_->GetLog()));
 
-                // Get the encoding.
                 auto encoding_ptr = GetEncodingIterator(data_->GetEncodingMap(), working_dwords[0], spec_data);
 
                 if (encoding_ptr != nullptr)
                 {
-                    // Insert one instruction info group.
                     instruction_info_stream.push_back(InstructionInfoBundle());
                     auto& instruction_info_bundle = instruction_info_stream.back();
 
@@ -2086,7 +2052,6 @@ namespace v1_1_1
                         }
                         --opcode_count;
 
-                        // Get the opcode.
                         uint64_t    opcode_value = 0;
                         const auto& field_iterator =
                             GetFieldIterator(working_dwords, opcode_field_name, encoding_ptr->microcode_format, opcode_value, data_->GetLog());
@@ -2095,18 +2060,15 @@ namespace v1_1_1
                         bool is_exp                  = encoding_ptr->name.find("EXP") != std::string::npos;
                         bool is_retrieval_successful = (field_iterator != encoding_ptr->microcode_format.bit_map.end() || is_exp);
 
-                        // Get the instruction name.
                         if (is_retrieval_successful)
                         {
                             instruction_info_bundle.bundle.push_back(InstructionInfo());
                             auto& instruction_info = instruction_info_bundle.bundle.back();
 
-                            // Get the modifiers.
                             bool is_extracted =
                                 ExtractModifiers(working_dwords, *encoding_ptr, instruction_info.operand_modifiers, err_message, data_->GetLog());
                             if (is_extracted)
                             {
-                                // Get the fields info into the container.
                                 RetrieveFieldInfo(working_dwords, encoding_ptr->microcode_format.bit_map, instruction_info, data_->GetLog());
                                 uint32_t second_dword = 0;
                                 if (working_dwords.size() > 1)
@@ -2128,7 +2090,6 @@ namespace v1_1_1
                                 assert(are_pointers_retrieved);
                                 if (are_pointers_retrieved)
                                 {
-                                    // Get the conditional encoding.
                                     if (encoding_ptr->name != instruction_ptrs.instruction_encoding_ptr->name)
                                     {
                                         const auto& encoding_iter =
@@ -2145,20 +2106,15 @@ namespace v1_1_1
                                         }
                                     }
 
-                                    // Encoding info retrieve successfully -- save return values.
                                     instruction_info.encoding_description = encoding_ptr->description;
                                     instruction_info.encoding_name        = encoding_ptr->name;
 
-                                    // Get the fields info in a formated single string for printing.
                                     amdisa::AmdIsaUtility::BitMapToString(encoding_ptr->microcode_format, working_dwords, instruction_info.encoding_layout);
 
-                                    // Find the instruction.
                                     {
-                                        // Dereference pointers for local use.
                                         const InstructionEncoding& inst_enc = *(instruction_ptrs.instruction_encoding_ptr);
                                         const Instruction&         inst     = *(instruction_ptrs.instruction_ptr);
 
-                                        // Instruction info retrieved successfully -- save return values.
                                         instruction_info.instruction_name                                     = inst.name;
                                         instruction_info.aliased_names                                        = inst.aliased_names;
                                         instruction_info.instruction_semantic_info.branch_info.is_branch      = inst.is_branch;
@@ -2168,10 +2124,8 @@ namespace v1_1_1
                                         instruction_info.instruction_semantic_info.is_program_terminator      = inst.is_program_terminator;
                                         instruction_info.instruction_description                              = inst.description;
 
-                                        // Get Functional Group and Subgroup Information
                                         GetFunctionalGroupSubgroupInfo(instruction_info, inst.functional_group_name, inst.functional_subgroups);
 
-                                        // Get Functional Group Description
                                         instruction_info.functional_group_subgroup_info.description = "Functional group description not found!";
                                         for (auto group_itr = spec_data.functional_group_info.begin(); group_itr != spec_data.functional_group_info.end();
                                              ++group_itr)
@@ -2183,25 +2137,21 @@ namespace v1_1_1
                                             }
                                         }
 
-                                        // DMASK
                                         uint64_t dmask_value = 0;
                                         const auto& dmask_field_iterator =
                                             GetFieldIterator(working_dwords, "DMASK", encoding_ptr->microcode_format, dmask_value, data_->GetLog());
                                         bool has_dmask_field = (dmask_field_iterator != encoding_ptr->microcode_format.bit_map.end());
 
-                                        // SADDR
                                         uint64_t    saddr_value = 0;
                                         const auto& saddr_field_iterator =
                                             GetFieldIterator(working_dwords, "SADDR", encoding_ptr->microcode_format, saddr_value, data_->GetLog());
                                         bool has_operand_saddr = (saddr_field_iterator != encoding_ptr->microcode_format.bit_map.end());
 
-                                        // Get the operands.
                                         Encoding encoding = *encoding_ptr;
                                         for (auto operands_iterator = inst_enc.operands.begin();
                                              !is_decode_failed && operands_iterator != inst_enc.operands.end();
                                              ++operands_iterator)
                                         {
-                                            // Dereference the iterator.
                                             const auto& operand = *operands_iterator;
 
                                             // No need to process implicit operands as they are not in the
@@ -2210,7 +2160,6 @@ namespace v1_1_1
                                             {
                                                 std::string field_name = operand.encoding_field_name;
 
-                                                // Convert field name to upper case.
                                                 field_name = AmdIsaUtility::ToUpper(field_name);
 
                                                 bool is_implied_literal = false;
@@ -2219,7 +2168,6 @@ namespace v1_1_1
                                                     is_implied_literal = true;
                                                 }
 
-                                                // Get the value of the field.
                                                 uint64_t    field_value = 0;
                                                 const auto& field_iterator =
                                                     GetFieldIterator(working_dwords, field_name, encoding.microcode_format, field_value, data_->GetLog());
@@ -2245,7 +2193,6 @@ namespace v1_1_1
                                                     }
                                                 }
 
-                                                // Get the operand type.
                                                 const auto& operand_type_iterator = std::find_if(
                                                     spec_data.operand_types.begin(), spec_data.operand_types.end(), [&](const OperandType& operand_type) {
                                                         return operand_type.name == operand.type;
@@ -2253,7 +2200,6 @@ namespace v1_1_1
 
                                                 bool is_operand_retrieval_successful = is_field_found && operand_type_iterator != spec_data.operand_types.end();
 
-                                                // Get the operand names.
                                                 if (is_operand_retrieval_successful)
                                                 {
                                                     instruction_info.instruction_operands.push_back(InstructionOperand());
@@ -2389,7 +2335,6 @@ namespace v1_1_1
                                                     }
                                                     else
                                                     {
-                                                        // Return raw bit value if no predefined values were
                                                         if (!is_operand_literal)
                                                         {
                                                             std::stringstream formatter;
@@ -2535,7 +2480,6 @@ namespace v1_1_1
             machine_code = machine_code >> 32;
         }
 
-        // Decode the stream.
         std::vector<InstructionInfoBundle> instruction_info_stream;
         bool                               is_decoded = DecodeInstructionStream(machine_code_stream, instruction_info_stream, err_message);
         assert(is_decoded);
@@ -2565,17 +2509,14 @@ namespace v1_1_1
         {
             const amdisa::IsaSpec& spec_data = data_->GetSpec();
 
-            // Convert to upper case.
             std::string instruction_name_all_caps = AmdIsaUtility::ToUpper(instruction_name);
 
-            // Find the instruction by name.
             const auto& instructions_iterator = std::find_if(spec_data.instructions.begin(), spec_data.instructions.end(), [&](const Instruction& instruction) {
                 return instruction.name == instruction_name_all_caps;
             });
 
             if (instructions_iterator != spec_data.instructions.end())
             {
-                // Instruction found -- save return values.
                 instruction_info.instruction_name        = instructions_iterator->name;
                 instruction_info.instruction_description = instructions_iterator->description;
             }

@@ -54,32 +54,32 @@ class ReflectionParametersUploadTask{
 
 [move_only]
 class ReflectionDispatchTask{
-    private mut GraphicsRuntime graphics;
-    private mut RendererRayTracingSystem raytracingSystem;
-    private ReflectionFrameSnapshot resources;
-    private ReflectionDispatchStage stage;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private ReflectionFrameSnapshot m_resources;
+    private ReflectionDispatchStage m_stage;
     public ReflectionFeedbackReservation feedbackReservation;
-    private in b8 hardwarePreparationReady;
-    private mut b8 hardwareDispatchLogged;
-    private mut b8 fallbackDispatchLogged;
+    private in b8 m_hardwarePreparationReady;
+    private mut b8 m_hardwareDispatchLogged;
+    private mut b8 m_fallbackDispatchLogged;
 
     public ReflectionDispatchTask(mut GraphicsRuntime graphics, in ReflectionGraphInputs inputs, in ReflectionFrameSnapshot resources, in ReflectionDispatchStage stage){
-        this.graphics = graphics;
-        this.raytracingSystem = inputs.raytracingSystem;
-        this.resources = resources;
-        this.stage = stage;
-        this.hardwarePreparationReady = inputs.hardwarePreparationReady;
-        this.hardwareDispatchLogged = inputs.hardwareDispatchLogged;
-        this.fallbackDispatchLogged = inputs.fallbackDispatchLogged;
+        this.m_graphics = graphics;
+        this.m_raytracingSystem = inputs.raytracingSystem;
+        this.m_resources = resources;
+        this.m_stage = stage;
+        this.m_hardwarePreparationReady = inputs.hardwarePreparationReady;
+        this.m_hardwareDispatchLogged = inputs.hardwareDispatchLogged;
+        this.m_fallbackDispatchLogged = inputs.fallbackDispatchLogged;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        in ReflectionFrameSnapshot resources = this.resources;
-        const b8 hardware = this.stage == ReflectionDispatchStage::Hardware;
-        if(hardware && !this.hardwarePreparationReady)
+        in ReflectionFrameSnapshot resources = this.m_resources;
+        const b8 hardware = this.m_stage == ReflectionDispatchStage::Hardware;
+        if(hardware && !this.m_hardwarePreparationReady)
             return true;
-        in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.stage);
+        in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.m_stage);
         if(!pipeline.valid() || (hardware && !resources.scene.valid()))
             return false;
         commandList.endRenderPass();
@@ -91,16 +91,16 @@ class ReflectionDispatchTask{
             tlas = resources.scene.tlasHeapHandle;
         }
         commandList.setComputeState(state);
-        this.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
-        if(ReflectionUsesSlicedCsgPushConstants(resources.scene.csgTraceContextBuffer.valid(), hardware, this.stage == ReflectionDispatchStage::BuildArgs))
+        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
+        if(ReflectionUsesSlicedCsgPushConstants(resources.scene.csgTraceContextBuffer.valid(), hardware, this.m_stage == ReflectionDispatchStage::BuildArgs))
             commandList.setPushConstants(MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, 0u));
         else
             commandList.setPushConstants(resources.frameParametersSlot);
-        const GpuTimingScopeDefinition scope = ReflectionDispatchTiming(this.stage);
-        GpuTimingMeasure timing(this.graphics.gpuTiming(), scope, this.graphics.getDevice(), commandList);
+        const GpuTimingScopeDefinition scope = ReflectionDispatchTiming(this.m_stage);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), scope, this.m_graphics.getDevice(), commandList);
         if(hardware)
             commandList.dispatchIndirect(0u);
-        else if(this.stage == ReflectionDispatchStage::BuildArgs)
+        else if(this.m_stage == ReflectionDispatchStage::BuildArgs)
             commandList.dispatch(1u, 1u, 1u);
         else
             commandList.dispatch(DivideUpWrapping(resources.parameters.width, s_ReflectionShaderClassifyGroupSize), DivideUpWrapping(resources.parameters.height, s_ReflectionShaderClassifyGroupSize), 1u);
@@ -109,36 +109,36 @@ class ReflectionDispatchTask{
 
     [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
-        const b8 hardware = IsReflectionHardwareDispatchActive(this.resources.parameters.hardwareEnabled, this.resources.parameters.maxHardwareRays, this.hardwarePreparationReady);
-        this.feedbackReservation.accept(token, IsReflectionHardwareSceneReady(this.resources.parameters.hardwareEnabled, this.hardwarePreparationReady));
-        if(this.stage == ReflectionDispatchStage::Hardware && hardware){
-            if(this.resources.scene.csgTraceContextBuffer.valid())
-                this.raytracingSystem.confirmRayTraceContextReadSubmission(token);
-            LogHardwareReflectionResolveIfNeeded(this.hardwareDispatchLogged);
+        const b8 hardware = IsReflectionHardwareDispatchActive(this.m_resources.parameters.hardwareEnabled, this.m_resources.parameters.maxHardwareRays, this.m_hardwarePreparationReady);
+        this.feedbackReservation.accept(token, IsReflectionHardwareSceneReady(this.m_resources.parameters.hardwareEnabled, this.m_hardwarePreparationReady));
+        if(this.m_stage == ReflectionDispatchStage::Hardware && hardware){
+            if(this.m_resources.scene.csgTraceContextBuffer.valid())
+                this.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
+            LogHardwareReflectionResolveIfNeeded(this.m_hardwareDispatchLogged);
         }
-        else if(this.stage == ReflectionDispatchStage::Classify && !hardware)
-            LogFallbackReflectionResolveIfNeeded(this.resources.parameters.traceMode, this.fallbackDispatchLogged);
+        else if(this.m_stage == ReflectionDispatchStage::Classify && !hardware)
+            LogFallbackReflectionResolveIfNeeded(this.m_resources.parameters.traceMode, this.m_fallbackDispatchLogged);
     }
     public void discarded(){ this.feedbackReservation.discard(); }
 }
 
 class ReflectionCsgHardwareSliceTask{
-    private mut GraphicsRuntime graphics;
-    private mut RendererRayTracingSystem raytracingSystem;
-    private ReflectionCsgDispatchHandle dispatch;
-    private u32 slice;
-    private u32 sliceCount;
-    private in b8 hardwarePreparationReady;
-    private mut b8 hardwareDispatchLogged;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private ReflectionCsgDispatchHandle m_dispatch;
+    private u32 m_slice;
+    private u32 m_sliceCount;
+    private in b8 m_hardwarePreparationReady;
+    private mut b8 m_hardwareDispatchLogged;
 
     public ReflectionCsgHardwareSliceTask(mut GraphicsRuntime graphics, in ReflectionGraphInputs inputs, in ReflectionCsgDispatchHandle dispatch, in u32 slice, in u32 sliceCount){
-        this.graphics = graphics;
-        this.raytracingSystem = inputs.raytracingSystem;
-        this.dispatch = dispatch;
-        this.slice = slice;
-        this.sliceCount = sliceCount;
-        this.hardwarePreparationReady = inputs.hardwarePreparationReady;
-        this.hardwareDispatchLogged = inputs.hardwareDispatchLogged;
+        this.m_graphics = graphics;
+        this.m_raytracingSystem = inputs.raytracingSystem;
+        this.m_dispatch = dispatch;
+        this.m_slice = slice;
+        this.m_sliceCount = sliceCount;
+        this.m_hardwarePreparationReady = inputs.hardwarePreparationReady;
+        this.m_hardwareDispatchLogged = inputs.hardwareDispatchLogged;
     }
     public GpuTaskCommandRequirements commandRequirements()const{
         GpuTaskCommandRequirements commands;
@@ -148,55 +148,55 @@ class ReflectionCsgHardwareSliceTask{
     }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.hardwarePreparationReady)
+        if(!this.m_hardwarePreparationReady)
             return true;
-        if(!this.dispatch.valid() || this.slice >= this.sliceCount)
+        if(!this.m_dispatch.valid() || this.m_slice >= this.m_sliceCount)
             return false;
-        in ReflectionFrameSnapshot resources = this.dispatch.deref().resources;
+        in ReflectionFrameSnapshot resources = this.m_dispatch.deref().resources;
         if(!resources.hardwarePipeline.valid() || !resources.scene.valid())
             return false;
         commandList.endRenderPass();
         ComputeState state;
         state.setPipeline(resources.hardwarePipeline.deref()).setIndirectParams(resources.indirectArgs.deref());
         commandList.setComputeState(state);
-        this.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, resources.hardwarePipeline.deref(), resources.scene.tlasHeapHandle);
-        commandList.setPushConstants(MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(this.slice, s_ReflectionTraceSliceRays)));
-        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
-        if(this.slice == 0u && !timing.begin(s_TimingScopeReflectionHardware, this.graphics.getDevice(), commandList))
+        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, resources.hardwarePipeline.deref(), resources.scene.tlasHeapHandle);
+        commandList.setPushConstants(MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(this.m_slice, s_ReflectionTraceSliceRays)));
+        mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
+        if(this.m_slice == 0u && !timing.begin(s_TimingScopeReflectionHardware, this.m_graphics.getDevice(), commandList))
             return false;
-        commandList.dispatchIndirect(ReflectionCsgSliceIndirectByteOffset(this.slice, s_ReflectionIndirectArgumentBytes));
-        if(IsFinalReflectionCsgHardwareSlice(this.slice, this.sliceCount))
+        commandList.dispatchIndirect(ReflectionCsgSliceIndirectByteOffset(this.m_slice, s_ReflectionIndirectArgumentBytes));
+        if(IsFinalReflectionCsgHardwareSlice(this.m_slice, this.m_sliceCount))
             return timing.recordEnd(commandList);
         return true;
     }
     [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
-        if(!this.hardwarePreparationReady)
+        if(!this.m_hardwarePreparationReady)
             return;
-        this.raytracingSystem.confirmRayTraceContextReadSubmission(token);
-        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
-        if(this.slice == 0u && !timing.confirmBeginSubmission(token)){
+        this.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
+        mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
+        if(this.m_slice == 0u && !timing.confirmBeginSubmission(token)){
             LogReflectionConfirmTimingBeginFailed();
             timing.discard();
         }
-        if(IsFinalReflectionCsgHardwareSlice(this.slice, this.sliceCount) && !timing.confirmEndSubmission(token, true)){
+        if(IsFinalReflectionCsgHardwareSlice(this.m_slice, this.m_sliceCount) && !timing.confirmEndSubmission(token, true)){
             LogReflectionConfirmTimingEndFailed();
             timing.discard();
         }
-        LogHardwareReflectionResolveIfNeeded(this.hardwareDispatchLogged);
+        LogHardwareReflectionResolveIfNeeded(this.m_hardwareDispatchLogged);
     }
     public void discarded(){
-        if(this.dispatch.valid())
-            this.dispatch.deref().timing.value().discard();
+        if(this.m_dispatch.valid())
+            this.m_dispatch.deref().timing.value().discard();
     }
 }
 
 class ReflectionOpticalHardwareStageTask{
-    private mut GraphicsRuntime graphics;
-    private ReflectionCsgDispatchHandle dispatch;
-    private ReflectionDispatchStage stage;
-    private in b8 hardwarePreparationReady;
-    private mut b8 hardwareDispatchLogged;
+    private mut GraphicsRuntime m_graphics;
+    private ReflectionCsgDispatchHandle m_dispatch;
+    private ReflectionDispatchStage m_stage;
+    private in b8 m_hardwarePreparationReady;
+    private mut b8 m_hardwareDispatchLogged;
 
     public ReflectionOpticalHardwareStageTask(
         mut GraphicsRuntime graphics,
@@ -204,24 +204,24 @@ class ReflectionOpticalHardwareStageTask{
         in ReflectionCsgDispatchHandle dispatch,
         in ReflectionDispatchStage stage
     ){
-        this.graphics = graphics;
-        this.dispatch = dispatch;
-        this.stage = stage;
-        this.hardwarePreparationReady = inputs.hardwarePreparationReady;
-        this.hardwareDispatchLogged = inputs.hardwareDispatchLogged;
+        this.m_graphics = graphics;
+        this.m_dispatch = dispatch;
+        this.m_stage = stage;
+        this.m_hardwarePreparationReady = inputs.hardwarePreparationReady;
+        this.m_hardwareDispatchLogged = inputs.hardwareDispatchLogged;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.hardwarePreparationReady)
+        if(!this.m_hardwarePreparationReady)
             return true;
-        if(!this.dispatch.valid())
+        if(!this.m_dispatch.valid())
             return false;
-        in ReflectionFrameSnapshot resources = this.dispatch.deref().resources;
-        in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.stage);
+        in ReflectionFrameSnapshot resources = this.m_dispatch.deref().resources;
+        in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.m_stage);
         if(!pipeline.valid())
             return false;
-        const b8 buildArgs = this.stage == ReflectionDispatchStage::BuildOpticalArgs;
+        const b8 buildArgs = this.m_stage == ReflectionDispatchStage::BuildOpticalArgs;
         if(!buildArgs && !resources.scene.valid())
             return false;
         commandList.endRenderPass();
@@ -233,16 +233,16 @@ class ReflectionOpticalHardwareStageTask{
             tlas = resources.scene.tlasHeapHandle;
         }
         commandList.setComputeState(state);
-        this.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
+        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
         commandList.setPushConstants(resources.frameParametersSlot);
-        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
-        if(this.stage == ReflectionDispatchStage::HardwareFast && !timing.begin(s_TimingScopeReflectionHardware, this.graphics.getDevice(), commandList))
+        mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
+        if(this.m_stage == ReflectionDispatchStage::HardwareFast && !timing.begin(s_TimingScopeReflectionHardware, this.m_graphics.getDevice(), commandList))
             return false;
         if(buildArgs){
             commandList.dispatch(1u, 1u, 1u);
             return true;
         }
-        if(this.stage == ReflectionDispatchStage::HardwareFast){
+        if(this.m_stage == ReflectionDispatchStage::HardwareFast){
             commandList.dispatchIndirect(0u);
             return true;
         }
@@ -251,24 +251,24 @@ class ReflectionOpticalHardwareStageTask{
     }
     [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
-        if(!this.hardwarePreparationReady)
+        if(!this.m_hardwarePreparationReady)
             return;
-        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
-        if(this.stage == ReflectionDispatchStage::HardwareFast && !timing.confirmBeginSubmission(token)){
+        mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
+        if(this.m_stage == ReflectionDispatchStage::HardwareFast && !timing.confirmBeginSubmission(token)){
             LogReflectionConfirmTimingBeginFailed();
             timing.discard();
         }
-        if(this.stage == ReflectionDispatchStage::Hardware){
+        if(this.m_stage == ReflectionDispatchStage::Hardware){
             if(!timing.confirmEndSubmission(token, true)){
                 LogReflectionConfirmTimingEndFailed();
                 timing.discard();
             }
-            LogHardwareReflectionResolveIfNeeded(this.hardwareDispatchLogged);
+            LogHardwareReflectionResolveIfNeeded(this.m_hardwareDispatchLogged);
         }
     }
     public void discarded(){
-        if(this.dispatch.valid())
-            this.dispatch.deref().timing.value().discard();
+        if(this.m_dispatch.valid())
+            this.m_dispatch.deref().timing.value().discard();
     }
 }
 

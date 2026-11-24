@@ -28,7 +28,7 @@ namespace __hidden_container_adaptor{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_DefaultCachelineSize = 64u;
+constexpr usize s_DefaultCacheLineSize = 64u;
 
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
 struct ProcessorInformationStorage final : NoCopy{
@@ -52,12 +52,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CacheSize{
-    usize m_size = s_DefaultCachelineSize;
+struct CacheLineSizeProbe{
+    usize m_largestLineSize = s_DefaultCacheLineSize;
 
 
 public:
-    CacheSize()noexcept{
+    CacheLineSizeProbe()noexcept{
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
         DWORD bufferSize = 0u;
         if(GetLogicalProcessorInformation(nullptr, &bufferSize) || GetLastError() != ERROR_INSUFFICIENT_BUFFER || bufferSize < sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION))
@@ -73,9 +73,9 @@ public:
             if(info.m_data[i].Relationship != RelationCache)
                 continue;
 
-            const auto cur = static_cast<usize>(info.m_data[i].Cache.LineSize);
-            if(m_size < cur)
-                m_size = cur;
+            const auto detectedLineSize = static_cast<usize>(info.m_data[i].Cache.LineSize);
+            if(m_largestLineSize < detectedLineSize)
+                m_largestLineSize = detectedLineSize;
         }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
         const Array<isize, 3u> lineSizes = {
@@ -95,9 +95,9 @@ public:
             if(lineSize <= 0)
                 continue;
 
-            const auto cur = static_cast<usize>(lineSize);
-            if(m_size < cur)
-                m_size = cur;
+            const auto detectedLineSize = static_cast<usize>(lineSize);
+            if(m_largestLineSize < detectedLineSize)
+                m_largestLineSize = detectedLineSize;
         }
 #endif
     }
@@ -107,9 +107,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const CacheSize& GetCacheSize()noexcept{
-    static const CacheSize s_CacheSize;
-    return s_CacheSize;
+const CacheLineSizeProbe& GetCacheLineSizeProbe()noexcept{
+    static const CacheLineSizeProbe s_CacheLineSizeProbe;
+    return s_CacheLineSizeProbe;
 }
 
 
@@ -128,11 +128,11 @@ namespace AdaptorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize()noexcept{ return __hidden_container_adaptor::GetCacheSize().m_size; }
+usize CacheLineSize()noexcept{ return __hidden_container_adaptor::GetCacheLineSizeProbe().m_largestLineSize; }
 
-usize CacheAlignedAlignment(usize valueAlignment)noexcept{
-    const usize cachelineSize = CachelineSize();
-    return cachelineSize > valueAlignment ? cachelineSize : valueAlignment;
+usize CacheLineAllocationAlignment(usize valueAlignment)noexcept{
+    const usize cacheLineSize = CacheLineSize();
+    return cacheLineSize > valueAlignment ? cacheLineSize : valueAlignment;
 }
 
 

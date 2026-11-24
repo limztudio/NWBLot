@@ -10,7 +10,7 @@ from window_capture_smoke import SmokeFailure
 from lifecycle_evidence import LightingLifecycleEvidence, DedicatedComputeUnavailable, NO_DEDICATED_ASYNC_COMPUTE, BOOTSTRAP_ACCEPTED, ACTIVE_HISTORY_ACCEPTED, CURRENT_FRAME_ACCEPTED, LAGGED_LIGHTING_LIFECYCLE
 
 LIT_NON_FINITE_LIFECYCLE_DEADLINE = "non-finite lifecycle deadline"
-LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE = "lagged lighting-history capture skipped because its source state was unavailable"
+LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPED = "lagged lighting-history capture skipped because its source state was unavailable"
 LIT_SELF_TEST = "--self-test"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
 LIT_TRANSITION_TIMEOUT = "--transition-timeout"
@@ -71,7 +71,7 @@ class LightingLifecycleSelfTest:
         else:
             raise AssertionError("a forbidden error accompanying the Graphics queue route was incorrectly skipped")
         current_history_warnings = ("deferred graph build with optional lagged lighting-history capture failed; retrying without the tail", "deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting",
-            LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE, "graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting",)
+            LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPED, "graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting",)
         for warning in current_history_warnings:
             try:
                 LightingLifecycleEvidence.require_final_run_verdict(f"{log}\n{warning}", 0, "")

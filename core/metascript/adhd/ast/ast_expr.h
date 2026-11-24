@@ -38,11 +38,11 @@ namespace LayoutQueryKind{
 #define NWB_ADHD_EXPORT_LAYOUT_QUERY(adhdName, enumName, cppPrefix, cppSuffix, booleanResult) enumName,
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_LAYOUT_QUERY
-        Count,
+        kCount,
     };
 }
 
-inline constexpr Array<LayoutQuery, LayoutQueryKind::Count> s_LayoutQueries = {{
+inline constexpr Array<LayoutQuery, LayoutQueryKind::kCount> s_LayoutQueries = {{
 #define NWB_ADHD_EXPORT_LAYOUT_QUERY(adhdName, enumName, cppPrefix, cppSuffix, booleanResult) LayoutQuery{ adhdName, cppPrefix, cppSuffix, booleanResult },
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_LAYOUT_QUERY
@@ -158,7 +158,7 @@ struct ParamDecl{
 
 struct Expr{
     ExprKind::Enum kind = ExprKind::Identifier;
-    LayoutQueryKind::Enum layoutQuery = LayoutQueryKind::Count;
+    LayoutQueryKind::Enum layoutQuery = LayoutQueryKind::kCount;
     SourceSpan span;
     MStringView text;
     MStringView resolvedSimdType;

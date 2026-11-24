@@ -1,8 +1,4 @@
-// bc7e_scalar.cpp - Pure scalar C++17 port of bc7e.ispc (auto-derived, then
-// hand-fixed). De-SIMD'd: the single SPMD foreach over blocks becomes a plain
-// for loop; uniform/varying are stripped (one lane/block, no gang), and the
-// ISPC stdlib surface is provided by ispc_compat.h. Encodes one 4x4 BC7 block
-// per iteration. Logic/math and the public API are preserved verbatim.
+// Scalar C++17 port of bc7e.ispc, encoding one 4x4 BC7 block per iteration.
 #include "basisu_bc7e_scalar.h"
 #include <cstdint>
 #include <cstring>   // memset, memcpy
@@ -10,11 +6,7 @@
 #include <cmath>
 #include <cstdio>
 
-// --- ISPC compatibility shim (formerly ispc_compat.h, inlined here so this .cpp
-// --- plus basisu_bc7e_scalar.h are fully self-contained). Supplies the small ISPC
-// --- stdlib surface the de-SIMD'd code uses, the base integer type aliases, and
-// --- the coherent control-flow keyword macros. Kept in the .cpp (not the public
-// --- header) so these global templates/macros don't leak into the rest of the project.
+// Keep the ISPC compatibility helpers local to this translation unit.
 
 // ISPC base integer type aliases (the fixed-width *_t names come from <cstdint>).
 typedef int8_t  int8;
@@ -67,8 +59,6 @@ static const float BC7E_DENOM_BIAS = 0.0000125f;
 
 // bc7e.ispc - Fast high quality SIMD BC7 encoder
 // Copyright (C) 2018-2020 Binomial LLC, All rights reserved. Apache 2.0 license - see LICENSE.
-// Typically compiled as: ispc -g -O2 "%(Filename).ispc" -o "$(TargetDir)%(Filename).obj" -h "$(ProjectDir)%(Filename)_ispc.h" --target=sse2,sse4,avx,avx2 --opt=fast-math --opt=disable-assertions
-// --opt=fast-math is optional (doesn't make much if any measurable difference). 
 // Thanks to ArasP for the determinism fix.
 
 #define BC7E_NON_DETERMINISTIC (0)
@@ -1764,11 +1754,8 @@ static uint64_t find_optimal_solution( uint32_t mode,  vec4F * pXl,  vec4F * pXh
 				{
 					color_quad_i xMinColor, xMaxColor;
 
-					// Notes: The pbit controls which quantization intervals are selected.
-					// total_levels=2^(comp_bits+1), where comp_bits=4 for mode 0, etc.
-					// pbit 0: v=(b*2)/(total_levels-1), pbit 1: v=(b*2+1)/(total_levels-1) where b is the component bin from [0,total_levels/2-1] and v is the [0,1] component value
-					// rearranging you get for pbit 0: b=floor(v*(total_levels-1)/2+.5)
-					// rearranging you get for pbit 1: b=floor((v*(total_levels-1)-1)/2+.5)
+					// With levels = 2^(comp_bits + 1), the p-bit selects v = (2*b + p) / (levels - 1).
+					// Quantize with b = floor((v * (levels - 1) - p) / 2 + 0.5).
 					for ( uint32_t c = 0; c < 4; c++)
 					{
 						xMinColor.m_c[c] = (int)((xl.m_c[c] * scalep - p) / 2.0f + .5f) * 2 + p;
@@ -1865,11 +1852,8 @@ static uint64_t find_optimal_solution( uint32_t mode,  vec4F * pXl,  vec4F * pXh
 				{
 					color_quad_i xMinColor, xMaxColor;
 
-					// Notes: The pbit controls which quantization intervals are selected.
-					// total_levels=2^(comp_bits+1), where comp_bits=4 for mode 0, etc.
-					// pbit 0: v=(b*2)/(total_levels-1), pbit 1: v=(b*2+1)/(total_levels-1) where b is the component bin from [0,total_levels/2-1] and v is the [0,1] component value
-					// rearranging you get for pbit 0: b=floor(v*(total_levels-1)/2+.5)
-					// rearranging you get for pbit 1: b=floor((v*(total_levels-1)-1)/2+.5)
+					// With levels = 2^(comp_bits + 1), the p-bit selects v = (2*b + p) / (levels - 1).
+					// Quantize with b = floor((v * (levels - 1) - p) / 2 + 0.5).
 					for ( uint32_t c = 0; c < 4; c++)
 					{
 						xMinColor.m_c[c] = (int)((xl.m_c[c] * scalep - p) / 2.0f + .5f) * 2 + p;
@@ -2096,9 +2080,6 @@ static uint64_t color_cell_compression( uint32_t mode, const  color_cell_compres
 		}
 
 		float vfr, vfg, vfb;
-		//vfr = hi[0] - lo[0];
-		//vfg = hi[1] - lo[1];
-		//vfb = hi[2] - lo[2];
 		// This is more stable.
 		vfr = .9f;
 		vfg = 1.0f;
@@ -2119,14 +2100,11 @@ static uint64_t color_cell_compression( uint32_t mode, const  color_cell_compres
 				b *= m;
 			}
 
-			//float delta = square(vfr - r) + square(vfg - g) + square(vfb - b);
 
 			vfr = r;
 			vfg = g;
 			vfb = b;
 
-			//if ((iter > 1) && (delta < 1e-8f))
-			//	break;
 		}
 
 		float len = vfr*vfr + vfg*vfg + vfb*vfb;
@@ -4730,7 +4708,6 @@ uint64_t bc7e_compress_block_single_mode(uint64_t* pBlock, const uint32_t* pPixe
 	if (!g_codec_initialized)
 	{
 		// Caller has forgotten to initialize the codec, or another thread is still working on that. We can't continue.
-		// What do we do here?
 		assert(0);
 
 		memset(pBlocks, 0, num_blocks * 16);

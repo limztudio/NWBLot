@@ -430,7 +430,7 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
     b8 hasRetiredSlots = false;
     {
         ScopedLock lock(m_mutex);
-        hasRetiredSlots = m_initialized.load(MemoryOrder::relaxed) && descriptorClass < GpuDescriptorClass::Count && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
+        hasRetiredSlots = m_initialized.load(MemoryOrder::relaxed) && descriptorClass < GpuDescriptorClass::kCount && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
     }
     if(hasRetiredSlots)
         collectRetired();
@@ -441,7 +441,7 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));
         return MakeUnexpected(Failure{});
     }
-    if(descriptorClass >= GpuDescriptorClass::Count){
+    if(descriptorClass >= GpuDescriptorClass::kCount){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::allocate called with invalid class {}."), static_cast<u32>(descriptorClass));
         return MakeUnexpected(Failure{});
     }
@@ -478,7 +478,7 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
         return MakeUnexpected(Failure{});
     }
 
-    if(slot >= allocator.slotStates.size() || slot >= allocator.allocatedClasses.size() || allocator.slotStates[slot] != SlotState::Free || allocator.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::Count)){
+    if(slot >= allocator.slotStates.size() || slot >= allocator.allocatedClasses.size() || allocator.slotStates[slot] != SlotState::Free || allocator.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::kCount)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::allocate: slot allocator state is invalid for class {} slot {}."), static_cast<u32>(descriptorClass), slot);
         return MakeUnexpected(Failure{});
     }
@@ -499,7 +499,7 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
             return;
         if(!handle.valid())
             return;
-        if(handle.descriptorClass() >= GpuDescriptorClass::Count)
+        if(handle.descriptorClass() >= GpuDescriptorClass::kCount)
             return;
         if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && !m_accelStructLayout)
             return;
@@ -649,7 +649,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_resourceDescriptorTextures.clear();
     m_samplerDescriptorResources.clear();
     m_accelStructBufferBindingOffset = 0u;
-    for(u32 i = 0u; i < GpuDescriptorClass::Count; ++i)
+    for(u32 i = 0u; i < GpuDescriptorClass::kCount; ++i)
         m_classBufferOffset[i] = 0u;
 
     m_resourceLayout = nullptr;

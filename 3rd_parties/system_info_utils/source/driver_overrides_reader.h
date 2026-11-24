@@ -23,22 +23,16 @@ namespace driver_overrides_utils
     class DriverOverridesReader
     {
     public:
-        /// @brief Default constructor
         DriverOverridesReader() = delete;
 
-        /// @brief delete copy constructor
         DriverOverridesReader(const DriverOverridesReader&) = delete;
 
-        /// @brief delete move constructor
         DriverOverridesReader(DriverOverridesReader&&) = delete;
 
-        /// @brief Default destructor
         ~DriverOverridesReader() = delete;
 
-        /// @brief delete assignment operator
         DriverOverridesReader& operator=(const DriverOverridesReader&) = delete;
 
-        /// @brief delete move assignment operator
         DriverOverridesReader& operator=(DriverOverridesReader&&) = delete;
 
         /// @brief Parses the Driver Overrides JSON representation.

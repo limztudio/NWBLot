@@ -92,7 +92,6 @@ foreach(_nwb_llvm_target_flag
     set(LLVM_HAS_${_nwb_llvm_target_flag}_TARGET 0)
 endforeach()
 
-# Undef init macros since no LLVM CodeGen targets are linked.
 set(_nwb_llvm_saved_native_arch "${LLVM_NATIVE_ARCH}")
 
 cmake_push_check_state(RESET)

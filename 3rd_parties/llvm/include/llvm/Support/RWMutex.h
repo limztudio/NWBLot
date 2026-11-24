@@ -33,7 +33,6 @@ class RWMutexImpl {
   /// @{
 public:
   /// Initializes the lock but doesn't acquire it.
-  /// Default Constructor.
   explicit RWMutexImpl();
 
   /// @}

@@ -10,7 +10,6 @@ if len (sys.argv) < 3:
 OUTPUT = sys.argv[1]
 CURRENT_SOURCE_DIR = sys.argv[2]
 
-# make sure input files are unique
 sources = sorted(set(sys.argv[3:]))
 
 with open (OUTPUT, "wb") as f:

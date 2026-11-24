@@ -26,12 +26,12 @@ using ThreadHandle = HANDLE;
 
 class SuspendedThread final : NoCopy{
 public:
-    explicit SuspendedThread(HANDLE thread)noexcept : m_thread(thread), m_previous(::SuspendThread(thread)), m_active(m_previous != DWORD(-1)){}
+    explicit SuspendedThread(HANDLE thread)noexcept : m_thread(thread), m_previousSuspendCount(::SuspendThread(thread)), m_active(m_previousSuspendCount != DWORD(-1)){}
     ~SuspendedThread()noexcept{
         if(m_active && ::ResumeThread(m_thread) == DWORD(-1))
             TerminateInvariant();
     }
-    [[nodiscard]] DWORD previous()const noexcept{ return m_previous; }
+    [[nodiscard]] DWORD previousSuspendCount()const noexcept{ return m_previousSuspendCount; }
     [[nodiscard]] DWORD resume()noexcept{
         const DWORD result = ::ResumeThread(m_thread);
         if(result != DWORD(-1))
@@ -40,7 +40,7 @@ public:
     }
 private:
     HANDLE m_thread;
-    DWORD m_previous;
+    DWORD m_previousSuspendCount;
     b8 m_active;
 };
 

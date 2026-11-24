@@ -708,7 +708,6 @@ static std::string SerializeRgdEventOccurrenceUmd(const RgdEventOccurrence& curr
     break;
     break;
     default:
-        // Notify in case there is an unknown event type.
         assert(false);
     }
 
@@ -765,7 +764,6 @@ static std::string SerializeRgdEventOccurrenceKmd(const RgdEventOccurrence& curr
     // Skip printing the data here when '--raw-data' is used.
     break;
     default:
-        // Notify in case there is an unknown event type.
         assert(false);
     }
 

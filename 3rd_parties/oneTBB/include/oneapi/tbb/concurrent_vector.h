@@ -345,7 +345,6 @@ public:
 
     ~concurrent_vector() {}
 
-    // Assignment
     concurrent_vector& operator=( const concurrent_vector& other ) {
         base_type::operator=(other);
         return *this;

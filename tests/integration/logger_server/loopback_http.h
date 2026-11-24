@@ -38,8 +38,8 @@ public:
     [[nodiscard]] Span<const u8> body()const noexcept{ return { reinterpret_cast<const u8*>(m_data), m_size }; }
     void consume()noexcept{ m_size = 0u; }
     [[nodiscard]] b8 respond(const u32 status)noexcept{
-        static char emptyBody[1]{};
-        auto* response = MHD_create_response_from_buffer(0u, emptyBody, MHD_RESPMEM_PERSISTENT);
+        static char s_EmptyBody[1]{};
+        auto* response = MHD_create_response_from_buffer(0u, s_EmptyBody, MHD_RESPMEM_PERSISTENT);
         if(!response)
             return false;
         const auto result = MHD_queue_response(&m_connection, status, response);

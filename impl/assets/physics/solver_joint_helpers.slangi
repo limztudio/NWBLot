@@ -144,7 +144,7 @@ void nwbPhysicsApplyLinearImpulsePair(
     const float3 invIB2,
     const float3 rA,
     const float3 rB,
-    const float3 P,
+    const float3 pairImpulse,
     const uint flagsA,
     const uint flagsB,
     inout float3 vA,
@@ -152,12 +152,12 @@ void nwbPhysicsApplyLinearImpulsePair(
     inout float3 vB,
     inout float3 wB
 ){
-    vA -= invMassA * P;
-    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, cross(rA, P));
+    vA -= invMassA * pairImpulse;
+    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, cross(rA, pairImpulse));
     if((flagsA & 0x07u) != 0u)
         vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
-    vB += invMassB * P;
-    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, cross(rB, P));
+    vB += invMassB * pairImpulse;
+    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, cross(rB, pairImpulse));
     if((flagsB & 0x07u) != 0u)
         vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
 }

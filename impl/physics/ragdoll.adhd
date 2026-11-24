@@ -267,7 +267,7 @@ class RagdollInstance{
             if(qvLen > 1.0e-6f)
                 rotErr = qv * ((2.0f * ATan2(VectorSingle(qvLen), VectorSingle(qErr.w)).x) / qvLen);
 
-            const f32 omegaN = 2.0f * s_PI * hertz;
+            const f32 omegaN = 2.0f * s_Pi * hertz;
             const f32 kp = omegaN * omegaN;
             const f32 kd = 2.0f * this.motorDampings[i] * omegaN;
             const f32 effInertia = this.m_boneMaxInertias[i];

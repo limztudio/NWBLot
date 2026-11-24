@@ -194,11 +194,11 @@ private:
 };
 
 template<typename EntryPoint>
-[[nodiscard]] inline int InvokeWindowsUnicodeEntryPoint(EntryPoint entryPoint, HINSTANCE hInstance)noexcept(s_TerminalFailureNoThrow && IsNothrowConstructible_V<EntryPoint, EntryPoint&> && IsNothrowDestructible_V<EntryPoint>){
-    return InvokeWithInitializedCommon([entryPoint, hInstance](){
+[[nodiscard]] inline int InvokeWindowsUnicodeEntryPoint(EntryPoint entryPoint, HINSTANCE moduleInstance)noexcept(s_TerminalFailureNoThrow && IsNothrowConstructible_V<EntryPoint, EntryPoint&> && IsNothrowDestructible_V<EntryPoint>){
+    return InvokeWithInitializedCommon([entryPoint, moduleInstance](){
         WindowsCommandLineArgs args;
         if(args.valid())
-            return entryPoint(args.argc(), args.argv(), hInstance);
+            return entryPoint(args.argc(), args.argv(), moduleInstance);
 
         return s_ApplicationEntryFailure;
     });
@@ -221,16 +221,16 @@ NWB_COMMON_END
 
 
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPWSTR lpCmdLine, [[maybe_unused]] _In_ int nCmdShow){ \
-        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
+    int WINAPI wWinMain(_In_ HINSTANCE moduleInstance, [[maybe_unused]] _In_opt_ HINSTANCE previousInstance, [[maybe_unused]] _In_ LPWSTR commandLine, [[maybe_unused]] _In_ int showCommand){ \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), moduleInstance); \
     } \
     int main(int, char**)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), GetModuleHandleW(nullptr)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI WinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPSTR lpCmdLine, [[maybe_unused]] _In_ int nCmdShow){ \
-        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
+    int WINAPI WinMain(_In_ HINSTANCE moduleInstance, [[maybe_unused]] _In_opt_ HINSTANCE previousInstance, [[maybe_unused]] _In_ LPSTR commandLine, [[maybe_unused]] _In_ int showCommand){ \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, moduleInstance); \
     } \
     int main(int argc, char** argv)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \

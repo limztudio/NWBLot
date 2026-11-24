@@ -67,20 +67,20 @@ char ZLIB_INTERNAL *gz_strwinerror(DWORD error) {
 
 /* Reset gzip file state */
 local void gz_reset(gz_statep state) {
-    state->x.have = 0;              /* no output data available */
-    state->past = 0;                /* have not read past end yet */
-    if (state->mode == GZ_READ) {   /* for reading ... */
-        state->eof = 0;             /* not at end of file */
-        state->how = LOOK;          /* look for gzip header */
+    state->x.have = 0;
+    state->past = 0;
+    if (state->mode == GZ_READ) {
+        state->eof = 0;
+        state->how = LOOK;
         state->junk = -1;           /* mark first member */
     }
-    else                            /* for writing ... */
+    else
         state->reset = 0;           /* no deflateReset pending */
-    state->again = 0;               /* no stalled i/o yet */
-    state->skip = 0;                /* no seek request pending */
-    gz_error(state, Z_OK, NULL);    /* clear error */
-    state->x.pos = 0;               /* no uncompressed data yet */
-    state->strm.avail_in = 0;       /* no input data yet */
+    state->again = 0;
+    state->skip = 0;
+    gz_error(state, Z_OK, NULL);
+    state->x.pos = 0;
+    state->strm.avail_in = 0;
 }
 
 /* Open a gzip file either by name or file descriptor. */
@@ -92,7 +92,6 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
     int exclusive = 0;
 #endif
 
-    /* check input */
     if (path == NULL || mode == NULL)
         return NULL;
 
@@ -285,7 +284,6 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
     /* initialize stream */
     gz_reset(state);
 
-    /* return stream */
     return (gzFile)state;
 }
 
@@ -330,7 +328,6 @@ gzFile ZEXPORT gzopen_w(const wchar_t *path, const char *mode) {
 int ZEXPORT gzbuffer(gzFile file, unsigned size) {
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return -1;
     state = (gz_statep)file;
@@ -354,7 +351,6 @@ int ZEXPORT gzbuffer(gzFile file, unsigned size) {
 int ZEXPORT gzrewind(gzFile file) {
     gz_statep state;
 
-    /* get internal structure */
     if (file == NULL)
         return -1;
     state = (gz_statep)file;
@@ -377,14 +373,12 @@ z_off64_t ZEXPORT gzseek64(gzFile file, z_off64_t offset, int whence) {
     z_off64_t ret, pos;
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return -1;
     state = (gz_statep)file;
     if (state->mode != GZ_READ && state->mode != GZ_WRITE)
         return -1;
 
-    /* check that there's no error */
     if (state->err != Z_OK && state->err != Z_BUF_ERROR)
         return -1;
 
@@ -453,14 +447,12 @@ z_off_t ZEXPORT gzseek(gzFile file, z_off_t offset, int whence) {
 z_off64_t ZEXPORT gztell64(gzFile file) {
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return -1;
     state = (gz_statep)file;
     if (state->mode != GZ_READ && state->mode != GZ_WRITE)
         return -1;
 
-    /* return position */
     return state->x.pos + (state->past ? 0 : state->skip);
 }
 
@@ -477,7 +469,6 @@ z_off64_t ZEXPORT gzoffset64(gzFile file) {
     z_off64_t offset;
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return -1;
     state = (gz_statep)file;
@@ -505,14 +496,12 @@ z_off_t ZEXPORT gzoffset(gzFile file) {
 int ZEXPORT gzeof(gzFile file) {
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return 0;
     state = (gz_statep)file;
     if (state->mode != GZ_READ && state->mode != GZ_WRITE)
         return 0;
 
-    /* return end-of-file state */
     return state->mode == GZ_READ ? state->past : 0;
 }
 
@@ -520,14 +509,12 @@ int ZEXPORT gzeof(gzFile file) {
 const char * ZEXPORT gzerror(gzFile file, int *errnum) {
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return NULL;
     state = (gz_statep)file;
     if (state->mode != GZ_READ && state->mode != GZ_WRITE)
         return NULL;
 
-    /* return error information */
     if (errnum != NULL)
         *errnum = state->err;
     return state->err == Z_MEM_ERROR ? "out of memory" :
@@ -538,7 +525,6 @@ const char * ZEXPORT gzerror(gzFile file, int *errnum) {
 void ZEXPORT gzclearerr(gzFile file) {
     gz_statep state;
 
-    /* get internal structure and check integrity */
     if (file == NULL)
         return;
     state = (gz_statep)file;

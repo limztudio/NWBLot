@@ -105,7 +105,6 @@ template <typename CRTP> class OptionBase {
     template <typename T> void copy_to(T *other) const;
 
   public:
-    // setters
 
     /// Changes the group membership
     CRTP *group(const std::string &name) {
@@ -130,7 +129,6 @@ template <typename CRTP> class OptionBase {
         return static_cast<CRTP *>(this);
     }
 
-    // Getters
 
     /// Get the group of this option
     CLI11_NODISCARD const std::string &get_group() const { return group_; }
@@ -147,7 +145,7 @@ template <typename CRTP> class OptionBase {
     /// The status of configurable
     CLI11_NODISCARD bool get_configurable() const { return configurable_; }
 
-    /// The status of configurable
+    /// True if flag values cannot be overridden
     CLI11_NODISCARD bool get_disable_flag_override() const { return disable_flag_override_; }
 
     /// Get the current delimiter char
@@ -171,7 +169,7 @@ template <typename CRTP> class OptionBase {
         return self;
     }
 
-    /// Set the multi option policy to take last
+    /// Set the multi option policy to take first
     CRTP *take_first() {
         auto *self = static_cast<CRTP *>(this);
         self->multi_option_policy(MultiOptionPolicy::TakeFirst);
@@ -206,7 +204,7 @@ template <typename CRTP> class OptionBase {
         return static_cast<CRTP *>(this);
     }
 
-    /// Allow in a configuration file
+    /// Set the delimiter for vector arguments
     CRTP *delimiter(char value = '\0') {
         delimiter_ = value;
         return static_cast<CRTP *>(this);
@@ -519,7 +517,7 @@ class Option : public OptionBase<Option> {
         return excludes(opt1, args...);
     }
 
-    /// Remove needs link from an option. Returns true if the option really was in the needs list.
+    /// Remove an exclusion and return true if it was present.
     bool remove_excludes(Option *opt);
 
     /// Sets environment variable to read if no option given

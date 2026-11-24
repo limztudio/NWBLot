@@ -64,7 +64,6 @@ bool RGPassManager::runOnFunction(Function &F) {
   if (RQ.empty()) // No regions, skip calling finalizers
     return false;
 
-  // Initialization
   for (Region *R : RQ) {
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
       RegionPass *RP = (RegionPass *)getContainedPass(Index);

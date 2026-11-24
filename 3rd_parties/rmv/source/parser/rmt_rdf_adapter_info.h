@@ -47,13 +47,13 @@ public:
         uint32_t memory_bus_width;      ///< Bus width of memory interface in bits
         uint32_t memory_bandwidth;      ///< Bandwidth of memory in MB/s
         uint32_t min_memory_clock;      ///< Minumum memory clock in Mhz
-        uint32_t max_memory_clock;      ///< Minumum memory clock in Mhz
+        uint32_t max_memory_clock;      ///< Maximum memory clock in MHz
     };
 
     /// Accessor for the adaptor information structure.
     ///
     /// @retval
-    /// kRmtOk                                      A reference to the adapter info.
+    /// A reference to the adapter info.
     ///
     const RmtRdfTraceAdapterInfo& GetChunkData() const;
 

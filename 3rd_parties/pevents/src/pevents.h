@@ -18,14 +18,11 @@
 #include <stdint.h>
 
 namespace neosmart {
-    // Type declarations
     struct neosmart_event_t_;
     typedef neosmart_event_t_ *neosmart_event_t;
 
-    // Constant declarations
     const uint64_t WAIT_INFINITE = ~((uint64_t)0);
 
-    // Function declarations
     neosmart_event_t CreateEvent(bool manualReset = false, bool initialState = false);
     int DestroyEvent(neosmart_event_t event);
     int WaitForEvent(neosmart_event_t event, uint64_t milliseconds = WAIT_INFINITE);

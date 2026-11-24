@@ -21,11 +21,11 @@ from renderer_ab_benchmark_test_support import scopes, trial_matrix
 from renderer_ab_workload_fixture import (
     LIT_A, LIT_AR, LIT_ARM, LIT_AS_JSON, LIT_B,
     LIT_BASELINE, LIT_BASELINE_EXECUTABLE, LIT_BASELINE_RUNTIME, LIT_BASELINE_SOURCE_MANIFEST, LIT_BR,
-    LIT_BS_JSON, LIT_CANDIDATE, LIT_CANDIDATE_EXECUTABLE, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, LIT_CANDIDATE_RUNTIME,
+    LIT_BS_JSON, LIT_CANDIDATE, LIT_CANDIDATE_EXECUTABLE, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANGE, LIT_CANDIDATE_RUNTIME,
     LIT_CANDIDATE_SOURCE_MANIFEST, LIT_ELIGIBLE, LIT_EVERY_PLANNED_TRIAL, LIT_GPU_SAMPLES, LIT_INACTIVE_REFLECTION_SCOPES,
     LIT_LOGGER, LIT_LOGSERVER_EXECUTABLE, LIT_MAIN, LIT_MEAN_FPS, LIT_MEAN_FRAME_MS,
     LIT_MEAN_MS, LIT_NEW_TIMING_TXT, LIT_NWB_AVBOIT_SMOKE_TIMING, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES,
-    LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_N_1280X900, LIT_N_16, LIT_N_960X720,
+    LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_N_1280X900, LIT_N_16, LIT_N_960X720,
     LIT_OLD_BMP, LIT_OUTPUT, LIT_OUTPUT_DIRECTORY, LIT_PRESERVED, LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN,
     LIT_REFLECTION_MIRROR_SPATIAL, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_REFLECTION_OPTICAL_INSIDE, LIT_REFLECTION_ROUGH_FILTERED, LIT_REFLECTION_ROUGH_SPATIAL,
     LIT_REFLECTION_SCREEN_DEPTH, LIT_SCOPES, LIT_TOTAL_MS, LIT_TRANSPARENT_MULTI, LIT_VK_INSTANCE_LAYERS,
@@ -36,7 +36,7 @@ from renderer_ab_workload_fixture import (
 class ReflectionWorkloadTests(unittest.TestCase):
     def test_reflection_environment_reuses_fixed_production_controls_after_clearing_inheritance(self):
         inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES: "1", LIT_NWB_AVBOIT_SMOKE_TIMING: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
-            LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO: "5", LIT_PRESERVED: LIT_YES}
+            LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS: "5", LIT_PRESERVED: LIT_YES}
         for workload in RendererWorkloadRegistry.workloads().values():
             if workload.reflection_policy is None:
                 continue
@@ -45,7 +45,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **overrides})
                 self.assertEqual(overrides[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
                 self.assertEqual(overrides[LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES], LIT_N_16)
-                self.assertEqual(overrides[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO], "0.016666667")
+                self.assertEqual(overrides[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS], "0.016666667")
         self.assertEqual(inherited[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "1")
 
     def test_reflection_cannot_override_explicit_vulkan_validation(self):
@@ -118,7 +118,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
         common = [LIT_BASELINE_EXECUTABLE, LIT_A, LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, LIT_B, LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         for count in (2, 169):
-            args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
+            args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANGE, str(count)])
             workload = RendererWorkloadRegistry.workloads()[args.workload]
             value = scopes(workload)
             benchmark.validate_coverage(value, workload, 6, 100)
@@ -127,10 +127,10 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 benchmark.validate_coverage(value, workload, 6, 100)
         for invalid in ("0", "-1", "1382401"):
             with self.subTest(native_calls=invalid), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
+                benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANGE, invalid])
         for name in (LIT_TRANSPARENT_MULTI, LIT_REFLECTION_SCREEN_DEPTH, LIT_REFLECTION_ROUGH_FILTERED):
             with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
+                benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANGE, "2"])
 
     def test_sliced_long_hardware_range_retains_all_work_in_per_frame_and_paired_times(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_REFLECTION_OPTICAL_CSG_CAP]

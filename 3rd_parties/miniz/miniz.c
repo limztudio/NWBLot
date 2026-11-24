@@ -84,7 +84,7 @@ extern "C"
         return ~crcu32;
     }
 #elif defined(USE_EXTERNAL_MZCRC)
-/* If USE_EXTERNAL_CRC is defined, an external module will export the
+/* If USE_EXTERNAL_MZCRC is defined, an external module will export the
  * mz_crc32() symbol for us to use, e.g. an SSE-accelerated version.
  * Depending on the impl, it may be necessary to ~ the input/output crc values.
  */
@@ -307,7 +307,7 @@ mz_ulong mz_crc32(mz_ulong crc, const mz_uint8 *ptr, size_t buf_len)
     mz_ulong mz_deflateBound(mz_streamp pStream, mz_ulong source_len)
     {
         (void)pStream;
-        /* This is really over conservative. (And lame, but it's actually pretty tricky to compute a true upper bound given the way tdefl's blocking works.) */
+        /* A conservative bound accounts for tdefl block overhead. */
         return MZ_MAX(128 + (source_len * 110) / 100, 128 + source_len + ((source_len / (31 * 1024)) + 1) * 5);
     }
 
@@ -317,7 +317,7 @@ mz_ulong mz_crc32(mz_ulong crc, const mz_uint8 *ptr, size_t buf_len)
         mz_stream stream;
         memset(&stream, 0, sizeof(stream));
 
-        /* In case mz_ulong is 64-bits (argh I hate longs). */
+        /* Reject sizes that do not fit the 32-bit stream fields. */
         if ((mz_uint64)(source_len | *pDest_len) > 0xFFFFFFFFU)
             return MZ_PARAM_ERROR;
 
@@ -560,7 +560,7 @@ mz_ulong mz_crc32(mz_ulong crc, const mz_uint8 *ptr, size_t buf_len)
         int status;
         memset(&stream, 0, sizeof(stream));
 
-        /* In case mz_ulong is 64-bits (argh I hate longs). */
+        /* Reject sizes that do not fit the 32-bit stream fields. */
         if ((mz_uint64)(*pSource_len | *pDest_len) > 0xFFFFFFFFU)
             return MZ_PARAM_ERROR;
 

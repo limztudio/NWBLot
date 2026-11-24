@@ -13,7 +13,7 @@ from harness_test_support import make_abnormal_exit_terminator
 
 
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
-LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
 LIT_SETTLE_SECONDS_2 = "--settle-seconds"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
 LIT_MAXIMUM_MEAN_ABS_2 = "--maximum-mean-abs"
@@ -216,7 +216,7 @@ def run_self_test(harness) -> int:
             result = harness.capture_scene(complex_args, complex_profile, complex_capture, complex_log, complex_environment)
         assert result.live_warmup[LIT_CAPTURE_SOURCE_FRAME] == 902
         assert captured_environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH] == str(complex_capture.resolve())
-        assert captured_environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO] == "360"
+        assert captured_environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT] == "360"
 
         reference_directory = root / LIT_OPAQUE_TEXTURE / LIT_REFERENCE
         reference_directory.mkdir(parents=True)

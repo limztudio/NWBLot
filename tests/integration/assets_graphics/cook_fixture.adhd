@@ -118,76 +118,76 @@ type TexturePayloadFormatEnum = TexturePayloadFormat;
 
 [ordered]
 class BuildInputSelection{
-    private HeapStorage storage;
-    private CpuTaskScheduler scheduler(1u);
+    private HeapStorage m_storage;
+    private CpuTaskScheduler m_scheduler(1u);
     public CapturingLogger m_logger;
-    private LoggerRegistrationGuard loggerGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
-    private Path root;
-    private AssetCookWorkspace workspace(s_AssetCaseTestsAssetsBuildInputs);
-    private CookFileCatalog catalog(this.workspace);
-    public AssetBuildOptions m_options(this.scheduler);
+    private LoggerRegistrationGuard m_loggerGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
+    private Path m_root;
+    private AssetCookWorkspace m_workspace(s_AssetCaseTestsAssetsBuildInputs);
+    private CookFileCatalog m_catalog(this.m_workspace);
+    public AssetBuildOptions m_options(this.m_scheduler);
 
     public void setup(){
-        this.root = GraphicsRepoPath() / "__build_obj" / "build_input_tests";
-        ASSERT_TRUE(EnsureDirectories(this.root / s_AssetsDirectory / "empty").has_value());
-        this.catalog.setRepoRoot(this.root);
-        this.catalog.appendRoot(this.root / s_AssetsDirectory, s_ProjectVirtualRoot);
+        this.m_root = GraphicsRepoPath() / "__build_obj" / "build_input_tests";
+        ASSERT_TRUE(EnsureDirectories(this.m_root / s_AssetsDirectory / "empty").has_value());
+        this.m_catalog.setRepoRoot(this.m_root);
+        this.m_catalog.appendRoot(this.m_root / s_AssetsDirectory, s_ProjectVirtualRoot);
     }
-    public void teardown(){ this.scheduler.wait(); }
-    public ~BuildInputSelection(){ this.scheduler.drain(); }
+    public void teardown(){ this.m_scheduler.wait(); }
+    public ~BuildInputSelection(){ this.m_scheduler.drain(); }
 
     public void addFile(in StringView relativePath){
-        const Path path = this.root / relativePath;
+        const Path path = this.m_root / relativePath;
         ASSERT_TRUE(EnsureDirectories(path.parentPath()).has_value());
         ASSERT_TRUE(WriteBinaryFile(path, Span<u8>()));
         String normalized = PathToString(path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
-        AppendTestCatalogFile(this.catalog, this.root / s_AssetsDirectory, path, normalized, s_ProjectVirtualRoot);
+        AppendTestCatalogFile(this.m_catalog, this.m_root / s_AssetsDirectory, path, normalized, s_ProjectVirtualRoot);
     }
     public void addInput(in StringView path){ this.m_options.inputs.emplace_back(path); }
     public void clearInputs(){ this.m_options.inputs.clear(); }
-    public usize fileCount()const{ return this.catalog.files.size(); }
-    public String filenameTextAt(in usize index)const{ return PathToString(this.catalog.files[index].filePath.filenameView()); }
+    public usize fileCount()const{ return this.m_catalog.files.size(); }
+    public String filenameTextAt(in usize index)const{ return PathToString(this.m_catalog.files[index].filePath.filenameView()); }
 
-    public GlobalPath ownedRoot(){ return OwnGraphicsPath(this.storage, this.root); }
-    public CookStringVector makeCookSources(){ return this.storage.makeValue<CookStringVector>(); }
-    public void appendCookSource(in StringView source, mut CookStringVector sources){ sources.emplace_back(source, this.storage); }
+    public GlobalPath ownedRoot(){ return OwnGraphicsPath(this.m_storage, this.m_root); }
+    public CookStringVector makeCookSources(){ return this.m_storage.makeValue<CookStringVector>(); }
+    public void appendCookSource(in StringView source, mut CookStringVector sources){ sources.emplace_back(source, this.m_storage); }
     public void appendCookPathSource(in GraphicsTestPath path, mut CookStringVector sources){ this.appendCookSource(PathToString(path), sources); }
-    public b8 select(){ return SelectBuildInputs(this.m_options, this.catalog); }
+    public b8 select(){ return SelectBuildInputs(this.m_options, this.m_catalog); }
 }
 
 [ordered]
 class ScratchPattern{
-    private mut GraphicsScratchArena owner;
-    private usize count;
-    private u8 seed;
-    private RawAllocation bytes;
+    private mut GraphicsScratchArena m_owner;
+    private usize m_count;
+    private u8 m_seed;
+    private RawAllocation m_bytes;
 
     public ScratchPattern(mut GraphicsScratchArena owner, in usize count, in u8 seed){
-        this.owner = owner;
-        this.count = count;
-        this.seed = seed;
-        this.bytes = AllocateBytes(owner.arena, 1u, count);
+        this.m_owner = owner;
+        this.m_count = count;
+        this.m_seed = seed;
+        this.m_bytes = AllocateBytes(owner.arena, 1u, count);
         if(this.valid()){
             for(usize i = 0u; i < count; ++i)
-                this.bytes[i] = cast<u8>(i + seed);
+                this.m_bytes[i] = cast<u8>(i + seed);
         }
     }
     public ~ScratchPattern(){ this.release(); }
-    public b8 valid()const{ return this.bytes.address() != 0u; }
+    public b8 valid()const{ return this.m_bytes.address() != 0u; }
     public b8 intact()const{
         if(!this.valid())
             return false;
-        for(usize i = 0u; i < this.count; ++i){
-            if(this.bytes[i] != cast<u8>(i + this.seed))
+        for(usize i = 0u; i < this.m_count; ++i){
+            if(this.m_bytes[i] != cast<u8>(i + this.m_seed))
                 return false;
         }
         return true;
     }
     public void release(){
         if(this.valid()){
-            FreeBytes(this.owner.arena, this.bytes, 1u, this.count);
-            this.bytes = RawAllocation();
+            FreeBytes(this.m_owner.arena, this.m_bytes, 1u, this.m_count);
+            this.m_bytes = RawAllocation();
         }
     }
 }
@@ -221,17 +221,17 @@ class GatherBytesMerge{
 [ordered]
 class GatherInputs{
     public ScratchStorage m_scratchArena(s_AssetCaseTestsAssetsGraphicsGatherInputs);
-    private HeapStorage storage;
+    private HeapStorage m_storage;
     public CapturingLogger m_logger;
-    private LoggerRegistrationGuard loggerGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
-    private Path root;
+    private LoggerRegistrationGuard m_loggerGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
+    private Path m_root;
     public AssetGatherOptions m_options;
 
     public void setup(){
         CompactString key;
         AppendHexU32(cast<u32>(ComputeFnv64Text(GraphicsCurrentTestName())), key);
-        this.root = GraphicsRepoPath() / "__build_obj" / "g" / key.view();
-        this.m_options.outputDirectory = PathToString(this.root / "out");
+        this.m_root = GraphicsRepoPath() / "__build_obj" / "g" / key.view();
+        this.m_options.outputDirectory = PathToString(this.m_root / "out");
         this.m_options.configuration = CompactString("tests");
         this.resetMergeCallCount();
     }
@@ -249,13 +249,13 @@ class GatherInputs{
             ASSERT_TRUE(name.has_value());
             ASSERT_TRUE(volume.append(name.value(), bytes));
         }
-        const Path input = this.root / directory;
-        ASSERT_TRUE(volume.writeBuiltAssets(OwnGraphicsPath(this.storage, input)));
+        const Path input = this.m_root / directory;
+        ASSERT_TRUE(volume.writeBuiltAssets(OwnGraphicsPath(this.m_storage, input)));
         this.m_options.inputs.emplace_back(PathToString(input));
     }
 
     public void verifyPayloads(in usize count, in usize payloadSize, in u8 seed){
-        auto result = MountGraphicsTestVolume(OwnGraphicsPath(this.storage, this.root / "out"), this.storage);
+        auto result = MountGraphicsTestVolume(OwnGraphicsPath(this.m_storage, this.m_root / "out"), this.m_storage);
         ASSERT_TRUE(result.has_value());
         mut IFilesystem filesystem = result.value().deref();
         ASSERT_TRUE(filesystem.mounted());
@@ -280,8 +280,8 @@ class GatherInputs{
     public usize mergeCallCount()const{ return TestProcessValue<GatherMergeCount>().calls; }
     public void resetMergeCallCount(){ TestProcessValue<GatherMergeCount>().calls = 0u; }
     public b8 hasFatalFailure()const{ return HasFatalTestFailure(); }
-    public AssetTestVector<AssetString> makeInputStrings(){ return this.storage.makeValue<AssetTestVector<AssetString>>(); }
-    public void appendInputString(in StringView text, mut AssetTestVector<AssetString> list){ list.emplace_back(text, this.storage); }
+    public AssetTestVector<AssetString> makeInputStrings(){ return this.m_storage.makeValue<AssetTestVector<AssetString>>(); }
+    public void appendInputString(in StringView text, mut AssetTestVector<AssetString> list){ list.emplace_back(text, this.m_storage); }
 
     public b8 writeDuplicateEntryManifestVolume(in Name name){
         AssetCookWorkspace workspace(s_AssetCaseTestsAssetsGraphicsGatherInputs);
@@ -293,7 +293,7 @@ class GatherInputs{
         if(!AppendTestCookPayload(name, first, volume.manifest, 1u)
             || !AppendTestCookPayload(name, second, volume.manifest, 1u))
             return false;
-        return volume.writeVolume(this.root / "out", "tests").has_value();
+        return volume.writeVolume(this.m_root / "out", "tests").has_value();
     }
 }
 

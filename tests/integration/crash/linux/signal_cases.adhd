@@ -13,15 +13,15 @@ class SignalEnvironment{
     public AlternateStack stack;
     public SignalAction action;
     public TerminationHandler termination = ReadTerminationHandler();
-    private b8 ready = false;
+    private b8 m_ready = false;
 
     public b8 save(){
-        this.ready = this.stack.read() && this.action.read(s_IllegalInstruction);
-        return this.ready;
+        this.m_ready = this.stack.read() && this.action.read(s_IllegalInstruction);
+        return this.m_ready;
     }
 
     public ~SignalEnvironment(){
-        if(this.ready){
+        if(this.m_ready){
             UninstallCrashHandler();
             if(!this.action.install(s_IllegalInstruction) || !this.stack.install())
                 TerminateInvariant();
@@ -80,7 +80,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     RemoveTestArtifacts(group);
     UninstallCrashHandler();
     const Path spoolDirectory = SpoolDirectory(group);
-    SignalStackMemory memory;
+    AlternateSignalStackStorage memory;
     SignalEnvironment previous;
     ASSERT_TRUE(previous.save());
     PersistentStorage installArena(s_InstallArena, PersistentArenaStructureAlignedSize(64u * 1024u));

@@ -163,8 +163,8 @@ enum
 
     /* Initializes the compressor. */
     /* There is no corresponding deinit() function because the tdefl API's do not dynamically allocate memory. */
-    /* pBut_buf_func: If NULL, output data will be supplied to the specified callback. In this case, the user should call the tdefl_compress_buffer() API for compression. */
-    /* If pBut_buf_func is NULL the user should always call the tdefl_compress() API. */
+    /* If pPut_buf_func is non-NULL, output is sent to the callback; use tdefl_compress_buffer(). */
+    /* If pPut_buf_func is NULL, use tdefl_compress(). */
     /* flags: See the above enums (TDEFL_HUFFMAN_ONLY, TDEFL_WRITE_ZLIB_HEADER, etc.) */
     MINIZ_EXPORT tdefl_status tdefl_init(tdefl_compressor *d, tdefl_put_buf_func_ptr pPut_buf_func, void *pPut_buf_user, int flags);
 

@@ -5852,9 +5852,8 @@ static FieldDecl *FindFieldDeclInstantiationPattern(const ASTContext &Ctx,
       Lookup, [](auto &&L) { return isa<FieldDecl>(*L); });
   if (Rng.empty())
     return nullptr;
-  // FIXME: this breaks clang/test/Modules/pr28812.cpp
-  // assert(std::distance(Rng.begin(), Rng.end()) <= 1
-  //       && "Duplicated instantiation pattern for field decl");
+  // FIXME: Checking for duplicate field instantiation patterns breaks
+  // clang/test/Modules/pr28812.cpp.
   return cast<FieldDecl>(*Rng.begin());
 }
 
@@ -11506,7 +11505,6 @@ static bool checkArithmeticBinOpPointerOperands(Sema &S, SourceLocation Loc,
   if (isLHSPointer) LHSPointeeTy = LHSExpr->getType()->getPointeeType();
   if (isRHSPointer) RHSPointeeTy = RHSExpr->getType()->getPointeeType();
 
-  // if both are pointers check if operation is valid wrt address spaces
   if (isLHSPointer && isRHSPointer) {
     if (!LHSPointeeTy.isAddressSpaceOverlapping(RHSPointeeTy,
                                                 S.getASTContext())) {
@@ -21627,7 +21625,6 @@ ExprResult RebuildUnknownAnyExpr::VisitCallExpr(CallExpr *E) {
   // Rebuild the appropriate pointer-to-function type.
   switch (Kind) {
   case FK_MemberFunction:
-    // Nothing to do.
     break;
 
   case FK_FunctionPointer:

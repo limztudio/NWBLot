@@ -6,7 +6,7 @@
 - `smoke/` holds runtime and hardware validation, including GPU-optional probes.
 - `ab/` holds manually launched A/B measurement workflows. Each runnable workflow has a terminal `launch.py`; capture, timing, and result artifacts stay local under `.cozter/out/ab-results/`.
 - `performance/` holds standalone opt-in benchmark and SIMD qualification workloads built behind explicit CMake options.
-- `name_symbols/` holds symbol-table (`nwb_namesym` in `tests/CMakeLists.txt`) inspection and sidecar verification tests.
+- `name_symbols/` holds symbol-table inspection and sidecar verification tests; `nwb_namesym` is defined in `name_symbols/CMakeLists.txt` when its prerequisites are available.
 
 CTest target names remain stable across this layout. Source-only CTest directories do not become launcher commands; add a terminal `launch.py` only for an independently runnable workflow. The current root-launcher A/B commands are `async-shadow-m4`, `frame-lagged-async-lighting`, `hardware-shadow-boundary`, and `renderer-baseline`.
 

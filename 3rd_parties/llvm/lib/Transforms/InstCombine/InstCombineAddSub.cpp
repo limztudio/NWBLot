@@ -761,12 +761,10 @@ static Value *checkForNegativeOperand(BinaryOperator &I,
   Value *X = nullptr, *Y = nullptr, *Z = nullptr;
   const APInt *C1 = nullptr, *C2 = nullptr;
 
-  // if ONE is on other side, swap
   if (match(RHS, m_Add(m_Value(X), m_One())))
     std::swap(LHS, RHS);
 
   if (match(LHS, m_Add(m_Value(X), m_One()))) {
-    // if XOR on other side, swap
     if (match(RHS, m_Xor(m_Value(Y), m_APInt(C1))))
       std::swap(X, RHS);
 
@@ -789,7 +787,6 @@ static Value *checkForNegativeOperand(BinaryOperator &I,
   LHS = I.getOperand(0);
   RHS = I.getOperand(1);
 
-  // if XOR is on other side, swap
   if (match(RHS, m_Xor(m_Value(Y), m_APInt(C1))))
     std::swap(LHS, RHS);
 

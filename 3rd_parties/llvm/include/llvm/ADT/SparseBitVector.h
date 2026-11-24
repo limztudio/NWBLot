@@ -448,7 +448,6 @@ public:
   SparseBitVector(SparseBitVector &&RHS)
       : Elements(std::move(RHS.Elements)), CurrElementIter(Elements.begin()) {}
 
-  // Clear.
   void clear() {
     Elements.clear();
   }

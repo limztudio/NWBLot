@@ -417,7 +417,7 @@ class VehicleController{
         const f32 curGearRatio = this.activeGearRatio();
         const VectorSingle absOmegaRatio = Abs(VectorSingle(curGearRatio * this.engine.finalDriveRatio, avgDrivenOmega, 0.0f, 0.0f));
         const f32 wheelToEngine = absOmegaRatio.x;
-        const f32 targetRpm = SimdMax(this.engine.idleRpm, (absOmegaRatio.y * wheelToEngine * 60.0f) / (2.0f * s_PI));
+        const f32 targetRpm = SimdMax(this.engine.idleRpm, (absOmegaRatio.y * wheelToEngine * 60.0f) / (2.0f * s_Pi));
         this.engineRpm = SimdClamp(this.engineRpm + (targetRpm - this.engineRpm) * SimdMin(1.0f, dt * 10.0f), this.engine.idleRpm, this.engine.maxRpm);
 
         if(this.engine.automaticTransmission && this.shiftCooldown <= 0.0f){

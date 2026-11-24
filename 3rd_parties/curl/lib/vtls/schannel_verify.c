@@ -552,7 +552,6 @@ CURLcode Curl_verify_host(struct Curl_cfilter *cf, struct Curl_easy *data)
                                       (LPTSTR)cert_hostname_buff, len,
                                       alt_name_info, Win8_compat);
 
-    /* Sanity check */
     if(actual_len != len) {
       failf(data,
             "schannel: CertGetNameString() returned certificate "

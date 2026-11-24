@@ -12074,7 +12074,6 @@ static std::optional<APValue> handleVectorUnaryOperator(ASTContext &Ctx,
                                                         APValue Elt) {
   switch (Op) {
   case UO_Plus:
-    // Nothing to do here.
     return Elt;
   case UO_Minus:
     if (Elt.getKind() == APValue::Int) {

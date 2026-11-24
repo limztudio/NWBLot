@@ -72,7 +72,6 @@ static struct mev_sh_entry *mev_sh_entry_get(struct Curl_hash *sh,
                                              curl_socket_t s)
 {
   if(s != CURL_SOCKET_BAD) {
-    /* only look for proper sockets */
     return Curl_hash_pick(sh, (const char *)&s, sizeof(curl_socket_t));
   }
   return NULL;
@@ -86,18 +85,15 @@ static struct mev_sh_entry *mev_sh_entry_add(struct Curl_hash *sh,
   struct mev_sh_entry *check;
 
   if(there) {
-    /* it is present, return fine */
     return there;
   }
 
-  /* not present, add it */
   check = curlx_calloc(1, sizeof(struct mev_sh_entry));
   if(!check)
     return NULL; /* major failure */
 
   Curl_uint32_spbset_init(&check->xfers);
 
-  /* make/add new hash entry */
   if(!Curl_hash_add(sh, (char *)&s, sizeof(curl_socket_t), check)) {
     mev_sh_entry_dtor(check);
     return NULL; /* major failure */
@@ -105,7 +101,7 @@ static struct mev_sh_entry *mev_sh_entry_add(struct Curl_hash *sh,
 #ifdef DEBUGBUILD
   check->magic = SH_ENTRY_MAGIC;
 #endif
-  return check; /* things are good in sockhash land */
+  return check;
 }
 
 /* delete the given socket entry from the hash */
@@ -180,7 +176,6 @@ static struct easy_pollset *mev_get_last_pollset(struct Curl_easy *data,
 static bool mev_sh_entry_xfer_add(struct mev_sh_entry *e,
                                   struct Curl_easy *data)
 {
-   /* detect weird values */
   DEBUGASSERT(mev_sh_entry_user_count(e) < 100000);
   return Curl_uint32_spbset_add(&e->xfers, data->mid);
 }
@@ -188,7 +183,6 @@ static bool mev_sh_entry_xfer_add(struct mev_sh_entry *e,
 static bool mev_sh_entry_conn_add(struct mev_sh_entry *e,
                                   struct connectdata *conn)
 {
-   /* detect weird values */
   DEBUGASSERT(mev_sh_entry_user_count(e) < 100000);
   DEBUGASSERT(!e->conn);
   if(e->conn)
@@ -440,7 +434,6 @@ static CURLMcode mev_pollset_diff(struct Curl_multi *multi,
     s = prev_ps->sockets[i];
     for(j = 0; j < ps->n; j++) {
       if(s == ps->sockets[j]) {
-        /* socket is still supervised */
         stillused = TRUE;
         break;
       }

@@ -478,7 +478,6 @@ static struct Curl_addrinfo *async_ares_node2addr(
     ca->ai_addr = (void *)((char *)ca + sizeof(struct Curl_addrinfo));
     memcpy(ca->ai_addr, ai->ai_addr, ss_size);
 
-    /* if the return list is empty, this becomes the first element */
     if(!cafirst)
       cafirst = ca;
 
@@ -489,7 +488,6 @@ static struct Curl_addrinfo *async_ares_node2addr(
     ++naddrs;
   }
 
-  /* if we failed, destroy the Curl_addrinfo list */
   if(error) {
     Curl_freeaddrinfo(cafirst);
     cafirst = NULL;

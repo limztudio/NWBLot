@@ -110,7 +110,6 @@ namespace astc_ldr
 	uint32_t get_colors(uint32_t cem_index, const uint8_t* pEndpoint_vals, uint32_t endpoint_ise_index, uint32_t weight_ise_index, color_rgba* pColors, bool decode_mode_srgb);
 	uint32_t get_colors_raw_weights(uint32_t cem_index, const uint8_t* pEndpoint_vals, uint32_t endpoint_ise_index, color_rgba* pColors, bool decode_mode_srgb);
 
-	//int apply_delta_to_bise_endpoint_val(uint32_t endpoint_ise_range, int ise_val, int delta);
 	int apply_delta_to_bise_weight_val(uint32_t weight_ise_range, int ise_val, int delta);
 
 	uint64_t eval_solution(
@@ -127,9 +126,6 @@ namespace astc_ldr
 		uint8_t* pWeight_vals0, uint8_t* pWeight_vals1, uint32_t weight_ise_index,
 		const cem_encode_params& params);
 
-	//bool cem8_or_12_used_blue_contraction(uint32_t cem_index, const uint8_t* pEndpoint_vals, uint32_t endpoint_ise_index);
-	//bool cem9_or_13_used_blue_contraction(uint32_t cem_index, const uint8_t* pEndpoint_vals, uint32_t endpoint_ise_index);
-	//bool used_blue_contraction(uint32_t cem_index, const uint8_t* pEndpoint_vals, uint32_t endpoint_ise_index);
 
 	uint64_t cem_encode_pixels(
 		uint32_t cem_index, int ccs_index,

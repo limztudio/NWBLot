@@ -867,7 +867,6 @@ int curl_formget(struct curl_httppost *form, void *arg,
 void curl_formfree(struct curl_httppost *form)
 {
   (void)form;
-  /* Nothing to do. */
 }
 
 #endif /* if disabled */

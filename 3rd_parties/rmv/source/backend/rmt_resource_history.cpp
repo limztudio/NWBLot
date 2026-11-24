@@ -8,7 +8,6 @@
 #include "rmt_resource_history.h"
 #include "rmt_assert.h"
 
-// add an event to resource history log
 RmtErrorCode RmtResourceHistoryAddEvent(RmtResourceHistory*         resource_history,
                                         RmtResourceHistoryEventType event_type,
                                         uint64_t                    thread_id,
@@ -27,14 +26,13 @@ RmtErrorCode RmtResourceHistoryAddEvent(RmtResourceHistory*         resource_his
         return kRmtErrorOutOfMemory;
     }
 
-    // if the events need compacting, ignore this event if it's indentical to the previous event
+    // Compact events with matching type, timestamp, thread, and virtual address.
     bool duplicate = false;
     if (compact)
     {
         int32_t last_event_index = resource_history->event_count - 1;
         if (last_event_index >= 0)
         {
-            // if the last event is the same as the current event, it's a duplicate
             RmtResourceHistoryEvent* last_event = &resource_history->events[last_event_index];
             if (last_event->event_type == event_type && last_event->timestamp == timestamp && last_event->thread_id == thread_id &&
                 last_event->virtual_address == virtual_address)
@@ -60,7 +58,6 @@ RmtErrorCode RmtResourceHistoryAddEvent(RmtResourceHistory*         resource_his
     return kRmtOk;
 }
 
-// destroy resource history
 RmtErrorCode RmtResourceHistoryDestroy(RmtResourceHistory* resource_history)
 {
     RMT_ASSERT(resource_history);

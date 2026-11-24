@@ -327,14 +327,12 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
                     // So when no SGPRs were found, result is lack of SRD assocaited with the instruction.
                     if(result == SrdAnalysisUnavailableReason::kUnknown)
                     {
-                        // No SRD used by offending instruction.
                         result = SrdAnalysisUnavailableReason::kInstructionDoesNotUseResourceDescriptor;
                     }
 
                 }
                 else
                 {
-                    // ISA decoder failed to decode this instruction - this is an error.
                     std::string error_msg = "ISA decoder failed to decode instruction stream. Error: " + err_message;
                     RgdUtils::PrintMessage(error_msg.c_str(), RgdMessageType::kError, true);
                     result = SrdAnalysisUnavailableReason::kIsaDecodingFailed;
@@ -342,7 +340,6 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
             }
             else
             {
-                // Failed to parse machine code - Should not reach here.
                 assert(false);
                 result = SrdAnalysisUnavailableReason::kIsaDecodingFailed;
                 RgdUtils::PrintMessage("failed to parse instruction machine code.", RgdMessageType::kError, true);
@@ -350,7 +347,6 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
         }
         else
         {
-            // No machine code found - - Should not reach here.
             assert(false);
             result = SrdAnalysisUnavailableReason::kIsaDecodingFailed;
             RgdUtils::PrintMessage("failed to find instruction machine code.", RgdMessageType::kError, true);
@@ -631,7 +627,6 @@ std::vector<uint32_t> SrdInstructionAnalyzer::ExtractSrdData(const std::vector<u
                 }
                 else
                 {
-                    // If we can't find a consecutive register, break.
                     break;
                 }
             }
@@ -701,7 +696,6 @@ std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector
     }
     else
     {
-        // Should not reach here.
         assert(false);
     }
 

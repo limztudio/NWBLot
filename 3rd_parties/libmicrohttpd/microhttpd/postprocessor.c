@@ -305,7 +305,6 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
       abort ();
       break; /* Unreachable */
     case PP_Init:
-      /* initial phase */
       mhd_assert (NULL == start_key);
       mhd_assert (NULL == end_key);
       mhd_assert (NULL == start_value);
@@ -338,7 +337,6 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
       }
       break; /* end PP_Init */
     case PP_ProcessKey:
-      /* key phase */
       mhd_assert (NULL == start_value);
       mhd_assert (NULL == end_value);
       mhd_assert (NULL != start_key || 0 == poff);
@@ -369,7 +367,6 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
         pp->state = PP_Callback;
         break;
       default:
-        /* normal character, advance! */
         if (0 == poff)
           start_key = post_data;
         poff++;
@@ -521,7 +518,6 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
 
   if (PP_Error == pp->state)
   {
-    /* State in error, returning failure */
     return MHD_NO;
   }
 
@@ -573,7 +569,6 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
   }
   if (PP_Error == pp->state)
   {
-    /* State in error, returning failure */
     return MHD_NO;
   }
   return MHD_YES;
@@ -614,8 +609,7 @@ try_match_header (const char *prefix,
  * @param pp post processor context
  * @param boundary boundary to look for
  * @param blen number of bytes in boundary
- * @param ioffptr set to the end of the boundary if found,
- *                otherwise incremented by one (FIXME: quirky API!)
+ * @param ioffptr incremented by the number of bytes consumed
  * @param next_state state to which we should advance the post processor
  *                   if the boundary is found
  * @param next_dash_state dash_state to which we should advance the
@@ -637,7 +631,6 @@ find_boundary (struct MHD_PostProcessor *pp,
   {
     if (pp->buffer_pos == pp->buffer_size)
       pp->state = PP_Error;     /* out of memory */
-    /* ++(*ioffptr); */
     return MHD_NO;              /* not enough data */
   }
   if ( (0 != memcmp ("--",
@@ -667,7 +660,6 @@ find_boundary (struct MHD_PostProcessor *pp,
     }
     return MHD_NO;                            /* expected boundary */
   }
-  /* remove boundary from buffer */
   (*ioffptr) += 2 + blen;
   /* next: start with headers */
   pp->skip_rn = RN_Dash;
@@ -678,10 +670,9 @@ find_boundary (struct MHD_PostProcessor *pp,
 
 
 /**
- * In buf, there maybe an expression '$key="$value"'.  If that is the
- * case, copy a copy of $value to destination.
+ * Copy the value of a '$key="$value"' expression in buf to destination.
  *
- * If destination is already non-NULL, do nothing.
+ * If *destination is already non-NULL, leave it unchanged.
  */
 static void
 try_get_value (const char *buf,
@@ -704,7 +695,6 @@ try_get_value (const char *buf,
          ( (spos != buf) &&
            (spos[-1] != ' ') ) )
     {
-      /* no match */
       bpos = spos + 1;
       continue;
     }
@@ -768,7 +758,6 @@ process_multipart_headers (struct MHD_PostProcessor *pp,
     pp->state = next_state;
     return MHD_YES;
   }
-  /* got an actual header */
   if (buf[newline] == '\r')
     pp->skip_rn = RN_OptN;
   buf[newline] = '\0';
@@ -1128,15 +1117,7 @@ post_process_multipart (struct MHD_PostProcessor *pp,
           pp->state = PP_Error;
           return MHD_NO;
         }
-        /* Note: 'bnd' points into 'pp->content_type', which is released
-           below, so the copy must be taken first.  It must also be
-           taken into a local: assigning the 'strstr()' result to
-           'pp->nested_boundary' first would overwrite -- and leak -- a
-           boundary already owned by this post processor.  That happens
-           whenever this state is reached twice without passing through
-           PP_PerformCleanup, i.e. for every additional nested
-           "multipart/mixed" part, and the leaked block is as long as
-           the boundary the client chose. */
+        /* Copy before freeing content_type or replacing nested_boundary. */
         nested = strdup (&bnd[MHD_STATICSTR_LEN_ ("boundary=")]);
         if (NULL == nested)
         {

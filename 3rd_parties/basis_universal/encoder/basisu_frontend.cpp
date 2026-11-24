@@ -35,7 +35,6 @@ namespace basisu
 	const uint32_t cMaxCodebookCreationThreads = 8;
 
 	const uint32_t BASISU_MAX_ENDPOINT_REFINEMENT_STEPS = 3;
-	//const uint32_t BASISU_MAX_SELECTOR_REFINEMENT_STEPS = 3;
 
 	const uint32_t BASISU_ENDPOINT_PARENT_CODEBOOK_SIZE = 16;
 	const uint32_t BASISU_SELECTOR_PARENT_CODEBOOK_SIZE_COMP_LEVEL_01 = 32;
@@ -211,7 +210,6 @@ namespace basisu
 
 				if (m_endpoint_refinement)
 				{
-					//dump_endpoint_clusterization_visualization("endpoint_clusters_before_refinement.png");
 
 					if (!refine_endpoint_clusterization())
 						early_out = true;
@@ -707,8 +705,6 @@ namespace basisu
 			if (m_optimized_cluster_selectors.size())
 				new_optimized_cluster_selectors[i] = m_optimized_cluster_selectors[new_to_old[i]];
 
-			//if (m_selector_cluster_block_indices.size())
-			//	new_selector_cluster_indices[i] = m_selector_cluster_block_indices[new_to_old[i]];
 		}
 
 		for (uint32_t i = 0; i < m_block_selector_cluster_index.size(); i++)
@@ -1051,7 +1047,6 @@ namespace basisu
 							const color_rgba &c = cluster_pixels[i];
 
 							uint64_t best_err = UINT64_MAX;
-							//uint32_t best_index = 0;
 
 							for (uint32_t s = 0; s < 4; s++)
 							{
@@ -1059,7 +1054,6 @@ namespace basisu
 								if (err < best_err)
 								{
 									best_err = err;
-									//best_index = s;
 								}
 							}
 
@@ -1146,7 +1140,6 @@ namespace basisu
 				continue;
 #endif
 
-			//const uint32_t new_endpoint_cluster_index = (uint32_t)m_endpoint_clusters.size();
 
 			enlarge_vector(m_endpoint_clusters, 1)->push_back(training_vector_index);
 			enlarge_vector(m_endpoint_cluster_etc_params, 1);
@@ -1199,10 +1192,7 @@ namespace basisu
 		{
 			uint32_t v = *(const uint32_t*)&k;
 			
-			//return bitmix32(v);
 			
-			//v ^= (v << 10);
-			//v ^= (v >> 12);
 			
 			return v;
 		}
@@ -1236,9 +1226,6 @@ namespace basisu
 
 			uint_vec cluster_sizes(total_clusters);
 
-			//typedef basisu::hash_map<color_rgba, uint32_t, color_rgba_hasher> color_hasher_type;
-			//color_hasher_type color_hasher;
-			//color_hasher.reserve(2048);
 
 			interval_timer hash_tm;
 			hash_tm.start();
@@ -1283,7 +1270,6 @@ namespace basisu
 					}
 				}
 
-				//printf("%i %f %f %f\n", cluster_index, total_r / (float)total_pixels, total_g / (float)total_pixels, total_b / (float)total_pixels);
 
 				pixel_clusters[cluster_index].m_first_pixel_index = first_pixel_index;
 				pixel_clusters[cluster_index].m_total_pixels = total_pixels;
@@ -1425,8 +1411,6 @@ namespace basisu
 
 			uint_vec sorted_cluster_indices_new_to_old(total_clusters);
 			indirect_sort(total_clusters, sorted_cluster_indices_new_to_old.data(), cluster_sizes.data());
-			//for (uint32_t i = 0; i < total_clusters; i++)
-			//	sorted_cluster_indices_new_to_old[i] = i;
 
 			uint_vec sorted_cluster_indices_old_to_new(total_clusters);
 			for (uint32_t i = 0; i < total_clusters; i++)
@@ -1519,7 +1503,6 @@ namespace basisu
 
 						{
 							etc1_optimizer optimizer;
-							//etc1_solution_coordinates solutions[2];
 
 							etc1_optimizer::params cluster_optimizer_params;
 							cluster_optimizer_params.m_num_src_pixels = total_pixels;
@@ -1572,7 +1555,6 @@ namespace basisu
 									const color_rgba& c = cluster_pixels[i];
 
 									uint64_t best_err = UINT64_MAX;
-									//uint32_t best_index = 0;
 
 									for (uint32_t s = 0; s < 4; s++)
 									{
@@ -1580,7 +1562,6 @@ namespace basisu
 										if (err < best_err)
 										{
 											best_err = err;
-											//best_index = s;
 										}
 									}
 
@@ -2721,7 +2702,6 @@ namespace basisu
 				
 		for (int block_index = 0; block_index < static_cast<int>(m_total_blocks); block_index++)
 		{
-			//uint32_t selector_cluster = m_block_selector_cluster_index(block_x, block_y);
 			vec2U &endpoint_clusters = m_block_endpoint_clusters_indices[block_index];
 
 			m_endpoint_cluster_etc_params[endpoint_clusters[0]].m_subblocks.push_back(block_index * 2);
@@ -2737,7 +2717,6 @@ namespace basisu
 			endpoint_cluster_etc_params &subblock_params = m_endpoint_cluster_etc_params[endpoint_cluster_index];
 
 			const uint_vec &subblocks = subblock_params.m_subblocks;
-			//uint32_t total_pixels = subblock.m_subblocks.size() * 8;
 
 			basisu::vector<color_rgba> subblock_colors[2]; // [use_individual_mode]
 			uint8_vec subblock_selectors[2];
@@ -2791,7 +2770,6 @@ namespace basisu
 				total_subblocks_examined += total_pixels / 8;
 
 				etc1_optimizer optimizer;
-				//etc1_solution_coordinates solutions[2];
 
 				etc1_optimizer::params cluster_optimizer_params;
 				cluster_optimizer_params.m_num_src_pixels = total_pixels;
@@ -2835,7 +2813,6 @@ namespace basisu
 
 						const uint32_t block_index = training_vector_index >> 1;
 						const uint32_t subblock_index = training_vector_index & 1;
-						//const bool is_flipped = true;
 
 						etc_block &blk = m_encoded_blocks[block_index];
 
@@ -2924,7 +2901,6 @@ namespace basisu
 		for (uint32_t i = 0; i < m_endpoint_clusters.size(); i++)
 			sorted_cluster_indices[i] = i;
 
-		//indexed_heap_sort(endpoint_clusters.size(), cluster_sizes.get_ptr(), sorted_cluster_indices.get_ptr());
 
 		image endpoint_cluster_vis(12 + minimum<uint32_t>(max_endpoint_cluster_size, 2048) * 5, (uint32_t)m_endpoint_clusters.size() * 3);
 
@@ -3057,7 +3033,6 @@ namespace basisu
 						
 					{
 						etc1_optimizer optimizer;
-						//etc1_solution_coordinates solutions[2];
 
 						etc1_optimizer::params cluster_optimizer_params;
 						cluster_optimizer_params.m_num_src_pixels = total_pixels;
@@ -3203,7 +3178,6 @@ namespace basisu
 			debug_printf("Final (post-RDO) endpoint clusters: %u\n", m_endpoint_clusters.size());
 		}
 						
-		//debug_printf("validate_output: %u\n", validate_output());
 	}
 
 	// Endpoint clusterization hierarchy integrity checker.
@@ -3289,7 +3263,6 @@ namespace basisu
 
 		for (uint32_t block_index = 0; block_index < m_total_blocks; block_index++)
 		{
-//#define CHECK(x) do { if (!(x)) { DebugBreak(); return false; } } while(0)
 #define CHECK(x) BASISU_FRONTEND_VERIFY(x);
 
 			CHECK(get_output_block(block_index).get_flip_bit() == true);

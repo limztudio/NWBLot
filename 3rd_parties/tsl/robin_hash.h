@@ -708,9 +708,6 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     return m_buckets_data.get_allocator();
   }
 
-  /*
-   * Iterators
-   */
   iterator begin() noexcept {
     std::size_t i = 0;
     while (i < m_bucket_count && m_buckets[i].empty()) {
@@ -739,18 +736,12 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     return const_iterator(m_buckets + m_bucket_count);
   }
 
-  /*
-   * Capacity
-   */
   bool empty() const noexcept { return m_nb_elements == 0; }
 
   size_type size() const noexcept { return m_nb_elements; }
 
   size_type max_size() const noexcept { return m_buckets_data.max_size(); }
 
-  /*
-   * Modifiers
-   */
   void clear() noexcept {
     if (m_min_load_factor > 0.0f) {
       clear_and_shrink();
@@ -994,9 +985,6 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     swap(m_try_shrink_on_next_insert, other.m_try_shrink_on_next_insert);
   }
 
-  /*
-   * Lookup
-   */
   template <class K, class U = ValueSelect,
             typename std::enable_if<has_mapped_type<U>::value>::type* = nullptr>
   typename U::value_type& at(const K& key) {
@@ -1100,9 +1088,6 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     return std::make_pair(it, (it == cend()) ? it : std::next(it));
   }
 
-  /*
-   * Bucket interface
-   */
   size_type bucket_count() const { return m_bucket_count; }
 
   size_type max_bucket_count() const {
@@ -1110,9 +1095,6 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
                     m_buckets_data.max_size());
   }
 
-  /*
-   * Hash policy
-   */
   float load_factor() const {
     if (bucket_count() == 0) {
       return 0;
@@ -1147,16 +1129,10 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
     rehash(size_type(std::ceil(float(count_) / max_load_factor())));
   }
 
-  /*
-   * Observers
-   */
   hasher hash_function() const { return static_cast<const Hash&>(*this); }
 
   key_equal key_eq() const { return static_cast<const KeyEqual&>(*this); }
 
-  /*
-   * Other
-   */
   iterator mutable_iterator(const_iterator pos) {
     return iterator(const_cast<bucket_entry*>(pos.m_bucket));
   }

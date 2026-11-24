@@ -35,7 +35,7 @@ class HardwareShadowBoundaryChecks:
         harness = self.harness
         defaults = harness.parse_args([harness.LIT_SELF_TEST])
         numeric_arguments = [harness.LIT_HEALTHY_EXECUTABLE, harness.LIT_HEALTHY, harness.LIT_BASELINE_EXECUTABLE_2, harness.LIT_BASELINE, harness.LIT_RUNTIME_DIR, 'runtime', harness.LIT_OUTPUT_DIR, 'output']
-        numeric_options = (harness.LIT_WARMUP_SECONDS, harness.LIT_MEASURE_SECONDS, harness.LIT_STARTUP_TIMEOUT, harness.LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2)
+        numeric_options = (harness.LIT_WARMUP_SECONDS, harness.LIT_MEASURE_SECONDS, harness.LIT_STARTUP_TIMEOUT, harness.LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_OPTION)
         for option in numeric_options:
             for value in ('nan', 'inf', '-inf'):
                 with mock.patch(LIT_SYS_STDERR):
@@ -45,7 +45,7 @@ class HardwareShadowBoundaryChecks:
                         assert error.code == 2
                     else:
                         raise AssertionError(f'hardware-shadow CLI accepted non-finite {option}={value}')
-        for option in (harness.LIT_WARMUP_SECONDS, harness.LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2):
+        for option in (harness.LIT_WARMUP_SECONDS, harness.LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_OPTION):
             assert getattr(harness.parse_args(numeric_arguments + [f'{option}=0']), option[2:].replace('-', '_')) == 0.0
         for option in (harness.LIT_MEASURE_SECONDS, harness.LIT_STARTUP_TIMEOUT):
             with mock.patch(LIT_SYS_STDERR):

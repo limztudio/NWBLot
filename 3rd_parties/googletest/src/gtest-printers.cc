@@ -265,7 +265,6 @@ void PrintCharAndCodeTo(Char c, ostream* os) {
   // unless c was already printed in the form '\x##' or the code is in
   // [1, 9].
   if (format == kHexEscape || (1 <= c && c <= 9)) {
-    // Do nothing.
   } else {
     *os << ", 0x" << String::FormatHexInt(static_cast<int>(c));
   }

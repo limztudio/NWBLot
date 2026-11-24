@@ -822,7 +822,6 @@ static APFloat harrisonUlp(const APFloat &X) {
 }
 
 namespace detail {
-/* Constructors.  */
 void IEEEFloat::initialize(const fltSemantics *ourSemantics) {
   semantics = ourSemantics;
   unsigned count = partCount();
@@ -915,7 +914,6 @@ void IEEEFloat::makeNaN(bool SNaN, bool Negative, const APInt *fill) {
       APInt::tcSetBit(significand, QNaNBit - 1);
   } else if (semantics->nanEncoding == fltNanEncoding::NegativeZero) {
     // The only NaN is a quiet NaN, and it has no bits sets in the significand.
-    // Do nothing.
   } else {
     // We always have to set the QNaN bit to make it a QNaN.
     APInt::tcSetBit(significand, QNaNBit);
@@ -4150,7 +4148,6 @@ namespace {
 
     // Change the exponent from 2^e to 10^e.
     if (exp == 0) {
-      // Nothing to do.
     } else if (exp > 0) {
       // Just shift left.
       significand = significand.zext(semanticsPrecision + exp);

@@ -129,13 +129,15 @@ RmtErrorCode RmtPhysicalAllocationListGetAllocationForAddress(const RmtPhysicalA
 /// Get a physical allocation at a specific index.
 ///
 /// @param [in] physical_allocation_list                A pointer to a <c><i>RmtPhysicalAllocationList</i></c> structure.
-/// @paran [in] index                                   The index of the physical allocation to return.
-/// @param [out] out_allocation                         The address of a pointer to a <c><i>RmtPhysicalAllocationList</i></c> structure.
+/// @param [in] index                                   The index of the physical allocation to return.
+/// @param [out] out_allocation                         Receives a pointer to the physical allocation.
 ///
 /// @retval
 /// kRmtOk                                  The operation completed successfully.
 /// @retval
 /// kRmtErrorInvalidPointer                 The operation failed because <c><i>physicalAllocationList</i></c> or <c><i>outAllocation</i></c> was <c><i>NULL</i></c>.
+/// @retval
+/// kRmtErrorIndexOutOfRange                The index is outside the list.
 RmtErrorCode RmtPhysicalAllocationListGetAllocationAtIndex(const RmtPhysicalAllocationList* physical_allocation_list,
                                                            int32_t                          index,
                                                            const RmtPhysicalAllocation**    out_allocation);

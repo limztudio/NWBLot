@@ -31,7 +31,7 @@ b8 DescriptorImagePolicy::Validate(const GpuDescriptorClass::Enum descriptorClas
         }
 
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
-        if(format == Format::UNKNOWN || format >= Format::Count){
+        if(format == Format::UNKNOWN || format >= Format::kCount){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-image format."));
             return false;
         }
@@ -50,7 +50,7 @@ b8 DescriptorImagePolicy::Validate(const GpuDescriptorClass::Enum descriptorClas
         }
 
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
-        if(format == Format::UNKNOWN || format >= Format::Count){
+        if(format == Format::UNKNOWN || format >= Format::kCount){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid StorageImage format."));
             return false;
         }

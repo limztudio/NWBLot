@@ -341,7 +341,6 @@ bool Curl_mapi_enter(struct Curl_mapi_guard *guard,
 
   guard->depth = 0;
 
-  /* Verify that we got an easy handle we can work with. */
   if(!GOOD_MULTI_HANDLE(multi)) {
     mresult = CURLM_BAD_HANDLE;
     goto out;
@@ -378,7 +377,6 @@ bool Curl_mapi_enter(struct Curl_mapi_guard *guard,
   }
 #endif
 
-  /* all fine, add to data's callstack */
   if(multi->callstack.count >= CURL_MAPI_MAX_RECURSION) {
     mresult = CURLM_RECURSIVE_API_CALL;
     goto out;
@@ -397,7 +395,7 @@ out:
 void Curl_mapi_leave(struct Curl_mapi_guard *guard)
 {
   if(guard->depth) {
-    /* guard->data is set when handle is supposed to stay alive during call */
+    /* guard->multi is set when the handle stays alive during the call. */
     if(guard->multi && GOOD_MULTI_HANDLE(guard->multi)) {
       if(guard->depth > guard->multi->callstack.count) {
         DEBUGASSERT(0); /* something very wrong */
@@ -422,7 +420,6 @@ void Curl_cbapi_enter(struct Curl_mapi_guard *guard,
 
   if(!multi)
     multi = data ? data->multi : NULL;
-  /* if not multi is involved here, just leave */
   if(!multi)
     return;
   /* invalid callback specifier? */
@@ -431,8 +428,6 @@ void Curl_cbapi_enter(struct Curl_mapi_guard *guard,
     return;
   }
   DEBUGASSERT(cbapi_fn_props[fn - CURL_CBAPI_FN_START].fn == fn);
-  /* all fine, add to data's callstack */
-  /* if multi callstack already at max depth, leave */
   if(multi->callstack.count >= CURL_MAPI_MAX_RECURSION) {
     DEBUGASSERT(0);
     return;

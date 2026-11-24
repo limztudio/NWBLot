@@ -30,15 +30,8 @@
 #include "rand.h"
 #include "curl_fopen.h"
 
-/* The dirslash() function breaks a null-terminated pathname string into
-   directory and filename components then returns the directory component up
-   to, *AND INCLUDING*, a final '/'. If there is no directory in the path,
-   this instead returns a "" string.
-
-   This function returns a pointer to malloc'ed memory.
-
-   The input path to this function is expected to have a filename part.
- */
+/* Return an allocated directory prefix with one trailing platform separator
+   when the prefix is nonempty. The path is expected to contain a filename. */
 
 #ifdef _WIN32
 #define PATHSEP   "\\"
@@ -59,10 +52,8 @@ static char *dirslash(const char *path)
   curlx_dyn_init(&out, CURL_MAX_INPUT_LENGTH);
   n = strlen(path);
   if(n) {
-    /* find the rightmost path separator, if any */
     while(n && !IS_SEP(path[n - 1]))
       --n;
-    /* skip over all the path separators, if any */
     while(n && IS_SEP(path[n - 1]))
       --n;
   }
@@ -75,11 +66,10 @@ static char *dirslash(const char *path)
 }
 
 /*
- * Curl_fopen() opens a file for writing with a temp name, to be renamed
- * to the final name when completed. If there is an existing file using this
- * name at the time of the open, this function will clone the mode from that
- * file. if 'tempname' is non-NULL, it needs a rename after the file is
- * written.
+ * Curl_fopen() normally opens a temporary file for later rename. On non-Windows
+ * systems, it opens non-regular files directly. When supported and the owner
+ * and group match, it copies the existing file mode to the temporary file.
+ * A non-NULL 'tempname' needs a rename after writing.
  */
 CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
                     FILE **fh, char **tempname)

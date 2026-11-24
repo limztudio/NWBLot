@@ -70,7 +70,7 @@ namespace basisu
 		uint32_t m_tables_file_ofs;			// Huffman tables file ofs
 
 		uint32_t m_first_image_file_ofs;	// First image data file ofs
-		uint32_t m_total_file_size;			// Total file size file ofs
+		uint32_t m_total_file_size;			// Total file size
 
 		void create_header(const basisu_backend_output& encoder_output,  basist::basis_texture_type tex_type, uint32_t userdata0, uint32_t userdata1, bool y_flipped, uint32_t us_per_frame);
 		bool create_image_descs(const basisu_backend_output& encoder_output);

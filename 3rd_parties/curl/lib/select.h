@@ -173,7 +173,7 @@ CURLcode Curl_pollset_set(struct Curl_easy *data,
 
 void Curl_pollset_remove(struct easy_pollset *ps, curl_socket_t sock);
 
-/* return < = on error, 0 on timeout or how many sockets are ready */
+/* Return a negative value on error, 0 on timeout, or the ready count. */
 int Curl_pollset_poll(struct Curl_easy *data,
                       struct easy_pollset *ps,
                       timediff_t timeout_ms);

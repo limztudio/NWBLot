@@ -10,7 +10,7 @@ from window_capture_validation import validate_expected_log_text
 
 LIT_MINIMUM_WARMUP_SECONDS = 5.0
 LIT_MILLISECONDS_PER_SECOND = 1000
-LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA = "ReflectionSmokeProject: hardware available"
+LIT_REFLECTION_HARDWARE_AVAILABLE_LOG = "ReflectionSmokeProject: hardware available"
 LIT_DIAGNOSTIC = "diagnostic"
 LIT_HARDWARE = "hardware"
 LIT_PRESENTATIONS = "presentations"
@@ -51,7 +51,7 @@ class ReflectionCpuTimingEvidence:
     def parse_runtime_log(text, case):
         if case not in CASES:
             raise SmokeFailure("unsupported reflection CPU diagnostic fixture")
-        validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created", LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA, "ReflectionSmokeProject: shutdown"], [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
+        validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created", LIT_REFLECTION_HARDWARE_AVAILABLE_LOG, "ReflectionSmokeProject: shutdown"], [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
              "ReflectionSmokeHistory:", "ReflectionSmokeOptics:", "ReflectionSmokeSlicePackets:", "ReflectionSmokeProject: fps avg=", "render submission suspended"])
         args = SimpleNamespace(family=case, ray_budget=1382400, optical_queries=16, screen_steps=96, mip_count=10, width=960, height=720, require_hardware=True)
         reflection.validate_trial_log(text, args, reflection.Variant(LIT_DIAGNOSTIC, LIT_HARDWARE, temporal=False, spatial=False, feedback=False))
@@ -60,7 +60,7 @@ class ReflectionCpuTimingEvidence:
         if extents != {("960", "720")}:
             raise SmokeFailure("reflection diagnostic extent differs from 960x720")
         availability = [line for line in lines if line.startswith("ReflectionSmokeProject: hardware ") and line.endswith((" available", " unavailable"))]
-        if availability != [LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA]:
+        if availability != [LIT_REFLECTION_HARDWARE_AVAILABLE_LOG]:
             raise SmokeFailure("reflection diagnostic has contradictory hardware availability")
         configured, configured_index = ReflectionCpuTimingEvidence._one(lines, "ReflectionCpuTiming: configured ", re.escape(f"ReflectionCpuTiming: configured case={case} preparation_presentations=64 warmup_seconds=5 "
             "minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"))

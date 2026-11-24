@@ -18,7 +18,7 @@ extern enum GpuCommandIrOpcode : u8{
     ClearTextureRectUInt,
     UploadBuffer,
     UploadTexture,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrReplayError::Enum")]
@@ -109,7 +109,7 @@ extern enum GpuCommandIrWireOpcode : u16{
     BindGraphicsHeap,
     SetPushConstants,
     EndRenderPass,
-    Count
+    kCount
 };
 
 

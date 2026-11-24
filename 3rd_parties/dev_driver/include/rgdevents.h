@@ -8,7 +8,6 @@
 #pragma once
 #pragma pack(push,1)
 
-// RDF.
 #include "amdrdf.h"
 #include "rgd_hash.h"
 
@@ -21,7 +20,6 @@ struct DDEventProviderHeader
     /// Minor version number that dictates the format of data in this file.
     uint16_t metaVersionMinor;
 
-    /// reserved
     uint32_t reserved;
 
     /// Number uniquely identifying an event provider.
@@ -84,7 +82,6 @@ enum class UmdEventId : uint8_t
 
 enum class ExecutionMarkerInfoType : uint8_t
 {
-    // Invalid
     InvalidInfo = 0,
 
     // Indicate that the header precedes a CmdBufferInfo struct.
@@ -286,7 +283,6 @@ struct MmrRegistersData : RgdEvent
 {
     uint32_t version;
 
-    // GPU identifier for these register events
     uint32_t gpuId;
 
     // number of MMrRegisterInfo structures which follow
@@ -352,10 +348,8 @@ enum HangType : uint32_t
 // Note: Must exactly match KmdShaderWavesEventData in kmdEventDefs.h
 struct ShaderWaves : RgdEvent
 {
-    // structure version
     uint32_t version;
 
-    // GPU identifier for these register events
     uint32_t gpuId;
 
     HangType         typeOfHang;
@@ -388,10 +382,8 @@ struct SeRegsInfo
 
 struct SeInfo : RgdEvent
 {
-    // structure version
     uint32_t version;
 
-    // GPU identifier for these register events
     uint32_t gpuId;
 
     // number of SeRegsInfo structures in seRegsInfos array
@@ -423,7 +415,6 @@ struct WaveRegistersData : RgdEvent
     {
         struct
         {
-            // Assumption is that wave, simd, wgp, sa won't change in the next 5 years, only SE
             unsigned int    waveId  : 5;
             unsigned int            : 3;
             unsigned int    simdId  : 2;
@@ -445,7 +436,6 @@ struct WaveRegistersData : RgdEvent
     WaveRegisterInfo registerInfos[1];
 };
 
-// Maximum VGPR currently is 256
 constexpr uint32_t kMaxGPRRegs = 256;
 
 // This struct is a counterpart to nc_radeon_gpu_detective_bgd_gpr_data
@@ -481,7 +471,6 @@ struct GprRegistersData : RgdEvent
     uint32_t reg[kMaxGPRRegs];
 };
 
-// Header information on how to interpret the info struct
 struct ExecutionMarkerInfoHeader
 {
     ExecutionMarkerInfoType infoType;
@@ -552,7 +541,6 @@ struct DispatchInfo
 /// BarrierBeginInfo follows header with ExecutionMarkerInfoType::BarrierBegin
 struct BarrierBeginInfo
 {
-    // Internal Barrier or external Barrier
     bool        isInternal;
 
     // Pal::Developer::BarrierType
@@ -578,7 +566,6 @@ struct BarrierEndInfo
 /// NestedCmdBufferInfo follows header with ExecutionMarkerInfoType::NestedCmdBuffer
 struct NestedCmdBufferInfo
 {
-    // cmdBufferId of the nested command buffer
     uint32_t nestedCmdBufferId;
 };
 
@@ -650,7 +637,6 @@ struct TraceChunkApiInfo
     uint16_t     apiVersionMinor = 0;  // Minor client API version
 };
 
-// TraceProcessInfo chunk data.
 struct TraceProcessInfo
 {
     uint32_t process_id = 0;

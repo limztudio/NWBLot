@@ -9674,13 +9674,7 @@ static void assignInheritanceModel(Sema &S, CXXRecordDecl *RD) {
 bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
                                    CompleteTypeKind Kind,
                                    TypeDiagnoser *Diagnoser) {
-  // FIXME: Add this assertion to make sure we always get instantiation points.
-  //  assert(!Loc.isInvalid() && "Invalid location in RequireCompleteType");
-  // FIXME: Add this assertion to help us flush out problems with
-  // checking for dependent types and type-dependent expressions.
-  //
-  //  assert(!T->isDependentType() &&
-  //         "Can't ask whether a dependent type is complete");
+  // FIXME: Check that the instantiation location is valid and the type is not dependent.
 
   if (const auto *MPTy = dyn_cast<MemberPointerType>(T.getCanonicalType())) {
     if (CXXRecordDecl *RD = MPTy->getMostRecentCXXRecordDecl();

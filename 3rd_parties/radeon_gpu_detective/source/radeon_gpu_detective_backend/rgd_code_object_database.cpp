@@ -177,7 +177,6 @@ static void BuildInstructionsVectorForShader(const std::string&                 
     // Parse the disassembly text to extract instructions and their offsets.
     while (std::getline(disassembly_stream, line))
     {
-        // Check if the line starts with a tab character.
         if (!line.empty() && line[0] == '\t')
         {
             // Replace the tab character with spaces (e.g., 4 spaces).
@@ -300,7 +299,6 @@ static void RgdCodeObjDbInitCodeObjEntry(RgdCodeObjectEntry* entry, ecitrace::Gp
 
         if (pipeline_data->pipelines != nullptr && pipeline_data->num_pipelines != 0)
         {
-            // For each shader in the pipeline metadata, build the shader info.
             for (size_t j = 0; j < pipeline_data->pipelines[0].num_shaders; ++j)
             {
                 amdt::HwStageType stage = GetHwStageForShader(pipeline_data->pipelines[0].shader_list[j].hardware_mapping_bit_field);
@@ -313,7 +311,6 @@ static void RgdCodeObjDbInitCodeObjEntry(RgdCodeObjectEntry* entry, ecitrace::Gp
                 entry->hw_stage_to_shader_info_map_[stage] = shader_info;
             }
 
-            // For each stage in the pipeline metadata, update the respective shader info.
             for (size_t j = 0; j < pipeline_data->pipelines[0].num_stages; ++j)
             {
                 amdt::HwStageType stage = pipeline_data->pipelines[0].stage_list[j].stage_type;
@@ -537,7 +534,6 @@ static bool ParseSeparatePdbFile(RgdDxbcParser& dxbc_parser, RgdShaderInfo& shad
     }
     else
     {
-        // Should not reach here.
         assert(false);
     }
 
@@ -577,7 +573,6 @@ static bool ParseSmallPdbFile(RgdDxbcParser& dxbc_parser, RgdShaderInfo& shader_
     }
     else
     {
-        // Should not reach here.
         assert(false);
         RgdUtils::PrintMessage("empty PDB path.", RgdMessageType::kError, true);
     }
@@ -661,7 +656,6 @@ bool RgdCodeObjectDatabase::ExtractDebugInfo(const Config& user_config, const st
     }
     else
     {
-        // Should not reach here.
         assert(false);
     }
 

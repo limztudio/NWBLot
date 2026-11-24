@@ -234,7 +234,6 @@ CLI11_INLINE Option *App::add_option(std::string option_name,
         if(test_name.size() == 3) {
             test_name.erase(0, 1);
         }
-        // if we are in option group
         const auto *op = top_level_parent->get_option_no_throw(test_name);
         if(op != nullptr && op->get_configurable()) {
             throw(OptionAlreadyAdded("added option positional name matches existing option: " + test_name));
@@ -665,7 +664,6 @@ template <class CharT> CLI11_INLINE void App::parse_char_t(int argc, const CharT
         return;
     }
 
-    // If the name is not set, read from command line
     if(name_.empty() || has_automatic_name_) {
         has_automatic_name_ = true;
         name_ = detail::maybe_narrow(argv[0]);
@@ -1090,8 +1088,6 @@ CLI11_NODISCARD CLI11_INLINE Option *App::get_option_no_throw(std::string option
         }
     }
     if(fallthrough_ && parent_ != nullptr && !name_.empty()) {
-        // if there is fallthrough and a parent and this is not an option_group then also check the parent for the
-        // option
         return _get_fallthrough_parent()->get_option_no_throw(option_name);
     }
     return nullptr;
@@ -1523,7 +1519,6 @@ CLI11_INLINE void App::_process_requirements() {
         if(count_all() > 0) {
             throw ExcludesError(get_display_name(), excluder);
         }
-        // if we are excluded but didn't receive anything, just return
         return;
     }
 
@@ -1546,7 +1541,6 @@ CLI11_INLINE void App::_process_requirements() {
         if(count_all() > 0) {
             throw RequiresError(get_display_name(), missing_need);
         }
-        // if we missing something but didn't have any options, just return
         return;
     }
 
@@ -1609,15 +1603,12 @@ CLI11_INLINE void App::_process_requirements() {
             continue;
         if(sub->name_.empty() && sub->required_ == false) {
             if(sub->count_all() == 0) {
+                // An empty group can skip its requirements when the parent requirement is met.
                 if(require_option_min_ > 0 && require_option_min_ <= used_options) {
                     continue;
-                    // if we have met the requirement and there is nothing in this option group skip checking
-                    // requirements
                 }
                 if(require_option_max_ > 0 && used_options >= require_option_min_) {
                     continue;
-                    // if we have met the requirement and there is nothing in this option group skip checking
-                    // requirements
                 }
             }
         }
@@ -2601,7 +2592,6 @@ CLI11_INLINE void App::_move_to_missing(detail::Classifier val_type, const std::
         }
     }
     if(allow_extras_ != ExtrasMode::Ignore) {
-        // if we haven't found any place to put them yet put them in missing
         missing_.emplace_back(val_type, val);
     }
 }

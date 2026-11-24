@@ -35,10 +35,10 @@
  * If the target buffer is too small, the copy is not performed but if the
  * target buffer has a non-zero size it gets a null-terminator stored.
  */
-void curlx_strcopy(char *dest,      /* destination buffer */
-                   size_t dsize,    /* size of target buffer */
-                   const char *src, /* source string */
-                   size_t slen)     /* length of source string to copy */
+void curlx_strcopy(char *dest,
+                   size_t dsize,
+                   const char *src,
+                   size_t slen)
 {
   DEBUGASSERT(slen < dsize);
   if(slen < dsize) {

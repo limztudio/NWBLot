@@ -59,7 +59,7 @@ extern class OsPipe{
 [cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeReadFailure")]
 extern class ClipboardPipeReadFailure{
     ClipboardStatus status;
-    b8 finished;
+    b8 endOfStream;
 };
 
 [cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeWriter"), cpp_flags(no_copy)]

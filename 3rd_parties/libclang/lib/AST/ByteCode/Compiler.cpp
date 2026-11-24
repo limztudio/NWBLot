@@ -6810,7 +6810,6 @@ template <class Emitter> bool Compiler<Emitter>::visitDoStmt(const DoStmt *S) {
 
 template <class Emitter>
 bool Compiler<Emitter>::visitForStmt(const ForStmt *S) {
-  // for (Init; Cond; Inc) { Body }
   const Stmt *Init = S->getInit();
   const Expr *Cond = S->getCond();
   const Expr *Inc = S->getInc();
@@ -8006,7 +8005,6 @@ bool Compiler<Emitter>::VisitVectorUnaryOperator(const UnaryOperator *E) {
       UnaryOp != UO_Not && UnaryOp != UO_AddrOf)
     return this->emitInvalid(E);
 
-  // Nothing to do here.
   if (UnaryOp == UO_Plus || UnaryOp == UO_AddrOf)
     return this->delegate(SubExpr);
 

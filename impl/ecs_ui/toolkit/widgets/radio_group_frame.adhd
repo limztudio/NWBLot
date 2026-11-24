@@ -11,12 +11,12 @@
 
 [move_only, friend(Builder)]
 class RadioGroupLabel{
-    private SharedTextLayout text;
-    private Rect bounds;
+    private SharedTextLayout m_text;
+    private Rect m_bounds;
 
     public RadioGroupLabel(in SharedTextLayout layout, in Rect bounds){
-        this.text = layout;
-        this.bounds = bounds;
+        this.m_text = layout;
+        this.m_bounds = bounds;
     }
 }
 

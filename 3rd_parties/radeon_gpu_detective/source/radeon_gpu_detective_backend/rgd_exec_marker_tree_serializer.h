@@ -139,7 +139,6 @@ public:
     // Update the nested command buffer marker nodes map.
     bool UpdateNestedCmdBufferMarkerNodes(uint64_t cmd_buffer_id, ExecMarkerTreeSerializer& nested_cmd_buffer_tree, uint8_t nested_command_buffer_queue_type);
 
-    // Return the status of the given marker node.
     MarkerExecutionStatus GetMarkerNodeStatus(const MarkerNode& node) const;
 
 private:
@@ -167,7 +166,6 @@ private:
     void UpdateAndValidateTimestamp(uint64_t timestamp);
 #endif
 
-    // Return the status of the given marker node.
     MarkerExecutionStatus GetItemStatus(const MarkerNode& node) const;
 
     // Generates a string representation of the execution marker tree.

@@ -639,7 +639,6 @@ void ExecMarkerDataSerializer::UpdateMarkerTreeNodesForNestedCmdBuffer(const Con
             // Get the list of nested command buffer IDs for the Execution Marker Tree.
             std::vector<uint64_t> nested_cmd_buffer_ids_for_exec_tree = parent_cmd_buffer_tree_ptr->GetNestedCmdBufferIdsForExecTree();
 
-            // For each nested command buffer ID, update the marker tree nodes.
             for (uint64_t nested_cmd_buffer_id : nested_cmd_buffer_ids_for_exec_tree)
             {
                 auto nested_cmd_buffer_tree_iter = command_buffer_exec_tree_.find(nested_cmd_buffer_id);

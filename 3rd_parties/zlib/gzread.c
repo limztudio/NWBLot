@@ -95,7 +95,6 @@ local int gz_look(gz_statep state) {
 
     /* allocate read buffers and inflate memory */
     if (state->size == 0) {
-        /* allocate buffers */
         state->in = (unsigned char *)malloc(state->want);
         state->out = (unsigned char *)malloc(state->want << 1);
         if (state->in == NULL || state->out == NULL) {
@@ -242,7 +241,6 @@ local int gz_decomp(gz_statep state) {
         return 0;
     }
 
-    /* return decompression status */
     return ret != Z_OK ? -1 : 0;
 }
 
@@ -343,7 +341,6 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     unsigned n;
     int err;
 
-    /* if len is zero, avoid unnecessary operations */
     if (len == 0)
         return 0;
 
@@ -415,7 +412,6 @@ local z_size_t gz_read(gz_statep state, voidp buf, z_size_t len) {
     if (len && state->eof)
         state->past = 1;
 
-    /* return number of bytes read into user buffer */
     return got;
 }
 
@@ -451,7 +447,6 @@ int ZEXPORT gzread(gzFile file, voidp buf, unsigned len) {
     /* read len or fewer bytes to buf */
     len = (unsigned)gz_read(state, buf, len);
 
-    /* check for an error */
     if (len == 0) {
         if (state->err != Z_OK && state->err != Z_BUF_ERROR)
             return -1;
@@ -464,7 +459,6 @@ int ZEXPORT gzread(gzFile file, voidp buf, unsigned len) {
         }
     }
 
-    /* return the number of bytes read */
     return (int)len;
 }
 
@@ -682,7 +676,6 @@ char * ZEXPORT gzgets(gzFile file, char *buf, int len) {
 int ZEXPORT gzdirect(gzFile file) {
     gz_statep state;
 
-    /* get internal structure */
     if (file == NULL)
         return 0;
     state = (gz_statep)file;

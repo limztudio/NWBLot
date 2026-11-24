@@ -144,7 +144,7 @@ static void dump_bt(void)
   backtrace_full(btstate, 0, full_callback, error_bt_callback, NULL);
 }
 #else
-#define dump_bt() /* nothing to do */
+#define dump_bt()
 #endif
 
 /* this sets the log filename */

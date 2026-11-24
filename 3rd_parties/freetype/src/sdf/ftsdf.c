@@ -1193,7 +1193,6 @@
     contours = shape->contours;
     memory   = shape->memory;
 
-    /* for each contour */
     while ( contours )
     {
       SDF_Edge*  edges     = contours->edges;
@@ -1202,7 +1201,6 @@
       SDF_Contour*  tempc;
 
 
-      /* for each edge */
       while ( edges )
       {
         SDF_Edge*  edge = edges;
@@ -1301,11 +1299,6 @@
   }
 
 
-  /**************************************************************************
-   *
-   * for debugging
-   *
-   */
 
 #ifdef FT_DEBUG_LEVEL_TRACE
 
@@ -3739,7 +3732,6 @@
       goto Exit;
     }
 
-    /* if the outline is empty, return */
     if ( outline->n_points == 0 || outline->n_contours == 0 )
       goto Exit;
 

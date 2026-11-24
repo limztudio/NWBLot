@@ -2626,11 +2626,8 @@ public:
   void discoverDecl(const DeclStmt *DS) {
     for (const Decl *D : DS->decls()) {
       if (const auto *VD = dyn_cast<VarDecl>(D)) {
-        // FIXME: Assertion temporarily disabled due to a bug in
-        // ASTMatcher internal behavior in presence of GNU
-        // statement-expressions. We need to properly investigate this
-        // because it can screw up our algorithm in other ways.
-        // assert(Defs.count(VD) == 0 && "Definition already discovered!");
+        // FIXME: GNU statement expressions can cause ASTMatcher to rediscover
+        // a definition; investigate the effects on this algorithm.
         Defs[VD] = DS;
       }
     }

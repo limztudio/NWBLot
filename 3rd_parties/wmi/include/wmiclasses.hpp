@@ -212,8 +212,6 @@ struct Win32_ParallelPort
 
 	void setProperties(const WmiResult &result, std::size_t index)
 	{
-		//vscode was a great help with search(.+?),
-		//and replace result.extract(index, "$1", (*this).$1);
 		result.extract(index,"Availability",(*this).Availability);
 		result.extract(index,"Capabilities",(*this).Capabilities);
 		result.extract(index,"CapabilityDescriptions",(*this).CapabilityDescriptions);
@@ -359,8 +357,6 @@ struct Win32_Processor
 
 	void setProperties(const WmiResult& result, std::size_t index)
 	{
-		//vscode was a great help with search(.+?),
-		//and replace result.extract(index, "$1", (*this).$1);
 		result.extract(index, "AddressWidth", (*this).AddressWidth);
 		result.extract(index, "Architecture", (*this).Architecture);
 		result.extract(index, "AssetTag", (*this).AssetTag);
@@ -1057,11 +1053,9 @@ struct Win32_OperatingSystem
 	uint64_t    FreePhysicalMemory ;
 	uint64_t    FreeSpaceInPagingFiles ;
 	uint64_t    FreeVirtualMemory ;
-	/////////////////////////////////////////////////////
 	std::string InstallDate ;
-	std::string LastBootUpTime ;///THIS MAYBE INCORRECT
+	std::string LastBootUpTime ;
 	std::string LocalDateTime ;
-	/////////////////////////////////////////////////////////
 	std::string Locale ;
 	std::string Manufacturer ;
 	uint64_t    MaxNumberOfProcesses ;
@@ -1250,8 +1244,6 @@ struct Win32_BaseBoard
 
 	void setProperties(const WmiResult& result, std::size_t index)
 	{
-		//vscode was a great help with search(.+?),
-		//and replace result.extract(index, "$1", (*this).$1);
 		result.extract(index, "Caption", (*this).Caption);
 		result.extract(index, "ConfigOptions", (*this).ConfigOptions);
 		result.extract(index, "CreationClassName", (*this).CreationClassName);
@@ -1326,8 +1318,6 @@ struct UWF_Filter
 
 	void setProperties(const WmiResult& result, std::size_t index)
 	{
-		//vscode was a great help with search(.+?),
-		//and replace result.extract(index, "$1", (*this).$1);
 		result.extract(index, "Id", (*this).Id);
 		result.extract(index, "CurrentEnabled", (*this).CurrentEnabled);
 		result.extract(index, "NextEnabled", (*this).NextEnabled);
@@ -1359,8 +1349,6 @@ struct AntiVirusProduct
 
 	void setProperties(const WmiResult& result, std::size_t index)
 	{
-		//vscode was a great help with search(.+?),
-		//and replace result.extract(index, "$1", (*this).$1);
 		result.extract(index, "DisplayName", (*this).DisplayName);
 		result.extract(index, "InstanceGuid", (*this).InstanceGuid);
 		result.extract(index, "PathToSignedProductExe", (*this).PathToSignedProductExe);

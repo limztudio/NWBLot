@@ -5,10 +5,10 @@ from csg_gi_temporal_contract import (
     EVENT_DATA_FLAGS_MARKER,
     EVENT_ORDER_MARKER,
     LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN,
-    LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP,
+    LIT_CSG_TEMPORAL_WARMUP_STARTED,
     LIT_EVENT_DATA,
     LIT_EVENT_ORDER,
-    LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE,
+    LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG,
     LIT_SPAN_STATE,
     LIT_TEMPORAL_SERIES_COMPLETE,
     LIT_TEMPORAL_WARMUP_COMPLETE,
@@ -25,7 +25,7 @@ from window_capture_validation import validate_expected_log_text
 class CsgTemporalSchedule:
     @staticmethod
     def parse(log, frame_interval):
-        validate_expected_log_text(log, (LIT_TEMPORAL_SERIES_COMPLETE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE), STRICT_LOG_FAILURE_MESSAGES)
+        validate_expected_log_text(log, (LIT_TEMPORAL_SERIES_COMPLETE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG), STRICT_LOG_FAILURE_MESSAGES)
         setups = re.findall(r"CsgVisibleSmokeProject: temporal scene animated=([01]) view=(full|indirect|direct|normal|position|cap_state|interval_state|event_state|event_data|event_order|span_state) minimum_frame=(\d+) warmup_seconds=(\d+) interval=(\d+) samples=(\d+)", log)
         if len(setups) != 1:
             raise SmokeFailure("temporal series must have exactly one logged scene setup")
@@ -55,7 +55,7 @@ class CsgTemporalSchedule:
         expected = [(sample, first_frame + frame_interval * sample) for sample in range(SAMPLE_COUNT)]
         if captured != expected:
             raise SmokeFailure(f"temporal source-frame sequence differs from its deterministic schedule: {captured}")
-        if not (log.index(LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP) < log.index(LIT_TEMPORAL_WARMUP_COMPLETE) < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
+        if not (log.index(LIT_CSG_TEMPORAL_WARMUP_STARTED) < log.index(LIT_TEMPORAL_WARMUP_COMPLETE) < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
             raise SmokeFailure("temporal capture must follow the completed live warmup")
         if len(re.findall(r"FramebufferCapture: capture ready", log)) != SAMPLE_COUNT:
             raise SmokeFailure("temporal series did not complete all accepted framebuffer readbacks")

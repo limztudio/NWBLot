@@ -80,7 +80,7 @@ applies an additional positive uniform scale after import.
 
 | Value | Result |
 | --- | --- |
-| `imported` (default) | Uses the imported per-corner normal stream. |
+| `imported` (default) | Uses the loader-provided per-corner normal stream; the loader is configured to generate missing normals. |
 | `smooth` | Rebuilds smooth normals shared by identical output positions. |
 | `regenerate` | Rebuilds a face normal for every triangle. |
 

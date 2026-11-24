@@ -207,7 +207,7 @@ b8 BuildPhysicsStressScene(mut PhysicsWorld world, in u32 targetDynamicBodies, i
     bulletSd.material.restitution = 0.4f;
 
     for(u32 bi = 0u; bi < bulletCount; ++bi){
-        const f32 angle = (2.0f * s_PI * cast<f32>(bi)) / cast<f32>(bulletCount);
+        const f32 angle = (2.0f * s_Pi * cast<f32>(bi)) / cast<f32>(bulletCount);
         const f32 dirX = Cos(VectorSingle(angle)).x;
         const f32 dirZ = Sin(VectorSingle(angle)).x;
         const f32 radius = 19.5f;

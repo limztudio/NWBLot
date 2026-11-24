@@ -48,7 +48,7 @@ namespace Feature{
         CooperativeVectorInferencing,
         CooperativeVectorTraining,
 
-        Count
+        kCount
     };
 };
 

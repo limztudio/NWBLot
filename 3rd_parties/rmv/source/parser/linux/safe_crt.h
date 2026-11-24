@@ -27,7 +27,7 @@ errno_t fopen_s(FILE** file, const char* filename, const char* mode);
 /// \param size_of_buffer Maximum number of characters to store.
 /// \param format Format-control string.
 /// \param ... Optional arguments to be formatted.
-/// \return The number of characters written or -1 if an error occurred.
+/// \return The number of characters that would be written, or a negative value on error.
 int sprintf_s(char* buffer, size_t size_of_buffer, const char* format, ...);
 
 /// fprintf_s secure version of fprintf.
@@ -41,12 +41,9 @@ int fprintf_s(FILE* stream, const char* format, ...);
 /// \param buffer Storage location for data.
 /// \param buffer_size Size of the destination buffer in bytes.
 /// \param element_size Size of the item to read in bytes.
-/// \param count Maximum number of items to be read.
+/// \param count Item count used for the buffer-size check.
 /// \param stream Pointer to FILE structure.
-/// \return The number of (whole) items that were read into the buffer, which may be less than count if a
-///         read error or the end of the file is encountered before count is reached. Use the feof or ferror
-///         function to distinguish an error from an end-of-file condition. If size or count is 0, fread_s
-///         returns 0 and the buffer contents are unchanged.
+/// \return Zero if element_size * count exceeds buffer_size; otherwise, the result of reading buffer_size items.
 size_t fread_s(void* buffer, size_t buffer_size, size_t element_size, size_t count, FILE* stream);
 
 /// strcpy_s secure version of strcpy.
@@ -58,10 +55,8 @@ errno_t strcpy_s(char* destination, size_t size, const char* source);
 
 /// @brief strncpy_s secure version of strncpy.
 ///
-/// Safely copies characters from the source string to the destination string and adds a terminator to the end of the destination string.
-/// Truncated strings (i.e. source strings that are longer than the size of the destination buffer) can be copied by specifying a
-/// <c><i>max_count</i></c> which is one less than the actual size of the destination buffer.  A terminating character is added to the
-/// truncated destination string.
+/// Copies up to max_count characters and writes a terminator at that offset.
+/// The destination must have more than max_count bytes.
 ///
 /// @param [out] out_destination    The destination (output) string.
 /// @param [in]  destination_size   The size of the destination buffer.
@@ -73,7 +68,7 @@ errno_t strcpy_s(char* destination, size_t size, const char* source);
 /// @retval
 /// ERANGE                          The number of characters to copy is zero.
 /// @retval
-/// EINVAL                          The operation failed because <c><i>out_destination</i></c> or <c>source<i>out_destination</i></c> was a null pointer.
+/// EINVAL                          The operation failed because <c><i>out_destination</i></c> or <c><i>source</i></c> was a null pointer.
 errno_t strncpy_s(char* out_destination, const size_t destination_size, const char* source, const size_t max_count);
 
 /// strcat_s secure version of strcat.

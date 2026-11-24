@@ -6,7 +6,7 @@ from window_capture_outcome import SmokeFailure
 
 LIT_TOKEN_FIELD_PATTERN = r"=(\S+)"
 LIT_ENABLED_FLAG = "1"
-LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI = "StressTestSmokeProject: device capability "
+LIT_STRESS_DEVICE_CAPABILITY_LOG_PREFIX = "StressTestSmokeProject: device capability "
 LIT_TRANSPARENT = "transparent"
 LIT_OPAQUE = "opaque"
 LIT_FRONT_Z = "front_z"
@@ -22,7 +22,7 @@ LIT_RECEIVERS = "receivers"
 LIT_MOTION = "motion"
 CSG_PROFILE = "StressTestSmokeProject: CSG "
 CSG_DISPATCH = "RendererSystem: dispatched CSG light-space shadows "
-CSG_DEVICE = LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI
+CSG_DEVICE = LIT_STRESS_DEVICE_CAPABILITY_LOG_PREFIX
 
 
 class CsgProfileEvidence:

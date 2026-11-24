@@ -59,9 +59,6 @@ int main(int /*argc*/, char */*args*/[])
 			cout << antivirus.DisplayName << " | path:" << antivirus.PathToSignedProductExe << " state:" << antivirus.ProductState << " time: " << antivirus.Timestamp << endl;
 		}
 
-		// Example for Windows Embedded
-		//UWF_Filter filter = retrieveWmi<UWF_Filter>();
-		//cout << "UWF Filter enabled:" << filter.CurrentEnabled << std::endl;
 	} catch (const WmiException &ex) {
 		cerr<<"Wmi error: "<<ex.errorMessage<<", Code: "<<ex.hexErrorCode()<<endl;
 		return 1;

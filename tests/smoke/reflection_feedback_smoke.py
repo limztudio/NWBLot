@@ -32,8 +32,8 @@ from reflection_feedback_evidence import (
     LIT_REFLECTIONSMOKEFEEDBACK,
     LIT_REFLECTIONSMOKEHISTORY,
     LIT_REFLECTIONSMOKEOPTICS,
-    LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK,
-    LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP,
+    LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE,
+    LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE,
     LIT_REFLECTIONSMOKESTATISTICS,
     LIT_SCREEN_ATTEMPTS,
     LIT_SCREEN_ITERATIONS,
@@ -112,8 +112,8 @@ def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "1" if spec.diagnostics else str(max(64, spec.accepted_frames) + 1), "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)),
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created", LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {spec.mode}", LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)),
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
+        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created", LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {spec.mode}", LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE.format(v=int(spec.enabled)),
+        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE.format(v=spec.screen_steps), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
         LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + ("hardware" if spec.mode == LIT_HYBRID and spec.hardware_budget else "screen-space"), LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
         "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
     if spec.diagnostics:

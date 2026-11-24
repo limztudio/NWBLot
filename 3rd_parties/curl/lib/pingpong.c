@@ -56,9 +56,6 @@ timediff_t Curl_pp_state_timeleft_ms(struct Curl_easy *data,
   return remain_ms;
 }
 
-/*
- * Curl_pp_statemach()
- */
 CURLcode Curl_pp_statemach(struct Curl_easy *data,
                            struct pingpong *pp, bool block,
                            bool disconnecting)
@@ -120,7 +117,6 @@ CURLcode Curl_pp_statemach(struct Curl_easy *data,
   return result;
 }
 
-/* initialize stuff to prepare for reading a fresh new response */
 void Curl_pp_init(struct pingpong *pp, const struct curltime *pnow)
 {
   DEBUGASSERT(!pp->initialized);
@@ -233,11 +229,6 @@ static CURLcode pingpong_read(struct Curl_easy *data,
   return Curl_conn_recv(data, sockindex, buffer, buflen, nread);
 }
 
-/*
- * Curl_pp_readresp()
- *
- * Reads a piece of a server response.
- */
 CURLcode Curl_pp_readresp(struct Curl_easy *data,
                           int8_t sockindex,
                           struct pingpong *pp,

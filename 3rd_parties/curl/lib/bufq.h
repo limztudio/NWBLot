@@ -74,8 +74,8 @@ void Curl_bufcp_free(struct bufc_pool *pool);
  * e.g. when the head chunk is partially read. `len` may also become
  * larger than the max when option `BUFQ_OPT_SOFT_LIMIT` is used.
  *
- * By default, writing to a full bufq will return (-1, CURLE_AGAIN). Same
- * as reading from an empty bufq.
+ * By default, writing to a full bufq or reading from an empty bufq returns
+ * CURLE_AGAIN.
  * With `BUFQ_OPT_SOFT_LIMIT` set, a bufq will allow writing beyond this limit
  * and use more than `max_chunks`. It will report that it is full
  * nevertheless. This is provided for situation where writes preferably never
@@ -101,8 +101,8 @@ struct bufq {
 
 /**
  * Default behaviour: chunk limit is "hard", meaning attempts to write
- * more bytes than can be hold in `max_chunks` is refused and will return
- * -1, CURLE_AGAIN. */
+ * more bytes than can be held in `max_chunks` is refused with CURLE_AGAIN
+ * when no bytes can be written. */
 #define BUFQ_OPT_NONE        0
 /**
  * Make `max_chunks` a "soft" limit. A bufq will report that it is "full"
@@ -206,13 +206,10 @@ typedef CURLcode Curl_bufq_writer(void *writer_ctx,
                                   size_t *pwritten);
 
 /**
- * Passes the chunks in the buffer queue to the writer and returns
- * the amount of buf written. A writer may return -1 and CURLE_AGAIN
- * to indicate blocking at which point the queue will stop and return
- * the amount of buf passed so far.
- * -1 is returned on any other errors reported by the writer.
- * Note that in case of a -1 chunks may have been written and
- * the buffer queue will have different length than before.
+ * Passes queued chunks to the writer and stores the bytes written in
+ * `pwritten`. A zero-byte write counts as blocking. If blocking follows
+ * progress, returns CURLE_OK; otherwise returns CURLE_AGAIN or the writer's
+ * error. The queue may change even on error.
  */
 CURLcode Curl_bufq_pass(struct bufq *q, Curl_bufq_writer *writer,
                         void *writer_ctx, size_t *pwritten);
@@ -235,19 +232,16 @@ CURLcode Curl_bufq_slurp(struct bufq *q, Curl_bufq_reader *reader,
 /**
  * Read *once* up to `max_len` bytes and append it to the buffer.
  * if `max_len` is 0, no limit is imposed besides the chunk space.
- * Returns the total amount of buf read (may be 0) or -1 on other
- * reader errors.
+ * Stores the number of bytes read in `pnread` and returns the reader's
+ * result, or CURLE_AGAIN if the queue is full.
  */
 CURLcode Curl_bufq_sipn(struct bufq *q, size_t max_len,
                         Curl_bufq_reader *reader, void *reader_ctx,
                         size_t *pnread);
 
 /**
- * Write buf to the end of the buffer queue.
- * Write bufq content or passed `buf` directly using the `writer`
- * callback when it sees fit. 'buf' might get passed directly
- * on or is placed into the buffer, depending on `len` and current
- * amount buffered, chunk size, etc.
+ * Write `buf` to the queue, passing queued data to `writer` when the
+ * queue is full. Store the number of input bytes accepted in `pwritten`.
  */
 CURLcode Curl_bufq_write_pass(struct bufq *q,
                               const uint8_t *buf, size_t len,

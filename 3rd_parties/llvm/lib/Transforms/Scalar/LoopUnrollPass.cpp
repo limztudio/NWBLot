@@ -1150,8 +1150,6 @@ void llvm::computeUnrollCount(Loop *L, const TargetTransformInfo &TTI,
     return;
   }
 
-  // Before starting partial unrolling, set up.partial to true,
-  // if user explicitly asked  for unrolling
   if (TripCount)
     UP.Partial |= PInfo.ExplicitUnroll;
 

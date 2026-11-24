@@ -44,10 +44,7 @@ static void copy_header_external(struct Curl_header_store *hs,
   h->value = hs->value;
   h->amount = amount;
   h->index = index;
-  /* this will randomly OR a reserved bit for the sole purpose of making it
-     impossible for applications to do == comparisons, as that would otherwise
-     be tempting and then lead to the reserved bits not being reserved
-     anymore. */
+  /* Set a reserved bit to discourage exact equality checks on origin flags. */
   h->origin = (unsigned int)(hs->type | (1 << 27));
   h->anchor = e;
 }
@@ -108,7 +105,6 @@ CURLHcode curl_easy_header(CURL *curl,
       goto out;
 
     if(nameindex == amount - 1)
-      /* if the last or only occurrence is what's asked for, then we know it */
       hs = pick;
     else {
       for(e = Curl_llist_head(&data->state.httphdrs); e;
@@ -125,7 +121,6 @@ CURLHcode curl_easy_header(CURL *curl,
       /* the first round counted this occurrence */
       DEBUGASSERT(e);
     }
-    /* this is the name we want */
     copy_header_external(hs, nameindex, amount, e_pick,
                          &data->state.headerout[0]);
     *hout = &data->state.headerout[0];
@@ -384,7 +379,6 @@ CURLcode Curl_headers_push(struct Curl_easy *data, const char *header,
     hs->type = type;
     hs->request = data->state.requests;
 
-    /* insert this node into the list of headers */
     Curl_llist_append(&data->state.httphdrs, hs, &hs->node);
   }
   else {
@@ -461,9 +455,6 @@ CURLcode Curl_headers_init(struct Curl_easy *data)
   return CURLE_OK;
 }
 
-/*
- * Curl_headers_cleanup(). Free all stored headers and associated memory.
- */
 CURLcode Curl_headers_cleanup(struct Curl_easy *data)
 {
   struct Curl_llist_node *e;

@@ -1251,7 +1251,6 @@ std::tuple<Pass *, bool> PMDataManager::getOnTheFlyPass(Pass *P, AnalysisID PI,
   llvm_unreachable("Unable to find on the fly pass");
 }
 
-// Destructor
 PMDataManager::~PMDataManager() {
   for (Pass *P : PassVector)
     delete P;

@@ -1752,7 +1752,6 @@ bool CursorVisitor::VisitHLSLAttributedResourceTypeLoc(
 }
 
 bool CursorVisitor::VisitHLSLInlineSpirvTypeLoc(HLSLInlineSpirvTypeLoc TL) {
-  // Nothing to do.
   return false;
 }
 
@@ -2090,7 +2089,7 @@ public:
   void VisitBlockExpr(const BlockExpr *B);
   void VisitCompoundLiteralExpr(const CompoundLiteralExpr *E);
   void VisitCompoundStmt(const CompoundStmt *S);
-  void VisitCXXDefaultArgExpr(const CXXDefaultArgExpr *E) { /* Do nothing. */
+  void VisitCXXDefaultArgExpr(const CXXDefaultArgExpr *E) {
   }
   void VisitMSDependentExistsStmt(const MSDependentExistsStmt *S);
   void VisitCXXDependentScopeMemberExpr(const CXXDependentScopeMemberExpr *E);

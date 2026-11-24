@@ -34,9 +34,6 @@ static inline void idct_1d_2(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 3, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_3(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -81,9 +78,6 @@ static inline void idct_1d_3(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 4, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_4(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -145,9 +139,6 @@ static inline void idct_1d_4(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 5, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_5(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -225,9 +216,6 @@ static inline void idct_1d_5(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 6, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_6(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -325,9 +313,6 @@ static inline void idct_1d_6(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 7, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_7(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -446,9 +431,6 @@ static inline void idct_1d_7(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 8, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_8(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -594,9 +576,6 @@ static inline void idct_1d_8(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 9, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_9(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -762,9 +741,6 @@ static inline void idct_1d_9(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 10, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_10(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -960,9 +936,6 @@ static inline void idct_1d_10(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 11, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_11(
     const float* src, int src_stride,
     float* dst,       int dst_stride)
@@ -1187,9 +1160,6 @@ static inline void idct_1d_11(
 
 // ------------------------------------------------------------
 // 1D ORTHONORMAL IDCT (DCT-III), SIZE 12, FLOAT
-// out[x*dst_stride] = sum_k C[k][x] * src[k*src_stride]
-// C[k][x] = alpha(k) * cos(pi * (2*x+1) * k / (2*N)),
-// alpha(0) = sqrt(1/N), alpha(k>0) = sqrt(2/N)
 static inline void idct_1d_12(
     const float* src, int src_stride,
     float* dst,       int dst_stride)

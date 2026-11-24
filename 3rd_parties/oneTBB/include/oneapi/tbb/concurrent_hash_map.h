@@ -178,7 +178,6 @@ public:
         return my_allocator;
     }
 
-    // Enable segment
     void enable_segment( segment_index_type k, bool is_initial = false ) {
         __TBB_ASSERT( k, "Zero segment must be embedded" );
         size_type sz;
@@ -792,13 +791,11 @@ public:
             }
         }
 
-        // Return reference to associated value in hash table.
         const_reference operator*() const {
             __TBB_ASSERT( my_node, "attempt to dereference empty accessor" );
             return my_node->value();
         }
 
-        // Return pointer to associated value in hash table.
         const_pointer operator->() const {
             return &operator*();
         }
@@ -822,13 +819,11 @@ public:
         // Type of value
         using value_type = typename concurrent_hash_map::value_type;
 
-        // Return reference to associated value in hash table.
         reference operator*() const {
             __TBB_ASSERT( this->my_node, "attempt to dereference empty accessor" );
             return this->my_node->value();
         }
 
-        // Return pointer to associated value in hash table.
         pointer operator->() const {
             return &operator*();
         }
@@ -858,7 +853,6 @@ public:
         this->reserve(n);
     }
 
-    // Copy constructor
     concurrent_hash_map( const concurrent_hash_map &table )
         : concurrent_hash_map(node_allocator_traits::select_on_container_copy_construction(table.get_allocator()))
     {
@@ -879,14 +873,12 @@ public:
         });
     }
 
-    // Move constructor
     concurrent_hash_map( concurrent_hash_map &&table )
         : concurrent_hash_map(std::move(table.get_allocator()))
     {
         this->internal_move(std::move(table));
     }
 
-    // Move constructor
     concurrent_hash_map( concurrent_hash_map &&table, const allocator_type &a )
         : concurrent_hash_map(a)
     {
@@ -930,7 +922,6 @@ public:
     concurrent_hash_map( std::initializer_list<value_type> il, const allocator_type& a )
         : concurrent_hash_map(il, hash_compare_type(), a) {}
 
-    // Assignment
     concurrent_hash_map& operator=( const concurrent_hash_map &table ) {
         if( this != &table ) {
             clear();
@@ -940,7 +931,6 @@ public:
         return *this;
     }
 
-    // Move Assignment
     concurrent_hash_map& operator=( concurrent_hash_map &&table ) {
         if( this != &table ) {
             using pocma_type = typename node_allocator_traits::propagate_on_container_move_assignment;
@@ -951,7 +941,6 @@ public:
         return *this;
     }
 
-    // Assignment
     concurrent_hash_map& operator=( std::initializer_list<value_type> il ) {
         clear();
         internal_copy(il.begin(), il.end(), il.size());
@@ -1081,7 +1070,6 @@ public:
     // Returns the current number of buckets
     size_type bucket_count() const { return this->my_mask.load(std::memory_order_relaxed) + 1; }
 
-    // return allocator object
     allocator_type get_allocator() const { return base_type::get_allocator(); }
 
     // swap two instances. Iterators are invalidated

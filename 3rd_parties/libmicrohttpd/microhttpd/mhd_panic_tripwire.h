@@ -44,10 +44,9 @@
  *
  * WHAT IS INTERCEPTED
  * -------------------
- * 1. #MHD_PANIC() - via the public MHD_set_panic_func() hook.  The reference
- *    to MHD_set_panic_func() is *weak*, so this header can also be included
- *    by the unit tests that compile a couple of library objects directly and
- *    do not link libmicrohttpd at all; there the hook is simply skipped.
+ * 1. #MHD_PANIC() - via the public MHD_set_panic_func() hook.  On supported
+ *    ELF toolchains the reference is weak, so tests without the library skip
+ *    the hook.  Other builds use a direct reference.
  * 2. abort() - via a SIGABRT handler.  This matters because in this code base
  *    the overwhelming majority of "fatal invariant reached from network
  *    input" sites are mhd_assert(), which goes to assert(3)/abort(3) and
@@ -105,12 +104,12 @@
  *
  *   MHD-PANIC-TRIPWIRE: kind=MHD_PANIC file=connection.c line=1234 \
  *     reason=Data offset exceeds limit.
- *   MHD-PANIC-TRIPWIRE-FRAME: ...
+ *   MHD-PANIC-TRIPWIRE-FRAMES: ...
  *   MHD-PANIC-TRIPWIRE: terminating with exit status 99
  *
  * Grep for #MHD_PANIC_TRIPWIRE_MARKER ("MHD-PANIC-TRIPWIRE") to classify a
- * failure.  Everything is emitted with write(2) and without allocating, so
- * the same code path is usable from the SIGABRT handler.
+ * failure.  Marker and status text use write; stack traces use the platform's
+ * backtrace functions when available.
  */
 
 #ifndef MHD_PANIC_TRIPWIRE_H
@@ -155,8 +154,7 @@
 
 /* Weak references let this header be included by the unit tests that do not
    link libmicrohttpd (test_str*, test_md5, test_sha*, test_auth_parse, ...).
-   Without weak-symbol support the MHD_PANIC() hook is simply not installed
-   and only the abort() hook remains. */
+   Without weak-symbol support the panic hook uses a direct reference. */
 #if defined(__GNUC__) && defined(__ELF__) && ! defined(_WIN32)
 #  define MHD_PANIC_TRIPWIRE_WEAK_ __attribute__ ((weak))
 #endif /* __GNUC__ && __ELF__ && ! _WIN32 */
@@ -198,8 +196,8 @@ static volatile sig_atomic_t mhd_panic_tripwire_status_ =
   MHD_PANIC_TRIPWIRE_EXIT_STATUS;
 
 /**
- * Set once a report is in progress, so that a second thread tripping at the
- * same time does not interleave its output with the first one.
+ * Set when a report starts to limit repeated output. This flag does not
+ * synchronize concurrent threads.
  */
 static volatile sig_atomic_t mhd_panic_tripwire_busy_ = 0;
 

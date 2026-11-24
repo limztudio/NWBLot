@@ -1140,7 +1140,6 @@ void Flang::ConstructJob(Compilation &C, const JobAction &JA,
   // Add MCModel information
   addMCModel(D, Args, Triple, RelocationModel, CmdArgs);
 
-  // Add Codegen options
   addCodegenOptions(Args, CmdArgs);
 
   // Add R Group options

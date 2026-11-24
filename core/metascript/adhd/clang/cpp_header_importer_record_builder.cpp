@@ -414,7 +414,7 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
     }
 }
 
-b8 ImporterContext::methodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept{
+b8 ImporterContext::MethodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept{
     if(a.isConstructor != b.isConstructor || a.isOperator != b.isOperator || a.isConst != b.isConst || a.isStatic != b.isStatic)
         return false;
     if(a.name != b.name || a.params.size() != b.params.size() || a.templateParams.size() != b.templateParams.size())
@@ -435,7 +435,7 @@ void ImporterContext::addUniqueMethod(ClassDecl& target, MethodDecl* method, Cla
         return;
     auto [it, inserted] = dedupe.methodsByName.emplace(method->name, MVector<const MethodDecl*>(m_arena));
     for(const MethodDecl* existing : it.value()){
-        if(existing && methodSignaturesEqual(*existing, *method))
+        if(existing && MethodSignaturesEqual(*existing, *method))
             return;
     }
     it.value().push_back(method);
@@ -563,7 +563,7 @@ void ImporterContext::extractClass(CXCursor classCursor){
     const long long sz = ::clang_Type_getSizeOf(recordType);
     const long long al = ::clang_Type_getAlignOf(recordType);
 
-    ClassDecl* cls = findExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, cppExportName);
+    ClassDecl* cls = FindExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, cppExportName);
     const b8 isNew = (cls == nullptr);
     if(isNew){
         cls = AllocateAstNode<ClassDecl>(m_arena);
@@ -606,7 +606,7 @@ void ImporterContext::extractClass(CXCursor classCursor){
         importClassMethodsFromCursor(resolvedBase, *cls, true, dedupe);
     }
 
-    if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && findExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
+    if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && FindExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
         if(m_aliasByName.find(compatAliasName) == m_aliasByName.end()){
             TypeAliasDecl* compatAlias = AllocateAstNode<TypeAliasDecl>(m_arena);
             compatAlias->name = compatAliasName;

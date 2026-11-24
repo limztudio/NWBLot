@@ -509,8 +509,7 @@ SourceLocation PathDiagnosticLocation::getValidSourceLocation(
     } while (!L.isValid());
   }
 
-  // FIXME: Ironically, this assert actually fails in some cases.
-  //assert(L.isValid());
+  // FIXME: The location may be invalid in some cases.
   return L;
 }
 

@@ -35,7 +35,7 @@ const char inflate_copyright[] =
    Build a set of tables to decode the provided canonical Huffman code.
    The code lengths are lens[0..codes-1].  The result starts at *table,
    whose indices are 0..2^bits-1.  work is a writable array of at least
-   lens shorts, which is used as a work area.  type is the type of code
+   codes shorts, which is used as a work area.  type is the type of code
    to be generated, CODES, LENS, or DISTS.  On return, zero is success,
    -1 is an invalid code, and +1 means that ENOUGH isn't enough.  table
    on return points to the next available entry's address.  bits is the
@@ -219,7 +219,6 @@ int ZLIB_INTERNAL inflate_table(codetype type, unsigned short FAR *lens,
 
     /* process all codes and make table entries */
     for (;;) {
-        /* create table entry */
         here.bits = (unsigned char)(len - drop);
         if (work[sym] + 1U < match) {
             here.op = (unsigned char)0;
@@ -267,7 +266,6 @@ int ZLIB_INTERNAL inflate_table(codetype type, unsigned short FAR *lens,
             if (drop == 0)
                 drop = root;
 
-            /* increment past last table */
             next += min;            /* here min is 1 << curr */
 
             /* determine length of next table */
@@ -304,7 +302,6 @@ int ZLIB_INTERNAL inflate_table(codetype type, unsigned short FAR *lens,
         next[huff] = here;
     }
 
-    /* set return parameters */
     *table += used;
     *bits = root;
     return 0;

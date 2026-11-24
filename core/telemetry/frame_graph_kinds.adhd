@@ -24,7 +24,7 @@ extern enum FrameGraphQueueAssignmentAcceptance : u8{
     First,
     Unchanged,
     Changed,
-    Count
+    kCount
 };
 
 [cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueAssignmentModifier::Mask")]
@@ -44,7 +44,7 @@ extern enum FrameGraphQueueAssignmentReason : u8{
     RequiredGraphics,
     Conservative,
     Scored,
-    Count
+    kCount
 };
 
 [cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueClass::Enum")]
@@ -53,7 +53,7 @@ extern enum FrameGraphQueueClass : u8{
     Graphics,
     Compute,
     Transfer,
-    Count
+    kCount
 };
 
 [cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphTaskPacketizationDecision::Enum")]
@@ -70,7 +70,7 @@ extern enum FrameGraphTaskPacketizationDecision : u8{
     MergedExplicit,
     MergedFrontierScored,
     ScoredMergeDomainMismatch,
-    Count
+    kCount
 };
 
 

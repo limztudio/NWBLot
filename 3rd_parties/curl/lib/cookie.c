@@ -1334,7 +1334,6 @@ CURLcode Curl_cookie_getlist(struct Curl_easy *data,
   for(n = Curl_llist_head(&ci->cookielist[myhash]); n; n = Curl_node_next(n)) {
     struct Cookie *co = Curl_node_elem(n);
 
-    /* if the cookie requires we are secure we must only continue if we are! */
     if(co->secure ? secure : TRUE) {
 
       /* now check if the domain is correct */
@@ -1669,7 +1668,6 @@ void Curl_flush_cookies(struct Curl_easy *data, bool cleanup)
   if(data->cookies) {
     const char *cookiejar = CURL_EASY_STR(data, STRING_COOKIEJAR);
     if(cookiejar && data->cookies->running) {
-      /* if we have a destination file for all the cookies to get dumped to */
       CURLcode result = cookie_output(data, data->cookies, cookiejar);
       if(result)
         infof(data, "WARNING: failed to save cookies in %s: %s",

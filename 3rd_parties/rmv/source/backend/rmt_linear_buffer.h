@@ -41,7 +41,7 @@ RmtErrorCode RmtAllocLinearBufferInitialize(RmtAllocLinearBuffer* linear_buffer,
 /// @param [in] size                    The size (in bytes) of the allocation.
 ///
 /// @returns
-/// A pointer to the next allocated block. If the buffer is empty then <c><i>NULL</i></c> is returned.
+/// A pointer to the next allocated block. If the buffer has too little space or linear_buffer is <c><i>NULL</i></c>, returns <c><i>NULL</i></c>.
 ///
 void* RmtAllocLinearBufferAllocate(RmtAllocLinearBuffer* linear_buffer, size_t size);
 

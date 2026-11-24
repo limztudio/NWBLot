@@ -3561,7 +3561,6 @@ void PrettyUnitTestResultPrinter::OnTestDisabled(const TestInfo& test_info) {
 void PrettyUnitTestResultPrinter::OnTestPartResult(
     const TestPartResult& result) {
   switch (result.type()) {
-    // If the test part succeeded, we don't need to do anything.
     case TestPartResult::kSuccess:
       return;
     default:
@@ -3779,7 +3778,6 @@ class BriefUnitTestResultPrinter : public TestEventListener {
 void BriefUnitTestResultPrinter::OnTestPartResult(
     const TestPartResult& result) {
   switch (result.type()) {
-    // If the test part succeeded, we don't need to do anything.
     case TestPartResult::kSuccess:
       return;
     default:
@@ -5166,7 +5164,6 @@ class ScopedPrematureExitFile {
   explicit ScopedPrematureExitFile(const char* premature_exit_filepath)
       : premature_exit_filepath_(
             premature_exit_filepath ? premature_exit_filepath : "") {
-    // If a path to the premature-exit file is specified...
     if (!premature_exit_filepath_.empty()) {
       // create the file with a single "0" character in it.  I/O
       // errors are ignored as there's nothing better we can do and we

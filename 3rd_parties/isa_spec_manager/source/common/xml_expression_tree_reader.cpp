@@ -152,7 +152,6 @@ namespace amdisa
     static const char* const kOpLogicalOr  = "||";
     static const char* const kOpLogicalNot = "!";
 
-    // Assignment
     static const char* const kOpAssign = "=";
 
     // Ternary
@@ -253,16 +252,13 @@ namespace amdisa
         kOpLogicalOr,
         kOpLogicalNot,
 
-        // Assignment
         kOpAssign,
 
         // Ternary
         kOpTernary};
 
-    // Forward declaration
     static std::shared_ptr<GenericExpressionNode> ParseXmlElement(const tinyxml2::XMLElement* element, std::string& err_message);
 
-    // Helper function to parse XML element into expression node
     static std::shared_ptr<GenericExpressionNode> ParseXmlElement(const tinyxml2::XMLElement* element, std::string& err_message)
     {
         if (!element)
@@ -286,7 +282,6 @@ namespace amdisa
                 node->children.push_back(id_node);
             }
 
-            // Parse type info if present
             const tinyxml2::XMLElement* ty_elem = element->FirstChildElement(kXmlElemTy);
             if (ty_elem)
             {
@@ -320,7 +315,6 @@ namespace amdisa
                 node->children.push_back(lit_node);
             }
 
-            // Parse type info if present
             const tinyxml2::XMLElement* ty_elem = element->FirstChildElement(kXmlElemTy);
             if (ty_elem)
             {
@@ -348,7 +342,6 @@ namespace amdisa
             node->expression_operator = kNodeType;
             node->is_ret_type_node = true;
 
-            // Parse the child type element
             const tinyxml2::XMLElement* child = element->FirstChildElement();
             if (child)
             {
@@ -370,7 +363,6 @@ namespace amdisa
             const char* base = element->Attribute(kXmlAttrBase);
             if (base)
             {
-                // Validate base type
                 if (kKnownBaseTypes.find(base) == kKnownBaseTypes.end())
                 {
                     err_message = kStringErrorUnknownBaseType + std::string(base);
@@ -412,7 +404,6 @@ namespace amdisa
                 node->children.push_back(elem_type);
             }
 
-            // Parse array size
             const char* size = element->Attribute(kXmlAttrSize);
             if (size)
             {
@@ -430,7 +421,6 @@ namespace amdisa
             node->expression_operator = kTypeLambdaType;
             node->is_ret_type_node = true;
 
-            // Parse params and return type
             for (const tinyxml2::XMLElement* child = element->FirstChildElement();
                  child; child = child->NextSiblingElement())
             {
@@ -441,7 +431,6 @@ namespace amdisa
                     auto params_node = std::make_shared<GenericExpressionNode>();
                     params_node->expression_operator = kTypeLambdaParams;
 
-                    // Parse each parameter
                     for (const tinyxml2::XMLElement* param = child->FirstChildElement();
                          param; param = param->NextSiblingElement())
                     {
@@ -461,7 +450,6 @@ namespace amdisa
                     auto ret_node = std::make_shared<GenericExpressionNode>();
                     ret_node->expression_operator = kTypeLambdaReturn;
 
-                    // Parse return type
                     const tinyxml2::XMLElement* ret_type_elem = child->FirstChildElement();
                     if (ret_type_elem)
                     {
@@ -487,14 +475,12 @@ namespace amdisa
             auto fields_node = std::make_shared<GenericExpressionNode>();
             fields_node->expression_operator = kTypeRecordFields;
 
-            // Parse fields
             for (const tinyxml2::XMLElement* field = element->FirstChildElement(kXmlElemF);
                  field; field = field->NextSiblingElement(kXmlElemF))
             {
                 auto field_node = std::make_shared<GenericExpressionNode>();
                 field_node->expression_operator = kTypeField;
 
-                // Field name
                 const char* name = field->Attribute(kXmlAttrName);
                 if (name)
                 {
@@ -503,7 +489,6 @@ namespace amdisa
                     field_node->children.push_back(name_node);
                 }
 
-                // Field type
                 const tinyxml2::XMLElement* field_type_elem = field->FirstChildElement();
                 if (field_type_elem)
                 {
@@ -531,7 +516,6 @@ namespace amdisa
                 return nullptr;
             }
 
-            // Validate operator
             if (kKnownOperators.find(op_type) == kKnownOperators.end())
             {
                 err_message = kStringErrorUnknownOperator + std::string(op_type);
@@ -556,7 +540,6 @@ namespace amdisa
                 }
             }
 
-            // Now parse type info if present
             const tinyxml2::XMLElement* ty_elem = element->FirstChildElement(kXmlElemTy);
             if (ty_elem)
             {
@@ -607,7 +590,6 @@ namespace amdisa
             }
             else
             {
-                // Parse the XML into expression tree
                 auto parsed_node = ParseXmlElement(root_elem, err_message);
                 if (parsed_node)
                 {

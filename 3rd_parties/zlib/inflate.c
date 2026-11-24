@@ -255,7 +255,6 @@ local int updatewindow(z_streamp strm, const Bytef *end, unsigned copy) {
 
     state = (struct inflate_state FAR *)strm->state;
 
-    /* if it hasn't been done already, allocate space for the window */
     if (state->window == Z_NULL) {
         state->window = (unsigned char FAR *)
                         ZALLOC(strm, 1U << state->wbits,
@@ -1168,7 +1167,6 @@ int ZEXPORT inflateGetDictionary(z_streamp strm, Bytef *dictionary,
                                  uInt *dictLength) {
     struct inflate_state FAR *state;
 
-    /* check state */
     if (inflateStateCheck(strm)) return Z_STREAM_ERROR;
     state = (struct inflate_state FAR *)strm->state;
 
@@ -1190,7 +1188,6 @@ int ZEXPORT inflateSetDictionary(z_streamp strm, const Bytef *dictionary,
     unsigned long dictid;
     int ret;
 
-    /* check state */
     if (inflateStateCheck(strm) || dictionary == Z_NULL)
         return Z_STREAM_ERROR;
     state = (struct inflate_state FAR *)strm->state;
@@ -1220,7 +1217,6 @@ int ZEXPORT inflateSetDictionary(z_streamp strm, const Bytef *dictionary,
 int ZEXPORT inflateGetHeader(z_streamp strm, gz_headerp head) {
     struct inflate_state FAR *state;
 
-    /* check state */
     if (inflateStateCheck(strm)) return Z_STREAM_ERROR;
     state = (struct inflate_state FAR *)strm->state;
     if ((state->wrap & 2) == 0) return Z_STREAM_ERROR;
@@ -1269,7 +1265,6 @@ int ZEXPORT inflateSync(z_streamp strm) {
     unsigned char buf[4];       /* to restore bit buffer to byte string */
     struct inflate_state FAR *state;
 
-    /* check parameters */
     if (inflateStateCheck(strm)) return Z_STREAM_ERROR;
     state = (struct inflate_state FAR *)strm->state;
     if (strm->avail_in == 0 && state->bits < 8) return Z_BUF_ERROR;
@@ -1331,7 +1326,6 @@ int ZEXPORT inflateCopy(z_streamp dest, z_streamp source) {
     struct inflate_state FAR *copy;
     unsigned char FAR *window;
 
-    /* check input */
     if (dest == Z_NULL)
         return Z_STREAM_ERROR;
     if (inflateStateCheck(source)) {

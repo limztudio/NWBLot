@@ -246,7 +246,7 @@ class GTEST_API_ [[nodiscard]] KilledBySignal {
 // #endif
 // }
 //
-// This will assert that DieInDebugReturn12InOpt() crashes in debug
+// This will assert that DieInDebugOr12(&sideeffect) crashes in debug
 // mode, usually due to a DCHECK or LOG(DFATAL), but returns the
 // appropriate fallback value (12 in this case) in opt mode. If you
 // need to test that a function has appropriate side-effects in opt

@@ -24,7 +24,7 @@ extern enum Feature : u8{
     VariableRateShading,
     CooperativeVectorInferencing,
     CooperativeVectorTraining,
-    Count
+    kCount
 };
 
 [cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainOutputMode::Enum")]

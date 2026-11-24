@@ -28,12 +28,6 @@
  * @author Christian Grothoff
  */
 
-/* Worth considering for future improvements and additions:
- * NetBSD has no sendfile or sendfile64. The way to work
- * with this seems to be to mmap the file and write(2) as
- * large a chunk as possible to the socket. Alternatively,
- * use madvise(..., MADV_SEQUENTIAL). */
-
 #include "mhd_send.h"
 #ifdef MHD_LINUX_SOLARIS_SENDFILE
 #include <sys/sendfile.h>
@@ -224,7 +218,7 @@ MHD_connection_set_nodelay_state_ (struct MHD_Connection *connection,
 #endif /* HAVE_MESSAGES */
 
 #else  /* ! TCP_NODELAY */
-  (void) connection; (void) nodelay_state; /* Mute compiler warnings */
+  (void) connection; (void) nodelay_state;
 #endif /* ! TCP_NODELAY */
   return false;
 }
@@ -301,7 +295,7 @@ MHD_connection_set_cork_state_ (struct MHD_Connection *connection,
 #endif /* HAVE_MESSAGES */
 
 #else  /* ! MHD_TCP_CORK_NOPUSH */
-  (void) connection; (void) cork_state; /* Mute compiler warnings. */
+  (void) connection; (void) cork_state;
 #endif /* ! MHD_TCP_CORK_NOPUSH */
   return false;
 }
@@ -341,7 +335,7 @@ pre_send_setopt (struct MHD_Connection *connection,
       return; /* Data is buffered by send() with MSG_MORE flag.
                * No need to check or change anything. */
 #else  /* ! MHD_USE_MSG_MORE */
-    (void) plain_send; /* Mute compiler warning. */
+    (void) plain_send;
 #endif /* ! MHD_USE_MSG_MORE */
 
 #ifdef MHD_TCP_CORK_NOPUSH
@@ -513,11 +507,9 @@ pre_send_setopt (struct MHD_Connection *connection,
 
   /* This is a typical *BSD (except FreeBSD) and Darwin behavior. */
 
-  /* Uncork socket if socket wasn't uncorked. */
   if (_MHD_OFF != connection->sk_corked)
     MHD_connection_set_cork_state_ (connection, false);
 
-  /* Set TCP_NODELAY if it wasn't set. */
   if (_MHD_ON != connection->sk_nodelay)
     MHD_connection_set_nodelay_state_ (connection, true);
 
@@ -526,7 +518,6 @@ pre_send_setopt (struct MHD_Connection *connection,
 #else  /* ! MHD_TCP_CORK_NOPUSH */
   /* Buffering of data is controlled only by
    * Nagel's algorithm. */
-  /* Set TCP_NODELAY if it wasn't set. */
   if (_MHD_ON != connection->sk_nodelay)
     MHD_connection_set_nodelay_state_ (connection, true);
 #endif /* ! MHD_TCP_CORK_NOPUSH */
@@ -593,7 +584,7 @@ post_send_setopt (struct MHD_Connection *connection,
     return; /* Nothing to do after send(). */
 
 #ifndef MHD_USE_MSG_MORE
-  (void) plain_send_next; /* Mute compiler warning */
+  (void) plain_send_next;
 #endif /* ! MHD_USE_MSG_MORE */
 
   /* Need to push data. */
@@ -737,7 +728,6 @@ post_send_setopt (struct MHD_Connection *connection,
       return; /* The data has been pushed by zero-send. */
   }
 
-  /* Failed to push the data. */
 #endif /* ! MHD_TCP_CORK_NOPUSH */
 #ifdef HAVE_MESSAGES
   MHD_DLOG (connection->daemon,
@@ -828,7 +818,6 @@ MHD_send_data_ (struct MHD_Connection *connection,
   }
   else
   {
-    /* plaintext transmission */
     if (buffer_size > MHD_SCKT_SEND_MAX_SIZE_)
     {
       buffer_size = MHD_SCKT_SEND_MAX_SIZE_; /* send() return value limit */
@@ -887,8 +876,6 @@ MHD_send_data_ (struct MHD_Connection *connection,
 #endif /* EPOLL_SUPPORT */
   }
 
-  /* If there is a need to push the data from network buffers
-   * call post_send_setopt(). */
   /* If TLS connection is used then next final send() will be
    * without MSG_MORE support. If non-TLS connection is used
    * it's unknown whether sendfile() will be used or not so
@@ -1022,11 +1009,11 @@ MHD_send_hdr_and_body_ (struct MHD_Connection *connection,
                              body_size,
                              push_body);
       if (0 < ret2)
-        return ret + ret2; /* Total data sent */
+        return ret + ret2;
       if (MHD_ERR_AGAIN_ == ret2)
         return ret;
 
-      return ret2; /* Error code */
+      return ret2;
     }
     return ret;
   }
@@ -1132,12 +1119,9 @@ MHD_send_hdr_and_body_ (struct MHD_Connection *connection,
       ~((enum MHD_EpollState) MHD_EPOLL_STATE_WRITE_READY);
 #endif /* EPOLL_SUPPORT */
 
-  /* If there is a need to push the data from network buffers
-   * call post_send_setopt(). */
   if ( (push_body) &&
        ((header_size + body_size) == (size_t) ret) )
   {
-    /* Complete reply has been sent. */
     /* If TLS connection is used then next final send() will be
      * without MSG_MORE support. If non-TLS connection is used
      * it's unknown whether next 'send' will be plain send() / sendmsg() or
@@ -1154,9 +1138,6 @@ MHD_send_hdr_and_body_ (struct MHD_Connection *connection,
   else if ( (push_hdr) &&
             (header_size <= (size_t) ret))
   {
-    /* The header has been sent completely and there is a
-     * need to push the header data. */
-    /* Luckily the type of send function will be used next is known. */
     post_send_setopt (connection,
 #if defined(_MHD_HAVE_SENDFILE)
                       MHD_resp_sender_std == connection->rp.resp_sender,
@@ -1169,7 +1150,7 @@ MHD_send_hdr_and_body_ (struct MHD_Connection *connection,
   return ret;
 #else  /* ! MHD_VECT_SEND */
   mhd_assert (false);
-  return MHD_ERR_CONNRESET_; /* Unreachable. Mute warnings. */
+  return MHD_ERR_CONNRESET_;
 #endif /* ! MHD_VECT_SEND */
 }
 
@@ -1290,7 +1271,7 @@ MHD_send_sendfile_ (struct MHD_Connection *connection)
     {
       return MHD_ERR_CONNRESET_;
     }
-    return MHD_ERR_BADF_;   /* Fail hard */
+    return MHD_ERR_BADF_;
 #endif /* HAVE_SOLARIS_SENDFILE */
   }
 #ifdef EPOLL_SUPPORT
@@ -1361,7 +1342,7 @@ MHD_send_sendfile_ (struct MHD_Connection *connection)
       connection->rp.resp_sender = MHD_resp_sender_std;
       return MHD_ERR_AGAIN_;
     }
-    return MHD_ERR_BADF_;   /* Return hard error. */
+    return MHD_ERR_BADF_;
   }
   mhd_assert (0 <= len);
   mhd_assert (SSIZE_MAX >= len);
@@ -1369,8 +1350,6 @@ MHD_send_sendfile_ (struct MHD_Connection *connection)
   ret = (ssize_t) len;
 #endif /* HAVE_FREEBSD_SENDFILE */
 
-  /* If there is a need to push the data from network buffers
-   * call post_send_setopt(). */
   /* It's unknown whether sendfile() will be used in the next
    * response so assume that next response will be the same. */
   if ( (push_data) &&
@@ -1505,7 +1484,6 @@ send_iov_nontls (struct MHD_Connection *connection,
     return MHD_ERR_NOTCONN_;
   }
 
-  /* Some data has been sent */
   if (1)
   {
     size_t track_sent = (size_t) res;
@@ -1583,14 +1561,13 @@ send_iov_emu (struct MHD_Connection *connection,
                           push_data && (r_iov->cnt == r_iov->sent + 1));
     if (0 > res)
     {
-      /* Result is an error */
       if (0 == total_sent)
-        return res; /* Nothing was sent, return result as is */
+        return res;
 
       if (MHD_ERR_AGAIN_ == res)
-        return (ssize_t) total_sent; /* Return the amount of the sent data */
+        return (ssize_t) total_sent;
 
-      return res; /* Any kind of a hard error */
+      return res;
     }
 
     total_sent += (size_t) res;

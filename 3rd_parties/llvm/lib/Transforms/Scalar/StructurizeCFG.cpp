@@ -1424,7 +1424,6 @@ bool StructurizeCFG::run(Region *R, DominatorTree *DT,
   simplifyAffectedPhis();
   rebuildSSA();
 
-  // Cleanup
   Order.clear();
   Visited.clear();
   DeletedPhis.clear();

@@ -18,7 +18,7 @@ extern "C" {
 /// A structure encapsulating a set of process IDs.
 typedef struct RmtProcessMap
 {
-    uint64_t process_identifiers[RMT_MAXIMUM_PROCESS_COUNT];       ///< The 32bit process identifier.
+    uint64_t process_identifiers[RMT_MAXIMUM_PROCESS_COUNT];       ///< Process identifiers.
     uint64_t process_committed_memory[RMT_MAXIMUM_PROCESS_COUNT];  ///< The amount of committed memory (in bytes) per process.
     int32_t  process_count;                                        ///< The number of processes.
 } RmtProcessMap;

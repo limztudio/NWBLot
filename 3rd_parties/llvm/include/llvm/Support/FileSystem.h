@@ -176,7 +176,6 @@ public:
         FileSizeLow(FileSizeLow), Type(Type), Perms(Perms) {}
   #endif
 
-  // getters
   file_type type() const { return Type; }
   perms permissions() const { return Perms; }
 
@@ -213,7 +212,6 @@ public:
   }
 #endif
 
-  // setters
   void type(file_type v) { Type = v; }
   void permissions(perms p) { Perms = p; }
 };

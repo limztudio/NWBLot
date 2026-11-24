@@ -617,7 +617,6 @@ public:
     return *this;
   }
 
-  // Assignment operator.
   const SmallBitVector &operator=(const SmallBitVector &RHS) {
     if (isSmall()) {
       if (RHS.isSmall())

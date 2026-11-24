@@ -468,7 +468,7 @@ protected:
                   std::is_trivially_destructible_v<ValueT>)
       return;
 
-    if (getNumBuckets() == 0) // Nothing to do.
+    if (getNumBuckets() == 0)
       return;
 
     BucketT *B = getBuckets();

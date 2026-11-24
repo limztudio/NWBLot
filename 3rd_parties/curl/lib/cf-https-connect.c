@@ -198,8 +198,7 @@ static CURLcode baller_connected(struct Curl_cfilter *cf,
 {
   struct cf_hc_ctx *ctx = cf->ctx;
 
-  /* Make the winner's connection filter out own sub-filter, check, move,
-   * close all remaining. */
+  /* Move the winning connection filter into this chain. */
   if(cf->next) {
     DEBUGASSERT(0);
     return CURLE_FAILED_INIT;
@@ -299,7 +298,6 @@ static enum alpnid cf_hc_get_httpsrr_alpn(struct Curl_cfilter *cf,
   const struct Curl_https_rrinfo *rr;
   size_t i;
 
-  /* Do we have HTTPS-RR information? */
   rr = Curl_conn_dns_get_https(data, cf->sockindex, ctx->destination);
 
   CURL_TRC_CF(data, cf, "HTTPS-RR %savailable", rr ? "" : "not ");

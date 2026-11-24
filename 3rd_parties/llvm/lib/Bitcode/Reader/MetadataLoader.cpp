@@ -265,7 +265,6 @@ void BitcodeReaderMetadataList::tryToResolveCycles() {
   OldTypeRefs.Unknown.clear();
 
   if (UnresolvedNodes.empty())
-    // Nothing to do.
     return;
 
   // Resolve any cycles.

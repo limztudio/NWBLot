@@ -45,10 +45,8 @@ public:
   using pointer = IIty *;
   using reference = IIty &;
 
-  // Default constructor
   InstIterator() = default;
 
-  // Copy constructor...
   template<typename A, typename B, typename C, typename D>
   InstIterator(const InstIterator<A,B,C,D> &II)
     : BBs(II.BBs), BB(II.BB), BI(II.BI) {}

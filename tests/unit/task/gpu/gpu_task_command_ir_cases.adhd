@@ -605,7 +605,7 @@ void VerifyGpuCmdIr_RejectsMalformedRecordsWithoutProducingPartialValues(){
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::UnsupportedOpcode);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrWord<u8>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::Count), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrCopyTextureOffset + s_GpuCmdIrRecOpcodeOffset, cast<u8>(GpuCommandIrWireOpcode::kCount), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 1u, s_CommandIrCopyTextureOffset, GpuCommandIrStreamValidationError::UnsupportedOpcode);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
@@ -633,7 +633,7 @@ void VerifyGpuCmdIr_RejectsMalformedRecordsWithoutProducingPartialValues(){
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);
-    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::Count), corruptedBytes);
+    WriteCommandIrWord<u8>(s_CommandIrClearTextureOffset + s_GpuCmdIrClearTexValueTypeOffset, cast<u8>(GpuClearTextureTaskValueType::kCount), corruptedBytes);
     GpuCmdIr_AssertRecordError(corruptedBytes, 3u, s_CommandIrClearTextureOffset, GpuCommandIrStreamValidationError::InvalidRecord);
 
     CopyCommandIrBytes(validBytes, corruptedBytes);

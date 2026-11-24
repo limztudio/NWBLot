@@ -95,7 +95,7 @@ namespace GpuTaskGraphCompilerDetail{
         const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
 
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
-        FOUNDATION_ASSERT(exportType < GpuCompiledBarrierType::Count);
+        FOUNDATION_ASSERT(exportType < GpuCompiledBarrierType::kCount);
 
         b8 hasTerminalDeclaredRange = false;
         GpuTaskId externalExportTask;
@@ -159,7 +159,7 @@ namespace GpuTaskGraphCompilerDetail{
             plan.resourceHasPendingEpilogueBarrier[resource.id.index] = 1u;
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count);
+                FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::kCount);
                 if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport, nullptr, true))
                     return false;
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{

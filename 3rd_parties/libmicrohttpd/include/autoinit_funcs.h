@@ -294,7 +294,6 @@
   Compiler/platform does not support automatic calls of user-defined initializer and deinitializer
 #endif /* EMIT_ERROR_IF_AUTOINIT_FUNCS_ARE_NOT_SUPPORTED */
 
-/* Do nothing */
 #define _SET_INIT_AND_DEINIT_FUNCS(FI,FD)
 /* Indicate that automatic initialisers/deinitialisers are not supported */
 #define _AUTOINIT_FUNCS_ARE_NOT_SUPPORTED 1

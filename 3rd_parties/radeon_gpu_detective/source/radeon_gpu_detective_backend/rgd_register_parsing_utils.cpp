@@ -64,7 +64,6 @@ bool RegisterParsingUtils::ParseWaveInfoRegisters(const CrashData& kmd_crash_dat
                         wave_info_registers_map[wave_registers->shaderId].sq_wave_valid_and_idle = wave_registers->registerInfos[j].data;
                         break;
                     default:
-                        // Should not reach here.
                         assert(false);
                     }
                 }

@@ -297,7 +297,7 @@ b8 CreateStartupCameraAndLightsOnWorld(mut World world){
     assert(activeCamera.camera.valid());
     Entity cameraEntity = world.entity(activeCamera.camera);
     mut TransformComponent cameraTransform = cameraEntity.getComponent<TransformComponent>();
-    cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_PI, 0.0f, 0.0f)));
+    cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_Pi, 0.0f, 0.0f)));
     const EntityID directionalLight = CreateDirectionalLightEntity(
         world,
         s_DefaultDirectionalLightPitch,
@@ -523,11 +523,11 @@ void ResetTestbedCameraForPhysicsScene(mut NotNullUniquePtr<World> worldHandle, 
     mut TransformComponent cameraTransform = cameraEntity.getComponent<TransformComponent>();
     if(mode == TestbedPhysicsSceneMode::Stress){
         cameraTransform.position = f32x4(0.0f, 3.8f, 4.5f, 0.0f);
-        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-0.28f, s_PI, 0.0f, 0.0f)));
+        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-0.28f, s_Pi, 0.0f, 0.0f)));
     }
     else{
         cameraTransform.position = f32x4(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
-        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_PI, 0.0f, 0.0f)));
+        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_Pi, 0.0f, 0.0f)));
     }
 }
 

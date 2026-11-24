@@ -997,9 +997,6 @@ TLSData* MemoryPool::getTLS(bool create)
     return tls;
 }
 
-/*
- * Return the bin for the given size.
- */
 inline Bin* TLSData::getAllocationBin(unsigned size)
 {
     return bin + getIndex(size);
@@ -2152,7 +2149,6 @@ inline FreeObject* Block::allocate()
     }
     MALLOC_ASSERT( !freeList, ASSERT_TEXT );
 
-    /* if free list is empty, try thread local bump pointer allocation. */
     if ( FreeObject *result = allocateFromBumpPtr() ) {
         return result;
     }

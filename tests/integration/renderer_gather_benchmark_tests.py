@@ -59,7 +59,7 @@ LIT_SYS_STDERR = "sys.stderr"
 LIT_CAPTURE_JSONL = "capture.jsonl"
 LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_UNIQUE = "unique"
 LIT_MAIN = "__main__"
 
@@ -291,10 +291,10 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
                     self.assertEqual(bench.environment({key: ""}, LIT_SHARED, mode, LIT_CAPTURE_JSONL)[key], "")
 
     def test_inherited_smoke_and_diagnostic_controls_are_sanitized(self):
-        env = bench.environment({LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_GPU_TIMING_FILE: "stale", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", "NWB_LINUX_BACKEND": "x11", "PATH": "keep"}, LIT_UNIQUE, LIT_TIMING, LIT_CAPTURE_JSONL)
+        env = bench.environment({LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_GPU_TIMING_FILE: "stale", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "1", "NWB_LINUX_BACKEND": "x11", "PATH": "keep"}, LIT_UNIQUE, LIT_TIMING, LIT_CAPTURE_JSONL)
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, env)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, env)
-        self.assertEqual(env[LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F], "0")
+        self.assertEqual(env[LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME], "0")
 
 
 if __name__ == LIT_MAIN:

@@ -28,10 +28,6 @@
 
 #include "curl_get_line.h"
 
-/*
- * Curl_get_line() returns only complete whole lines that end with newline.
- * When 'eof' is set TRUE, the last line has been read.
- */
 CURLcode Curl_get_line(struct dynbuf *buf, FILE *input, bool *eof)
 {
   CURLcode result;
@@ -52,16 +48,13 @@ CURLcode Curl_get_line(struct dynbuf *buf, FILE *input, bool *eof)
         /* too long line or out of memory */
         return result;
     }
-    /* now check the full line */
     rlen = curlx_dyn_len(buf);
     b = curlx_dyn_ptr(buf);
     if(rlen && (b[rlen - 1] == '\n'))
-      /* LF at end of the line */
-      return CURLE_OK; /* all good */
+      return CURLE_OK;
     if(*eof)
       /* append a newline */
       return curlx_dyn_addn(buf, "\n", 1);
-    /* otherwise get next line to append */
   }
   /* UNREACHABLE */
 }

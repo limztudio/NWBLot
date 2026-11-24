@@ -53,9 +53,8 @@ therefore stores 7,372,536 bytes (about 7.03 MiB) with RG32, or about 14.06 MiB 
 RGBA32, excluding driver alignment and metadata. Building mip zero reads nine
 neighboring depth samples per pixel. The additional maximum-depth channel costs
 more storage and reduction bandwidth than a minimum-only hierarchy, while
-allowing empty intervals behind visible surfaces to be skipped. Using min/max depth intervals allows empty intervals behind visible surfaces
-to be skipped so backward-camera rays stay within the 96-step limit without
-relying on unbounded iteration.
+allowing empty intervals behind visible surfaces to be skipped so backward-camera
+rays stay within the 96-step limit without relying on unbounded iteration.
 
 The dedicated `nwb_reflection_smoke` target compiles `reflection_optical_scenes.adhd`,
 `reflection_suite_scenes.adhd`, and `reflection_probes_and_runtime.adhd` and links
@@ -212,7 +211,9 @@ Registered reflection capture CTests in `tests/smoke/reflection_smoke.cmake` are
 - `nwb_reflection_optical_capture_smoke` (`reflection_smoke.py --suite optical`)
 - `nwb_reflection_feedback_capture_smoke` (`reflection_smoke.py --suite feedback`)
 - `nwb_reflection_feedback_diagnostics_off_capture_smoke` (`reflection_smoke.py --suite feedback-diagnostics-off`)
-- `nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`, registered alongside caustic smokes)
+
+`nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`) is registered
+alongside the caustic smokes in `tests/smoke/CMakeLists.txt`.
 
 The interactive launcher scene is
 `reflection`, with `--reflection-case
@@ -349,14 +350,13 @@ The interactive launcher also accepts `--reflection-case rough`,
 `--reflection-final-state`. Diagnostics can be disabled for timing runs;
 source-anchored acceptance captures require it enabled.
 
-History remains RGBA16F. Before writing an accumulated mean, the temporal shader
-stochastically rounds RGB to exact half-representable FP32 values using an
-independent pixel/channel/accepted-sample-index hash. This removes accumulated
-directed storage-rounding bias without another buffer or dispatch. The owned
+History remains RGBA16F. The temporal shader computes the accumulated mean
+using `half` RGB values and passes it to the history-rounding helper, which uses
+pixel, channel, sample-index and seed hashes before writing the result. The owned
 raw writer establishes nonnegative radiance, finite inputs are checked, and the
 validated 256-sample maximum bounds the integer rounding implementation. The
 sample index continues beyond the bounded history count. The spatial result is
-stored separately and cannot bias future temporal samples.
+stored separately and cannot feed future temporal samples.
 
 Stage six adds a separate `--suite optical` with 30 bounded captures. The
 camera and a smooth opaque mirror face forward; all transport-test glass and
@@ -488,9 +488,10 @@ Two banks of 8x8 tile/surface-class entries occupy 172,832 bytes at 960x720,
 including their 16-byte headers, about 168.8 KiB. The 953x713 NPOT fixture has the
 same rounded tile extent. Existing classification and argument-building tasks
 write disjoint entry/header ranges; feedback adds no separate GPU dispatch.
-The shared parameter block is 176 bytes and diagnostic counters are 100 bytes
-(`NWB_REFLECTION_COUNTER_SIZE = 100u`, 25 `u32` counters in
-`impl/assets/graphics/reflection/frame_constants.h`).
+The shared parameter block is 176 bytes. The diagnostic readback covers 100 bytes
+(`NWB_REFLECTION_COUNTER_SIZE`, 25 `u32` counters); the allocated counter buffer
+is 104 bytes because it also contains the optical-candidate work counter at byte
+100. Both sizes are defined in `impl/assets/graphics/reflection/frame_constants.h`.
 The parameter block omits unused fields; its CPU mirror, shader declaration,
 upload size, and offset checks use the same current layout. Payload size is a
 layout fact; timing qualification remains separate.

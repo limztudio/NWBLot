@@ -570,7 +570,7 @@ inline bool Writer<StringBuffer>::ScanWriteUnescapedString(StringStream& is, siz
         const __m128i s = _mm_load_si128(reinterpret_cast<const __m128i *>(p));
         const __m128i t1 = _mm_cmpeq_epi8(s, dq);
         const __m128i t2 = _mm_cmpeq_epi8(s, bs);
-        const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s < 0x20 <=> max(s, 0x19) == 0x19
+        const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s <= 0x19 <=> max(s, 0x19) == 0x19
         const __m128i x = _mm_or_si128(_mm_or_si128(t1, t2), t3);
         unsigned short r = static_cast<unsigned short>(_mm_movemask_epi8(x));
         if (RAPIDJSON_UNLIKELY(r != 0)) {   // some of characters is escaped
@@ -607,4 +607,4 @@ RAPIDJSON_DIAG_POP
 RAPIDJSON_DIAG_POP
 #endif
 
-#endif // RAPIDJSON_RAPIDJSON_H_
+#endif // RAPIDJSON_WRITER_H_

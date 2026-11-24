@@ -195,10 +195,10 @@ namespace basisu
 
 					k = Pcontrib[i].n++;
 
-					Pcontrib[i].p[k].pixel = (unsigned short)n; /* store src sample number */
-					Pcontrib[i].p[k].weight = weight;           /* store src sample weight */
+					Pcontrib[i].p[k].pixel = (unsigned short)n;
+					Pcontrib[i].p[k].weight = weight;
 
-					total_weight += weight; /* total weight of all contributors */
+					total_weight += weight;
 
 					if (weight > max_w)
 					{
@@ -211,8 +211,6 @@ namespace basisu
 				printf("\n\n");
 #endif
 
-				//assert(Pcontrib[i].n);
-				//assert(max_k != -1);
 				if ((max_k == -1) || (Pcontrib[i].n == 0))
 				{
 					free(Pcpool);
@@ -250,7 +248,6 @@ namespace basisu
 				n += (right - left + 1);
 			}
 
-			/* Allocate memory for contributors. */
 
 			int total = n;
 			if ((total == 0) || ((Pcpool = (Contrib*)calloc(total, sizeof(Contrib))) == NULL))
@@ -306,10 +303,10 @@ namespace basisu
 
 					k = Pcontrib[i].n++;
 
-					Pcontrib[i].p[k].pixel = (unsigned short)n; /* store src sample number */
-					Pcontrib[i].p[k].weight = weight;           /* store src sample weight */
+					Pcontrib[i].p[k].pixel = (unsigned short)n;
+					Pcontrib[i].p[k].weight = weight;
 
-					total_weight += weight; /* total weight of all contributors */
+					total_weight += weight;
 
 					if (weight > max_w)
 					{
@@ -321,9 +318,6 @@ namespace basisu
 #if RESAMPLER_DEBUG
 				printf("\n\n");
 #endif
-
-				//assert(Pcontrib[i].n);
-				//assert(max_k != -1);
 
 				if ((max_k == -1) || (Pcontrib[i].n == 0))
 				{
@@ -412,7 +406,6 @@ namespace basisu
 		Sample* Ptmp = m_delay_x_resample ? m_Ptmp_buf : Pdst;
 		assert(Ptmp);
 
-		/* Process each contributor. */
 
 		for (i = 0; i < Pclist->n; i++)
 		{
@@ -444,7 +437,6 @@ namespace basisu
 			}
 		}
 
-		/* Now generate the destination line */
 
 		if (m_delay_x_resample) // Was X resampling delayed until after Y resampling?
 		{
@@ -467,10 +459,6 @@ namespace basisu
 		if (m_cur_src_y >= m_resample_src_y)
 			return false;
 
-		/* Does this source line contribute
-		* to any destination line? if not,
-		* exit now.
-		*/
 
 		if (!m_Psrc_y_count[resampler_range_check(m_cur_src_y, m_resample_src_y)])
 		{
@@ -484,7 +472,6 @@ namespace basisu
 			if (m_Pscan_buf->scan_buf_y[i] == -1)
 				break;
 
-		/* If the buffer is full, exit with an error. */
 
 		if (i == MAX_SCAN_BUF_SIZE)
 		{
@@ -495,7 +482,6 @@ namespace basisu
 		m_Psrc_y_flag[resampler_range_check(m_cur_src_y, m_resample_src_y)] = true;
 		m_Pscan_buf->scan_buf_y[i] = m_cur_src_y;
 
-		/* Does this slot have any memory allocated to it? */
 
 		if (!m_Pscan_buf->scan_buf_l[i])
 		{
@@ -531,17 +517,10 @@ namespace basisu
 	{
 		int i;
 
-		/* If all the destination lines have been
-		* generated, then always return NULL.
-		*/
 
 		if (m_cur_dst_y == m_resample_dst_y)
 			return NULL;
 
-		/* Check to see if all the required
-		* contributors are present, if not,
-		* return NULL.
-		*/
 
 		for (i = 0; i < m_Pclist_y[m_cur_dst_y].n; i++)
 			if (!m_Psrc_y_flag[resampler_range_check(m_Pclist_y[m_cur_dst_y].p[i].pixel, m_resample_src_y)])
@@ -774,8 +753,7 @@ namespace basisu
 			int x_ops = count_ops(m_Pclist_x, m_resample_dst_x);
 			int y_ops = count_ops(m_Pclist_y, m_resample_dst_y);
 
-			// Hack 10/2000: Weight Y axis ops a little more than X axis ops.
-			// (Y axis ops use more cache resources.)
+			// Y-axis operations have higher cache costs.
 			int xy_ops = x_ops * m_resample_src_y +
 				(4 * y_ops * m_resample_dst_x) / 3;
 

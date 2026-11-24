@@ -7468,7 +7468,6 @@ public:
 } // namespace clang
 
 void TypeLocReader::VisitQualifiedTypeLoc(QualifiedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocReader::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
@@ -7490,15 +7489,12 @@ void TypeLocReader::VisitPointerTypeLoc(PointerTypeLoc TL) {
 }
 
 void TypeLocReader::VisitDecayedTypeLoc(DecayedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocReader::VisitAdjustedTypeLoc(AdjustedTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocReader::VisitArrayParameterTypeLoc(ArrayParameterTypeLoc TL) {
-  // nothing to do
 }
 
 void TypeLocReader::VisitMacroQualifiedTypeLoc(MacroQualifiedTypeLoc TL) {
@@ -7706,11 +7702,9 @@ void TypeLocReader::VisitAttributedTypeLoc(AttributedTypeLoc TL) {
 }
 
 void TypeLocReader::VisitCountAttributedTypeLoc(CountAttributedTypeLoc TL) {
-  // Nothing to do
 }
 
 void TypeLocReader::VisitBTFTagAttributedTypeLoc(BTFTagAttributedTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocReader::VisitOverflowBehaviorTypeLoc(OverflowBehaviorTypeLoc TL) {
@@ -7719,11 +7713,9 @@ void TypeLocReader::VisitOverflowBehaviorTypeLoc(OverflowBehaviorTypeLoc TL) {
 
 void TypeLocReader::VisitHLSLAttributedResourceTypeLoc(
     HLSLAttributedResourceTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocReader::VisitHLSLInlineSpirvTypeLoc(HLSLInlineSpirvTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocReader::VisitTemplateTypeParmTypeLoc(TemplateTypeParmTypeLoc TL) {
@@ -7826,7 +7818,6 @@ void TypeLocReader::VisitDependentBitIntTypeLoc(
 }
 
 void TypeLocReader::VisitPredefinedSugarTypeLoc(PredefinedSugarTypeLoc TL) {
-  // Nothing to do.
 }
 
 void ASTRecordReader::readTypeLoc(TypeLoc TL) {

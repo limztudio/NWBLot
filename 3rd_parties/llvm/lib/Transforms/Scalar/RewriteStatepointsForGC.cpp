@@ -737,7 +737,6 @@ public:
     // Conflict is a final state.
     if (isConflict())
       return;
-    // if we are not known - just take other state.
     if (isUnknown()) {
       Status = Other.getStatus();
       BaseValue = Other.getBaseValue();

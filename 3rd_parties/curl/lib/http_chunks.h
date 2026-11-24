@@ -47,8 +47,7 @@ typedef enum {
   /* wait for LF, ignore all else */
   CHUNK_LF,
 
-  /* We eat the amount of data specified. When done, we move on to the
-     POST_CR state. */
+  /* Read the chunk data, then expect its trailing line ending. */
   CHUNK_DATA,
 
   /* POSTLF should get a CR and then an LF and nothing else, then move back to
@@ -69,10 +68,7 @@ typedef enum {
      Next char must be an LF */
   CHUNK_TRAILER_CR,
 
-  /* A trailer LF must be found now, otherwise CHUNKE_BAD_CHUNK will be
-     signalled If this is an empty trailer CHUNKE_STOP will be signalled.
-     Otherwise the trailer will be broadcasted via Curl_client_write() and the
-     next state will be CHUNK_TRAILER */
+  /* Continue with another trailer or the final line ending. */
   CHUNK_TRAILER_POSTCR,
 
   /* Successfully de-chunked everything */
@@ -104,7 +100,6 @@ struct Curl_chunker {
   BIT(in_connect); /* this is a CONNECT response body */
 };
 
-/* The following functions are defined in http_chunks.c */
 void Curl_httpchunk_init(struct Curl_easy *data, struct Curl_chunker *ch,
                          bool ignore_body, bool in_connect);
 void Curl_httpchunk_free(struct Curl_easy *data, struct Curl_chunker *ch);

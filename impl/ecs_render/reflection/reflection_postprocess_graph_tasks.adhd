@@ -72,72 +72,72 @@ class ReflectionFinalizeTask{
 
 [move_only]
 class ReflectionTemporalTask{
-    private mut GraphicsRuntime graphics;
-    private ReflectionPostprocessSnapshot snapshot;
+    private mut GraphicsRuntime m_graphics;
+    private ReflectionPostprocessSnapshot m_snapshot;
     public ReflectionHistoryReservation reservation;
-    private u32 width;
-    private u32 height;
-    private in b8 hardwarePreparationReady;
-    private b8 hardwareEnabled;
+    private u32 m_width;
+    private u32 m_height;
+    private in b8 m_hardwarePreparationReady;
+    private b8 m_hardwareEnabled;
 
     public ReflectionTemporalTask(mut GraphicsRuntime graphics, in ReflectionFrameSnapshot resources, in borrow b8 hardwarePreparationReady){
-        this.graphics = graphics;
-        this.snapshot = resources.postprocess;
+        this.m_graphics = graphics;
+        this.m_snapshot = resources.postprocess;
         this.reservation = ReflectionHistoryReservation(resources.postprocess.control, resources.postprocess.history);
-        this.width = resources.parameters.width;
-        this.height = resources.parameters.height;
-        this.hardwarePreparationReady = hardwarePreparationReady;
-        this.hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
+        this.m_width = resources.parameters.width;
+        this.m_height = resources.parameters.height;
+        this.m_hardwarePreparationReady = hardwarePreparationReady;
+        this.m_hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.snapshot.history.eligible)
+        if(!this.m_snapshot.history.eligible)
             return true;
-        const b8 ready = this.hardwareEnabled && this.hardwarePreparationReady;
-        const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(this.snapshot.history, ready);
-        if(ShouldSkipReflectionTemporalDispatch(outcome.reused, this.snapshot.history.settings.temporalMaxSamples))
+        const b8 ready = this.m_hardwareEnabled && this.m_hardwarePreparationReady;
+        const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(this.m_snapshot.history, ready);
+        if(ShouldSkipReflectionTemporalDispatch(outcome.reused, this.m_snapshot.history.settings.temporalMaxSamples))
             return true;
         const ReflectionTemporalPushConstants parameters = MakeReflectionTemporalPushConstants(
-            this.width, this.height, this.snapshot.current.storageSlot, this.snapshot.previous.sampledSlot,
-            this.snapshot.opaqueSpecularSlot, outcome.reused, this.snapshot.history.previousSampleCount,
-            this.snapshot.history.settings.temporalMaxSamples, outcome.sampleIndex, this.snapshot.history.settings.samplingSeed
+            this.m_width, this.m_height, this.m_snapshot.current.storageSlot, this.m_snapshot.previous.sampledSlot,
+            this.m_snapshot.opaqueSpecularSlot, outcome.reused, this.m_snapshot.history.previousSampleCount,
+            this.m_snapshot.history.settings.temporalMaxSamples, outcome.sampleIndex, this.m_snapshot.history.settings.samplingSeed
         );
-        DispatchReflectionPostprocess(commandList, this.graphics, this.snapshot.temporalPipeline.deref(), parameters,
-            s_TimingScopeReflectionTemporal, this.width, this.height, s_ReflectionShaderTemporalGroupSize);
+        DispatchReflectionPostprocess(commandList, this.m_graphics, this.m_snapshot.temporalPipeline.deref(), parameters,
+            s_TimingScopeReflectionTemporal, this.m_width, this.m_height, s_ReflectionShaderTemporalGroupSize);
         return !commandList.commandRecordingFailed();
     }
-    public void accepted(in QueueSubmissionToken token){ this.reservation.accept(token, this.hardwareEnabled && this.hardwarePreparationReady); }
+    public void accepted(in QueueSubmissionToken token){ this.reservation.accept(token, this.m_hardwareEnabled && this.m_hardwarePreparationReady); }
     public void discarded(){ this.reservation.discard(); }
 }
 
 [move_only]
 class ReflectionStatisticsReadbackTask{
-    private BufferHandle source;
+    private BufferHandle m_source;
     public BufferHandle destination;
     public GpuGraphResourceId sourceResource;
     public GpuGraphResourceId destinationResource;
     public ReflectionStatisticsReservation reservation;
-    private ReflectionHistoryPlan history;
-    private ReflectionFeedbackPlan feedback;
-    private in b8 hardwarePreparationReady;
-    private b8 feedbackReserved;
-    private b8 hardwareEnabled;
+    private ReflectionHistoryPlan m_history;
+    private ReflectionFeedbackPlan m_feedback;
+    private in b8 m_hardwarePreparationReady;
+    private b8 m_feedbackReserved;
+    private b8 m_hardwareEnabled;
 
     public ReflectionStatisticsReadbackTask(in ReflectionFrameSnapshot resources, in ReflectionStatistics metadata, in borrow b8 hardwarePreparationReady, in b8 feedbackReserved){
-        this.source = resources.counters;
+        this.m_source = resources.counters;
         this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(resources.statistics.control, metadata);
-        this.history = resources.postprocess.history;
-        this.feedback = resources.feedback.plan;
-        this.hardwarePreparationReady = hardwarePreparationReady;
-        this.feedbackReserved = feedbackReserved;
-        this.hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
+        this.m_history = resources.postprocess.history;
+        this.m_feedback = resources.feedback.plan;
+        this.m_hardwarePreparationReady = hardwarePreparationReady;
+        this.m_feedbackReserved = feedbackReserved;
+        this.m_hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.source.valid() || !this.destination.valid() || !this.reservation.valid())
+        if(!this.m_source.valid() || !this.destination.valid() || !this.reservation.valid())
             return false;
         const GpuGraphResourceId source = this.sourceResource;
         const GpuGraphResourceId destination = this.destinationResource;
@@ -147,13 +147,13 @@ class ReflectionStatisticsReadbackTask{
         }))
             return false;
         commandList.endRenderPass();
-        commandList.copyBuffer(this.destination.deref(), 0u, this.source.deref(), 0u, s_ReflectionReadbackCounterBytes);
+        commandList.copyBuffer(this.destination.deref(), 0u, this.m_source.deref(), 0u, s_ReflectionReadbackCounterBytes);
         return !commandList.commandRecordingFailed();
     }
     public void accepted(in QueueSubmissionToken token){
-        const b8 hardwareReady = this.hardwareEnabled && this.hardwarePreparationReady;
-        const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(this.history, hardwareReady);
-        const ReflectionFeedbackOutcome feedback = ResolvePublishedReflectionFeedbackOutcome(this.feedback, hardwareReady, this.feedbackReserved);
+        const b8 hardwareReady = this.m_hardwareEnabled && this.m_hardwarePreparationReady;
+        const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(this.m_history, hardwareReady);
+        const ReflectionFeedbackOutcome feedback = ResolvePublishedReflectionFeedbackOutcome(this.m_feedback, hardwareReady, this.m_feedbackReserved);
         this.reservation.acceptReservation(token, hardwareReady, ReflectionStatisticsOutcome(history, feedback));
     }
     public void discarded(){ this.reservation.discard(); }

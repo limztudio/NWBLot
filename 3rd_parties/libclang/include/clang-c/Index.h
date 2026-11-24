@@ -2158,7 +2158,7 @@ enum CXCursorKind {
    */
   CXCursor_OMPAssumeDirective = 309,
 
-  /** OpenMP assume directive.
+  /** OpenMP stripe directive.
    */
   CXCursor_OMPStripeDirective = 310,
 
@@ -3257,7 +3257,7 @@ clang_Cursor_getTemplateArgumentKind(CXCursor C, unsigned I);
  *
  * If the argument CXCursor does not represent a FunctionDecl, StructDecl,
  * ClassDecl or ClassTemplatePartialSpecialization whose I'th template argument
- * has a kind of CXTemplateArgKind_Integral, an invalid type is returned.
+ * has a kind of CXTemplateArgumentKind_Type, an invalid type is returned.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
@@ -3277,8 +3277,8 @@ CINDEX_LINKAGE CXType clang_Cursor_getTemplateArgumentType(CXCursor C,
  *  decl representing a template specialization) as a signed long long.
  *
  * It is undefined to call this function on a CXCursor that does not represent a
- * FunctionDecl, StructDecl, ClassDecl or ClassTemplatePartialSpecialization
- * whose I'th template argument is not an integral value.
+ * FunctionDecl, StructDecl, ClassDecl or ClassTemplatePartialSpecialization,
+ * or if its I'th template argument is not an integral value.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
@@ -4001,13 +4001,13 @@ enum CXChildVisitResult {
  * Visitor invoked for each cursor found by a traversal.
  *
  * This visitor function will be invoked for each cursor found by
- * clang_visitCursorChildren(). Its first argument is the cursor being
- * visited, its second argument is the parent visitor for that cursor,
+ * clang_visitChildren(). Its first argument is the cursor being
+ * visited, its second argument is the parent cursor,
  * and its third argument is the client data provided to
- * clang_visitCursorChildren().
+ * clang_visitChildren().
  *
  * The visitor should return one of the \c CXChildVisitResult values
- * to direct clang_visitCursorChildren().
+ * to direct clang_visitChildren().
  */
 typedef enum CXChildVisitResult (*CXCursorVisitor)(CXCursor cursor,
                                                    CXCursor parent,
@@ -4956,7 +4956,7 @@ CINDEX_LINKAGE CXCursor clang_getSpecializedCursorTemplate(CXCursor C);
  * pieces of the name. See also CXNameRange_WantSinglePiece.
  *
  * \returns The piece of the name pointed to by the given cursor. If there is no
- * name, or if the PieceIndex is out-of-range, a null-cursor will be returned.
+ * name, or if the PieceIndex is out-of-range, a null range will be returned.
  */
 CINDEX_LINKAGE CXSourceRange clang_getCursorReferenceNameRange(
     CXCursor C, unsigned NameFlags, unsigned PieceIndex);
@@ -6754,10 +6754,10 @@ typedef enum CXVisitorResult (*CXFieldVisitor)(CXCursor C,
 /**
  * Visit the fields of a particular type.
  *
- * This function visits all the direct fields of the given cursor,
+ * This function visits all the direct fields of the given type,
  * invoking the given \p visitor function with the cursors of each
  * visited field. The traversal may be ended prematurely, if
- * the visitor returns \c CXFieldVisit_Break.
+ * the visitor returns \c CXVisit_Break.
  *
  * \param T the record type whose field may be visited.
  *
@@ -6768,7 +6768,7 @@ typedef enum CXVisitorResult (*CXFieldVisitor)(CXCursor C,
  * be passed to the visitor each time it is invoked.
  *
  * \returns a non-zero value if the traversal was terminated
- * prematurely by the visitor returning \c CXFieldVisit_Break.
+ * prematurely by the visitor returning \c CXVisit_Break.
  */
 CINDEX_LINKAGE unsigned clang_Type_visitFields(CXType T, CXFieldVisitor visitor,
                                                CXClientData client_data);
@@ -6776,21 +6776,21 @@ CINDEX_LINKAGE unsigned clang_Type_visitFields(CXType T, CXFieldVisitor visitor,
 /**
  * Visit the base classes of a type.
  *
- * This function visits all the direct base classes of a the given cursor,
+ * This function visits all the direct base classes of the given type,
  * invoking the given \p visitor function with the cursors of each
  * visited base. The traversal may be ended prematurely, if
- * the visitor returns \c CXFieldVisit_Break.
+ * the visitor returns \c CXVisit_Break.
  *
- * \param T the record type whose field may be visited.
+ * \param T the record type whose base classes may be visited.
  *
  * \param visitor the visitor function that will be invoked for each
- * field of \p T.
+ * base class of \p T.
  *
  * \param client_data pointer data supplied by the client, which will
  * be passed to the visitor each time it is invoked.
  *
  * \returns a non-zero value if the traversal was terminated
- * prematurely by the visitor returning \c CXFieldVisit_Break.
+ * prematurely by the visitor returning \c CXVisit_Break.
  */
 CINDEX_LINKAGE unsigned clang_visitCXXBaseClasses(CXType T,
                                                   CXFieldVisitor visitor,
@@ -6799,21 +6799,21 @@ CINDEX_LINKAGE unsigned clang_visitCXXBaseClasses(CXType T,
 /**
  * Visit the class methods of a type.
  *
- * This function visits all the methods of the given cursor,
+ * This function visits all the methods of the given type,
  * invoking the given \p visitor function with the cursors of each
  * visited method. The traversal may be ended prematurely, if
- * the visitor returns \c CXFieldVisit_Break.
+ * the visitor returns \c CXVisit_Break.
  *
- * \param T The record type whose field may be visited.
+ * \param T The record type whose methods may be visited.
  *
  * \param visitor The visitor function that will be invoked for each
- * field of \p T.
+ * method of \p T.
  *
  * \param client_data Pointer data supplied by the client, which will
  * be passed to the visitor each time it is invoked.
  *
  * \returns A non-zero value if the traversal was terminated
- * prematurely by the visitor returning \c CXFieldVisit_Break.
+ * prematurely by the visitor returning \c CXVisit_Break.
  */
 CINDEX_LINKAGE unsigned clang_visitCXXMethods(CXType T, CXFieldVisitor visitor,
                                               CXClientData client_data);

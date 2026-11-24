@@ -46,7 +46,7 @@ from hardware_shadow_report import (  # noqa: E402
     LIT_FAIL,
     LIT_HEALTHY,
     LIT_INCONCLUSIVE,
-    LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN,
+    LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCENT,
     LIT_PASS,
     LIT_RENDER_SHADOW_VISIBILITY,
     LIT_UTF_8,
@@ -69,11 +69,11 @@ LIT_BASELINE_EXECUTABLE_2 = "--baseline-executable"
 LIT_RUNTIME_DIR = "--runtime-dir"
 LIT_OUTPUT_DIR = "--output-dir"
 
-LIT_STRESSTESTSMOKEPROJECT_ENABLED_HEALTHY = "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
-LIT_STRESSTESTSMOKEPROJECT_RAYQUERY_CAPABL = "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
-LIT_STRESSTESTSMOKEPROJECT_ENABLED_NATURAL = "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
-LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
+LIT_HEALTHY_HARDWARE_SHADOW_BENCHMARK_LOG = "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
+LIT_HARDWARE_SHADOW_RAY_QUERY_AVAILABLE_LOG = "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_NATURAL_OPAQUE_SHADOW_BASELINE_LOG = "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
+LIT_SOFTWARE_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched software shadow traversal"
 LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER = "hardware-shadow benchmark logserver"
 LIT_SELF_TEST = "--self-test"
 LIT_STORE_TRUE = "store_true"
@@ -81,7 +81,7 @@ LIT_BASELINE_EXECUTABLE = "baseline_executable"
 LIT_WARMUP_SECONDS = "--warmup-seconds"
 LIT_MEASURE_SECONDS = "--measure-seconds"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
-LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2 = "--maximum-transparent-frame-regression-percent"
+LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_OPTION = "--maximum-transparent-frame-regression-percent"
 LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
@@ -89,16 +89,16 @@ LIT_APPEND = "append"
 KNOWN_TIMING_SCOPES = (FRAME_SCOPE, *OPTIONAL_COMPARISON_SCOPES)
 CAPABILITY_SKIP_LOG = "StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"
 DEFAULT_FORBIDDEN_LOGS = (*STRICT_LOG_FAILURE_MESSAGES, "cannot safely continue after an unresolved frame recovery submission",)
-HEALTHY_REQUIRED_LOGS = (LIT_STRESSTESTSMOKEPROJECT_ENABLED_HEALTHY, LIT_STRESSTESTSMOKEPROJECT_RAYQUERY_CAPABL, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,)
-BASELINE_REQUIRED_LOGS = (LIT_STRESSTESTSMOKEPROJECT_ENABLED_NATURAL, LIT_STRESSTESTSMOKEPROJECT_RAYQUERY_CAPABL,)
+HEALTHY_REQUIRED_LOGS = (LIT_HEALTHY_HARDWARE_SHADOW_BENCHMARK_LOG, LIT_HARDWARE_SHADOW_RAY_QUERY_AVAILABLE_LOG, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG,)
+BASELINE_REQUIRED_LOGS = (LIT_NATURAL_OPAQUE_SHADOW_BASELINE_LOG, LIT_HARDWARE_SHADOW_RAY_QUERY_AVAILABLE_LOG,)
 SHADOW_FAILURE_LOGS = ("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame", "RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility",
     "RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility", "RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility",
     "RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility", "RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility",
     "RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope; preserving opaque visibility", "RendererSystem: split transparent soft-shadow first wavelet failed; preserving opaque visibility",
     "RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility", "RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility",
     "RendererSystem: ray-traced shadow visibility pass failed", "RendererSystem: changed HW shadow material context has no graph-owned upload batch",)
-HEALTHY_FORBIDDEN_LOGS = (LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_STRESSTESTSMOKEPROJECT_ENABLED_NATURAL, *SHADOW_FAILURE_LOGS,)
-BASELINE_FORBIDDEN_LOGS = (LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA, LIT_STRESSTESTSMOKEPROJECT_ENABLED_HEALTHY, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, *SHADOW_FAILURE_LOGS,)
+HEALTHY_FORBIDDEN_LOGS = (LIT_SOFTWARE_SHADOW_DISPATCH_LOG, LIT_NATURAL_OPAQUE_SHADOW_BASELINE_LOG, *SHADOW_FAILURE_LOGS,)
+BASELINE_FORBIDDEN_LOGS = (LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, LIT_HEALTHY_HARDWARE_SHADOW_BENCHMARK_LOG, LIT_SOFTWARE_SHADOW_DISPATCH_LOG, *SHADOW_FAILURE_LOGS,)
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
@@ -241,7 +241,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(LIT_MEASURE_SECONDS, type=float, default=12.0, help="Timestamp collection duration per arm after warmup.")
     parser.add_argument(LIT_STARTUP_TIMEOUT, type=float, default=45.0, help="Timeout for device creation and window visibility.")
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum render.frame timing intervals required per arm.")
-    parser.add_argument(LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2, dest=LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN, type=float, help="Optional maximum hardware-transparent frame overhead versus the opaque baseline.",)
+    parser.add_argument(LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_OPTION, dest=LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCENT, type=float, help="Optional maximum hardware-transparent frame overhead versus the opaque baseline.",)
     parser.add_argument("--gpu-validation", action=LIT_STORE_TRUE, help="Pass --gpudbg to both benchmark processes.")
     parser.add_argument("--reject-log", action=LIT_APPEND, default=[], help="Additional log substring that fails either arm.")
     parser.add_argument("--report-only", action=LIT_STORE_TRUE, help="Write the report but return success if a measurement gate fails.")
@@ -262,7 +262,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     if args.minimum_samples <= 0:
         parser.error("--minimum-samples must be positive")
     if args.maximum_transparent_frame_regression_percent is not None:
-        require_non_negative(parser, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2, args.maximum_transparent_frame_regression_percent,)
+        require_non_negative(parser, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_OPTION, args.maximum_transparent_frame_regression_percent,)
 
     args.healthy_executable = args.healthy_executable.resolve()
     args.baseline_executable = args.baseline_executable.resolve()

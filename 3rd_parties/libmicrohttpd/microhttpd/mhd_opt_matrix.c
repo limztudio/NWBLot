@@ -35,20 +35,8 @@
 /**
  * The built-in matrix of daemon option profiles.
  *
- * Every value of every dimension listed in the header appears at least once:
- *
- * * memory limit: 0 (default), 64, 128, 256, 512, 1024, 2048, 3072, 4096;
- * * client discipline level: -3, -2, -1, 0, 1, 2, 3;
- * * #MHD_OPTION_STRICT_FOR_CLIENT with a positive and with a negative value;
- * * threading: external polling, one internal thread, thread-per-connection,
- *   thread pool;
- * * polling backend: select(), poll(), epoll.
- *
- * Profile zero is "neutral": it is exactly the configuration the tests of
- * this directory used before the matrix was introduced.
- *
  * The combination "thread-per-connection + epoll" is deliberately absent: MHD
- * rejects it (daemon.c:8680).  External polling is always paired with the
+ * rejects it.  External polling is always paired with the
  * select()-style interface, as that is the only one the tests can drive.
  */
 static const struct MHD_OptMatrixProfile opt_profiles[] = {
@@ -107,14 +95,8 @@ static int env_parsed;
  */
 static int env_selected;
 
-/**
- * The profile derived from the environment.
- */
 static struct MHD_OptMatrixProfile env_profile;
 
-/**
- * The name of @a env_profile.
- */
 static char env_profile_name[64];
 
 
@@ -245,7 +227,7 @@ mhd_opt_matrix_from_env (void)
   poll_env = getenv (MHD_OPT_MATRIX_POLL_ENV);
   if ((NULL == prof_env) && (NULL == mem_env) && (NULL == discp_env) &&
       (NULL == strict_env) && (NULL == thr_env) && (NULL == poll_env))
-    return NULL; /* Nothing selected: keep the previous behaviour */
+    return NULL;
 
   if (NULL != prof_env)
   {
@@ -326,7 +308,7 @@ mhd_opt_matrix_effective_discipline (const struct MHD_OptMatrixProfile *prof)
     return 0;
   if (! prof->use_legacy_strict)
     return prof->discipline_lvl;
-  /* Mirror the mapping of daemon.c:7102-7106 exactly. */
+  /* Mirror the MHD_OPTION_STRICT_FOR_CLIENT mapping in daemon.c. */
   if (-1 >= prof->discipline_lvl)
     return -3;
   if (1 <= prof->discipline_lvl)

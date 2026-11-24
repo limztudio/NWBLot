@@ -546,7 +546,6 @@
     FT_Long       woff2_num_faces = 0;
 
 
-    /* for now, parameters are unused */
     FT_UNUSED( num_params );
     FT_UNUSED( params );
 

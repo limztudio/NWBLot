@@ -30,9 +30,6 @@ namespace astc_ldr {
 		// This should match how the texture is later decoded by the GPU for maximum quality. This bit is stored into the output file.
 		bool m_astc_decode_mode_srgb = true;
 
-		// If true, trade off some compression (3-10%) for faster decompression.
-		// If false, favor highest compression, but slower decompression.
-		//bool m_use_faster_format = true;
 		
 		basist::astc_ldr_t::xuastc_ldr_syntax m_compressed_syntax = basist::astc_ldr_t::xuastc_ldr_syntax::cFullArith;
 

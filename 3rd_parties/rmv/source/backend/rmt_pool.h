@@ -24,8 +24,7 @@ extern "C" {
 ///
 /// Allocating and freeing is a relatively cheap, fixed cost operation.
 ///
-/// The contents of freed memory blocks is not changed when blocks are
-/// returned to the pool, other than the first sizeof(uintptr_t) bytes.
+/// Freed blocks are overwritten and used to store the free list.
 ///
 /// NOTE: The minimum supported size of a block in this pool allocator is
 /// the same as the sizeof(uintptr_t). This limitation is so the additional
@@ -54,7 +53,7 @@ typedef struct RmtPool
 /// @retval
 /// kRmtErrorInvalidPointer         The operation failed because either <c><i>pool</i></c> or <c><i>buffer</i></c> was NULL.
 /// @retval
-/// kRmtErrorInvalidSize            The operation failed because <c><i>chunkSize</i></c> was not greater than or equal to sizeof(uintptr_t).
+/// kRmtErrorInvalidSize            The operation failed because <c><i>block_size</i></c> was not greater than or equal to sizeof(uintptr_t).
 ///
 RmtErrorCode RmtPoolInitialize(RmtPool* pool, void* buffer, size_t buffer_size, size_t block_size);
 

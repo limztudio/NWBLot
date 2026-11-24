@@ -260,8 +260,8 @@ class ArticulationLinkBinary{
     public f32x4 inertiaDiag(0.1f, 0.1f, 0.1f, 0.0f);
     public u32 parentIndex = s_NullIndex;
     public f32 mass = 1.0f;
-    public f32 lowerLimit = -s_PI;
-    public f32 upperLimit = s_PI;
+    public f32 lowerLimit = -s_Pi;
+    public f32 upperLimit = s_Pi;
     public f32 driveTargetPos = 0.0f;
     public f32 driveTargetVel = 0.0f;
     public f32 driveStiffness = 0.0f;
@@ -389,7 +389,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             && d.halfHeight >= 0.0f
             && d.skinWidth >= 0.0f
             && d.maxSlopeAngleRad >= 0.0f
-            && d.maxSlopeAngleRad <= s_PI * 0.5f + 1.0e-4f
+            && d.maxSlopeAngleRad <= s_Pi * 0.5f + 1.0e-4f
             && d.stepUpHeight >= 0.0f
             && d.stepDownHeight >= 0.0f
             && d.maxStrength >= 0.0f

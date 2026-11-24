@@ -344,7 +344,6 @@ namespace internal
     private:
         void Construct()
         {
-            // Read the header from the file start
             if (stream_->Read(0, sizeof(header_), &header_) != sizeof(header_)) {
                 throw std::runtime_error("Error while reading file -- could not read header");
             }
@@ -1115,7 +1114,6 @@ namespace internal
                                             flags_and_attributes,
                                             NULL);
 
-        // Convert the object handle to a file descriptor.
         int file_handle = _open_osfhandle((intptr_t)object_handle, _O_BINARY);
         auto fd = _fdopen(file_handle, mode);
         if (fd == nullptr) {
@@ -1123,7 +1121,6 @@ namespace internal
             throw std::runtime_error("Error opening file");
         }
 
-        // Disable inheritance of the file handle.
         SetHandleInformation(object_handle, HANDLE_FLAG_INHERIT, 0);
         return rdf_make_unique<Filestream>(fd, accessMode);
 #else
@@ -1161,7 +1158,6 @@ namespace internal
         }
 
 #if RDF_PLATFORM_WINDOWS
-        // Disable inheritance of the file handle.
         SetHandleInformation((HANDLE)_get_osfhandle(_fileno(fd)), HANDLE_FLAG_INHERIT, 0);
 #endif  // #if RDF_PLATFORM_WINDOWS
         return rdf_make_unique<Filestream>(fd, accessMode);
@@ -1176,7 +1172,6 @@ namespace internal
         }
 #if RDF_PLATFORM_WINDOWS
         else {
-            // Disable inheritance of the file handle.
             SetHandleInformation((HANDLE)_get_osfhandle(_fileno(fd)), HANDLE_FLAG_INHERIT, 0);
         }
 #endif // #if RDF_PLATFORM_WINDOWS

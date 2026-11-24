@@ -174,8 +174,8 @@ public:
     ///
     /// @param [in]  history_handle                 The instance handle for a previously generated history of events.
     /// @param [in]  event_index                    The index of the event information in the history to retrieve.
-    /// @param [in]  event_type                     The template type of event to retrieve.
-    /// @param [in]  out_event_info                 A pointer to the structure populated with the event information.
+    /// @param [in]  event_type                     The event type to retrieve.
+    /// @param [out] out_event_info                 A pointer to the structure populated with the event information.
     ///
     /// @retval
     /// kRmtOk                                      The operation completed successfully.
@@ -201,10 +201,8 @@ public:
             result = history->GetEventType(event_index, &expected_event_type);
             if (result == kRmtOk)
             {
-                // Verify that the event type matches the event type being retrieved from the history.
                 if (event_type == expected_event_type)
                 {
-                    // Typecast to the correct event info unionized structure using the <EventInfoType> template parameter.
                     *out_event_info = reinterpret_cast<const EventInfoType*>(&history->event_list_[event_index].event_data);
                     result          = kRmtOk;
                 }
@@ -221,7 +219,7 @@ public:
     ///  Returns the event type for an event in the history.
     ///
     /// @param [in]  event_index                    The index of the event to retrieve the type for.
-    /// @param [in]  out_event_type                 A pointer that receives the event type value.
+    /// @param [out] out_event_type                 A pointer that receives the event type value.
     ///
     /// @retval
     /// kRmtOk                                      The operation completed successfully.
@@ -235,7 +233,7 @@ public:
     /// Returns the time in clock ticks that an event was generated.
     ///
     /// @param [in]  event_index                    The index of the event to retrieve the timestamp for.
-    /// @param [in]  out_timestamp                  A pointer that receives the timestamp value.
+    /// @param [out] out_timestamp                  A pointer that receives the timestamp value.
     ///
     /// @retval
     /// kRmtOk                                      The operation completed successfully.

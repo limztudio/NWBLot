@@ -52,10 +52,8 @@ static CURL_INLINE void sigpipe_ignore(struct Curl_easy *data,
   ig->no_signal = data->set.no_signal;
   if(!data->set.no_signal) {
     struct sigaction action;
-    /* first, extract the existing situation */
     sigaction(SIGPIPE, NULL, &ig->old_pipe_act);
     action = ig->old_pipe_act;
-    /* ignore this signal */
     action.sa_handler = SIG_IGN;
 #ifdef SA_SIGINFO
     /* clear SA_SIGINFO flag since we are using sa_handler */
@@ -73,7 +71,6 @@ static CURL_INLINE void sigpipe_ignore(struct Curl_easy *data,
 static CURL_INLINE void sigpipe_restore(struct Curl_sigpipe_ctx *ig)
 {
   if(!ig->no_signal)
-    /* restore the outside state */
     sigaction(SIGPIPE, &ig->old_pipe_act, NULL);
 }
 

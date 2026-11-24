@@ -517,7 +517,6 @@ struct OffsetTo : Offset<OffsetType, has_null>
     TRACE_SANITIZE (this);
     if (unlikely (!c->check_struct (this))) return_trace (false);
     hb_barrier ();
-    //if (unlikely (this->is_null ())) return_trace (true);
     if (unlikely ((const char *) base + (unsigned) *this < (const char *) base)) return_trace (false);
     return_trace (true);
   }

@@ -237,8 +237,6 @@ void Curl_dnscache_prune(struct Curl_easy *data, const struct curltime *pnow)
     else
       break;
 
-    /* if the cache size is still too big, use the oldest age as new prune
-       limit */
   } while(timeout_ms);
 
   dnscache_unlock(data, dnscache);

@@ -4148,7 +4148,6 @@ namespace basisu
 
 			if (!can_fit_into_size_t(total_vals))
 			{
-				// What can we do?
 				assert(0);
 				return *this;
 			}
@@ -4181,7 +4180,6 @@ namespace basisu
 
 			if (!can_fit_into_size_t(total_vals))
 			{
-				// What can we do?
 				assert(0);
 				return false;
 			}

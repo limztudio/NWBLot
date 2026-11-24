@@ -517,7 +517,7 @@ void AppendPhysicsDebugArcAxesWithEndpoints<TSink : IPhysicsDebugLineSink>(
     outEndPt = outStartPt;
     if(IsPhysicsDebugPhaseFull(sink, budget))
         return;
-    if(startAngle == 0.0f && Abs(VectorSingle(endAngle - s_PI)).x <= 1.0e-5f){
+    if(startAngle == 0.0f && Abs(VectorSingle(endAngle - s_Pi)).x <= 1.0e-5f){
         const f32 c22 = 0.92387953251f;
         const f32 s22 = 0.38268343236f;
         const f32 c45 = 0.70710678119f;
@@ -1183,10 +1183,10 @@ void AppendPhysicsDebugCapsuleShape<TSink : IPhysicsDebugLineSink>(
     const VectorSingle v1 = v * r1;
     AppendPhysicsDebugCircleAxes(p0, u0, v0, color, sink, budget);
     AppendPhysicsDebugCircleAxes(p1, u1, v1, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p0, u0, -axis * r0, 0.0f, s_PI, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p0, v0, -axis * r0, 0.0f, s_PI, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p1, u1, axis * r1, 0.0f, s_PI, color, sink, budget);
-    AppendPhysicsDebugArcAxes(p1, v1, axis * r1, 0.0f, s_PI, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p0, u0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p0, v0, -axis * r0, 0.0f, s_Pi, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p1, u1, axis * r1, 0.0f, s_Pi, color, sink, budget);
+    AppendPhysicsDebugArcAxes(p1, v1, axis * r1, 0.0f, s_Pi, color, sink, budget);
     AppendPhysicsDebugLine(p0 + u0, p1 + u1, color, sink, budget);
     AppendPhysicsDebugLine(p0 - u0, p1 - u1, color, sink, budget);
     AppendPhysicsDebugLine(p0 + v0, p1 + v1, color, sink, budget);
@@ -1869,7 +1869,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                     f32 sz = j.swingLimitY;
                     if(sy <= 0.0f) sy = sz;
                     if(sz <= 0.0f) sz = sy;
-                    const VectorSingle clampedSwing = Clamp(VectorSingle(sy, sz, 0.0f, 0.0f), VectorSingle(0.0f), VectorSingle(s_PI * 0.95f));
+                    const VectorSingle clampedSwing = Clamp(VectorSingle(sy, sz, 0.0f, 0.0f), VectorSingle(0.0f), VectorSingle(s_Pi * 0.95f));
                     VectorSingle sAng(0.0f);
                     VectorSingle cAng(0.0f);
                     VectorSinCos(sAng, cAng, clampedSwing);
@@ -2014,7 +2014,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                             AppendPhysicsDebugCircle(aA, pU, pV, rad, activeJointColor, sink, budget);
                         }
                         else if(acfg.motion == JointMotion::Limited){
-                            const VectorSingle angLimits = Clamp(VectorSingle(acfg.lowerLimit, acfg.upperLimit, 0.0f, 0.0f), VectorSingle(-s_PI), VectorSingle(s_PI));
+                            const VectorSingle angLimits = Clamp(VectorSingle(acfg.lowerLimit, acfg.upperLimit, 0.0f, 0.0f), VectorSingle(-s_Pi), VectorSingle(s_Pi));
                             const f32 lo = angLimits.x;
                             const f32 hi = angLimits.y;
                             if(lo <= hi){

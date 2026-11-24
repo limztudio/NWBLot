@@ -23,10 +23,6 @@
  ***************************************************************************/
 #include "curl_setup.h"
 
-/*
- * curlx_winapi_strerror:
- * Variant of curlx_strerror if the error code is definitely Windows API.
- */
 #ifdef _WIN32
 #include "curlx/winapi.h"
 #include "curlx/snprintf.h"
@@ -81,8 +77,6 @@ const char *curlx_winapi_strerror(DWORD err, char *buf, size_t buflen)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic warning "-Wformat-truncation=1"
 #endif
-    /* some GCC compilers cause false positive warnings if we allow this
-       warning */
     SNPRINTF(buf, buflen, "Unknown error %lu (0x%08lx)", err, err);
 #if defined(__GNUC__) && __GNUC__ >= 7
 #pragma GCC diagnostic pop

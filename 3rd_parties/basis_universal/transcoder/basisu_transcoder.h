@@ -178,10 +178,10 @@ namespace basist
 	// Returns the # of bytes per pixel for uncompressed formats, or 0 for block texture formats.
 	uint32_t basis_get_uncompressed_bytes_per_pixel(transcoder_texture_format fmt);
 
-	// Returns the block width for the specified texture format, which is currently either 4 or 8 for FXT1.
+	// Returns the block width for the specified texture format, or 4 by default.
 	uint32_t basis_get_block_width(transcoder_texture_format fmt);
 
-	// Returns the block height for the specified texture format, which is currently always 4.
+	// Returns the block height for the specified texture format, or 4 by default.
 	uint32_t basis_get_block_height(transcoder_texture_format fmt);
 		
 	// ASTC/XUASTC LDR formats only: Given a basis_tex_format (mode or codec), return the corresponding ASTC basisu::texture_format with the proper block size from 4x4-12x12.

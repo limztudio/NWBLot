@@ -41,10 +41,10 @@
 #ifndef INT_MAX
 #ifdef __INT_MAX__
 #define INT_MAX __INT_MAX__
-#else  /* ! __UINT_MAX__ */
+#else  /* ! __INT_MAX__ */
 #define INT_MAX MHD_SIGNED_TYPE_MAX_ (int)
-#endif /* ! __UINT_MAX__ */
-#endif /* !UINT_MAX */
+#endif /* ! __INT_MAX__ */
+#endif /* !INT_MAX */
 
 #ifndef UINT_MAX
 #ifdef __UINT_MAX__
@@ -99,7 +99,7 @@
 #define INT64_MAX __INT64_MAX__
 #else  /* ! __INT64_MAX__ */
 #define INT64_MAX ((int64_t) 0x7FFFFFFFFFFFFFFF)
-#endif /* ! __UINT64_MAX__ */
+#endif /* ! __INT64_MAX__ */
 #endif /* !INT64_MAX */
 
 #ifndef SIZE_MAX

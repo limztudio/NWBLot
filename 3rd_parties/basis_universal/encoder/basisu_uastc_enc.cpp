@@ -991,7 +991,6 @@ namespace basisu
 	// DualPlane: 0, WeightRange: 2 (4), Subsets: 2, CEM: 8 (RGB Direct       ), EndpointRange: 12 (40)         MODE3
 	static void astc_mode4(const color_rgba block[4][4], uastc_encode_results* pResults, uint32_t& total_results, bc7enc_compress_block_params& comp_params, bool estimate_partition)
 	{
-		//const uint32_t weight_range = 2;
 		const uint32_t endpoint_range = 12;
 
 		uint32_t first_common_pattern = 0;
@@ -1405,7 +1404,6 @@ namespace basisu
 			last_common_pattern = best_common_pattern + 1;
 		}
 
-		//const uint32_t weight_range = 2;
 		const uint32_t endpoint_range = 12;
 
 		for (uint32_t common_pattern = first_common_pattern; common_pattern < last_common_pattern; common_pattern++)
@@ -1622,7 +1620,6 @@ namespace basisu
 
 		const uint32_t weights[4] = { 1, 1, 1, 1 };
 
-		//const uint32_t weight_range = 2;
 		const uint32_t endpoint_range = (mode == 16) ? 20 : 8;
 
 		uint32_t first_common_pattern = 0;
@@ -2438,7 +2435,6 @@ namespace basisu
 		}
 
 		ccell_params.m_num_pixels = 16;
-		//ccell_params.m_pPixels = (color_quad_u8*)&block[0][0];
 		ccell_params.m_pPixels = (color_quad_u8*)temp_block;
 		ccell_params.m_num_selector_weights = 16;
 		ccell_params.m_pSelector_weights = g_astc_weights4;
@@ -3066,7 +3062,6 @@ namespace basisu
 						const int a = pPixels[i];
 
 						uint32_t best_s_err = UINT32_MAX;
-						//uint32_t best_s = 0;
 						for (uint32_t s = 0; s < 8; s++)
 						{
 							const int v = clamp255((int)multiplier * g_etc2_eac_tables[table][s] + (int)base);
@@ -3075,7 +3070,6 @@ namespace basisu
 							if (err < best_s_err)
 							{
 								best_s_err = err;
-								//best_s = s;
 							}
 						}
 
@@ -3125,10 +3119,6 @@ namespace basisu
 
 	void encode_uastc(const uint8_t* pRGBAPixels, uastc_block& output_block, uint32_t flags)
 	{
-//		printf("encode_uastc: \n");
-//		for (int i = 0; i < 16; i++)
-//			printf("[%u %u %u %u] ", pRGBAPixels[i * 4 + 0], pRGBAPixels[i * 4 + 1], pRGBAPixels[i * 4 + 2], pRGBAPixels[i * 4 + 3]);
-//		printf("\n");
 
 		const color_rgba(*block)[4] = reinterpret_cast<const color_rgba(*)[4]>(pRGBAPixels);
 
@@ -3171,7 +3161,6 @@ namespace basisu
 
 			pack_uastc(output_block, solid_results, etc1_blk, etc1_bias, eac_a8_blk, false, false);
 
-//			printf(" Solid\n");
 
 			return;
 		}
@@ -3179,7 +3168,6 @@ namespace basisu
 		int level = flags & 7;
 		const bool favor_uastc_error = (flags & cPackUASTCFavorUASTCError) != 0;
 		const bool favor_bc7_error = !favor_uastc_error && ((flags & cPackUASTCFavorBC7Error) != 0);
-		//const bool etc1_perceptual = true;
 		
 		// TODO: This uses 64KB of stack space!
 		uastc_encode_results results[MAX_ENCODE_RESULTS];
@@ -3263,8 +3251,6 @@ namespace basisu
 #endif
 
 		// HACK HACK
-		//mode_mask &= ~(1 << 18);
-		//mode_mask = (1 << 18)| (1 << 10);
 																				
 		uint32_t total_results = 0;
 				
@@ -3640,10 +3626,6 @@ namespace basisu
 		// Finally, pack the UASTC block with its hints and we're done.
 		pack_uastc(output_block, best_results, etc1_blk, etc1_bias, eac_a8_blk, bc1_hint0, bc1_hint1);
 
-//		printf(" Packed: ");
-//		for (int i = 0; i < 16; i++)
-//			printf("%X ", output_block.m_bytes[i]);
-//		printf("\n");
 	}
 
 	static bool uastc_recompute_hints(basist::uastc_block* pBlock, const color_rgba* pBlock_pixels, uint32_t flags, const unpacked_uastc_block *pUnpacked_blk)
@@ -3918,7 +3900,6 @@ namespace basisu
 			if (cur_find_res == selector_history.end())
 			{
 				// Wasn't found - wildly estimate literal cost
-				//cur_bits = (total_sel_bits * 5) / 4;
 				cur_bits = (total_sel_bits * params.m_lz_literal_cost) / 100;
 			}
 			else

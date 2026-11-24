@@ -6586,7 +6586,7 @@ NamedDecl *Sema::HandleDeclarator(Scope *S, Declarator &D,
     // external linkage in the translation unit, create any builtin with
     // the same name.
     if (D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_typedef)
-      /* Do nothing*/;
+      ;
     else if (CurContext->isFunctionOrMethod() &&
              (D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_extern ||
               R->isFunctionType())) {
@@ -14284,7 +14284,6 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
   if (VDecl->isLocalVarDecl()) {
     // Don't check the initializer if the declaration is malformed.
     if (VDecl->isInvalidDecl()) {
-      // do nothing
 
     // OpenCL v1.2 s6.5.3: __constant locals must be constant-initialized.
     // This is true even in C++ for OpenCL.
@@ -14293,7 +14292,6 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
 
       // Otherwise, C++ does not restrict the initializer.
     } else if (getLangOpts().CPlusPlus) {
-      // do nothing
 
     // C99 6.7.8p4: All the expressions in an initializer for an object that has
     // static storage duration shall be constant expressions or string literals.
@@ -14880,7 +14878,6 @@ void Sema::ActOnCXXForRangeDecl(Decl *D, bool InExpansionStmt) {
     break;
   }
 
-  // for-range-declaration cannot be given a storage class specifier con't.
   switch (VD->getTSCSpec()) {
   case TSCS_thread_local:
     Error = 6;
@@ -18785,7 +18782,6 @@ Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK, SourceLocation KWLoc,
       // Otherwise, only diagnose if the declaration is in scope.
       } else if (!isDeclInScope(DirectPrevDecl, SearchDC, S,
                                 SS.isNotEmpty() || isMemberSpecialization)) {
-        // do nothing
 
       // Diagnose implicit declarations introduced by elaborated types.
       } else if (TUK == TagUseKind::Reference || TUK == TagUseKind::Friend) {

@@ -96,9 +96,6 @@ CLI11_INLINE std::string Formatter::make_groups(const App *app, AppFormatMode mo
         if(!group.empty() && !opts.empty()) {
             out << make_group(group, false, opts);
 
-            // Removed double newline between groups for consistency of help text
-            // if(group != groups.back())
-            //    out << "\n";
         }
     }
 
@@ -248,7 +245,6 @@ CLI11_INLINE std::string Formatter::make_subcommands(const App *app, AppFormatMo
             subcmd_groups_seen.push_back(group_key);
     }
 
-    // For each group, filter out and print subcommands
     for(const std::string &group : subcmd_groups_seen) {
         out << '\n' << group << ":\n";
         std::vector<const App *> subcommands_group = app->get_subcommands(

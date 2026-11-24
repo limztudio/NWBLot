@@ -23,7 +23,7 @@ LIT_SLEEP = "sleep"
 LIT_RENDER_FRAME = "render.frame"
 LIT_RENDER_ASYNC_SHADOW = "render.async_shadow"
 LIT_RENDER_ASYNC_FINAL = "render.async_final"
-LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO = "cannot safely continue after an unresolved frame recovery submission"
+LIT_UNRESOLVED_FRAME_RECOVERY_SUBMISSION = "cannot safely continue after an unresolved frame recovery submission"
 LIT_I = "<I"
 LIT_UTF_8 = "utf-8"
 LIT_BENCHMARK_LOGSERVER = "benchmark logserver"
@@ -153,7 +153,7 @@ def run_self_test(harness) -> int:
 
         async_run.scopes = {**async_run.scopes, LIT_RENDER_ASYNC_SHADOW: harness.ScopeSummary(12, 10, 1.0, 1.0, 0.0, 1.0)}
         assert harness.AsyncShadowM4Report().evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_INCONCLUSIVE
-        async_run.forbidden_log_messages = [LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO]
+        async_run.forbidden_log_messages = [LIT_UNRESOLVED_FRAME_RECOVERY_SUBMISSION]
         assert harness.AsyncShadowM4Report().evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_FAIL
         async_run.forbidden_log_messages = []
 

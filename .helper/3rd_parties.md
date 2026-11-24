@@ -35,7 +35,7 @@ than working around it elsewhere.
 - For header-only packages, register interface targets with `nwb_declare_vendor_headers(<target> <alias> <include_dir>)`.
 - Suppress vendor warnings with `nwb_disable_vendor_warnings(<target>)`.
 - C/C++ static libs linked into engine targets must match the engine's per-config CRT and
-  `_ITERATOR_DEBUG_LEVEL`: add the target to the `nwb_match_engine_runtime` list in `3rd_parties/CMakeLists.txt`
+  `_ITERATOR_DEBUG_LEVEL`: apply `nwb_match_engine_runtime(<target>)` in `3rd_parties/CMakeLists.txt`
   (otherwise lld-link rejects the mix via `/failifmismatch`).
 - Prefer building vendored libraries `STATIC` so nothing has to deploy a vendored `.dll` next to an executable
   (e.g. amdrdf is forced static via `RDF_BUILD_STATIC=1`).

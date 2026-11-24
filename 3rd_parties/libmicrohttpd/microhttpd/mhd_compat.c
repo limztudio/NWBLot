@@ -31,7 +31,7 @@
 #ifndef HAVE_SNPRINTF
 #include <stdio.h>
 #include <stdarg.h>
-#endif  /* HAVE_SNPRINTF */
+#endif  /* ! HAVE_SNPRINTF */
 #endif /* _WIN32  && !__CYGWIN__ */
 
 #ifndef HAVE_CALLOC
@@ -80,7 +80,7 @@ W32_snprintf (char *__restrict s,
 }
 
 
-#endif  /* HAVE_SNPRINTF */
+#endif  /* ! HAVE_SNPRINTF */
 #endif /* _WIN32  && !__CYGWIN__ */
 
 #ifndef HAVE_CALLOC

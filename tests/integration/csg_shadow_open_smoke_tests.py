@@ -22,7 +22,7 @@ LIT_CAPTURE_SUFFIX = ".txt"
 LIT_RETAINED = "retained"
 LIT_HARDWARE = "hardware"
 LIT_ENABLED = "enabled"
-LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA = "FramebufferCapture: graphics source frame 119"
+LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME = "FramebufferCapture: graphics source frame 119"
 LIT_SOFTWARE = "software"
 LIT_REFERENCE = "reference"
 LIT_TERMINAL65 = "terminal65"
@@ -68,7 +68,7 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def log(self, case=LIT_RETAINED, route=LIT_HARDWARE, warning_policy=LIT_ENABLED):
         first, second = COUNTS[case]
-        lines = ["FramebufferCapture: capture ready", LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, "CsgShadowSmokeProject: shutdown",
+        lines = ["FramebufferCapture: capture ready", LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME, "CsgShadowSmokeProject: shutdown",
             f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
             f"CsgShadowSmokeProject: atlas arm=1 light=directional hardware={int(route == LIT_HARDWARE)}",
             "SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 budget_bytes=268435456 coverage=0 blocker_search=0 capture_cadence=0"]
@@ -178,7 +178,7 @@ class CsgOpenShadowTests(unittest.TestCase):
 
     def test_missing_stale_or_repeated_completed_source_is_rejected(self):
         log = self.log()
-        for changed in (log.replace("frame 119", "frame 118"), log + "\nFramebufferCapture: graphics source frame 120", log.replace(LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, "")):
+        for changed in (log.replace("frame 119", "frame 118"), log + "\nFramebufferCapture: graphics source frame 120", log.replace(LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME, "")):
             with self.assertRaises(SmokeFailure):
                 CsgOpenShadowRuntimeEvidence.validate_runtime(changed, LIT_RETAINED, LIT_HARDWARE, 120)
 

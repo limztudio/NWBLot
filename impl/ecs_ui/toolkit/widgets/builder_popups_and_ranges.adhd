@@ -511,7 +511,7 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
             input.focus(),
             item.state.id
         );
-        if(!mark.has_value() || !frame.m_labels[index].text.valid() || !painter.paintRadioGroupChoiceRow(
+        if(!mark.has_value() || !frame.m_labels[index].m_text.valid() || !painter.paintRadioGroupChoiceRow(
             this.m_paint,
             this.m_text,
             this.m_skin.value(),
@@ -519,8 +519,8 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
             frame.m_widgetStyle,
             frame.m_metrics,
             row,
-            frame.m_labels[index].text.deref(),
-            frame.m_labels[index].bounds,
+            frame.m_labels[index].m_text.deref(),
+            frame.m_labels[index].m_bounds,
             mark.value().name,
             visualFlags.enabled,
             visualFlags.checked,

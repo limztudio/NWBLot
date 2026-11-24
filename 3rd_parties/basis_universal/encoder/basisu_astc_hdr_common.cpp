@@ -142,7 +142,6 @@ static void compute_half_to_qlog_table(uint32_t bits, uint16_t* pTable, const ba
 				break;
 
 			float v = qlog16_to_float[idx];
-			//assert(!std::isinf(v) && !std::isnan(v)); // too clostly in debug
 
 			// Compute error
 			float err = fabsf(v - desired_val);
@@ -174,7 +173,6 @@ static void init_qlog_tables()
 {
 	basisu::vector<float> qlog16_to_float(65536);
 
-	// for all possible qlog16, compute the corresponding half float
 	for (uint32_t i = 0; i <= 65535; i++)
 	{
 		half_float h = astc_helpers::qlog16_to_half(i);
@@ -192,7 +190,6 @@ static void init_qlog_tables()
 
 	jp.wait_for_all();
 #else
-	// for all possible half floats, find the nearest qlog5-12 float
 	for (uint32_t bits = HALF_TO_QLOG_TABS_MIN_BITS; bits <= HALF_TO_QLOG_TABS_MAX_BITS; bits++)
 	{
 		compute_half_to_qlog_table(bits, g_pHalf_to_qlog_tabs[bits - HALF_TO_QLOG_TABS_MIN_BITS], qlog16_to_float);
@@ -801,7 +798,6 @@ static void encode_astc_hdr_init()
 			g_map_astc_to_linear_order[ise_range][g_map_linear_to_astc_order[ise_range][i]] = (uint8_t)i;
 	}
 
-	//init_quantize_tables();
 }
 
 bool g_astc_hdr_enc_initialized;
@@ -967,7 +963,6 @@ double eval_selectors_f(
 
 		double lowest_e = BIG_FLOAT_VAL;
 
-		//double dists[MAX_SUPPORTED_WEIGHT_LEVELS];
 
 		// this is an approximation of MSLE
 		for (uint32_t i = 0; i < num_weight_levels; i++)
@@ -982,7 +977,6 @@ double eval_selectors_f(
 
 			double e = R_WEIGHT * (rd * rd) + G_WEIGHT * (gd * gd) + bd * bd;
 
-			//dists[i] = e;
 
 			if (e < lowest_e)
 			{
@@ -1815,8 +1809,6 @@ void pack_astc_mode11_direct(uint8_t* pEndpoints, vec3F l_q16, vec3F h_q16)
 			h_q = g_half_to_qlog8[bounds_check((uint32_t)h_half, 0U, 32768U)];
 
 			// this quantizes R and G as 7 bits vs. 8, for grayscale.
-			//l_q = g_half_to_qlog7[bounds_check((uint32_t)l_half, 0U, 32768U)] << 1;
-			//h_q = g_half_to_qlog7[bounds_check((uint32_t)h_half, 0U, 32768U)] << 1;
 						
 			l_q = minimum<uint32_t>(l_q, MAX_QLOG8);
 			h_q = minimum<uint32_t>(h_q, MAX_QLOG8);
@@ -4060,12 +4052,7 @@ double encode_astc_hdr_block_mode_7(
 
 #if 1
 	{
-		//const float TL = 8830.0f;// (float)half_to_qlog16(float_to_half(0.00061f));
-		//const float TH = 41600.0f;// (float)half_to_qlog16(float_to_half(40.0f));
-		//float zl = minimum<float>(color_box_q16[0][0], color_box_q16[0][1], color_box_q16[0][2]);
-		//float zh = minimum<float>(color_box_q16[1][0], color_box_q16[1][1], color_box_q16[1][2]);
 
-		//if ((zl <= TL) && (zh >= TH))
 		{
 			// Try a simpler technique for artifact reduction
 			l = BIG_FLOAT_VAL;
@@ -4159,7 +4146,6 @@ double encode_astc_hdr_block_mode_7(
 
 		t *= one_over_num_pixels;
 
-		//int e[2][3];
 		if (!decode_mode7_to_qlog12(trial_blk_endpoints, e, nullptr, ise_endpoint_range))
 			break;
 
@@ -4773,7 +4759,6 @@ downsample_matrix g_downsample_matrices_6x6[] =
 	{ 5, 6, (const float*)g_weight_downsample_6x6_to_5x6 },
 	{ 6, 6, (const float*)g_weight_downsample_6x6_to_6x6 }
 };
-//const uint32_t NUM_DOWNSAMPLE_MATRICES_6x6 = sizeof(g_downsample_matrices_6x6) / sizeof(g_downsample_matrices_6x6[0]);
 
 //--------------------------------------------------------------------------------------------------------------------------
 // 
@@ -6232,8 +6217,6 @@ static bool refine_endpoints_mode7(
 	vec3F cur_h_q16((float)(trial_e[1][0] << 4), (float)(trial_e[1][1] << 4), (float)(trial_e[1][2] << 4));
 
 	float s_r = (cur_h_q16[0] - block_mean_color_q16[0]) / t;
-	//float s_g = (cur_h_q16[1] - block_mean_color_q16[1]) / t;
-	//float s_b = (cur_h_q16[2] - block_mean_color_q16[2]) / t;
 	float new_s_q16 = ceilf(s_r);
 
 	if (!pack_mode7(new_high_color_q16, new_s_q16, endpoint_ise_range, trial_endpoints, weight_ise_range, coptions, first_submode, last_submode, false, submode_used))

@@ -83,8 +83,7 @@ struct pingpong {
 /*
  * Curl_pp_statemach()
  *
- * called repeatedly until done. Set 'wait' to make it wait a while on the
- * socket if there is no traffic.
+ * Called repeatedly until done. Set 'block' to wait for socket activity.
  */
 CURLcode Curl_pp_statemach(struct Curl_easy *data, struct pingpong *pp,
                            bool block, bool disconnecting);
@@ -154,8 +153,8 @@ CURLcode Curl_pp_pollset(struct Curl_easy *data,
  *
  * Curl_pp_moredata()
  *
- * Returns whether there are still more data in the cache and so a call
- * to Curl_pp_readresp() will not block.
+ * Return whether buffered data remains after the final response line and
+ * there is no pending send.
  */
 bool Curl_pp_moredata(struct pingpong *pp);
 

@@ -104,7 +104,7 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
         return MakeUnexpected(Failure{});
     }
-    if(static_cast<u32>(d.format) >= static_cast<u32>(Format::Count)){
+    if(static_cast<u32>(d.format) >= static_cast<u32>(Format::kCount)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
         return MakeUnexpected(Failure{});

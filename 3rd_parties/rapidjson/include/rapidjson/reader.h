@@ -277,7 +277,7 @@ inline const char* SkipWhitespace(const char* p, const char* end) {
 }
 
 #ifdef RAPIDJSON_SSE42
-//! Skip whitespace with SSE 4.2 pcmpistrm instruction, testing 16 8-byte characters at once.
+//! Skip whitespace with SSE 4.2 pcmpistrm instruction, testing 16 bytes at once.
 inline const char *SkipWhitespace_SIMD(const char* p) {
     // Fast return for single non-whitespace
     if (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')
@@ -342,7 +342,7 @@ inline const char *SkipWhitespace_SIMD(const char* p, const char* end) {
 
 #elif defined(RAPIDJSON_SSE2)
 
-//! Skip whitespace with SSE2 instructions, testing 16 8-byte characters at once.
+//! Skip whitespace with SSE2 instructions, testing 16 bytes at once.
 inline const char *SkipWhitespace_SIMD(const char* p) {
     // Fast return for single non-whitespace
     if (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')
@@ -936,7 +936,7 @@ private:
             const __m128i s = _mm_load_si128(reinterpret_cast<const __m128i *>(p));
             const __m128i t1 = _mm_cmpeq_epi8(s, dq);
             const __m128i t2 = _mm_cmpeq_epi8(s, bs);
-            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s < 0x20 <=> max(s, 0x19) == 0x19
+            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s <= 0x19 <=> max(s, 0x19) == 0x19
             const __m128i x = _mm_or_si128(_mm_or_si128(t1, t2), t3);
             unsigned short r = static_cast<unsigned short>(_mm_movemask_epi8(x));
             if (RAPIDJSON_UNLIKELY(r != 0)) {   // some of characters is escaped
@@ -997,7 +997,7 @@ private:
             const __m128i s = _mm_load_si128(reinterpret_cast<const __m128i *>(p));
             const __m128i t1 = _mm_cmpeq_epi8(s, dq);
             const __m128i t2 = _mm_cmpeq_epi8(s, bs);
-            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s < 0x20 <=> max(s, 0x19) == 0x19
+            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s <= 0x19 <=> max(s, 0x19) == 0x19
             const __m128i x = _mm_or_si128(_mm_or_si128(t1, t2), t3);
             unsigned short r = static_cast<unsigned short>(_mm_movemask_epi8(x));
             if (RAPIDJSON_UNLIKELY(r != 0)) {   // some of characters is escaped
@@ -1045,7 +1045,7 @@ private:
             const __m128i s = _mm_load_si128(reinterpret_cast<const __m128i *>(p));
             const __m128i t1 = _mm_cmpeq_epi8(s, dq);
             const __m128i t2 = _mm_cmpeq_epi8(s, bs);
-            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s < 0x20 <=> max(s, 0x19) == 0x19
+            const __m128i t3 = _mm_cmpeq_epi8(_mm_max_epu8(s, sp), sp); // s <= 0x19 <=> max(s, 0x19) == 0x19
             const __m128i x = _mm_or_si128(_mm_or_si128(t1, t2), t3);
             unsigned short r = static_cast<unsigned short>(_mm_movemask_epi8(x));
             if (RAPIDJSON_UNLIKELY(r != 0)) {   // some of characters is escaped

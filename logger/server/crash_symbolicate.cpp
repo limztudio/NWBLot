@@ -239,7 +239,7 @@ public:
     [[nodiscard]] Expected<void, AftermathLoadFailure> load(Core::Alloc::ScratchArena& scratchArena){
         const auto opened = library.open(scratchArena, Core::Crash::s_AftermathRuntimeName);
         if(!opened)
-            return MakeUnexpected(AftermathLoadFailure{ .operation = s_CrashSymbolicateAftermathAftermathLoadRuntimeOperation, .native = opened.error(), });
+            return MakeUnexpected(AftermathLoadFailure{ .operation = s_CrashSymbolicateAftermathLoadRuntimeOperation, .native = opened.error(), });
 
         const auto create = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder");
         const auto generate = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GenerateJSON>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON");
@@ -270,8 +270,8 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
         return;
 
 #if !defined(NWB_WITH_AFTERMATH)
-    outReport += s_CrashSymbolicateAftermathAftermathSectionHeader;
-    outReport += s_CrashSymbolicateAftermathAftermathSkippedReport;
+    outReport += s_CrashSymbolicateAftermathSectionHeader;
+    outReport += s_CrashSymbolicateAftermathSkippedReport;
 #else
     Vector<u8, Core::Alloc::ScratchArena> dumpBytes(scratchArena);
     const auto read = ReadBinaryFile(dumpPath, dumpBytes);
@@ -296,8 +296,8 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
     }
 
     if(dumpBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        outReport += s_CrashSymbolicateAftermathAftermathSectionHeader;
-        outReport += s_CrashSymbolicateAftermathAftermathCreateDecoderFailedReport;
+        outReport += s_CrashSymbolicateAftermathSectionHeader;
+        outReport += s_CrashSymbolicateAftermathCreateDecoderFailedReport;
         return;
     }
 
@@ -307,8 +307,8 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
         GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;
         const GFSDK_Aftermath_Result createResult = decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<u32>(dumpBytes.size()), &decoder);
         if(!GFSDK_Aftermath_SUCCEED(createResult) || !decoder){
-            outReport += s_CrashSymbolicateAftermathAftermathSectionHeader;
-            outReport += s_CrashSymbolicateAftermathAftermathCreateDecoderFailedReport;
+            outReport += s_CrashSymbolicateAftermathSectionHeader;
+            outReport += s_CrashSymbolicateAftermathCreateDecoderFailedReport;
             outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\ndecoder_present={}\n", createResult, decoder != nullptr).view();
             return;
         }
@@ -333,8 +333,8 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
             &jsonSize
         );
         if(!GFSDK_Aftermath_SUCCEED(generateResult) || jsonSize == 0u){
-            outReport += s_CrashSymbolicateAftermathAftermathSectionHeader;
-            outReport += s_CrashSymbolicateAftermathAftermathGenerateJsonFailedReport;
+            outReport += s_CrashSymbolicateAftermathSectionHeader;
+            outReport += s_CrashSymbolicateAftermathGenerateJsonFailedReport;
             outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\njson_bytes={}\n", generateResult, jsonSize).view();
             return;
         }
@@ -342,8 +342,8 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
         json.resize(jsonSize, '\0');
         const GFSDK_Aftermath_Result getResult = decoderLib.getJson(decoder, jsonSize, json.data());
         if(!GFSDK_Aftermath_SUCCEED(getResult)){
-            outReport += s_CrashSymbolicateAftermathAftermathSectionHeader;
-            outReport += s_CrashSymbolicateAftermathAftermathGetJsonFailedReport;
+            outReport += s_CrashSymbolicateAftermathSectionHeader;
+            outReport += s_CrashSymbolicateAftermathGetJsonFailedReport;
             outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\n", getResult).view();
             return;
         }

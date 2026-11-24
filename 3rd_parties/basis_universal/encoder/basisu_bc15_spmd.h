@@ -16,9 +16,8 @@ namespace basisu
 {
 	namespace bc_spmd
 	{
-		// Build the solid-color omatch tables. Call once before encoding (idempotent). Not safe to call
-		// concurrently with itself or the encoders on first use -- call it once at startup (e.g. right after
-		// basisu_encoder_init(), which also performs the CPU-feature detection encode_bc1_spmd dispatches on).
+		// Build the solid-color tables. Concurrent calls are safe.
+		// basisu_encoder_init() detects CPU features for SIMD dispatch.
 		void init();
 
 		// Encode num_blocks opaque BC1 blocks.
@@ -35,8 +34,7 @@ namespace basisu
 		// Encode num_blocks single-channel BC4 (RGTC1) blocks. Clone of basist::encode_bc4's algorithm: raw bbox
 		// min/max endpoints + exact nearest-of-8 integer-threshold selector, ALWAYS 8-value mode (red0 > red1) --
 		// including a forced-8-value solid-block path so we NEVER emit a 6-value block (safe for BC3/BC5). Quality
-		// matches encode_bc4 (bit-exact on non-solid blocks; identical decode on solid). (Least-squares endpoint
-		// refinement may be layered on later.)
+		// matches encode_bc4 in the default mode (bit-exact on non-solid blocks; identical decode on solid).
 		//   pSrc_pixels  : num_blocks * 16 uint8_t, block-contiguous; texel index within a block = y*4 + x. The
 		//                  caller extracts the 16 single-channel values per block itself (e.g. one channel of RGBA).
 		//   pBlocks      : output; BC4 block b is written at (uint8_t*)pBlocks + b * 8 * block_stride.
@@ -51,7 +49,6 @@ namespace basisu
 		void encode_bc4_scalar(void* pBlocks, const uint8_t* pSrc_pixels, uint32_t num_blocks, uint32_t block_stride = 1, bool high_quality = false, uint32_t src_stride = 1);
 		void encode_bc4_spmd(void* pBlocks, const uint8_t* pSrc_pixels, uint32_t num_blocks, uint32_t block_stride = 1, bool high_quality = false, uint32_t src_stride = 1);
 
-		// ---------------- High-level format helpers (RGBA in -> complete GPU blocks out) ----------------
 		// Convenience wrappers over the low-level encoders. Each takes pPixels = num_blocks * 16 color_rgba,
 		// block-contiguous (texel index = y*4 + x), and writes complete blocks. num_blocks may be ANY count >= 1
 		// (not necessarily a multiple of 4); the <4 tail is handled internally with NO output overrun.

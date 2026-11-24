@@ -118,19 +118,19 @@ class MaterialPassDrawSnapshotCache : NoCopy{
 }
 
 class MaterialDrawGather{
-    private mut RendererMaterialSystem system;
-    private mut World world;
-    private mut RendererMeshSystem meshes;
-    private mut RendererCsgSystem csg;
-    private in CsgShapeRegistry registry;
-    private in RendererOpticalVolumeSelection opticalVolumes;
-    private mut Framebuffer framebuffer;
-    private MaterialPipelinePass pass;
-    private b8 transparent;
-    private RendererResourceLookupMode lookupMode;
-    private in Optional<in MeshViewGpuData> meshView;
-    private in MaterialPassGatherOutputs outputs;
-    private mut MaterialTypedStager typedStager;
+    private mut RendererMaterialSystem m_system;
+    private mut World m_world;
+    private mut RendererMeshSystem m_meshes;
+    private mut RendererCsgSystem m_csg;
+    private in CsgShapeRegistry m_registry;
+    private in RendererOpticalVolumeSelection m_opticalVolumes;
+    private mut Framebuffer m_framebuffer;
+    private MaterialPipelinePass m_pass;
+    private b8 m_transparent;
+    private RendererResourceLookupMode m_lookupMode;
+    private in Optional<in MeshViewGpuData> m_meshView;
+    private in MaterialPassGatherOutputs m_outputs;
+    private mut MaterialTypedStager m_typedStager;
     private MaterialPassDrawSnapshotCache m_snapshotCache;
 
     public MaterialDrawGather(
@@ -148,98 +148,98 @@ class MaterialDrawGather{
         in MaterialPassGatherOutputs outputs,
         mut MaterialTypedStager typedStager
     ){
-        this.system = system;
-        this.world = world;
-        this.meshes = meshes;
-        this.csg = csg;
-        this.registry = registry;
-        this.opticalVolumes = opticalVolumes;
-        this.framebuffer = framebuffer;
-        this.pass = pass;
-        this.transparent = transparent;
-        this.lookupMode = lookupMode;
-        this.meshView = meshView;
-        this.outputs = outputs;
-        this.typedStager = typedStager;
+        this.m_system = system;
+        this.m_world = world;
+        this.m_meshes = meshes;
+        this.m_csg = csg;
+        this.m_registry = registry;
+        this.m_opticalVolumes = opticalVolumes;
+        this.m_framebuffer = framebuffer;
+        this.m_pass = pass;
+        this.m_transparent = transparent;
+        this.m_lookupMode = lookupMode;
+        this.m_meshView = meshView;
+        this.m_outputs = outputs;
+        this.m_typedStager = typedStager;
     }
 
     [cpp_unwind]
     private Expected<MaterialInstanceAppend> appendInstance(in EntityID entity, in MaterialSurfaceInfo material, in MeshResources mesh, in Optional<in TransformComponent> transform, in b8 hasReceiverLookup){
         const auto appended = AppendMaterialPassInstance(
-            this.typedStager,
-            this.meshes,
+            this.m_typedStager,
+            this.m_meshes,
             entity,
             material,
             mesh,
             transform,
-            this.outputs.instanceData,
-            this.outputs.materialTypedRanges
+            this.m_outputs.instanceData,
+            this.m_outputs.materialTypedRanges
         );
         if(!appended.has_value())
             return MakeUnexpected(Failure());
         if(hasReceiverLookup)
-            this.outputs.csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData());
+            this.m_outputs.csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData());
         return appended;
     }
 
     [cpp_unwind]
     private b8 prepareGeometry(mut MeshResources mesh, in MaterialPipelineResources resources){
-        return PrepareMaterialPassGeometry(this.meshes, this.lookupMode, mesh, resources);
+        return PrepareMaterialPassGeometry(this.m_meshes, this.m_lookupMode, mesh, resources);
     }
 
     [cpp_unwind]
     private Expected<mut MaterialPipelineResources> pipeline(in MaterialSurfaceInfo material, in MaterialPipelineKey key){
-        if(this.lookupMode == RendererResourceLookupMode::CreateMissing)
-            return this.system.createRendererPipeline(material, key, this.framebuffer);
-        return this.system.findRendererPipeline(key);
+        if(this.m_lookupMode == RendererResourceLookupMode::CreateMissing)
+            return this.m_system.createRendererPipeline(material, key, this.m_framebuffer);
+        return this.m_system.findRendererPipeline(key);
     }
 
     [cpp_unwind]
     private b8 appendDraw(in EntityID entity, mut MaterialSurfaceInfo material, mut MeshResources mesh, in CsgReceiverDrawState receiver, in Optional<in CsgFrameReceiverLookup> lookup){
         assert(mesh.valid() && GeometryHeapHandlesReady(mesh.geometryHeapHandles));
-        assert(material.transparent == this.transparent);
+        assert(material.transparent == this.m_transparent);
         Optional<in TransformComponent> transform;
-        const Optional<mut TransformComponent> borrowedTransform = this.world.borrowComponent<TransformComponent>(entity);
+        const Optional<mut TransformComponent> borrowedTransform = this.m_world.borrowComponent<TransformComponent>(entity);
         if(borrowedTransform.has_value())
             transform.emplace(borrowedTransform.value());
 
-        const b8 clipRequested = lookup.has_value() && receiver.active && MaterialPipelinePassUsesRendererCsgClip(this.pass, this.transparent);
+        const b8 clipRequested = lookup.has_value() && receiver.active && MaterialPipelinePassUsesRendererCsgClip(this.m_pass, this.m_transparent);
         LogCsgCapSurfaceDispatchUnavailableIfNeeded(clipRequested, material.csgCapSurfaceDispatchAvailable, material.materialName, material.csgCapSurfaceDispatchUnavailableLogged);
         Expected<CsgReceiverClipDrawInfo> clip = MakeUnexpected(Failure());
         if(clipRequested && material.csgCapSurfaceDispatchAvailable){
             if(transform.has_value())
-                clip = this.csg.resolveCsgReceiverClipDrawInfo(lookup.value(), receiver, mesh.csgLocalBounds, transform.value());
+                clip = this.m_csg.resolveCsgReceiverClipDrawInfo(lookup.value(), receiver, mesh.csgLocalBounds, transform.value());
             else
-                clip = this.csg.resolveCsgReceiverClipDrawInfo(lookup.value(), receiver, mesh.csgLocalBounds);
+                clip = this.m_csg.resolveCsgReceiverClipDrawInfo(lookup.value(), receiver, mesh.csgLocalBounds);
         }
         const b8 clipActive = clip.has_value() && clip.value().cutterCount > 0u;
-        if(this.pass == MaterialPipelinePass::CsgReceiverSurface && !clipActive)
+        if(this.m_pass == MaterialPipelinePass::CsgReceiverSurface && !clipActive)
             return lookup.has_value() && this.appendInstance(entity, material, mesh, transform, true).has_value();
 
         Name evaluator = s_NameNone;
         u64 revision = 0u;
         if(clipActive){
             evaluator = clip.value().evaluatorVariant;
-            revision = this.registry.revision();
+            revision = this.m_registry.revision();
         }
-        in FramebufferInfoEx framebufferInfo = this.framebuffer.getFramebufferInfo();
-        const MaterialPipelineKey key = BuildMaterialPassPipelineKey(material.materialName, FramebufferInfo(framebufferInfo), this.pass, material.twoSided, clipActive, evaluator, revision);
+        in FramebufferInfoEx framebufferInfo = this.m_framebuffer.getFramebufferInfo();
+        const MaterialPipelineKey key = BuildMaterialPassPipelineKey(material.materialName, FramebufferInfo(framebufferInfo), this.m_pass, material.twoSided, clipActive, evaluator, revision);
         const auto primary = this.pipeline(material, key);
         if(!primary.has_value() || !this.prepareGeometry(mesh, primary.value()))
             return false;
         const RenderPath path = primary.value().renderPath;
-        in SharedPool snapshotPool = this.system.materialState().m_drawSnapshotPool;
+        in SharedPool snapshotPool = this.m_system.materialState().m_drawSnapshotPool;
         const auto primarySnapshotResult = this.m_snapshotCache.pipeline(snapshotPool, key, primary.value());
         if(!primarySnapshotResult.has_value())
             return false;
-        const b8 surfaceActive = IsCsgReceiverSurfacePassActive(clipActive, this.pass);
+        const b8 surfaceActive = IsCsgReceiverSurfacePassActive(clipActive, this.m_pass);
         MaterialPipelineKey surfaceKey = key;
         Shared<MaterialPassPipelineResourceSnapshot> surfaceSnapshot;
         RenderPath surfacePath = RenderPath::MeshShader;
         if(surfaceActive){
             surfaceKey.pass = MaterialPipelinePass::CsgReceiverSurface;
             Expected<mut MaterialPipelineResources> surface = primary;
-            if(this.pass != MaterialPipelinePass::CsgReceiverSurface)
+            if(this.m_pass != MaterialPipelinePass::CsgReceiverSurface)
                 surface = this.pipeline(material, surfaceKey);
             if(!surface.has_value() || !this.prepareGeometry(mesh, surface.value()))
                 return false;
@@ -260,22 +260,22 @@ class MaterialDrawGather{
         const u32 constantOffset = appended.value().typedRanges.constantRange.byteOffset;
         if(clipActive){
             Expected<CsgReceiverRangeGpuData> range = MakeUnexpected(Failure());
-            if(transform.has_value() && this.meshView.has_value())
-                range = this.csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, transform.value(), framebufferInfo.width, framebufferInfo.height, this.meshView.value(), this.outputs.csgFrameData);
+            if(transform.has_value() && this.m_meshView.has_value())
+                range = this.m_csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, transform.value(), framebufferInfo.width, framebufferInfo.height, this.m_meshView.value(), this.m_outputs.csgFrameData);
             else if(transform.has_value())
-                range = this.csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, transform.value(), framebufferInfo.width, framebufferInfo.height, this.outputs.csgFrameData);
-            else if(this.meshView.has_value())
-                range = this.csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, this.meshView.value(), this.outputs.csgFrameData);
+                range = this.m_csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, transform.value(), framebufferInfo.width, framebufferInfo.height, this.m_outputs.csgFrameData);
+            else if(this.m_meshView.has_value())
+                range = this.m_csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, this.m_meshView.value(), this.m_outputs.csgFrameData);
             else
-                range = this.csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, this.outputs.csgFrameData);
+                range = this.m_csg.appendCsgReceiverClipData(lookup.value(), receiver, mesh.csgLocalBounds, framebufferInfo.width, framebufferInfo.height, this.m_outputs.csgFrameData);
             if(!range.has_value())
                 return false;
             range.value().shadingModelId = material.shadingModelId;
             range.value().surfaceDispatchId = material.surfaceDispatchId;
             range.value().materialConstantByteOffset = constantOffset;
             range.value().meshInstanceIndex = index;
-            assert(index < this.outputs.csgFrameData.receiverRanges.size());
-            this.outputs.csgFrameData.receiverRanges[index] = range.value();
+            assert(index < this.m_outputs.csgFrameData.receiverRanges.size());
+            this.m_outputs.csgFrameData.receiverRanges[index] = range.value();
         }
         MaterialPassDrawItem item;
         item.meshKey = mesh.meshName;
@@ -289,32 +289,32 @@ class MaterialDrawGather{
         if(transform.has_value())
             item.meshletConeCullScaleSafe = MeshletConeCullScaleSafe(LoadFloat(transform.value().scale));
 
-        if(this.pass != MaterialPipelinePass::CsgReceiverSurface){
+        if(this.m_pass != MaterialPipelinePass::CsgReceiverSurface){
             if(surfaceActive){
                 MaterialPassDrawItem primaryItem = item;
-                AppendMaterialDrawItem(path, primaryItem, this.outputs.drawItems.csg);
+                AppendMaterialDrawItem(path, primaryItem, this.m_outputs.drawItems.csg);
             }
             else if(clipActive)
-                AppendMaterialDrawItem(path, item, this.outputs.drawItems.csg);
+                AppendMaterialDrawItem(path, item, this.m_outputs.drawItems.csg);
             else
-                AppendMaterialDrawItem(path, item, this.outputs.drawItems.regular);
+                AppendMaterialDrawItem(path, item, this.m_outputs.drawItems.regular);
         }
         if(surfaceActive){
             item.pipelineKey = surfaceKey;
             item.pipelineResources = surfaceSnapshot;
-            AppendMaterialDrawItem(surfacePath, item, this.outputs.drawItems.csgReceiverSurface);
+            AppendMaterialDrawItem(surfacePath, item, this.m_outputs.drawItems.csgReceiverSurface);
         }
         return true;
     }
 
     [cpp_unwind]
     private void gatherRow(in MeshSystem ecsMeshes, in CsgReceiverPass receiverPass, in Optional<in CsgFrameReceiverLookup> lookup, in EntityID entity, in RendererComponent renderer){
-        if(!renderer.visible || this.opticalVolumes.isSuppressed(entity))
+        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
             return;
         Expected<mut MaterialSurfaceInfo> material = MakeUnexpected(Failure());
-        if(this.lookupMode == RendererResourceLookupMode::PreparedOnly){
-            material = this.system.findMaterialSurfaceInfo(renderer.material);
-            if(!material.has_value() || material.value().transparent != this.transparent)
+        if(this.m_lookupMode == RendererResourceLookupMode::PreparedOnly){
+            material = this.m_system.findMaterialSurfaceInfo(renderer.material);
+            if(!material.has_value() || material.value().transparent != this.m_transparent)
                 return;
         }
         const auto resolved = ecsMeshes.resolveRenderableMeshStatus(entity);
@@ -322,20 +322,20 @@ class MaterialDrawGather{
             return;
         Expected<mut MeshResources> mesh = MakeUnexpected(Failure());
         if(resolved.value().runtime){
-            if(this.lookupMode == RendererResourceLookupMode::CreateMissing)
-                mesh = this.meshes.createRuntimeMeshResources(resolved.value().runtimeMesh);
+            if(this.m_lookupMode == RendererResourceLookupMode::CreateMissing)
+                mesh = this.m_meshes.createRuntimeMeshResources(resolved.value().runtimeMesh);
             else
-                mesh = this.meshes.findRuntimeMeshResources(resolved.value().runtimeMesh);
+                mesh = this.m_meshes.findRuntimeMeshResources(resolved.value().runtimeMesh);
         }
-        else if(this.lookupMode == RendererResourceLookupMode::CreateMissing)
-            mesh = this.meshes.createMeshResources(resolved.value().mesh);
+        else if(this.m_lookupMode == RendererResourceLookupMode::CreateMissing)
+            mesh = this.m_meshes.createMeshResources(resolved.value().mesh);
         else
-            mesh = this.meshes.findMeshResources(resolved.value().mesh.name());
+            mesh = this.m_meshes.findMeshResources(resolved.value().mesh.name());
         if(!mesh.has_value())
             return;
         if(!material.has_value()){
-            material = this.system.createMaterialSurfaceInfo(renderer.material);
-            if(!material.has_value() || material.value().transparent != this.transparent)
+            material = this.m_system.createMaterialSurfaceInfo(renderer.material);
+            if(!material.has_value() || material.value().transparent != this.m_transparent)
                 return;
         }
         CsgReceiverDrawState receiver;
@@ -350,7 +350,7 @@ class MaterialDrawGather{
 
     [cpp_unwind]
     public void gather(in MeshSystem ecsMeshes, in CsgReceiverPass receiverPass, in Optional<in CsgFrameReceiverLookup> lookup){
-        for(in auto row : this.world.view<RendererComponent>())
+        for(in auto row : this.m_world.view<RendererComponent>())
             this.gatherRow(ecsMeshes, receiverPass, lookup, Get<0>(row), Get<1>(row));
     }
 }

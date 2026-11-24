@@ -128,11 +128,6 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     return curlx_wait_ms(timeout_ms);
   }
 
-  /* Avoid initial timestamp, avoid curlx_now() call, when elapsed
-     time in this function does not need to be measured. This happens
-     when function is called with a zero timeout or a negative timeout
-     value indicating a blocking call should be performed. */
-
   num = 0;
   if(readfd0 != CURL_SOCKET_BAD) {
     pfd[num].fd = readfd0;
@@ -222,11 +217,6 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms)
     /* no sockets, wait */
     return curlx_wait_ms(timeout_ms);
   }
-
-  /* Avoid initial timestamp, avoid curlx_now() call, when elapsed
-     time in this function does not need to be measured. This happens
-     when function is called with a zero timeout or a negative timeout
-     value indicating a blocking call should be performed. */
 
 #ifdef HAVE_POLL
 
@@ -542,9 +532,6 @@ void Curl_pollset_move(struct easy_pollset *to, struct easy_pollset *from)
   }
 }
 
-/**
- *
- */
 CURLcode Curl_pollset_change(struct Curl_easy *data,
                              struct easy_pollset *ps, curl_socket_t sock,
                              int add_flags, int remove_flags)

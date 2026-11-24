@@ -44,92 +44,92 @@ namespace FrameDetail{
 
 #define NWB_DECLARE_LINUX_KEY_SYMBOLS(StructName, ValueType, Prefix) \
 struct StructName{ \
-    using value_type = ValueType; \
-    static constexpr value_type s_Key0 = Prefix##_0; \
-    static constexpr value_type s_Key9 = Prefix##_9; \
-    static constexpr value_type s_KeyA = Prefix##_A; \
-    static constexpr value_type s_KeyZ = Prefix##_Z; \
-    static constexpr value_type s_Keya = Prefix##_a; \
-    static constexpr value_type s_Keyz = Prefix##_z; \
-    static constexpr value_type s_F1 = Prefix##_F1; \
-    static constexpr value_type s_F24 = Prefix##_F24; \
-    static constexpr value_type s_KP0 = Prefix##_KP_0; \
-    static constexpr value_type s_KP9 = Prefix##_KP_9; \
-    static constexpr value_type s_ISOLeftTab = Prefix##_ISO_Left_Tab; \
-    static constexpr value_type s_Grave = Prefix##_grave; \
-    static constexpr value_type s_QuoteLeft = Prefix##_quoteleft; \
-    static constexpr value_type s_Print = Prefix##_Print; \
-    static constexpr value_type s_SysReq = Prefix##_Sys_Req; \
-    static constexpr value_type s_AltL = Prefix##_Alt_L; \
-    static constexpr value_type s_MetaL = Prefix##_Meta_L; \
-    static constexpr value_type s_AltR = Prefix##_Alt_R; \
-    static constexpr value_type s_MetaR = Prefix##_Meta_R; \
-    static constexpr value_type s_SuperL = Prefix##_Super_L; \
-    static constexpr value_type s_HyperL = Prefix##_Hyper_L; \
-    static constexpr value_type s_SuperR = Prefix##_Super_R; \
-    static constexpr value_type s_HyperR = Prefix##_Hyper_R; \
-    static constexpr value_type s_Space = Prefix##_space; \
-    static constexpr value_type s_Apostrophe = Prefix##_apostrophe; \
-    static constexpr value_type s_Comma = Prefix##_comma; \
-    static constexpr value_type s_Minus = Prefix##_minus; \
-    static constexpr value_type s_Period = Prefix##_period; \
-    static constexpr value_type s_Slash = Prefix##_slash; \
-    static constexpr value_type s_Semicolon = Prefix##_semicolon; \
-    static constexpr value_type s_Equal = Prefix##_equal; \
-    static constexpr value_type s_BracketLeft = Prefix##_bracketleft; \
-    static constexpr value_type s_Backslash = Prefix##_backslash; \
-    static constexpr value_type s_BracketRight = Prefix##_bracketright; \
-    static constexpr value_type s_Escape = Prefix##_Escape; \
-    static constexpr value_type s_ReturnKey = Prefix##_Return; \
-    static constexpr value_type s_Tab = Prefix##_Tab; \
-    static constexpr value_type s_BackSpace = Prefix##_BackSpace; \
-    static constexpr value_type s_Insert = Prefix##_Insert; \
-    static constexpr value_type s_DeleteKey = Prefix##_Delete; \
-    static constexpr value_type s_Right = Prefix##_Right; \
-    static constexpr value_type s_Left = Prefix##_Left; \
-    static constexpr value_type s_Down = Prefix##_Down; \
-    static constexpr value_type s_Up = Prefix##_Up; \
-    static constexpr value_type s_Prior = Prefix##_Prior; \
-    static constexpr value_type s_Next = Prefix##_Next; \
-    static constexpr value_type s_Home = Prefix##_Home; \
-    static constexpr value_type s_End = Prefix##_End; \
-    static constexpr value_type s_CapsLock = Prefix##_Caps_Lock; \
-    static constexpr value_type s_ScrollLock = Prefix##_Scroll_Lock; \
-    static constexpr value_type s_NumLock = Prefix##_Num_Lock; \
-    static constexpr value_type s_Pause = Prefix##_Pause; \
-    static constexpr value_type s_F25 = Prefix##_F25; \
-    static constexpr value_type s_KPInsert = Prefix##_KP_Insert; \
-    static constexpr value_type s_KPEnd = Prefix##_KP_End; \
-    static constexpr value_type s_KPDown = Prefix##_KP_Down; \
-    static constexpr value_type s_KPNext = Prefix##_KP_Next; \
-    static constexpr value_type s_KPLeft = Prefix##_KP_Left; \
-    static constexpr value_type s_KPBegin = Prefix##_KP_Begin; \
-    static constexpr value_type s_KPRight = Prefix##_KP_Right; \
-    static constexpr value_type s_KPHome = Prefix##_KP_Home; \
-    static constexpr value_type s_KPUp = Prefix##_KP_Up; \
-    static constexpr value_type s_KPPrior = Prefix##_KP_Prior; \
-    static constexpr value_type s_KPDelete = Prefix##_KP_Delete; \
-    static constexpr value_type s_KPDecimal = Prefix##_KP_Decimal; \
-    static constexpr value_type s_KPDivide = Prefix##_KP_Divide; \
-    static constexpr value_type s_KPMultiply = Prefix##_KP_Multiply; \
-    static constexpr value_type s_KPSubtract = Prefix##_KP_Subtract; \
-    static constexpr value_type s_KPAdd = Prefix##_KP_Add; \
-    static constexpr value_type s_KPEnter = Prefix##_KP_Enter; \
-    static constexpr value_type s_KPEqual = Prefix##_KP_Equal; \
-    static constexpr value_type s_ShiftL = Prefix##_Shift_L; \
-    static constexpr value_type s_ControlL = Prefix##_Control_L; \
-    static constexpr value_type s_ShiftR = Prefix##_Shift_R; \
-    static constexpr value_type s_ControlR = Prefix##_Control_R; \
-    static constexpr value_type s_Menu = Prefix##_Menu; \
+    using KeySymbolType = ValueType; \
+    static constexpr KeySymbolType s_Key0 = Prefix##_0; \
+    static constexpr KeySymbolType s_Key9 = Prefix##_9; \
+    static constexpr KeySymbolType s_UppercaseA = Prefix##_A; \
+    static constexpr KeySymbolType s_UppercaseZ = Prefix##_Z; \
+    static constexpr KeySymbolType s_LowercaseA = Prefix##_a; \
+    static constexpr KeySymbolType s_LowercaseZ = Prefix##_z; \
+    static constexpr KeySymbolType s_F1 = Prefix##_F1; \
+    static constexpr KeySymbolType s_F24 = Prefix##_F24; \
+    static constexpr KeySymbolType s_KP0 = Prefix##_KP_0; \
+    static constexpr KeySymbolType s_KP9 = Prefix##_KP_9; \
+    static constexpr KeySymbolType s_ISOLeftTab = Prefix##_ISO_Left_Tab; \
+    static constexpr KeySymbolType s_Grave = Prefix##_grave; \
+    static constexpr KeySymbolType s_QuoteLeft = Prefix##_quoteleft; \
+    static constexpr KeySymbolType s_Print = Prefix##_Print; \
+    static constexpr KeySymbolType s_SysReq = Prefix##_Sys_Req; \
+    static constexpr KeySymbolType s_AltL = Prefix##_Alt_L; \
+    static constexpr KeySymbolType s_MetaL = Prefix##_Meta_L; \
+    static constexpr KeySymbolType s_AltR = Prefix##_Alt_R; \
+    static constexpr KeySymbolType s_MetaR = Prefix##_Meta_R; \
+    static constexpr KeySymbolType s_SuperL = Prefix##_Super_L; \
+    static constexpr KeySymbolType s_HyperL = Prefix##_Hyper_L; \
+    static constexpr KeySymbolType s_SuperR = Prefix##_Super_R; \
+    static constexpr KeySymbolType s_HyperR = Prefix##_Hyper_R; \
+    static constexpr KeySymbolType s_Space = Prefix##_space; \
+    static constexpr KeySymbolType s_Apostrophe = Prefix##_apostrophe; \
+    static constexpr KeySymbolType s_Comma = Prefix##_comma; \
+    static constexpr KeySymbolType s_Minus = Prefix##_minus; \
+    static constexpr KeySymbolType s_Period = Prefix##_period; \
+    static constexpr KeySymbolType s_Slash = Prefix##_slash; \
+    static constexpr KeySymbolType s_Semicolon = Prefix##_semicolon; \
+    static constexpr KeySymbolType s_Equal = Prefix##_equal; \
+    static constexpr KeySymbolType s_BracketLeft = Prefix##_bracketleft; \
+    static constexpr KeySymbolType s_Backslash = Prefix##_backslash; \
+    static constexpr KeySymbolType s_BracketRight = Prefix##_bracketright; \
+    static constexpr KeySymbolType s_Escape = Prefix##_Escape; \
+    static constexpr KeySymbolType s_ReturnKey = Prefix##_Return; \
+    static constexpr KeySymbolType s_Tab = Prefix##_Tab; \
+    static constexpr KeySymbolType s_Backspace = Prefix##_BackSpace; \
+    static constexpr KeySymbolType s_Insert = Prefix##_Insert; \
+    static constexpr KeySymbolType s_DeleteKey = Prefix##_Delete; \
+    static constexpr KeySymbolType s_Right = Prefix##_Right; \
+    static constexpr KeySymbolType s_Left = Prefix##_Left; \
+    static constexpr KeySymbolType s_Down = Prefix##_Down; \
+    static constexpr KeySymbolType s_Up = Prefix##_Up; \
+    static constexpr KeySymbolType s_Prior = Prefix##_Prior; \
+    static constexpr KeySymbolType s_Next = Prefix##_Next; \
+    static constexpr KeySymbolType s_Home = Prefix##_Home; \
+    static constexpr KeySymbolType s_End = Prefix##_End; \
+    static constexpr KeySymbolType s_CapsLock = Prefix##_Caps_Lock; \
+    static constexpr KeySymbolType s_ScrollLock = Prefix##_Scroll_Lock; \
+    static constexpr KeySymbolType s_NumLock = Prefix##_Num_Lock; \
+    static constexpr KeySymbolType s_Pause = Prefix##_Pause; \
+    static constexpr KeySymbolType s_F25 = Prefix##_F25; \
+    static constexpr KeySymbolType s_KPInsert = Prefix##_KP_Insert; \
+    static constexpr KeySymbolType s_KPEnd = Prefix##_KP_End; \
+    static constexpr KeySymbolType s_KPDown = Prefix##_KP_Down; \
+    static constexpr KeySymbolType s_KPNext = Prefix##_KP_Next; \
+    static constexpr KeySymbolType s_KPLeft = Prefix##_KP_Left; \
+    static constexpr KeySymbolType s_KPBegin = Prefix##_KP_Begin; \
+    static constexpr KeySymbolType s_KPRight = Prefix##_KP_Right; \
+    static constexpr KeySymbolType s_KPHome = Prefix##_KP_Home; \
+    static constexpr KeySymbolType s_KPUp = Prefix##_KP_Up; \
+    static constexpr KeySymbolType s_KPPrior = Prefix##_KP_Prior; \
+    static constexpr KeySymbolType s_KPDelete = Prefix##_KP_Delete; \
+    static constexpr KeySymbolType s_KPDecimal = Prefix##_KP_Decimal; \
+    static constexpr KeySymbolType s_KPDivide = Prefix##_KP_Divide; \
+    static constexpr KeySymbolType s_KPMultiply = Prefix##_KP_Multiply; \
+    static constexpr KeySymbolType s_KPSubtract = Prefix##_KP_Subtract; \
+    static constexpr KeySymbolType s_KPAdd = Prefix##_KP_Add; \
+    static constexpr KeySymbolType s_KPEnter = Prefix##_KP_Enter; \
+    static constexpr KeySymbolType s_KPEqual = Prefix##_KP_Equal; \
+    static constexpr KeySymbolType s_ShiftL = Prefix##_Shift_L; \
+    static constexpr KeySymbolType s_ControlL = Prefix##_Control_L; \
+    static constexpr KeySymbolType s_ShiftR = Prefix##_Shift_R; \
+    static constexpr KeySymbolType s_ControlR = Prefix##_Control_R; \
+    static constexpr KeySymbolType s_Menu = Prefix##_Menu; \
 }
 
 template<typename Symbols>
 inline constexpr b8 s_LinuxKeySymbolsUseIntegralOperands =
-    IsIntegral_V<typename Symbols::value_type>
+    IsIntegral_V<typename Symbols::KeySymbolType>
     && IsIntegral_V<decltype(Symbols::s_AltL)>
     && IsIntegral_V<decltype(Symbols::s_AltR)>
     && IsIntegral_V<decltype(Symbols::s_Apostrophe)>
-    && IsIntegral_V<decltype(Symbols::s_BackSpace)>
+    && IsIntegral_V<decltype(Symbols::s_Backspace)>
     && IsIntegral_V<decltype(Symbols::s_Backslash)>
     && IsIntegral_V<decltype(Symbols::s_BracketLeft)>
     && IsIntegral_V<decltype(Symbols::s_BracketRight)>
@@ -173,10 +173,10 @@ inline constexpr b8 s_LinuxKeySymbolsUseIntegralOperands =
     && IsIntegral_V<decltype(Symbols::s_KPUp)>
     && IsIntegral_V<decltype(Symbols::s_Key0)>
     && IsIntegral_V<decltype(Symbols::s_Key9)>
-    && IsIntegral_V<decltype(Symbols::s_KeyA)>
-    && IsIntegral_V<decltype(Symbols::s_KeyZ)>
-    && IsIntegral_V<decltype(Symbols::s_Keya)>
-    && IsIntegral_V<decltype(Symbols::s_Keyz)>
+    && IsIntegral_V<decltype(Symbols::s_UppercaseA)>
+    && IsIntegral_V<decltype(Symbols::s_UppercaseZ)>
+    && IsIntegral_V<decltype(Symbols::s_LowercaseA)>
+    && IsIntegral_V<decltype(Symbols::s_LowercaseZ)>
     && IsIntegral_V<decltype(Symbols::s_Left)>
     && IsIntegral_V<decltype(Symbols::s_Menu)>
     && IsIntegral_V<decltype(Symbols::s_MetaL)>
@@ -208,15 +208,15 @@ inline constexpr b8 s_LinuxKeySymbolsUseIntegralOperands =
 
 
 template<typename Symbols>
-[[nodiscard]] inline i32 TranslateLinuxKeySymbol(typename Symbols::value_type keySym)noexcept(s_LinuxKeySymbolsUseIntegralOperands<Symbols>){
+[[nodiscard]] inline i32 TranslateLinuxKeySymbol(typename Symbols::KeySymbolType keySym)noexcept(s_LinuxKeySymbolsUseIntegralOperands<Symbols>){
     if(keySym >= Symbols::s_Key0 && keySym <= Symbols::s_Key9)
         return static_cast<i32>(keySym);
 
-    if(keySym >= Symbols::s_KeyA && keySym <= Symbols::s_KeyZ)
+    if(keySym >= Symbols::s_UppercaseA && keySym <= Symbols::s_UppercaseZ)
         return static_cast<i32>(keySym);
 
-    if(keySym >= Symbols::s_Keya && keySym <= Symbols::s_Keyz)
-        return static_cast<i32>(Key::A + (keySym - Symbols::s_Keya));
+    if(keySym >= Symbols::s_LowercaseA && keySym <= Symbols::s_LowercaseZ)
+        return static_cast<i32>(Key::A + (keySym - Symbols::s_LowercaseA));
 
     if(keySym >= Symbols::s_F1 && keySym <= Symbols::s_F24)
         return static_cast<i32>(Key::F1 + (keySym - Symbols::s_F1));
@@ -255,7 +255,7 @@ template<typename Symbols>
     case Symbols::s_Escape: return Key::Escape;
     case Symbols::s_ReturnKey: return Key::Enter;
     case Symbols::s_Tab: return Key::Tab;
-    case Symbols::s_BackSpace: return Key::Backspace;
+    case Symbols::s_Backspace: return Key::Backspace;
     case Symbols::s_Insert: return Key::Insert;
     case Symbols::s_DeleteKey: return Key::Delete;
     case Symbols::s_Right: return Key::Right;

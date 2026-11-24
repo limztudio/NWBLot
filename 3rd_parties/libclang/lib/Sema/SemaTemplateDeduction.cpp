@@ -4519,7 +4519,7 @@ TemplateDeductionResult Sema::DeduceTemplateArguments(
                             PartialOverloading)) {
     const auto *Proto = Function->getType()->castAs<FunctionProtoType>();
     if (Proto->isTemplateVariadic())
-      /* Do nothing */;
+      ;
     else if (!Proto->isVariadic())
       return TemplateDeductionResult::TooManyArguments;
   }

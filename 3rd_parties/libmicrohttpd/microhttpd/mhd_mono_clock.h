@@ -65,7 +65,7 @@ MHD_monotonic_sec_counter (void);
  * Tries to be not affected by manually setting the system real time
  * clock or adjustments by NTP synchronization.
  *
- * @return number of microseconds from some fixed moment
+ * @return number of milliseconds from some fixed moment
  */
 uint64_t
 MHD_monotonic_msec_counter (void);

@@ -1,5 +1,7 @@
 # Renderer optimization implementation record
 
+> **Historical record:** This is a historical implementation and measurement record. Its statuses, instructions, and source references describe the recorded campaign rather than a current work queue.
+
 This work follows the September 12, 2026 reflection/refraction audit at source `50f258fcf`. Each completed step is committed and pushed separately. Production changes stay in their owning domains and follow `.helper/standard.md` and `.helper/exception.md`.
 
 Correctness takes priority over an apparent timing reduction. Shader candidates require the relevant image, boundary, and lifecycle checks. Performance comparisons use frozen baseline/candidate builds and assets, matched workloads, independent balanced blocks, and actual completed GPU samples. Builds, cooking, GPU tests, and timing acquisitions run sequentially. No failed or unfavorable trial is discarded to improve the result. A rejected experiment is restored and its outcome is documented.

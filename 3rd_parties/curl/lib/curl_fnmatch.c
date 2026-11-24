@@ -411,7 +411,6 @@ int Curl_fnmatch(void *ptr, const char *pattern, const char *string)
   default:
     return CURL_FNMATCH_FAIL;
   }
-  /* not reached */
 }
 #endif /* !HAVE_FNMATCH */
 

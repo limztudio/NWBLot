@@ -17,7 +17,6 @@
 #include <windows.h>
 #endif  // #ifdef _WIN32
 
-// structure for a mutex
 typedef struct RmtMutexInternal
 {
 #ifdef _WIN32
@@ -28,7 +27,6 @@ typedef struct RmtMutexInternal
 #endif  // #ifdef _WIN32
 } RmtMutexInternal;
 
-// create a mutex
 RmtErrorCode RmtMutexCreate(RmtMutex* mutex, const char* name)
 {
     RMT_ASSERT_MESSAGE(mutex, "Parameter mutex is NULL.");
@@ -40,7 +38,6 @@ RmtErrorCode RmtMutexCreate(RmtMutex* mutex, const char* name)
     RMT_STATIC_ASSERT(sizeof(RmtMutex) >= sizeof(RmtMutexInternal));
 
 #ifdef _WIN32
-    /* create the mutex for win32 */
     mutex_internal->handle = CreateMutexA(NULL, FALSE, name);
 
     RMT_RETURN_ON_ERROR(mutex_internal->handle != NULL, kRmtErrorPlatformFunctionFailed);

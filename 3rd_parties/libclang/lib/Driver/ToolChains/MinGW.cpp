@@ -768,7 +768,6 @@ void toolchains::MinGW::addClangTargetOptions(
   if (Arg *A = DriverArgs.getLastArg(options::OPT_mguard_EQ)) {
     StringRef GuardArgs = A->getValue();
     if (GuardArgs == "none") {
-      // Do nothing.
     } else if (GuardArgs == "cf") {
       // Emit CFG instrumentation and the table of address-taken functions.
       CC1Args.push_back("-cfguard");

@@ -445,8 +445,6 @@ InferAddressSpacesImpl::getIntToPtrPointerOperand(const Operator *I2P) const {
   if (I2P->getType()->isVectorTy())
     return nullptr;
 
-  // If I2P has been accessed and has the corresponding old pointer value, just
-  // return true.
   if (auto *OldPtr = PtrIntCastPairs.lookup(I2P))
     return OldPtr;
 

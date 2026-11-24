@@ -275,7 +275,6 @@ bool RgdDxbcParser::CheckDigestMatch(const std::string& file_path, uint64_t hash
         // If PDBs are generated using '-Zs', a file with magic number 'DXBC' along with a separate slim/small PDB file is created for each shader.
         // This slim pdb file only contains the shader source code and no debug info.
 
-        // Read the header.
         DxbcHeader header;
         if (!file.read(reinterpret_cast<char*>(&header), sizeof(header)))
         {
@@ -556,7 +555,6 @@ bool RgdDxbcParser::FindShaderIoAndBindings(const std::string& dxc_dumpbin_outpu
         std::string trimmed_line;
         RgdUtils::TrimLeadingAndTrailingWhitespace(line, trimmed_line);
 
-        // Check if the line starts with a semicolon.
         if (!trimmed_line.empty() && trimmed_line[0] == ';')
         {
             found_section = true;
@@ -581,7 +579,6 @@ bool RgdDxbcParser::ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_f
 
     if (file.is_open())
     {
-        // Read the header.
         DxbcHeader header;
         if (file.read(reinterpret_cast<char*>(&header), sizeof(header)))
         {
@@ -720,7 +717,6 @@ bool RgdDxbcParser::FindPdbFileInDirectories(const std::string& pdb_file_name, s
             }
             else
             {
-                // Should not reach here.
                 assert(false);
             }
             if (result)

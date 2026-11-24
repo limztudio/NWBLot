@@ -104,15 +104,15 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not a persistent constant buffer."));
             return false;
         }
-        if((item.type == ResourceType::RawBuffer_SRV || item.type == ResourceType::RawBuffer_UAV) && !bufferDesc.canHaveRawViews){
+        if((item.type == ResourceType::RawBufferSrv || item.type == ResourceType::RawBufferUav) && !bufferDesc.canHaveRawViews){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no raw-view capability."));
             return false;
         }
-        if((item.type == ResourceType::StructuredBuffer_SRV || item.type == ResourceType::StructuredBuffer_UAV) && bufferDesc.structStride == 0u){
+        if((item.type == ResourceType::StructuredBufferSrv || item.type == ResourceType::StructuredBufferUav) && bufferDesc.structStride == 0u){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not structured."));
             return false;
         }
-        if((item.type == ResourceType::StructuredBuffer_UAV || item.type == ResourceType::RawBuffer_UAV) && !bufferDesc.canHaveUAVs){
+        if((item.type == ResourceType::StructuredBufferUav || item.type == ResourceType::RawBufferUav) && !bufferDesc.canHaveUAVs){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no UAV capability."));
             return false;
         }
@@ -141,10 +141,10 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
     }
     else{
         switch(item.type){
-        case ResourceType::TypedBuffer_SRV:
-        case ResourceType::TypedBuffer_UAV:{
+        case ResourceType::TypedBufferSrv:
+        case ResourceType::TypedBufferUav:{
             auto& buffer = *MakeNotNull(checked_cast<Buffer*>(item.resourceHandle));
-            const VkBufferUsageFlags requiredUsage = item.type == ResourceType::TypedBuffer_UAV
+            const VkBufferUsageFlags requiredUsage = item.type == ResourceType::TypedBufferUav
                 ? VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
             ;
@@ -154,7 +154,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             }
             const BufferDesc& bufferDesc = buffer.getCreationDescription();
             FOUNDATION_ASSERT((buffer.m_bufferInfo.usage & requiredUsage) == requiredUsage);
-            if(!bufferDesc.canHaveTypedViews || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs)){
+            if(!bufferDesc.canHaveTypedViews || (item.type == ResourceType::TypedBufferUav && !bufferDesc.canHaveUAVs)){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;
             }
@@ -168,7 +168,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 return false;
             }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
-            if(viewFormat == Format::UNKNOWN || viewFormat >= Format::Count){
+            if(viewFormat == Format::UNKNOWN || viewFormat >= Format::kCount){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is invalid."));
                 return false;
             }
@@ -186,7 +186,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
                 bufferFeatures = formatProperties.bufferFeatures;
             }
-            const VkFormatFeatureFlags requiredFormatFeature = item.type == ResourceType::TypedBuffer_UAV ? VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT : VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
+            const VkFormatFeatureFlags requiredFormatFeature = item.type == ResourceType::TypedBufferUav ? VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT : VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
             if((bufferFeatures & requiredFormatFeature) == 0u){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: format lacks texel-buffer support."));
                 return false;
@@ -206,20 +206,20 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             addressInfo.address = descriptorAddress;
             addressInfo.range = range->byteSize;
             addressInfo.format = vkFormat;
-            if(item.type == ResourceType::TypedBuffer_UAV)
+            if(item.type == ResourceType::TypedBufferUav)
                 getInfo.data.pStorageTexelBuffer = &addressInfo;
             else
                 getInfo.data.pUniformTexelBuffer = &addressInfo;
             break;
         }
-        case ResourceType::Texture_SRV:
-        case ResourceType::Texture_UAV:{
+        case ResourceType::TextureSrv:
+        case ResourceType::TextureUav:{
             auto& texture = *MakeNotNull(checked_cast<Texture*>(item.resourceHandle));
             if(!m_device.isTextureReadyForGpuUse(&texture)){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Texture."));
                 return false;
             }
-            const VkImageUsageFlags requiredUsage = item.type == ResourceType::Texture_UAV ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT;
+            const VkImageUsageFlags requiredUsage = item.type == ResourceType::TextureUav ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT;
             if((texture.m_imageInfo.usage & requiredUsage) == 0u){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: Texture lacks native descriptor usage."));
                 return false;
@@ -228,7 +228,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             if(!imageView)
                 return false;
             imageInfo.imageView = *imageView;
-            imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VulkanDetail::s_ReadOnlyImageLayout;
+            imageInfo.imageLayout = item.type == ResourceType::TextureUav ? VK_IMAGE_LAYOUT_GENERAL : VulkanDetail::s_ReadOnlyImageLayout;
             getInfo.data.pSampledImage = &imageInfo;
             getInfo.data.pStorageImage = &imageInfo;
             break;

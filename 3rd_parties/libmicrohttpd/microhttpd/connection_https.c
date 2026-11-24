@@ -21,8 +21,7 @@
 
 /**
  * @file connection_https.c
- * @brief  Methods for managing SSL/TLS connections. This file is only
- *         compiled if ENABLE_HTTPS is set.
+ * @brief  Methods for managing SSL/TLS connections.
  * @author Sagie Amir
  * @author Christian Grothoff
  * @author Karlson2k (Evgeny Grin)
@@ -68,7 +67,6 @@ recv_tls_adapter (struct MHD_Connection *connection,
       connection->epoll_state &=
         ~((enum MHD_EpollState) MHD_EPOLL_STATE_READ_READY);
 #endif
-    /* Any network errors means that buffer is empty. */
     connection->tls_read_ready = false;
     return MHD_ERR_AGAIN_;
   }
@@ -145,7 +143,6 @@ MHD_run_tls_handshake_ (struct MHD_Connection *connection)
     ret = gnutls_handshake (connection->tls_session);
     if (ret == GNUTLS_E_SUCCESS)
     {
-      /* set connection TLS state to enable HTTP processing */
       connection->tls_state = MHD_TLS_CONN_CONNECTED;
       MHD_update_last_activity_ (connection);
       return true;
@@ -154,10 +151,8 @@ MHD_run_tls_handshake_ (struct MHD_Connection *connection)
          (GNUTLS_E_INTERRUPTED == ret) )
     {
       connection->tls_state = MHD_TLS_CONN_HANDSHAKING;
-      /* handshake not done */
       return false;
     }
-    /* handshake failed */
     connection->tls_state = MHD_TLS_CONN_TLS_FAILED;
 #ifdef HAVE_MESSAGES
     MHD_DLOG (connection->daemon,
@@ -215,4 +210,3 @@ MHD_tls_connection_shutdown (struct MHD_Connection *connection)
 }
 
 
-/* end of connection_https.c */

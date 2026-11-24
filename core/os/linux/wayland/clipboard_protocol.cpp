@@ -20,18 +20,18 @@ namespace __hidden_wayland_clipboard_protocol{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<AStringView, 4u> s_Utf8Mimes{ "text/plain;charset=utf-8", "text/plain;charset=UTF-8", "UTF8_STRING", "text/plain" };
+static constexpr Array<AStringView, 4u> s_PreferredUtf8MimeTypes{ "text/plain;charset=utf-8", "text/plain;charset=UTF-8", "UTF8_STRING", "text/plain" };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void SelectMime(const AStringView mime, u8& rank)noexcept{
+static void UpdatePreferredUtf8MimeRank(const AStringView mime, u8& rank)noexcept{
     if(mime.empty())
         return;
-    for(usize index = 0u; index < s_Utf8Mimes.size(); ++index){
-        const u8 candidate = static_cast<u8>(s_Utf8Mimes.size() - index);
-        if(mime == s_Utf8Mimes[index] && candidate > rank){
+    for(usize index = 0u; index < s_PreferredUtf8MimeTypes.size(); ++index){
+        const u8 candidate = static_cast<u8>(s_PreferredUtf8MimeTypes.size() - index);
+        if(mime == s_PreferredUtf8MimeTypes[index] && candidate > rank){
             rank = candidate;
         }
     }
@@ -48,8 +48,8 @@ static void SelectMime(const AStringView mime, u8& rank)noexcept{
 
 
 NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank)noexcept{
-    FOUNDATION_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard_protocol::s_Utf8Mimes.size());
-    return MakeNotNull(__hidden_wayland_clipboard_protocol::s_Utf8Mimes[__hidden_wayland_clipboard_protocol::s_Utf8Mimes.size() - rank].data());
+    FOUNDATION_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard_protocol::s_PreferredUtf8MimeTypes.size());
+    return MakeNotNull(__hidden_wayland_clipboard_protocol::s_PreferredUtf8MimeTypes[__hidden_wayland_clipboard_protocol::s_PreferredUtf8MimeTypes.size() - rank].data());
 }
 
 void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
@@ -120,7 +120,7 @@ void WaylandClipboardService::OnSelection(void* const data, wl_data_device*, wl_
 
 void WaylandClipboardService::OnOfferMime(void* const data, wl_data_offer*, const char* const mime)noexcept{
     auto& offer = *MakeNotNull(static_cast<Offer*>(data));
-    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
+    __hidden_wayland_clipboard_protocol::UpdatePreferredUtf8MimeRank(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::OnOfferActions(void*, wl_data_offer*, u32)noexcept{}
@@ -132,7 +132,7 @@ void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*
 void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *MakeNotNull(static_cast<Source*>(data));
     u8 rank = 0u;
-    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
+    __hidden_wayland_clipboard_protocol::UpdatePreferredUtf8MimeRank(SafeStringView(mime), rank);
     if(rank != 0u){
         source.service.sendSource(source, fd);
         return;
@@ -173,7 +173,7 @@ void WaylandClipboardService::OnPrimarySelection(void* const data, zwp_primary_s
 
 void WaylandClipboardService::OnPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime)noexcept{
     auto& offer = *MakeNotNull(static_cast<Offer*>(data));
-    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
+    __hidden_wayland_clipboard_protocol::UpdatePreferredUtf8MimeRank(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
@@ -264,7 +264,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const wl_data_source_listener s_Listener{ OnSourceTarget, OnSourceSend, OnSourceCancelled, OnSourceDrop, OnSourceFinished, OnSourceAction };
         if(wl_data_source_add_listener(native, &s_Listener, source.get()) != 0)
             FOUNDATION_FATAL_ASSERT(false);
-        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
+        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_PreferredUtf8MimeTypes)
             wl_data_source_offer(native, mime.data());
         wl_data_device_set_selection(m_device, native, m_serial);
     }
@@ -277,7 +277,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const zwp_primary_selection_source_v1_listener s_Listener{ OnPrimarySend, OnPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &s_Listener, source.get()) != 0)
             FOUNDATION_FATAL_ASSERT(false);
-        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
+        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_PreferredUtf8MimeTypes)
             zwp_primary_selection_source_v1_offer(native, mime.data());
         zwp_primary_selection_device_v1_set_selection(m_primaryDevice, native, m_serial);
     }

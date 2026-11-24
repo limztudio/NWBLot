@@ -312,7 +312,6 @@ UNITTEST CURLUcode parse_hostname_login(struct Curl_URL *u,
    * ftp://user:password@ftp.site.example:8021/README */
   ptr++;
 
-  /* if this is a known scheme, get some details */
   if(u->scheme)
     h = Curl_get_scheme(u->scheme);
 
@@ -1855,7 +1854,6 @@ static CURLUcode set_url(CURLU *u, const char *url, size_t part_size,
     return CURLUE_MALFORMED_INPUT;
   }
 
-  /* if the new URL is absolute replace the existing with the new. */
   if(Curl_is_absolute_url(url, NULL, 0,
                           flags & (CURLU_GUESS_SCHEME | CURLU_DEFAULT_SCHEME)))
     return parseurl_and_replace(url, u, flags);

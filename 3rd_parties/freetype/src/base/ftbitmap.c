@@ -362,7 +362,6 @@
       p = bitmap->buffer + (FT_UInt)pitch * ( bitmap->rows - 1 );
     }
 
-    /* for each row */
     for ( y = 0; y < bitmap->rows; y++ )
     {
       /*
@@ -795,7 +794,7 @@
       return FT_THROW( Invalid_Argument );
 
     if ( source_->pixel_mode == FT_PIXEL_MODE_NONE )
-      return FT_Err_Ok;               /* nothing to do */
+      return FT_Err_Ok;
 
     /* pitches must have the same sign */
     if ( target->pixel_mode == FT_PIXEL_MODE_BGRA &&
@@ -803,7 +802,7 @@
       return FT_THROW( Invalid_Argument );
 
     if ( !( source_->width && source_->rows ) )
-      return FT_Err_Ok;               /* nothing to do */
+      return FT_Err_Ok;
 
     /* get source bitmap dimensions assuming integer offsets */
     sbx.xMin = ( source_offset_.x >> 6 );

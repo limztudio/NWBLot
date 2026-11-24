@@ -99,11 +99,7 @@ static CURLcode send_buf(struct Curl_easy *data,
     if(!timeout_ms)
       timeout_ms = TIMEDIFF_T_MAX;
 
-    /* Do not busyloop. The entire loop thing is a workaround as it causes a
-       BLOCKING behavior which is a NO-NO. This function should rather be
-       split up in a do and a doing piece where the pieces that are not
-       possible to send now will be sent in the doing function repeatedly
-       until the entire request is sent. */
+    /* Wait for writability to avoid a busy loop; this blocks the transfer. */
     what = SOCKET_WRITABLE(sockfd, timeout_ms);
     if(what < 0) {
       result = CURLE_SEND_ERROR;

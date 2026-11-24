@@ -1027,10 +1027,7 @@ public:
     //! Get a value from an object associated with the name.
     /*! \pre IsObject() == true
         \tparam T Either \c Ch or \c const \c Ch (template used for disambiguation with \ref operator[](SizeType))
-        \note In version 0.1x, if the member is not found, this function returns a null value. This makes issue 7.
-        Since 0.2, if the name is not correct, it will assert.
-        If user is unsure whether a member exists, user should use HasMember() first.
-        A better approach is to use FindMember().
+        \note Asserts if the member does not exist. Use FindMember() to check first.
         \note Linear time complexity.
     */
     template <typename T>
@@ -1058,11 +1055,7 @@ public:
         else {
             RAPIDJSON_ASSERT(false);    // see above note
 
-            // This will generate -Wexit-time-destructors in clang
-            // static GenericValue NullValue;
-            // return NullValue;
-
-            // Use static buffer and placement-new to prevent destruction
+            // Avoid an exit-time destructor warning in clang.
             static char buffer[sizeof(GenericValue)];
             return *new (buffer) GenericValue();
         }
@@ -1130,9 +1123,6 @@ public:
         \return Iterator to member, if it exists.
             Otherwise returns \ref MemberEnd().
 
-        \note Earlier versions of Rapidjson returned a \c NULL pointer, in case
-            the requested member doesn't exist. For consistency with e.g.
-            \c std::map, this has been changed to MemberEnd() now.
         \note Linear time complexity.
     */
     MemberIterator FindMember(const Ch* name) {
@@ -1150,9 +1140,6 @@ public:
         \return Iterator to member, if it exists.
             Otherwise returns \ref MemberEnd().
 
-        \note Earlier versions of Rapidjson returned a \c NULL pointer, in case
-            the requested member doesn't exist. For consistency with e.g.
-            \c std::map, this has been changed to MemberEnd() now.
         \note Linear time complexity.
     */
     template <typename SourceAllocator>
@@ -1990,7 +1977,6 @@ private:
     //! Assignment without calling destructor
     void RawAssign(GenericValue& rhs) RAPIDJSON_NOEXCEPT {
         data_ = rhs.data_;
-        // data_.f.flags = rhs.data_.f.flags;
         rhs.data_.f.flags = kNullFlag;
     }
 
@@ -2331,8 +2317,6 @@ private:
         GenericDocument& d_;
     };
 
-    // callers of the following private Handler functions
-    // template <typename,typename,typename> friend class GenericReader; // for parsing
     template <typename, typename> friend class GenericValue; // for deep copying
 
 public:
@@ -2493,7 +2477,7 @@ private:
 //! Helper class for accessing Value of object type.
 /*!
     Instance of this helper class is obtained by \c GenericValue::GetObject().
-    In addition to all APIs for array type, it provides range-based for loop if \c RAPIDJSON_HAS_CXX11_RANGE_FOR=1.
+    In addition to object APIs, it provides range-based for loop if \c RAPIDJSON_HAS_CXX11_RANGE_FOR=1.
 */
 template <bool Const, typename ValueT>
 class GenericObject {

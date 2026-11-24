@@ -32,7 +32,7 @@ LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_UTF_8 = "utf-8"
 LIT_STATUS = "status"
 LIT_CAPTURES = "captures"
-LIT_QUALIFICATION_ARM_OR_SHARED_INPUT_CHAN = "qualification arm or shared input changed"
+LIT_QUALIFICATION_INPUT_CHANGED = "qualification arm or shared input changed"
 LIT_PASSED = "passed"
 LIT_MAIN = "__main__"
 LIT_APPEND = "append"
@@ -119,13 +119,13 @@ def main(argv=None):
         for selection in SELECTIONS:
             if RendererBenchmarkIdentity.freeze_arm(arm) != identity or RendererBenchmarkIdentity.binary_identity(args.logserver_executable) != logger_identity \
                     or any(file_identity(Path(path)) != saved for path, saved in shared.items()):
-                raise SmokeFailure(LIT_QUALIFICATION_ARM_OR_SHARED_INPUT_CHAN)
+                raise SmokeFailure(LIT_QUALIFICATION_INPUT_CHANGED)
             frame, evidence = capture(args, selection)
             frames[selection] = frame
             report[LIT_CAPTURES].append(evidence)
         if RendererBenchmarkIdentity.freeze_arm(arm) != identity or RendererBenchmarkIdentity.binary_identity(args.logserver_executable) != logger_identity \
                 or any(file_identity(Path(path)) != saved for path, saved in shared.items()):
-            raise SmokeFailure(LIT_QUALIFICATION_ARM_OR_SHARED_INPUT_CHAN)
+            raise SmokeFailure(LIT_QUALIFICATION_INPUT_CHANGED)
         report["images"] = ReflectionSpatialOwnerImageEvidence.compare_images(frames)
         report[LIT_STATUS] = LIT_PASSED
     except (SmokeFailure, OSError, ValueError, subprocess.TimeoutExpired) as error:

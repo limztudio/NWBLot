@@ -163,19 +163,19 @@ b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in Gp
 
 [cpp_unwind]
 b8 RefractionResolveGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
-    const auto resources = ResolveRefractionGraphTaskResources(this.resources, true, this.hardwareReady);
-    return this.system.refraction().recordRefractionResolve(commands, this.targets, resources);
+    const auto resources = ResolveRefractionGraphTaskResources(this.m_resources, true, this.m_hardwareReady);
+    return this.m_raytracingSystem.refraction().recordRefractionResolve(commands, this.m_targets, resources);
 }
 
 [cpp_unwind]
 void RefractionResolveGraphTask::accepted(in QueueSubmissionToken token){
-    const b8 usedHardware = this.resources.usesHardwareTrace && this.hardwareReady;
+    const b8 usedHardware = this.m_resources.usesHardwareTrace && this.m_hardwareReady;
     if(usedHardware){
-        this.system.confirmRayTraceContextReadSubmission(token);
-        LogAcceptedRefractionResolveIfNeeded(true, this.hardwareLogged);
+        this.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
+        LogAcceptedRefractionResolveIfNeeded(true, this.m_hardwareLogged);
     }
     else
-        LogAcceptedRefractionResolveIfNeeded(false, this.screenLogged);
+        LogAcceptedRefractionResolveIfNeeded(false, this.m_screenLogged);
 }
 
 [cpp_unwind]

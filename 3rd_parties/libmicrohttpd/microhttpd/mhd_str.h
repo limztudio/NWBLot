@@ -134,7 +134,7 @@ MHD_str_equal_caseless_bin_n_ (const char *const str1,
  * @param token the token to find
  * @param token_len length of token, not including optional terminating
  *                  null-character.
- * @return non-zero if two strings are equal, zero otherwise.
+ * @return non-zero if the token is present, zero otherwise.
  */
 bool
 MHD_str_has_token_caseless_ (const char *str,
@@ -149,7 +149,7 @@ MHD_str_has_token_caseless_ (const char *str,
  * @warning tkn must be static string
  * @param str the string to check
  * @param tkn the static string of token to find
- * @return non-zero if two strings are equal, zero otherwise.
+ * @return non-zero if the token is present, zero otherwise.
  */
 #define MHD_str_has_s_token_caseless_(str,tkn) \
   MHD_str_has_token_caseless_ ((str),(tkn),MHD_STATICSTR_LEN_ (tkn))
@@ -439,7 +439,7 @@ MHD_uint64_to_str (uint64_t val,
 
 
 /**
- * Convert uint16_t value to decimal US-ASCII string padded with
+ * Convert uint8_t value to decimal US-ASCII string padded with
  * zeros on the left side.
  *
  * @note: result is NOT zero-terminated.
@@ -568,9 +568,9 @@ MHD_str_pct_decode_lenient_n_ (const char *pct_encoded,
  * their decoded versions and copying back all other characters without extra
  * processing.
  *
- * @param[in,out] str the string to be updated in-place, must be zero-terminated
- *                    on input, the output is zero-terminated; the string is
- *                    truncated to zero length if broken encoding is found
+ * @param[in,out] str the string to update; input must be zero-terminated.
+ *                    On success the output is zero-terminated. The string
+ *                    may be modified if the encoding is invalid.
  * @return the number of character in decoded string
  */
 size_t
@@ -698,7 +698,7 @@ MHD_str_equal_caseless_quoted_bin_n (const char *quoted,
  *               DQUOTE chars, does not need to be zero-terminated
  * @param quoted_len the length in chars of the @a quoted string
  * @param[out] result the pointer to the buffer to put the result, must
- *                    be at least @a size character long. May be modified even
+ *                    be at least @a quoted_len characters long. May be modified even
  *                    if @a quoted is invalid sequence. The result is NOT
  *                    zero-terminated.
  * @return The number of characters written to the output buffer,

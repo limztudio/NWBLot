@@ -173,7 +173,6 @@ public:
   /// Default constructor that creates an APInt with a 1-bit zero value.
   explicit APInt() { U.VAL = 0; }
 
-  /// Copy Constructor.
   APInt(const APInt &that) : BitWidth(that.BitWidth) {
     if (isSingleWord())
       U.VAL = that.U.VAL;
@@ -181,7 +180,6 @@ public:
       initSlowCase(that);
   }
 
-  /// Move Constructor.
   APInt(APInt &&that) : BitWidth(that.BitWidth) {
     memcpy(&U, &that.U, sizeof(U));
     that.BitWidth = 0;
@@ -619,9 +617,6 @@ public:
   /// \name Assignment Operators
   /// @{
 
-  /// Copy assignment operator.
-  ///
-  /// \returns *this after assignment of RHS.
   APInt &operator=(const APInt &RHS) {
     // The common case (both source or dest being inline) doesn't require
     // allocation or deallocation.
@@ -635,7 +630,6 @@ public:
     return *this;
   }
 
-  /// Move assignment operator.
   APInt &operator=(APInt &&that) {
 #ifdef EXPENSIVE_CHECKS
     // Some std::shuffle implementations still do self-assignment.

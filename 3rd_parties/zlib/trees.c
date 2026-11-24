@@ -97,7 +97,7 @@ local ct_data static_dtree[D_CODES];
 
 uch _dist_code[DIST_CODE_LEN];
 /* Distance codes. The first 256 values correspond to the distances
- * 3 .. 258, the last 256 values correspond to the top 8 bits of
+ * 1 .. 256, the last 256 values correspond to the top 8 bits of
  * the 15 bit distances.
  */
 
@@ -759,7 +759,7 @@ local void send_tree(deflate_state *s, ct_data *tree, int max_code) {
     int max_count = 7;         /* max repeat count */
     int min_count = 4;         /* min repeat count */
 
-    /* tree[max_code + 1].Len = -1; */  /* guard already set */
+    /* scan_tree() already set the guard. */
     if (nextlen == 0) max_count = 138, min_count = 3;
 
     for (n = 0; n <= max_code; n++) {

@@ -69,16 +69,16 @@ struct alignas(32) SIMDVectorDoubleConstU{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr f32 s_PI = 3.141592654f;
-inline constexpr f64 s_DoublePI = 0x1.921fb54442d18p+1;
-constexpr f32 s_2PI = 6.283185307f;
-inline constexpr f64 s_Double2PI = 0x1.921fb54442d18p+2;
-constexpr f32 s_1DIV2PI = 0.159154943f;
-constexpr f32 s_PIDIV2 = 1.570796327f;
-inline constexpr f64 s_DoublePIDIV2 = 0x1.921fb54442d18p+0;
-constexpr f32 s_PIDIV4 = 0.785398163f;
-inline constexpr f64 s_DoublePIDIV4 = 0x1.921fb54442d18p-1;
-constexpr f32 s_3PIDIV4 = 2.3561944905f;
+constexpr f32 s_Pi = 3.141592654f;
+inline constexpr f64 s_DoublePi = 0x1.921fb54442d18p+1;
+constexpr f32 s_TwoPi = 6.283185307f;
+inline constexpr f64 s_DoubleTwoPi = 0x1.921fb54442d18p+2;
+constexpr f32 s_ReciprocalTwoPi = 0.159154943f;
+constexpr f32 s_HalfPi = 1.570796327f;
+inline constexpr f64 s_DoubleHalfPi = 0x1.921fb54442d18p+0;
+constexpr f32 s_QuarterPi = 0.785398163f;
+inline constexpr f64 s_DoubleQuarterPi = 0x1.921fb54442d18p-1;
+constexpr f32 s_ThreePiOverFour = 2.3561944905f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,10 +135,10 @@ inline constexpr i32 s_SIMDAvxPermutePdAllHigh = 0xF;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_SELECT_0 = 0x00000000;
-constexpr u64 s_DoubleSELECT_0 = 0x00000000;
-constexpr u32 s_SELECT_1 = 0xFFFFFFFF;
-constexpr u64 s_DoubleSELECT_1 = 0xFFFFFFFFFFFFFFFFull;
+constexpr u32 s_SelectFalseMask32 = 0x00000000;
+constexpr u64 s_SelectFalseMask64 = 0x00000000;
+constexpr u32 s_SelectTrueMask32 = 0xFFFFFFFF;
+constexpr u64 s_SelectTrueMask64 = 0xFFFFFFFFFFFFFFFFull;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,10 +206,10 @@ inline const SIMDVectorDoubleConstF s_DoubleSIMDOneHalf = { { { 0.5, 0.5, 0.5, 0
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDHalfPi = { { { s_PIDIV2, s_PIDIV2, s_PIDIV2, s_PIDIV2 } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDPi = { { { s_PI, s_PI, s_PI, s_PI } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDTwoPi = { { { s_2PI, s_2PI, s_2PI, s_2PI } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDReciprocalTwoPi = { { { s_1DIV2PI, s_1DIV2PI, s_1DIV2PI, s_1DIV2PI } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDHalfPi = { { { s_HalfPi, s_HalfPi, s_HalfPi, s_HalfPi } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDPi = { { { s_Pi, s_Pi, s_Pi, s_Pi } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDTwoPi = { { { s_TwoPi, s_TwoPi, s_TwoPi, s_TwoPi } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDReciprocalTwoPi = { { { s_ReciprocalTwoPi, s_ReciprocalTwoPi, s_ReciprocalTwoPi, s_ReciprocalTwoPi } } };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,11 +230,11 @@ FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDNegOneMask = { { { 0xFFFFFFFF, 0x
 
 
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDNoFraction = { { { s_F32NoFractionThreshold, s_F32NoFractionThreshold, s_F32NoFractionThreshold, s_F32NoFractionThreshold } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect0101 = { { { s_SELECT_0, s_SELECT_1, s_SELECT_0, s_SELECT_1 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect0101 = { { { s_DoubleSELECT_0, s_DoubleSELECT_1, s_DoubleSELECT_0, s_DoubleSELECT_1 } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1110 = { { { s_SELECT_1, s_SELECT_1, s_SELECT_1, s_SELECT_0 } } };
-inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1110 = { { { s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_1, s_DoubleSELECT_0 } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1011 = { { { s_SELECT_1, s_SELECT_0, s_SELECT_1, s_SELECT_1 } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect0101 = { { { s_SelectFalseMask32, s_SelectTrueMask32, s_SelectFalseMask32, s_SelectTrueMask32 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect0101 = { { { s_SelectFalseMask64, s_SelectTrueMask64, s_SelectFalseMask64, s_SelectTrueMask64 } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1110 = { { { s_SelectTrueMask32, s_SelectTrueMask32, s_SelectTrueMask32, s_SelectFalseMask32 } } };
+inline const SIMDVectorDoubleConstU s_DoubleSIMDSelect1110 = { { { s_SelectTrueMask64, s_SelectTrueMask64, s_SelectTrueMask64, s_SelectFalseMask64 } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDSelect1011 = { { { s_SelectTrueMask32, s_SelectFalseMask32, s_SelectTrueMask32, s_SelectTrueMask32 } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDFlipY = { { { 0, 0x80000000, 0, 0 } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDFlipZ = { { { 0, 0, 0x80000000, 0 } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstU s_SIMDFlipW = { { { 0, 0, 0, 0x80000000 } } };

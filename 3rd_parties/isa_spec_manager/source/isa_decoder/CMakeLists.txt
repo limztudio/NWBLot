@@ -2,7 +2,6 @@
 cmake_minimum_required(VERSION 3.10)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
 
-# Setting project directories.
 set (SRC_DIR ../../source)
 set (INC_DIR ../../include)
 
@@ -24,14 +23,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output)
 
-# Local target: IsaDecoder.
-# Setting all header files for this project.
 set (ALL_H
-    # Top interface header.
     ${INC_DIR}/amdisa/isa_decoder.h
     ${INC_DIR}/amdisa/api_version.h
 
-    # Local library headers.
     ${SRC_DIR}/common/amdisa_expression_tree_consts.h
     ${SRC_DIR}/common/amdisa_structures.h
     ${SRC_DIR}/common/amdisa_xml_element_consts.h
@@ -39,22 +34,17 @@ set (ALL_H
     ${SRC_DIR}/common/isa_xml_reader.h
     ${SRC_DIR}/common/xml_expression_tree_reader.h
 
-    # Decoder implementation headers.
     ./isa_decoder_strategy.h
     ./v1_1_1/encoding_condition_handler_v1_1_1.h
 
-    # Third party library headers.
     ${TINYXML_DIR}/tinyxml2.h
 )
 
-# Setting all source files for this project.
 set (ALL_CPP
-    # Top interface source file.
     ./isa_decoder.cpp
     ./encoding_condition_handler.hpp
     ./v1_1_1/isa_decoder_v1_1_1.cpp
 
-    # Local library source files.
     ${SRC_DIR}/common/amdisa_utility.cpp
     ${SRC_DIR}/common/amdisa_structures.cpp
     ${SRC_DIR}/common/isa_xml_reader.cpp
@@ -65,8 +55,6 @@ if (NOT _NWB_USE_TINYXML2_TARGET)
     list(APPEND ALL_CPP ${TINYXML_DIR}/tinyxml2.cpp)
 endif()
 
-# Adding target.
-# Static Library
 add_library(isa_decoder STATIC ${ALL_CPP})
 target_include_directories(isa_decoder PRIVATE
     ${SRC_DIR}/common
@@ -82,7 +70,6 @@ nwb_skip_unity_build_sources(
     "${CMAKE_CURRENT_LIST_DIR}/v1_1_1/isa_decoder_v1_1_1.cpp"
 )
 
-# install public headers
 install(DIRECTORY ${INC_DIR}/amdisa DESTINATION include COMPONENT dev)
 
 install(TARGETS isa_decoder EXPORT isa_decoderTargets
@@ -90,5 +77,4 @@ install(TARGETS isa_decoder EXPORT isa_decoderTargets
         LIBRARY DESTINATION lib COMPONENT binary
 )
 
-# Group these projects under an Examples folder.
 set_target_properties(isa_decoder PROPERTIES FOLDER "libs")

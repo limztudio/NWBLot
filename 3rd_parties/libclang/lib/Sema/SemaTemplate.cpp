@@ -5590,8 +5590,6 @@ bool Sema::CheckTemplateArgument(NamedDecl *Param, TemplateArgumentLoc &ArgLoc,
                              NTTP->getDeclName());
       }
 
-      // If that worked, check the non-type template parameter type
-      // for validity.
       if (!NTTPType.isNull())
         NTTPType = CheckNonTypeTemplateParameterType(NTTPType,
                                                      NTTP->getLocation());

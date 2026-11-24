@@ -104,14 +104,14 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
     if(shape.type == ShapeType::Sphere){
         const f32 r = shape.sphereShape().radius();
         if(r > 0.0f)
-            shapeVol = (4.0f / 3.0f) * s_PI * r * r * r;
+            shapeVol = (4.0f / 3.0f) * s_Pi * r * r * r;
     }
     else if(shape.type == ShapeType::Capsule){
         const CapsuleShape cap = shape.capsuleShape();
         const f32 r = cap.radius();
         if(r > 0.0f){
             const f32 len = Vector3Length(VectorSingle(cap.center2Vec() - cap.center1(), 0.0f)).x;
-            shapeVol = s_PI * r * r * (len + (4.0f / 3.0f) * r);
+            shapeVol = s_Pi * r * r * (len + (4.0f / 3.0f) * r);
         }
     }
     else if(shape.type == ShapeType::Cylinder){
@@ -119,14 +119,14 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
         const f32 r = cyl.radius() + cyl.convexRadius();
         const f32 h = 2.0f * (cyl.halfHeight() + cyl.convexRadius());
         if(r > 0.0f && h > 0.0f)
-            shapeVol = s_PI * r * r * h;
+            shapeVol = s_Pi * r * r * h;
     }
     else if(shape.type == ShapeType::Cone){
         const ConeShape cone = shape.coneShape();
         const f32 r = cone.radius() + cone.convexRadius();
         const f32 h = 2.0f * (cone.halfHeight() + cone.convexRadius());
         if(r > 0.0f && h > 0.0f)
-            shapeVol = (s_PI / 3.0f) * r * r * h;
+            shapeVol = (s_Pi / 3.0f) * r * r * h;
     }
     else if(shape.type == ShapeType::TaperedCapsule){
         const TaperedCapsuleShape tc = shape.taperedCapsuleShape();
@@ -137,19 +137,19 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
             const f32 len = Vector3Length(d).x;
             if(len <= Abs(VectorSingle(r1 - r2)).x + 1.0e-5f){
                 const f32 mr = SimdMax(r1, r2);
-                shapeVol = (4.0f / 3.0f) * s_PI * mr * mr * mr;
+                shapeVol = (4.0f / 3.0f) * s_Pi * mr * mr * mr;
             }
             else{
                 const f32 sinA = SimdClamp((r1 - r2) / len, -0.99999f, 0.99999f);
                 const f32 cosA = SqrtFast(SimdMax(0.0f, 1.0f - sinA * sinA));
                 const f32 h1 = r1 * (1.0f + sinA);
                 const f32 h2 = r2 * (1.0f - sinA);
-                const f32 cap1 = (s_PI / 3.0f) * h1 * h1 * (3.0f * r1 - h1);
-                const f32 cap2 = (s_PI / 3.0f) * h2 * h2 * (3.0f * r2 - h2);
+                const f32 cap1 = (s_Pi / 3.0f) * h1 * h1 * (3.0f * r1 - h1);
+                const f32 cap2 = (s_Pi / 3.0f) * h2 * h2 * (3.0f * r2 - h2);
                 const f32 ra = r1 * cosA;
                 const f32 rb = r2 * cosA;
                 const f32 frustumH = len + (r2 - r1) * sinA;
-                const f32 frustum = (s_PI / 3.0f) * frustumH * (ra * ra + ra * rb + rb * rb);
+                const f32 frustum = (s_Pi / 3.0f) * frustumH * (ra * ra + ra * rb + rb * rb);
                 shapeVol = cap1 + cap2 + SimdMax(0.0f, frustum);
             }
         }
@@ -191,12 +191,12 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
             }
             if(volume6 <= 1.0e-12f){
                 if(r > 0.0f)
-                    shapeVol = (4.0f / 3.0f) * s_PI * r * r * r;
+                    shapeVol = (4.0f / 3.0f) * s_Pi * r * r * r;
             }
             else{
                 shapeVol = volume6 / 6.0f;
                 if(r > 0.0f)
-                    shapeVol += skinVol + (4.0f / 3.0f) * s_PI * r * r * r;
+                    shapeVol += skinVol + (4.0f / 3.0f) * s_Pi * r * r * r;
             }
         }
     }
@@ -234,19 +234,19 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), xfPos, xfRot);
             const SphereShape s = shape.sphereShape();
             const f32 r = SimdMax(1.0e-3f, s.radius());
-            const f32 v = (4.0f / 3.0f) * s_PI * r * r * r;
+            const f32 v = (4.0f / 3.0f) * s_Pi * r * r * r;
             const VectorSingle wc = TransformPointValues(xfPos, xfRot, s.center());
             const f32 d = fluid.signedDepthWithNormal(wc, surfNorm);
             totalVol += v;
             if(d + r <= 0.0f)
                 continue;
             const f32 h = SimdClamp(d + r, 0.0f, 2.0f * r);
-            const f32 vCap = (s_PI / 3.0f) * h * h * (3.0f * r - h);
+            const f32 vCap = (s_Pi / 3.0f) * h * h * (3.0f * r - h);
             const f32 frac = SimdClamp(vCap / SimdMax(1.0e-7f, v), 0.0f, 1.0f);
             const VectorSingle cob = wc - surfNorm * (r * 0.375f * (1.0f - frac));
             subVol += vCap;
             weightedCob = weightedCob + cob * vCap;
-            areaEst += s_PI * r * r * frac;
+            areaEst += s_Pi * r * r * frac;
         }
         else{
             const VectorSingle bMin = VectorSingle(shape.aabb.lowerBound);

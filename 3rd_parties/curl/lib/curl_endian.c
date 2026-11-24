@@ -25,57 +25,21 @@
 
 #include "curl_endian.h"
 
-/*
- * Curl_read16_le()
- *
- * This function converts a 16-bit integer from the little endian format, as
- * used in the incoming package to whatever endian format we are using
- * natively.
- *
- * Parameters:
- *
- * buf      [in]     - A pointer to a 2-byte buffer.
- *
- * Returns the integer.
- */
+/* Read a little-endian integer from a 2-byte buffer. */
 unsigned short Curl_read16_le(const unsigned char *buf)
 {
   return (unsigned short)(((unsigned short)buf[0]) |
                           ((unsigned short)buf[1] << 8));
 }
 
-/*
- * Curl_read32_le()
- *
- * This function converts a 32-bit integer from the little endian format, as
- * used in the incoming package to whatever endian format we are using
- * natively.
- *
- * Parameters:
- *
- * buf      [in]     - A pointer to a 4-byte buffer.
- *
- * Returns the integer.
- */
+/* Read a little-endian integer from a 4-byte buffer. */
 unsigned int Curl_read32_le(const unsigned char *buf)
 {
   return ((unsigned int)buf[0]) | ((unsigned int)buf[1] << 8) |
          ((unsigned int)buf[2] << 16) | ((unsigned int)buf[3] << 24);
 }
 
-/*
- * Curl_read16_be()
- *
- * This function converts a 16-bit integer from the big endian format, as
- * used in the incoming package to whatever endian format we are using
- * natively.
- *
- * Parameters:
- *
- * buf      [in]     - A pointer to a 2-byte buffer.
- *
- * Returns the integer.
- */
+/* Read a big-endian integer from a 2-byte buffer. */
 unsigned short Curl_read16_be(const unsigned char *buf)
 {
   return (unsigned short)(((unsigned short)buf[0] << 8) |

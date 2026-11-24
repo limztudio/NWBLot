@@ -293,11 +293,6 @@ namespace neosmart {
         }
 
         while (!done) {
-            // One (or more) of the events we're monitoring has been triggered?
-
-            // If we're waiting for all events, assume we're done and check if there's an event that
-            // hasn't fired But if we're waiting for just one event, assume we're not done until we
-            // find a fired event
             done = (waitAll && wfmo->Status.EventsLeft == 0) ||
                    (!waitAll && wfmo->Status.FiredEvent != -1);
 
@@ -534,16 +529,6 @@ namespace neosmart {
 
 #ifdef PULSE
     int PulseEvent(neosmart_event_t event) {
-        // This may look like it's a horribly inefficient kludge with the sole intention of reducing
-        // code duplication, but in reality this is what any PulseEvent() implementation must look
-        // like. The only overhead (function calls aside, which your compiler will likely optimize
-        // away, anyway), is if only WFMO auto-reset waits are active there will be overhead to
-        // unnecessarily obtain the event mutex for ResetEvent() after. In all other cases (being no
-        // pending waits, WFMO manual-reset waits, or any WFSO waits), the event mutex must first be
-        // released for the waiting thread to resume action prior to locking the mutex again in
-        // order to set the event state to unsignaled, or else the waiting threads will loop back
-        // into a wait (due to checks for spurious CVariable wakeups).
-
         int result = SetEvent(event);
         assert(result == 0);
         result = ResetEvent(event);

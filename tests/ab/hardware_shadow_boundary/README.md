@@ -1,7 +1,7 @@
 # Hardware transparent versus opaque shadow boundary
 
 This target-hardware A/B workflow measures the natural hardware transparent-shadow route against an opaque hardware-only
-baseline on the animated ten-character stress scene. Both arms freeze the same yaw and use the same binary:
+baseline on the animated ten-character stress scene. Both arms freeze the same yaw; by default the launcher uses the same binary for both:
 
 - `nwb_hardware_shadow_boundary_healthy_benchmark` records the healthy hardware transparent-shadow tail.
 - The second launch sets `NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1`, making every test-scene character opaque
@@ -20,8 +20,9 @@ python -m launcher hardware-shadow-boundary
 Use `--config dbg` for correctness investigation or `--config opt` for timing evidence. The canonical launcher
 rejects `fin` because Final builds omit the warning diagnostics needed to detect transient hardware-route degradation.
 For an optimized binary whose timing names are hashed, forward its generated `.namesym` sidecar with
-`--healthy-namesym`; because both arms reuse the same executable, the runner applies that sidecar to both arms when
-`--baseline-namesym` is omitted.
+`-- --healthy-namesym <path>`. When both arms use the same executable, the runner applies that sidecar to both arms if
+`--baseline-namesym` is omitted. The launcher also accepts an explicit `--baseline-executable` override; provide its
+matching sidecar when it differs from the healthy executable.
 
 The command configures and builds the shared benchmark, then writes a timestamped artifact bundle
 under `.cozter/out/ab-results/hardware-shadow-boundary/`. It measures without GPU validation by

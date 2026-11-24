@@ -271,10 +271,10 @@ namespace astc_helpers
 	// These helpers are all quite slow, but are useful for table preparation.
 	
 	// Dequantizes ISE encoded endpoint val to [0,255] (slowly)
-	uint32_t dequant_bise_endpoint(uint32_t val, uint32_t ise_range); // ISE ranges 4-11
+	uint32_t dequant_bise_endpoint(uint32_t val, uint32_t ise_range); // ISE ranges 4-20
 		
 	// Dequantizes ISE encoded weight val to [0,64] (slowly)
-	uint32_t dequant_bise_weight(uint32_t val, uint32_t ise_range); // ISE ranges 0-10
+	uint32_t dequant_bise_weight(uint32_t val, uint32_t ise_range); // ISE ranges 0-11
 
 	uint32_t find_nearest_bise_endpoint(int v, uint32_t ise_range);
 	uint32_t find_nearest_bise_weight(int v, uint32_t ise_range);
@@ -1466,7 +1466,7 @@ namespace astc_helpers
 		return best_index;
 	}
 
-	// Returns the nearest ISE weight given a [0,64] endpoint value.
+	// Returns the nearest ISE weight given a [0,64] weight value.
 	uint32_t find_nearest_bise_weight(int v, uint32_t ise_range)
 	{
 		assert(ise_range >= FIRST_VALID_WEIGHT_ISE_RANGE && ise_range <= LAST_VALID_WEIGHT_ISE_RANGE);
@@ -3172,7 +3172,6 @@ namespace astc_helpers
 						if (use_precomputed_texel_partitions)
 						{
 							subset = get_precomputed_texel_partition(blk_width, blk_height, log_blk.m_partition_id, x, y, log_blk.m_num_partitions);
-							//assert((int)subset == compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block)); // extra paranoia
 						}
 						else
 							subset = compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block);
@@ -3246,7 +3245,6 @@ namespace astc_helpers
 						if (use_precomputed_texel_partitions)
 						{
 							subset = get_precomputed_texel_partition(blk_width, blk_height, log_blk.m_partition_id, x, y, log_blk.m_num_partitions);
-							//assert((int)subset == compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block)); // extra paranoia
 						}
 						else
 							subset = compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block);
@@ -3315,7 +3313,6 @@ namespace astc_helpers
 						if (use_precomputed_texel_partitions)
 						{
 							subset = get_precomputed_texel_partition(blk_width, blk_height, log_blk.m_partition_id, x, y, log_blk.m_num_partitions);
-							//assert((int)subset == compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block)); // extra paranoia
 						}
 						else
 							subset = compute_texel_partition(log_blk.m_partition_id, x, y, 0, log_blk.m_num_partitions, small_block);
@@ -3336,7 +3333,6 @@ namespace astc_helpers
 							int he = endpoints[subset][c][1];
 
 							// FIXME: the spec is apparently wrong? this matches ARM's and Google's decoder
-							//if ((dec_mode == cDecodeModeSRGB8) && (c <= 2))
 							// See https://github.com/ARM-software/astc-encoder/issues/447
 							// See latest spec with recent (2023-2024) fixes: 
 							// https://raw.githubusercontent.com/KhronosGroup/DataFormat/refs/heads/main/astc.txt
@@ -3358,7 +3354,7 @@ namespace astc_helpers
 
 							uint32_t k = weight_interpolate(le, he, w);
 
-							// FIXME (old comment - before 2023/2024 ARM etc. spec fixes): This is what the spec says to do in LDR mode, but this is not what ARM's decoder does
+							// ARM decoders may round LDR endpoints differently.
 							// See decompress_symbolic_block(), decode_texel() and unorm16_to_sf16. 
 							// It seems to effectively divide by 65535.0 and convert to FP16, then back to float, mul by 255.0, add .5 and then convert to 8-bit.
 							((uint8_t*)pPixels)[pixel_index * 4 + c] = (uint8_t)(k >> 8);
@@ -3587,7 +3583,6 @@ namespace astc_helpers
 		uint32_t part_shift = (log_blk.m_num_partitions == 3) ? 2 : 0;
 		part_shift += large_block * 4;
 
-		//uint32_t pixel_index = 0;
 
 		if (log_blk.m_num_partitions == 1)
 		{
@@ -4683,7 +4678,7 @@ namespace astc_helpers
 
 		if (g_ise_range_table[ise_range][1])
 		{
-			// Trits+bits, 5 vals per block, 7 bits extra per block
+			// Trits+bits, 5 vals per block, 8 bits extra per block
 			const uint32_t total_blocks = (num_vals + 4) / 5;
 			for (uint32_t b = 0; b < total_blocks; b++)
 			{
@@ -4693,7 +4688,7 @@ namespace astc_helpers
 		}
 		else if (g_ise_range_table[ise_range][2])
 		{
-			// Quints+bits, 3 vals per block, 8 bits extra per block
+			// Quints+bits, 3 vals per block, 7 bits extra per block
 			const uint32_t total_blocks = (num_vals + 2) / 3;
 			for (uint32_t b = 0; b < total_blocks; b++)
 			{

@@ -203,7 +203,6 @@ void ConstraintSystem::dump() const {
         Coefficient = std::to_string(E.Coefficient) + " * ";
       Parts.push_back(Coefficient + Names[E.Id - 1]);
     }
-    // assert(!Parts.empty() && "need to have at least some parts");
     int64_t ConstPart = 0;
     if (Row[0].Id == 0)
       ConstPart = Row[0].Coefficient;

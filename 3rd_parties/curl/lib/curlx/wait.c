@@ -37,15 +37,9 @@
 #include "curlx/wait.h"
 
 /*
- * Internal function used for waiting a specific amount of ms in
- * Curl_socket_check() and Curl_poll() when no file descriptor is provided to
- * wait on, being used to delay execution. Winsock select() and poll() timeout
- * mechanisms need a valid socket descriptor in a not null file descriptor set
- * to work. Waiting indefinitely with this function is not allowed, a zero or
- * negative timeout value is returned immediately. Timeout resolution,
- * accuracy, as well as maximum supported value is system dependent, neither
- * factor is a critical issue for the intended use of this function in the
- * library.
+ * Wait without a socket descriptor; Winsock select() and poll() require one.
+ * A zero timeout returns immediately and a negative timeout is an error.
+ * Resolution, accuracy, and the maximum timeout depend on the system.
  *
  * Return values:
  *   -1 = system call error, or invalid timeout value

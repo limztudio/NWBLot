@@ -1003,7 +1003,7 @@ struct ufbx_node {
 //
 // If `unique_per_vertex` is set then the attribute is guaranteed to have a
 // single defined value per vertex accessible via:
-//   attrib.values.data[attrib.indices.data[mesh->vertex_first_index[vertex_ix]]
+//   attrib.values.data[attrib.indices.data[mesh->vertex_first_index[vertex_ix]]]
 typedef struct ufbx_vertex_attrib {
 	// Is this attribute defined by the mesh.
 	bool exists;
@@ -1587,7 +1587,7 @@ struct ufbx_camera {
 	// Valid if `projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE`.
 	ufbx_vec2 field_of_view_deg;
 
-	// Component-wise `tan(field_of_view_deg)`, also represents the size of the
+	// Component-wise tangent of half the field of view, also the half-size of the
 	// frustum slice at distance of 1.
 	// Valid if `projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE`.
 	ufbx_vec2 field_of_view_tan;
@@ -1940,7 +1940,7 @@ typedef enum ufbx_skinning_method UFBX_ENUM_REPR {
 	UFBX_SKINNING_METHOD_RIGID,
 	// Convert the transformations to dual quaternions and blend in that space
 	UFBX_SKINNING_METHOD_DUAL_QUATERNION,
-	// Blend between `UFBX_SKINNING_METHOD_LINEAR` and `UFBX_SKINNING_METHOD_BLENDED_DQ_LINEAR`
+	// Blend between `UFBX_SKINNING_METHOD_LINEAR` and `UFBX_SKINNING_METHOD_DUAL_QUATERNION`
 	// The blend weight can be found either per-vertex in `ufbx_skin_vertex.dq_weight`
 	// or in `ufbx_skin_deformer.dq_vertices/dq_weights` (indexed by vertex).
 	UFBX_SKINNING_METHOD_BLENDED_DQ_LINEAR,
@@ -2735,7 +2735,7 @@ typedef enum ufbx_blend_mode UFBX_ENUM_REPR {
 
 UFBX_ENUM_TYPE(ufbx_blend_mode, UFBX_BLEND_MODE, UFBX_BLEND_OVERLAY);
 
-// Blend modes to combine layered textures with, compatible with common blend
+// Texture coordinate wrap mode.
 typedef enum ufbx_wrap_mode UFBX_ENUM_REPR {
 	UFBX_WRAP_REPEAT, // < Repeat the texture past the [0,1] range
 	UFBX_WRAP_CLAMP,  // < Clamp the normalized texture coordinates to [0,1]
@@ -3341,7 +3341,7 @@ typedef enum ufbx_constraint_aim_up_type UFBX_ENUM_REPR {
 
 UFBX_ENUM_TYPE(ufbx_constraint_aim_up_type, UFBX_CONSTRAINT_AIM_UP_TYPE, UFBX_CONSTRAINT_AIM_UP_NONE);
 
-// Method to determine the up vector in aim constraints
+// Method to determine the pole vector in IK constraints.
 typedef enum ufbx_constraint_ik_pole_type UFBX_ENUM_REPR {
 	UFBX_CONSTRAINT_IK_POLE_VECTOR, // < Use towards calculated from `ufbx_constraint.targets`
 	UFBX_CONSTRAINT_IK_POLE_NODE,   // < Use `ufbx_constraint.ik_pole_vector` directly
@@ -4641,9 +4641,9 @@ typedef void ufbx_thread_pool_free_fn(void *user, ufbx_thread_pool_context ctx);
 // Hypothetical example of calls, where `UFBX_THREAD_GROUP_COUNT=2` for simplicity:
 //
 //   run_fn(group=0, start_index=0, count=4)   -> t0 := threaded { ufbx_thread_pool_run_task(0..3) }
-//   run_fn(group=1, start_index=4, count=10)  -> t1 := threaded { ufbx_thread_pool_run_task(4..10) }
+//   run_fn(group=1, start_index=4, count=6)   -> t1 := threaded { ufbx_thread_pool_run_task(4..9) }
 //   wait_fn(group=0, max_index=4)             -> wait_threads(t0)
-//   run_fn(group=0, start_index=10, count=15) -> t0 := threaded { ufbx_thread_pool_run_task(10..14) }
+//   run_fn(group=0, start_index=10, count=5)  -> t0 := threaded { ufbx_thread_pool_run_task(10..14) }
 //   wait_fn(group=1, max_index=10)            -> wait_threads(t1)
 //   wait_fn(group=0, max_index=15)            -> wait_threads(t0)
 //
@@ -4741,7 +4741,7 @@ typedef struct ufbx_load_opts {
 	bool strict;
 
 	// Force ASCII parsing to use a single thread.
-	// The multi-threaded ASCII parsing is slightly more lenient as it ignores
+	// The single-threaded ASCII parsing is slightly more lenient as it ignores
 	// the self-reported size of ASCII arrays, that threaded parsing depends on.
 	bool force_single_thread_ascii_parsing;
 
@@ -5651,7 +5651,7 @@ ufbx_abi void ufbx_retain_line_curve(ufbx_line_curve *curve);
 ufbx_abi uint32_t ufbx_find_face_index(ufbx_mesh *mesh, size_t index);
 
 // Triangulate a mesh face, returning the number of triangles.
-// NOTE: You need to space for `(face.num_indices - 2) * 3 - 1` indices!
+// NOTE: For a face with at least three indices, reserve `(face.num_indices - 2) * 3` indices.
 // HINT: Using `ufbx_mesh.max_face_triangles * 3` is always safe.
 ufbx_abi uint32_t ufbx_catch_triangulate_face(ufbx_panic *panic, uint32_t *indices, size_t num_indices, const ufbx_mesh *mesh, ufbx_face face);
 ufbx_abi uint32_t ufbx_triangulate_face(uint32_t *indices, size_t num_indices, const ufbx_mesh *mesh, ufbx_face face);
@@ -6028,7 +6028,7 @@ public:
 // Used by: `ufbx_node`.
 #define UFBX_ScalingPivot "ScalingPivot"
 
-// Scaling pivot: point around which rotation is performed.
+// Rotation pivot: point around which rotation is performed.
 // Used by: `ufbx_node`.
 #define UFBX_RotationPivot "RotationPivot"
 

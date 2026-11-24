@@ -69,7 +69,7 @@
 #else /* _WIN32 */
 #define MHD_FILE_READ_BLOCK_SIZE 4096 /* 4k */
 #endif /* _WIN32 */
-#endif /* !MHD_FD_BLOCK_SIZE */
+#endif /* !MHD_FILE_READ_BLOCK_SIZE */
 
 /**
  * Insert a new header at the first position of the response
@@ -185,7 +185,7 @@ MHD_add_response_entry_no_alloc_ (struct MHD_Response *response,
   hdr->kind = kind;
   _MHD_insert_header_last (response, hdr);
 
-  return true; /* Success exit point */
+  return true;
 }
 
 
@@ -232,13 +232,13 @@ MHD_add_response_entry_no_check_ (struct MHD_Response *response,
     if (MHD_add_response_entry_no_alloc_ (response, kind,
                                           header_malloced, header_len,
                                           value_malloced, content_len))
-      return true; /* Success exit point */
+      return true;
 
     free (value_malloced);
   }
   free (header_malloced);
 
-  return false; /* Failure exit point */
+  return false;
 }
 
 
@@ -330,14 +330,13 @@ add_response_header_connection (struct MHD_Response *response,
                                 const char *value)
 {
   static const char *key = MHD_HTTP_HEADER_CONNECTION;
-  /** the length of the "Connection" key */
   static const size_t key_len =
     MHD_STATICSTR_LEN_ (MHD_HTTP_HEADER_CONNECTION);
-  size_t value_len; /**< the length of the @a value */
+  size_t value_len;
   size_t old_value_len; /**< the length of the existing "Connection" value */
-  size_t buf_size;  /**< the size of the buffer */
-  size_t norm_len;  /**< the length of the normalised value */
-  char *buf;        /**< the temporal buffer */
+  size_t buf_size;
+  size_t norm_len;
+  char *buf;
   struct MHD_HTTP_Res_Header *hdr; /**< existing "Connection" header */
   bool value_has_close; /**< the @a value has "close" token */
   bool already_has_close; /**< existing "Connection" header has "close" token */
@@ -469,7 +468,6 @@ add_response_header_connection (struct MHD_Response *response,
   if (NULL == hdr)
   {
     struct MHD_HTTP_Res_Header *new_hdr; /**< new "Connection" header */
-    /* Create new response header entry */
     new_hdr = MHD_calloc_ (1, sizeof (struct MHD_HTTP_Res_Header));
     if (NULL != new_hdr)
     {
@@ -495,7 +493,6 @@ add_response_header_connection (struct MHD_Response *response,
     return MHD_NO;
   }
 
-  /* Update existing header entry */
   free (hdr->value);
   hdr->value = buf;
   hdr->value_size = pos;
@@ -544,7 +541,7 @@ del_response_header_connection (struct MHD_Response *response,
   }
   else
   {
-    hdr->value[hdr->value_size] = 0; /* Null-terminate the result */
+    hdr->value[hdr->value_size] = 0;
     if (0 != (response->flags_auto
               & ((enum MHD_ResponseAutoFlags) MHD_RAF_HAS_CONNECTION_CLOSE)))
     {
@@ -710,9 +707,9 @@ MHD_add_response_header (struct MHD_Response *response,
 /**
  * Add a footer line to the response.
  *
- * @param response response to remove a header from
- * @param footer the footer to delete
- * @param content value to delete
+ * @param response response to add a footer to
+ * @param footer the footer name to add
+ * @param content value to add
  * @return #MHD_NO on error (i.e. invalid footer or content format).
  * @ingroup response
  */
@@ -1085,7 +1082,7 @@ MHD_set_response_options (struct MHD_Response *response,
  * @param pos offset in the file to access
  * @param buf where to write the data
  * @param max number of bytes to write at most
- * @return number of bytes written
+ * @return number of bytes read, or a content reader end-of-stream or error code
  */
 static ssize_t
 file_reader (void *cls,
@@ -1147,16 +1144,16 @@ file_reader (void *cls,
     return MHD_CONTENT_READER_END_WITH_ERROR; /* Value of 'response->fd' is not valid. */
   else
   {
-    OVERLAPPED f_ol = {0, 0, {{0, 0}}, 0};   /* Initialize to zero. */
+    OVERLAPPED f_ol = {0, 0, {{0, 0}}, 0};
     ULARGE_INTEGER pos_uli;
     DWORD toRead = (max > INT32_MAX) ? INT32_MAX : (DWORD) max;
     DWORD resRead;
 
-    pos_uli.QuadPart = (uint64_t) offset64;   /* Simple transformation 64bit -> 2x32bit. */
+    pos_uli.QuadPart = (uint64_t) offset64;
     f_ol.Offset = pos_uli.LowPart;
     f_ol.OffsetHigh = pos_uli.HighPart;
     if (! ReadFile (fh, (void *) buf, toRead, &resRead, &f_ol))
-      return MHD_CONTENT_READER_END_WITH_ERROR;   /* Read error. */
+      return MHD_CONTENT_READER_END_WITH_ERROR;
     if (0 == resRead)
       return MHD_CONTENT_READER_END_OF_STREAM;
     return (ssize_t) resRead;
@@ -1173,7 +1170,7 @@ file_reader (void *cls,
  * @param pos offset in the pipe to access (ignored)
  * @param buf where to write the data
  * @param max number of bytes to write at most
- * @return number of bytes written
+ * @return number of bytes read, or a content reader end-of-stream or error code
  */
 static ssize_t
 pipe_reader (void *cls,
@@ -1212,7 +1209,7 @@ pipe_reader (void *cls,
  * Destroy file reader context.  Closes the file
  * descriptor.
  *
- * @param cls pointer to file descriptor
+ * @param cls pointer to the response
  */
 static void
 free_callback (void *cls)
@@ -1843,11 +1840,11 @@ MHD_create_response_empty (enum MHD_ResponseFlags flags)
        * assignment with MHD_set_response_options() call. */
       r->flags = flags;
 
-      return r; /* Successful result */
+      return r;
     }
     free (r);
   }
-  return NULL; /* Something failed */
+  return NULL;
 }
 
 

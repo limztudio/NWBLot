@@ -44,7 +44,7 @@ RmtErrorCode RmtMutexCreate(RmtMutex* mutex, const char* name);
 /// @retval
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                     The parameter <c><i>threadEvent</i></c> was NULL.
+/// kRmtErrorInvalidPointer                     The parameter <c><i>mutex</i></c> was NULL.
 /// @retval
 /// kRmtErrorPlatformFunctionFailed             A platform-specific function failed.
 ///
@@ -57,7 +57,7 @@ RmtErrorCode RmtMutexLock(RmtMutex* mutex);
 /// @retval
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                     The parameter <c><i>threadEvent</i></c> was NULL.
+/// kRmtErrorInvalidPointer                     The parameter <c><i>mutex</i></c> was NULL.
 /// @retval
 /// kRmtErrorPlatformFunctionFailed             A platform-specific function failed.
 ///
@@ -70,7 +70,7 @@ RmtErrorCode RmtMutexUnlock(RmtMutex* mutex);
 /// @retval
 /// kRmtOk                                      The operation completed successfully.
 /// @retval
-/// kRmtErrorInvalidPointer                     The parameter <c><i>threadEvent</i></c> was NULL.
+/// kRmtErrorInvalidPointer                     The parameter <c><i>mutex</i></c> was NULL.
 /// @retval
 /// kRmtErrorPlatformFunctionFailed             A platform-specific function failed.
 ///

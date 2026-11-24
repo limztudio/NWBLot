@@ -61,10 +61,8 @@ namespace xbc7 {
 		// quality/speed of the BC7 blocks XBC7 then supercompresses.
 		uint32_t m_bc7_pack_flags = basist::bc7f::cPackBC7FlagDefaultPartiallyAnalytical;
 
-		// Selects which BC7 base encoder packs the initial blocks. Default cBC7F
-		// (the existing fast built-in packer); cBC7E_Scalar selects the higher-quality
-		// scalar bc7e encoder at m_bc7e_scalar_level. Affects only the primary base
-		// pack -- the optional alt-pack RDO path still uses bc7f for now.
+		// Select the primary BC7 encoder; cBC7E_Scalar uses m_bc7e_scalar_level.
+		// The optional alternate pack still uses bc7f.
 		bc7_encoder_type m_bc7_encoder = bc7_encoder_type::cBC7F;
 
 		// Quality level for the bc7e_scalar encoder (only used when m_bc7_encoder ==
@@ -93,16 +91,9 @@ namespace xbc7 {
 		uint32_t m_bc7_pack_flags_alt = basist::bc7f::cPackBC7FlagPBitOpt | basist::bc7f::cPackBC7FlagUseTrivialMode6;
 		float m_bc7_alt_max_psnr_drop = 0.5f; // dB the alternate may be worse than the primary and still be kept
 
-		// Optional block-reuse RDO pre-pass (runs after the BC7 base pack, BEFORE
-		// the endpoint RDO -- once a whole block is reused there's no point trying
-		// cheaper endpoints). For each non-solid block it tries replacing it with:
-		//  - REPEAT: an exact copy of its left/upper causal neighbor (the cheapest
-		//    command -- one byte, no config/endpoints/weights), kept if within
-		//    m_repeat_rdo_max_psnr_drop dB; and/or
-		//  - SOLID: its mean color (cheap SolidDPCM command), kept if within
-		//    m_solid_rdo_max_psnr_drop dB.
-		// Repeat is preferred over Solid (cheaper). Each independently enabled; off
-		// by default.
+		// Before endpoint RDO, try a left/upper neighbor copy or a mean-color
+		// solid block within the respective PSNR drop limits. Repeat is preferred
+		// over solid; each option is independently enabled.
 		bool m_repeat_rdo_enabled = false;
 		float m_repeat_rdo_max_psnr_drop = 0.5f; // dB a block may drop to become a Repeat of a neighbor
 		bool m_solid_rdo_enabled = false;
@@ -188,9 +179,8 @@ namespace xbc7 {
 	};
 
 	// coded_log_blocks (REQUIRED, by reference): receives the final coded logical
-	// BC7 blocks (resized + filled by the encoder). It's mandatory because the
-	// encoder always decodes the stream it just produced and validates every block
-	// round-trips to these -- see the self-validation at the end of pack_image().
+	// BC7 blocks (resized + filled by the encoder). When self-validation is enabled,
+	// the encoder checks that each decoded block matches these blocks.
 	bool pack_image(
 		const image& orig_img,
 		const pack_options& opts,

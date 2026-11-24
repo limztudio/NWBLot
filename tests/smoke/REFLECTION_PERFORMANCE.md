@@ -1,5 +1,7 @@
 # Reflection performance and benchmark reproduction
 
+> **Historical record:** This report preserves the recorded benchmark results and their original conditions. Current reflection behavior and tests are described in [the reflection guide](REFLECTION.md).
+
 The September 12 [deferred optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md) did not establish a reliable improvement and was reverted. Its 16 trials remain separate from the September 9 results below.
 
 The eight-stage reflection implementation is complete. The optimized benchmark completed all **164 process trials in 40 balanced blocks**, retaining **120,748 completed GPU frame samples**. These measurements show that fewer hardware rays or screen-depth loads do not necessarily reduce total frame time.

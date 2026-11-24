@@ -94,7 +94,7 @@ private:
 //! Output byte stream wrapper with statically bound encoding.
 /*!
     \tparam Encoding The interpretation of encoding of the stream. Either UTF8, UTF16LE, UTF16BE, UTF32LE, UTF32BE.
-    \tparam OutputByteStream Type of input byte stream. For example, FileWriteStream.
+    \tparam OutputByteStream Type of output byte stream. For example, FileWriteStream.
 */
 template <typename Encoding, typename OutputByteStream>
 class EncodedOutputStream {
@@ -296,4 +296,4 @@ RAPIDJSON_DIAG_POP
 RAPIDJSON_DIAG_POP
 #endif
 
-#endif // RAPIDJSON_FILESTREAM_H_
+#endif // RAPIDJSON_ENCODEDSTREAM_H_

@@ -1,8 +1,3 @@
-# NWB-rewritten RGD backend CMakeLists for an offline/vendored, in-process .rgd decoder build.
-# Differences from upstream: no FetchContent (the comgr lib + ISA-spec XML are optional runtime-deploy data,
-# like Aftermath's DLL); link the engine's vendored miniz instead of compiling a bundled copy; exclude the
-# DXBC (DirectX bytecode) parser, which needs DXC and is irrelevant to a Vulkan engine. amd_gpu_dis / amd_comgr
-# are dlopen'd at runtime, so the disassembly degrades gracefully if those runtime libs / the ISA XML are absent.
 cmake_minimum_required(VERSION 3.10)
 project(rgd_backend)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../configuration/UnityBuild.cmake")
@@ -12,7 +7,6 @@ set(_RGD_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 # Build the crash-SUMMARY decoder (markers, page fault, registers, resources, system info). The shader
 # disassembly / code-object files are excluded: they need amd_gpu_dis's CodeObjectDisassemblerApi.h, which
 # ships only inside Radeon GPU Analyzer (not in RGD's dependency map). rgd_dxbc_parser is DirectX-only.
-# Drop in the amd_gpu_dis package + re-include these to enable live ISA disassembly later.
 file(GLOB RGD_BACKEND_SRC "${PROJECT_SOURCE_DIR}/*.cpp")
 list(FILTER RGD_BACKEND_SRC EXCLUDE REGEX
     "rgd_dxbc_parser|rgd_process_utils|rgd_amd_gpu_dis_loader|rgd_code_object_database|rgd_srd_disassembler|rgd_srd_instruction_analyzer|rgd_enhanced_crash_info_serializer")

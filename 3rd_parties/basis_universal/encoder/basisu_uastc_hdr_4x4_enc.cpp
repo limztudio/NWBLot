@@ -22,8 +22,6 @@ void uastc_hdr_4x4_codec_options::init()
 {
 	astc_hdr_codec_base_options::init();
 
-	// This was the log bias we used on the initial release. It's too low.
-	//m_q_log_bias = Q_LOG_BIAS_4x4;
 
 	m_q_log_bias = Q_LOG_BIAS_6x6;
 
@@ -153,8 +151,6 @@ void uastc_hdr_4x4_codec_options::set_quality_level(int level)
 		m_mode11_part2_part_masks = 1 | 2;
 		m_mode7_part2_part_masks = 1 | 2;
 
-		// TODO: Disabling this hurts BC6H quality, but significantly speeds up compression.
-		//m_refine_weights = false;
 		break;
 	}
 	case 2:
@@ -222,7 +218,6 @@ static bool pack_solid(const vec4F* pBlock_linear_colors, basisu::vector<astc_hd
 		g = maximum<float>(0.0f, powf(2.0f, g * (1.0f / 16.0f)) - LOG_BIAS);
 		b = maximum<float>(0.0f, powf(2.0f, b * (1.0f / 16.0f)) - LOG_BIAS);
 
-		// for safety
 		r = minimum<float>(r, MAX_HALF_FLOAT);
 		g = minimum<float>(g, MAX_HALF_FLOAT);
 		b = minimum<float>(b, MAX_HALF_FLOAT);
@@ -358,7 +353,6 @@ static void pack_mode11(
 
 				double cmp_err = compute_block_error(16, &block_pixels_half[0][0], &unpacked_astc_blk_rgb[0][0][0], coptions);
 				// can't use full equality test due to precision
-				//assert(results.m_best_block_error == cmp_err);
 				assert(equal_rel_tol(results.m_best_block_error, cmp_err, .001));
 			}
 #endif

@@ -40,8 +40,8 @@ namespace ShaderType{
         IntersectionStage,
         CallableStage,
 
-        Count,
-        Invalid = Count,
+        kCount,
+        Invalid = kCount,
     };
     enum Mask : u16{
         None            = 0x0000,
@@ -71,7 +71,7 @@ namespace ShaderType{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 
     [[nodiscard]] inline constexpr b8 IsValid(const Enum shaderType)noexcept{
-        return shaderType < Count;
+        return shaderType < kCount;
     }
 
     [[nodiscard]] inline constexpr usize ToIndex(const Enum shaderType)noexcept{

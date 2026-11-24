@@ -78,7 +78,7 @@ FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL AllComparisonMask(SIMDVectorDouble val
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) == VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) == VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) == VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) == VectorGetW(v1) ? s_SELECT_1 : 0u);
+    return VectorSetInt(VectorGetX(v0) == VectorGetX(v1) ? s_SelectTrueMask32 : 0u, VectorGetY(v0) == VectorGetY(v1) ? s_SelectTrueMask32 : 0u, VectorGetZ(v0) == VectorGetZ(v1) ? s_SelectTrueMask32 : 0u, VectorGetW(v0) == VectorGetW(v1) ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vceqq_f32(v0, v1));
 #else
@@ -100,7 +100,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleEqual(SIMDVe
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorEqualInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return VectorSetInt(VectorGetIntX(v0) == VectorGetIntX(v1) ? s_SELECT_1 : 0u, VectorGetIntY(v0) == VectorGetIntY(v1) ? s_SELECT_1 : 0u, VectorGetIntZ(v0) == VectorGetIntZ(v1) ? s_SELECT_1 : 0u, VectorGetIntW(v0) == VectorGetIntW(v1) ? s_SELECT_1 : 0u);
+    return VectorSetInt(VectorGetIntX(v0) == VectorGetIntX(v1) ? s_SelectTrueMask32 : 0u, VectorGetIntY(v0) == VectorGetIntY(v1) ? s_SelectTrueMask32 : 0u, VectorGetIntZ(v0) == VectorGetIntZ(v1) ? s_SelectTrueMask32 : 0u, VectorGetIntW(v0) == VectorGetIntW(v1) ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vceqq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1)));
 #else
@@ -128,10 +128,10 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleEqualInt(SIM
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorNearEqual(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle epsilon)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSetInt(
-        Abs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? s_SELECT_1 : 0u,
-        Abs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? s_SELECT_1 : 0u,
-        Abs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? s_SELECT_1 : 0u,
-        Abs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? s_SELECT_1 : 0u
+        Abs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? s_SelectTrueMask32 : 0u,
+        Abs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? s_SelectTrueMask32 : 0u,
+        Abs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? s_SelectTrueMask32 : 0u,
+        Abs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? s_SelectTrueMask32 : 0u
     );
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vcleq_f32(vabsq_f32(vsubq_f32(v0, v1)), epsilon));
@@ -163,7 +163,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleNearEqual(SI
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorNotEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] != v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] != v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] != v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] != v1.f[3] ? s_SELECT_1 : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] != v1.f[0] ? s_SelectTrueMask32 : 0u, v0.f[1] != v1.f[1] ? s_SelectTrueMask32 : 0u, v0.f[2] != v1.f[2] ? s_SelectTrueMask32 : 0u, v0.f[3] != v1.f[3] ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vmvnq_u32(vceqq_f32(v0, v1)));
 #else
@@ -173,7 +173,7 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorNotEqual(SIMDVecto
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleNotEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(FOUNDATION_HAS_NEON64)
-    const uint64x2_t allBits = vdupq_n_u64(s_DoubleSELECT_1);
+    const uint64x2_t allBits = vdupq_n_u64(s_SelectTrueMask64);
     return SIMDVectorDoubleDetail::FromUIntPairs(veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), allBits), veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)), allBits));
 #elif defined(FOUNDATION_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_NEQ_UQ));
@@ -186,7 +186,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleNotEqual(SIM
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorNotEqualInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.u[0] != v1.u[0] ? s_SELECT_1 : 0u, v0.u[1] != v1.u[1] ? s_SELECT_1 : 0u, v0.u[2] != v1.u[2] ? s_SELECT_1 : 0u, v0.u[3] != v1.u[3] ? s_SELECT_1 : 0u);
+    return SIMDConvertDetail::MakeU32(v0.u[0] != v1.u[0] ? s_SelectTrueMask32 : 0u, v0.u[1] != v1.u[1] ? s_SelectTrueMask32 : 0u, v0.u[2] != v1.u[2] ? s_SelectTrueMask32 : 0u, v0.u[3] != v1.u[3] ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vmvnq_u32(vceqq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1))));
 #else
@@ -203,7 +203,7 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorGreater(SIMDVector
 #if defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vcgtq_f32(v0, v1));
 #elif defined(FOUNDATION_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) > VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) > VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) > VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) > VectorGetW(v1) ? s_SELECT_1 : 0u);
+    return VectorSetInt(VectorGetX(v0) > VectorGetX(v1) ? s_SelectTrueMask32 : 0u, VectorGetY(v0) > VectorGetY(v1) ? s_SelectTrueMask32 : 0u, VectorGetZ(v0) > VectorGetZ(v1) ? s_SelectTrueMask32 : 0u, VectorGetW(v0) > VectorGetW(v1) ? s_SelectTrueMask32 : 0u);
 #else
     return _mm_cmpgt_ps(v0, v1);
 #endif
@@ -223,7 +223,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleGreater(SIMD
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorGreaterOrEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) >= VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) >= VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) >= VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) >= VectorGetW(v1) ? s_SELECT_1 : 0u);
+    return VectorSetInt(VectorGetX(v0) >= VectorGetX(v1) ? s_SelectTrueMask32 : 0u, VectorGetY(v0) >= VectorGetY(v1) ? s_SelectTrueMask32 : 0u, VectorGetZ(v0) >= VectorGetZ(v1) ? s_SelectTrueMask32 : 0u, VectorGetW(v0) >= VectorGetW(v1) ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vcgeq_f32(v0, v1));
 #else
@@ -245,7 +245,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleGreaterOrEqu
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorLess(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] < v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] < v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] < v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] < v1.f[3] ? s_SELECT_1 : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] < v1.f[0] ? s_SelectTrueMask32 : 0u, v0.f[1] < v1.f[1] ? s_SelectTrueMask32 : 0u, v0.f[2] < v1.f[2] ? s_SelectTrueMask32 : 0u, v0.f[3] < v1.f[3] ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vcltq_f32(v0, v1));
 #else
@@ -267,7 +267,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleLess(SIMDVec
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorLessOrEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] <= v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] <= v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] <= v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] <= v1.f[3] ? s_SELECT_1 : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] <= v1.f[0] ? s_SelectTrueMask32 : 0u, v0.f[1] <= v1.f[1] ? s_SelectTrueMask32 : 0u, v0.f[2] <= v1.f[2] ? s_SelectTrueMask32 : 0u, v0.f[3] <= v1.f[3] ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_u32(vcleq_f32(v0, v1));
 #else

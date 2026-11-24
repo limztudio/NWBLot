@@ -455,7 +455,6 @@ static CURLcode socket_open(struct Curl_easy *data,
     CURL_CBAPI_END(&guard);
   }
   else {
-    /* opensocket callback not set, so create the socket now */
 #ifdef DEBUGBUILD
     if((addr->family == AF_INET6) && getenv("CURL_DBG_SOCK_FAIL_IPV6")) {
       failf(data, "CURL_DBG_SOCK_FAIL_IPV6: failed to open socket");
@@ -468,7 +467,6 @@ static CURLcode socket_open(struct Curl_easy *data,
   }
 
   if(*sockfd == CURL_SOCKET_BAD) {
-    /* no socket, no connection */
     failf(data, "failed to open socket: %s",
           curlx_strerror(SOCKERRNO, errbuf, sizeof(errbuf)));
     return CURLE_COULDNT_CONNECT;
@@ -503,15 +501,6 @@ static CURLcode socket_open(struct Curl_easy *data,
   return CURLE_OK;
 }
 
-/*
- * Create a socket based on info from 'conn' and 'ai'.
- *
- * 'addr' should be a pointer to the correct struct to get data back, or NULL.
- * 'sockfd' must be a pointer to a socket descriptor.
- *
- * If the open socket callback is set, used that!
- *
- */
 CURLcode Curl_socket_open(struct Curl_easy *data,
                           const struct Curl_addrinfo *ai,
                           struct Curl_sockaddr_ex *addr,
@@ -582,7 +571,6 @@ int Curl_socket_close(struct Curl_easy *data, struct connectdata *conn,
  * Parameters:
  *
  * input  [in]     - input string.
- * len    [in]     - length of the input string.
  * dev    [in/out] - address where a pointer to newly allocated memory
  *                   holding the interface-or-host will be stored upon
  *                   completion or NULL if the caller is not interested.
@@ -899,7 +887,6 @@ static CURLcode bindlocal(struct Curl_easy *data, struct connectdata *conn,
 #endif
   for(;;) {
     if(bind(sockfd, sock, sizeof_sa) >= 0) {
-      /* we succeeded to bind */
       infof(data, "Local port: %hu", port);
       conn->bits.bound = TRUE;
       result = CURLE_OK;
@@ -978,10 +965,8 @@ static bool verifyconnect(curl_socket_t sockfd, int *psockerr)
   }
 #endif
   if((sockerr == 0) || (SOCKEISCONN == sockerr))
-    /* we are connected, awesome! */
     rc = TRUE;
   else
-    /* This was not a successful connect */
     rc = FALSE;
   if(psockerr)
     *psockerr = sockerr;
@@ -1010,7 +995,6 @@ static CURLcode socket_connect_result(struct Curl_easy *data,
     NOVERBOSE((void)ipaddress);
   }
   data->state.os_errno = sockerr;
-  /* connect failed */
   return CURLE_COULDNT_CONNECT;
 }
 
@@ -1455,7 +1439,7 @@ static int do_connect(struct Curl_cfilter *cf, struct Curl_easy *data,
     if(Curl_conn_is_ssl(cf->conn, cf->sockindex))
       rc = connect(ctx->sock, &ctx->addr.curl_sa_addr, ctx->addr.addrlen);
     else
-      rc = 0; /* Do nothing */
+      rc = 0;
 #endif
   }
   else {
@@ -1478,7 +1462,7 @@ static CURLcode cf_tcp_connect(struct Curl_cfilter *cf,
     return CURLE_OK;
   }
 
-  *done = FALSE; /* a negative world view is best */
+  *done = FALSE;
   if(ctx->sock == CURL_SOCKET_BAD) {
     int sockerr;
 
@@ -1491,7 +1475,6 @@ static CURLcode cf_tcp_connect(struct Curl_cfilter *cf,
       return CURLE_OK;
     }
 
-    /* Connect TCP socket */
     rc = do_connect(cf, data, (bool)cf->conn->bits.tcp_fastopen);
     sockerr = SOCKERRNO;
     set_local_ip(cf, data);
@@ -1521,7 +1504,6 @@ static CURLcode cf_tcp_connect(struct Curl_cfilter *cf,
   }
   else if(rc == CURL_CSELECT_OUT || cf->conn->bits.tcp_fastopen) {
     if(verifyconnect(ctx->sock, &ctx->sockerr)) {
-      /* we are connected with TCP, awesome! */
       ctx->connected_at = *Curl_pgrs_now(data);
       set_local_ip(cf, data);
       *done = TRUE;
@@ -2329,7 +2311,6 @@ static CURLcode cf_tcp_accept_connect(struct Curl_cfilter *cf,
   *done = FALSE;
   timeout_ms = cf_tcp_accept_timeleft(cf, data);
   if(timeout_ms < 0) {
-    /* if a timeout was already reached, bail out */
     failf(data, "Accept timeout occurred while waiting server connect");
     return CURLE_FTP_ACCEPT_TIMEOUT;
   }
@@ -2340,7 +2321,6 @@ static CURLcode cf_tcp_accept_connect(struct Curl_cfilter *cf,
   CURL_TRC_CF(data, cf, "socket_check -> %x", (unsigned int)socketstate);
   switch(socketstate) {
   case -1: /* error */
-    /* let's die here */
     failf(data, "Error while waiting for server connect");
     return CURLE_FTP_ACCEPT_FAILED;
   default:

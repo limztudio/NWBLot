@@ -38,19 +38,16 @@ struct ResourcePriorityComparator
 
         if (lhs_usage_type != rhs_usage_type)
         {
-            // Compare by usage type.
             result = lhs_usage_type > rhs_usage_type;
         }
         else
         {
             if (lhs->size_in_bytes != rhs->size_in_bytes)
             {
-                // Compare by size.
                 result = lhs->size_in_bytes < rhs->size_in_bytes;
             }
             else
             {
-                // Compare by resource identifier (last resort, since the other attributes are the same).
                 result = lhs->identifier > rhs->identifier;
             }
         }
@@ -59,7 +56,6 @@ struct ResourcePriorityComparator
     }
 };
 
-// Helper function to improve tree balance by hashing the handles.
 static RmtGpuAddress HashGpuAddress(RmtGpuAddress address)
 {
 #if 0
@@ -71,7 +67,6 @@ static RmtGpuAddress HashGpuAddress(RmtGpuAddress address)
 #endif
 }
 
-// helper function to find smallest value in a branch
 static RmtVirtualAllocationInterval* GetSmallestNode(RmtVirtualAllocationInterval* node)
 {
     while ((node != nullptr) && (node->left != nullptr))
@@ -81,7 +76,6 @@ static RmtVirtualAllocationInterval* GetSmallestNode(RmtVirtualAllocationInterva
     return node;
 }
 
-// recursive function to find a node by ID
 static RmtVirtualAllocationInterval* FindAllocationNode(RmtVirtualAllocationInterval* root, RmtGpuAddress gpu_address)
 {
     if (root == nullptr)
@@ -102,7 +96,6 @@ static RmtVirtualAllocationInterval* FindAllocationNode(RmtVirtualAllocationInte
     return FindAllocationNode(root->right, gpu_address);
 }
 
-// recursive function to insert a node
 static RmtVirtualAllocationInterval* InsertNode(RmtVirtualAllocationList*     virtual_allocation_list,
                                                 RmtVirtualAllocationInterval* node,
                                                 RmtGpuAddress                 gpu_address,
@@ -111,7 +104,6 @@ static RmtVirtualAllocationInterval* InsertNode(RmtVirtualAllocationList*     vi
 {
     if (node == nullptr)
     {
-        // create a new node
         RmtVirtualAllocationInterval* new_node = (RmtVirtualAllocationInterval*)RmtPoolAllocate(&virtual_allocation_list->allocation_interval_pool);
         if (new_node != nullptr)
         {
@@ -146,7 +138,6 @@ static RmtVirtualAllocationInterval* InsertNode(RmtVirtualAllocationList*     vi
     return node;
 }
 
-// recursive function to delete a node
 static RmtVirtualAllocationInterval* DeleteNode(RmtVirtualAllocationList*     virtual_allocation_list,
                                                 RmtVirtualAllocationInterval* node,
                                                 RmtGpuAddress                 gpu_address)
@@ -198,14 +189,12 @@ static RmtVirtualAllocationInterval* DeleteNode(RmtVirtualAllocationList*     vi
         RMT_ASSERT(node->allocation);
         node->allocation = smallest_child->allocation;
 
-        // now delete the node we just moved.
         node->right = DeleteNode(virtual_allocation_list, node->right, smallest_child->base_address);
     }
 
     return node;
 }
 
-// search the acceleration structure for a resource.
 static RmtVirtualAllocationInterval* FindAllocationIntervalByAddress(const RmtVirtualAllocationList* virtual_allocation_list, RmtGpuAddress gpu_address)
 {
     RmtVirtualAllocationInterval* found_node = FindAllocationNode(virtual_allocation_list->root, gpu_address);
@@ -217,7 +206,6 @@ static RmtVirtualAllocationInterval* FindAllocationIntervalByAddress(const RmtVi
     return found_node;
 }
 
-// add a resource to the acceleration structure.
 static RmtErrorCode AddAllocationToTree(RmtVirtualAllocationList* virtual_allocation_list,
                                         RmtGpuAddress             gpu_address,
                                         int32_t                   size_in_4kb_pages,
@@ -231,7 +219,6 @@ static RmtErrorCode AddAllocationToTree(RmtVirtualAllocationList* virtual_alloca
     return kRmtOk;
 }
 
-// destroy a resource from the acceleration structure.
 static RmtErrorCode RemoveAllocationFromTree(RmtVirtualAllocationList* virtual_allocation_list, RmtGpuAddress gpu_address)
 {
     const size_t pool_count       = virtual_allocation_list->allocation_interval_pool.allocated;
@@ -280,7 +267,6 @@ uint64_t RmtVirtualAllocationGetTotalResourceMemoryInBytes(const RmtDataSnapshot
         const RmtResource* current_resource        = virtual_allocation->resources[current_resource_index];
         const size_t       current_resource_offset = current_resource->address - virtual_allocation->base_address;
 
-        // Ignore heaps.
         if (current_resource->resource_type == kRmtResourceTypeHeap)
         {
             continue;
@@ -303,7 +289,6 @@ uint64_t RmtVirtualAllocationGetTotalResourceMemoryInBytes(const RmtDataSnapshot
                 continue;
             }
 
-            // merge ranges.
             const size_t new_size = (current_resource_offset + current_resource->size_in_bytes) - region_stack[current_region_stack_top - 1].offset;
             region_stack[current_region_stack_top - 1].size = RMT_MAXIMUM(new_size, region_stack[current_region_stack_top - 1].size);
         }
@@ -357,7 +342,6 @@ uint64_t RmtVirtualAllocationGetResourceStandardDeviationInBytes(const RmtDataSn
 
         if (current_resource->resource_type == RmtResourceType::kRmtResourceTypeHeap)
         {
-            // Skip heaps.
             continue;
         }
 
@@ -431,7 +415,6 @@ RmtErrorCode RmtVirtualAllocationListInitialize(RmtVirtualAllocationList* virtua
     virtual_allocation_list->unbound_memory_regions         = nullptr;
     virtual_allocation_list->unbound_memory_region_count    = 0;
 
-    // initialize interval pool.
     RmtPoolInitialize(&virtual_allocation_list->allocation_interval_pool,
                       virtual_allocation_list->allocation_intervals,
                       interval_size_in_bytes,
@@ -455,7 +438,7 @@ RmtErrorCode RmtVirtualAllocationListAddAllocation(RmtVirtualAllocationList* vir
     RMT_RETURN_ON_ERROR(size_in_4kb_pages, kRmtErrorInvalidSize);
     RMT_RETURN_ON_ERROR(virtual_allocation_list->allocation_count < virtual_allocation_list->total_allocations, kRmtErrorOutOfMemory);
 
-    // check if this region overlaps an existing region
+    // Check whether the starting address belongs to an existing allocation.
     const RmtVirtualAllocation* found_allocation = NULL;
     const RmtErrorCode          error_code       = RmtVirtualAllocationListGetAllocationForAddress(virtual_allocation_list, address, &found_allocation);
     if (error_code == kRmtOk)
@@ -466,7 +449,6 @@ RmtErrorCode RmtVirtualAllocationListAddAllocation(RmtVirtualAllocationList* vir
 
     const int32_t next_allocation_index = virtual_allocation_list->allocation_count;
 
-    // fill out the details.
     RmtVirtualAllocation* allocation_details    = &virtual_allocation_list->allocation_details[next_allocation_index];
     allocation_details->base_address            = address;
     allocation_details->size_in_4kb_page        = size_in_4kb_pages;
@@ -492,7 +474,6 @@ RmtErrorCode RmtVirtualAllocationListAddAllocation(RmtVirtualAllocationList* vir
         allocation_details->heap_preferences[current_heap_preference_index] = preferences[current_heap_preference_index];
     }
 
-    // fill out the allocation interval
     const RmtGpuAddress hashed_address = HashGpuAddress(address);
     const RmtErrorCode  add_result     = AddAllocationToTree(virtual_allocation_list, hashed_address, size_in_4kb_pages, allocation_details);
     if (add_result != kRmtOk)
@@ -521,15 +502,7 @@ RmtErrorCode RmtVirtualAllocationListRemoveAllocation(RmtVirtualAllocationList* 
         return kRmtErrorNoAllocationFound;
     }
 
-    // mark the allocation as dead, the allocation will then be removed later on
-    // when the resource pointers are set on the allocation. Removal of allocations
-    // is deferred in this way, as moving the virtual allocation structures
-    // on-demand means we'd have to dive off and fix up the boundAllocation pointers
-    // on the resources. As we don't set these until the end of the parsing process
-    // this is undesireable. Additionally, this has the benefit that we can
-    // potentially detect "dangling" resources, i.e.: resources which are not
-    // destroyed that are still bound to a free'd range in the virtual address map.
-    // See the rmtVirtualAllocationListCompact for more info.
+    // Defer compaction to keep resource allocation pointers stable and detect dangling resources.
     current_allocation_interval->dead = 1;
     current_allocation_interval->allocation->flags |= kRmtAllocationDetailIsDead;
 
@@ -537,7 +510,6 @@ RmtErrorCode RmtVirtualAllocationListRemoveAllocation(RmtVirtualAllocationList* 
     virtual_allocation_list->total_allocated_bytes -= size_in_bytes;
     virtual_allocation_list->allocations_per_preferred_heap[current_allocation_interval->allocation->heap_preferences[0]] -= size_in_bytes;
 
-    // remove efrom the tree
     RemoveAllocationFromTree(virtual_allocation_list, hashed_address);
 
     return kRmtOk;
@@ -555,7 +527,6 @@ RmtErrorCode RmtVirtualAllocationListAddResourceReference(RmtVirtualAllocationLi
     RMT_RETURN_ON_ERROR(virtual_allocation_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(virtual_allocation_list->allocation_count, kRmtErrorNoAllocationFound);
 
-    // find the allocation index.
     const RmtGpuAddress           hashed_address = HashGpuAddress(address);
     RmtVirtualAllocationInterval* interval       = FindAllocationIntervalByAddress(virtual_allocation_list, hashed_address);
     if (interval == nullptr)
@@ -563,7 +534,6 @@ RmtErrorCode RmtVirtualAllocationListAddResourceReference(RmtVirtualAllocationLi
         return kRmtErrorNoAllocationFound;
     }
 
-    // store the residency update on the details structure.
     RmtVirtualAllocation* current_details = interval->allocation;
     RMT_ASSERT(current_details);
 
@@ -591,7 +561,6 @@ RmtErrorCode RmtVirtualAllocationListAddCpuMap(RmtVirtualAllocationList* virtual
     RMT_RETURN_ON_ERROR(virtual_allocation_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(virtual_allocation_list->allocation_count, kRmtErrorNoAllocationFound);
 
-    // find the allocation index.
     const RmtGpuAddress           hashed_address = HashGpuAddress(address);
     RmtVirtualAllocationInterval* interval       = FindAllocationIntervalByAddress(virtual_allocation_list, hashed_address);
     if (interval == nullptr)
@@ -599,7 +568,6 @@ RmtErrorCode RmtVirtualAllocationListAddCpuMap(RmtVirtualAllocationList* virtual
         return kRmtErrorNoAllocationFound;
     }
 
-    // store the residency update on the details structure.
     RmtVirtualAllocation* current_details = interval->allocation;
     current_details->flags |= kRmtAllocationDetailIsCpuMapped;
     current_details->flags |= kRmtAllocationDetailHasBeenCpuMapped;
@@ -615,7 +583,6 @@ RmtErrorCode RmtVirtualAllocationListAddCpuUnmap(RmtVirtualAllocationList* virtu
     RMT_RETURN_ON_ERROR(virtual_allocation_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(virtual_allocation_list->allocation_count, kRmtErrorNoAllocationFound);
 
-    // find the allocation index.
     const RmtGpuAddress           hashed_address = HashGpuAddress(address);
     RmtVirtualAllocationInterval* interval       = FindAllocationIntervalByAddress(virtual_allocation_list, hashed_address);
     if (interval == nullptr)
@@ -623,7 +590,6 @@ RmtErrorCode RmtVirtualAllocationListAddCpuUnmap(RmtVirtualAllocationList* virtu
         return kRmtErrorNoAllocationFound;
     }
 
-    // store the residency update on the details structure.
     RmtVirtualAllocation* current_details = interval->allocation;
     current_details->flags &= ~kRmtAllocationDetailIsCpuMapped;
     current_details->last_cpu_un_map = timestamp;
@@ -641,7 +607,6 @@ RmtErrorCode RmtVirtualAllocationListGetAllocationForAddress(const RmtVirtualAll
     RMT_RETURN_ON_ERROR(virtual_allocation_list, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(out_allocation, kRmtErrorInvalidPointer);
 
-    // find the allocation interval.
     const RmtGpuAddress           hashed_address = HashGpuAddress(address);
     RmtVirtualAllocationInterval* interval       = FindAllocationIntervalByAddress(virtual_allocation_list, hashed_address);
     if (interval == nullptr)
@@ -649,7 +614,6 @@ RmtErrorCode RmtVirtualAllocationListGetAllocationForAddress(const RmtVirtualAll
         return kRmtErrorNoAllocationFound;
     }
 
-    // store the residency update on the details structure.
     RmtVirtualAllocation* current_details = interval->allocation;
     *out_allocation                       = current_details;
     return kRmtOk;
@@ -720,13 +684,11 @@ RmtErrorCode RmtVirtualAllocationListCompact(RmtVirtualAllocationList* virtual_a
 
     DropDeadAllocations(virtual_allocation_list);
 
-    // Now perform compaction.
     for (int32_t current_virtual_allocation_index = 0; current_virtual_allocation_index < virtual_allocation_list->allocation_count;
          ++current_virtual_allocation_index)
     {
         RmtVirtualAllocation* current_virtual_allocation = &virtual_allocation_list->allocation_details[current_virtual_allocation_index];
 
-        // If the allocation is alive, then we can leave it be.
         if ((current_virtual_allocation->flags & kRmtAllocationDetailIsDead) != kRmtAllocationDetailIsDead)
         {
             continue;
@@ -738,20 +700,17 @@ RmtErrorCode RmtVirtualAllocationListCompact(RmtVirtualAllocationList* virtual_a
 
         const int32_t last_virtual_allocation_index = virtual_allocation_list->allocation_count - 1;
 
-        // If the current allocation index is at or past the end of the list, then we're done.
         if (current_virtual_allocation_index >= last_virtual_allocation_index)
         {
             continue;
         }
 
-        // Otherwise do a full copy and fix it all up.
         const RmtVirtualAllocation* last_virtual_allocation = &virtual_allocation_list->allocation_details[last_virtual_allocation_index];
 
         // Get the original guid before copying so it can be fixed up.
         int32_t guid = current_virtual_allocation->guid;
         memcpy(current_virtual_allocation, last_virtual_allocation, sizeof(RmtVirtualAllocation));
 
-        // Fix up guid.
         current_virtual_allocation->guid = guid;
 
         RMT_ASSERT((current_virtual_allocation->flags & kRmtAllocationDetailIsDead) != kRmtAllocationDetailIsDead);
@@ -800,7 +759,6 @@ RmtErrorCode RmtVirtualAllocationGetBackingStorageHistogram(const RmtDataSnapsho
         // Handle edge case where last page isn't 4KB in size.
         const uint64_t size = RMT_MINIMUM(end_virtual_address - current_virtual_address, size_of_minimum_page);
 
-        // get the physical address
         RmtGpuAddress      physical_address = 0;
         const RmtErrorCode error_code = RmtPageTableGetPhysicalAddressForVirtualAddress(&snapshot->page_table, current_virtual_address, &physical_address);
 
@@ -876,11 +834,9 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
             continue;
         }
 
-        // Reset the alias size.
         resource->adjusted_size_in_bytes = 0;
         resource->is_aliased             = false;
 
-        // Skip this resource if it is disabled by the usage filter.
         const RmtResourceUsageType usage_type = RmtResourceGetUsageType(resource);
         if (!(RmtResourceGetUsageTypeMask(usage_type) & resource_usage_mask))
         {
@@ -919,7 +875,6 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
             const AliasedResourceIntervalType search_interval = {new_resource_start + 1LL, new_resource_end - 1LL, nullptr};
             interval_tree.FindOverlappingIntervals(search_interval, interval_overlaps);
 
-            // Sort the overlapping intervals by range start value.
             std::sort(interval_overlaps.begin(), interval_overlaps.end(), [](const AliasedResourceIntervalType& lhs, const AliasedResourceIntervalType& rhs) {
                 return lhs.start < rhs.start;
             });
@@ -941,7 +896,6 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
 
                 if (existing_interval_start <= new_interval_start)
                 {
-                    // Trim the start of the new interval.
                     const uint64_t trim_amount = std::min(new_interval_end, existing_interval_end) - new_interval_start;
                     new_interval_start += trim_amount;
                     new_resource_remaining_size -= trim_amount;
@@ -949,13 +903,11 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
                 }
                 else
                 {
-                    // Trim the end of the new interval.
                     if (new_interval_end > existing_interval_end)
                     {
                         new_interval_end = existing_interval_end;
                     }
 
-                    // Calculate the amount to trim from the new interval end.
                     const uint64_t trim_amount = new_interval_end - existing_interval_start;
                     new_interval_end -= trim_amount;
                     new_resource_remaining_size -= trim_amount;
@@ -966,7 +918,6 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
                     RMT_ASSERT(new_interval.end > new_interval.start);
                     interval_tree.Insert(new_interval);
 
-                    // Increase the adjusted size of the resource.
                     const uint64_t interval_size = new_interval_end - new_interval_start;
                     new_resource->adjusted_size_in_bytes += interval_size;
 
@@ -988,10 +939,8 @@ static RmtErrorCode AdjustAliasedResourceSizesForAllocation(const RmtVirtualAllo
             const AliasedResourceIntervalType new_interval = {new_interval_start, new_interval_end, new_resource};
             interval_tree.Insert(new_interval);
 
-            // Set the flag that indicates subsequent resources that are processed need to be checked for overlaps in the interval tree.
             interval_inserted = true;
 
-            // Increase the adjusted size of the resource.
             new_resource->adjusted_size_in_bytes += new_resource_remaining_size;
         }
     }
@@ -1012,23 +961,20 @@ RmtErrorCode RmtVirtualAllocationListUpdateAliasedResourceSizes(const RmtVirtual
     int max_resource = 0;
     for (int index = 0; index < allocation_list->allocation_count; index++)
     {
-        // Update the maximum number of resources found.
         max_resource = RMT_MAXIMUM(max_resource, allocation_list->allocation_details[index].resource_count);
     }
 
     if (max_resource == 0)
     {
-        // There are no resources bound to any of the virtual allocation so just exit.
         return kRmtOk;
     }
 
-    // Temporary list of resource pointers that get sorted by start address.
+    // Temporary list of resources sorted by priority.
     std::vector<RmtResource*> sorted_resources;
 
     // Temporary list of resource intervals that overlap with a resource.
     std::vector<AliasedResourceIntervalType> interval_overlaps;
 
-    // Reserve space up front for the temporary lists.
     sorted_resources.reserve(max_resource);
     interval_overlaps.reserve(max_resource - 1);
 

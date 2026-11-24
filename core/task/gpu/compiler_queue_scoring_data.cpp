@@ -47,7 +47,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     , externalQueueLoads(options.queueLoads)
     , externalQueueLoadCount(options.queueLoadCount)
 {
-    for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup)
+    for(usize costGroup = 0u; costGroup < GpuTaskCostHint::kCount; ++costGroup)
         costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
     for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex){
         const GpuTaskSchedulingHint& scheduling = CompilerGraphAccess::TaskNode(graph, taskIndex).scheduling;

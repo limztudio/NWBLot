@@ -175,14 +175,13 @@ static void deblock_block_region_interior(int fbw, int fbh, const image& src_img
 	const int y_top = by;
 	const int y_bottom = by + fbh - 1;
 
-	// --- Four corners -------------------------------------------------------
 
 	BASISU_CORNER(x_left, y_top, dst_x, dst_y);
 	BASISU_CORNER(x_right, y_top, dst_x + fbw - 1, dst_y);
 	BASISU_CORNER(x_left, y_bottom, dst_x, dst_y + fbh - 1);
 	BASISU_CORNER(x_right, y_bottom, dst_x + fbw - 1, dst_y + fbh - 1);
 
-	// --- Top and Bottom edges: rows y_top and y_bottom, columns (x_left, x_right) exclusive.
+	// Blur the top and bottom edges, excluding corners.
 	for (int sy = y_top; sy <= y_bottom; sy += (fbh - 1))
 	{
 		const int ty = dst_y + (sy - by);
@@ -203,7 +202,7 @@ static void deblock_block_region_interior(int fbw, int fbh, const image& src_img
 		}
 	}
 
-	// --- Left and Right edges: columns x_left and x_right, rows (y_top, y_bottom) exclusive.
+	// Blur the left and right edges, excluding corners.
 	for (int sx = x_left; sx <= x_right; sx += (fbw - 1))
 	{
 		const int tx = dst_x + (sx - bx);
@@ -295,8 +294,6 @@ static void code_block_weights(
 	const uint32_t total_grid_samples = grid_width * grid_height;
 	const uint32_t num_planes = log_blk.m_dual_plane ? 2 : 1;
 
-	//const auto& dequant_tab = astc_helpers::g_dequant_tables.get_weight_tab(log_blk.m_weight_ise_range).m_ISE_to_val;
-	//const auto& quant_tab = astc_helpers::g_dequant_tables.get_weight_tab(log_blk.m_weight_ise_range).m_val_to_ise;
 
 	uint8_t dequantized_raw_weights0[astc_helpers::MAX_BLOCK_PIXELS];
 
@@ -630,7 +627,6 @@ static uint64_t eval_error(
 	bool status = astc_helpers::decode_block_xuastc_ldr(enc_log_block, dec_block_pixels, block_width, block_height, params.m_decode_mode_srgb ? astc_helpers::cDecodeModeSRGB8 : astc_helpers::cDecodeModeLDR8);
 	if (!status)
 	{
-		// Shouldn't ever happen
 		assert(0);
 		return UINT64_MAX;
 	}
@@ -641,14 +637,12 @@ static uint64_t eval_error(
 	bool alt_status = astc_helpers::decode_block(enc_log_block, dec_block_pixels_alt, block_width, block_height, params.m_decode_mode_srgb ? astc_helpers::cDecodeModeSRGB8 : astc_helpers::cDecodeModeLDR8);
 	if (!alt_status)
 	{
-		// Shouldn't ever happen
 		assert(0);
 		return UINT64_MAX;
 	}
 
 	if (memcmp(dec_block_pixels, dec_block_pixels_alt, sizeof(color_rgba) * block_width * block_height) != 0)
 	{
-		// Very bad
 		assert(0);
 		return UINT64_MAX;
 	}
@@ -673,7 +667,6 @@ static uint64_t eval_error(
 	const uint8_t* pEndpoint_vals, const uint8_t* pWeight_grid_vals0, const uint8_t* pWeight_grid_vals1,
 	const astc_ldr::cem_encode_params& params)
 {
-	//const uint32_t total_block_pixels = block_width * block_height;
 	const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	astc_helpers::log_astc_block enc_log_block;
@@ -937,10 +930,8 @@ static bool polish_block_weights_final_slow(
 {
 	const bool dual_plane_flag = enc_log_block.m_dual_plane;
 
-	//const uint32_t endpoint_ise_range = enc_log_block.m_endpoint_ise_range;
 	const uint32_t weight_ise_range = enc_log_block.m_weight_ise_range;
 	
-	//const uint32_t total_block_pixels = block_width * block_height;
 	const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	bool improved_flag = false;
@@ -1024,12 +1015,10 @@ static bool polish_block_weights_final_fast(
 
 	const bool dual_plane_flag = enc_log_block.m_dual_plane;
 
-	//const uint32_t endpoint_ise_range = enc_log_block.m_endpoint_ise_range;
 	const uint32_t weight_ise_range = enc_log_block.m_weight_ise_range;
 
 	const uint32_t total_block_pixels = block_width * block_height;
 	BASISU_NOTE_UNUSED(total_block_pixels);
-	//const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	bool improved_flag = false;
 
@@ -1194,7 +1183,6 @@ static bool polish_block_weights(
 	const uint32_t cem_index = enc_log_block.m_color_endpoint_modes[0];
 	const uint32_t num_subsets = enc_log_block.m_num_partitions;
 	const bool dual_plane_flag = enc_log_block.m_dual_plane;
-	//const uint32_t num_planes = dual_plane_flag ? 2 : 1;
 	const int ccs_index = dual_plane_flag ? enc_log_block.m_color_component_selector : -1;
 
 	const uint32_t endpoint_ise_range = enc_log_block.m_endpoint_ise_range;
@@ -1205,7 +1193,6 @@ static bool polish_block_weights(
 
 	const basist::astc_ldr_t::astc_block_grid_data *pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, grid_width, grid_height);
 
-	//const bool is_downsampling = (grid_width < block_width) || (grid_height < block_height);
 
 #if defined(_DEBUG) || defined(DEBUG)
 	if (num_subsets > 1)
@@ -1439,7 +1426,6 @@ static bool polish_block_weights(
 					ideal_block_weights1[i] = (float)ideal_block_raw_weights1[i];
 			}
 
-			//const float* pUpsample_matrix = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, grid_width, grid_height)->m_upsample_matrix.get_ptr();
 			const float* pUpsample_matrix = pGrid_data->m_upsample_matrix.get_ptr();
 
 			qcd::qcd_min_solver solver;
@@ -1633,7 +1619,6 @@ static bool encode_trial_subsets(
 		*pTry_direct_encoding_flag = false;
 
 	const bool is_downsampling = (grid_width < block_width) || (grid_height < block_height);
-	//const uint32_t total_block_pixels = block_width * block_height;
 	const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	color_rgba part_pixels[astc_helpers::MAX_PARTITIONS][astc_ldr::ASTC_LDR_MAX_BLOCK_PIXELS];
@@ -1880,11 +1865,9 @@ static bool encode_trial(
 		pDownsample_matrix = pBlock_grid_data->m_downsample_matrix.get_ptr();
 	}
 
-	//const uint32_t total_block_pixels = block_width * block_height;
 	const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	const auto& dequant_tab = astc_helpers::g_dequant_tables.get_weight_tab(weight_ise_range).m_ISE_to_val;
-	//const auto& quant_tab = astc_helpers::g_dequant_tables.get_weight_tab(weight_ise_range).m_val_to_ise;
 
 	enc_log_block.clear();
 
@@ -2121,9 +2104,7 @@ static bool encode_trial_refine_only(
 	const uint32_t grid_width = enc_log_block.m_grid_width;
 	const uint32_t grid_height = enc_log_block.m_grid_height;
 
-	//const bool is_downsampling = (grid_width < block_width) || (grid_height < block_height);
 
-	//const uint32_t total_block_pixels = block_width * block_height;
 	const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	uint8_t dequantized_raw_weights0[astc_ldr::ASTC_LDR_MAX_BLOCK_PIXELS];
@@ -2167,7 +2148,6 @@ static bool encode_trial_refine_only(
 	uint8_t refined_weights0[astc_ldr::ASTC_LDR_MAX_BLOCK_PIXELS];
 	uint8_t refined_weights1[astc_ldr::ASTC_LDR_MAX_BLOCK_PIXELS];
 
-	//bool use_blue_contraction = true;
 
 	bool try_direct_encoding_flag = false;
 
@@ -2339,7 +2319,6 @@ void log_surrogate_astc_blk::decode(uint32_t block_width, uint32_t block_height,
 			{
 				float w = ((int)c == m_ccs_index) ? pWeights1[x + y * block_width] : pWeights0[x + y * block_width];
 
-				//dst[c] = lerp(l[c], h[c], w);
 
 				const float one_minus_w = 1.0f - w;
 				dst[c] = l[c] * one_minus_w + h[c] * w;
@@ -2459,7 +2438,6 @@ static float decode_surrogate_and_compute_error(
 		} // i
 	}
 
-	//assert(equal_tol(total_err, total_err_alt, .000125f));
 	float total_err = total_err_alt;
 #endif
 
@@ -2488,8 +2466,6 @@ static float encode_surrogate_trial(
 		pDownsample_matrix = pBlock_grid_data->m_downsample_matrix.get_ptr();
 	}
 
-	//const uint32_t total_block_pixels = block_width * block_height;
-	//const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	log_block.m_cem_index = cem_index;
 	log_block.m_ccs_index = ccs_index;
@@ -2548,7 +2524,6 @@ static float encode_surrogate_trial(
 #if defined(_DEBUG) || defined(DEBUG)
 		{
 			float alt_wsse_err = decode_surrogate_and_compute_error(block_width, block_height, pixel_stats, log_block, nullptr, params);
-			//assert(fabs(wsse_err - alt_wsse_err) < .125f);
 			assert(basisu::equal_rel_tol(wsse_err, alt_wsse_err, .0125f));
 		}
 #endif
@@ -2572,8 +2547,6 @@ static float encode_surrogate_trial_subsets(
 	assert((num_subsets >= 2) && (num_subsets <= astc_helpers::MAX_PARTITIONS));
 
 	const bool is_downsampling = (grid_width < block_width) || (grid_height < block_height);
-	//const uint32_t total_block_pixels = block_width * block_height;
-	//const uint32_t total_grid_pixels = grid_width * grid_height;
 
 	const uint32_t num_weight_levels = astc_helpers::get_ise_levels(weight_ise_range);
 	const uint32_t num_endpoint_levels = astc_helpers::get_ise_levels(endpoint_ise_range);
@@ -2676,7 +2649,6 @@ static float encode_surrogate_trial_subsets(
 	{
 		float alt_subset_err = decode_surrogate_and_compute_error(block_width, block_height, pixel_stats, log_block, pPat, params);
 
-		//assert(fabs(total_subset_err - alt_subset_err) < .00125f);
 		assert(basisu::equal_rel_tol(total_subset_err, (double)alt_subset_err, (double).0125f));
 	}
 #endif
@@ -3810,7 +3782,6 @@ struct weight_terms
 		m_var = weight_var / (float)n;
 
 		// drops below 2/3 on smooth blocks and tends to 2/3 when weights are well spread (so normalized by (2.0f / 3.0f))
-		//m_endpoint_factor = (1.0f + 2.0f * m_var + 2.0f * m_mean * m_mean - 2.0f * m_mean) / (2.0f / 3.0f);
 		m_endpoint_factor = (1.0f + 2.0f * m_var + 2.0f * m_mean * m_mean - 2.0f * m_mean) * (3.0f / 2.0f);
 		m_endpoint_factor = clamp<float>(m_endpoint_factor, .25f, 1.50f);
 
@@ -4589,7 +4560,6 @@ struct ldr_astc_lowlevel_block_encoder
 				}
 				else
 				{
-					//const astc_ldr::partitions_data* pPart_data = (tm.m_num_parts == 2) ? p.m_pPart_data_p2 : p.m_pPart_data_p3;
 
 					const uint32_t s = astc_helpers::cem_is_ldr_base_scale(tm.m_cem) ? 1 : 0;
 					const uint32_t num_est_parts_to_try = (tm.m_num_parts == 2) ? m_num_est_parts2[s] : m_num_est_parts3[s];
@@ -4625,8 +4595,6 @@ struct ldr_astc_lowlevel_block_encoder
 
 			} // j
 
-			//fmt_debug_printf("Total superbucket entries: {}\n", m_superbucket_hash.size());
-			//fmt_debug_printf("Max superbucket tm indices: {}\n", max_superbucket_tm_indices);
 
 			const uint32_t total_block_texels = p.m_total_block_pixels;
 			const float inv_total_block_texels = 1.0f / (float)total_block_texels;
@@ -4649,14 +4617,12 @@ struct ldr_astc_lowlevel_block_encoder
 				const trial_mode_estimate_superbucket_key& key = superbucket_iter->first;
 				const trial_mode_estimate_superbucket_value& val = superbucket_iter->second;
 
-				//const bool cem_has_alpha = astc_helpers::does_cem_have_alpha(key.m_cem_index);
 
 				log_surrogate_astc_blk log_blk;
 
 				const astc_ldr::partitions_data* pPart_data = nullptr;
 				const astc_ldr::partition_pattern_vec* pPat = nullptr;
 
-				//const uint32_t num_planes = (key.m_ccs_index >= 0) ? 2 : 1;
 
 				const float worst_wsse_found_so_far = (m_trial_mode_estimate_priority_queue.size() >= max_priority_queue_size) ? m_trial_mode_estimate_priority_queue.top().m_wsse : 1e+9f;
 
@@ -4823,21 +4789,15 @@ struct ldr_astc_lowlevel_block_encoder
 					if (total_wsse_so_far >= worst_wsse_found_so_far)
 						continue;
 
-					//const float lost_weight_energy0 = compute_lost_dct_energy(p.m_block_width, p.m_block_height, weight0_energy, tm.m_grid_width, tm.m_grid_height) * inv_total_block_texels;
-					//assert(basisu::equal_tol(lost_weight_energy0, compute_lost_dct_energy_orig(p.m_block_width, p.m_block_height, weight0_energy, tm.m_grid_width, tm.m_grid_height) * inv_total_block_texels, .0000125f));
 
 					const float lost_weight_energy0_prefix_sum = compute_lost_dct_energy_prefix_sum(p.m_block_width, p.m_block_height, weight0_energy_prefix_sum, tm.m_grid_width, tm.m_grid_height, total_weight0_ac_energy) * inv_total_block_texels;
-					//assert(basisu::equal_tol(lost_weight_energy0, lost_weight_energy0_prefix_sum, .00125f));
 					const float lost_weight_energy0 = lost_weight_energy0_prefix_sum;
 
 					float lost_weight_energy1 = 0;
 					if (key.m_ccs_index >= 0)
 					{
-						//lost_weight_energy1 = compute_lost_dct_energy(p.m_block_width, p.m_block_height, weight1_energy, tm.m_grid_width, tm.m_grid_height) * inv_total_block_texels;
-						//assert(basisu::equal_tol(lost_weight_energy1, compute_lost_dct_energy_orig(p.m_block_width, p.m_block_height, weight1_energy, tm.m_grid_width, tm.m_grid_height) * inv_total_block_texels, .0000125f));
 
 						const float lost_weight_energy1_prefix_sum = compute_lost_dct_energy_prefix_sum(p.m_block_width, p.m_block_height, weight1_energy_prefix_sum, tm.m_grid_width, tm.m_grid_height, total_weight1_ac_energy) * inv_total_block_texels;
-						//assert(basisu::equal_tol(lost_weight_energy1, lost_weight_energy1_prefix_sum, .00125f));
 						
 						lost_weight_energy1 = lost_weight_energy1_prefix_sum;
 					}
@@ -4863,8 +4823,6 @@ struct ldr_astc_lowlevel_block_encoder
 								if ((span_size == 0.0f) && ((log_blk.m_endpoints[subset_index][1][c] == 0.0f) || (log_blk.m_endpoints[subset_index][1][c] == 1.0f)))
 								{
 									// Won't have any E/W quant err at extremes (0.0 or 1.0 are always perfectly represented), no weight downsample error either.
-									//chan_mse.m_ep = 0.0f;
-									//chan_mse.m_wp = 0.0f;
 								}
 								else
 								{
@@ -4899,8 +4857,6 @@ struct ldr_astc_lowlevel_block_encoder
 							if ((span_size == 0.0f) && ((log_blk.m_endpoints[subset_index][1][c] == 0.0f) || (log_blk.m_endpoints[subset_index][1][c] == 1.0f)))
 							{
 								// Won't have any E/W quant err at extremes (0.0 or 1.0 are always perfectly represented), no weight downsample error either.
-								//chan_mse.m_ep = 0.0f;
-								//chan_mse.m_wp = 0.0f;
 							}
 							else
 							{
@@ -4988,7 +4944,6 @@ struct ldr_astc_lowlevel_block_encoder
 
 				if (tm.m_num_parts > 1)
 				{
-					//const astc_ldr::partitions_data* pPart_data = (tm.m_num_parts == 2) ? p.m_pPart_data_p2 : p.m_pPart_data_p3;
 
 					const uint32_t s = astc_helpers::cem_is_ldr_base_scale(tm.m_cem) ? 1 : 0;
 					const uint32_t num_est_parts_to_try = (tm.m_num_parts == 2) ? m_num_est_parts2[s] : m_num_est_parts3[s];
@@ -5047,7 +5002,6 @@ struct ldr_astc_lowlevel_block_encoder
 		for (auto it = shortlist_buckets.begin(); it != shortlist_buckets.end(); ++it)
 		{
 			shortlist_bucket& bucket = it->first;
-			//const uint_vec& trial_mode_indices = it->second;
 			const trial_mode_index_vec& trial_mode_indices = it->second;
 
 			// Choose bucket's largest endpoint/weight ise ranges (finest quant levels) - anything in the bucket will quite likely encode to worse SSE, which we can rapidly estimate.
@@ -5343,7 +5297,6 @@ struct ldr_astc_lowlevel_block_encoder
 		
 		// TODO: Tune this further. Memory here adds up across all encoding threads.
 		{
-			//const float reserve_factor = (sizeof(void*) > 4) ? .5f : .25f;
 			const uint32_t reserve_size = 64;// maximum(256, (int)(p.m_num_trial_modes * reserve_factor));
 
 			if (shortlist_trials.capacity() < reserve_size)
@@ -6310,7 +6263,6 @@ static void create_encoder_trial_modes_full_eval(uint32_t block_width, uint32_t 
 #endif
 
 const uint32_t TOTAL_RGBA_CHAN_PAIRS = 6;
-//const uint32_t TOTAL_RGB_CHAN_PAIRS = 3;
 static const uint8_t g_rgba_chan_pairs[TOTAL_RGBA_CHAN_PAIRS][2] =
 {
 	{ 0, 1 },
@@ -6485,7 +6437,6 @@ struct ldr_astc_block_encode_image_output
 			}
 		} // y
 
-		//fmt_debug_printf("Cleared enc_out image block info: {3.3} secs\n", itm.get_elapsed_secs());
 	}
 
 	astc_ldr::partitions_data m_part_data_p2;
@@ -6688,12 +6639,6 @@ struct encoder_config_manager
 			m_chan_pair_correlations[i] = 1.0f;
 		}
 				
-		// 0=0, 1
-		// 1=0, 2
-		// 2=1, 2
-		// 3=0, 3
-		// 4=1, 3
-		// 5=2, 3
 
 		m_min_corr = 1.0f;
 		m_max_corr = 0.0f;
@@ -6855,7 +6800,6 @@ struct encoder_config_manager
 				if (min_p < enc_cfg.m_strong_dp_decorr_thresh_rgb)
 				{
 					const bool has_r = m_active_chan_flags[0], has_g = m_active_chan_flags[1];
-					//const bool has_b = active_chan_flags[2];
 
 					uint32_t total_active_chans_rgb = 0;
 					for (uint32_t i = 0; i < 3; i++)
@@ -6929,7 +6873,7 @@ struct encoder_config_manager
 			enc_blk_params.m_polish_weights_flag = true;
 						
 			enc_blk_params.m_use_direct_modes = true;
-			//enc_blk_params.m_use_base_scale_modes = true; // just leaving this alone now from the first pass, it will be disabled for good reasons now
+			// Keep the base-scale mode decision from the first pass.
 
 			enc_blk_params.m_early_stop_wpsnr = enc_cfg.m_early_stop_wpsnr + 2.0f;
 			enc_blk_params.m_early_stop2_wpsnr = enc_cfg.m_early_stop2_wpsnr + 2.0f;
@@ -7203,7 +7147,6 @@ static bool encode_block_to_dc_latent(
 		log_blk.m_endpoint_ise_range = (uint8_t)((subsets == 3) ? astc_helpers::BISE_64_LEVELS : astc_helpers::BISE_256_LEVELS);
 		log_blk.m_color_endpoint_modes[2] = (subsets == 3) ? 6 : 0;
 
-		//const auto& weight_quant_tab = astc_helpers::g_dequant_tables.get_weight_tab(log_blk.m_weight_ise_range).m_val_to_ise;
 		const auto& endpoint_quant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(log_blk.m_endpoint_ise_range).m_val_to_ise;
 				
 		for (uint32_t unique_part_iter = 0; unique_part_iter < pPat_data->m_total_unique_patterns; unique_part_iter++)
@@ -7326,7 +7269,6 @@ static bool encode_block_to_linear_latent(
 
 	const uint32_t weight_ise_range = astc_helpers::BISE_16_LEVELS;
 
-	//const auto& weight_quant_tab = astc_helpers::g_dequant_tables.get_weight_tab(weight_ise_range).m_val_to_ise;
 	const auto& weight_dequant_tab = astc_helpers::g_dequant_tables.get_weight_tab(weight_ise_range).m_ISE_to_val;
 
 	const uint32_t NUM_WEIGHT_GRIDS = 4 * 4;
@@ -7449,9 +7391,7 @@ static bool encode_block_to_linear_latent(
 	cem_enc_params.m_max_ls_passes = 1;
 		
 	for (uint32_t subsets = 2; subsets <= 3; subsets++)
-	//const uint32_t subsets = 2;
 	{
-		//const astc_ldr::partitions_data* pPat_data = (subsets == 3) ? pPart_data_p3 : pPart_data_p2;
 
 		for (uint32_t grid_index = 0; grid_index < NUM_WEIGHT_GRIDS; grid_index++)
 		{
@@ -7469,16 +7409,13 @@ static bool encode_block_to_linear_latent(
 			log_blk.m_weight_ise_range = (uint8_t)weight_ise_range;
 			memcpy(log_blk.m_weights, weight_grids[grid_index], total_grid_samples);
 
-			//const auto& endpoint_quant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(log_blk.m_endpoint_ise_range).m_val_to_ise;
 
 			uint64_t best_err = UINT64_MAX;
 			astc_helpers::log_astc_block best_log_blk;
 			best_log_blk.clear();
 
-			//for (uint32_t unique_part_iter = 0; unique_part_iter < pPat_data->m_total_unique_patterns; unique_part_iter++)
 			for (uint32_t pat_index = 0; pat_index < num_patterns_to_try; pat_index++)
 			{
-				//const uint32_t part_seed = pPat_data->m_unique_index_to_part_seed[unique_part_iter];
 				const uint32_t part_seed = ((subsets == 2) ? best_2subset_seed_ids[pat_index] : best_3subset_seed_ids[pat_index]) & 1023;
 							
 				log_blk.m_partition_id = basisu::safe_cast_uint16(part_seed);
@@ -7559,7 +7496,6 @@ static bool encode_block_to_linear_latent(
 						tm_index = s_tm2_index_13[block_size_index];
 				}
 
-				//fmt_printf("block_size_index: {}, grid_index: {}, tm: {}\n", block_size_index, grid_index & 3, find_tm_index(encoder_trial_modes, best_log_blk));
 				assert((int)tm_index == find_tm_index(encoder_trial_modes, best_log_blk));
 				
 				new_output_blk.m_trial_mode_index = basisu::safe_cast_int16(tm_index);
@@ -7704,7 +7640,6 @@ static bool ldr_astc_block_encode_image(
 
 		const bool srgb_flag = false;
 				
-		//if (TOTAL_BLURRED_IMAGES > 3)
 		if(0)
 		{
 			for (uint32_t k = 0; k < TOTAL_BLURRED_IMAGES; k++)
@@ -7933,9 +7868,6 @@ static bool ldr_astc_block_encode_image(
 		
 	uint32_t total_blocks_to_recompress = 0;
 		
-	//uint32_t max_candidates = 64;
-	//if (total_blocks >= (512 * 512))
-	//	max_candidates = 16; // save memory
 		
 	for (uint32_t superpass_index = 0; superpass_index < total_superpasses; superpass_index++)
 	{
@@ -7972,13 +7904,10 @@ static bool ldr_astc_block_encode_image(
 					&encoder_pool, &grid_coder, &grouped_encoder_trial_modes,
 					&enc_out, &output_block_devel_info, &total_void_extent_blocks_skipped, &superpass2_recompress_block_flags, &total_blocks_to_recompress, &last_printed_progress_val]
 					{
-						//if ((bx == 0x35) && (by == 0xec))
-						//	printf(".");
 
 						if (encoder_failed_flag)
 							return;
 
-						//const uint32_t base_x = bx * block_width, base_y = by * block_height;
 
 						color_rgba block_pixels[astc_ldr::ASTC_LDR_MAX_BLOCK_PIXELS];
 						orig_img.extract_block_clamped(block_pixels, bx * block_width, by * block_height, block_width, block_height);
@@ -7994,11 +7923,9 @@ static bool ldr_astc_block_encode_image(
 
 							const bool is_purely_solid_block = (pixel_stats.m_min == pixel_stats.m_max);
 
-							// if void extent, just skip
 							if (is_purely_solid_block)
 								return;
 
-							//const basisu::vector<encode_block_output>& out_blocks = out_block_info.m_out_blocks;
 
 							for (uint32_t neighbor_index = 0; neighbor_index < basist::astc_ldr_t::cMaxConfigReuseNeighbors; neighbor_index++)
 							{
@@ -8037,7 +7964,7 @@ static bool ldr_astc_block_encode_image(
 								const uint32_t neighbor_tm_index = neighbor_output.m_trial_mode_index;
 								assert(neighbor_tm_index < encoder_trial_modes.size());
 
-								//const trial_mode& neighbor_tm = encoder_trial_modes[neighbor_tm_index]; // do not use the tm's cem, it may be base+ofs, use the log blk instead
+								// The trial mode CEM may be base+offset; use the logical block.
 
 								const astc_helpers::log_astc_block& neighbor_log_blk = neighbor_output.m_log_blk;
 								assert(!neighbor_log_blk.m_solid_color_flag_ldr);
@@ -8128,7 +8055,6 @@ static bool ldr_astc_block_encode_image(
 
 									if (enc_cfg.m_use_dct)
 									{
-										//const basist::astc_ldr_t::astc_block_grid_data* pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, new_log_block.m_grid_width, new_log_block.m_grid_height);
 
 										const uint32_t num_planes = (new_log_block.m_dual_plane ? 2 : 1);
 
@@ -8159,7 +8085,6 @@ static bool ldr_astc_block_encode_image(
 
 									new_output_blk.m_trial_mode_index = safe_cast_int16(neighbor_tm_index);
 									new_output_blk.m_log_blk = new_log_block;
-									//new_output_blk.m_trial_surrogate.clear();
 
 									new_output_blk.m_sse = eval_error(block_width, block_height, new_log_block, pixel_stats, enc_cfg.m_cem_enc_params);
 
@@ -8177,7 +8102,6 @@ static bool ldr_astc_block_encode_image(
 									// Start with fresh 0 weights, then polish them.
 									clear_obj(new_log_block.m_weights);
 
-									//const bool use_blue_contraction = enc_cfg.m_use_blue_contraction;
 
 									bool improved_flag = false;
 
@@ -8213,7 +8137,6 @@ static bool ldr_astc_block_encode_image(
 
 									if (enc_cfg.m_use_dct)
 									{
-										//const basist::astc_ldr_t::astc_block_grid_data* pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, new_log_block.m_grid_width, new_log_block.m_grid_height);
 
 										const uint32_t num_planes = (new_log_block.m_dual_plane ? 2 : 1);
 
@@ -8244,7 +8167,6 @@ static bool ldr_astc_block_encode_image(
 
 									new_output_blk.m_trial_mode_index = safe_cast_int16(neighbor_tm_index);
 									new_output_blk.m_log_blk = new_log_block;
-									//new_output_blk.m_trial_surrogate.clear();
 
 									new_output_blk.m_sse = eval_error(block_width, block_height, new_log_block, pixel_stats, enc_cfg.m_cem_enc_params);
 
@@ -8396,11 +8318,7 @@ static bool ldr_astc_block_encode_image(
 #endif
 
 							// --------------------- BLOCK BLURRING
-							//const float BLUR_STD_DEV_THRESH = (15.0f / 255.0f);
-							//const float BLUR_SOBEL_ENERGY_THRESH = 15000.0f;
 
-							//const float BLUR_STD_DEV_THRESH = (5.0f / 255.0f);
-							//const float BLUR_SOBEL_ENERGY_THRESH = 5000.0f;
 														
 							const float BLUR_STD_DEV_THRESH = (10.0f / 255.0f);
 							const float BLUR_SOBEL_ENERGY_THRESH = 10000.0f;
@@ -8538,7 +8456,6 @@ static bool ldr_astc_block_encode_image(
 							// --------------------- WEIGHT GRID DCT CODING 
 							if (enc_cfg.m_use_dct)
 							{
-								// apply DCT to weights
 								for (uint32_t out_block_iter = 0; out_block_iter < out_blocks.size_u32(); out_block_iter++)
 								{
 									if (!apply_weight_grid_dct(block_width, block_height,
@@ -8577,7 +8494,6 @@ static bool ldr_astc_block_encode_image(
 								for (uint32_t i = 0; i < total_block_pixels; i++)
 									total_err += weighted_color_error(block_pixels[i], dec_pixels[i], enc_cfg.m_cem_enc_params);
 
-								// if not blurred 
 								if (out_blocks[out_block_iter].m_blur_id == 0)
 								{
 									if (out_blocks[out_block_iter].m_sse != total_err)
@@ -8934,7 +8850,6 @@ static bool ldr_astc_block_encode_image(
 						// Warning: This invalidate the neighbor indices
 						out_block_info.m_packed_out_block_index = new_out_block_index;
 
-						//astc_helpers::astc_block& packed_block = enc_out.m_packed_phys_blocks(bx, by);
 
 						bool pack_success = astc_helpers::pack_astc_block((astc_helpers::astc_block&)packed_blocks(bx, by), new_output_blk.m_log_blk);
 						if (!pack_success)
@@ -8967,7 +8882,6 @@ static bool ldr_astc_block_encode_image(
 						// Warning: This invalidate the neighbor indices
 						out_block_info.m_packed_out_block_index = new_out_block_index;
 
-						//astc_helpers::astc_block& packed_block = enc_out.m_packed_phys_blocks(bx, by);
 
 						bool pack_success = astc_helpers::pack_astc_block((astc_helpers::astc_block&)packed_blocks(bx, by), new_output_blk.m_log_blk);
 						if (!pack_success)
@@ -8999,7 +8913,6 @@ static bool ldr_astc_block_encode_image(
 			fmt_debug_printf("consistency checking\n");
 
 		// Consistency/sanity cross checking
-		//uint32_t total_blocks_using_neighbor_config = 0;
 		for (uint32_t by = 0; by < num_blocks_y; by++)
 		{
 			for (uint32_t bx = 0; bx < num_blocks_x; bx++)
@@ -9069,7 +8982,6 @@ static bool ldr_astc_block_encode_image(
 						return false;
 					}
 
-					//const basist::astc_ldr_t::astc_block_grid_data* pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, best_log_blk.m_grid_width, best_log_blk.m_grid_height);
 					const uint32_t total_planes = best_log_blk.m_num_partitions ? (best_log_blk.m_dual_plane ? 2 : 1) : 0;
 
 					astc_helpers::log_astc_block verify_log_blk(best_log_blk);
@@ -9115,7 +9027,6 @@ static bool ldr_astc_block_encode_image(
 			fmt_debug_printf("consistency checking PASSED\n");
 	}
 
-	//fmt_debug_printf("Total blocks using neighbor config: {} {3.2}%\n", total_blocks_using_neighbor_config, ((float)total_blocks_using_neighbor_config * 100.0f) / (float)(total_blocks));
 
 	// Debug output
 	uint_vec trial_mode_hist;
@@ -9143,10 +9054,7 @@ static bool ldr_astc_block_encode_image(
 			if (out_devel_desc.m_trial_mode_index >= 0)
 				trial_mode_hist[out_devel_desc.m_trial_mode_index]++;
 
-			//const float total_astc_weight_bits = log2f((float)astc_helpers::get_ise_levels(best_out_block.m_log_blk.m_weight_ise_range)) *
-			//	best_out_block.m_log_blk.m_grid_width * best_out_block.m_log_blk.m_grid_height * (best_out_block.m_log_blk.m_dual_plane ? 2 : 1);
 
-			//bool used_blue_contraction = astc_ldr::used_blue_contraction(best_out_blocks_log_astc_blk.m_color_endpoint_modes[0], best_out_blocks_log_astc_blk.m_endpoints, best_out_blocks_log_astc_blk.m_endpoint_ise_range);
 
 			if (enc_cfg.m_debug_images)
 			{
@@ -9154,8 +9062,6 @@ static bool ldr_astc_block_encode_image(
 				color_rgba vis2_col(g_black_color);
 				color_rgba dp_vis(g_black_color);
 				color_rgba base_ofs_vis(g_black_color);
-				//color_rgba dct_bits_abs_vis(g_black_color);
-				//color_rgba dct_bits_vs_astc_vis(g_black_color);
 
 				const astc_ldr::partition_pattern_vec* pPat = nullptr;
 
@@ -9182,8 +9088,6 @@ static bool ldr_astc_block_encode_image(
 					pPat = &pPart_data->m_partition_pats[part_unique_index];
 				}
 
-				//						vis_col.r = enc_blk_params.m_use_base_scale_modes ? 255 : 0;
-				//						vis_col.g = enc_blk_params.m_use_direct_modes ? 255 : 0;
 
 				if (!out_devel_desc.m_low_freq_block_flag)
 				{
@@ -9397,7 +9301,7 @@ static bool ldr_astc_block_encode_image(
 					const basist::astc_ldr_t::trial_mode& tm = desc.m_pTrial_modes[desc.m_trial_mode_index];
 
 					const uint32_t actual_cem = log_blk.m_color_endpoint_modes[0];
-					//assert(tm.m_cem == log_blk.m_color_endpoint_modes[0]); // may differ due to base+ofs usage
+					// Endpoint modes may differ when base+offset is used.
 
 					assert((tm.m_ccs_index >= 0) == log_blk.m_dual_plane);
 					assert((!log_blk.m_dual_plane) || (tm.m_ccs_index == log_blk.m_color_component_selector));
@@ -9636,8 +9540,6 @@ bool ldr_astc_block_encode_image_fast_4x4(
 		return false;
 	}
 
-	//const uint32_t width = orig_img.get_width(), height = orig_img.get_height();
-	//const uint32_t total_pixels = width * height;
 	const uint32_t total_block_pixels = enc_cfg.m_block_width * enc_cfg.m_block_height;
 	const uint32_t num_blocks_x = orig_img.get_block_width(enc_cfg.m_block_width);
 	const uint32_t num_blocks_y = orig_img.get_block_height(enc_cfg.m_block_height);
@@ -9803,7 +9705,6 @@ bool ldr_astc_block_encode_image_fast_4x4(
 
 						if (enc_cfg.m_use_dct)
 						{
-							//const basist::astc_ldr_t::astc_block_grid_data* pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, new_log_block.m_grid_width, new_log_block.m_grid_height);
 
 							const uint32_t num_planes = (log_blk.m_dual_plane ? 2 : 1);
 
@@ -9871,7 +9772,6 @@ bool ldr_astc_block_encode_image_fast_4x4(
 
 							if (!dec_status)
 							{
-								// Shouldn't ever happen
 								assert(0);
 								encoder_failed_flag.store(true);
 								return;
@@ -9939,7 +9839,6 @@ static astcenc_context* comp_astc_init_ldr(
 
 	uint32_t flags = ASTCENC_FLG_USE_DECODE_UNORM8;
 
-	// flags = 0 for ordinary LDR color compression
 	astcenc_error status = astcenc_config_init(
 		profile,
 		block_w,
@@ -10087,8 +9986,6 @@ static bool ldr_astc_block_encode_image_astcenc(
 
 	const uint32_t block_width = enc_cfg.m_block_width, block_height = enc_cfg.m_block_height;
 
-	//const uint32_t width = orig_img.get_width(), height = orig_img.get_height();
-	//const uint32_t total_pixels = width * height;
 	const uint32_t total_block_pixels = enc_cfg.m_block_width * enc_cfg.m_block_height;
 	const uint32_t num_blocks_x = orig_img.get_block_width(enc_cfg.m_block_width);
 	const uint32_t num_blocks_y = orig_img.get_block_height(enc_cfg.m_block_height);
@@ -10355,7 +10252,6 @@ static bool ldr_astc_block_encode_image_astcenc(
 
 					if (enc_cfg.m_use_dct)
 					{
-						//const basist::astc_ldr_t::astc_block_grid_data* pGrid_data = basist::astc_ldr_t::find_astc_block_grid_data(block_width, block_height, new_log_block.m_grid_width, new_log_block.m_grid_height);
 
 						const uint32_t num_planes = (log_blk.m_dual_plane ? 2 : 1);
 
@@ -10424,7 +10320,6 @@ static bool ldr_astc_block_encode_image_astcenc(
 
 					if (!dec_status)
 					{
-						// Shouldn't ever happen
 						assert(0);
 						return false;
 					}
@@ -10445,7 +10340,6 @@ static bool ldr_astc_block_encode_image_astcenc(
 
 			if (!blk_info.m_out_blocks.size())
 			{
-				//assert(0);
 				error_printf("Couldn't find any compliant astcenc candidates at block {}x{}\n", bx, by);
 				return false;
 			}
@@ -10455,7 +10349,6 @@ static bool ldr_astc_block_encode_image_astcenc(
 			bool pack_status = astc_helpers::pack_astc_block(*pFinal_packed_block, blk_info.m_out_blocks[best_cand_index].m_log_blk);
 			if (!pack_status)
 			{
-				//assert(0);
 				error_printf("Failed packing final physical ASTC block at {}x{}\n", bx, by);
 				return false;
 			}
@@ -10884,7 +10777,6 @@ static bool ldr_astc_block_encode_image_astcf(
 
 								if (!dec_status)
 								{
-									// Shouldn't ever happen
 									assert(0);
 									
 									error_printf("decode_block_xuastc_ldr() failed!\n");
@@ -11278,7 +11170,6 @@ static void configure_encoder_effort_level(int level, ldr_astc_block_encode_imag
 
 		cfg.m_cem_enc_params.m_use_exhaustive_weight_eval = true;
 						
-		//cfg.m_second_pass_total_weight_refine_passes = 0;
 
 		break;
 	}
@@ -11992,12 +11883,9 @@ static bool compress_image_full_zstd(
 
 	for (uint32_t by = 0; by < num_blocks_y; by++)
 	{
-		//const uint32_t base_y = by * block_height;
 
 		for (uint32_t bx = 0; bx < num_blocks_x; bx++)
 		{
-			//const uint32_t base_x = bx * block_width;
-			//raw_bits.put_bits(0xA1, 8);
 
 			basist::astc_ldr_t::prev_block_state_full_zstd& prev_state = prev_block_states(bx, by);
 			
@@ -12034,9 +11922,7 @@ static bool compress_image_full_zstd(
 
 					coded_blocks(bx, by) = prev_log_blk;
 
-					//prev_state.m_was_solid_color = pPrev_block_state->m_was_solid_color;
 					prev_state.m_tm_index = pPrev_block_state->m_tm_index;
-					//prev_state.m_base_cem_index = pPrev_block_state->m_base_cem_index;
 
 					if (cur_run_len == FULL_ZSTD_MAX_RUN_LEN)
 					{
@@ -12207,9 +12093,7 @@ static bool compress_image_full_zstd(
 					solid_dpcm_bytes.push_back((uint8_t)delta);
 				}
 				
-				//prev_state.m_was_solid_color = true;
 				prev_state.m_tm_index = -1;
-				//prev_state.m_base_cem_index = astc_helpers::CEM_LDR_RGB_DIRECT;
 
 				continue;
 			}
@@ -12279,11 +12163,9 @@ static bool compress_image_full_zstd(
 				// Must send endpoints too.
 				total_raw_commands++;
 
-				// Format of mode byte (UD bit used in modes other than raw)
-				// 7  6  5  4  3  2  1  0
-				// UD C  ED HH BO I  I  M
+				// Raw mode byte: UD C ED HH BO II M (bits 7 to 0).
 				
-				// MMM=mode
+				// M=raw mode bit
 				// II=neighbor reuse index [0,3], 3=no reuse
 				// BO=base offset flag
 				// HH=partition hash hit flag
@@ -13095,7 +12977,6 @@ static uint64_t calc_cross_block_boundary_delta_mismatch(const image& orig_img, 
 		penalty += calc_penalty(orig_delta_right, cand_delta_right, comp_weights);
 	} // x
 
-	//const float PENALTY_WEIGHT = 2.5f;
 	const float PENALTY_WEIGHT = g_astc_refine_cross_block_penalty_weight.get_float();
 	return (uint64_t)std::round(penalty * PENALTY_WEIGHT);
 }
@@ -13204,8 +13085,6 @@ static bool deblocking_find_best_candidate(
 		return true;
 	}
 
-	// if a candidate has a WSSE worse than this, ignore it
-	//const uint64_t skip_sse_thresh = (cur_sse * 4) / 3;
 	const uint64_t skip_sse_thresh = UINT64_MAX;
 		
 	uint32_t best_cand_index = 0;
@@ -13331,7 +13210,6 @@ static bool deblocking_find_best_candidate(
 			{
 				// penalize base-ofs candidates if there are not enough base-ofs neighbors, as they will likely be more visible
 				cand_err = (cand_err * 5) / 4;
-				//total_base_ofs_penalties++;
 				applied_base_ofs_penalty = true;
 			}
 		}
@@ -13435,7 +13313,6 @@ static bool deblocking_compute_error(
 	{
 		const encode_block_output& out_blk = out_blocks[cand_index];
 
-		//const uint64_t cand_sse = out_blocks[cand_index].m_sse;
 
 		uint64_t block_wsse = 0, block_artifact_penalty_wsse = 0, chroma_loss_penalty_wsse = 0;
 		
@@ -13484,7 +13361,6 @@ static bool deblocking_compute_error(
 			{
 				// penalize base-ofs candidates if there are not enough base-ofs neighbors, as they will likely be more visible
 				cand_err = (cand_err * 5) / 4;
-				//total_base_ofs_penalties++;
 			}
 		}
 
@@ -13724,10 +13600,6 @@ static bool mutate_candidates(
 							if (log_blk.m_solid_color_flag_ldr)
 								continue;
 
-							//uint32_t cem_index = log_blk.m_color_endpoint_modes[0];
-							// TODO
-							//if ((cem_index != 6) && (cem_index != 8) && (cem_index != 9))
-							//	continue;
 						}
 
 						color_rgba orig_block[astc_helpers::MAX_BLOCK_PIXELS];
@@ -13798,7 +13670,6 @@ static bool mutate_candidates(
 									// now permute the endpoints if necessary so they roughly match
 									if (perm_index)
 									{
-										//const uint32_t num_cem_vals = astc_helpers::get_num_cem_values(new_log_blk.m_color_endpoint_modes[0]);
 
 										uint8_t cur_endpoints[astc_helpers::MAX_ENDPOINT_VALS];
 										memcpy(cur_endpoints, new_log_blk.m_endpoints, num_cem_vals * new_log_blk.m_num_partitions);
@@ -14156,7 +14027,6 @@ static bool refine_output_for_deblocking(
 	const uint32_t block_height = global_cfg.m_astc_block_height;
 	const uint32_t total_block_pixels = block_width * block_height;
 
-	//const uint32_t total_pixels = width * height;
 	const uint32_t num_blocks_x = (width + block_width - 1) / block_width;
 	const uint32_t num_blocks_y = (height + block_height - 1) / block_height;
 	const uint32_t total_blocks = num_blocks_x * num_blocks_y;
@@ -14869,8 +14739,6 @@ bool compress_image(
 
 	astc_ldr_encode_config global_cfg(orig_global_cfg);
 
-	//global_cfg.m_debug_block_x = 17;
-	//global_cfg.m_debug_block_y = 26;
 		
 #if !BASISU_SUPPORT_ASTCENC
 	if (global_cfg.m_use_astcenc)
@@ -14999,7 +14867,6 @@ bool compress_image(
 	enc_cfg.m_debug_images = global_cfg.m_debug_images;
 	enc_cfg.m_debug_file_prefix = global_cfg.m_debug_file_prefix;
 
-	//ldr_astc_block_encode_image_output enc_out;
 
 	std::unique_ptr<ldr_astc_block_encode_image_output> pEnc_out = std::make_unique<ldr_astc_block_encode_image_output>();
 	ldr_astc_block_encode_image_output& enc_out = *pEnc_out;
@@ -15548,7 +15415,6 @@ bool compress_image(
 
 				total_solid_blocks++;
 
-				//total_header_bits += mode_model.get_price(cMODE_SOLID) + (float)(8 * (has_alpha ? 4 : 3));
 				total_header_bits += mode_model.get_price((uint32_t)basist::astc_ldr_t::xuastc_mode::cMODE_SOLID);
 				enc.encode((uint32_t)basist::astc_ldr_t::xuastc_mode::cMODE_SOLID, mode_model);
 
@@ -15625,7 +15491,6 @@ bool compress_image(
 			}
 
 			//--------------------------------------------
-			// for (uint32_t out_block_iter = 0; out_block_iter < blk_info.m_out_blocks.size(); out_block_iter++)
 			int full_cfg_endpoint_reuse_index = -1;
 
 			for (uint32_t i = 0; i < basist::astc_ldr_t::cMaxConfigReuseNeighbors; i++)
@@ -15708,7 +15573,6 @@ bool compress_image(
 				enc.encode((uint32_t)basist::astc_ldr_t::xuastc_mode::cMODE_RAW, mode_model);
 
 				const uint32_t cur_actual_cem = cur_log_blk.m_color_endpoint_modes[0];
-				//const bool actual_cem_supports_bc = astc_helpers::cem_supports_bc(cur_actual_cem);
 				const uint32_t total_endpoint_vals = astc_helpers::get_num_cem_values(cur_actual_cem);
 
 				// DO NOT use tm.m_cem because the encoder may have selected a base+ofs variant instead. Use cur_actual_cem.
@@ -15999,7 +15863,6 @@ bool compress_image(
 					int64_t best_trial_delta2 = INT64_MAX;
 					float best_trial_bits = BIG_FLOAT_VAL;
 
-					//auto& trial_dpcm_model = dpcm_endpoint_models[cur_log_blk.m_endpoint_ise_range - astc_helpers::FIRST_VALID_ENDPOINT_ISE_RANGE];
 
 					for (uint32_t reuse_index = 0; reuse_index < basist::astc_6x6_hdr::NUM_REUSE_XY_DELTAS; reuse_index++)
 					{
@@ -16208,7 +16071,6 @@ bool compress_image(
 				bool use_dct = enc_cfg.m_use_dct;
 				
 				// TODO - tune this threshold
-				//const uint32_t SWITCH_TO_DPCM_NUM_COEFF_THRESH = (cur_log_blk.m_grid_width * cur_log_blk.m_grid_height * 102 + 64) >> 7;
 				const uint32_t SWITCH_TO_DPCM_NUM_COEFF_THRESH = (cur_log_blk.m_grid_width * cur_log_blk.m_grid_height * 45 + 64) >> 7;
 
 				if (use_dct)

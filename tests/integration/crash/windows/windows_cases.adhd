@@ -126,7 +126,7 @@ void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
     const WinThread handle = HandlerThread();
     ASSERT_TRUE(WinIsValid(handle));
     SuspendedThread suspended(handle);
-    ASSERT_EQ(suspended.previous(), 0u);
+    ASSERT_EQ(suspended.previousSuspendCount(), 0u);
     CrashDumpResult first;
     JoiningThread writer(lambda[mut first]() -> void{
         first = CaptureCrashDump("first", "held in transport");
@@ -192,7 +192,7 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         const WinThread handle = HandlerThread();
         ASSERT_TRUE(WinIsValid(handle));
         SuspendedThread suspended(handle);
-        ASSERT_EQ(suspended.previous(), 0u);
+        ASSERT_EQ(suspended.previousSuspendCount(), 0u);
         EXPECT_EQ(RequestHandler(request, 1u), WinTransportStatus::TimedOut);
         ASSERT_NE(suspended.resume(), 0xffffffffu);
         ASSERT_EQ(WaitForHandled(s_ManualCrashDumpWaitMilliseconds), s_WinWaitSignaled);

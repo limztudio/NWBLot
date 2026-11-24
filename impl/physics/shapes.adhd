@@ -405,7 +405,7 @@ MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
     if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
-    const f32 volume = (4.0f / 3.0f) * s_PI * r * r * r;
+    const f32 volume = (4.0f / 3.0f) * s_Pi * r * r * r;
     const f32 mass = density * volume;
     const f32 iCenter = 0.4f * mass * r * r;
 
@@ -430,8 +430,8 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     const f32 length = Vector3Length(d).x;
     const f32 rr = r * r;
 
-    const f32 cylMass = density * s_PI * rr * length;
-    const f32 sphMass = density * (4.0f / 3.0f) * s_PI * rr * r;
+    const f32 cylMass = density * s_Pi * rr * length;
+    const f32 sphMass = density * (4.0f / 3.0f) * s_Pi * rr * r;
     const f32 totalMass = cylMass + sphMass;
     if(totalMass <= 0.0f)
         return outMass;
@@ -540,7 +540,7 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         if(r <= 0.0f)
             return outMass;
         const VectorSingle c = hull.centroid();
-        const f32 capMass = density * (4.0f / 3.0f) * s_PI * r * r * r;
+        const f32 capMass = density * (4.0f / 3.0f) * s_Pi * r * r * r;
         const f32 iSph = 0.4f * capMass * r * r;
         outMass.setCenterMass(c, capMass);
         outMass.inertia = Mat3(
@@ -614,7 +614,7 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         }
     }
 
-    const f32 capMass = density * (4.0f / 3.0f) * s_PI * r * r * r;
+    const f32 capMass = density * (4.0f / 3.0f) * s_Pi * r * r * r;
     const f32 capI = 0.4f * capMass * r * r;
     totalMass += capMass;
     totalWeightedCom = totalWeightedCom + coreWorldCom * capMass;
@@ -1148,7 +1148,7 @@ MassData ComputeCylinderMass(in CylinderShape cyl, in f32 density){
     if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
         return outMass;
     const f32 rr = r * r;
-    const f32 mass = density * s_PI * rr * h;
+    const f32 mass = density * s_Pi * rr * h;
     const f32 iy = 0.5f * mass * rr;
     const f32 ix = mass * (3.0f * rr + h * h) / 12.0f;
     outMass.setCenterMass(cyl.center(), mass);
@@ -1168,7 +1168,7 @@ MassData ComputeConeMass(in ConeShape cone, in f32 density){
     if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
         return outMass;
     const f32 rr = r * r;
-    const f32 mass = density * (s_PI / 3.0f) * rr * h;
+    const f32 mass = density * (s_Pi / 3.0f) * rr * h;
     const f32 iy = 0.3f * mass * rr;
     const f32 ix = mass * (0.15f * rr + 0.0375f * h * h);
     const VectorSingle com = cone.center() + VectorSingle(0.0f, -0.5f * hh, 0.0f, 0.0f);
@@ -1235,7 +1235,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c1y;
             const f32 rSq = SimdMax(0.0f, r1 * r1 - dy * dy);
-            const f32 w = glWeights[k] * halfSpan * s_PI;
+            const f32 w = glWeights[k] * halfSpan * s_Pi;
             totalVol += w * rSq;
             momentY += w * rSq * y;
             iAxisVol += w * 0.5f * rSq * rSq;
@@ -1252,7 +1252,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 r = ra + (rb - ra) * tNorm;
             const f32 rSq = r * r;
-            const f32 w = glWeights[k] * (0.5f * span) * s_PI;
+            const f32 w = glWeights[k] * (0.5f * span) * s_Pi;
             totalVol += w * rSq;
             momentY += w * rSq * y;
             iAxisVol += w * 0.5f * rSq * rSq;
@@ -1269,7 +1269,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c2y;
             const f32 rSq = SimdMax(0.0f, r2 * r2 - dy * dy);
-            const f32 w = glWeights[k] * halfSpan * s_PI;
+            const f32 w = glWeights[k] * halfSpan * s_Pi;
             totalVol += w * rSq;
             momentY += w * rSq * y;
             iAxisVol += w * 0.5f * rSq * rSq;

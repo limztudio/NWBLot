@@ -3519,11 +3519,9 @@ Decl *TemplateDeclInstantiator::VisitCXXMethodDecl(
 
   // If there's a function template, let our caller handle it.
   if (FunctionTemplate) {
-    // do nothing
 
   // Don't hide a (potentially) valid declaration with an invalid one.
   } else if (Method->isInvalidDecl() && !Previous.empty()) {
-    // do nothing
 
   // Otherwise, check access to friends and make them visible.
   } else if (isFriend) {

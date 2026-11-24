@@ -27,7 +27,7 @@ extern enum GpuTaskGraphPacketizationPolicy : u8{
     ExplicitMerge,
     FrontierSafe,
     FrontierScored,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentStatus::Enum")]
@@ -57,7 +57,7 @@ extern enum GpuTaskQueueAssignmentReason : u8{
     RequiredGraphics,
     Conservative,
     Scored,
-    Count
+    kCount
 };
 
 

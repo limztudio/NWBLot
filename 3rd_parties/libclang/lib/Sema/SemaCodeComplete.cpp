@@ -575,7 +575,6 @@ static QualType getPreferredTypeOfBinaryRHS(Sema &S, Expr *LHS,
     return QualType();
   default:
     // FIXME(ibiryukov): handle the missing op, re-add the assertion.
-    // assert(false && "unhandled binary op");
     return QualType();
   }
 }
@@ -3577,7 +3576,6 @@ AddFunctionTypeQualsToCompletionString(CodeCompletionBuilder &Result,
                                        bool AsInformativeChunks = true) {
   if (auto *CxxMethodDecl = llvm::dyn_cast_if_present<CXXMethodDecl>(Function);
       CxxMethodDecl && CxxMethodDecl->hasCXXExplicitFunctionObjectParameter()) {
-    // if explicit object method, infer quals from the object parameter
     const auto Quals = CxxMethodDecl->getFunctionObjectParameterType();
     if (!Quals.hasQualifiers())
       return;

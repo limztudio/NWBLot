@@ -451,7 +451,6 @@ extern __inline __m128
     __attribute__((__gnu_inline__, __always_inline__, __artificial__))
     _mm_and_ps(__m128 __A, __m128 __B) {
   return ((__m128)vec_and((__v4sf)__A, (__v4sf)__B));
-  //  return __builtin_ia32_andps (__A, __B);
 }
 
 extern __inline __m128

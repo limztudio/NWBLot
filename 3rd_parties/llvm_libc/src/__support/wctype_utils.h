@@ -39,8 +39,7 @@ namespace internal {
 // functions, make sure you have benchmarks to show your new solution is faster,
 // as well as a way to support non-ASCII character encodings.
 
-// Similarly, do not change these fumarks to show your new solution is faster,
-// as well as a way to support non-Anctions to use case ranges. e.g.
+// Similarly, do not change these functions to use case ranges. e.g.
 //  bool islower(wchar_t ch) {
 //    switch(ch) {
 //    case L'a'...L'z':

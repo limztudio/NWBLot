@@ -388,7 +388,6 @@ void darwin::Linker::AddLinkArgs(Compilation &C, const ArgList &Args,
       CmdArgs.push_back("-no_pie");
   }
 
-  // for embed-bitcode, use -bitcode_bundle in linker command
   if (C.getDriver().embedBitcodeEnabled()) {
     // Check if the toolchain supports bitcode build flow.
     if (MachOTC.SupportsEmbeddedBitcode()) {

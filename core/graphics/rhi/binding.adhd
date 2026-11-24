@@ -12,20 +12,20 @@ extern enum BindlessLayoutType : u8{
 [cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::ResourceType::Enum")]
 extern enum ResourceType : u8{
     None,
-    Texture_SRV,
-    Texture_UAV,
-    TypedBuffer_SRV,
-    TypedBuffer_UAV,
-    StructuredBuffer_SRV,
-    StructuredBuffer_UAV,
-    RawBuffer_SRV,
-    RawBuffer_UAV,
+    TextureSrv,
+    TextureUav,
+    TypedBufferSrv,
+    TypedBufferUav,
+    StructuredBufferSrv,
+    StructuredBufferUav,
+    RawBufferSrv,
+    RawBufferUav,
     ConstantBuffer,
     VolatileConstantBuffer,
     Sampler,
     RayTracingAccelStruct,
     PushConstants,
-    Count
+    kCount
 };
 
 

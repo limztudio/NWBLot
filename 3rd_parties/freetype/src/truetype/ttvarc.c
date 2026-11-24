@@ -687,7 +687,6 @@
     if ( component->gid >= (FT_UInt)face->root.num_glyphs )
     {
       /* For now, don't fail - the font might be using extended GID space. */
-      /* return FT_THROW( Invalid_Glyph_Index ); */
     }
 
     /* read condition index */
@@ -1310,7 +1309,6 @@
     while ( i < num_deltas )
       deltas[i++] = 0;
 
-    /* return the number of bytes consumed */
     *bytes_consumed = (FT_UInt)( p - start );
 
     return FT_Err_Ok;

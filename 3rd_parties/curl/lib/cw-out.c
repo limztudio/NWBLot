@@ -51,10 +51,6 @@
  * not be written. Data that was already in flight from the server also
  * needs buffering on paused transfer when it arrives.
  *
- * In addition, the writer allows buffering of "small" body writes,
- * so client functions are called less often. That is only enabled on a
- * number of conditions.
- *
  * HEADER and BODY data may arrive in any order. For paused transfers,
  * a list of `struct cw_out_buf` is kept for `cw_out_type` types. The
  * list may be: [BODY]->[HEADER]->[BODY]->[HEADER]....
@@ -151,9 +147,7 @@ static void cw_get_writefunc(struct Curl_easy *data, cw_out_type otype,
       *pwcb_data = data->set.out;
     }
     *pmax_write = CURL_MAX_WRITE_SIZE;
-    /* if we ever want buffering of BODY output, we can set `min_write`
-     * the preferred size. The default should always be to pass data
-     * to the client as it comes without delay */
+    /* Pass body data to the client without a minimum-size delay. */
     *pmin_write = 0;
     break;
   case CW_OUT_HDS:

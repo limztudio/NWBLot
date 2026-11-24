@@ -268,7 +268,7 @@
       shift %= count;
 
     if ( shift == 0 )
-      return; /* nothing to do */
+      return;
 
     /* We use the following algorithm to do the rolling, */
     /* which needs two temporary variables only.         */

@@ -176,7 +176,6 @@ int Curl_getaddrinfo_ex(const char *nodename,
       memcpy(ca->ai_canonname, ai->ai_canonname, namelen);
     }
 
-    /* if the return list is empty, this becomes the first element */
     if(!cafirst)
       cafirst = ca;
 
@@ -190,7 +189,6 @@ int Curl_getaddrinfo_ex(const char *nodename,
   if(aihead)
     CURL_FREEADDRINFO(aihead);
 
-  /* if we failed, also destroy the Curl_addrinfo list */
   if(error) {
     Curl_freeaddrinfo(cafirst);
     cafirst = NULL;

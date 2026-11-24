@@ -2043,8 +2043,6 @@ static CURLMcode multistate_performing(struct Curl_easy *data,
       result = ret;
 
     if(retry) {
-      /* if we are to retry, set the result to OK and consider the
-         request as done */
       result = CURLE_OK;
       data->req.done = TRUE;
     }
@@ -2068,8 +2066,6 @@ static CURLMcode multistate_performing(struct Curl_easy *data,
         result = CURLE_OUT_OF_MEMORY;
       }
       else {
-        /* if we are to retry, set the result to OK and consider the request
-          as done */
         retry = TRUE;
         result = CURLE_OK;
         data->req.done = TRUE;
@@ -2204,7 +2200,6 @@ static CURLMcode multistate_do(struct Curl_easy *data,
             /* skip some states if it is important */
             multi_done(data, CURLE_OK, FALSE);
 
-            /* if there is no connection left, skip the DONE state */
             multistate(data, data->conn ? MSTATE_DONE : MSTATE_COMPLETED);
             mresult = CURLM_CALL_MULTI_PERFORM;
             goto end;
@@ -2412,7 +2407,6 @@ static CURLcode is_finished(struct Curl_multi *multi,
            connection */
         streamclose(data->conn);
 
-        /* if not yet in DONE state, go there. */
         if(data->mstate < MSTATE_DONE)
           multistate(data, MSTATE_DONE);
         return result;
@@ -2641,8 +2635,6 @@ static CURLMcode multistate_doing_more(struct Curl_easy *data,
 
   if(!*result) {
     if(control != DOMORE_INCOMPLETE) {
-      /* if DONE, advance to DO_DONE
-         if GOBACK, go back to DOING */
       multistate(data, control == DOMORE_DONE ? MSTATE_DID : MSTATE_DOING);
       return CURLM_CALL_MULTI_PERFORM;
     }
@@ -2707,8 +2699,6 @@ static CURLMcode multistate_done(struct Curl_easy *data, CURLcode *presult)
 #ifndef CURL_DISABLE_FTP
   if(data->state.wildcardmatch) {
     if(data->wildcard->state != CURLWC_DONE) {
-      /* if a wildcard is set and we are not ending -> lets start again
-         with MSTATE_INIT */
       multistate(data, MSTATE_INIT);
       return CURLM_CALL_MULTI_PERFORM;
     }
@@ -3600,7 +3590,6 @@ CURLMcode Curl_update_timer(struct Curl_multi *multi)
   multi_timeout(multi, &timeouts_offset_us, &timeout_ms);
 
   if(timeout_ms < 0 && !multi->last_timeout_set) {
-    /* nothing to do */
   }
   else if(timeout_ms < 0) {
     /* there is no timeout now but there was one previously */

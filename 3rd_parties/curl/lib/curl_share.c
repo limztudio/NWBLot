@@ -214,7 +214,6 @@ CURLSHcode curl_share_setopt(CURLSH *sh, CURLSHoption option, ...)
 
   switch(option) {
   case CURLSHOPT_SHARE:
-    /* this is a type this share will share */
     type = va_arg(param, int);
 
     switch(type) {
@@ -282,7 +281,6 @@ CURLSHcode curl_share_setopt(CURLSH *sh, CURLSHoption option, ...)
     break;
 
   case CURLSHOPT_UNSHARE:
-    /* this is a type this share will no longer share */
     type = va_arg(param, int);
     switch(type) {
     case CURL_LOCK_DATA_DNS:
@@ -380,7 +378,7 @@ CURLSHcode Curl_share_lock_share(struct Curl_share *share,
     return CURLSHE_INVALID;
 
   if(share->specifier & (unsigned int)(1 << type) &&
-     share->lockfunc) /* only call this if set! */
+     share->lockfunc)
     share->lockfunc(data, type, accesstype, share->clientdata);
   /* else if we do not share this, pretend successful lock */
 
@@ -401,7 +399,7 @@ CURLSHcode Curl_share_unlock_share(struct Curl_share *share,
     return CURLSHE_INVALID;
 
   if(share->specifier & (unsigned int)(1 << type) &&
-     share->unlockfunc) /* only call this if set! */
+     share->unlockfunc)
     share->unlockfunc(data, type, share->clientdata);
 
   return CURLSHE_OK;

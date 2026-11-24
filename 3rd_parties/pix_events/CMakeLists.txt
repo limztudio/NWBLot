@@ -1,7 +1,4 @@
-# NWB-authored CMakeLists for the PIX event decoder static library (RGD decodes PIX-format execution
-# markers with it). Upstream ships only a .vcxproj. The decoder uses windows.h/Strsafe.h, so it is built on
-# Windows only; for a Vulkan engine its decode path is inert at runtime (markers are Vulkan debug labels),
-# but RGD's core parser includes <PixEventDecoder.h> at compile time, so the lib must exist to link.
+# RGD's parser requires the Windows-only PIX event decoder.
 cmake_minimum_required(VERSION 3.10)
 project(pix_events_decoder)
 include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
@@ -20,8 +17,7 @@ if(WIN32)
         "${PROJECT_SOURCE_DIR}"
         "${PROJECT_SOURCE_DIR}/decoder/lib")
 
-    # The vendored decoder relies on MSVC's implicit transitive std includes (std::wstring_view, std::optional);
-    # clang needs them explicit, so force-include a small header ahead of every TU (no vendored-source edit).
+    # Clang needs standard headers that the decoder gets transitively with MSVC.
     if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
         target_compile_options(pix_events_decoder PRIVATE "/FI${PROJECT_SOURCE_DIR}/nwb_force_std_includes.h")
     else()

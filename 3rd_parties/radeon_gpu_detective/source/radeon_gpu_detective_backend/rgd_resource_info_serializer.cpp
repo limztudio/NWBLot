@@ -119,7 +119,6 @@ static const std::string GetSwizzlePatternString(const RmtImageFormat* image_for
     return  RmtGetSwizzlePatternFromImageFormat(image_format, flags_text, kMaxFlagsStringLength);;
 }
 
-// Get image format string.
 static const std::string GetImageFormatString(const RmtFormat image_format)
 {
     return  RmtGetFormatNameFromFormat(image_format);;
@@ -131,7 +130,6 @@ static const std::string GetImageTypeStringFromImageType(RmtTilingType tiling_ty
     return  RmtGetTilingNameFromTilingType(tiling_type);
 }
 
-// Get flags string.
 static const std::string GetFlagsString(RmtResourceType resource_type, uint32_t flags, std::string flag_type = "create")
 {
     char flags_text[kMaxFlagsStringLength] = "";
@@ -149,7 +147,6 @@ static const std::string GetFlagsString(RmtResourceType resource_type, uint32_t 
         }
         else
         {
-            // should not reach here.
             assert(false);
         }
         break;
@@ -165,7 +162,6 @@ static const std::string GetFlagsString(RmtResourceType resource_type, uint32_t 
         }
         else
         {
-            // should not reach here.
             assert(false);
         }
         break;
@@ -183,7 +179,6 @@ static const std::string GetFlagsString(RmtResourceType resource_type, uint32_t 
         break;
 
     default:
-        // Should not reach here.
         assert(false);
         break;
     }
@@ -640,7 +635,6 @@ bool RgdResourceInfoSerializer::Impl::BuildResourceHistoryforVa(const Config& us
         }
         else
         {
-            // Shouldn't get here.
             assert(false);
             result = false;
         }
@@ -1415,7 +1409,6 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
                         break;
 
                     default:
-                        // Should not reach here.
                         assert(false);
                     }
 
@@ -1540,13 +1533,11 @@ bool RgdResourceInfoSerializer::Impl::ResourceHistoryToJson(const Config&   user
                                     break;
 
                                 default:
-                                    // Should not reach here.
                                     assert(false);
                                 }
                             }
                             else
                             {
-                                // Should not reach here.
                                 assert(false);
                             }
                         }
@@ -1644,7 +1635,6 @@ bool RgdResourceInfoSerializer::Impl::ResourceHistoryToJson(const Config&   user
     return ret;
 }
 
-// Set output format.
 void RgdResourceInfoSerializer::Impl::SetOutputFormat(const Config& user_config)
 {
     // True if the output we are required to produce is in text format (file or console).
@@ -1799,7 +1789,6 @@ void RgdResourceInfoSerializer::Impl::GenerateResourceTimeline(const Config&  us
                         break;
 
                     default:
-                        // Should not reach here.
                         assert(false);
                     }
 

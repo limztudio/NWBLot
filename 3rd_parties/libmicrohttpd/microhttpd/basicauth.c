@@ -87,7 +87,7 @@ MHD_basic_auth_get_username_password3 (struct MHD_Connection *connection)
         password_pos = username_len + 1;
         password_len = decoded_len - password_pos;
         ret->password = decoded + password_pos;
-        ret->password[password_len] = 0;  /* Zero-terminate the string */
+        ret->password[password_len] = 0;
         ret->password_len = password_len;
       }
       else
@@ -97,10 +97,10 @@ MHD_basic_auth_get_username_password3 (struct MHD_Connection *connection)
         ret->password_len = 0;
       }
       ret->username = decoded;
-      ret->username[username_len] = 0;  /* Zero-terminate the string */
+      ret->username[username_len] = 0;
       ret->username_len = username_len;
 
-      return ret; /* Success exit point */
+      return ret;
     }
 #ifdef HAVE_MESSAGES
     else
@@ -119,7 +119,7 @@ MHD_basic_auth_get_username_password3 (struct MHD_Connection *connection)
   }
 #endif /* HAVE_MESSAGES */
 
-  return NULL; /* Failure exit point */
+  return NULL;
 }
 
 
@@ -163,7 +163,7 @@ MHD_basic_auth_get_username_password (struct MHD_Connection *connection,
           mhd_assert (0 == (*password)[info->password_len]);
 
           free (info);
-          return username; /* Success exit point */
+          return username;
         }
 #ifdef HAVE_MESSAGES
         else
@@ -174,7 +174,7 @@ MHD_basic_auth_get_username_password (struct MHD_Connection *connection,
       else
       {
         free (info);
-        return username; /* Success exit point */
+        return username;
       }
 
       free (username);
@@ -189,7 +189,7 @@ MHD_basic_auth_get_username_password (struct MHD_Connection *connection,
   free (info);
   if (NULL != password)
     *password = NULL;
-  return NULL;  /* Failure exit point */
+  return NULL;
 }
 
 
@@ -264,7 +264,7 @@ MHD_queue_basic_auth_required_response3 (struct MHD_Connection *connection,
   if (0 == prefer_utf8)
   {
     h_str[pos++] = '\"';
-    h_str[pos++] = 0; /* Zero terminate the result */
+    h_str[pos++] = 0;
     mhd_assert (pos <= h_maxlen + 1);
   }
   else

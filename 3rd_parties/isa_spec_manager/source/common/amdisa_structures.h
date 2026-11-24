@@ -13,16 +13,13 @@
 
 namespace amdisa
 {
-    // Data types which are referenced by the spec.
     enum class DataType
     {
         // Data type is unknown or was not set.
         kUnknown,
 
-        // Integer data type.
         kInteger,
 
-        // Float data type.
         kFloat,
 
         // Data type to represent unstructured binary data.
@@ -63,17 +60,13 @@ namespace amdisa
     // Generic expression tree. Saves the structure of the tree.
     struct GenericExpressionNode
     {
-        // Expression operator.
         std::string expression_operator;
 
-        // Pointers to children nodes.
         std::vector<std::shared_ptr<GenericExpressionNode>> children;
 
-        // Return type node.
         bool is_ret_type_node = false;
     };
 
-    // Information describing this spec.
     struct SpecMetadata
     {
         std::string copyright;
@@ -82,7 +75,6 @@ namespace amdisa
         std::string schema_version;
     };
 
-    // Information describing a hardware architecture.
     struct Architecture
     {
         std::string name;
@@ -183,7 +175,6 @@ namespace amdisa
         MicrocodeFormat                           microcode_format;
     };
 
-    // Information describing encodings.
     struct Encoding
     {
         std::vector<uint64_t>  identifiers;
@@ -203,7 +194,6 @@ namespace amdisa
         friend std::ostream& operator<<(std::ostream& os, const Encoding& enc);
     };
 
-    // Information describing operands of different encodings.
     struct Operand
     {
         std::string field_name;
@@ -240,7 +230,6 @@ namespace amdisa
         friend std::ostream& operator<<(std::ostream& os, const InstructionEncoding& ie);
     };
 
-    // Information describing instructions.
     struct Instruction
     {
         std::string                      name;
@@ -248,7 +237,6 @@ namespace amdisa
         std::string                      description;
         std::vector<InstructionEncoding> encodings;
 
-        // True if this instruction is a branch, false otherwise.
         bool is_branch             = false;
         bool is_conditional_branch = false;
         bool is_indirect_branch    = false;
@@ -268,14 +256,12 @@ namespace amdisa
         friend std::ostream& operator<<(std::ostream& os, const Instruction& ins);
     };
 
-    // Information describing all available functional groups for the instructions
     struct FunctionalGroupInfo
     {
         std::string name;
         std::string desc;
     };
 
-    // Information describing all available functional subgroups for the instructions
     struct FunctionalSubgroupInfo
     {
         std::string name;
@@ -292,7 +278,6 @@ namespace amdisa
         friend std::ostream& operator<<(std::ostream& os, const DataAttributes& da);
     };
 
-    // Information describing data formats.
     struct DataFormat
     {
         std::string                 name;
@@ -306,7 +291,6 @@ namespace amdisa
         friend std::ostream& operator<<(std::ostream& os, const DataFormat& df);
     };
 
-    // Information describing operand types.
     struct OperandType
     {
         std::string                  name;
@@ -330,31 +314,22 @@ namespace amdisa
         std::string native_encoding;
     };
 
-    // Structure for accessing the ISA spec data.
     struct IsaSpec
     {
-        // Metadata describing the spec.
         SpecMetadata info;
 
-        // The architecture which is described by this spec.
         Architecture architecture;
 
-        // Container for all the ISA encodings.
         std::vector<Encoding> encodings;
 
-        // Container for all the ISA instructions.
         std::vector<Instruction> instructions;
 
-        // Container for all data formats.
         std::vector<DataFormat> data_formats;
 
-        // Container for all operand types.
         std::vector<OperandType> operand_types;
 
-        // Container for functional groups
         std::vector<FunctionalGroupInfo> functional_group_info;
 
-        // Container for functional subgroups
         std::vector<FunctionalSubgroupInfo> functional_subgroup_info;
 
         operator std::string() const noexcept;

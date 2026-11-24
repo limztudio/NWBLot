@@ -572,8 +572,6 @@ Error InstrProfWriter::writeImpl(ProfOStream &OS) {
   Header.Version = WritePrevVersion
                        ? IndexedInstrProf::ProfVersion::Version11
                        : IndexedInstrProf::ProfVersion::CurrentVersion;
-  // The WritePrevVersion handling will either need to be removed or updated
-  // if the version is advanced beyond 12.
   static_assert(IndexedInstrProf::ProfVersion::CurrentVersion ==
                 IndexedInstrProf::ProfVersion::Version14);
   if (static_cast<bool>(ProfileKind & InstrProfKind::IRInstrumentation))

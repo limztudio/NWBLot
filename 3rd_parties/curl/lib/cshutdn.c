@@ -111,12 +111,9 @@ static void cshutdn_run_conn_handler(struct Curl_easy *data,
         Curl_pgrsTime(data, TIMER_STARTOP);
       }
 
-      /* This is set if protocol-specific cleanups should be made */
       DEBUGF(infof(data, "connection #%" FMT_OFF_T
                    ", shutdown protocol handler (aborted=%d)",
                    conn->connection_id, conn->bits.aborted));
-      /* There are protocol handlers that block on retrieving
-       * server responses here (FTP). Set a short timeout. */
       conn->scheme->run->disconnect(data, conn, (bool)conn->bits.aborted);
     }
 
@@ -516,7 +513,6 @@ void Curl_cshutdn_perform(struct cshutdn *cshutdn,
   cshutdn_perform(cshutdn, admin, sigpipe_ctx);
 }
 
-/* return fd_set info about the shutdown connections */
 void Curl_cshutdn_setfds(struct cshutdn *cshutdn,
                          struct Curl_easy *admin,
                          fd_set *read_fd_set, fd_set *write_fd_set,
@@ -557,7 +553,6 @@ void Curl_cshutdn_setfds(struct cshutdn *cshutdn,
   }
 }
 
-/* return information about the shutdown connections */
 unsigned int Curl_cshutdn_add_waitfds(struct cshutdn *cshutdn,
                                       struct Curl_easy *admin,
                                       struct Curl_waitfds *cwfds)

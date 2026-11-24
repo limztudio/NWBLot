@@ -240,9 +240,6 @@ namespace basisu
 			}
 
 			options += " -cl-std=CL1.2";
-			//options += " -cl-opt-disable";
-			//options += " -cl-mad-enable";
-			//options += " -cl-fast-relaxed-math";
 
 			ret = clBuildProgram(m_program, 1, &m_device_id,
 				options.size() ? options.c_str() : nullptr,  // options
@@ -503,7 +500,6 @@ namespace basisu
 			cl_serializer serializer(this);
 
 			size_t num_global_items[2] = { width, height };
-			//size_t num_local_items[2] = { 1, 1 };
 
 			cl_int ret = clEnqueueNDRangeKernel(command_queue, kernel,
 				2,  // work_dim
@@ -530,7 +526,6 @@ namespace basisu
 
 			size_t global_ofs[2] = { ofs_x, ofs_y };
 			size_t num_global_items[2] = { width, height };
-			//size_t num_local_items[2] = { 1, 1 };
 
 			cl_int ret = clEnqueueNDRangeKernel(command_queue, kernel,
 				2,  // work_dim

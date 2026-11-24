@@ -1,6 +1,6 @@
 # Shared CPU task scheduling
 
-NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. The standalone `asset_builder` tool constructs its own scheduler once at entry (`pipeline/asset_builder/module.adhd`).
+NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Worlds and projects own task scopes; systems own their data and borrow the execution service. The standalone `asset_builder` tool constructs its own scheduler once at entry (`pipeline/asset_builder/module.adhd`).
 
 The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task/cpu` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
 
@@ -62,7 +62,7 @@ The main thread must pump the scheduler while main-thread tasks are outstanding.
 
 ECS preparation remains a serial caller phase because existing preparation can create entities and change component storage. Each preparation callback must complete those structural changes before returning. Updates return an expected command result and run as dependency tasks: every conflicting component access preserves system registration order; read/read accesses can overlap. A system failure skips its conflicting dependents and reaches `World::tick()` after admitted work joins. The project owner logs the error and returns its existing failed-update status to `Frame`. Structural changes during concurrent updates still require the caller to provide a safe structural boundary. UI updates explicitly target the main thread.
 
-`GraphicsRuntime` owns a scope for async resource setup and resource-lifetime joins. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
+`GraphicsRuntime` borrows the shared scheduler for resource setup and graph work; its GPU resource lifetimes retain their separate completion contracts. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
 
 `Core::GpuTaskScheduler`, declared in `core/task/gpu/scheduler.h`, coordinates GPU graph recording, submission, and recovery. It lives in the GPU task domain alongside the graph compiler and recorder. `GraphicsRuntime` owns the separate device, resource, and presentation lifecycle and borrows the frame-owned CPU/GPU schedulers. The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
 

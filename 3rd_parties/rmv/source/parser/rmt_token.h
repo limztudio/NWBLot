@@ -123,7 +123,7 @@ typedef struct RmtTokenCpuMap
     bool           is_unmap;         ///< The map operation is an unmap
 } RmtTokenCpuMap;
 
-/// A structure encapsulating a time delta.
+/// A virtual allocation token.
 typedef struct RmtTokenVirtualAllocate
 {
     RmtTokenCommon common;                                ///< Fields common to all tokens.
@@ -142,7 +142,6 @@ typedef struct RmtTokenResourceCreate
     RmtResourceIdentifier    original_resource_identifier;  ///< The original resource ID included in the Token's payload.
     RmtCorrelationIdentifier correlation_identifier;        ///< The Resource Name USERDATA correlation ID (set to 0 if unused).
     RmtOwnerType             owner_type;                    ///< The part of the software stack creating this resource.
-    //RmtOwnerCategory              owner_category;                 ///< The owner category.
     RmtCommitType   commit_type;    ///< The type of commitment reqeuired for this resource.
     RmtResourceType resource_type;  ///< The resource type.
 
@@ -224,7 +223,7 @@ typedef struct RmtToken
 ///
 /// Since the Userdata token allocates memory, a memcpy will not work.
 ///
-/// @param [in] dest A pointer to the destination token.
+/// @param [out] dest A pointer to the destination token.
 /// @param [in] src  A pointer to the source token.
 void RmtTokenCopy(RmtToken* dest, const RmtToken* src);
 

@@ -46,11 +46,8 @@ CURLcode Curl_socket_addr_from_ai(struct Curl_sockaddr_ex *addr,
                                   uint8_t transport);
 
 /*
- * Create a socket based on info from 'conn' and 'ai'.
- *
- * Fill in 'addr' and 'sockfd' accordingly if OK is returned. If the open
- * socket callback is set, used that!
- *
+ * Create a socket for 'ai', using the open socket callback if set.
+ * 'addr' may be NULL when the caller does not need the address.
  */
 CURLcode Curl_socket_open(struct Curl_easy *data,
                           const struct Curl_addrinfo *ai,
@@ -126,8 +123,7 @@ CURLcode Curl_conn_tcp_listen_set(struct Curl_easy *data,
                                   curl_socket_t *s);
 
 /**
- * Return TRUE iff the last filter at `sockindex` was set via
- * Curl_conn_tcp_listen_set().
+ * Return TRUE if the filter chain at `sockindex` contains a TCP listener.
  */
 bool Curl_conn_is_tcp_listen(struct Curl_easy *data,
                              int8_t sockindex);

@@ -898,7 +898,7 @@ void VerifyGpuScoring_RejectsInvalidGraphOwnedTimingPolicy(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuTaskTimingMetadata invalidTiming = GpuTaskTimingMetadata();
-    invalidTiming.policy = GpuTaskTimingPolicy::Count;
+    invalidTiming.policy = GpuTaskTimingPolicy::kCount;
     const Expected<GpuTaskId> taskResult = AddTaskWithCommands(
         s_GpuCaseTaskGraphTimingPolicyInvalid,
         "Timing Policy Invalid",

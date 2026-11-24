@@ -19,7 +19,7 @@ extern class DiagnosticEventRecord{
 
 [cpp_name("::DiagnosticEventText"), cpp_flags(self_defaulted, brace_init)]
 extern class DiagnosticEventText{
-    StringView c_str(...)const;
+    StringView nullTerminatedText(...)const;
     StringView view(...)const;
 };
 

@@ -1628,7 +1628,6 @@
           /* add current outline to the glyph slot */
           FT_GlyphLoader_Add( builder->loader );
 
-          /* return now! */
           FT_TRACE4(( "\n" ));
           return error;
 
@@ -1677,7 +1676,6 @@
             FT_GlyphLoader_Add( builder->loader );
           }
 
-          /* return now! */
           FT_TRACE4(( "\n" ));
           return error;
 

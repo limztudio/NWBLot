@@ -16,7 +16,7 @@ namespace RmtMemoryAliasingTimelineAlgorithm
     {
         allocation_size_ = size;
         regions_slow_part_.resize(1);
-        regions_slow_part_.front() = AllocationRegionSlowPart{};  // Clear
+        regions_slow_part_.front() = AllocationRegionSlowPart{};
         regions_fast_part_.resize(1);
         regions_fast_part_.front().non_zero_counters_ = 0;
         RMT_ASSERT(regions_fast_part_.front().begin_offset_ == 0);
@@ -28,7 +28,6 @@ namespace RmtMemoryAliasingTimelineAlgorithm
         const SizeType end_offset = offset + size;
         RMT_ASSERT(end_offset <= allocation_size_);
 
-        // Binary search
         const auto it =
             std::lower_bound(regions_fast_part_.begin(), regions_fast_part_.end(), offset, [](const AllocationRegionFastPart& lhs, SizeType rhsOffset) {
                 return lhs.begin_offset_ < rhsOffset;
@@ -40,11 +39,11 @@ namespace RmtMemoryAliasingTimelineAlgorithm
             // Previous region needs to be split.
             RMT_ASSERT(index > 0);
             --index;
-            AllocationRegionSlowPart new_region_slow = regions_slow_part_[index];  // Copy
-            AllocationRegionFastPart new_region_fast = regions_fast_part_[index];  // Copy
+            AllocationRegionSlowPart new_region_slow = regions_slow_part_[index];
+            AllocationRegionFastPart new_region_fast = regions_fast_part_[index];
             new_region_fast.begin_offset_            = offset;
             ++index;
-            regions_slow_part_.insert(regions_slow_part_.begin() + index, new_region_slow);  // Insert `new_region` after `it`.
+            regions_slow_part_.insert(regions_slow_part_.begin() + index, new_region_slow);
             regions_fast_part_.insert(regions_fast_part_.begin() + index, new_region_fast);
         }
 
@@ -62,12 +61,12 @@ namespace RmtMemoryAliasingTimelineAlgorithm
         {
             // `end_offset` of the new region falls inside the current region `it`.
             // We need to split it into 2 parts: first will be existing `it`, second will be `new_region`.
-            AllocationRegionSlowPart new_region_slow = regions_slow_part_[index];  // Copy
-            AllocationRegionFastPart new_region_fast = regions_fast_part_[index];  // Copy
+            AllocationRegionSlowPart new_region_slow = regions_slow_part_[index];
+            AllocationRegionFastPart new_region_fast = regions_fast_part_[index];
             new_region_fast.begin_offset_            = end_offset;
             IncrementRegion(index, res_usage_type);
             ++index;
-            regions_slow_part_.insert(regions_slow_part_.begin() + index, new_region_slow);  // Insert `new_region` after `it`.
+            regions_slow_part_.insert(regions_slow_part_.begin() + index, new_region_slow);
             regions_fast_part_.insert(regions_fast_part_.begin() + index, new_region_fast);
         }
 
@@ -79,7 +78,6 @@ namespace RmtMemoryAliasingTimelineAlgorithm
         const SizeType end_offset = offset + size;
         RMT_ASSERT(end_offset <= allocation_size_);
 
-        // Binary search.
         const auto it =
             std::lower_bound(regions_fast_part_.begin(), regions_fast_part_.end(), offset, [](const AllocationRegionFastPart& lhs, SizeType rhsOffset) {
                 return lhs.begin_offset_ < rhsOffset;
@@ -110,7 +108,7 @@ namespace RmtMemoryAliasingTimelineAlgorithm
             return;
         }
 
-        total_sizes_per_resource_ = SizePerResourceUsageType{};  // Clear
+        total_sizes_per_resource_ = SizePerResourceUsageType{};
         total_bound_size_         = 0;
 
         for (size_t index = 0, count = regions_fast_part_.size(); index < count; ++index)
@@ -190,7 +188,7 @@ namespace RmtMemoryAliasingTimelineAlgorithm
 
     void RmtMemoryAliasingCalculator::CalculateSizes(SizePerResourceUsageType& out_sizes, SizeType& out_unbound_size) const
     {
-        out_sizes        = SizePerResourceUsageType{};  // Zero-initialize.
+        out_sizes        = SizePerResourceUsageType{};
         out_unbound_size = 0;
 
         for (const auto& alloc_it : allocations_)

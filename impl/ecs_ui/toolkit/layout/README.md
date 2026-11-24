@@ -1,6 +1,6 @@
 # Logical layout tree
 
-`LayoutTree` owns bounded construction, measurement, and arranged geometry in a caller-owned `GlobalArena`. It depends only on the UI geometry/arena types. It does not shape text, access the OS, or create GPU resources.
+`LayoutTree` owns bounded construction, measurement, and arranged geometry in a caller-owned `GlobalArena`. Its layout operations use UI geometry and arena-backed storage; they do not shape text, access the OS, or create GPU resources. The layout sources are part of `nwb_ui`, whose target also links input and UI asset modules.
 
 Build one root with `s_LayoutNoParent`, then add each child after its parent. Nodes receive `u32` indexes. The tree admits up to 4,096 nodes (or a smaller constructor capacity), rejects a second root or children on `Leaf`, and cannot express a cycle. Containers preserve child insertion order. `addNode(parent, description)` returns `Expected<u32>` with the admitted index. A failed admission returns an unexpected result and prevents publication until `reset()` starts another build; check success before using the index.
 

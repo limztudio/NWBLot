@@ -343,7 +343,7 @@ namespace RenderPassLoadAction{
         Load,
         Clear,
         Discard,
-        Count,
+        kCount,
     };
 };
 
@@ -351,7 +351,7 @@ namespace RenderPassStoreAction{
     enum Enum : u8{
         Store,
         Discard,
-        Count,
+        kCount,
     };
 };
 

@@ -22,7 +22,6 @@
 
 namespace basisu
 {
-	// --- DXGI format codes (only the ones we emit). ---
 	enum
 	{
 		DXGI_FORMAT_R8G8B8A8_UNORM = 28,
@@ -46,7 +45,6 @@ namespace basisu
 		DXGI_FORMAT_B4G4R4A4_UNORM = 115
 	};
 
-	// --- DDS header flag/cap constants. ---
 	enum
 	{
 		DDSD_CAPS = 0x1, DDSD_HEIGHT = 0x2, DDSD_WIDTH = 0x4, DDSD_PITCH = 0x8,
@@ -65,7 +63,6 @@ namespace basisu
 		DDS_RESOURCE_MISC_TEXTURECUBE = 0x4
 	};
 
-	// Per-format static info.
 	struct dds_format_info
 	{
 		const char* m_pToken;

@@ -1051,7 +1051,7 @@ bool LoopPredication::predicateLoopExits(Loop *L, SCEVExpander &Rewriter) {
   L->getExitingBlocks(ExitingBlocks);
 
   if (ExitingBlocks.empty())
-    return false; // Nothing to do.
+    return false;
 
   auto *Latch = L->getLoopLatch();
   if (!Latch)

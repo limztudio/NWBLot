@@ -50,9 +50,7 @@ MHD_MD5_init_one_time (struct Md5CtxExt *ctx)
     ctx->handle = NULL;
   }
 
-  /* If handle is NULL, the error must be set */
   mhd_assert ((NULL != ctx->handle) || (0 != ctx->ext_error));
-  /* If error is set, the handle must be NULL */
   mhd_assert ((0 == ctx->ext_error) || (NULL == ctx->handle));
 }
 

@@ -50,12 +50,10 @@ static void rlimit_update(struct Curl_rlimit *r,
   if(elapsed_us < r->step_us)
     return;
 
-  /* we do the update */
   r->ts = *pts;
   elapsed_steps = elapsed_us / r->step_us;
   r->spare_us = elapsed_us % r->step_us;
 
-  /* How many tokens did we gain since the last update? */
   if(r->rate_per_step > (INT64_MAX / elapsed_steps))
     token_gain = INT64_MAX;
   else {

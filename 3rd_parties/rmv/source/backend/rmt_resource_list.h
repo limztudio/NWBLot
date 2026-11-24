@@ -30,7 +30,6 @@ typedef enum RmtResourceBackingStorage
     kRmtResourceBackingStorageUnmapped = kRmtHeapTypeCount,        ///< Unmapped histogram entry.
     kRmtResourceBackingStorageUnknown  = (kRmtHeapTypeCount + 1),  ///< Unknown histogram entry.
 
-    // Add above this.
     kRmtResourceBackingStorageCount
 } RmtResourceBackingStorage;
 
@@ -51,7 +50,7 @@ typedef struct RmtResource
     uint64_t              address;        ///< The virtual address of the resource.
     uint64_t              size_in_bytes;  ///< The total size of the resource.
     const RmtVirtualAllocation*
-        bound_allocation;  ///< An pointers to a <c><i>RmtAllocation</i></c> structure containing the virtual address allocation containing this resource. This is set to NULL if the resource isn't bound to a virtual address.
+        bound_allocation;  ///< The containing virtual allocation, or NULL when unbound.
     uint32_t        flags;          ///< Flags on the resource.
     RmtCommitType   commit_type;    ///< The commit type of the resource.
     RmtResourceType resource_type;  ///< The type of the resource.

@@ -20,6 +20,7 @@ must not be misrepresented as being the original software.
 3. This notice may not be removed or altered from any source
 distribution.
 */
+// Modified by NWBLot.
 
 #ifndef TINYXML2_INCLUDED
 #define TINYXML2_INCLUDED
@@ -189,7 +190,7 @@ private:
     char*   _start;
     char*   _end;
 
-    StrPair( const StrPair& other );	// not supported
+    StrPair( const StrPair& other );
     void operator=( const StrPair& other );	// not supported, use TransferTo()
 };
 
@@ -291,8 +292,8 @@ public:
     }
 
 private:
-    DynArray( const DynArray& ); // not supported
-    void operator=( const DynArray& ); // not supported
+    DynArray( const DynArray& );
+    void operator=( const DynArray& );
 
     void EnsureCapacity( size_t cap ) {
         TIXMLASSERT( cap > 0 );
@@ -347,7 +348,6 @@ public:
     }
 
     void Clear() {
-        // Delete the blocks.
         while( !_blockPtrs.Empty()) {
             Block* lastBlock = _blockPtrs.Pop();
             delete lastBlock;
@@ -368,7 +368,6 @@ public:
 
     virtual void* Alloc() override{
         if ( !_root ) {
-            // Need a new block.
             Block* block = new Block;
             _blockPtrs.Push( block );
 
@@ -418,22 +417,14 @@ public:
         return _nUntracked;
     }
 
-	// This number is perf sensitive. 4k seems like a good tradeoff on my machine.
-	// The test file is large, 170k.
-	// Release:		VS2010 gcc(no opt)
-	//		1k:		4000
-	//		2k:		4000
-	//		4k:		3900	21000
-	//		16k:	5200
-	//		32k:	4300
-	//		64k:	4000	21000
+	// Block size affects performance.
     // Declared public because some compilers do not accept to use ITEMS_PER_BLOCK
     // in private part if ITEMS_PER_BLOCK is private
     enum { ITEMS_PER_BLOCK = (4 * 1024) / ITEM_SIZE };
 
 private:
-    MemPoolT( const MemPoolT& ); // not supported
-    void operator=( const MemPoolT& ); // not supported
+    MemPoolT( const MemPoolT& );
+    void operator=( const MemPoolT& );
 
     union Item {
         Item*   next;
@@ -971,14 +962,14 @@ private:
     void InsertChildPreamble( XMLNode* insertThis ) const;
     const XMLElement* ToElementWithName( const char* name ) const;
 
-    XMLNode( const XMLNode& );	// not supported
-    XMLNode& operator=( const XMLNode& );	// not supported
+    XMLNode( const XMLNode& );
+    XMLNode& operator=( const XMLNode& );
 };
 
 
 /** XML text.
 
-	Note that a text node can have child element nodes, for example:
+	Text can appear beside child elements, for example:
 	@verbatim
 	<root>This is <b>bold</b></root>
 	@endverbatim
@@ -1022,8 +1013,8 @@ protected:
 private:
     bool _isCData;
 
-    XMLText( const XMLText& );	// not supported
-    XMLText& operator=( const XMLText& );	// not supported
+    XMLText( const XMLText& );
+    XMLText& operator=( const XMLText& );
 };
 
 
@@ -1051,8 +1042,8 @@ protected:
     char* ParseDeep( char* p, StrPair* parentEndTag, int* curLineNumPtr) override;
 
 private:
-    XMLComment( const XMLComment& );	// not supported
-    XMLComment& operator=( const XMLComment& );	// not supported
+    XMLComment( const XMLComment& );
+    XMLComment& operator=( const XMLComment& );
 };
 
 
@@ -1090,8 +1081,8 @@ protected:
     char* ParseDeep( char* p, StrPair* parentEndTag, int* curLineNumPtr ) override;
 
 private:
-    XMLDeclaration( const XMLDeclaration& );	// not supported
-    XMLDeclaration& operator=( const XMLDeclaration& );	// not supported
+    XMLDeclaration( const XMLDeclaration& );
+    XMLDeclaration& operator=( const XMLDeclaration& );
 };
 
 
@@ -1125,8 +1116,8 @@ protected:
     char* ParseDeep( char* p, StrPair* parentEndTag, int* curLineNumPtr ) override;
 
 private:
-    XMLUnknown( const XMLUnknown& );	// not supported
-    XMLUnknown& operator=( const XMLUnknown& );	// not supported
+    XMLUnknown( const XMLUnknown& );
+    XMLUnknown& operator=( const XMLUnknown& );
 };
 
 
@@ -1243,8 +1234,8 @@ private:
     XMLAttribute() : _name(), _value(),_parseLineNum( 0 ), _next( 0 ), _memPool( 0 ) {}
     virtual ~XMLAttribute()	{}
 
-    XMLAttribute( const XMLAttribute& );	// not supported
-    void operator=( const XMLAttribute& );	// not supported
+    XMLAttribute( const XMLAttribute& );
+    void operator=( const XMLAttribute& );
     void SetName( const char* name );
 
     char* ParseDeep( char* p, bool processEntities, int* curLineNumPtr );
@@ -1685,8 +1676,8 @@ protected:
 private:
     XMLElement( XMLDocument* doc );
     virtual ~XMLElement();
-    XMLElement( const XMLElement& );	// not supported
-    void operator=( const XMLElement& );	// not supported
+    XMLElement( const XMLElement& );
+    void operator=( const XMLElement& );
 
     XMLAttribute* FindOrCreateAttribute( const char* name );
     char* ParseAttributes( char* p, int* curLineNumPtr );
@@ -1718,14 +1709,12 @@ class TINYXML2_LIB XMLDocument : public XMLNode
 {
     friend class XMLElement;
     // Gives access to SetError and Push/PopDepth, but over-access for everything else.
-    // Wishing C++ had "internal" scope.
     friend class XMLNode;
     friend class XMLText;
     friend class XMLComment;
     friend class XMLDeclaration;
     friend class XMLUnknown;
 public:
-    /// constructor
     XMLDocument( bool processEntities = true, Whitespace whitespaceMode = PRESERVE_WHITESPACE );
     ~XMLDocument();
 
@@ -1929,8 +1918,8 @@ public:
     }
 
 private:
-    XMLDocument( const XMLDocument& );	// not supported
-    void operator=( const XMLDocument& );	// not supported
+    XMLDocument( const XMLDocument& );
+    void operator=( const XMLDocument& );
 
     bool			_writeBOM;
     bool			_processEntities;
@@ -1996,59 +1985,8 @@ inline NodeType* XMLDocument::CreateUnlinkedNode( MemPoolT<PoolElementSize>& poo
 }
 
 /**
-	A XMLHandle is a class that wraps a node pointer with null checks; this is
-	an incredibly useful thing. Note that XMLHandle is not part of the TinyXML-2
-	DOM structure. It is a separate utility class.
-
-	Take an example:
-	@verbatim
-	<Document>
-		<Element attributeA = "valueA">
-			<Child attributeB = "value1" />
-			<Child attributeB = "value2" />
-		</Element>
-	</Document>
-	@endverbatim
-
-	Assuming you want the value of "attributeB" in the 2nd "Child" element, it's very
-	easy to write a *lot* of code that looks like:
-
-	@verbatim
-	XMLElement* root = document.FirstChildElement( "Document" );
-	if ( root )
-	{
-		XMLElement* element = root->FirstChildElement( "Element" );
-		if ( element )
-		{
-			XMLElement* child = element->FirstChildElement( "Child" );
-			if ( child )
-			{
-				XMLElement* child2 = child->NextSiblingElement( "Child" );
-				if ( child2 )
-				{
-					// Finally do something useful.
-	@endverbatim
-
-	And that doesn't even cover "else" cases. XMLHandle addresses the verbosity
-	of such code. A XMLHandle checks for null pointers so it is perfectly safe
-	and correct to use:
-
-	@verbatim
-	XMLHandle docHandle( &document );
-	XMLElement* child2 = docHandle.FirstChildElement( "Document" ).FirstChildElement( "Element" ).FirstChildElement().NextSiblingElement();
-	if ( child2 )
-	{
-		// do something useful
-	@endverbatim
-
-	Which is MUCH more concise and useful.
-
-	It is also safe to copy handles - internally they are nothing more than node pointers.
-	@verbatim
-	XMLHandle handleCopy = handle;
-	@endverbatim
-
-	See also XMLConstHandle, which is the same as XMLHandle, but operates on const objects.
+	XMLHandle wraps a node pointer with null checks. Handles can be copied.
+	Use XMLConstHandle for const nodes.
 */
 class TINYXML2_LIB XMLHandle
 {
@@ -2059,10 +1997,8 @@ public:
     /// Create a handle from a node.
     explicit XMLHandle( XMLNode& node ) : _node( &node ) {
     }
-    /// Copy constructor
     XMLHandle( const XMLHandle& ref ) : _node( ref._node ) {
     }
-    /// Assignment
     XMLHandle& operator=( const XMLHandle& ref )							{
         _node = ref._node;
         return *this;

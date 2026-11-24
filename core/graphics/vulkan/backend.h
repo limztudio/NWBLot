@@ -35,7 +35,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Expected<BufferSuballocation> UploadManager::trySuballocateFromChunk(BufferChunk& chunk, const u64 size, const u32 alignment)noexcept{
+inline Expected<BufferSuballocation> UploadManager::TrySuballocateFromChunk(BufferChunk& chunk, const u64 size, const u32 alignment)noexcept{
     u64 alignedOffset = chunk.allocated;
     if(alignment > 1u){
         const u64 align64 = static_cast<u64>(alignment);
@@ -71,7 +71,7 @@ inline Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 
 
     BufferChunk* const cachedChunk = owner->m_activeUploadChunks[chunkSlot];
     if(cachedChunk && cachedChunk->manager == this && cachedChunk->owner == owner && cachedChunk->nativeRecordingID == nativeRecordingID && cachedChunk->physicalQueue == queue){
-        const auto fastResult = trySuballocateFromChunk(*cachedChunk, size, alignment);
+        const auto fastResult = TrySuballocateFromChunk(*cachedChunk, size, alignment);
         if(fastResult){
             FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & slotBit) != 0u);
             return fastResult;

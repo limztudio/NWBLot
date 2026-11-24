@@ -293,7 +293,7 @@ b8 IsStaleUiTextEditSurroundingRevision(
     case TextInputEventKind::DeleteSurrounding: {
         if(IsStaleUiTextEditSurroundingRevision(expectedSurroundingRevision, event.surroundingRevision, matchesPublishedModel))
             return UiTextEditStatus::StaleSurrounding;
-        if(cast<u8>(event.deletionBasis) >= cast<u8>(TextInputDeletionBasis::Count))
+        if(cast<u8>(event.deletionBasis) >= cast<u8>(TextInputDeletionBasis::kCount))
             return UiTextEditStatus::InvalidEvent;
         if(event.deletionBasis == TextInputDeletionBasis::Selection){
             if(

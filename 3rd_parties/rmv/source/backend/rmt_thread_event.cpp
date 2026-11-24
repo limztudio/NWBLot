@@ -16,7 +16,6 @@
 
 #include "rmt_assert.h"
 
-// structure for thread event
 typedef struct RmtThreadEventInternal
 {
 #ifdef _WIN32
@@ -26,13 +25,11 @@ typedef struct RmtThreadEventInternal
 #endif  // #ifdef _WIN32
 } RmtThreadEventInternal;
 
-// create a thread event
 RmtErrorCode RmtThreadEventCreate(RmtThreadEvent* thread_event, bool initial_value, bool manual_reset, const char* name)
 {
     RMT_ASSERT_MESSAGE(thread_event, "Parameter threadEvent is NULL.");
     RMT_RETURN_ON_ERROR(thread_event, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadEventInternal* thread_event_internal = (RmtThreadEventInternal*)thread_event;
 
     // if this fails it means the external opaque structure isn't large enough for an internal thread event.
@@ -49,17 +46,14 @@ RmtErrorCode RmtThreadEventCreate(RmtThreadEvent* thread_event, bool initial_val
     return kRmtOk;
 }
 
-// signal a thread event
 RmtErrorCode RmtThreadEventSignal(RmtThreadEvent* thread_event)
 {
     RMT_ASSERT_MESSAGE(thread_event, "Parameter threadEvent is NULL.");
     RMT_RETURN_ON_ERROR(thread_event, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadEventInternal* thread_event_internal = (RmtThreadEventInternal*)thread_event;
 
 #ifdef _WIN32
-    // signal the event
     BOOL result = SetEvent(thread_event_internal->handle);
 #else
     int result = neosmart::SetEvent(thread_event_internal->handle);
@@ -69,13 +63,11 @@ RmtErrorCode RmtThreadEventSignal(RmtThreadEvent* thread_event)
     return kRmtOk;
 }
 
-/* wait for a thread event */
 RmtErrorCode RmtThreadEventWait(RmtThreadEvent* thread_event)
 {
     RMT_ASSERT_MESSAGE(thread_event, "Parameter threadEvent is NULL.");
     RMT_RETURN_ON_ERROR(thread_event, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadEventInternal* thread_event_internal = (RmtThreadEventInternal*)thread_event;
 
 #ifdef _WIN32
@@ -89,13 +81,11 @@ RmtErrorCode RmtThreadEventWait(RmtThreadEvent* thread_event)
     return kRmtOk;
 }
 
-/* reset a thread event */
 RmtErrorCode RmtThreadEventReset(RmtThreadEvent* thread_event)
 {
     RMT_ASSERT_MESSAGE(thread_event, "Parameter threadEvent is NULL.");
     RMT_RETURN_ON_ERROR(thread_event, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadEventInternal* thread_event_internal = (RmtThreadEventInternal*)thread_event;
 
 #ifdef _WIN32
@@ -115,7 +105,6 @@ RmtErrorCode RmtThreadEventDestroy(RmtThreadEvent* thread_event)
     RMT_ASSERT_MESSAGE(thread_event, "Parameter threadEvent is NULL.");
     RMT_RETURN_ON_ERROR(thread_event, kRmtErrorInvalidPointer);
 
-    // convert the pointer to the internal representation
     RmtThreadEventInternal* thread_event_internal = (RmtThreadEventInternal*)thread_event;
 
 #ifdef _WIN32

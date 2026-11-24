@@ -414,7 +414,6 @@ CURLcode Curl_client_flush(struct Curl_easy *data)
   return result;
 }
 
-/* Create an unencoding writer stage using the given handler. */
 CURLcode Curl_cwriter_create(struct Curl_cwriter **pwriter,
                              struct Curl_easy *data,
                              const struct Curl_cwtype *cwt,
@@ -1184,7 +1183,7 @@ CURLcode Curl_creader_add(struct Curl_easy *data,
       return result;
   }
 
-  /* Insert the writer as first in its phase.
+  /* Insert the reader as first in its phase.
    * Skip existing readers of lower phases. */
   while(*anchor && (*anchor)->phase < reader->phase)
     anchor = &(*anchor)->next;
@@ -1279,7 +1278,6 @@ static CURLcode cr_null_read(struct Curl_easy *data,
 static curl_off_t cr_null_total_length(struct Curl_easy *data,
                                        struct Curl_creader *reader)
 {
-  /* this reader changes length depending on input */
   (void)data;
   (void)reader;
   return 0;

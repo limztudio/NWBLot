@@ -1343,7 +1343,6 @@ static CURLcode url_set_data_creds_netrc(struct Curl_easy *data,
                                 *pcreds, CREDS_NETRC, pcreds);
       if(result)
         goto out;
-      /* for updated strings, we update them in the URL */
       uc = curl_url_set(data->state.uh, CURLUPART_USER,
                         Curl_creds_user(*pcreds), CURLU_URLENCODE);
       if(!uc)

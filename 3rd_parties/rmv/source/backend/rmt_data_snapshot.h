@@ -35,7 +35,6 @@ typedef enum RmtSegmentStatusFlags
     kRmtSegmentStatusFlagGpuVisible = (1 << 5)
 } RmtSegmentStatusFlags;
 
-/// An enumeration of all subscription
 typedef enum RmtSegmentSubscriptionStatus
 {
     kRmtSegmentSubscriptionStatusOverLimit    = 0,  ///< The segment is over-subscribed.

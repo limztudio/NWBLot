@@ -394,7 +394,6 @@
             my_aggregator.initialize_handler(handler_type(this));
         }
 
-        // copy constructor
         reserving_port(const reserving_port& /* other */) = delete;
 
         void set_join_node_pointer(reserving_forwarding_base *join) {
@@ -598,7 +597,6 @@
             my_aggregator.initialize_handler(handler_type(this));
         }
 
-        //! copy constructor
         queueing_port(const queueing_port& /* other */) = delete;
 
         //! record parent for tallying available items
@@ -800,7 +798,6 @@
             my_aggregator.initialize_handler(handler_type(this));
         }
 
-        // copy constructor
         key_matching_port(const key_matching_port& /*other*/) = delete;
 #if __INTEL_COMPILER <= 2021
         // Suppress superfluous diagnostic about virtual keyword absence in a destructor of an inherited
@@ -1007,7 +1004,6 @@
             join_helper<N>::reset_ports(my_inputs);
         }
         void tuple_rejected() {
-            // nothing to do.
         }
 
         input_type my_inputs;
@@ -1239,7 +1235,6 @@
         }
 
         void tuple_rejected() {
-            // nothing to do.
         }
 
         input_type my_inputs;  // input ports

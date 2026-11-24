@@ -2332,16 +2332,6 @@ static bool isObjCTypeSubstitutable(ASTContext &Context,
            Context.ObjCQualifiedIdTypesAreCompatible(A, B, false);
   }
 
-  /*
-  // id is a special type that bypasses type checking completely.  We want a
-  // warning when it is used in one place but not another.
-  if (C.isObjCIdType(A) || C.isObjCIdType(B)) return false;
-
-
-  // If B is a qualified id, then A must also be a qualified id (which it isn't
-  // if we've got this far)
-  if (B->isObjCQualifiedIdType()) return false;
-  */
 
   // Now we know that A and B are (potentially-qualified) class types.  The
   // normal rules for assignment apply.
@@ -3021,7 +3011,6 @@ void SemaObjC::ImplMethodsVsClassMethods(Scope *S, ObjCImplDecl *IMPDecl,
     DiagnoseUnimplementedProperties(S, IMPDecl, CDecl, SynthesizeProperties);
   }
 
-  // Diagnose null-resettable synthesized setters.
   diagnoseNullResettableSynthesizedSetters(IMPDecl);
 
   SelectorSet ClsMap;

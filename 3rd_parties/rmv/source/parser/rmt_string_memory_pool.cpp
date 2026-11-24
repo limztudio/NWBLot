@@ -39,7 +39,6 @@ RmtErrorCode RmtStringMemoryPool::Allocate(const size_t buffer_size, char** out_
         memory_pool_buffer_ = nullptr;
     }
 
-    // If no buffer, allocate one and add it to the buffer cache.
     if (memory_pool_buffer_ == nullptr)
     {
         char* new_block = new (std::nothrow) char[memory_pool_block_size_];

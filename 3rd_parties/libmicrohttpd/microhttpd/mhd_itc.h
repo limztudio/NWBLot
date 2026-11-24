@@ -256,7 +256,7 @@ static const uint64_t _MHD_itc_wr_data = 1;
 /**
  * Change itc FD options to be non-blocking.
  *
- * @param fd the FD to manipulate
+ * @param itc the inter-thread communication primitive to manipulate
  * @return non-zero if succeeded, zero otherwise
  */
 int

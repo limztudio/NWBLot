@@ -1210,7 +1210,6 @@ checkPlaceholderForOverload(Sema &S, Expr *&E,
     return false;
   }
 
-  // Nothing to do.
   return false;
 }
 
@@ -5287,7 +5286,6 @@ Sema::CompareReferenceRelationship(SourceLocation Loc,
   // conversions, ObjC pointer conversions, and function pointer conversions.
   // (Qualification conversions are checked last.)
   if (UnqualT1 == UnqualT2) {
-    // Nothing to do.
   } else if (isCompleteType(Loc, OrigT2) &&
              IsDerivedFrom(Loc, UnqualT2, UnqualT1))
     Conv |= ReferenceConversions::DerivedToBase;
@@ -11125,7 +11123,6 @@ bool clang::isBetterOverloadCandidate(
       return false;
 
     case ImplicitConversionSequence::Indistinguishable:
-      // Do nothing.
       break;
     }
   }
@@ -13853,7 +13850,6 @@ private:
     TargetFunctionType = S.ExtractUnqualifiedFunctionType(TargetType);
   }
 
-  // return true if any matching specializations were found
   bool AddMatchingTemplateFunction(FunctionTemplateDecl* FunctionTemplate,
                                    const DeclAccessPair& CurAccessFunPair) {
     if (CXXMethodDecl *Method
@@ -15288,7 +15284,6 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
                                          CandidateSet);
   }
 
-  // Add builtin operator candidates.
   AddBuiltinOperatorCandidates(Op, OpLoc, ArgsArray, CandidateSet);
 
   bool HadMultipleCandidates = (CandidateSet.size() > 1);

@@ -278,7 +278,7 @@ CURLcode curlx_base64_encode(const uint8_t *inputbuff, size_t insize,
  * encoded data. Size of encoded data is returned in variable pointed by
  * outlen.
  *
- * Input length of 0 indicates input buffer holds a null-terminated string.
+ * An input length of 0 returns NULL in *outptr and 0 in *outlen.
  *
  * Returns CURLE_OK on success, otherwise specific error code. Function
  * output shall not be considered valid unless CURLE_OK is returned.

@@ -563,7 +563,7 @@ class App {
                        AssignTo &variable,  ///< The variable to set
                        std::string option_description = "") {
 
-        auto fun = [&variable](const CLI::results_t &res) {  // comment for spacing
+        auto fun = [&variable](const CLI::results_t &res) {
             return detail::lexical_conversion<AssignTo, ConvertTo>(res, variable);
         };
 
@@ -587,7 +587,7 @@ class App {
                                  AssignTo &variable,  ///< The variable to set
                                  std::string option_description = "") {
 
-        auto fun = [&variable](const CLI::results_t &res) {  // comment for spacing
+        auto fun = [&variable](const CLI::results_t &res) {
             return detail::lexical_conversion<AssignTo, AssignTo>(res, variable);
         };
 
@@ -1076,10 +1076,8 @@ class App {
     /// Check the status of the allow windows style options
     CLI11_NODISCARD bool get_allow_windows_style_options() const { return allow_windows_style_options_; }
 
-    /// Check the status of the allow windows style options
     CLI11_NODISCARD bool get_positionals_at_end() const { return positionals_at_end_; }
 
-    /// Check the status of the allow windows style options
     CLI11_NODISCARD bool get_configurable() const { return configurable_; }
 
     /// Get the group of this subcommand
@@ -1130,20 +1128,17 @@ class App {
     /// Get the status of allowing prefix matching for subcommands
     CLI11_NODISCARD bool get_allow_subcommand_prefix_matching() const { return allow_prefix_matching_; }
 
-    /// Get the status of disabled
     CLI11_NODISCARD bool get_immediate_callback() const { return immediate_callback_; }
 
     /// Get the status of disabled by default
     CLI11_NODISCARD bool get_disabled_by_default() const { return (default_startup == startup_mode::disabled); }
 
-    /// Get the status of disabled by default
     CLI11_NODISCARD bool get_enabled_by_default() const { return (default_startup == startup_mode::enabled); }
     /// Get the status of validating positionals
     CLI11_NODISCARD bool get_validate_positionals() const { return validate_positionals_; }
     /// Get the status of validating optional vector arguments
     CLI11_NODISCARD bool get_validate_optional_arguments() const { return validate_optional_arguments_; }
 
-    /// Get the status of allow extras
     CLI11_NODISCARD config_extras_mode get_allow_config_extras() const {
         return static_cast<config_extras_mode>(allow_config_extras_);
     }

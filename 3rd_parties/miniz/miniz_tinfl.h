@@ -74,8 +74,8 @@ extern "C"
 
         /* Any status code less than TINFL_STATUS_DONE must indicate a failure. */
 
-        /* This flag indicates the inflator has returned every byte of uncompressed data that it can, has consumed every byte that it needed, has successfully reached the end of the deflate stream, and */
-        /* if zlib headers and adler32 checking enabled that it has successfully checked the uncompressed data's adler32. If you call it again you'll just get TINFL_STATUS_DONE over and over again. */
+        /* All output was returned and the deflate stream ended. The Adler-32 check
+         * passed if zlib headers and checking were enabled. Further calls return DONE. */
         TINFL_STATUS_DONE = 0,
 
         /* This flag indicates the inflator MUST have more input data (even 1 byte) before it can make any more forward progress, or you need to clear the TINFL_FLAG_HAS_MORE_INPUT */

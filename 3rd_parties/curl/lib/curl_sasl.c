@@ -102,11 +102,6 @@ unsigned short Curl_sasl_decode_mech(const char *ptr, size_t maxlen,
   return 0;
 }
 
-/*
- * Curl_sasl_parse_url_auth_option()
- *
- * Parse the URL login options.
- */
 CURLcode Curl_sasl_parse_url_auth_option(struct SASL *sasl,
                                          const char *value, size_t len)
 {
@@ -134,11 +129,6 @@ CURLcode Curl_sasl_parse_url_auth_option(struct SASL *sasl,
   return result;
 }
 
-/*
- * Curl_sasl_init()
- *
- * Initializes the SASL structure.
- */
 void Curl_sasl_init(struct SASL *sasl, struct Curl_easy *data,
                     const struct SASLproto *params)
 {
@@ -175,16 +165,11 @@ void Curl_sasl_init(struct SASL *sasl, struct Curl_easy *data,
   }
 }
 
-/*
- * sasl_state()
- *
- * This is the ONLY way to change SASL state!
- */
+/* Use for state transitions after initialization. */
 static void sasl_state(struct SASL *sasl, struct Curl_easy *data,
                        saslstate newstate)
 {
 #if defined(DEBUGBUILD) && defined(CURLVERBOSE)
-  /* for debug purposes */
   static const char * const names[] = {
     "STOP",
     "PLAIN",
@@ -266,14 +251,8 @@ static CURLcode build_message(struct SASL *sasl, struct bufref *msg)
   return result;
 }
 
-/*
- * Curl_sasl_can_authenticate()
- *
- * Check if we have enough auth data and capabilities to authenticate.
- */
 bool Curl_sasl_can_authenticate(struct SASL *sasl, struct Curl_easy *data)
 {
-  /* Have credentials been provided? */
   if(data->conn->creds)
     return TRUE;
 
@@ -502,11 +481,6 @@ static bool sasl_choose_login(struct Curl_easy *data, struct sasl_ctx *sctx)
   return FALSE;
 }
 
-/*
- * Curl_sasl_start()
- *
- * Calculate the required login details for SASL authentication.
- */
 CURLcode Curl_sasl_start(struct SASL *sasl, struct Curl_easy *data,
                          bool force_ir, saslprogress *progress)
 {
@@ -571,11 +545,6 @@ CURLcode Curl_sasl_start(struct SASL *sasl, struct Curl_easy *data,
   return sctx.result;
 }
 
-/*
- * Curl_sasl_continue()
- *
- * Continue the authentication.
- */
 CURLcode Curl_sasl_continue(struct SASL *sasl, struct Curl_easy *data,
                             int code, saslprogress *progress)
 {

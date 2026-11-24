@@ -1103,8 +1103,8 @@ namespace basist
 	// ============================================================================================================
 	// transcode_image_level: output_row_pitch_in_blocks_or_pixels / output_rows_in_pixels CONTRACT
 	//
-	// DDS has no "original" (pre-block-padding) dimensions, so the caller supplies them via output pitch/rows as a
-	// proxy. Both default to 0 == the tight image size. By destination kind:
+	// DDS stores exact image dimensions. Output pitch and rows describe the destination buffer;
+	// zero uses the tight image size. By destination kind:
 	//
 	//  UNCOMPRESSED (cTFRGBA32/RGB565/RGBA4444, incl. BGRA/X8/16-bpp/byte swizzles): pitch = dest stride in PIXELS,
 	//    output_rows = rows. The dest may be SMALLER than the image (we clip the blit to the top-left overlap, e.g.

@@ -53,7 +53,7 @@ typedef enum RmtDataTimelineType
 /// A structure encapsulating a single level in a series.
 typedef struct RmtDataTimelineSeriesLevel
 {
-    uint64_t* values;       ///< Pointer to an array of <c><i>int32_t</i></c> values at this level in the series map.
+    uint64_t* values;       ///< Pointer to an array of <c><i>uint64_t</i></c> values at this level in the series map.
     int32_t   value_count;  ///< The number of elements in the array pointed to by <c><i>values</i></c>.
 } RmtDataTimelineSeriesLevel;
 

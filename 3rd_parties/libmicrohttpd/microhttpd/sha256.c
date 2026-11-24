@@ -53,7 +53,6 @@ MHD_SHA256_init (struct Sha256Ctx *ctx)
   ctx->H[6] = UINT32_C (0x1f83d9ab);
   ctx->H[7] = UINT32_C (0x5be0cd19);
 
-  /* Initialise number of bytes. */
   ctx->count = 0;
 }
 
@@ -102,10 +101,6 @@ sha256_transform (uint32_t H[SHA256_DIGEST_SIZE_WORDS],
      See FIPS PUB 180-4 formulae 4.2, 4.3. */
 #define Ch(x,y,z)     ( (z) ^ ((x) & ((y) ^ (z))) )
 #define Maj(x,y,z)    ( ((x) & (y)) ^ ((z) & ((x) ^ (y))) )
-  /* Unoptimized (original) versions: */
-/* #define Ch(x,y,z)  ( ( (x) & (y) ) ^ ( ~(x) & (z) ) )          */
-/* #define Maj(x,y,z) ( ((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)) ) */
-
   /* Four 'Sigma' macro functions.
      See FIPS PUB 180-4 formulae 4.4, 4.5, 4.6, 4.7. */
 #define SIG0(x)  (_MHD_ROTR32 ((x), 2) ^ _MHD_ROTR32 ((x), 13) ^ \
@@ -223,8 +218,6 @@ sha256_transform (uint32_t H[SHA256_DIGEST_SIZE_WORDS],
   /* During last 48 steps, before making any calculations on each step,
      current W element is generated from other W elements of the cyclic buffer
      and the generated value is stored back in the cyclic buffer. */
-  /* Note: instead of using K constants as array, all K values are specified
-     individually for each step, see FIPS PUB 180-4 paragraph 4.2.2 for K values. */
   SHA2STEP32 (a, b, c, d, e, f, g, h, UINT32_C (0xe49b69c1), W[16 & 0xf] = \
                 Wgen (W,16));
   SHA2STEP32 (h, a, b, c, d, e, f, g, UINT32_C (0xefbe4786), W[17 & 0xf] = \
@@ -417,7 +410,7 @@ MHD_SHA256_update (struct Sha256Ctx *ctx,
 
 #ifndef MHD_FAVOR_SMALL_CODE
   if (0 == length)
-    return; /* Shortcut, do nothing */
+    return;
 #endif /* MHD_FAVOR_SMALL_CODE */
 
   /* Note: (count & (SHA256_BLOCK_SIZE-1))

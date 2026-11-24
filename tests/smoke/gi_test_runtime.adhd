@@ -276,8 +276,8 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
         SmokeMaterialRef material = s_GiGroundOpaqueMaterial;
         if(this.m_complexSceneEnabled)
             material = s_GiDiffuseMaterial;
-        const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, 0.0f, 0.0f, 0.0f));
-        const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_PI / 180.0f));
+        const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_HalfPi, 0.0f, 0.0f, 0.0f));
+        const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_Pi / 180.0f));
         const VectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
         const EntityID entity = CreateTintedStaticMeshEntity(
             s_GiGroundMesh,

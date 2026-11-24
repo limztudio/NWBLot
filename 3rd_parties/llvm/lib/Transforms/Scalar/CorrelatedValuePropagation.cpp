@@ -1347,7 +1347,7 @@ static bool runImpl(Function &F, LazyValueInfo *LVI, DominatorTree *DT,
             RetRange->unionWith(LVI->getConstantRange(RetVal, RI,
                                                       /*UndefAllowed=*/false));
 
-      if (isa<Constant>(RetVal)) break; // nothing to do
+      if (isa<Constant>(RetVal)) break;
       if (auto *C = getConstantAt(RetVal, RI, LVI)) {
         ++NumReturns;
         RI->replaceUsesOfWith(RetVal, C);

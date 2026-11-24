@@ -93,8 +93,8 @@ using TestArena = TestStorage<Core::Alloc::GlobalArena, Tag>;
 
 namespace TestDetail{
     inline Core::Alloc::GlobalArena& Arena(){
-        static Core::Alloc::GlobalArena arena(Name("tests/common/default_test_arena"));
-        return arena;
+        static Core::Alloc::GlobalArena s_Arena(Name("tests/common/default_test_arena"));
+        return s_Arena;
     }
 };
 

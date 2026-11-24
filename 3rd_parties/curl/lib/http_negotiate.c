@@ -55,11 +55,9 @@ CURLcode Curl_input_negotiate(struct Curl_easy *data, struct connectdata *conn,
   CURLcode result;
   size_t len;
 
-  /* Point to credentials and host */
   struct Curl_creds *creds = NULL;
   const char *host;
 
-  /* Point to the correct struct with this */
   struct negotiatedata *neg_ctx;
   uint8_t state;
 
@@ -134,8 +132,7 @@ CURLcode Curl_input_negotiate(struct Curl_easy *data, struct connectdata *conn,
     http_auth_nego_reset(conn, neg_ctx, proxy);
 
   if(!result && !proxy) {
-    /* Start it up. From this time onwards, the connection is tied
-     * tp the credentials used. */
+    /* The connection is now tied to these credentials. */
     if(conn->creds_origin &&
        !Curl_peer_equal(conn->creds_origin, data->state.origin)) {
       DEBUGASSERT(0); /* should not happen. */

@@ -8,7 +8,7 @@ extern enum GpuClearTextureTaskValueType : u8{
     UInt,
     Int,
     DepthStencil,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuTaskTimingPolicy::Enum")]
@@ -16,7 +16,7 @@ extern enum GpuTaskTimingPolicy : u8{
     None,
     PacketOnly,
     Task,
-    Count
+    kCount
 };
 
 

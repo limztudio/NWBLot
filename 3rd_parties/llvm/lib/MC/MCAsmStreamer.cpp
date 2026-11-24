@@ -1065,7 +1065,6 @@ void MCAsmStreamer::emitXCOFFSymbolLinkageWithVisibility(
 
   switch (Visibility) {
   case MCSA_Invalid:
-    // Nothing to do.
     break;
   case MCSA_Hidden:
     OS << ",hidden";

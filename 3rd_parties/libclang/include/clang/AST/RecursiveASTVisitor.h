@@ -321,7 +321,6 @@ public:
   /// \returns false if the visitation was terminated early, true otherwise.
   bool TraverseConceptReference(ConceptReference *CR);
 
-  // Visit concept reference.
   bool VisitConceptReference(ConceptReference *CR) { return true; }
 
   /// Recursively visit a single component of an __builtin_offsetof

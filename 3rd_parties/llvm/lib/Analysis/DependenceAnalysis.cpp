@@ -2645,7 +2645,6 @@ DependenceInfo::depends(Instruction *Src, Instruction *Dst,
     PossiblyLoopIndependent = false;
 
   if (!(Src->mayReadOrWriteMemory() && Dst->mayReadOrWriteMemory()))
-    // if both instructions don't reference memory, there's no dependence
     return nullptr;
 
   if (!isLoadOrStore(Src) || !isLoadOrStore(Dst)) {

@@ -487,8 +487,6 @@ CLI11_INLINE std::string binary_escape_string(const std::string &string_to_escap
         // the cast is necessary to avoid undefined behaviour
         if(isprint(static_cast<unsigned char>(c)) == 0) {
             std::stringstream stream;
-            // if the character is not printable
-            // we'll convert it to a hex string using a stringstream
             // note that since char is signed we have to cast it to unsigned first
             stream << std::hex << static_cast<unsigned int>(static_cast<unsigned char>(c));
             std::string code = stream.str();

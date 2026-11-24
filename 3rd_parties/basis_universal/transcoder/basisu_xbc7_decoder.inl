@@ -104,14 +104,12 @@ namespace xbc7 {
 
 			if (cand_index == cCandLeftEdge)
 			{
-				// left edge
 				for (uint32_t y = 0; y < 4; y++)
 					for (uint32_t x = 0; x < 4; x++)
 						weight_preds[index_from_xy(x, y)] = orig_weight_preds[index_from_xy(3, y)];
 			}
 			else if (cand_index == cCandUpperEdge)
 			{
-				// upper edge
 				for (uint32_t y = 0; y < 4; y++)
 					for (uint32_t x = 0; x < 4; x++)
 						weight_preds[index_from_xy(x, y)] = orig_weight_preds[index_from_xy(x, 3)];
@@ -142,7 +140,6 @@ namespace xbc7 {
 
 						if (cand_index == cCandLUBlend)
 						{
-							// Existing distance-weighted blend.
 							const int wl = 4 - static_cast<int>(x); // 4,3,2,1
 							const int wu = 4 - static_cast<int>(y); // 4,3,2,1
 							const int den = wl + wu;
@@ -151,7 +148,6 @@ namespace xbc7 {
 						}
 						else if (cand_index == cCandLUAvg)
 						{
-							// Simple average.
 							pred = (left_val + upper_val + 1) >> 1;
 						}
 						else // cCandLUBlendStrong
@@ -172,14 +168,12 @@ namespace xbc7 {
 			}
 			else if (cand_index == cCandReflectLeft)
 			{
-				// reflect left
 				for (uint32_t y = 0; y < 4; y++)
 					for (uint32_t x = 0; x < 4; x++)
 						weight_preds[index_from_xy(x, y)] = orig_weight_preds[index_from_xy(3 - x, y)];
 			}
 			else if (cand_index == cCandReflectUpper)
 			{
-				// reflect upper
 				for (uint32_t y = 0; y < 4; y++)
 					for (uint32_t x = 0; x < 4; x++)
 						weight_preds[index_from_xy(x, y)] = orig_weight_preds[index_from_xy(x, 3 - y)];
@@ -270,9 +264,7 @@ namespace xbc7 {
 			}
 			else if (cand_index == cCandDiagAvg)
 			{
-				// Average upper-left and upper-right diagonal blocks.
 				// pCand_log_blk is pLeft_diag_log_blk here, so orig_weight_preds contains upper-left.
-				// Pull upper-right directly from pRight_diag_log_blk.
 
 				for (uint32_t w = 0; w < 16; w++)
 				{
@@ -285,14 +277,8 @@ namespace xbc7 {
 			}
 			else if (cand_index == cCandDiagEdgeBlend)
 			{
-				// Blend upper-left block's right edge with upper-right block's left edge.
-				// pCand_log_blk is pLeft_diag_log_blk, so orig_weight_preds contains upper-left.
-				// Pull upper-right left edge directly from pRight_diag_log_blk.
-				//
-				// For each row y:
-				//   L = upper-left[3,y]
-				//   R = upper-right[0,y]
-				// Then interpolate across x.
+				// Blend the upper-left right edge with the upper-right left edge.
+				// orig_weight_preds contains the upper-left block.
 
 				int right_diag_left_edge[4];
 
@@ -310,8 +296,6 @@ namespace xbc7 {
 
 					for (uint32_t x = 0; x < 4; x++)
 					{
-						// x=0 mostly left_val, x=3 mostly right_val.
-						// Use 4-sample interpolation: 3/0, 2/1, 1/2, 0/3.
 						const int pred = ((3 - static_cast<int>(x)) * left_val +
 							static_cast<int>(x) * right_val + 1) / 3;
 
@@ -353,12 +337,10 @@ namespace xbc7 {
 
 					for (uint32_t x = 0; x < 4; x++)
 					{
-						// Same as #15: lateral predictor from upper-left/right diagonal edges.
 						const int diag_blend =
 							((3 - static_cast<int>(x)) * left_diag_right_val +
 								static_cast<int>(x) * right_diag_left_val + 1) / 3;
 
-						// Same as #6: direct upper edge replicated downward.
 						const int up_val = upper_edge[x];
 
 						// Trust upper edge more near y=0, trust diagonal lateral structure more lower in the block.
@@ -488,12 +470,7 @@ namespace xbc7 {
 
 		if ((amp_code) && (pWeight_predictions))
 		{
-			// Amplitude code: generalization of the old inversion flag.
-			// All transforms are about the prediction's own mean (per
-			// plane), so they negate/scale the ACs while leaving the DC
-			// for the DC coefficient -- the old 64-w flip also
-			// complemented the DC, forcing a DC correction symbol
-			// whenever the content mean wasn't complementary.
+			// Apply amplitude transforms around the prediction's per-plane mean.
 			int sum = 0;
 			for (uint32_t i = 0; i < 16; i++)
 				sum += pWeight_predictions[i];
@@ -508,7 +485,6 @@ namespace xbc7 {
 				{
 					// flip about mean (s = -1): pure AC negation
 					v = basisu::clamp<int>(2 * mean - w, 0, 64);
-					//v = 64 - w;
 				}
 				else if (amp_code == 2)
 				{
@@ -720,7 +696,6 @@ namespace xbc7 {
 			return false;
 
 #ifndef NDEBUG
-		// Debug builds: report the input buffer size and the stream type.
 		{
 			const char* pType = "regular (blob)";
 			if (comp[0] == 0xB8)
@@ -741,7 +716,6 @@ namespace xbc7 {
 		if (!m_rdr.init(comp.data(), comp.size()))
 			return false;
 
-		// ---- header ----
 		if (m_rdr.get_size(cBlobHeader) != sizeof(xbc7_header))
 			return false;
 
@@ -802,16 +776,8 @@ namespace xbc7 {
 			if (m_rdr.get_size(cBlobStripeSeekTable) != m_num_stripes * SEEK_NUM_STREAMS * 4)
 				return false;
 
-			// Entries are DELTAS from the previous stripe's start, stripe-major,
-			// stored byte-plane (SoA) transposed: byte b of entry e lives at
-			// pT[b * num_entries + e] (the encoder's inverse of this layout).
-			// Reconstruct absolute offsets with a running prefix sum, validating
-			// as we go (all BEFORE any block decode): stripe 0's delta must be 0,
-			// and each running offset must stay within [0, blob_end] (blob_end =
-			// byte size, or total bits for the three bit blobs). Monotonicity is
-			// automatic -- deltas are unsigned, so the running sum never
-			// decreases. The range test rejects a corrupted table immediately; a
-			// wild byte/bit offset can never reach the cursor seek in decode_stripe.
+			// Stripe-major deltas use transposed byte planes: byte b of entry e
+			// is pT[b * num_entries + e]. Validate offsets before decoding.
 			const uint8_t* pT = m_rdr.get_ptr(cBlobStripeSeekTable);
 			const uint32_t num_entries = m_num_stripes * SEEK_NUM_STREAMS;
 			for (uint32_t id = 1; id < (uint32_t)cBlobStripeSeekTable; id++)
@@ -1052,7 +1018,6 @@ namespace xbc7 {
 				}
 				else
 				{
-					// ---- config ----
 					if (cmd == (uint32_t)xbc7_command_id::cCmdNewConfig)
 					{
 						uint8_t config_byte;
@@ -1121,7 +1086,6 @@ namespace xbc7 {
 					const basist::bc7u::endpoint_format& fmt = basist::bc7u::g_endpoint_formats[log_blk.m_mode];
 					const uint32_t num_comps = log_blk.get_num_comps();
 
-					// ---- endpoints ----
 					if (ep_mode == (uint32_t)xbc7_command_endpoint_mode::cCmdEndpointRaw)
 					{
 						for (uint32_t subset = 0; subset < log_blk.m_num_partitions; subset++)
@@ -1325,7 +1289,6 @@ namespace xbc7 {
 							continue; // next plane
 						}
 
-						// ---- DC ----
 						uint8_t dc_byte;
 						if (!dc_coeffs.get(dc_byte))
 							return false;
@@ -1341,7 +1304,6 @@ namespace xbc7 {
 								dc = -dc;
 						}
 
-						// ---- ACs ----
 						xbc7::dct_syms syms;
 						syms.clear();
 						syms.m_dc = (int16_t)dc;
@@ -1396,12 +1358,7 @@ namespace xbc7 {
 					} // p
 				}
 								
-				// ---- single emit point: every block path (repeat-last,
-				// repeat-upper, solid, config) falls through to here, so the
-				// caller's block callback is invoked EXACTLY ONCE per block,
-				// after the logical block is stored in m_log_blks. The caller may
-				// pack a physical BC7 block, store it, compare it vs a reference,
-				// transcode it, etc. A false return aborts the decode. ----
+				// Call once per stored block; a false return aborts decoding.
 				if (m_block_cb && !m_block_cb(bx, by, log_blk, m_block_data))
 					return false;
 

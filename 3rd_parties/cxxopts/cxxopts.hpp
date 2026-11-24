@@ -113,7 +113,6 @@ THE SOFTWARE.
 #define CXXOPTS_DIAGNOSTIC_POP DO_PRAGMA(GCC diagnostic pop)
 #define CXXOPTS_IGNORE_WARNING(x) DO_PRAGMA(GCC diagnostic ignored x)
 #else
-// define other compilers here if needed
 #define CXXOPTS_DIAGNOSTIC_PUSH
 #define CXXOPTS_DIAGNOSTIC_POP
 #define CXXOPTS_IGNORE_WARNING(x)
@@ -155,11 +154,8 @@ toLocalString(std::string s)
   return icu::UnicodeString::fromUTF8(std::move(s));
 }
 
-// GNU GCC with -Weffc++ will issue a warning regarding the upcoming class, we want to silence it:
-// warning: base class 'class std::enable_shared_from_this<cxxopts::Value>' has accessible non-virtual destructor
 CXXOPTS_DIAGNOSTIC_PUSH
 CXXOPTS_IGNORE_WARNING("-Wnon-virtual-dtor")
-// This will be ignored under other compilers like LLVM clang.
 class UnicodeStringIterator
 {
   public:
@@ -289,7 +285,6 @@ end(const icu::UnicodeString& s)
 
 } // namespace std
 
-//ifdef CXXOPTS_USE_UNICODE
 #else
 
 namespace cxxopts {
@@ -347,7 +342,6 @@ empty(const std::string& s)
 
 } // namespace cxxopts
 
-//ifdef CXXOPTS_USE_UNICODE
 #endif
 
 namespace cxxopts {
@@ -576,11 +570,8 @@ void throw_or_mimic(const std::string& text)
                 "deriving classes");
 
 #ifndef CXXOPTS_NO_EXCEPTIONS
-  // If CXXOPTS_NO_EXCEPTIONS is not defined, just throw
   throw T{text};
 #else
-  // Otherwise manually instantiate the exception, print what() to stderr,
-  // and exit
   T exception{text};
   std::cerr << exception.what() << std::endl;
   std::exit(EXIT_FAILURE);
@@ -2033,7 +2024,6 @@ class Options
     add_option(group, short_name, long_names, desc, value, arg_help);
   }
 
-  //parse positional arguments into the given option
   void
   parse_positional(std::string option);
 
@@ -2098,7 +2088,6 @@ class Options
   std::vector<std::string> m_positional{};
   std::unordered_set<std::string> m_positional_set{};
 
-  //mapping from groups to help options
   std::vector<std::string> m_group{};
   std::map<std::string, HelpGroupDetails> m_help{};
 };
@@ -2296,7 +2285,6 @@ format_description
     ++size;
   }
 
-  //append whatever is left but ignore whitespace
   if (!onlyWhiteSpace)
   {
     stringAppend(result, startLine, previous);
@@ -2538,17 +2526,13 @@ OptionParser::parse(int argc, const char* const* argv)
 
     if (!matched)
     {
-      //not a flag
 
-      // but if it starts with a `-`, then it's an error
       if (argv[current][0] == '-' && argv[current][1] != '\0') {
         if (!m_allow_unrecognised) {
           throw_or_mimic<exceptions::invalid_option_syntax>(argv[current]);
         }
       }
 
-      //if true is returned here then it was consumed, otherwise it is
-      //ignored
       if (consume_positional(argv[current], next_positional))
       {
       }
@@ -2556,11 +2540,9 @@ OptionParser::parse(int argc, const char* const* argv)
       {
         unmatched.emplace_back(argv[current]);
       }
-      //if we return from here then it was parsed successfully, so continue
     }
     else
     {
-      //short or long option?
       if (argu_desc.grouping)
       {
         const std::string& s = argu_desc.arg_name;
@@ -2577,7 +2559,6 @@ OptionParser::parse(int argc, const char* const* argv)
               unmatched.push_back(std::string("-") + s[i]);
               continue;
             }
-            //error
             throw_or_mimic<exceptions::no_such_option>(name);
           }
 
@@ -2585,7 +2566,6 @@ OptionParser::parse(int argc, const char* const* argv)
 
           if (i + 1 == s.size())
           {
-            //it must be the last argument
             checked_parse_arg(argc, argv, current, value, name);
           }
           else if (value->value().has_implicit())
@@ -2600,7 +2580,6 @@ OptionParser::parse(int argc, const char* const* argv)
           }
           else
           {
-            //error
             throw_or_mimic<exceptions::option_requires_argument>(name);
           }
         }
@@ -2615,27 +2594,22 @@ OptionParser::parse(int argc, const char* const* argv)
         {
           if (m_allow_unrecognised)
           {
-            // keep unrecognised options in argument list, skip to next argument
             unmatched.emplace_back(argv[current]);
             ++current;
             continue;
           }
-          //error
           throw_or_mimic<exceptions::no_such_option>(name);
         }
 
         auto opt = iter->second;
 
-        //equals provided for long option?
         if (argu_desc.set_value)
         {
-          //parse the option given
 
           parse_option(opt, name, argu_desc.value);
         }
         else
         {
-          //parse the next argument
           checked_parse_arg(argc, argv, current, opt, name);
         }
       }
@@ -2672,7 +2646,6 @@ OptionParser::parse(int argc, const char* const* argv)
       ++current;
     }
 
-    //adjust argv for any that couldn't be swallowed
     while (current != argc) {
       unmatched.emplace_back(argv[current]);
       ++current;
@@ -2737,7 +2710,6 @@ Options::add_option
     add_one_option(long_name, option);
   }
 
-  //add the help details
 
   if (m_help.find(group) == m_help.end())
   {

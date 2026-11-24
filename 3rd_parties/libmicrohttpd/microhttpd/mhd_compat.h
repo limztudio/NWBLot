@@ -42,7 +42,6 @@
 #include <string.h>
 #endif /* HAVE_STRING_H */
 
-/* MHD_strerror_ is strerror */
 #define MHD_strerror_(errnum) strerror ((errnum))
 
 /* Platform-independent snprintf name */
@@ -67,7 +66,7 @@ int W32_snprintf (char *__restrict s, size_t n, const char *__restrict format,
  * @return pseudo random number at least 30-bit wide.
  */
 #define MHD_random_() random ()
-#else  /* HAVE_RANDOM */
+#else  /* ! HAVE_RANDOM */
 #ifdef HAVE_RAND
 /**
  * Generate pseudo random number at least 30-bit wide.

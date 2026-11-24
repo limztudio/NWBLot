@@ -68,14 +68,12 @@ enum RN_State
   RN_Inactive = 0,
 
   /**
-   * If the next character is CR, skip it.  Otherwise,
-   * just go inactive.
+   * Skip an optional LF after CR; otherwise check for a boundary or line ending.
    */
   RN_OptN = 1,
 
   /**
-   * Expect CRLF (and only CRLF).  As always, we also
-   * expect only LF or only CR.
+   * Expect CRLF, CR, or LF.
    */
   RN_Full = 2,
 
@@ -222,10 +220,7 @@ struct MHD_PostProcessor
   enum PP_State state;
 
   /**
-   * Side-state-machine: skip CRLF (or just LF).
-   * Set to 0 if we are not in skip mode.  Set to 2
-   * if a CRLF is expected, set to 1 if a CR should
-   * be skipped if it is the next character.
+   * Side state machine for line endings and boundary dashes.
    */
   enum RN_State skip_rn;
 

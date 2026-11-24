@@ -1114,8 +1114,6 @@
       }
       else
       {
-        /* if an edge was found, simply add the segment to the edge's */
-        /* list                                                       */
         seg->edge_next         = found->first;
         found->last->edge_next = seg;
         found->last            = seg;

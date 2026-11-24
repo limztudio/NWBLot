@@ -415,7 +415,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
 
     const auto validateBarrierList = [&](const Span<const GpuCompiledBarrier> barriers)noexcept{
         for(const GpuCompiledBarrier& barrier : barriers){
-            if(barrier.type >= GpuCompiledBarrierType::Count || !declarationAccess.validResource(barrier.resource))
+            if(barrier.type >= GpuCompiledBarrierType::kCount || !declarationAccess.validResource(barrier.resource))
                 return false;
             const auto& barrierResource = getCachedResource(barrier.resource);
             if(barrierResource.type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
@@ -484,7 +484,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         FOUNDATION_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID && taskView.id == task && (taskView.resourceUseCount == 0u || taskView.resourceUses != nullptr));
         for(usize useIndex = 0u; useIndex < taskView.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = taskView.resourceUses[useIndex];
-            if(use.access >= GpuTaskResourceAccess::Count || !validateResourceState(use.resource, use.requiredState))
+            if(use.access >= GpuTaskResourceAccess::kCount || !validateResourceState(use.resource, use.requiredState))
                 return false;
             const auto& cached = getCachedResource(use.resource);
             if(cached.type == GpuGraphResourceType::Texture && !validateTextureRange(cached.texture, use.range.textureSubresources))

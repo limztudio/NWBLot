@@ -30,7 +30,7 @@ b8 GpuDescriptorHeap::SlotAllocator::initialize(Alloc::PersistentArena& arena, c
         return false;
     for(u32 slot = 0u; slot < newCapacity; ++slot){
         slotStates[slot] = SlotState::Free;
-        allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::Count);
+        allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
     }
     capacity = newCapacity;
     return true;

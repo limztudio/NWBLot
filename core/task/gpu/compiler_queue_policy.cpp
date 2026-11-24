@@ -202,7 +202,7 @@ TopologySharingLut TopologySharingLut::Build(const GpuPhysicalQueueTopology& top
 }
 
 [[nodiscard]] b8 IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{
-    return hint.cost < GpuTaskCostHint::Count;
+    return hint.cost < GpuTaskCostHint::kCount;
 }
 
 

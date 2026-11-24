@@ -34,7 +34,6 @@ include("${CMAKE_CURRENT_BINARY_DIR}/Makefile.inc.cmake")
 
 list(APPEND HHEADERS "${CMAKE_CURRENT_BINARY_DIR}/curl_config.h")
 
-# The rest of the build
 
 set_property(DIRECTORY APPEND PROPERTY INCLUDE_DIRECTORIES
   "${PROJECT_BINARY_DIR}/lib"        # for "curl_config.h"
@@ -59,7 +58,6 @@ if(CURL_BUILD_TESTING)
   add_custom_target(curlu-unitprotos DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/unitprotos.h")
 endif()
 
-## Library definition
 
 if(NOT DEFINED IMPORT_LIB_SUFFIX)
   # Suffix implib name with "_imp" by default, to avoid conflicting with
@@ -94,7 +92,6 @@ if(NOT DEFINED SHARE_LIB_OBJECT)
   if(WIN32)
     set(SHARE_LIB_OBJECT ON)
   else()
-    # On other platforms, make it an option disabled by default
     set(SHARE_LIB_OBJECT OFF)
   endif()
 endif()
@@ -277,7 +274,6 @@ if(BUILD_SHARED_LIBS)
       VERSION "${_cmakeversion}" SOVERSION "${_cmakesoname}")
   endif()
 
-  ## Versioned symbols
 
   if(CURL_LIBCURL_VERSIONED_SYMBOLS)
     if(NOT DEFINED CURL_LIBCURL_VERSIONED_SYMBOLS_PREFIX)

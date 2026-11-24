@@ -409,13 +409,13 @@ public:
         const EntityID* const anchorData = m_anchorEntities.data();
         const usize count = m_count;
         if constexpr(sizeof...(Ts) == 1u){
-            runAnchorLoop1Range(anchorData, 0u, count, slices, func);
+            RunAnchorLoop1Range(anchorData, 0u, count, slices, func);
         }
         else if constexpr(sizeof...(Ts) == 2u){
             if(m_anchorPoolIndex == 0u)
-                runAnchorLoop2Range<0u>(anchorData, 0u, count, slices, func);
+                RunAnchorLoop2Range<0u>(anchorData, 0u, count, slices, func);
             else
-                runAnchorLoop2Range<1u>(anchorData, 0u, count, slices, func);
+                RunAnchorLoop2Range<1u>(anchorData, 0u, count, slices, func);
         }
         else if constexpr(sizeof...(Ts) == 3u){
             if(hasFastMaskPrefilter())
@@ -428,9 +428,9 @@ public:
             Array<usize, sizeof...(Ts)> probeOrder{};
             ECSDetail::SortProbeOrderAscending<sizeof...(Ts)>(probeOrder, m_anchorPoolIndex, m_poolSizes);
             if(hasFastMaskPrefilter())
-                runAnchorLoopOrderedRange<true>(anchorData, 0u, count, m_anchorPoolIndex, probeOrder, sparseViews, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoopOrderedRange<true>(anchorData, 0u, count, m_anchorPoolIndex, probeOrder, sparseViews, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             else
-                runAnchorLoopOrderedRange<false>(anchorData, 0u, count, m_anchorPoolIndex, probeOrder, sparseViews, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoopOrderedRange<false>(anchorData, 0u, count, m_anchorPoolIndex, probeOrder, sparseViews, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
         }
     }
 
@@ -462,14 +462,14 @@ private:
     }
 
     template<typename SliceTupleT, typename Func>
-    static FOUNDATION_INLINE void runAnchorLoop1Range(const EntityID* const anchorData, const usize first, const usize last, const SliceTupleT& slices, Func& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<const EntityID&>(), DeclVal<Ts&>()...))){
+    static FOUNDATION_INLINE void RunAnchorLoop1Range(const EntityID* const anchorData, const usize first, const usize last, const SliceTupleT& slices, Func& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<const EntityID&>(), DeclVal<Ts&>()...))){
         auto* const c0 = Get<0>(slices).components;
         for(usize i = first; i < last; ++i)
             func(anchorData[i], c0[i]);
     }
 
     template<usize AnchorIdx, typename SliceTupleT, typename Func>
-    static FOUNDATION_INLINE void runAnchorLoop2Range(const EntityID* const anchorData, const usize first, const usize last, const SliceTupleT& slices, Func& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
+    static FOUNDATION_INLINE void RunAnchorLoop2Range(const EntityID* const anchorData, const usize first, const usize last, const SliceTupleT& slices, Func& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
         constexpr usize OtherIdx = 1u - AnchorIdx;
         auto* const cAnchor = Get<AnchorIdx>(slices).components;
         const auto& sOther = Get<OtherIdx>(slices);
@@ -486,7 +486,7 @@ private:
     }
 
     template<usize AnchorIdx, usize Probe1, usize Probe2, b8 UseMask, typename SliceTupleT, typename Func>
-    static void runAnchorLoop3Range(
+    static void RunAnchorLoop3Range(
         const EntityID* const anchorData,
         const usize first,
         const usize last,
@@ -533,32 +533,32 @@ private:
         switch(m_anchorPoolIndex){
         case 0u:
             if(m_poolSizes[1u] <= m_poolSizes[2u])
-                runAnchorLoop3Range<0u, 1u, 2u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<0u, 1u, 2u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             else
-                runAnchorLoop3Range<0u, 2u, 1u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<0u, 2u, 1u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             break;
         case 1u:
             if(m_poolSizes[0u] <= m_poolSizes[2u])
-                runAnchorLoop3Range<1u, 0u, 2u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<1u, 0u, 2u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             else
-                runAnchorLoop3Range<1u, 2u, 0u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<1u, 2u, 0u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             break;
         default:
             if(m_poolSizes[0u] <= m_poolSizes[1u])
-                runAnchorLoop3Range<2u, 0u, 1u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<2u, 0u, 1u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             else
-                runAnchorLoop3Range<2u, 1u, 0u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
+                RunAnchorLoop3Range<2u, 1u, 0u, UseMask>(anchorData, first, last, slices, m_entityMasks, m_entityMaskCount, m_requiredMask, func);
             break;
         }
     }
 
     template<typename SliceTupleT, typename Func, usize... Is>
-    static FOUNDATION_INLINE void invokeWithDenseIndices(EntityID entityId, const SliceTupleT& slices, const Array<u32, sizeof...(Ts)>& d, Func& func, IndexSequence<Is...>)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
+    static FOUNDATION_INLINE void InvokeWithDenseIndices(EntityID entityId, const SliceTupleT& slices, const Array<u32, sizeof...(Ts)>& d, Func& func, IndexSequence<Is...>)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
         func(entityId, Get<Is>(slices).components[d[Is]]...);
     }
 
     template<b8 UseMask, typename SliceTupleT, typename Func>
-    static void runAnchorLoopOrderedRange(
+    static void RunAnchorLoopOrderedRange(
         const EntityID* const anchorData,
         const usize first,
         const usize last,
@@ -583,7 +583,7 @@ private:
                     d[slot] = sparseViews[slot].denseIndexUnchecked(entityIndex);
                 }
                 d[anchorPoolIndex] = static_cast<u32>(i);
-                invokeWithDenseIndices(entityId, slices, d, func, IndexSequenceFor<Ts...>{});
+                InvokeWithDenseIndices(entityId, slices, d, func, IndexSequenceFor<Ts...>{});
                 continue;
             }
             b8 matched = true;
@@ -599,7 +599,7 @@ private:
             if(!matched)
                 continue;
             d[anchorPoolIndex] = static_cast<u32>(i);
-            invokeWithDenseIndices(entityId, slices, d, func, IndexSequenceFor<Ts...>{});
+            InvokeWithDenseIndices(entityId, slices, d, func, IndexSequenceFor<Ts...>{});
         }
     }
 
@@ -617,17 +617,17 @@ private:
         const EntityID* const anchorData = m_anchorEntities.data();
         if constexpr(sizeof...(Ts) == 1u){
             return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<const EntityID&>(), DeclVal<Ts&>()...))){
-                runAnchorLoop1Range(anchorData, first, last, slices, func);
+                RunAnchorLoop1Range(anchorData, first, last, slices, func);
             }, options);
         }
         else if constexpr(sizeof...(Ts) == 2u){
             if(m_anchorPoolIndex == 0u){
                 return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                    runAnchorLoop2Range<0u>(anchorData, first, last, slices, func);
+                    RunAnchorLoop2Range<0u>(anchorData, first, last, slices, func);
                 }, options);
             }
             return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                runAnchorLoop2Range<1u>(anchorData, first, last, slices, func);
+                RunAnchorLoop2Range<1u>(anchorData, first, last, slices, func);
             }, options);
         }
         else if constexpr(sizeof...(Ts) == 3u){
@@ -637,11 +637,11 @@ private:
             auto dispatchPerm = [&]<usize AnchorIdx, usize Probe1, usize Probe2>() -> Expected<void, CpuTaskAdmissionError::Enum>{
                 if(hasFastMaskPrefilter()){
                     return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, entityMasks, entityMaskCount, requiredMask, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                        runAnchorLoop3Range<AnchorIdx, Probe1, Probe2, true>(anchorData, first, last, slices, entityMasks, entityMaskCount, requiredMask, func);
+                        RunAnchorLoop3Range<AnchorIdx, Probe1, Probe2, true>(anchorData, first, last, slices, entityMasks, entityMaskCount, requiredMask, func);
                     }, options);
                 }
                 return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                    runAnchorLoop3Range<AnchorIdx, Probe1, Probe2, false>(anchorData, first, last, slices, nullptr, 0u, 0u, func);
+                    RunAnchorLoop3Range<AnchorIdx, Probe1, Probe2, false>(anchorData, first, last, slices, nullptr, 0u, 0u, func);
                 }, options);
             };
             switch(m_anchorPoolIndex){
@@ -663,11 +663,11 @@ private:
             const u64 requiredMask = m_requiredMask;
             if(hasFastMaskPrefilter()){
                 return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, anchorPoolIndex, probeOrder, sparseViews, entityMasks, entityMaskCount, requiredMask, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                    runAnchorLoopOrderedRange<true>(anchorData, first, last, anchorPoolIndex, probeOrder, sparseViews, slices, entityMasks, entityMaskCount, requiredMask, func);
+                    RunAnchorLoopOrderedRange<true>(anchorData, first, last, anchorPoolIndex, probeOrder, sparseViews, slices, entityMasks, entityMaskCount, requiredMask, func);
                 }, options);
             }
             return tasks.parallelRange(0u, m_count, grainSize, [slices, anchorData, anchorPoolIndex, probeOrder, sparseViews, &func](const usize first, const usize last)noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-                runAnchorLoopOrderedRange<false>(anchorData, first, last, anchorPoolIndex, probeOrder, sparseViews, slices, nullptr, 0u, 0u, func);
+                RunAnchorLoopOrderedRange<false>(anchorData, first, last, anchorPoolIndex, probeOrder, sparseViews, slices, nullptr, 0u, 0u, func);
             }, options);
         }
     }

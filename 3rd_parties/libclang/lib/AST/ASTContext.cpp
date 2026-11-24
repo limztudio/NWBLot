@@ -1880,7 +1880,6 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool ForAlignof) const {
   // If we're using the align attribute only, just ignore everything
   // else about the declaration and its type.
   if (UseAlignAttrOnly) {
-    // do nothing
   } else if (const auto *VD = dyn_cast<ValueDecl>(D)) {
     QualType T = VD->getType();
     if (const auto *RT = T->getAs<ReferenceType>()) {
@@ -4965,12 +4964,8 @@ static bool isCanonicalResultType(QualType T) {
 QualType
 ASTContext::getFunctionNoProtoType(QualType ResultTy,
                                    const FunctionType::ExtInfo &Info) const {
-  // FIXME: This assertion cannot be enabled (yet) because the ObjC rewriter
-  // functionality creates a function without a prototype regardless of
-  // language mode (so it makes them even in C++). Once the rewriter has been
-  // fixed, this assertion can be enabled again.
-  //assert(!LangOpts.requiresStrictPrototypes() &&
-  //       "strict prototypes are disabled");
+  // FIXME: The ObjC rewriter creates functions without prototypes even in
+  // language modes that require strict prototypes.
 
   // Unique functions, to guarantee there is only one function of a particular
   // structure.
@@ -6632,7 +6627,6 @@ bool ASTContext::QIdProtocolsAdoptObjCObjectProtocols(QualType QT,
     // If both the right and left sides have qualifiers.
     bool Adopts = false;
     for (auto *Proto : OPT->quals()) {
-      // return 'true' if 'PI' is in the inheritance hierarchy of Proto
       if ((Adopts = ProtocolCompatibleWithProtocol(PI, Proto)))
         break;
     }

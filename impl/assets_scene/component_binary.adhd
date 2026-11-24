@@ -53,7 +53,7 @@ const StringView s_LightTypePoint = "point";
 const StringView s_LightTypeSpot = "spot";
 const StringView s_LightTypeHint = "must be 'directional', 'point', or 'spot'";
 
-const f32 s_SceneDegreesToRadians = s_PI / 180.0f;
+const f32 s_SceneDegreesToRadians = s_Pi / 180.0f;
 const f32 s_SceneMinQuaternionLengthSq = 0.000001f;
 const f32 s_TransformRotationUnitLengthSquaredTolerance = 0.001f;
 

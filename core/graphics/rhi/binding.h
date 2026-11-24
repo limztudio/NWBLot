@@ -21,21 +21,21 @@ namespace ResourceType{
     enum Enum : u8{
         None,
 
-        Texture_SRV,
-        Texture_UAV,
-        TypedBuffer_SRV,
-        TypedBuffer_UAV,
-        StructuredBuffer_SRV,
-        StructuredBuffer_UAV,
-        RawBuffer_SRV,
-        RawBuffer_UAV,
+        TextureSrv,
+        TextureUav,
+        TypedBufferSrv,
+        TypedBufferUav,
+        StructuredBufferSrv,
+        StructuredBufferUav,
+        RawBufferSrv,
+        RawBufferUav,
         ConstantBuffer,
         VolatileConstantBuffer,
         Sampler,
         RayTracingAccelStruct,
         PushConstants,
 
-        Count
+        kCount
     };
 };
 
@@ -50,27 +50,27 @@ struct BindingLayoutItem{
 
 
 public:
-#define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM, FACTORY_NAME) \
-    static constexpr BindingLayoutItem FACTORY_NAME(const u32 slot, const usize size)noexcept{ \
-        BindingLayoutItem ret{}; \
-        ret.slot = slot; \
-        ret.type = ResourceType::TYPE_ENUM; \
-        ret.size = static_cast<u16>(size); \
-        return ret; \
+#define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(kind) \
+    static constexpr BindingLayoutItem kind(const u32 slot, const usize size)noexcept{ \
+        BindingLayoutItem item{}; \
+        item.slot = slot; \
+        item.type = ResourceType::kind; \
+        item.size = static_cast<u16>(size); \
+        return item; \
     }
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV, TextureSrv)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_UAV, TextureUav)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_SRV, TypedBufferSrv)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_UAV, TypedBufferUav)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_SRV, StructuredBufferSrv)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_UAV, StructuredBufferUav)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_SRV, RawBufferSrv)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_UAV, RawBufferUav)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(ConstantBuffer, ConstantBuffer)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer, VolatileConstantBuffer)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler, Sampler)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct, RayTracingAccelStruct)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(PushConstants, PushConstants)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TextureSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TextureUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(ConstantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(PushConstants)
 #undef NWB_BINDING_LAYOUT_ITEM_INITIALIZER
 
 

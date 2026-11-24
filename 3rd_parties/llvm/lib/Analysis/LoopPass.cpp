@@ -153,7 +153,6 @@ bool LPPassManager::runOnFunction(Function &F) {
   if (LQ.empty()) // No loops, skip calling finalizers
     return false;
 
-  // Initialization
   for (Loop *L : LQ) {
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
       LoopPass *P = getContainedPass(Index);

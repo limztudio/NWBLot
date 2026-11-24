@@ -431,14 +431,9 @@ LIBC_INLINE float128 sqrtf128(float128 x) {
   v >>= 15; // position mantissa
   v += rnd; // round
 
-  // Set inexact flag only if square root is inexact
-  // TODO: We will have to raise FE_INEXACT most of the time, but this
-  // operation is very costly, especially in x86-64, since technically, it
-  // needs to synchronize both SSE and x87 flags.  Need to investigate
-  // further to see how we can make this performant.
+  // TODO: Raise FE_INEXACT for inexact results without the current SSE and
+  // x87 synchronization cost on x86-64.
   // https://github.com/llvm/llvm-project/issues/126753
-
-  // if(frac) fputil::raise_except_if_required(FE_INEXACT);
 
   v += static_cast<UInt128>(e2) << FPBits::FRACTION_LEN; // place exponent
   return cpp::bit_cast<float128>(v);

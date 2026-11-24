@@ -21,7 +21,7 @@ LIT_NWB_SOFT_SHADOW_TEST_ANGLE = "NWB_SOFT_SHADOW_TEST_ANGLE"
 LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS = "NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_TRANSPARENT_MULTI = "transparent-multi"
-LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
 LIT_N_0_016666667 = "0.016666667"
 LIT_ROUGH = "rough"
 LIT_N_0_03 = "0.03"
@@ -96,7 +96,7 @@ class RendererWorkloadRegistry:
     def workloads():
         scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT)
         result = {LIT_TRANSPARENT_MULTI: Workload(LIT_TRANSPARENT_MULTI, 1280, 900, tuple((scope, 1) for scope in scopes), OCCUPANCY, (("NWB_AVBOIT_SMOKE_TIMING", "1"), ("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", "0"),
-             (LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO, LIT_N_0_016666667)), RendererWorkloadLogPolicy.transparent_multi_log)}
+             (LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS, LIT_N_0_016666667)), RendererWorkloadLogPolicy.transparent_multi_log)}
         definitions = (("reflection-rough-spatial", LIT_ROUGH, LIT_HARDWARE, .4, False, True, reflection.SPATIAL), ("reflection-mirror-spatial", LIT_ROUGH, LIT_HARDWARE, 0.0, False, True, reflection.SPATIAL),
             ("reflection-rough-filtered", LIT_ROUGH, LIT_HARDWARE, .4, True, True, reflection.SPATIAL), ("reflection-screen-depth", "floor", "screen", 0.0, False, False, reflection.DEPTH),
             ("reflection-optical-clear", "optical_clear", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE), ("reflection-optical-csg-cap", "optical_csg_cap", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
@@ -115,5 +115,5 @@ class RendererWorkloadRegistry:
         shadow_scopes = (FRAME, *SHADOW_CONTROLS, *SHADOW_PHASES)
         for name, angle, radius in (("shadow-zero-extent", "0", "0"), ("shadow-finite-extent", LIT_N_0_03, LIT_N_0_15), ("shadow-zero-directional", "0", LIT_N_0_15), ("shadow-zero-punctual", LIT_N_0_03, "0")):
             result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in shadow_scopes), LIT_RENDER_SHADOW_VISIBILITY, (("NWB_SOFT_SHADOW_TEST_TIMING", "1"), (LIT_NWB_SOFT_SHADOW_TEST_ANGLE, angle), (LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS, radius),
-                    ("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE", "0.6"), (LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO, LIT_N_0_016666667)), RendererWorkloadLogPolicy.soft_shadow_log, inactive_scopes=SHADOW_INACTIVE, control_scopes=SHADOW_CONTROLS)
+                    ("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE", "0.6"), (LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS, LIT_N_0_016666667)), RendererWorkloadLogPolicy.soft_shadow_log, inactive_scopes=SHADOW_INACTIVE, control_scopes=SHADOW_CONTROLS)
         return result

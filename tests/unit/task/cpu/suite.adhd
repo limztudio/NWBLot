@@ -14,61 +14,61 @@ const u32 s_CleanupWaitIntervalMS = 20u;
 const u32 s_CleanupTaskTimeoutMS = 4000u;
 
 class ReentrantRetirementProbe{
-    private mut CpuTaskScheduler scheduler;
-    private in CpuTaskHandle handle;
-    private mut b8 incomplete;
-    private mut usize outstanding;
+    private mut CpuTaskScheduler m_scheduler;
+    private in CpuTaskHandle m_handle;
+    private mut b8 m_incomplete;
+    private mut usize m_outstanding;
     public ReentrantRetirementProbe(mut CpuTaskScheduler scheduler, in borrow CpuTaskHandle handle, mut b8 incomplete, mut usize outstanding){
-        this.scheduler = scheduler;
-        this.handle = handle;
-        this.incomplete = incomplete;
-        this.outstanding = outstanding;
+        this.m_scheduler = scheduler;
+        this.m_handle = handle;
+        this.m_incomplete = incomplete;
+        this.m_outstanding = outstanding;
     }
     public void retire(){
-        this.incomplete = !this.scheduler.isComplete(this.handle);
-        this.outstanding = this.scheduler.statistics().outstandingTasks;
+        this.m_incomplete = !this.m_scheduler.isComplete(this.m_handle);
+        this.m_outstanding = this.m_scheduler.statistics().outstandingTasks;
     }
 }
 class CallbackLoan{
     public mut b8 ownerAlive;
-    private mut Atomic<u32> retirements;
-    private mut Atomic<u32> lateRetirements;
+    private mut Atomic<u32> m_retirements;
+    private mut Atomic<u32> m_lateRetirements;
     public CallbackLoan(mut b8 alive, mut Atomic<u32> retired, mut Atomic<u32> late){
         this.ownerAlive = alive;
-        this.retirements = retired;
-        this.lateRetirements = late;
+        this.m_retirements = retired;
+        this.m_lateRetirements = late;
     }
     public void retire(){
-        this.retirements.fetch_add(1u, MemoryOrder::release);
-        if(!this.ownerAlive) this.lateRetirements.fetch_add(1u, MemoryOrder::release);
+        this.m_retirements.fetch_add(1u, MemoryOrder::release);
+        if(!this.ownerAlive) this.m_lateRetirements.fetch_add(1u, MemoryOrder::release);
     }
 }
 
 class ShutdownSubmittingCallbacks : ProjectShutdownListener{
-    private mut CpuTaskScope scope;
-    private mut b8 ownerAlive;
-    private mut Atomic<u32> retirements;
-    private mut Atomic<u32> lateRetirements;
-    private mut u32 callbacks;
+    private mut CpuTaskScope m_scope;
+    private mut b8 m_ownerAlive;
+    private mut Atomic<u32> m_retirements;
+    private mut Atomic<u32> m_lateRetirements;
+    private mut u32 m_callbacks;
     public ShutdownSubmittingCallbacks(mut CpuTaskScope tasks, mut b8 alive, mut Atomic<u32> retired, mut Atomic<u32> late, mut u32 callbacks){
-        this.scope = tasks;
-        this.ownerAlive = alive;
-        this.retirements = retired;
-        this.lateRetirements = late;
-        this.callbacks = callbacks;
+        this.m_scope = tasks;
+        this.m_ownerAlive = alive;
+        this.m_retirements = retired;
+        this.m_lateRetirements = late;
+        this.m_callbacks = callbacks;
     }
-    public ~ShutdownSubmittingCallbacks(){ this.ownerAlive = false; }
+    public ~ShutdownSubmittingCallbacks(){ this.m_ownerAlive = false; }
     [cpp_unwind]
     public void onShutdown()override{
-        const auto first = this.scope.submit(lambda[mut this]() -> void{
-            ++this.callbacks;
+        const auto first = this.m_scope.submit(lambda[mut this]() -> void{
+            ++this.m_callbacks;
             ThrowTestException<TerminalTaskError>(TerminalTaskError(s_LoaderShutdownFailure));
         }, MainThreadOptions());
         EXPECT_TRUE(first.has_value());
         if(!first.has_value()) return;
-        const CallbackLoan loan(this.ownerAlive, this.retirements, this.lateRetirements);
-        const auto second = SubmitAfter(this.scope, RetireAfterTask(loan, lambda[mut this](in CallbackLoan capture, in b8 active) -> void{
-            if(active && capture.ownerAlive) ++this.callbacks;
+        const CallbackLoan loan(this.m_ownerAlive, this.m_retirements, this.m_lateRetirements);
+        const auto second = SubmitAfter(this.m_scope, RetireAfterTask(loan, lambda[mut this](in CallbackLoan capture, in b8 active) -> void{
+            if(active && capture.ownerAlive) ++this.m_callbacks;
         }), MainThreadOptions(), first.value());
         EXPECT_TRUE(second.has_value());
     }

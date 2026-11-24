@@ -130,8 +130,6 @@ private: // MCContext manages these
       : FileNum(fileNum), Line(line), Column(column), Flags(flags), Isa(isa),
         Discriminator(discriminator) {}
 
-  // Allow the default copy constructor and assignment operator to be used
-  // for an MCDwarfLoc object.
 
 public:
   /// Get the FileNum of this MCDwarfLoc.
@@ -191,8 +189,6 @@ class MCDwarfLineEntry : public MCDwarfLoc {
   MCSymbol *Label;
 
 private:
-  // Allow the default copy constructor and assignment operator to be used
-  // for an MCDwarfLineEntry object.
 
 public:
   // Constructor to create an MCDwarfLineEntry given a symbol and the dwarf loc.

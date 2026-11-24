@@ -73,7 +73,6 @@ IWbemServices* connect(IWbemLocator *pLocator, const std::string& path)
 		}
 	}
 
-	//Set authentication proxy
 	hr = CoSetProxyBlanket(pServices,
 		RPC_C_AUTHN_DEFAULT,
 		RPC_C_AUTHZ_NONE,
@@ -371,7 +370,6 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 	IWbemServices *pServices;
 	IEnumWbemClassObject *pClassObject;
 
-	//Create the WBEM locator
 	try {
 		pLocator = createWbemLocator();
 	} catch (const WmiException &) {
@@ -379,7 +377,6 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 		throw;
 	}
 
-	//Open connection to computer
 	try {
 		pServices = connect(pLocator, p);
 	} catch (const WmiException &) {
@@ -388,7 +385,6 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 		throw;
 	}
 
-	//Execute the query
 	try {
 		pClassObject = execute(pServices, q);
 	} catch (const WmiException &) {

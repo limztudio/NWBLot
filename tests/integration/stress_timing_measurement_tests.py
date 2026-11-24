@@ -20,7 +20,7 @@ LIT_RESULT_JSON = "result.json"
 LIT_OBSERVED_FPS = "observed_fps"
 LIT_ERROR = "error"
 LIT_N_96 = "96"
-LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI = "fps=16 presentations=480 seconds=30 first=80 last=560"
+LIT_EXPECTED_STRESS_PRESENTATION_RESULT = "fps=16 presentations=480 seconds=30 first=80 last=560"
 LIT_RENDERER_EXE = "renderer.exe"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -48,7 +48,7 @@ LIT_MEASUREMENT = "measurement"
 LIT_QUERIES_PER_HARDWARE_RAY = "physical_queries_per_hardware_ray"
 LIT_GENERATION = "generation"
 LIT_NWB_STRESS_TEST_SPIN_ANGLE = "NWB_STRESS_TEST_SPIN_ANGLE"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_NWB_STRESS_CHARACTERS_PER_CLASS = "NWB_STRESS_CHARACTERS_PER_CLASS"
 LIT_N_10 = "10"
 LIT_PACING = "pacing"
@@ -82,7 +82,7 @@ LIT_MAIN = "__main__"
 class StressMeasurementTests(unittest.TestCase):
     def test_current_pacing_summary_requires_exactly_one_ordered_record(self):
         paced = valid_log()
-        record = next(line for line in paced.splitlines() if line.startswith(presentation.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA))
+        record = next(line for line in paced.splitlines() if line.startswith(presentation.LIT_STRESS_PRESENTATION_PACING_LOG_PREFIX))
         self.assertEqual(presentation.PresentationEvidence().parse_runtime_log(paced, 0)[LIT_PACING]["samples"], 480)
         missing = paced.replace(record, "")
         for invalid in (missing, paced + record, missing + record, missing.replace(presentation.START, record + "\n" + presentation.START), paced.replace("p50ms=62.5 p95ms=70.0", "p50ms=80.0 p95ms=70.0")):
@@ -98,7 +98,7 @@ class StressMeasurementTests(unittest.TestCase):
             presentation.PresentationEvidence().parse_measurement(valid_log().replace(LIT_COMPLETE_FPS_16, "complete fps=10.7"))
 
     def test_counts_positive_exact_bounded_and_rates_finite(self):
-        for old, new in (("presentations=480", "presentations=479"), (LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI, "fps=0 presentations=0 seconds=30 first=80 last=80"), (LIT_COMPLETE_FPS_16, "complete fps=nan"), ("seconds=30", "seconds=inf"),
+        for old, new in (("presentations=480", "presentations=479"), (LIT_EXPECTED_STRESS_PRESENTATION_RESULT, "fps=0 presentations=0 seconds=30 first=80 last=80"), (LIT_COMPLETE_FPS_16, "complete fps=nan"), ("seconds=30", "seconds=inf"),
             ("last=560", "last=18446744073709551616")):
             with self.subTest(new=new), self.assertRaises(smoke.SmokeFailure):
                 presentation.PresentationEvidence().parse_measurement(valid_log().replace(old, new))
@@ -108,7 +108,7 @@ class StressMeasurementTests(unittest.TestCase):
             presentation.PresentationEvidence().parse_measurement(valid_log().replace("fps=16 presentations=480 seconds=30", "fps=16.551724137931034 presentations=480 seconds=29"))
 
     def test_duplicate_missing_or_out_of_order_markers_rejected(self):
-        for text in (valid_log() + presentation.START, valid_log().replace(presentation.START, ""), valid_log() + presentation.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI,
+        for text in (valid_log() + presentation.START, valid_log().replace(presentation.START, ""), valid_log() + presentation.DONE + LIT_EXPECTED_STRESS_PRESENTATION_RESULT,
             valid_log().replace(presentation.SHUTDOWN, ""), presentation.SHUTDOWN + "\n" + valid_log().replace(presentation.SHUTDOWN, "")):
             with self.subTest(text=text[-100:]), self.assertRaises(smoke.SmokeFailure):
                 presentation.PresentationEvidence().parse_measurement(text)
@@ -132,9 +132,9 @@ class StressMeasurementTests(unittest.TestCase):
     def test_environment_replaces_inherited_capture_controls(self):
         runtime = Path(self.enterContext(TemporaryDirectory()))
         args = stress_arguments(runtime)
-        env = StressLaunchEnvironment.launch_environment({LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_96, LIT_NWB_STRESS_TEST_SPIN_ANGLE: "2", LIT_NWB_OTHER: LIT_BAD,
+        env = StressLaunchEnvironment.launch_environment({LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: LIT_N_96, LIT_NWB_STRESS_TEST_SPIN_ANGLE: "2", LIT_NWB_OTHER: LIT_BAD,
             LIT_NWB_STRESS_REFLECTION_DIAGNOSTICS: "1", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5", LIT_PATH: LIT_KEPT}, args, Path("trial"))
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, env)
         self.assertNotIn(LIT_NWB_OTHER, env)
         self.assertEqual(env[LIT_NWB_STRESS_TEST_SPIN_ANGLE], "0.6")
         self.assertEqual(env[LIT_NWB_STRESS_CHARACTERS_PER_CLASS], LIT_N_10)

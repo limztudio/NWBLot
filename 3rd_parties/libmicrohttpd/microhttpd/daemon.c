@@ -2651,7 +2651,7 @@ psk_gnutls_adapter (gnutls_session_t session,
   free (app_psk);
   return 0;
 #else
-  (void) username; (void) key; /* Mute compiler warning */
+  (void) username; (void) key;
 #ifdef HAVE_MESSAGES
   MHD_DLOG (daemon,
             _ ("PSK not supported by this server.\n"));
@@ -3366,7 +3366,7 @@ new_connections_list_process_ (struct MHD_Daemon *daemon)
   daemon->new_connections_tail = NULL;
   daemon->have_new = false;
   MHD_mutex_unlock_chk_ (&daemon->new_connections_mutex);
-  (void) local_head; /* Mute compiler warning */
+  (void) local_head;
 
   /* Process new connections in FIFO order. */
   do
@@ -6314,7 +6314,7 @@ unescape_wrapper (void *cls,
 {
   bool broken;
   size_t res;
-  (void) cls; /* Mute compiler warning. */
+  (void) cls;
 
   /* TODO: add individual parameter */
   if (0 <= connection->daemon->client_discipline)
@@ -7636,7 +7636,7 @@ setup_epoll_fd (struct MHD_Daemon *daemon)
   int fd;
 
 #ifndef HAVE_MESSAGES
-  (void) daemon; /* Mute compiler warning. */
+  (void) daemon;
 #endif /* ! HAVE_MESSAGES */
 
 #ifdef USE_EPOLL_CREATE1

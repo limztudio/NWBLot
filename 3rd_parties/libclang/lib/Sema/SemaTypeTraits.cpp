@@ -239,7 +239,6 @@ Sema::CheckCXX2CRelocatable(const CXXRecordDecl *D) {
     if (D->isDependentType())
       return false;
 
-    // if it is eligible for trivial relocation
     if (!IsEligibleForTrivialRelocation(*this, D))
       return false;
 
@@ -247,7 +246,6 @@ Sema::CheckCXX2CRelocatable(const CXXRecordDecl *D) {
     if (IsUnion())
       return true;
 
-    // is default-movable.
     return IsDefaultMovable();
   }();
 

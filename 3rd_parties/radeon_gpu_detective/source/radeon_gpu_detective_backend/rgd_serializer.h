@@ -22,7 +22,6 @@ class RgdSerializer
 {
 public:
     // Serializes the given SystemInfo structure into a string.
-    // Returns true if the file exists and false otherwise.
     static bool ToString(const Config& user_config, const system_info_utils::SystemInfo& system_info, const nlohmann::json& driver_experiments_json, std::string& system_info_txt);
 
     // Serialize the input parameters information into a string.
@@ -37,7 +36,6 @@ public:
     // Generates a string representing the RgdEvent's header for Kmd event, with each line being pushed with the offset tabs.
     static std::string RgdEventHeaderToStringKmd(const RgdEvent& rgd_event, const std::string& offset_tabs);
 
-    // Serializes the given RGD event into a string with offset being
     static std::string EventTimestampToString(const TimestampEvent& timestamp_event, const std::string& offset_tabs);
     static std::string EventExecMarkerBeginToString(const CrashAnalysisExecutionMarkerBegin& exec_marker_event, const std::string& offset_tabs);
     static std::string EventExecMarkerInfoToString(const CrashAnalysisExecutionMarkerInfo& exec_marker_event, const std::string& offset_tabs);

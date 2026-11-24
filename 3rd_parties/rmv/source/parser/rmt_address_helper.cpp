@@ -35,7 +35,6 @@ uint64_t RmtGetAllocationSizeInBytes(uint64_t size_in_pages, RmtPageSize page_si
 
 bool RmtAllocationsOverlap(RmtGpuAddress base_address1, uint64_t size_in_bytes1, RmtGpuAddress base_address2, uint64_t size_in_bytes2)
 {
-    // If there's a size of 0 bytes, there is no overlap.
     if (size_in_bytes1 == 0 || size_in_bytes2 == 0)
     {
         return false;

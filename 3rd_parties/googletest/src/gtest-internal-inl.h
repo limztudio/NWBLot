@@ -339,8 +339,6 @@ static void Delete(T* x) {
 // TestPropertyKeyIs is copyable.
 class TestPropertyKeyIs {
  public:
-  // Constructor.
-  //
   // TestPropertyKeyIs has NO default constructor.
   explicit TestPropertyKeyIs(const std::string& key) : key_(key) {}
 

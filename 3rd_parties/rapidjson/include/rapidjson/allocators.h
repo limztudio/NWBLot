@@ -221,8 +221,8 @@ public:
             return NULL;
     }
 
-    //! Frees a memory block (concept Allocator)
-    static void Free(void *ptr) { (void)ptr; } // Do nothing
+    //! Individual allocations cannot be freed from the pool.
+    static void Free(void *ptr) { (void)ptr; }
 
 private:
     //! Copy constructor is not permitted.
@@ -268,4 +268,4 @@ private:
 
 RAPIDJSON_NAMESPACE_END
 
-#endif // RAPIDJSON_ENCODINGS_H_
+#endif // RAPIDJSON_ALLOCATORS_H_

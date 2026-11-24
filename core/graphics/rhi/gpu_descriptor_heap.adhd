@@ -15,7 +15,7 @@ extern enum GpuDescriptorClass : u8{
     SampledImage3D,
     SampledImage2DArrayUint,
     SampledImageCube,
-    Count
+    kCount
 };
 
 

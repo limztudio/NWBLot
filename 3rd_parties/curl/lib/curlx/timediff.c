@@ -23,14 +23,6 @@
  ***************************************************************************/
 #include "curlx/timediff.h"
 
-/*
- * Converts number of milliseconds into a timeval structure.
- *
- * Return values:
- *    NULL IF tv is NULL or ms < 0 (eg. no timeout -> blocking select)
- *    tv with 0 in both fields IF ms == 0 (eg. 0ms timeout -> polling select)
- *    tv with converted fields IF ms > 0 (eg. >0ms timeout -> waiting select)
- */
 struct timeval *curlx_mstotv(struct timeval *tv, timediff_t ms)
 {
   if(!tv)
@@ -76,9 +68,6 @@ struct timeval *curlx_mstotv(struct timeval *tv, timediff_t ms)
   return tv;
 }
 
-/*
- * Converts a timeval structure into number of milliseconds.
- */
 timediff_t curlx_tvtoms(struct timeval *tv)
 {
   return (tv->tv_sec * 1000) + (timediff_t)(tv->tv_usec / 1000);

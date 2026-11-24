@@ -38,7 +38,6 @@ struct RootSignatureToken {
   // Retain spelling of an numeric constant to be parsed later
   StringRef NumSpelling;
 
-  // Constructors
   RootSignatureToken(uint32_t LocOffset) : LocOffset(LocOffset) {}
   RootSignatureToken(Kind TokKind, uint32_t LocOffset)
       : TokKind(TokKind), LocOffset(LocOffset) {}

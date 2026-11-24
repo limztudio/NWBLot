@@ -26,7 +26,7 @@ static constexpr int s_UnknownFormatBlockY = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<FormatInfo, Format::Count> s_FormatInfo = {{
+static constexpr Array<FormatInfo, Format::kCount> s_FormatInfo = {{
     { Format::UNKNOWN              , "UNKNOWN", __hidden_graphics_format::s_UnknownFormatBlockX, __hidden_graphics_format::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
@@ -153,15 +153,15 @@ static constexpr Array<FormatInfo, Format::Count> s_FormatInfo = {{
 
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
-    FOUNDATION_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::Count), FOUNDATION_TEXT("Format::Enum out of range"));
-    if(static_cast<usize>(format) >= static_cast<usize>(Format::Count))
+    FOUNDATION_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), FOUNDATION_TEXT("Format::Enum out of range"));
+    if(static_cast<usize>(format) >= static_cast<usize>(Format::kCount))
         return s_FormatInfo[static_cast<u32>(Format::UNKNOWN)];
 
     return s_FormatInfo[static_cast<u32>(format)];
 }
 
 Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, const TextureUploadAspect::Enum requestedAspect)noexcept{
-    if(requestedAspect >= TextureUploadAspect::Count)
+    if(requestedAspect >= TextureUploadAspect::kCount)
         return MakeUnexpected(Failure{});
 
     if(formatInfo.hasDepth && formatInfo.hasStencil){
@@ -218,7 +218,7 @@ Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, con
         || mipLevel >= textureDesc.mipLevels
         || mipLevel >= sizeof(u32) * s_BitsPerByte
         || arraySlice >= textureDesc.arraySize
-        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count)
+        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)
     )
         return MakeUnexpected(Failure{});
 

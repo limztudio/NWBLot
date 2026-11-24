@@ -20,9 +20,9 @@ from renderer_ab_benchmark_test_support import scopes, trial_matrix
 
 from renderer_ab_workload_fixture import (
     LIT_HYBRID, LIT_IN_FLIGHT_RANGES_2, LIT_IN_FLIGHT_RANGES_32, LIT_MAIN, LIT_NAN,
-    LIT_NWB_GPU_TIMING_FILE, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_NWB_SOFT_SHADOW_TEST_ANGLE,
+    LIT_NWB_GPU_TIMING_FILE, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_NWB_SOFT_SHADOW_TEST_ANGLE,
     LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS, LIT_NWB_SOFT_SHADOW_TEST_TIMING, LIT_N_1280X900, LIT_N_960X720, LIT_OLD_BMP,
-    LIT_PRESERVED, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE, LIT_SHADOW_FINITE_EXTENT,
+    LIT_PRESERVED, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, LIT_SOFTWARE_SHADOW_DISPATCH_LOG, LIT_HEMI_AMBIENT_SHADOW_RESPONSE_LOG, LIT_SHADOW_FINITE_EXTENT,
     LIT_SHADOW_ROUTE, LIT_SHADOW_ZERO_EXTENT, LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN, LIT_SOFTWARE, LIT_TIMING_TXT,
     LIT_VK_LAYER_KHRONOS_VALIDATION, LIT_YES, soft_shadow_log_text,
 )
@@ -32,7 +32,7 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
     def test_shadow_environment_clears_inherited_capture_and_extent_policy(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_SHADOW_ZERO_EXTENT]
         env, overrides = benchmark.configure_environment({LIT_NWB_SOFT_SHADOW_TEST_ANGLE: "0.2", LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS: "1", LIT_NWB_SOFT_SHADOW_TEST_TIMING: "0",
-            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "360", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_PRESERVED: LIT_YES}, workload, Path(LIT_TIMING_TXT))
+            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "360", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_PRESERVED: LIT_YES}, workload, Path(LIT_TIMING_TXT))
         self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
 
     def test_shadow_logs_require_actual_policy_route_extent_and_lifecycle(self):
@@ -48,9 +48,9 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
 
     def test_shadow_hardware_dispatch_evidence_is_required_and_retired_routes_are_rejected(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_SHADOW_ZERO_EXTENT]
-        marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
+        marker = LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG
         text = soft_shadow_log_text(workload)
-        for altered in (text.replace(marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
+        for altered in (text.replace(marker, ""), text + "\n" + LIT_SOFTWARE_SHADOW_DISPATCH_LOG):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 RendererWorkloadLogPolicy.soft_shadow_log(altered, workload, True)
         retired = soft_shadow_log_text(workload, LIT_HYBRID)
@@ -68,7 +68,7 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
     def test_shadow_logs_require_exact_material_indirect_response(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_SHADOW_ZERO_EXTENT]
         text = soft_shadow_log_text(workload)
-        marker = LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE
+        marker = LIT_HEMI_AMBIENT_SHADOW_RESPONSE_LOG
         self.assertEqual(RendererWorkloadLogPolicy.soft_shadow_log(text, workload, True)["indirect_response"], "hemi-ambient")
         for altered in (text.replace(marker, ""), text.replace(marker, "ShadowTimingProbe: indirect response surfel"), text + "\n" + marker, text + "\nShadowTimingProbe: indirect response surfel"):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):

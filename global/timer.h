@@ -147,7 +147,7 @@ namespace TimerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Timer g_VeryBegining = TimerNow();
+inline Timer g_TimerOrigin = TimerNow();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,8 +179,8 @@ inline Timer g_VeryBegining = TimerNow();
 
 
 template<typename T>
-inline T DurationInSeconds(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
+inline T DurationInSeconds(const Timer& current, const Timer& start = TimerDetail::g_TimerOrigin)noexcept(IsArithmetic_V<T>){
+    return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - start).count();
 }
 
 template<typename T>
@@ -192,20 +192,20 @@ inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept(IsArithmetic_V<T>){
 }
 
 template<typename T>
-inline T DurationInMS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - late).count();
+inline T DurationInMS(const Timer& current, const Timer& start = TimerDetail::g_TimerOrigin)noexcept(IsArithmetic_V<T>){
+    return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - start).count();
 }
 
 template<typename T>
-inline T DurationInNS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - late).count();
+inline T DurationInNS(const Timer& current, const Timer& start = TimerDetail::g_TimerOrigin)noexcept(IsArithmetic_V<T>){
+    return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - start).count();
 }
 
-inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept{
-    if(current < late)
+inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& start = TimerDetail::g_TimerOrigin)noexcept{
+    if(current < start)
         return TimerDelta(0);
 
-    return TimerDelta(DurationInMS<i64>(current, late));
+    return TimerDelta(DurationInMS<i64>(current, start));
 }
 
 

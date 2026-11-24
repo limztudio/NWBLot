@@ -70,7 +70,7 @@ const unsigned char Curl_tolowermap[256] = {
 };
 
 /* Copy an upper case version of the string from src to dest. The
- * strings may overlap. No more than n characters of the string are copied
+ * strings may overlap if dest does not start after src. No more than n characters are copied
  * (including any NUL) and the destination string will NOT be
  * null-terminated if that limit is reached.
  */
@@ -85,7 +85,7 @@ void Curl_strntoupper(char *dest, const char *src, size_t n)
 }
 
 /* Copy a lower case version of the string from src to dest. The
- * strings may overlap. No more than n characters of the string are copied
+ * strings may overlap if dest does not start after src. No more than n characters are copied
  * (including any NUL) and the destination string will NOT be
  * null-terminated if that limit is reached.
  */

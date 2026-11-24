@@ -120,13 +120,6 @@ static inline int futex_wakeup_one( void *futex ) {
     return r;
 }
 
-// Additional possible methods that are not required right now
-// static inline int futex_wakeup_all( void *futex ) {
-//     int r = ::syscall( SYS_futex,futex,__TBB_FUTEX_WAKE,INT_MAX,nullptr,nullptr,0 );
-//     __TBB_ASSERT( r>=0, "futex_wakeup_all: error in waking up threads" );
-//     return r;
-// }
-
 #endif // __TBB_USE_FUTEX
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

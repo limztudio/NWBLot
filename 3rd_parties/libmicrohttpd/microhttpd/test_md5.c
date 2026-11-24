@@ -18,7 +18,7 @@
 */
 
 /**
- * @file microhttpd/test_md5.h
+ * @file microhttpd/test_md5.c
  * @brief  Unit tests for md5 functions
  * @author Karlson2k (Evgeny Grin)
  */

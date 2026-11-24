@@ -410,7 +410,7 @@ static b8 LowerBuiltinWireOperation(
     GraphicsState reusableGraphicsState;
     u64 recordIndex = 0u;
     const u8* recordPtr = nullptr;
-    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
+    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::kCount;
     GpuCommandIrDetail::DecodedRecordContext decodedContext;
     for(;;){
         b8 matchesPacket = false;

@@ -39,15 +39,12 @@
 #include "cfilters.h"
 #include "connect.h"
 
-/* first byte is command.
-   second byte is for flags. */
+/* The first byte contains the packet type and flags. */
 #define MQTT_MSG_CONNECT    0x10
-/* #define MQTT_MSG_CONNACK    0x20 */
 #define MQTT_MSG_PUBLISH    0x30
 #define MQTT_MSG_SUBSCRIBE  0x82
 #define MQTT_MSG_SUBACK     0x90
 #define MQTT_MSG_DISCONNECT 0xe0
-/* #define MQTT_MSG_PINGREQ    0xC0 */
 #define MQTT_MSG_PINGRESP   0xD0
 
 #define MQTT_CONNACK_LEN  2
@@ -275,7 +272,7 @@ static int init_connpack(char *packet, char *remain, int remain_pos)
   packet[remain_pos + 7] = 0x04;
   /* CONNECT flag: CleanSession */
   packet[remain_pos + 8] = 0x02;
-  /* keep-alive 0 = disabled */
+  /* Keep-alive interval: 60 seconds. */
   packet[remain_pos + 9] = 0x00;
   packet[remain_pos + 10] = 0x3c;
   /* end of variable header */
@@ -297,7 +294,6 @@ static CURLcode mqtt_connect(struct Curl_easy *data)
   const size_t clen = CURL_CSTRLEN("curl");
   char *packet = NULL;
 
-  /* extracting username from request */
   struct Curl_creds *creds = data->state.creds;
   const size_t ulen = creds ? strlen(creds->user) : 0;
   const size_t plen = creds ? strlen(creds->passwd) : 0;
@@ -313,19 +309,16 @@ static CURLcode mqtt_connect(struct Curl_easy *data)
   /* 10 length of variable header and 1 the first byte of the fixed header */
   packetlen = payloadlen + 10 + remain_pos + 1;
 
-  /* allocating packet */
   if(packetlen > 0xFFFFFFF)
     return CURLE_WEIRD_SERVER_REPLY;
   packet = curlx_calloc(1, packetlen);
   if(!packet)
     return CURLE_OUT_OF_MEMORY;
 
-  /* set initial values for the CONNECT packet */
   pos = init_connpack(packet, remain, remain_pos);
 
   result = Curl_rand_alnum(data, (unsigned char *)&client_id[clen],
                            MQTT_CLIENTID_LEN - clen + 1);
-  /* add client id */
   rc = add_client_id(client_id, strlen(client_id), packet, pos + 1);
   if(rc) {
     failf(data, "Client ID length mismatched: [%zu]", strlen(client_id));
@@ -338,7 +331,6 @@ static CURLcode mqtt_connect(struct Curl_easy *data)
   start_user = pos + 3 + MQTT_CLIENTID_LEN;
   /* position where the password payload starts */
   start_pwd = start_user + ulen;
-  /* if username was provided, add it to the packet */
   if(ulen) {
     start_pwd += 2;
 
@@ -351,7 +343,6 @@ static CURLcode mqtt_connect(struct Curl_easy *data)
     }
   }
 
-  /* if passwd was provided, add it to the packet */
   if(plen) {
     rc = add_passwd(creds->passwd, plen, packet, start_pwd, remain_pos);
     if(rc) {
@@ -437,7 +428,6 @@ static CURLcode mqtt_verify_connack(struct Curl_easy *data)
   if(result)
     return result;
 
-  /* verify CONNACK */
   DEBUGASSERT(curlx_dyn_len(&mq->recvbuf) >= MQTT_CONNACK_LEN);
   ptr = curlx_dyn_ptr(&mq->recvbuf);
   Curl_debug(data, CURLINFO_HEADER_IN, ptr, MQTT_CONNACK_LEN);
@@ -543,7 +533,6 @@ static CURLcode mqtt_verify_suback(struct Curl_easy *data)
   if(result)
     goto fail;
 
-  /* verify SUBACK */
   DEBUGASSERT(curlx_dyn_len(&mq->recvbuf) >= MQTT_SUBACK_LEN);
   ptr = curlx_dyn_ptr(&mq->recvbuf);
   Curl_debug(data, CURLINFO_HEADER_IN, ptr, MQTT_SUBACK_LEN);
@@ -771,7 +760,6 @@ MQTT_SUBACK_COMING:
     /* we received something */
     mq->lastTime = *Curl_pgrs_now(data);
 
-    /* if QoS is set, message contains packet id */
     result = Curl_client_write(data, CLIENTWRITE_BODY, buffer, nread);
     if(result)
       goto end;

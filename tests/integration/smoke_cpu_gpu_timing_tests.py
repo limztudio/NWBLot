@@ -15,7 +15,7 @@ LIT_STRESS = "stress"
 
 LIT_WINDOW_80_560_100_580_30 = "window 80 560 100 580 30"
 LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 1 renderer.frame"
-LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 1 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
+LIT_LAST_GPU_TIMING_SAMPLE_ROW = "sample 1 0 1 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
 LIT_N = "\n"
 LIT_RENDERER_FRAME = "renderer.frame"
 LIT_DECODED_FROM_HASH = "decoded_from_hash"
@@ -50,7 +50,7 @@ def publication_text(extra_rows=()):
     rows = [f"sample 0 {index} 1 101 81 100 100 100 1 0.002 0.002 0.002 0.002" for index in range(len(NAMES))]
     rows.append("sample 1 0 1 101 81 100 97 99 3 0.006 0.002 0.002 0.002")
     rows.extend(f"sample 0 {index} 1 580 560 579 579 579 1 0.004 0.004 0.004 0.004" for index in range(len(NAMES)))
-    rows.append(LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009)
+    rows.append(LIT_LAST_GPU_TIMING_SAMPLE_ROW)
     rows.extend(extra_rows)
     return LIT_N.join(lines + rows + [f"complete {len(rows)} {len(NAMES)+1}"]) + LIT_N
 
@@ -111,7 +111,7 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
                 diagnostic.parse_publications(publication_text().replace(before, after), MEASUREMENT)
 
     def test_invalid_duration_and_source_provenance_fail(self):
-        target = LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009
+        target = LIT_LAST_GPU_TIMING_SAMPLE_ROW
         mutations = ("sample 1 0 1 580 560 579 570 581 3 0.009 0.003 0.003 0.003", target.replace(LIT_N_0_009, "nan"), target.replace(LIT_N_0_009, "0.9"), target.replace("570 572 3", "570 572 0"), target.replace("580 560", "99 80"))
         for replacement in mutations:
             with self.subTest(replacement=replacement), self.assertRaises(SmokeFailure):

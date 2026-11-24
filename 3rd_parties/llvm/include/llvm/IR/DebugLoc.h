@@ -83,7 +83,6 @@ class DILocAndCoverageTracking : public DbgLocOrigin {
 
 public:
   DebugLocKind Kind;
-  // Default constructor for empty DebugLocs.
   DILocAndCoverageTracking()
       : DbgLocOrigin(true), Loc(nullptr), Kind(DebugLocKind::Normal) {}
   // Valid or nullptr DILocation*, no annotative DebugLocKind.

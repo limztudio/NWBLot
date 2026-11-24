@@ -28,8 +28,8 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] T& TestProcessValue(){
-    static T value{};
-    return value;
+    static T s_Value{};
+    return s_Value;
 }
 
 template<typename T>

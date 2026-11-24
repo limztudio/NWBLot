@@ -66,7 +66,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importResource(const GpuGraphResource
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::Count)
+    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::kCount)
         return MakeUnexpected(Failure{});
 
     GpuGraphResourceImportIndex::ResourceLookupHint lookupHint;

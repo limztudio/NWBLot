@@ -240,8 +240,6 @@ bool CXXBasePaths::lookupInBases(ASTContext &Context,
         // We have a path. Make a copy of it before moving on.
         Paths.push_back(ScratchPath);
       } else if (!isFindingAmbiguities()) {
-        // We found a path and we don't care about ambiguities;
-        // return immediately.
         return FoundPath;
       }
     } else if (VisitBase) {

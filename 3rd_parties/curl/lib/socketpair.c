@@ -227,13 +227,11 @@ static int wakeup_inet(curl_socket_t socks[2], bool nonblocking)
     if(Curl_rand(NULL, (unsigned char *)rnd, sizeof(rnd)))
       goto error;
 
-    /* write data to the socket */
     swrite(socks[0], rnd, sizeof(rnd));
     /* verify that we read the correct data */
     do {
       ssize_t nread;
 
-      /* Do not block forever */
       if(curlx_timediff_ms(curlx_now(), start) > (60 * 1000))
         goto error;
 

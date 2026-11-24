@@ -634,7 +634,6 @@ typedef long long __attribute__((__may_alias__)) HEXAGON_Vect64;
 
 class HEXAGON_Vect64C {
 public:
-  // Constructors
   HEXAGON_Vect64C(long long d = 0) : data(d) {};
   HEXAGON_Vect64C(int w1, int w0) : data(HEXAGON_V64_CREATE_W(w1, w0)) {};
   HEXAGON_Vect64C(short h3, short h2, short h1, short h0)
@@ -1087,7 +1086,6 @@ typedef int HEXAGON_Vect32;
 
 class HEXAGON_Vect32C {
 public:
-  // Constructors
   HEXAGON_Vect32C(int w = 0) : data(w) {};
   HEXAGON_Vect32C(short h1, short h0) : data(HEXAGON_V32_CREATE_H(h1, h0)) {};
   HEXAGON_Vect32C(signed char b3, signed char b2, signed char b1, signed char b0)
@@ -1861,7 +1859,6 @@ typedef long long __attribute__((__may_alias__)) Q6Vect64;
 
 class Q6Vect64C {
 public:
-  // Constructors
   Q6Vect64C(long long d = 0) : data(d) {};
   Q6Vect64C(int w1, int w0) : data(Q6V64_CREATE_W(w1, w0)) {};
   Q6Vect64C(short h3, short h2, short h1, short h0)
@@ -2312,7 +2309,6 @@ typedef int Q6Vect32;
 
 class Q6Vect32C {
 public:
-  // Constructors
   Q6Vect32C(int w = 0) : data(w) {};
   Q6Vect32C(short h1, short h0) : data(Q6V32_CREATE_H(h1, h0)) {};
   Q6Vect32C(signed char b3, signed char b2, signed char b1, signed char b0)
@@ -2528,21 +2524,15 @@ typedef int Q6Pred;
 
 class HVX_Vect {
 public:
-  // Constructors.
-  // Default.
   HVX_Vect() : data(Q6_W_vcombine_VV(Q6_V_vzero(), Q6_V_vzero())){};
 
-  // Custom constructors.
   HVX_Vect(HVX_VectorPair W) : data(W){};
   HVX_Vect(HVX_Vector v1, HVX_Vector v0) : data(HEXAGON_HVX_CREATE_W(v1, v0)){};
 
-  // Copy constructor.
   HVX_Vect(const HVX_Vect &W) = default;
 
-  // Move constructor.
   HVX_Vect(HVX_Vect &&W) = default;
 
-  // Assignment operator.
   HVX_Vect &operator=(const HVX_Vect &W) = default;
 
   operator HVX_VectorPair() { return data; };

@@ -26,8 +26,8 @@ namespace Tests::Smoke{
 
 template<typename T, typename Initializer>
 [[nodiscard]] inline T InitializeOnce(const Initializer& initialize){
-    static const T value = initialize();
-    return value;
+    static const T s_Value = initialize();
+    return s_Value;
 }
 
 template<typename TNameArena, typename TValueArena>

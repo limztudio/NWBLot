@@ -22,10 +22,8 @@
 // Constant used when matching implicit resources to heaps.  The creation times must be equal or less than this value to be considered a pair.
 static const size_t kImplicitResourceCheckClockTicksThreshold = 2;
 
-// Constant used to indicate an unknown driver resource ID.
 static const RmtResourceIdentifier kUnknownDriverResourceId = 0;
 
-// Constant used to indicate an unknown correlation ID.
 static const RmtCorrelationIdentifier kUnknownCorrelationId = 0;
 
 // A structure that contains the information needed for matching a heap with an image or buffer resource.
@@ -44,7 +42,6 @@ std::unordered_map<RmtResourceIdentifier, RmtResourceIdentifier> paired_heap_to_
 // A lookup map used to locate a heap using an image/buffer resource ID as the key.
 std::unordered_map<RmtResourceIdentifier, RmtResourceIdentifier> paired_resource_to_heap_map;
 
-// UserData related Token types
 enum TokenType
 {
     kResourceCreate,
@@ -54,7 +51,6 @@ enum TokenType
     kResourceImplicit,
 };
 
-// A structure used to hold information about the tokens that are processed.
 struct TokenData
 {
     TokenType               token_type;
@@ -67,7 +63,6 @@ struct TokenData
     RmtTimestamp            timestamp;
 };
 
-// An ID used for tracking resource names.
 typedef uint64_t RmtResourceNameHash;
 
 // List of all the events we're interested in, in chronological order, taking into account the ETW lag time.
@@ -99,10 +94,8 @@ static std::unordered_set<RmtResourceIdentifier> internal_resource_ids_needing_c
 // 1MB memory pool for resource name strings.
 static const uint64_t kMemoryPoolBlockSize = 1024 * 1024;
 
-// Memory pool for managing resource name text string allocations.
 static RmtStringMemoryPool resource_name_string_pool(kMemoryPoolBlockSize);
 
-// Flag indicating, if true, that Name UserData tokens have been parsed.
 static bool resource_name_token_tracked = false;
 
 // @brief Stores an implicit resource in a map.
@@ -160,19 +153,16 @@ static RmtResourceNameHash ResourceNamingGenerateHash(RmtResourceIdentifier reso
     uint64_t hash1 = resource_id;
     uint64_t hash2 = correlation_id;
 
-    // If the resource ID is unknown, replace it with the correlation ID.
     if (resource_id == kUnknownDriverResourceId)
     {
         hash1 = correlation_id;
     }
 
-    // If the correlation ID is unknown, replace it with the resource ID.
     if (correlation_id == kUnknownCorrelationId)
     {
         hash2 = resource_id;
     }
 
-    // Create hash value.
     return ((hash2 << 32) | (hash1 & 0xFFFFFFFF));
 }
 
@@ -224,7 +214,6 @@ static void ProcessResourceCreateToken(const TokenData& token_data)
     resource_hash_to_internal_resource_id[hash]                               = token_data.internal_resource_id;
     internal_resource_id_to_resource_hash_id[token_data.internal_resource_id] = hash;
 
-    // Mark this resource as needing a correlation.
     if (token_data.resource_type != kRmtResourceTypeBuffer)
     {
         internal_resource_ids_needing_correlation.insert(token_data.internal_resource_id);
@@ -258,7 +247,6 @@ static void ProcessResourceNameToken(const TokenData& token_data, bool any_corre
 
     if (any_correlations)
     {
-        // The trace file contains Correlation UserData tokens.
         const RmtResourceNameHash hash = ResourceNamingGenerateHash(kUnknownDriverResourceId, token_data.correlation_id);
 
         const auto& internal_resource_id_iterator = resource_hash_to_internal_resource_id.find(hash);
@@ -269,7 +257,6 @@ static void ProcessResourceNameToken(const TokenData& token_data, bool any_corre
             // Make sure this resource doesn't require a correlation ID to match the resource name (it shouldn't be found in the internal_resource_ids_needing_correlation set).
             if (internal_resource_ids_needing_correlation.find(internal_resource_identifier) == internal_resource_ids_needing_correlation.end())
             {
-                // Update the internal resource ID to resource name lookup map.
                 StoreNameForResource(internal_resource_identifier,
                                      token_data.timestamp,
                                      correlation_id_to_resource_names[token_data.correlation_id].find(token_data.timestamp)->second,
@@ -287,7 +274,6 @@ static void ProcessResourceNameToken(const TokenData& token_data, bool any_corre
             const auto& internal_resource_id_iterator2 = resource_hash_to_internal_resource_id.find((*resource_name_hash_iterator).second);
             if (internal_resource_id_iterator2 != resource_hash_to_internal_resource_id.end())
             {
-                // The internal resource ID was found.  Map the resource name to the internal resource ID.
                 const RmtResourceIdentifier internal_resource_identifier             = (*internal_resource_id_iterator2).second;
                 internal_resource_id_to_resource_names[internal_resource_identifier] = correlation_id_to_resource_names[token_data.correlation_id];
             }
@@ -303,7 +289,6 @@ static void ProcessResourceNameToken(const TokenData& token_data, bool any_corre
         const auto& it = resource_hash_to_internal_resource_id.find(hash);
         if (it != resource_hash_to_internal_resource_id.end())
         {
-            // The internal resource ID was found.  Map the resource name to the internal resource ID.
             const RmtResourceIdentifier internal_resource_identifier             = (*it).second;
             internal_resource_id_to_resource_names[internal_resource_identifier] = correlation_id_to_resource_names[token_data.correlation_id];
         }
@@ -314,7 +299,6 @@ static void ProcessImplicitResourceToken(const TokenData& token_data, bool any_c
 {
     if (any_correlations)
     {
-        // The trace file contains Correlation UserData tokens.
         const RmtResourceNameHash hash = ResourceNamingGenerateHash(kUnknownDriverResourceId, token_data.correlation_id);
 
         const auto& internal_resource_id_iterator = resource_hash_to_internal_resource_id.find(hash);
@@ -325,7 +309,6 @@ static void ProcessImplicitResourceToken(const TokenData& token_data, bool any_c
             // Make sure this resource doesn't require a correlation ID to match the implicit resource.
             if (internal_resource_ids_needing_correlation.find(internal_resource_identifier) == internal_resource_ids_needing_correlation.end())
             {
-                // Mark this resource as implicit.
                 StoreImplicitResource(internal_resource_identifier, token_data.implicit_resource_type);
                 return;
             }
@@ -340,7 +323,6 @@ static void ProcessImplicitResourceToken(const TokenData& token_data, bool any_c
             const auto& internal_resource_id_iterator2 = resource_hash_to_internal_resource_id.find((*resource_name_hash_iterator).second);
             if (internal_resource_id_iterator2 != resource_hash_to_internal_resource_id.end())
             {
-                // The internal resource ID was found. Mark this resource as implicit.
                 const RmtResourceIdentifier internal_resource_identifier = (*internal_resource_id_iterator2).second;
                 StoreImplicitResource(internal_resource_identifier, token_data.implicit_resource_type);
             }
@@ -355,7 +337,6 @@ static void ProcessImplicitResourceToken(const TokenData& token_data, bool any_c
         const auto& it = resource_hash_to_internal_resource_id.find(hash);
         if (it != resource_hash_to_internal_resource_id.end())
         {
-            // The internal resource ID was found. Mark this resource as implicit.
             const RmtResourceIdentifier internal_resource_identifier = (*it).second;
             StoreImplicitResource(internal_resource_identifier, token_data.implicit_resource_type);
         }
@@ -367,7 +348,6 @@ RmtErrorCode RmtResourceUserdataProcessEvents(const bool any_correlations)
     internal_resource_id_to_resource_names.clear();
     resource_identifier_implicit.clear();
 
-    // Process events.
     for (auto it = tokens.begin(); it != tokens.end(); ++it)
     {
         switch ((*it).second.token_type)
@@ -402,7 +382,6 @@ RmtErrorCode RmtResourceUserdataProcessEvents(const bool any_correlations)
     paired_resources_and_heaps.clear();
     tokens.clear();
 
-    // Clear the flag that indicates there are Name UserData tokens waiting to be processed.
     resource_name_token_tracked = false;
 
     return kRmtOk;
@@ -534,7 +513,6 @@ RmtErrorCode RmtResourceUserDataTrackBoundResource(const RmtResource* resource, 
             paired_resource_to_heap_map[paired_heap_and_resource_info->second.image_buffer_internal_resource_id] = heap_resource->identifier;
             paired_heap_to_resource_map[heap_resource->identifier] = paired_heap_and_resource_info->second.image_buffer_internal_resource_id;
 
-            // Remove from paired resources and heaps since a match has been found.
             paired_resources_and_heaps.erase(allocation_identifier);
         }
     }
@@ -548,11 +526,9 @@ RmtErrorCode RmtResourceUserDataTrackBoundResource(const RmtResource* resource, 
         }
         else
         {
-            // Heap is paired with an image/buffer resource.
             paired_heap_to_resource_map[paired_heap_and_resource_info->second.heap_internal_resource_id] = image_buffer_resource->identifier;
             paired_resource_to_heap_map[image_buffer_resource->identifier] = paired_heap_and_resource_info->second.heap_internal_resource_id;
 
-            // Remove from paired resources and heaps since a match has been found.
             paired_resources_and_heaps.erase(allocation_identifier);
         }
     }

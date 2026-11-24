@@ -50,7 +50,7 @@ Identifiers use ASCII letters, digits, and underscores, with a letter or undersc
 
 Lists and maps allow trailing commas. Duplicate dictionary keys replace earlier values. **`{}` is an empty list.** Maps can be created through dotted assignment or a nonempty dictionary literal; there is no empty map literal.
 
-String contents retain backslashes verbatim. For example, `"a\nb"` contains a backslash and `n`, rather than a newline. A backslash lets the lexer skip the following character while finding the closing quote, but the parser does not decode escapes. Use forward slashes for asset paths.
+String contents retain backslashes verbatim. For example, `"a\nb"` contains a backslash and `n`, rather than a newline. A backslash escapes the following character for quote scanning, but the parser does not decode the stored text. The lexer requires at least one hexadecimal digit after `\x` and validates `\u`/`\U` escapes as four/eight hex digits forming a Unicode scalar; malformed forms are rejected. Use forward slashes for asset paths.
 
 There is no boolean value type or boolean literal. Indexing, function calls, comparisons, logical operators, conditionals, and loops are outside the language.
 
@@ -189,7 +189,7 @@ MetaScript handles syntax and generic value operations. File access, UTF-8 BOM r
 | `export_preprocessor.h`, `preprocessor_semantics.h` | Shared preprocessor directive names, literal tokens, and include extension rules. |
 | `preprocessor_macro_expander.h`, `preprocessor_macro_expander.cpp` | Macro expansion and defined-operand handling. |
 | `preprocessor_includes.h`, `preprocessor_includes.cpp` | Include resolution, deduplication, and source-range tracking. |
-| `attribute_parser.h`, `attribute_parser.cpp` | Shared single-bracket attribute list parser (`[name("arg"), flag]`). |
+| `attribute_parser.h`, `attribute_parser.cpp` | Single-bracket attribute list parser used by the ADHD compiler (`[name("arg"), flag]`); metadata struct attributes are parsed separately by `statement_parser.cpp`. |
 | `literal_decoder.h` | Integer and floating-point literal decoding shared across parsers and validators. |
 | `parser.h`, `parser.cpp` | `Document`, parse entry points, and reader buffering. |
 | `parser_cursor.*` | Shared token cursor and diagnostics. |

@@ -45,26 +45,26 @@ template<typename Observer>
 class DiagnosticSubscription final : NoCopy{
 public:
     explicit DiagnosticSubscription(Observer& observer)noexcept{
-        NothrowScopedLock lock(s_mutex);
-        m_previousObserver = s_observer;
-        s_observer = &observer;
+        NothrowScopedLock lock(s_Mutex);
+        m_previousObserver = s_Observer;
+        s_Observer = &observer;
         m_previousCallback = DiagnosticDetail::g_EventCallback.exchange(&Dispatch, MemoryOrder::acq_rel);
     }
     ~DiagnosticSubscription()noexcept{
-        NothrowScopedLock lock(s_mutex);
+        NothrowScopedLock lock(s_Mutex);
         SetDiagnosticEventCallback(m_previousCallback);
-        s_observer = m_previousObserver;
+        s_Observer = m_previousObserver;
     }
 
 private:
     static void Dispatch(const DiagnosticEventRecord& record)noexcept{
-        NothrowScopedLock lock(s_mutex);
-        if(s_observer)
-            s_observer->observe(record);
+        NothrowScopedLock lock(s_Mutex);
+        if(s_Observer)
+            s_Observer->observe(record);
     }
 
-    inline static Futex s_mutex;
-    inline static Observer* s_observer = nullptr;
+    inline static Futex s_Mutex;
+    inline static Observer* s_Observer = nullptr;
     Observer* m_previousObserver = nullptr;
     DiagnosticEventCallback m_previousCallback = nullptr;
 };

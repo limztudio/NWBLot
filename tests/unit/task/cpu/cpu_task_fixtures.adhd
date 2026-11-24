@@ -32,9 +32,9 @@ const u32 s_MpmcGateTimeoutMS = 4000u;
 
 
 class DeadlineGuard{
-    private JoiningThread watchdog;
+    private JoiningThread m_watchdog;
     public DeadlineGuard(in b8 deathTest, in u32 timeoutMS){
-        this.watchdog = JoiningThread(lambda[in deathTest, in timeoutMS](in StopToken stop) -> void{
+        this.m_watchdog = JoiningThread(lambda[in deathTest, in timeoutMS](in StopToken stop) -> void{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS){
@@ -48,10 +48,10 @@ class DeadlineGuard{
 }
 
 class LifetimeProbe{
-    private mut Atomic<u32> retirements;
+    private mut Atomic<u32> m_retirements;
     public u32 value;
-    public LifetimeProbe(mut Atomic<u32> counter, in u32 value){ this.retirements = counter; this.value = value; }
-    public void retire(){ this.retirements.fetch_add(1u, MemoryOrder::release); }
+    public LifetimeProbe(mut Atomic<u32> counter, in u32 value){ this.m_retirements = counter; this.value = value; }
+    public void retire(){ this.m_retirements.fetch_add(1u, MemoryOrder::release); }
 }
 
 class ProducerState{

@@ -1685,7 +1685,6 @@ typedef enum {
                     CURLOPTTYPE_FUNCTIONPOINT, 144,
                     7.82.0, "Serves no purpose anymore"),
 
-  /* if the connection proceeds too quickly then need to slow it down */
   /* limit-rate: maximum number of bytes per second to send or receive */
   CURLOPT(CURLOPT_MAX_SEND_SPEED_LARGE, CURLOPTTYPE_OFF_T, 145),
   CURLOPT(CURLOPT_MAX_RECV_SPEED_LARGE, CURLOPTTYPE_OFF_T, 146),

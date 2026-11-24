@@ -94,7 +94,7 @@ void GpuRoutingDeclarePartialDag(mut GpuTaskGraph graph, in usize taskCount, in 
                 GpuRoutingPushTaskDependency(dependencies, generation, previousLayer + offset);
         }
         GpuTaskSchedulingHint scheduling = GpuTaskSchedulingHint();
-        scheduling.cost = cast<GpuTaskCostHintEnum>(taskIndex % cast<usize>(GpuTaskCostHint::Count));
+        scheduling.cost = cast<GpuTaskCostHintEnum>(taskIndex % cast<usize>(GpuTaskCostHint::kCount));
         scheduling.mergeWithPrevious = shape == GpuRoutingPartialDagShape::MergedPairs && taskIndex % 2u != 0u;
         b8 graphicsTask = false;
         if(shape == GpuRoutingPartialDagShape::MergedPairs)

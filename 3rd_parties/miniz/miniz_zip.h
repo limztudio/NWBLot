@@ -440,7 +440,6 @@ extern "C"
 
 #ifndef MINIZ_NO_STDIO
     /* Reads a single file from an archive into a heap block. */
-    /* If pComment is not NULL, only the file with the specified comment will be extracted. */
     /* Returns NULL on failure. */
     MINIZ_EXPORT void *mz_zip_extract_archive_file_to_heap(const char *pZip_filename, const char *pArchive_name, size_t *pSize, mz_uint flags);
     MINIZ_EXPORT void *mz_zip_extract_archive_file_to_heap_v2(const char *pZip_filename, const char *pArchive_name, const char *pComment, size_t *pSize, mz_uint flags, mz_zip_error *pErr);

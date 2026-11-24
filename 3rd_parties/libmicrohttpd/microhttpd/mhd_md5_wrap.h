@@ -87,9 +87,7 @@
 
 #ifndef MHD_MD5_HAS_DEINIT
 #define MHD_MD5_deinit(ignore) (void)0
-#endif /* HAVE_MD5_DEINIT */
-
-/* Sanity checks */
+#endif /* ! MHD_MD5_HAS_DEINIT */
 
 #if ! defined(MHD_MD5_HAS_FINISH_RESET) && ! defined(MHD_MD5_HAS_FINISH)
 #error Required at least one of MHD_MD5_finish_reset(), MHD_MD5_finish()

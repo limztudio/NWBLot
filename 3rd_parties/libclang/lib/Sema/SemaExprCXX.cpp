@@ -5210,7 +5210,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
 
       // x -> y
       if (Context.hasSameUnqualifiedType(ElType, From->getType())) {
-        // do nothing
       } else if (From->getType()->isRealFloatingType()) {
         From = ImpCastExprToType(From, ElType,
                 isFloatingComplex ? CK_FloatingCast : CK_FloatingToIntegral).get();
@@ -5239,7 +5238,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
 
       // x -> y
       if (Context.hasSameUnqualifiedType(ElType, ToType)) {
-        // do nothing
       } else if (ToType->isRealFloatingType()) {
         From = ImpCastExprToType(From, ToType,
                                  isFloatingComplex ? CK_FloatingCast
@@ -5371,7 +5369,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
 
   switch (SCS.Third) {
   case ICK_Identity:
-    // Nothing to do.
     break;
 
   case ICK_Function_Conversion:
@@ -5569,7 +5566,6 @@ QualType Sema::CheckPointerToMemberOperands(ExprResult &LHS, ExprResult &RHS,
   if (const FunctionProtoType *Proto = Result->getAs<FunctionProtoType>()) {
     switch (Proto->getRefQualifier()) {
     case RQ_None:
-      // Do nothing
       break;
 
     case RQ_LValue:

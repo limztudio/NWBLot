@@ -47,7 +47,7 @@ b8 GpuCompiledOwnershipTransfer::valid()const noexcept{
         !resource.valid()
         || resourceIdentity == s_NameNone
         || resourceType >= GpuGraphResourceType::HazardDomain
-        || route >= GpuOwnershipTransferRoute::Count
+        || route >= GpuOwnershipTransferRoute::kCount
         || !sourceQueue.valid()
         || !destinationQueue.valid()
         || sourceQueue == destinationQueue

@@ -18,7 +18,6 @@ if not hh.endswith('.hh'):
     sys.exit(f'Output must end with .hh: {hh}')
 decl = hh[:-len('.hh')].replace('-', '_')
 
-# Stringize the GLSL source into a C string literal
 with open(INPUT, 'r') as f:
     lines = f.read().splitlines()
 

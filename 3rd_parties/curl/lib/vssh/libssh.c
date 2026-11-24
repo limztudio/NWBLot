@@ -1461,10 +1461,7 @@ static int myssh_in_SFTP_QUOTE(struct Curl_easy *data,
   if(!sshp)
     return myssh_to_ERROR(data, sshc, CURLE_FAILED_INIT);
 
-  /* if a command starts with an asterisk, which a legal SFTP command never
-     can, the command is allowed to fail without it causing any
-     aborts or cancels etc. It causes libcurl to act as if the command
-     is successful, whatever the server responds. */
+  /* A leading asterisk lets the command fail without aborting the transfer. */
 
   if(cmd[0] == '*') {
     cmd++;
@@ -1672,10 +1669,7 @@ static int myssh_in_SFTP_QUOTE_STAT(struct Curl_easy *data,
   const char *cmd = sshc->quote_item->data;
   sshc->acceptfail = FALSE;
 
-  /* if a command starts with an asterisk, which a legal SFTP command never
-     can, the command is allowed to fail without it causing any
-     aborts or cancels etc. It causes libcurl to act as if the command
-     is successful, whatever the server responds. */
+  /* A leading asterisk lets the command fail without aborting the transfer. */
 
   if(cmd[0] == '*') {
     cmd++;
@@ -2949,7 +2943,6 @@ static CURLcode sftp_done(struct Curl_easy *data, CURLcode status,
   return myssh_done(data, sshc, status);
 }
 
-/* return number of sent bytes */
 static CURLcode sftp_send(struct Curl_easy *data, int8_t sockindex,
                           const uint8_t *mem, size_t len, bool eos,
                           size_t *pnwritten)

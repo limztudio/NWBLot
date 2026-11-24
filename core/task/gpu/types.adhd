@@ -19,7 +19,7 @@ extern enum GpuCompiledBarrierType : u8{
     AccelStructOwnershipRelease,
     AccelStructOwnershipAcquire,
     AccelStructStateExport,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphPipelineType::Enum")]
@@ -28,7 +28,7 @@ extern enum GpuGraphPipelineType : u8{
     Compute,
     Meshlet,
     RayTracing,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceType::Enum")]
@@ -37,14 +37,14 @@ extern enum GpuGraphResourceType : u8{
     Buffer,
     AccelStruct,
     HazardDomain,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceVersionOrigin::Enum")]
 extern enum GpuGraphResourceVersionOrigin : u8{
     TaskProduced,
     ImportedRoot,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskCostHint::Enum")]
@@ -53,7 +53,7 @@ extern enum GpuTaskCostHint : u8{
     Small,
     Medium,
     Large,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskGraphTelemetryEdgeFlag::Mask")]
@@ -85,7 +85,7 @@ extern enum GpuTaskHazardType : u8{
     WriteAfterWrite,
     VersionDependency,
     VersionLifetime,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceAccess::Enum")]
@@ -93,14 +93,14 @@ extern enum GpuTaskResourceAccess : u8{
     Read,
     Write,
     ReadWrite,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceVersionRole::Enum")]
 extern enum GpuTaskResourceVersionRole : u8{
     Produce,
     Consume,
-    Count
+    kCount
 };
 
 

@@ -1486,7 +1486,6 @@
 
     if ( useIntersection )
     {
-      /* return intersection point to caller */
       *nextP0 = intersection;
     }
   }

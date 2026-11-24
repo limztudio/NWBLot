@@ -58,7 +58,7 @@ LIT_METRICS = "metrics"
 LIT_LOG_2 = ".log"
 LIT_TIMEOUT = "--timeout"
 LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
-LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC = "frozen caustic arm or logger dependency inventory changed during capture"
+LIT_FROZEN_CAUSTIC_DEPENDENCY_CHANGED = "frozen caustic arm or logger dependency inventory changed during capture"
 LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
@@ -189,7 +189,7 @@ def main(argv=None):
         for preset in PRESETS:
             for enabled in (True, False):
                 if RendererBenchmarkIdentity.freeze_arm(arm) != identity or RendererBenchmarkIdentity.binary_identity(args.logserver_executable) != logger_binaries:
-                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC)
+                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_DEPENDENCY_CHANGED)
                 key = preset + (LIT_ON_2 if enabled else LIT_OFF)
                 image = output / (key + ".bmp")
                 workload = RendererWorkloadRegistry.workloads()["caustic-" + preset]
@@ -202,7 +202,7 @@ def main(argv=None):
                 if completed.returncode:
                     raise SmokeFailure(key + " actual capture failed: " + str(completed.returncode))
                 if RendererBenchmarkIdentity.freeze_arm(arm) != identity or RendererBenchmarkIdentity.binary_identity(args.logserver_executable) != logger_binaries:
-                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC)
+                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_DEPENDENCY_CHANGED)
                 settings = CausticWorkload.environment(preset, enabled)
                 log = image.with_suffix(LIT_LOG_2)
                 text = log.read_text(encoding=LIT_UTF_8)

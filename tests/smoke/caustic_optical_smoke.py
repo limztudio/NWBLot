@@ -35,8 +35,8 @@ LIT_LOG = ".log"
 LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_REJECT_LOG_MESSAGE = "--reject-log-message"
 LIT_REFLECTION_RESOLVE_HARDWARE = "Reflection resolve: hardware"
-LIT_NATURAL_SOFTWARE_ONLY_SHADOW_ROUTE_SEL = "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED = "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_UTF_8 = "utf-8"
 LIT_EXTERIOR_ENVIRONMENT = "exterior_environment"
@@ -78,17 +78,17 @@ def capture(args, variant):
     command += [LIT_EXPECT_LOG_MESSAGE if variant != LIT_CAUSTICS_DISABLED else LIT_REJECT_LOG_MESSAGE, "caustic producer ("]
     if args.software_ray_tracing:
         command += ["--application-arg=--disable-hardware-ray-tracing"]
-        for message in ("Loader: hardware ray tracing disabled before device creation", LIT_NATURAL_SOFTWARE_ONLY_SHADOW_ROUTE_SEL, "RendererSystem: dispatched software shadow traversal",
+        for message in ("Loader: hardware ray tracing disabled before device creation", LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED, "RendererSystem: dispatched software shadow traversal",
             "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)",):
             command += [LIT_EXPECT_LOG_MESSAGE, message]
         if variant != LIT_CAUSTICS_DISABLED:
             command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched software caustic producer"]
-        for message in (LIT_REFLECTION_RESOLVE_HARDWARE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA, "RendererSystem: dispatched hardware caustic producer", "RendererSystem: created surfel HW trace compute pipeline",
+        for message in (LIT_REFLECTION_RESOLVE_HARDWARE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, "RendererSystem: dispatched hardware caustic producer", "RendererSystem: created surfel HW trace compute pipeline",
             "RendererSystem: created refraction resolve pipeline (hardware ray query, sparse queue)", "RendererSystem: created refraction resolve pipeline (hardware ray query, dense grid)",):
             command += [LIT_REJECT_LOG_MESSAGE, message]
     else:
-        command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware else LIT_NATURAL_SOFTWARE_ONLY_SHADOW_ROUTE_SEL]
-        command += [LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA]
+        command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware else LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED]
+        command += [LIT_EXPECT_LOG_MESSAGE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:

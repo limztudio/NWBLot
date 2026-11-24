@@ -11,19 +11,19 @@
 
 
 class ShadowVisibilityOpaqueGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private b8 hardwareShadowSupported;
-    private b8 graphOwnsOpaqueTemporalMergeEntryStates;
-    private FrozenLightSpaceShadowHandle lightSpace;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> asyncTiming;
-    private mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
-    private in b8 prepared;
-    private mut b8 opaqueProduced;
-    private mut u32 opaqueFrameIndex;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private b8 m_hardwareShadowSupported;
+    private b8 m_graphOwnsOpaqueTemporalMergeEntryStates;
+    private FrozenLightSpaceShadowHandle m_lightSpace;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_asyncTiming;
+    private mut Optional<GpuTimingMeasure> m_shadowVisibilityTiming;
+    private in b8 m_prepared;
+    private mut b8 m_opaqueProduced;
+    private mut u32 m_opaqueFrameIndex;
 
     public ShadowVisibilityOpaqueGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -40,111 +40,111 @@ class ShadowVisibilityOpaqueGraphTask{
         mut b8 opaqueProduced,
         mut u32 opaqueFrameIndex
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.hardwareShadowSupported = hardwareShadowSupported;
-        this.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
-        this.lightSpace = lightSpace;
-        this.timingTicket = timingTicket;
-        this.asyncTiming = asyncTiming;
-        this.shadowVisibilityTiming = shadowVisibilityTiming;
-        this.prepared = prepared;
-        this.opaqueProduced = opaqueProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_hardwareShadowSupported = hardwareShadowSupported;
+        this.m_graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+        this.m_lightSpace = lightSpace;
+        this.m_timingTicket = timingTicket;
+        this.m_asyncTiming = asyncTiming;
+        this.m_shadowVisibilityTiming = shadowVisibilityTiming;
+        this.m_prepared = prepared;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
 
         const Optional<GpuPhysicalQueueInfo> queue = context.compiledPlan.findQueueInfo(context.queue);
         if(!queue.has_value())
             return false;
 
-        this.opaqueProduced = false;
-        this.opaqueFrameIndex = 0u;
-        if(this.shadowVisibilityTiming.has_value()){
-            this.shadowVisibilityTiming.value().discardTiming();
-            this.shadowVisibilityTiming.reset();
+        this.m_opaqueProduced = false;
+        this.m_opaqueFrameIndex = 0u;
+        if(this.m_shadowVisibilityTiming.has_value()){
+            this.m_shadowVisibilityTiming.value().discardTiming();
+            this.m_shadowVisibilityTiming.reset();
         }
-        if(this.asyncTiming.has_value()){
-            this.asyncTiming.value().discardTiming();
-            this.asyncTiming.reset();
+        if(this.m_asyncTiming.has_value()){
+            this.m_asyncTiming.value().discardTiming();
+            this.m_asyncTiming.reset();
         }
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
         if(queue.value().queueClass == CommandQueue::Compute)
-            this.asyncTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeAsyncShadow, this.graphics.getDevice(), commandList);
-        this.shadowVisibilityTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeShadowVisibility, this.graphics.getDevice(), commandList);
+            this.m_asyncTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeAsyncShadow, this.m_graphics.getDevice(), commandList);
+        this.m_shadowVisibilityTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, this.m_graphics.getDevice(), commandList);
 
         b8 opaqueRecorded = false;
-        if(this.prepared){
+        if(this.m_prepared){
             Optional<in LightSpaceShadowSnapshot> lightSpaceOpt;
-            if(this.lightSpace.valid())
-                lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.lightSpace.deref().snapshot);
+            if(this.m_lightSpace.valid())
+                lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.m_lightSpace.deref().snapshot);
             Expected<u32> opaqueFrame = MakeUnexpected(Failure());
-            if(this.hardwareShadowSupported)
-                opaqueFrame = this.raytracingSystem.renderShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
+            if(this.m_hardwareShadowSupported)
+                opaqueFrame = this.m_raytracingSystem.renderShadowVisibilityOpaque(commandList, this.m_targets, this.m_deferredLightingResources, this.m_graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
             else
-                opaqueFrame = this.raytracingSystem.renderGpuBvhShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
+                opaqueFrame = this.m_raytracingSystem.renderGpuBvhShadowVisibilityOpaque(commandList, this.m_targets, this.m_deferredLightingResources, this.m_graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
             opaqueRecorded = opaqueFrame.has_value();
             if(opaqueFrame.has_value())
-                this.opaqueFrameIndex = opaqueFrame.value();
+                this.m_opaqueFrameIndex = opaqueFrame.value();
         }
         if(!opaqueRecorded){
             warning("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility");
-            this.raytracingSystem.clearShadowVisibility(commandList, this.targets);
-            commandList.setTextureState(this.targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
+            this.m_raytracingSystem.clearShadowVisibility(commandList, this.m_targets);
+            commandList.setTextureState(this.m_targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
-            this.shadowVisibilityTiming.value().discardTiming();
-            this.shadowVisibilityTiming.reset();
-            if(this.asyncTiming.has_value()){
-                this.asyncTiming.value().discardTiming();
-                this.asyncTiming.reset();
+            this.m_shadowVisibilityTiming.value().discardTiming();
+            this.m_shadowVisibilityTiming.reset();
+            if(this.m_asyncTiming.has_value()){
+                this.m_asyncTiming.value().discardTiming();
+                this.m_asyncTiming.reset();
             }
             return true;
         }
 
-        this.opaqueProduced = true;
-        const b8 visibilityMarkerFinished = FinishSplitGpuTimingMarker(this.shadowVisibilityTiming);
+        this.m_opaqueProduced = true;
+        const b8 visibilityMarkerFinished = FinishSplitGpuTimingMarker(this.m_shadowVisibilityTiming);
         b8 asyncMarkerFinished = true;
-        if(this.asyncTiming.has_value())
-            asyncMarkerFinished = FinishSplitGpuTimingMarker(this.asyncTiming);
+        if(this.m_asyncTiming.has_value())
+            asyncMarkerFinished = FinishSplitGpuTimingMarker(this.m_asyncTiming);
         if(!asyncMarkerFinished || !visibilityMarkerFinished){
-            DiscardGpuTimingMeasure(this.asyncTiming);
-            DiscardGpuTimingMeasure(this.shadowVisibilityTiming);
+            DiscardGpuTimingMeasure(this.m_asyncTiming);
+            DiscardGpuTimingMeasure(this.m_shadowVisibilityTiming);
             return false;
         }
         return true;
     }
 
     public void discarded(){
-        this.opaqueProduced = false;
-        DiscardGpuTimingMeasure(this.shadowVisibilityTiming);
-        DiscardGpuTimingMeasure(this.asyncTiming);
+        this.m_opaqueProduced = false;
+        DiscardGpuTimingMeasure(this.m_shadowVisibilityTiming);
+        DiscardGpuTimingMeasure(this.m_asyncTiming);
     }
 }
 
 class ShadowVisibilityOpaqueFirstWaveletGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> asyncTiming;
-    private mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
-    private mut Optional<GpuTimingMeasure> opaqueResolveTiming;
-    private mut b8 opaqueProduced;
-    private in u32 opaqueFrameIndex;
-    private b8 hardwareShadowSupported;
-    private b8 graphOwnsOpaqueTemporalMergeEntryStates;
-    private b8 deferUpsample;
-    private b8 deferWavelet;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_asyncTiming;
+    private mut Optional<GpuTimingMeasure> m_shadowVisibilityTiming;
+    private mut Optional<GpuTimingMeasure> m_opaqueResolveTiming;
+    private mut b8 m_opaqueProduced;
+    private in u32 m_opaqueFrameIndex;
+    private b8 m_hardwareShadowSupported;
+    private b8 m_graphOwnsOpaqueTemporalMergeEntryStates;
+    private b8 m_deferUpsample;
+    private b8 m_deferWavelet;
 
     public ShadowVisibilityOpaqueFirstWaveletGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -162,78 +162,78 @@ class ShadowVisibilityOpaqueFirstWaveletGraphTask{
         in b8 deferUpsample,
         in b8 deferWavelet
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.asyncTiming = asyncTiming;
-        this.shadowVisibilityTiming = shadowVisibilityTiming;
-        this.opaqueResolveTiming = opaqueResolveTiming;
-        this.opaqueProduced = opaqueProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.hardwareShadowSupported = hardwareShadowSupported;
-        this.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
-        this.deferUpsample = deferUpsample;
-        this.deferWavelet = deferWavelet;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_asyncTiming = asyncTiming;
+        this.m_shadowVisibilityTiming = shadowVisibilityTiming;
+        this.m_opaqueResolveTiming = opaqueResolveTiming;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_hardwareShadowSupported = hardwareShadowSupported;
+        this.m_graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+        this.m_deferUpsample = deferUpsample;
+        this.m_deferWavelet = deferWavelet;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
-        if(!this.opaqueProduced)
+        if(!this.m_opaqueProduced)
             return true;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(this.opaqueResolveTiming.has_value()){
-            this.opaqueResolveTiming.value().discardTiming();
-            this.opaqueResolveTiming.reset();
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(this.m_opaqueResolveTiming.has_value()){
+            this.m_opaqueResolveTiming.value().discardTiming();
+            this.m_opaqueResolveTiming.reset();
         }
-        this.opaqueResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeShadowOpaqueResolve, this.graphics.getDevice(), commandList);
-        if(this.raytracingSystem.renderSoftOpaqueShadowResolvePhase(
+        this.m_opaqueResolveTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueResolve, this.m_graphics.getDevice(), commandList);
+        if(this.m_raytracingSystem.renderSoftOpaqueShadowResolvePhase(
             commandList,
-            this.targets,
-            this.deferredLightingResources,
-            this.opaqueFrameIndex,
-            this.hardwareShadowSupported,
-            this.graphOwnsOpaqueTemporalMergeEntryStates,
-            ResolveSoftShadowOpaqueFirstWaveletPhase(this.deferWavelet)
+            this.m_targets,
+            this.m_deferredLightingResources,
+            this.m_opaqueFrameIndex,
+            this.m_hardwareShadowSupported,
+            this.m_graphOwnsOpaqueTemporalMergeEntryStates,
+            ResolveSoftShadowOpaqueFirstWaveletPhase(this.m_deferWavelet)
         )){
-            if(this.deferUpsample){
-                this.opaqueResolveTiming.value().finishTiming(commandList);
-                this.opaqueResolveTiming.reset();
+            if(this.m_deferUpsample){
+                this.m_opaqueResolveTiming.value().finishTiming(commandList);
+                this.m_opaqueResolveTiming.reset();
                 return true;
             }
-            return FinishSplitGpuTimingMarker(this.opaqueResolveTiming);
+            return FinishSplitGpuTimingMarker(this.m_opaqueResolveTiming);
         }
 
         warning("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility");
-        RecoverOpaqueSoftShadowAllLit(this.raytracingSystem, this.targets, this.opaqueProduced, this.asyncTiming, this.shadowVisibilityTiming, this.opaqueResolveTiming, commandList);
+        RecoverOpaqueSoftShadowAllLit(this.m_raytracingSystem, this.m_targets, this.m_opaqueProduced, this.m_asyncTiming, this.m_shadowVisibilityTiming, this.m_opaqueResolveTiming, commandList);
         return true;
     }
 
     public void discarded(){
-        this.opaqueProduced = false;
-        DiscardGpuTimingMeasure(this.asyncTiming);
-        DiscardGpuTimingMeasure(this.shadowVisibilityTiming);
-        DiscardGpuTimingMeasure(this.opaqueResolveTiming);
+        this.m_opaqueProduced = false;
+        DiscardGpuTimingMeasure(this.m_asyncTiming);
+        DiscardGpuTimingMeasure(this.m_shadowVisibilityTiming);
+        DiscardGpuTimingMeasure(this.m_opaqueResolveTiming);
     }
 }
 
 class ShadowVisibilityOpaqueResolveTailGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> asyncTiming;
-    private mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
-    private mut Optional<GpuTimingMeasure> opaqueResolveTiming;
-    private mut b8 opaqueProduced;
-    private in u32 opaqueFrameIndex;
-    private b8 hardwareShadowSupported;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_asyncTiming;
+    private mut Optional<GpuTimingMeasure> m_shadowVisibilityTiming;
+    private mut Optional<GpuTimingMeasure> m_opaqueResolveTiming;
+    private mut b8 m_opaqueProduced;
+    private in u32 m_opaqueFrameIndex;
+    private b8 m_hardwareShadowSupported;
 
     public ShadowVisibilityOpaqueResolveTailGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -247,58 +247,58 @@ class ShadowVisibilityOpaqueResolveTailGraphTask{
         in borrow u32 opaqueFrameIndex,
         in b8 hardwareShadowSupported
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.asyncTiming = asyncTiming;
-        this.shadowVisibilityTiming = shadowVisibilityTiming;
-        this.opaqueResolveTiming = opaqueResolveTiming;
-        this.opaqueProduced = opaqueProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.hardwareShadowSupported = hardwareShadowSupported;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_asyncTiming = asyncTiming;
+        this.m_shadowVisibilityTiming = shadowVisibilityTiming;
+        this.m_opaqueResolveTiming = opaqueResolveTiming;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_hardwareShadowSupported = hardwareShadowSupported;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
-        if(!this.opaqueProduced)
+        if(!this.m_opaqueProduced)
             return true;
-        if(!this.opaqueResolveTiming.has_value())
+        if(!this.m_opaqueResolveTiming.has_value())
             return false;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(this.raytracingSystem.renderSoftOpaqueShadowResolveTail(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, this.hardwareShadowSupported)){
-            this.opaqueResolveTiming.value().finishTiming(commandList);
-            this.opaqueResolveTiming.reset();
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(this.m_raytracingSystem.renderSoftOpaqueShadowResolveTail(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, this.m_hardwareShadowSupported)){
+            this.m_opaqueResolveTiming.value().finishTiming(commandList);
+            this.m_opaqueResolveTiming.reset();
             return true;
         }
 
         warning("RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility");
-        RecoverOpaqueSoftShadowAllLit(this.raytracingSystem, this.targets, this.opaqueProduced, this.asyncTiming, this.shadowVisibilityTiming, this.opaqueResolveTiming, commandList);
+        RecoverOpaqueSoftShadowAllLit(this.m_raytracingSystem, this.m_targets, this.m_opaqueProduced, this.m_asyncTiming, this.m_shadowVisibilityTiming, this.m_opaqueResolveTiming, commandList);
         return true;
     }
 
     public void discarded(){
-        this.opaqueProduced = false;
-        DiscardGpuTimingMeasure(this.asyncTiming);
-        DiscardGpuTimingMeasure(this.shadowVisibilityTiming);
-        DiscardGpuTimingMeasure(this.opaqueResolveTiming);
+        this.m_opaqueProduced = false;
+        DiscardGpuTimingMeasure(this.m_asyncTiming);
+        DiscardGpuTimingMeasure(this.m_shadowVisibilityTiming);
+        DiscardGpuTimingMeasure(this.m_opaqueResolveTiming);
     }
 }
 
 class ShadowTransparentSoftTraceGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private FrozenLightSpaceShadowHandle lightSpace;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private in b8 opaqueProduced;
-    private in u32 opaqueFrameIndex;
-    private mut b8 transparentTraceProduced;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private FrozenLightSpaceShadowHandle m_lightSpace;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in b8 m_opaqueProduced;
+    private in u32 m_opaqueFrameIndex;
+    private mut b8 m_transparentTraceProduced;
 
     public ShadowTransparentSoftTraceGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -310,58 +310,58 @@ class ShadowTransparentSoftTraceGraphTask{
         in borrow u32 opaqueFrameIndex,
         mut b8 transparentTraceProduced
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.lightSpace = lightSpace;
-        this.timingTicket = timingTicket;
-        this.opaqueProduced = opaqueProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.transparentTraceProduced = transparentTraceProduced;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_lightSpace = lightSpace;
+        this.m_timingTicket = timingTicket;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_transparentTraceProduced = transparentTraceProduced;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
 
-        this.transparentTraceProduced = false;
-        if(!this.opaqueProduced)
+        this.m_transparentTraceProduced = false;
+        if(!this.m_opaqueProduced)
             return true;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
         Optional<in LightSpaceShadowSnapshot> lightSpaceOpt;
-        if(this.lightSpace.valid())
-            lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.lightSpace.deref().snapshot);
-        if(!this.raytracingSystem.renderSoftTransparentShadowTrace(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, true, lightSpaceOpt)){
+        if(this.m_lightSpace.valid())
+            lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.m_lightSpace.deref().snapshot);
+        if(!this.m_raytracingSystem.renderSoftTransparentShadowTrace(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, true, lightSpaceOpt)){
             warning("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility");
             return true;
         }
-        this.transparentTraceProduced = true;
+        this.m_transparentTraceProduced = true;
         return true;
     }
 
     public void discarded(){
-        this.transparentTraceProduced = false;
+        this.m_transparentTraceProduced = false;
 
     }
 }
 
 class ShadowTransparentSoftTemporalMergeGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> transparentResolveTiming;
-    private in b8 opaqueProduced;
-    private mut b8 transparentTraceProduced;
-    private in u32 opaqueFrameIndex;
-    private b8 graphOwnsTransparentTemporalMergeEntryStates;
-    private b8 combinedTemporal;
-    private b8 hardwareShadowSupported;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_transparentResolveTiming;
+    private in b8 m_opaqueProduced;
+    private mut b8 m_transparentTraceProduced;
+    private in u32 m_opaqueFrameIndex;
+    private b8 m_graphOwnsTransparentTemporalMergeEntryStates;
+    private b8 m_combinedTemporal;
+    private b8 m_hardwareShadowSupported;
 
     public ShadowTransparentSoftTemporalMergeGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -377,77 +377,77 @@ class ShadowTransparentSoftTemporalMergeGraphTask{
         in b8 combinedTemporal,
         in b8 hardwareShadowSupported
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.transparentResolveTiming = transparentResolveTiming;
-        this.opaqueProduced = opaqueProduced;
-        this.transparentTraceProduced = transparentTraceProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates;
-        this.combinedTemporal = combinedTemporal;
-        this.hardwareShadowSupported = hardwareShadowSupported;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_transparentResolveTiming = transparentResolveTiming;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_transparentTraceProduced = transparentTraceProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates;
+        this.m_combinedTemporal = combinedTemporal;
+        this.m_hardwareShadowSupported = hardwareShadowSupported;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     private b8 recoverOpaqueTemporal(mut CommandList commandList)const{
-        if(!this.combinedTemporal)
+        if(!this.m_combinedTemporal)
             return true;
-        return this.raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, this.hardwareShadowSupported, true, SoftShadowOpaqueResolvePhase::TemporalOnly);
+        return this.m_raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, this.m_hardwareShadowSupported, true, SoftShadowOpaqueResolvePhase::TemporalOnly);
     }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
-        if(!this.opaqueProduced)
+        if(!this.m_opaqueProduced)
             return true;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(!this.transparentTraceProduced)
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(!this.m_transparentTraceProduced)
             return this.recoverOpaqueTemporal(commandList);
-        if(this.transparentResolveTiming.has_value()){
-            this.transparentResolveTiming.value().discardTiming();
-            this.transparentResolveTiming.reset();
+        if(this.m_transparentResolveTiming.has_value()){
+            this.m_transparentResolveTiming.value().discardTiming();
+            this.m_transparentResolveTiming.reset();
         }
-        this.transparentResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, this.graphics.getDevice(), commandList);
+        this.m_transparentResolveTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, this.m_graphics.getDevice(), commandList);
         b8 merged = false;
-        if(this.combinedTemporal)
-            merged = this.raytracingSystem.renderSoftShadowCombinedTemporalMerge(commandList, this.targets);
+        if(this.m_combinedTemporal)
+            merged = this.m_raytracingSystem.renderSoftShadowCombinedTemporalMerge(commandList, this.m_targets);
         else
-            merged = this.raytracingSystem.renderSoftTransparentShadowTemporalMerge(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, this.graphOwnsTransparentTemporalMergeEntryStates);
+            merged = this.m_raytracingSystem.renderSoftTransparentShadowTemporalMerge(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, this.m_graphOwnsTransparentTemporalMergeEntryStates);
         if(merged)
-            return FinishSplitGpuTimingMarker(this.transparentResolveTiming);
+            return FinishSplitGpuTimingMarker(this.m_transparentResolveTiming);
 
         warning("RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility");
-        this.transparentTraceProduced = false;
-        this.transparentResolveTiming.value().discardTiming();
-        this.transparentResolveTiming.reset();
+        this.m_transparentTraceProduced = false;
+        this.m_transparentResolveTiming.value().discardTiming();
+        this.m_transparentResolveTiming.reset();
         return this.recoverOpaqueTemporal(commandList);
     }
 
     public void discarded(){
-        this.transparentTraceProduced = false;
-        DiscardGpuTimingMeasure(this.transparentResolveTiming);
+        this.m_transparentTraceProduced = false;
+        DiscardGpuTimingMeasure(this.m_transparentResolveTiming);
     }
 }
 
 class ShadowTransparentSoftFirstWaveletGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> transparentResolveTiming;
-    private in b8 opaqueProduced;
-    private mut b8 transparentTraceProduced;
-    private in u32 opaqueFrameIndex;
-    private b8 graphOwnsTransparentWaveletInputBoundary;
-    private b8 startsTransparentResolveTiming;
-    private b8 combinedWavelet;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_transparentResolveTiming;
+    private in b8 m_opaqueProduced;
+    private mut b8 m_transparentTraceProduced;
+    private in u32 m_opaqueFrameIndex;
+    private b8 m_graphOwnsTransparentWaveletInputBoundary;
+    private b8 m_startsTransparentResolveTiming;
+    private b8 m_combinedWavelet;
 
     public ShadowTransparentSoftFirstWaveletGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -463,88 +463,88 @@ class ShadowTransparentSoftFirstWaveletGraphTask{
         in b8 startsTransparentResolveTiming,
         in b8 combinedWavelet
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.transparentResolveTiming = transparentResolveTiming;
-        this.opaqueProduced = opaqueProduced;
-        this.transparentTraceProduced = transparentTraceProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.graphOwnsTransparentWaveletInputBoundary = graphOwnsTransparentWaveletInputBoundary;
-        this.startsTransparentResolveTiming = startsTransparentResolveTiming;
-        this.combinedWavelet = combinedWavelet;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_transparentResolveTiming = transparentResolveTiming;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_transparentTraceProduced = transparentTraceProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_graphOwnsTransparentWaveletInputBoundary = graphOwnsTransparentWaveletInputBoundary;
+        this.m_startsTransparentResolveTiming = startsTransparentResolveTiming;
+        this.m_combinedWavelet = combinedWavelet;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
-        if(!this.opaqueProduced)
+        if(!this.m_opaqueProduced)
             return true;
-        if(this.combinedWavelet){
-            GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-            if(this.transparentTraceProduced && this.transparentResolveTiming.has_value()){
-                if(this.raytracingSystem.renderSoftShadowCombinedWavelet(commandList, this.targets))
+        if(this.m_combinedWavelet){
+            GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+            if(this.m_transparentTraceProduced && this.m_transparentResolveTiming.has_value()){
+                if(this.m_raytracingSystem.renderSoftShadowCombinedWavelet(commandList, this.m_targets))
                     return true;
             }
-            this.transparentTraceProduced = false;
-            DiscardGpuTimingMeasure(this.transparentResolveTiming);
-            return this.raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, true, true, SoftShadowOpaqueResolvePhase::WaveletOnly);
+            this.m_transparentTraceProduced = false;
+            DiscardGpuTimingMeasure(this.m_transparentResolveTiming);
+            return this.m_raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, true, true, SoftShadowOpaqueResolvePhase::WaveletOnly);
         }
-        if(!this.transparentTraceProduced)
+        if(!this.m_transparentTraceProduced)
             return true;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(this.startsTransparentResolveTiming){
-            if(this.transparentResolveTiming.has_value()){
-                this.transparentResolveTiming.value().discardTiming();
-                this.transparentResolveTiming.reset();
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(this.m_startsTransparentResolveTiming){
+            if(this.m_transparentResolveTiming.has_value()){
+                this.m_transparentResolveTiming.value().discardTiming();
+                this.m_transparentResolveTiming.reset();
             }
-            this.transparentResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, this.graphics.getDevice(), commandList);
+            this.m_transparentResolveTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, this.m_graphics.getDevice(), commandList);
         }
-        else if(!this.transparentResolveTiming.has_value()){
+        else if(!this.m_transparentResolveTiming.has_value()){
             warning("RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope; preserving opaque visibility");
-            this.transparentTraceProduced = false;
+            this.m_transparentTraceProduced = false;
             return true;
         }
 
-        if(this.raytracingSystem.renderSoftTransparentShadowFirstWavelet(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, this.graphOwnsTransparentWaveletInputBoundary)){
-            if(this.startsTransparentResolveTiming && !FinishSplitGpuTimingMarker(this.transparentResolveTiming))
+        if(this.m_raytracingSystem.renderSoftTransparentShadowFirstWavelet(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex, this.m_graphOwnsTransparentWaveletInputBoundary)){
+            if(this.m_startsTransparentResolveTiming && !FinishSplitGpuTimingMarker(this.m_transparentResolveTiming))
                 return false;
             return true;
         }
 
         warning("RendererSystem: split transparent soft-shadow first wavelet failed; preserving opaque visibility");
-        this.transparentTraceProduced = false;
-        if(this.transparentResolveTiming.has_value()){
-            this.transparentResolveTiming.value().discardTiming();
-            this.transparentResolveTiming.reset();
+        this.m_transparentTraceProduced = false;
+        if(this.m_transparentResolveTiming.has_value()){
+            this.m_transparentResolveTiming.value().discardTiming();
+            this.m_transparentResolveTiming.reset();
         }
         return true;
     }
 
     public void discarded(){
-        this.transparentTraceProduced = false;
-        DiscardGpuTimingMeasure(this.transparentResolveTiming);
+        this.m_transparentTraceProduced = false;
+        DiscardGpuTimingMeasure(this.m_transparentResolveTiming);
     }
 }
 
 class ShadowTransparentSoftFoldGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private mut Optional<GpuTimingMeasure> asyncTiming;
-    private mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
-    private mut Optional<GpuTimingMeasure> transparentResolveTiming;
-    private in b8 opaqueProduced;
-    private mut b8 transparentTraceProduced;
-    private in u32 opaqueFrameIndex;
-    private b8 combinedUpsample;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private mut Optional<GpuTimingMeasure> m_asyncTiming;
+    private mut Optional<GpuTimingMeasure> m_shadowVisibilityTiming;
+    private mut Optional<GpuTimingMeasure> m_transparentResolveTiming;
+    private in b8 m_opaqueProduced;
+    private mut b8 m_transparentTraceProduced;
+    private in u32 m_opaqueFrameIndex;
+    private b8 m_combinedUpsample;
 
     public ShadowTransparentSoftFoldGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -559,93 +559,93 @@ class ShadowTransparentSoftFoldGraphTask{
         in borrow u32 opaqueFrameIndex,
         in b8 combinedUpsample
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.asyncTiming = asyncTiming;
-        this.shadowVisibilityTiming = shadowVisibilityTiming;
-        this.transparentResolveTiming = transparentResolveTiming;
-        this.opaqueProduced = opaqueProduced;
-        this.transparentTraceProduced = transparentTraceProduced;
-        this.opaqueFrameIndex = opaqueFrameIndex;
-        this.combinedUpsample = combinedUpsample;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_asyncTiming = asyncTiming;
+        this.m_shadowVisibilityTiming = shadowVisibilityTiming;
+        this.m_transparentResolveTiming = transparentResolveTiming;
+        this.m_opaqueProduced = opaqueProduced;
+        this.m_transparentTraceProduced = transparentTraceProduced;
+        this.m_opaqueFrameIndex = opaqueFrameIndex;
+        this.m_combinedUpsample = combinedUpsample;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
 
         const Optional<GpuPhysicalQueueInfo> queue = context.compiledPlan.findQueueInfo(context.queue);
         if(!queue.has_value())
             return false;
-        if(!this.opaqueProduced)
+        if(!this.m_opaqueProduced)
             return true;
-        if(!this.shadowVisibilityTiming.has_value() || (queue.value().queueClass == CommandQueue::Compute && !this.asyncTiming.has_value()))
+        if(!this.m_shadowVisibilityTiming.has_value() || (queue.value().queueClass == CommandQueue::Compute && !this.m_asyncTiming.has_value()))
             return false;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(this.transparentTraceProduced){
-            if(!this.transparentResolveTiming.has_value())
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        if(this.m_transparentTraceProduced){
+            if(!this.m_transparentResolveTiming.has_value())
                 return false;
             b8 resolved = false;
-            if(this.combinedUpsample)
-                resolved = this.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, this.targets, this.deferredLightingResources, true);
+            if(this.m_combinedUpsample)
+                resolved = this.m_raytracingSystem.renderSoftShadowTerminalUpsample(commandList, this.m_targets, this.m_deferredLightingResources, true);
             else
-                resolved = this.raytracingSystem.renderSoftTransparentShadowFold(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex);
+                resolved = this.m_raytracingSystem.renderSoftTransparentShadowFold(commandList, this.m_targets, this.m_deferredLightingResources, this.m_opaqueFrameIndex);
             if(resolved){
-                this.transparentResolveTiming.value().finishTiming(commandList);
-                this.transparentResolveTiming.reset();
+                this.m_transparentResolveTiming.value().finishTiming(commandList);
+                this.m_transparentResolveTiming.reset();
             }
             else{
                 warning("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility");
-                this.transparentTraceProduced = false;
-                this.transparentResolveTiming.value().discardTiming();
-                this.transparentResolveTiming.reset();
+                this.m_transparentTraceProduced = false;
+                this.m_transparentResolveTiming.value().discardTiming();
+                this.m_transparentResolveTiming.reset();
             }
         }else{
-            if(this.transparentResolveTiming.has_value()){
-                this.transparentResolveTiming.value().discardTiming();
-                this.transparentResolveTiming.reset();
+            if(this.m_transparentResolveTiming.has_value()){
+                this.m_transparentResolveTiming.value().discardTiming();
+                this.m_transparentResolveTiming.reset();
             }
             warning("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility");
         }
 
-        if(ShouldPublishDeferredOpaqueFallbackUpsample(this.combinedUpsample, this.transparentTraceProduced)){
-            if(!this.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, this.targets, this.deferredLightingResources, false))
+        if(ShouldPublishDeferredOpaqueFallbackUpsample(this.m_combinedUpsample, this.m_transparentTraceProduced)){
+            if(!this.m_raytracingSystem.renderSoftShadowTerminalUpsample(commandList, this.m_targets, this.m_deferredLightingResources, false))
                 return false;
         }
 
-        this.shadowVisibilityTiming.value().finishTiming(commandList);
-        this.shadowVisibilityTiming.reset();
-        if(this.asyncTiming.has_value()){
-            this.asyncTiming.value().finishTiming(commandList);
-            this.asyncTiming.reset();
+        this.m_shadowVisibilityTiming.value().finishTiming(commandList);
+        this.m_shadowVisibilityTiming.reset();
+        if(this.m_asyncTiming.has_value()){
+            this.m_asyncTiming.value().finishTiming(commandList);
+            this.m_asyncTiming.reset();
         }
         return true;
     }
 
     public void discarded(){
-        this.transparentTraceProduced = false;
-        DiscardGpuTimingMeasure(this.asyncTiming);
-        DiscardGpuTimingMeasure(this.shadowVisibilityTiming);
-        DiscardGpuTimingMeasure(this.transparentResolveTiming);
-        this.raytracingSystem.discardSoftShadowTemporalHistory();
+        this.m_transparentTraceProduced = false;
+        DiscardGpuTimingMeasure(this.m_asyncTiming);
+        DiscardGpuTimingMeasure(this.m_shadowVisibilityTiming);
+        DiscardGpuTimingMeasure(this.m_transparentResolveTiming);
+        this.m_raytracingSystem.discardSoftShadowTemporalHistory();
     }
 }
 
 class ShadowVisibilityGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GraphicsRuntime graphics;
-    private mut DeferredFrameTargets targets;
-    private DeferredLightingGraphResources deferredLightingResources;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private in b8 prepared;
-    private GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
-    private b8 hardwareShadowSupported;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private DeferredLightingGraphResources m_deferredLightingResources;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in b8 m_prepared;
+    private GraphOwnedAdaptiveShadowPlan m_graphOwnedAdaptivePlan;
+    private b8 m_hardwareShadowSupported;
 
     public ShadowVisibilityGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -657,44 +657,44 @@ class ShadowVisibilityGraphTask{
         in GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
         in b8 hardwareShadowSupported
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.graphics = graphics;
-        this.targets = targets;
-        this.deferredLightingResources = deferredLightingResources;
-        this.timingTicket = timingTicket;
-        this.prepared = prepared;
-        this.graphOwnedAdaptivePlan = graphOwnedAdaptivePlan;
-        this.hardwareShadowSupported = hardwareShadowSupported;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_deferredLightingResources = deferredLightingResources;
+        this.m_timingTicket = timingTicket;
+        this.m_prepared = prepared;
+        this.m_graphOwnedAdaptivePlan = graphOwnedAdaptivePlan;
+        this.m_hardwareShadowSupported = hardwareShadowSupported;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.deferredLightingResources.valid())
+        if(!this.m_deferredLightingResources.valid())
             return false;
 
         Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan;
-        if(this.graphOwnedAdaptivePlan.enabled)
-            graphOwnedAdaptivePlan = Optional<in GraphOwnedAdaptiveShadowPlan>(this.graphOwnedAdaptivePlan);
+        if(this.m_graphOwnedAdaptivePlan.enabled)
+            graphOwnedAdaptivePlan = Optional<in GraphOwnedAdaptiveShadowPlan>(this.m_graphOwnedAdaptivePlan);
 
         const Optional<GpuPhysicalQueueInfo> queue = context.compiledPlan.findQueueInfo(context.queue);
         if(!queue.has_value())
             return false;
 
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
         Optional<GpuTimingMeasure> asyncTiming;
         if(queue.value().queueClass == CommandQueue::Compute)
-            asyncTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeAsyncShadow, this.graphics.getDevice(), commandList);
+            asyncTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeAsyncShadow, this.m_graphics.getDevice(), commandList);
 
         b8 shadowVisibilityWritten = false;
-        if(this.prepared && this.hardwareShadowSupported){
-            shadowVisibilityWritten = this.raytracingSystem.renderShadowVisibility(commandList, this.targets, this.deferredLightingResources).has_value();
+        if(this.m_prepared && this.m_hardwareShadowSupported){
+            shadowVisibilityWritten = this.m_raytracingSystem.renderShadowVisibility(commandList, this.m_targets, this.m_deferredLightingResources).has_value();
             if(!shadowVisibilityWritten)
                 warning("RendererSystem: ray-traced shadow visibility pass failed");
         }
-        else if(this.prepared)
-            shadowVisibilityWritten = this.raytracingSystem.renderGpuBvhShadowVisibility(commandList, this.targets, this.deferredLightingResources, false, false, false, graphOwnedAdaptivePlan).has_value();
+        else if(this.m_prepared)
+            shadowVisibilityWritten = this.m_raytracingSystem.renderGpuBvhShadowVisibility(commandList, this.m_targets, this.m_deferredLightingResources, false, false, false, graphOwnedAdaptivePlan).has_value();
 
         if(asyncTiming.has_value()){
             asyncTiming.value().finishTiming(commandList);
@@ -704,7 +704,7 @@ class ShadowVisibilityGraphTask{
     }
 
     public void discarded(){
-        this.raytracingSystem.discardSoftShadowTemporalHistory();
+        this.m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     }
 }

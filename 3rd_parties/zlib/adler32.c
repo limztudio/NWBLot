@@ -120,7 +120,6 @@ uLong ZEXPORT adler32_z(uLong adler, const Bytef *buf, z_size_t len) {
         MOD(sum2);
     }
 
-    /* return recombined sums */
     return adler | (sum2 << 16);
 }
 
@@ -139,7 +138,6 @@ local uLong adler32_combine_(uLong adler1, uLong adler2, z_off64_t len2) {
     if (len2 < 0)
         return 0xffffffffUL;
 
-    /* the derivation of this formula is left as an exercise for the reader */
     MOD63(len2);                /* assumes len2 >= 0 */
     rem = (unsigned)len2;
     sum1 = adler1 & 0xffff;

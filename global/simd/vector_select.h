@@ -13,7 +13,7 @@
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return VectorSetInt(selectX ? s_SELECT_1 : 0u, selectY ? s_SELECT_1 : 0u, selectZ ? s_SELECT_1 : 0u, selectW ? s_SELECT_1 : 0u);
+    return VectorSetInt(selectX ? s_SelectTrueMask32 : 0u, selectY ? s_SelectTrueMask32 : 0u, selectZ ? s_SelectTrueMask32 : 0u, selectW ? s_SelectTrueMask32 : 0u);
 #elif defined(FOUNDATION_HAS_NEON)
     const int32x2_t lo = vcreate_s32(static_cast<u64>(selectX) | (static_cast<u64>(selectY) << s_F32BitCount));
     const int32x2_t hi = vcreate_s32(static_cast<u64>(selectZ) | (static_cast<u64>(selectW) << s_F32BitCount));
@@ -26,7 +26,7 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorSelectControl(u32 
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
-    return VectorDoubleSetInt(selectX ? s_DoubleSELECT_1 : 0u, selectY ? s_DoubleSELECT_1 : 0u, selectZ ? s_DoubleSELECT_1 : 0u, selectW ? s_DoubleSELECT_1 : 0u);
+    return VectorDoubleSetInt(selectX ? s_SelectTrueMask64 : 0u, selectY ? s_SelectTrueMask64 : 0u, selectZ ? s_SelectTrueMask64 : 0u, selectW ? s_SelectTrueMask64 : 0u);
 }
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorAndInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{

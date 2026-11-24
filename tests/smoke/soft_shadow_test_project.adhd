@@ -239,9 +239,9 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     }
 
     private void updateWindowTitle(){
-        const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(this.m_yaw.yaw()), VectorSingle(s_2PI));
+        const VectorSingle display = CalculateSmokeYawDisplay(VectorSingle(this.m_yaw.yaw()), VectorSingle(s_TwoPi));
         const f32 yawDegrees = display.y;
-        const f32 angleDegrees = this.m_angularRadius * 360.0f / s_2PI;
+        const f32 angleDegrees = this.m_angularRadius * 360.0f / s_TwoPi;
         StringView manualSuffix = "";
         if(this.m_yaw.manualControl())
             manualSuffix = "  [manual: <- ->]";

@@ -1322,8 +1322,6 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
   }
 
   assert(!Preamble && "No Preamble should be stored at that point");
-  // If we aren't allowed to rebuild the precompiled preamble, just
-  // return now.
   if (!AllowRebuild)
     return nullptr;
 

@@ -305,8 +305,8 @@ class ArticulationLinkDef{
     public f32x4 comLocal(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 inertiaDiag(0.1f, 0.1f, 0.1f, 0.0f);
     public b8 enableLimit = false;
-    public f32 lowerLimit = -s_PI;
-    public f32 upperLimit = s_PI;
+    public f32 lowerLimit = -s_Pi;
+    public f32 upperLimit = s_Pi;
     public b8 enableDrive = false;
     public f32 driveTargetPos = 0.0f;
     public f32 driveTargetVel = 0.0f;

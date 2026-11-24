@@ -184,7 +184,7 @@ The CSG shadow tail is conditional on a ready light-space snapshot with CSG enab
 ## Math Matrix Layout
 
 1. In `global/simd/matrix.h`, `SIMDMatrix::v[0..3]` stores rows.
-2. Translation lives in the fourth column, the W lanes of `v[0]`, `v[1]`, and `v[2]`; `MatrixTranslation*` and `MatrixLookTo*` already produce the storage layout consumed by `Vector*Transform`.
+2. Translation lives in the fourth column, the W lanes of `v[0]`, `v[1]`, and `v[2]`; `MatrixTranslation*` already produces the storage layout consumed by `Vector*Transform`.
 3. `Vector*Transform` functions evaluate `result = M * v`; if a helper needs row-vector semantics, make the conversion explicit instead of changing the public math convention.
 4. Stream transforms in `global/simd/vector.h` build transposed temporaries for backend efficiency only; those transposes are implementation details, not a different API convention.
 5. Compact affine matrix boundaries are convention-sensitive: `Float34` / `Float34U` are the current 3x4 storage snapshots. Do not add an extra transpose in `LoadFloat` / `StoreFloat` for those types, or translation/basis data will round-trip incorrectly.

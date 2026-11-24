@@ -82,6 +82,66 @@ b8 CsgClipCutterRequiresShapeBounds(in b8 receiverBoundsValid, in b8 hasShaderMo
     return !hasShaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
 }
 
+b8 ResolveCsgClipWorkBoundsValues(
+    in b8 receiverValid,
+    in VectorSingle receiverMinBounds,
+    in VectorSingle receiverMaxBounds,
+    in b8 cutterBoundsResolved,
+    in b8 cutterFiniteBounds,
+    in VectorSingle cutterMinBounds,
+    in VectorSingle cutterMaxBounds,
+    mut b8 outValid,
+    mut VectorSingle outMinBounds,
+    mut VectorSingle outMaxBounds
+){
+    if(!cutterBoundsResolved){
+        if(receiverValid)
+            return false;
+        outValid = false;
+        outMinBounds = VectorZero();
+        outMaxBounds = VectorZero();
+        return true;
+    }
+    if(!cutterFiniteBounds){
+        outValid = receiverValid;
+        outMinBounds = receiverMinBounds;
+        outMaxBounds = receiverMaxBounds;
+        return true;
+    }
+    if(!receiverValid){
+        outValid = true;
+        outMinBounds = cutterMinBounds;
+        outMaxBounds = cutterMaxBounds;
+        return true;
+    }
+    if(
+        !IsFinite(receiverMinBounds.xyz)
+        || !IsFinite(receiverMaxBounds.xyz)
+        || !IsFinite(cutterMinBounds.xyz)
+        || !IsFinite(cutterMaxBounds.xyz)
+        || receiverMinBounds.x > receiverMaxBounds.x
+        || receiverMinBounds.y > receiverMaxBounds.y
+        || receiverMinBounds.z > receiverMaxBounds.z
+        || cutterMinBounds.x > cutterMaxBounds.x
+        || cutterMinBounds.y > cutterMaxBounds.y
+        || cutterMinBounds.z > cutterMaxBounds.z
+    )
+        return false;
+    if(
+        receiverMaxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverMinBounds.x
+        || receiverMaxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverMinBounds.y
+        || receiverMaxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverMinBounds.z
+    )
+        return false;
+
+    const VectorSingle mergedMin = Max(receiverMinBounds, cutterMinBounds);
+    const VectorSingle mergedMax = Min(receiverMaxBounds, cutterMaxBounds);
+    outMinBounds = mergedMin;
+    outMaxBounds = mergedMax;
+    outValid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
+    return true;
+}
+
 Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     in CsgClipWorkBounds receiverBounds,
     in b8 cutterBoundsResolved,
@@ -89,45 +149,27 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     in VectorSingle cutterMinBounds,
     in VectorSingle cutterMaxBounds
 ){
-    CsgClipWorkBounds outWorkBounds;
-    if(!cutterBoundsResolved){
-        if(receiverBounds.valid)
-            return MakeUnexpected(Failure());
-        return outWorkBounds;
-    }
-    if(!cutterFiniteBounds)
-        return receiverBounds;
-    if(!receiverBounds.valid){
-        outWorkBounds.minBounds = f32x4(cutterMinBounds);
-        outWorkBounds.maxBounds = f32x4(cutterMaxBounds);
-        outWorkBounds.valid = true;
-        return outWorkBounds;
-    }
-    if(
-        !IsFinite(VectorSingle(receiverBounds.minBounds.x, receiverBounds.minBounds.y, receiverBounds.minBounds.z, 0.0f))
-        || !IsFinite(VectorSingle(receiverBounds.maxBounds.x, receiverBounds.maxBounds.y, receiverBounds.maxBounds.z, 0.0f))
-        || !IsFinite(cutterMinBounds.xyz)
-        || !IsFinite(cutterMaxBounds.xyz)
-        || receiverBounds.minBounds.x > receiverBounds.maxBounds.x
-        || receiverBounds.minBounds.y > receiverBounds.maxBounds.y
-        || receiverBounds.minBounds.z > receiverBounds.maxBounds.z
-        || cutterMinBounds.x > cutterMaxBounds.x
-        || cutterMinBounds.y > cutterMaxBounds.y
-        || cutterMinBounds.z > cutterMaxBounds.z
-    )
-        return MakeUnexpected(Failure());
-    if(
-        receiverBounds.maxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverBounds.minBounds.x
-        || receiverBounds.maxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverBounds.minBounds.y
-        || receiverBounds.maxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverBounds.minBounds.z
-    )
+    b8 resolvedValid = false;
+    VectorSingle resolvedMin = VectorZero();
+    VectorSingle resolvedMax = VectorZero();
+    if(!ResolveCsgClipWorkBoundsValues(
+        receiverBounds.valid,
+        VectorSingle(receiverBounds.minBounds),
+        VectorSingle(receiverBounds.maxBounds),
+        cutterBoundsResolved,
+        cutterFiniteBounds,
+        cutterMinBounds,
+        cutterMaxBounds,
+        resolvedValid,
+        resolvedMin,
+        resolvedMax
+    ))
         return MakeUnexpected(Failure());
 
-    const VectorSingle mergedMin = Max(VectorSingle(receiverBounds.minBounds), cutterMinBounds);
-    const VectorSingle mergedMax = Min(VectorSingle(receiverBounds.maxBounds), cutterMaxBounds);
-    outWorkBounds.minBounds = f32x4(mergedMin);
-    outWorkBounds.maxBounds = f32x4(mergedMax);
-    outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
+    CsgClipWorkBounds outWorkBounds;
+    outWorkBounds.minBounds = f32x4(resolvedMin);
+    outWorkBounds.maxBounds = f32x4(resolvedMax);
+    outWorkBounds.valid = resolvedValid;
     return outWorkBounds;
 }
 
@@ -144,25 +186,84 @@ Expected<Span<u8>> TryResolveCsgCutterParameterBytes(
     return resolved;
 }
 
-Expected<MatrixSingle> TryInvertCsgReceiverLocalToWorld(in b8 hasTransform, in MatrixSingle localToWorld){
-    if(!hasTransform)
-        return MatrixIdentity();
+b8 TryInvertCsgReceiverLocalToWorld(in b8 hasTransform, in MatrixSingle localToWorld, mut MatrixSingle outMatrix){
+    if(!hasTransform){
+        outMatrix = MatrixIdentity();
+        return true;
+    }
     const VectorSingle determinant = MatrixDeterminant(localToWorld);
     if(!IsFinite(determinant) || Abs(determinant).x <= 0.0f)
-        return MakeUnexpected(Failure());
-    return Inverse(localToWorld);
+        return false;
+    outMatrix = Inverse(localToWorld);
+    return true;
 }
 
-Expected<MatrixSingle> TryBuildCsgReceiverWorldToLocal(
+b8 TryBuildCsgReceiverWorldToLocal(
     in b8 hasTransform,
     in VectorSingle position,
     in VectorSingle rotation,
-    in VectorSingle scale
+    in VectorSingle scale,
+    mut MatrixSingle outMatrix
 ){
-    if(!hasTransform)
-        return MatrixIdentity();
+    if(!hasTransform){
+        outMatrix = MatrixIdentity();
+        return true;
+    }
     const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
-    return TryInvertCsgReceiverLocalToWorld(true, localToWorld);
+    return TryInvertCsgReceiverLocalToWorld(true, localToWorld, outMatrix);
+}
+
+void LoadCsgReceiverWorldBoundsValuesFromMatrix(
+    in CsgReceiverCpuBounds receiverBounds,
+    in b8 hasTransform,
+    in MatrixSingle localToWorld,
+    mut b8 outValid,
+    mut VectorSingle outMinBounds,
+    mut VectorSingle outMaxBounds
+){
+    outValid = false;
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    if(!CsgReceiverBoundsCanCull(receiverBounds))
+        return;
+
+    const VectorSingle localMinBounds = VectorSingle(receiverBounds.minBounds);
+    const VectorSingle localMaxBounds = VectorSingle(receiverBounds.maxBounds);
+    if(!AabbValid(localMinBounds, localMaxBounds))
+        return;
+
+    if(!hasTransform){
+        outMinBounds = localMinBounds;
+        outMaxBounds = localMaxBounds;
+        outValid = true;
+        return;
+    }
+
+    VectorSingle transformedMin(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle transformedMax(0.0f, 0.0f, 0.0f, 0.0f);
+    if(TryTransformAabb(localToWorld, localMinBounds, localMaxBounds, transformedMin, transformedMax)){
+        outMinBounds = transformedMin;
+        outMaxBounds = transformedMax;
+        outValid = true;
+    }
+}
+
+void LoadCsgReceiverWorldBoundsValuesFromTransform(
+    in CsgReceiverCpuBounds receiverBounds,
+    in b8 hasTransform,
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale,
+    mut b8 outValid,
+    mut VectorSingle outMinBounds,
+    mut VectorSingle outMaxBounds
+){
+    if(!hasTransform){
+        LoadCsgReceiverWorldBoundsValuesFromMatrix(receiverBounds, false, MatrixIdentity(), outValid, outMinBounds, outMaxBounds);
+        return;
+    }
+    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
+    LoadCsgReceiverWorldBoundsValuesFromMatrix(receiverBounds, true, localToWorld, outValid, outMinBounds, outMaxBounds);
 }
 
 CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromMatrix(
@@ -171,27 +272,12 @@ CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromMatrix(
     in MatrixSingle localToWorld
 ){
     CsgClipWorkBounds worldBounds;
-    if(!CsgReceiverBoundsCanCull(receiverBounds))
-        return worldBounds;
-
-    const VectorSingle localMinBounds(receiverBounds.minBounds);
-    const VectorSingle localMaxBounds(receiverBounds.maxBounds);
-    if(!AabbValid(localMinBounds, localMaxBounds))
-        return worldBounds;
-
-    if(!hasTransform){
-        worldBounds.minBounds = f32x4(localMinBounds);
-        worldBounds.maxBounds = f32x4(localMaxBounds);
-        worldBounds.valid = true;
-        return worldBounds;
-    }
-
-    VectorSingle transformedMin(0.0f, 0.0f, 0.0f, 0.0f);
-    VectorSingle transformedMax(0.0f, 0.0f, 0.0f, 0.0f);
-    if(TryTransformAabb(localToWorld, localMinBounds, localMaxBounds, transformedMin, transformedMax)){
-        worldBounds.minBounds = f32x4(transformedMin);
-        worldBounds.maxBounds = f32x4(transformedMax);
-        worldBounds.valid = true;
+    VectorSingle resolvedMin = VectorZero();
+    VectorSingle resolvedMax = VectorZero();
+    LoadCsgReceiverWorldBoundsValuesFromMatrix(receiverBounds, hasTransform, localToWorld, worldBounds.valid, resolvedMin, resolvedMax);
+    if(worldBounds.valid){
+        worldBounds.minBounds = f32x4(resolvedMin);
+        worldBounds.maxBounds = f32x4(resolvedMax);
     }
     return worldBounds;
 }
@@ -225,7 +311,9 @@ CsgCutterGpuData BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
     in CsgShapeTypeId shapeType,
     in MatrixSingle worldToShape,
     in Span<u8> parameterBytes,
-    in CsgClipWorkBounds workBounds,
+    in b8 workValid,
+    in VectorSingle workMinBounds,
+    in VectorSingle workMaxBounds,
     in b8 meshViewReady,
     in MatrixSingle worldToClip,
     in u32 frameWidth,
@@ -233,8 +321,8 @@ CsgCutterGpuData BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
     mut CsgFrameWorkRegion inOutReceiverWorkRegion
 ){
     const CsgCutterGpuData cutterGpuData = BuildCsgCutterGpuData(shapeType, worldToShape, parameterBytes);
-    if(meshViewReady && workBounds.valid)
-        inOutReceiverWorkRegion.expandWorldBounds(worldToClip, VectorSingle(workBounds.minBounds), VectorSingle(workBounds.maxBounds), frameWidth, frameHeight);
+    if(meshViewReady && workValid)
+        inOutReceiverWorkRegion.expandWorldBounds(worldToClip, workMinBounds, workMaxBounds, frameWidth, frameHeight);
     else
         inOutReceiverWorkRegion.expandFull();
     return cutterGpuData;

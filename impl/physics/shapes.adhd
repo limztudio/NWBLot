@@ -363,12 +363,12 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         const VectorSingle hYzxSq(hSq.y, hSq.z, hSq.x, 0.0f);
         const VectorSingle hZxySq(hSq.z, hSq.x, hSq.y, 0.0f);
         const VectorSingle diagI = (hYzxSq + hZxySq) * ((1.0f / 3.0f) * mass);
-        const Mat3 localI(
+        const MatrixSingle localI(
             VectorSingle(diagI.x, 0.0f, 0.0f, 0.0f),
             VectorSingle(0.0f, diagI.y, 0.0f, 0.0f),
             VectorSingle(0.0f, 0.0f, diagI.z, 0.0f)
         );
-        const Mat3 rotI = RotateSymmetricMat3(SafeNormalizeQuat(VectorSingle(hull.boxRotation)), localI);
+        const MatrixSingle rotI = Matrix3RotateSymmetric(SafeNormalizeQuat(VectorSingle(hull.boxRotation)), localI);
         const VectorSingle c = hull.centroid();
         const VectorSingle cYzx(c.y, c.z, c.x, 0.0f);
         const VectorSingle cZxy(c.z, c.x, c.y, 0.0f);
@@ -376,14 +376,14 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         const VectorSingle shiftOff = (c * cZxy) * (-mass);
         outMass.setCenterMass(c, mass);
         outMass.inertia = Mat3(
-            VectorSingle(rotI.row0) + VectorSingle(shiftDiag.x, shiftOff.y, shiftOff.x, 0.0f),
-            VectorSingle(rotI.row1) + VectorSingle(shiftOff.y, shiftDiag.y, shiftOff.z, 0.0f),
-            VectorSingle(rotI.row2) + VectorSingle(shiftOff.x, shiftOff.z, shiftDiag.z, 0.0f)
+            rotI[0u] + VectorSingle(shiftDiag.x, shiftOff.y, shiftOff.x, 0.0f),
+            rotI[1u] + VectorSingle(shiftOff.y, shiftDiag.y, shiftOff.z, 0.0f),
+            rotI[2u] + VectorSingle(shiftOff.x, shiftOff.z, shiftDiag.z, 0.0f)
         );
         return outMass;
     }
 
-    const VectorSingle refPoint = Vec3FromU(hull.vertices[0u]);
+    const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
     f32 volume6 = 0.0f;
     VectorSingle comAccum = VectorSingle(0.0f);
     VectorSingle iAxisAccum = VectorSingle(0.0f);
@@ -394,12 +394,12 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         if(face.vertexCount < 3u)
             continue;
         u8 eIdx = face.edge;
-        const VectorSingle v0 = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]) - refPoint;
+        const VectorSingle v0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f) - refPoint;
         eIdx = hull.halfEdges[eIdx].next;
-        VectorSingle vPrev = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]) - refPoint;
+        VectorSingle vPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f) - refPoint;
         for(u8 t = 2u; t < face.vertexCount; ++t){
             eIdx = hull.halfEdges[eIdx].next;
-            const VectorSingle vCurr = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]) - refPoint;
+            const VectorSingle vCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f) - refPoint;
             const f32 det = Vector3Dot(v0, Cross(vPrev, vCurr)).x;
             volume6 += det;
             comAccum = comAccum + (v0 + vPrev + vCurr) * (0.25f * det);
@@ -449,30 +449,32 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     return outMass;
 }
 
-Aabb3D ComputeSphereAabb(in SphereShape sphere, in Transform3D xf){
-    const VectorSingle wc = TransformPoint(xf, sphere.center());
+void ComputeSphereAabbValues(in SphereShape sphere, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
+    const VectorSingle wc = TransformPointValues(xfPos, xfRot, sphere.center());
     const f32 rad = sphere.radius();
     const VectorSingle r = VectorSingle(rad, rad, rad, 0.0f);
-    return Aabb3D(wc - r, wc + r);
+    outMin = wc - r;
+    outMax = wc + r;
 }
 
-Aabb3D ComputeCapsuleAabb(in CapsuleShape capsule, in Transform3D xf){
-    const VectorSingle p1 = TransformPoint(xf, capsule.center1());
-    const VectorSingle p2 = TransformPoint(xf, capsule.center2Vec());
+void ComputeCapsuleAabbValues(in CapsuleShape capsule, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
+    const VectorSingle p1 = TransformPointValues(xfPos, xfRot, capsule.center1());
+    const VectorSingle p2 = TransformPointValues(xfPos, xfRot, capsule.center2Vec());
     const f32 rad = capsule.radius();
     const VectorSingle r = VectorSingle(rad, rad, rad, 0.0f);
-    return Aabb3D(Min(p1, p2) - r, Max(p1, p2) + r);
+    outMin = Min(p1, p2) - r;
+    outMax = Max(p1, p2) + r;
 }
 
-Aabb3D ComputeHullAabb(in HullShape hull, in Transform3D xf){
+void ComputeHullAabbValues(in HullShape hull, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
     const f32 r = hull.radius();
     if(hull.isBox()){
         const VectorSingle localCenter = hull.centroid();
-        VectorSingle worldCenter = VectorSingle(xf.position);
+        VectorSingle worldCenter = xfPos;
         if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
-            worldCenter = TransformPoint(xf, localCenter);
+            worldCenter = TransformPointValues(xfPos, xfRot, localCenter);
 
-        VectorSingle qBox = VectorSingle(xf.rotation);
+        VectorSingle qBox = xfRot;
         if(hull.boxRotation.x != 0.0f || hull.boxRotation.y != 0.0f || hull.boxRotation.z != 0.0f || hull.boxRotation.w != 1.0f)
             qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hull.boxRotation)));
 
@@ -486,31 +488,42 @@ Aabb3D ComputeHullAabb(in HullShape hull, in Transform3D xf){
         const VectorSingle az(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
         const VectorSingle ext = hull.halfExtents();
         const VectorSingle extent = Abs(ax) * ext.x + Abs(ay) * ext.y + Abs(az) * ext.z + VectorSingle(r, r, r, 0.0f);
-        return Aabb3D(worldCenter - extent, worldCenter + extent);
+        outMin = worldCenter - extent;
+        outMax = worldCenter + extent;
+        return;
     }
 
-    if(hull.vertices.empty())
-        return Aabb3D();
+    if(hull.vertices.empty()){
+        outMin = VectorSingle(0.0f);
+        outMax = VectorSingle(0.0f);
+        return;
+    }
 
-    VectorSingle minPt = TransformPoint(xf, Vec3FromU(hull.vertices[0u]));
+    VectorSingle minPt = TransformPointValues(xfPos, xfRot, VectorSingle(hull.vertices[0u], 0.0f));
     VectorSingle maxPt = minPt;
     for(usize i = 1u; i < hull.vertices.size(); ++i){
-        const VectorSingle wp = TransformPoint(xf, Vec3FromU(hull.vertices[i]));
+        const VectorSingle wp = TransformPointValues(xfPos, xfRot, VectorSingle(hull.vertices[i], 0.0f));
         minPt = Min(minPt, wp);
         maxPt = Max(maxPt, wp);
     }
     const VectorSingle rv = VectorSingle(r, r, r, 0.0f);
-    return Aabb3D(minPt - rv, maxPt + rv);
+    outMin = minPt - rv;
+    outMax = maxPt + rv;
 }
 
 u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx){
     const u32 nodeIdx = cast<u32>(mesh.nodes.size());
     mesh.nodes.push_back(MeshBvhNode());
 
-    Aabb3D box = triAabbs[triOrder[beginIdx]];
-    for(usize i = beginIdx + 1u; i < endIdx; ++i)
-        box = AabbUnion(box, triAabbs[triOrder[i]]);
-    mesh.nodes[nodeIdx].setAabb(box);
+    VectorSingle boxMin(triAabbs[triOrder[beginIdx]].lowerBound);
+    VectorSingle boxMax(triAabbs[triOrder[beginIdx]].upperBound);
+    for(usize i = beginIdx + 1u; i < endIdx; ++i){
+        in Aabb3D triBox = triAabbs[triOrder[i]];
+        boxMin = Min(boxMin, VectorSingle(triBox.lowerBound));
+        boxMax = Max(boxMax, VectorSingle(triBox.upperBound));
+    }
+    mesh.nodes[nodeIdx].aabbMinLeft = f32x3_u32(boxMin.x, boxMin.y, boxMin.z, mesh.nodes[nodeIdx].aabbMinLeft.w);
+    mesh.nodes[nodeIdx].aabbMaxRight = f32x3_u32(boxMax.x, boxMax.y, boxMax.z, mesh.nodes[nodeIdx].aabbMaxRight.w);
 
     const usize triCount = endIdx - beginIdx;
     if(triCount <= 4u){
@@ -518,14 +531,14 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
         return nodeIdx;
     }
 
-    const VectorSingle ext = VectorSingle(box.upperBound) - VectorSingle(box.lowerBound);
+    const VectorSingle ext = boxMax - boxMin;
     usize splitAxis = 0u;
     if(ext.y > ext.x && ext.y >= ext.z)
         splitAxis = 1u;
     else if(ext.z > ext.x && ext.z > ext.y)
         splitAxis = 2u;
 
-    const f32 splitMid = (VectorGetByIndex(VectorSingle(box.lowerBound), cast<isize>(splitAxis)) + VectorGetByIndex(VectorSingle(box.upperBound), cast<isize>(splitAxis))) * 0.5f;
+    const f32 splitMid = (VectorGetByIndex(boxMin, cast<isize>(splitAxis)) + VectorGetByIndex(boxMax, cast<isize>(splitAxis))) * 0.5f;
 
     usize midIdx = beginIdx;
     for(usize i = beginIdx; i < endIdx; ++i){
@@ -578,10 +591,10 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
             continue;
 
         MeshTriangle tri;
-        tri.v0 = PackVec3U(p0);
-        tri.v1 = PackVec3U(p1);
-        tri.v2 = PackVec3U(p2);
-        tri.normal = PackVec3U(SafeNormalizeVec3(cr, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+        tri.v0 = f32x3u(p0);
+        tri.v1 = f32x3u(p1);
+        tri.v2 = f32x3u(p2);
+        tri.normal = f32x3u(SafeNormalizeVec3(cr, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
         rawTriangles.push_back(tri);
         rawTriAabbs.push_back(Aabb3D(Min(p0, Min(p1, p2)), Max(p0, Max(p1, p2))));
         rawTriIndices.push_back(u32x4(i0, i1, i2, 0u));
@@ -645,8 +658,8 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
         const u32 tB = rec.triIdx[1u];
         const u8 eA = rec.edgeIdx[0u];
         const u8 eB = rec.edgeIdx[1u];
-        const VectorSingle nA = Vec3FromU(rawTriangles[tA].normal);
-        const VectorSingle nB = Vec3FromU(rawTriangles[tB].normal);
+        const VectorSingle nA = VectorSingle(rawTriangles[tA].normal, 0.0f);
+        const VectorSingle nB = VectorSingle(rawTriangles[tB].normal, 0.0f);
 
         const u32x4 ivA = rawTriIndices[tA];
         u32 edgeVertA = ivA.x;
@@ -731,22 +744,28 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
             mesh.nodes[slotIdx].aabbMaxRight.w |= (flag << shift);
     }
     mesh.triangles.swap(orderedTris);
-    Aabb3D localBox = mesh.nodes[0u].aabb();
-    if(radius > 0.0f)
-        localBox = FattenAabb(localBox, radius);
-    mesh.setLocalAabb(localBox);
+    VectorSingle localMin(mesh.nodes[0u].aabbMinLeft, 0.0f);
+    VectorSingle localMax(mesh.nodes[0u].aabbMaxRight, 0.0f);
+    if(radius > 0.0f){
+        const VectorSingle rVec(radius, radius, radius, 0.0f);
+        localMin = localMin - rVec;
+        localMax = localMax + rVec;
+    }
+    mesh.setLocalAabb(Aabb3D(localMin, localMax));
 
     return mesh;
 }
 
-Aabb3D ComputeMeshAabb(in MeshShape mesh, in Transform3D xf){
-    if(mesh.nodes.empty())
-        return Aabb3D();
+void ComputeMeshAabbValues(in MeshShape mesh, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
+    if(mesh.nodes.empty()){
+        outMin = VectorSingle(0.0f);
+        outMax = VectorSingle(0.0f);
+        return;
+    }
 
-    const Aabb3D rootBox = mesh.nodes[0u].aabb();
-    const VectorSingle lMin = VectorSingle(rootBox.lowerBound);
-    const VectorSingle lMax = VectorSingle(rootBox.upperBound);
-    VectorSingle wMin = TransformPoint(xf, lMin);
+    const VectorSingle lMin(mesh.nodes[0u].aabbMinLeft, 0.0f);
+    const VectorSingle lMax(mesh.nodes[0u].aabbMaxRight, 0.0f);
+    VectorSingle wMin = TransformPointValues(xfPos, xfRot, lMin);
     VectorSingle wMax = wMin;
 
     for(u32 mask = 1u; mask < 8u; ++mask){
@@ -756,14 +775,15 @@ Aabb3D ComputeMeshAabb(in MeshShape mesh, in Transform3D xf){
         if((mask & 1u) != 0u) cx = lMax.x;
         if((mask & 2u) != 0u) cy = lMax.y;
         if((mask & 4u) != 0u) cz = lMax.z;
-        const VectorSingle wp = TransformPoint(xf, VectorSingle(cx, cy, cz, 0.0f));
+        const VectorSingle wp = TransformPointValues(xfPos, xfRot, VectorSingle(cx, cy, cz, 0.0f));
         wMin = Min(wMin, wp);
         wMax = Max(wMax, wp);
     }
 
     const f32 rad = mesh.radius();
     const VectorSingle r(rad, rad, rad, 0.0f);
-    return Aabb3D(wMin - r, wMax + r);
+    outMin = wMin - r;
+    outMax = wMax + r;
 }
 
 

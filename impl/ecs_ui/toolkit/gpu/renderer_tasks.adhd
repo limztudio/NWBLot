@@ -264,7 +264,7 @@ Optional<GpuScissorRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in
     const auto bounds = TryComputeGpuScissorBounds(geometry, draw);
     if(!bounds.has_value())
         return Optional<GpuScissorRect>();
-    return Optional<GpuScissorRect>(GpuScissorRect(bounds.value().x, bounds.value().y, bounds.value().z, bounds.value().w));
+    return Optional<GpuScissorRect>(bounds.value());
 }
 
 b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut GpuPaintPushConstants push){

@@ -50,16 +50,14 @@ Expected<Vector<u16>> BuildClusterJointMap(in MeshInstance instance, in ImportOp
             return MakeUnexpected(Failure());
         }
         const UfbxMatrix inverseBind = MultiplyUfbxMatrices(cluster.geometryToBone(), meshFromOutput);
-        const Expected<MatrixSingle> inverseBindValueResult = TryConvertFbxInverseBindMatrix(LoadUfbxMatrix(inverseBind), cast<f64>(UfbxDeterminant(inverseBind)));
-        if(!inverseBindValueResult.has_value())
+        MatrixSingle inverseBindValue = MatrixSingle();
+        if(!TryConvertFbxInverseBindMatrix(LoadUfbxMatrix(inverseBind), cast<f64>(UfbxDeterminant(inverseBind)), inverseBindValue))
             return MakeUnexpected(Failure());
-        const MatrixSingle inverseBindValue = inverseBindValueResult.value();
 
         const UfbxMatrix bindPose = InvertUfbxMatrix(inverseBind);
-        const Expected<MatrixSingle> bindPoseValueResult = TryConvertFbxBindPoseMatrix(LoadUfbxMatrix(bindPose));
-        if(!bindPoseValueResult.has_value())
+        MatrixSingle bindPoseValue = MatrixSingle();
+        if(!TryConvertFbxBindPoseMatrix(LoadUfbxMatrix(bindPose), bindPoseValue))
             return MakeUnexpected(Failure());
-        const MatrixSingle bindPoseValue = bindPoseValueResult.value();
 
         const usize key = cluster.bone().identity();
         if(inOutContext.jointLookup.contains(key)){
@@ -113,9 +111,11 @@ Expected<MeshSkinInfluence> LoadInfluence(in UfbxSkin skin, in Span<u16> cluster
             return MakeUnexpected(Failure());
     }
 
-    if(!TryNormalizeFbxSkinInfluenceWeights(weightSum, result))
+    VectorSingle normalized(0.0f);
+    if(!TryNormalizeFbxSkinInfluenceWeights(weightSum, VectorSingle(result.weight), normalized))
         return MakeUnexpected(Failure());
 
+    result.weight = f32x4u(normalized);
     return result;
 }
 

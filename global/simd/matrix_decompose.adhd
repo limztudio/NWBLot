@@ -16,27 +16,15 @@ extern class MatrixDoubleDecomposition{
     VectorDouble translation;
 };
 
-[cpp_name("::RigidDualQuaternion"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class RigidDualQuaternion{
-    VectorSingle dual;
-    VectorSingle real;
-};
-
-[cpp_name("::RigidDualQuaternionDouble"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class RigidDualQuaternionDouble{
-    VectorDouble dual;
-    VectorDouble real;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [cpp_name("::MatrixDecompose")]
-extern Expected<MatrixDecomposition> MatrixDecompose(in MatrixSingle a0);
+extern b8 MatrixDecompose(in MatrixSingle a0, mut MatrixSingle outDecomposition);
 
 [cpp_name("::MatrixDoubleDecompose")]
-extern Expected<MatrixDoubleDecomposition> MatrixDoubleDecompose(in MatrixDouble a0);
+extern b8 MatrixDoubleDecompose(in MatrixDouble a0, mut MatrixDouble outDecomposition);
 
 [cpp_name("::MatrixDoubleIsAffine")]
 extern b8 MatrixDoubleIsAffine(in MatrixDouble a0, in auto a1);
@@ -51,10 +39,10 @@ extern b8 MatrixDoubleIsRigidAffine(in MatrixDouble a0, in auto a1, in auto a2);
 extern VectorDouble MatrixDoubleLinearDeterminantV(in MatrixDouble a0);
 
 [cpp_name("::MatrixDoubleTryBuildRigidDualQuaternion")]
-extern Expected<RigidDualQuaternionDouble> MatrixDoubleTryBuildRigidDualQuaternion(in MatrixDouble a0, in auto a1, in auto a2);
+extern b8 MatrixDoubleTryBuildRigidDualQuaternion(in MatrixDouble a0, in auto a1, in auto a2, mut VectorDouble outReal, mut VectorDouble outDual);
 
 [cpp_name("::MatrixDoubleTryBuildRigidRotationQuaternion")]
-extern Expected<VectorDouble> MatrixDoubleTryBuildRigidRotationQuaternion(in MatrixDouble a0, in auto a1, in auto a2);
+extern b8 MatrixDoubleTryBuildRigidRotationQuaternion(in MatrixDouble a0, in auto a1, in auto a2, mut VectorDouble outQuaternion);
 
 [cpp_name("::MatrixIsAffine")]
 extern b8 MatrixIsAffine(in MatrixSingle a0, in auto a1);
@@ -69,10 +57,10 @@ extern b8 MatrixIsRigidAffine(in MatrixSingle a0, in auto a1, in auto a2);
 extern VectorSingle MatrixLinearDeterminantV(in MatrixSingle a0);
 
 [cpp_name("::MatrixTryBuildRigidDualQuaternion")]
-extern Expected<RigidDualQuaternion> MatrixTryBuildRigidDualQuaternion(in MatrixSingle a0, in auto a1, in auto a2);
+extern b8 MatrixTryBuildRigidDualQuaternion(in MatrixSingle a0, in auto a1, in auto a2, mut VectorSingle outReal, mut VectorSingle outDual);
 
 [cpp_name("::MatrixTryBuildRigidRotationQuaternion")]
-extern Expected<VectorSingle> MatrixTryBuildRigidRotationQuaternion(in MatrixSingle a0, in auto a1, in auto a2);
+extern b8 MatrixTryBuildRigidRotationQuaternion(in MatrixSingle a0, in auto a1, in auto a2, mut VectorSingle outQuaternion);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

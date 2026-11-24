@@ -72,7 +72,11 @@ Expected<CsgShapeBounds> EvaluateCsgShapeBounds<ShapeT : ICsgShape>(in MatrixSin
         return MakeUnexpected(Failure());
     if(!bounds.value().finiteBounds)
         return CsgShapeBounds();
-    return CsgShapeBounds(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds), true);
+    CsgShapeBounds worldBounds;
+    worldBounds.minBounds = bounds.value().minBounds;
+    worldBounds.maxBounds = bounds.value().maxBounds;
+    worldBounds.finiteBounds = true;
+    return worldBounds;
 }
 
 Expected<CsgShapeTypeDesc> MakeCsgShapeTypeDesc<ShapeT : ICsgShape>(in Name shaderModule, in StringView moduleInclude){

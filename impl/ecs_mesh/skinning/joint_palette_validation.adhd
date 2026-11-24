@@ -76,11 +76,10 @@ b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSi
 }
 
 Expected<SkeletonJointMatrix> TryBuildRigidDualQuaternionPayload(in MatrixSingle matrix){
-    const Expected<RigidDualQuaternion> payload = MatrixTryBuildRigidDualQuaternion(matrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
-    if(!payload.has_value())
+    VectorSingle real(0.0f);
+    VectorSingle dual(0.0f);
+    if(!MatrixTryBuildRigidDualQuaternion(matrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon, real, dual))
         return MakeUnexpected(Failure());
-    const VectorSingle real = payload.value().real;
-    const VectorSingle dual = payload.value().dual;
     return SkeletonJointMatrix(real.x, real.y, real.z, real.w, dual.x, dual.y, dual.z, dual.w, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -101,19 +100,18 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntryValidated(
     }
     MatrixSingle resolvedJoint = sourceJoint;
     if(hasInverseBindMatrices){
-        const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrix3x4Prevalidated(
+        if(!TryResolveSkinningJointMatrix3x4Prevalidated(
             sourceJoint,
             true,
             true,
             MatrixSingle(inverseBindMatrices[jointIndex]),
             inverseBindValidated,
-            s_SkinValidationEpsilon
-        );
-        if(!jointMatrix.has_value()){
+            s_SkinValidationEpsilon,
+            resolvedJoint
+        )){
             error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
             return MakeUnexpected(Failure());
         }
-        resolvedJoint = jointMatrix.value();
     }
     if(!useDualQuaternionPayload)
         return SkeletonJointMatrix(resolvedJoint);

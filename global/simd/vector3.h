@@ -195,24 +195,26 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDouble3Normalize(S
     return VectorDoubleAndInt(VectorDoubleSelect(s_DoubleSIMDQNaN, result, VectorDoubleNotEqualInt(lengthSq, s_DoubleSIMDInfinity)), s_DoubleSIMDMask3);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorSingleResult> FOUNDATION_SIMD_CALL Vector3TryNormalize(SIMDVectorSingle value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL Vector3TryNormalize(SIMDVectorSingle value, SIMDVectorSingle& outValue)noexcept{
     const SIMDVectorSingle lengthSquared = Vector3LengthSq(value);
     if(!VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquared, VectorZero()))
-        return MakeUnexpected(Failure{});
+        return false;
 
     const SIMDVectorSingle normalized = Vector3Normalize(value);
     FOUNDATION_ASSERT(Vector3IsFinite(normalized));
-    return SIMDVectorSingleResult{ normalized };
+    outValue = normalized;
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorDoubleResult> FOUNDATION_SIMD_CALL VectorDouble3TryNormalize(SIMDVectorDouble value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL VectorDouble3TryNormalize(SIMDVectorDouble value, SIMDVectorDouble& outValue)noexcept{
     const SIMDVectorDouble lengthSquared = VectorDouble3LengthSq(value);
     if(!VectorDoubleIsFinite(lengthSquared, VectorDoubleComponentMask::s_DoubleXYZW) || !VectorDouble3Greater(lengthSquared, VectorDoubleZero()))
-        return MakeUnexpected(Failure{});
+        return false;
 
     const SIMDVectorDouble normalized = VectorDouble3Normalize(value);
     FOUNDATION_ASSERT(VectorDouble3IsFinite(normalized));
-    return SIMDVectorDoubleResult{ normalized };
+    outValue = normalized;
+    return true;
 }
 
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL Vector3NormalizeOr(SIMDVectorSingle value, SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{

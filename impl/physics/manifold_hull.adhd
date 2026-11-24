@@ -62,15 +62,15 @@ VectorSingle HullSupportVertex(in HullShape hull, in VectorSingle dir){
         return VectorSingle(0.0f);
     const VectorSingle dirZero = VectorSingle(dir, 0.0f);
     usize best = 0u;
-    f32 bestDot = Vector3Dot(Vec3FromU(hull.vertices[0u]), dirZero).x;
+    f32 bestDot = Vector3Dot(VectorSingle(hull.vertices[0u], 0.0f), dirZero).x;
     for(usize i = 1u; i < hull.vertices.size(); ++i){
-        const f32 d = Vector3Dot(Vec3FromU(hull.vertices[i]), dirZero).x;
+        const f32 d = Vector3Dot(VectorSingle(hull.vertices[i], 0.0f), dirZero).x;
         if(d > bestDot){
             bestDot = d;
             best = i;
         }
     }
-    return Vec3FromU(hull.vertices[best]);
+    return VectorSingle(hull.vertices[best], 0.0f);
 }
 
 b8 IsMinkowskiFace(in VectorSingle a, in VectorSingle b, in VectorSingle edgeBA, in VectorSingle c, in VectorSingle d, in VectorSingle edgeDC){
@@ -81,16 +81,15 @@ b8 IsMinkowskiFace(in VectorSingle a, in VectorSingle b, in VectorSingle edgeBA,
     return (cba * dba < 0.0f) && (adc * bdc < 0.0f) && (cba * bdc > 0.0f);
 }
 
-void QueryFaceAxesA(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA, mut SeparatingAxisResult outBest){
+void QueryFaceAxesA(in HullShape hullA, in HullShape hullB, in VectorSingle relPosBtoA, in VectorSingle relRotBtoA, mut SeparatingAxisResult outBest){
     outBest.kind = SeparatingFeatureKind::FaceAxisA;
     outBest.separation = -s_MaxF32;
-    const VectorSingle qB = VectorSingle(xfBtoA.rotation);
     for(usize i = 0u; i < hullA.facePlanes.size(); ++i){
         const VectorSingle nA = VectorSingle(hullA.facePlanes[i].normalOffset, 0.0f);
         const f32 offsetA = hullA.facePlanes[i].normalOffset.w;
-        const VectorSingle dirInB = Vector3InverseRotate(-nA, qB);
+        const VectorSingle dirInB = Vector3InverseRotate(-nA, relRotBtoA);
         const VectorSingle supInB = HullSupportVertex(hullB, dirInB);
-        const VectorSingle supInA = TransformPoint(xfBtoA, supInB);
+        const VectorSingle supInA = TransformPointValues(relPosBtoA, relRotBtoA, supInB);
         const f32 sep = Vector3Dot(nA, supInA).x - offsetA;
         if(sep > outBest.separation){
             outBest.separation = sep;
@@ -100,17 +99,18 @@ void QueryFaceAxesA(in HullShape hullA, in HullShape hullB, in Transform3D xfBto
     }
 }
 
-void QueryFaceAxesB(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA, mut SeparatingAxisResult outBest){
+void QueryFaceAxesB(in HullShape hullA, in HullShape hullB, in VectorSingle relPosBtoA, in VectorSingle relRotBtoA, mut SeparatingAxisResult outBest){
     outBest.kind = SeparatingFeatureKind::FaceAxisB;
     outBest.separation = -s_MaxF32;
-    const VectorSingle qB = VectorSingle(xfBtoA.rotation);
-    const Transform3D xfAtoB = RelativeTransform(xfBtoA, Transform3D());
+    VectorSingle relPosAtoB(0.0f);
+    VectorSingle relRotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(relPosBtoA, relRotBtoA, VectorSingle(0.0f), QuaternionIdentity(), relPosAtoB, relRotAtoB);
     for(usize i = 0u; i < hullB.facePlanes.size(); ++i){
         const VectorSingle nB = VectorSingle(hullB.facePlanes[i].normalOffset, 0.0f);
         const f32 offsetB = hullB.facePlanes[i].normalOffset.w;
-        const VectorSingle nBInA = Vector3Rotate(nB, qB);
+        const VectorSingle nBInA = Vector3Rotate(nB, relRotBtoA);
         const VectorSingle supA = HullSupportVertex(hullA, -nBInA);
-        const VectorSingle supAInB = TransformPoint(xfAtoB, supA);
+        const VectorSingle supAInB = TransformPointValues(relPosAtoB, relRotAtoB, supA);
         const f32 sep = Vector3Dot(nB, supAInB).x - offsetB;
         if(sep > outBest.separation){
             outBest.separation = sep;
@@ -120,12 +120,11 @@ void QueryFaceAxesB(in HullShape hullA, in HullShape hullB, in Transform3D xfBto
     }
 }
 
-void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA, mut SeparatingAxisResult outBest){
+void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in VectorSingle relPosBtoA, in VectorSingle relRotBtoA, mut SeparatingAxisResult outBest){
     outBest.kind = SeparatingFeatureKind::EdgePairAxis;
     outBest.separation = -s_MaxF32;
 
     const VectorSingle cA = hullA.centroid();
-    const VectorSingle qB = VectorSingle(xfBtoA.rotation);
 
     Array<f32x4, s_MaxHullEdges> bP0;
     Array<f32x4, s_MaxHullEdges> bDir;
@@ -140,11 +139,11 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
         if(cast<usize>(heB.twin) < eB)
             continue;
         in HalfEdge twinB = hullB.halfEdges[heB.twin];
-        const VectorSingle pB0 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[heB.tail]));
-        const VectorSingle pB1 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[twinB.tail]));
+        const VectorSingle pB0 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[heB.tail], 0.0f));
+        const VectorSingle pB1 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[twinB.tail], 0.0f));
         const VectorSingle dirB = VectorSingle(pB1 - pB0, 0.0f);
-        const VectorSingle nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), qB);
-        const VectorSingle nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), qB);
+        const VectorSingle nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), relRotBtoA);
+        const VectorSingle nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), relRotBtoA);
         bP0[bCount] = f32x4(pB0, 0.0f);
         bDir[bCount] = f32x4(dirB, 0.0f);
         bN0[bCount] = f32x4(nB0, 0.0f);
@@ -161,8 +160,8 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
             continue;
 
         in HalfEdge twinA = hullA.halfEdges[heA.twin];
-        const VectorSingle pA0 = Vec3FromU(hullA.vertices[heA.tail]);
-        const VectorSingle pA1 = Vec3FromU(hullA.vertices[twinA.tail]);
+        const VectorSingle pA0 = VectorSingle(hullA.vertices[heA.tail], 0.0f);
+        const VectorSingle pA1 = VectorSingle(hullA.vertices[twinA.tail], 0.0f);
         const VectorSingle dirA = VectorSingle(pA1 - pA0, 0.0f);
         const f32 lenSqA = Vector3LengthSq(dirA).x;
         const VectorSingle nA0 = VectorSingle(hullA.facePlanes[heA.face].normalOffset, 0.0f);
@@ -196,6 +195,25 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
     }
 }
 
+ClipVertex MakeInterpolatedClipVertex(
+    in ClipVertex prev,
+    in ClipVertex cur,
+    in f32 prevDist,
+    in f32 curDist,
+    in u8 id0,
+    in u8 id1
+){
+    const f32 denom = prevDist - curDist;
+    f32 t = 0.0f;
+    if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+        t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
+    ClipVertex interp;
+    interp.position = f32x3u(Lerp(VectorSingle(prev.position, 0.0f), VectorSingle(cur.position, 0.0f), VectorSingle(t)));
+    interp.id0 = id0;
+    interp.id1 = id1;
+    return interp;
+}
+
 u32 ClipPolygonAgainstPlane(
     in FixedVector<ClipVertex, s_MaxClipPoints> inVerts,
     in VectorSingle planeNormal,
@@ -208,41 +226,20 @@ u32 ClipPolygonAgainstPlane(
         return 0u;
 
     ClipVertex prev = inVerts[inVerts.size() - 1u];
-    f32 prevDist = Vector3Dot(planeNormal, Vec3FromU(prev.position)).x - planeOffset;
+    f32 prevDist = Vector3Dot(planeNormal, VectorSingle(prev.position, 0.0f)).x - planeOffset;
 
     for(usize i = 0u; i < inVerts.size(); ++i){
         const ClipVertex cur = inVerts[i];
-        const f32 curDist = Vector3Dot(planeNormal, Vec3FromU(cur.position)).x - planeOffset;
+        const f32 curDist = Vector3Dot(planeNormal, VectorSingle(cur.position, 0.0f)).x - planeOffset;
 
         if(curDist <= 0.0f){
-            if(prevDist > 0.0f){
-                const f32 denom = prevDist - curDist;
-                f32 t = 0.0f;
-                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-                if(outVerts.size() < s_MaxClipPoints){
-                    ClipVertex interp;
-                    interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
-                    interp.id0 = edgeTag;
-                    interp.id1 = cur.id1;
-                    outVerts.push_back(interp);
-                }
-            }
+            if(prevDist > 0.0f && outVerts.size() < s_MaxClipPoints)
+                outVerts.push_back(MakeInterpolatedClipVertex(prev, cur, prevDist, curDist, edgeTag, cur.id1));
             if(outVerts.size() < s_MaxClipPoints)
                 outVerts.push_back(cur);
         }
-        else if(prevDist <= 0.0f){
-            const f32 denom = prevDist - curDist;
-            f32 t = 0.0f;
-            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-            if(outVerts.size() < s_MaxClipPoints){
-                ClipVertex interp;
-                interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
-                interp.id0 = cur.id0;
-                interp.id1 = edgeTag;
-                outVerts.push_back(interp);
-            }
+        else if(prevDist <= 0.0f && outVerts.size() < s_MaxClipPoints){
+            outVerts.push_back(MakeInterpolatedClipVertex(prev, cur, prevDist, curDist, cur.id0, edgeTag));
         }
 
         prev = cur;
@@ -264,9 +261,9 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
 
     usize idx1 = 0u;
     f32 bestDistSq1 = -1.0f;
-    const VectorSingle p0 = Vec3FromU(candidates[idx0].position);
+    const VectorSingle p0(candidates[idx0].position, 0.0f);
     for(usize i = 0u; i < candidates.size(); ++i){
-        const f32 dSq = Vector3LengthSq(VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f)).x;
+        const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(candidates[i].position, 0.0f) - p0, 0.0f)).x;
         if(dSq > bestDistSq1){
             bestDistSq1 = dSq;
             idx1 = i;
@@ -275,12 +272,12 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
 
     usize idx2 = 0u;
     f32 bestArea2 = -1.0f;
-    const VectorSingle p1 = Vec3FromU(candidates[idx1].position);
+    const VectorSingle p1(candidates[idx1].position, 0.0f);
     const VectorSingle e01 = VectorSingle(p1 - p0, 0.0f);
     for(usize i = 0u; i < candidates.size(); ++i){
         if(i == idx0 || i == idx1)
             continue;
-        const VectorSingle c = Cross(e01, VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f));
+        const VectorSingle c = Cross(e01, VectorSingle(VectorSingle(candidates[i].position, 0.0f) - p0, 0.0f));
         const f32 area = Abs(Vector3Dot(c, refNormal)).x;
         if(area > bestArea2){
             bestArea2 = area;
@@ -292,12 +289,12 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
     f32 bestOutsideArea = -1.0f;
     usize fallbackIdx3 = 0u;
     f32 bestFallbackArea = -1.0f;
-    const VectorSingle p2 = Vec3FromU(candidates[idx2].position);
+    const VectorSingle p2(candidates[idx2].position, 0.0f);
     const f32 baseSign = Vector3Dot(Cross(e01, VectorSingle(p2 - p0, 0.0f)), refNormal).x;
     for(usize i = 0u; i < candidates.size(); ++i){
         if(i == idx0 || i == idx1 || i == idx2)
             continue;
-        const VectorSingle pi = Vec3FromU(candidates[i].position);
+        const VectorSingle pi(candidates[i].position, 0.0f);
         const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
         const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
         const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
@@ -342,21 +339,25 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
 
 Manifold CollideHullFaces(
     in HullShape refHull,
-    in Transform3D refXf,
+    in VectorSingle refPos,
+    in VectorSingle refRot,
     in u32 refFaceIdx,
     in HullShape incHull,
-    in Transform3D incXf,
-    in Transform3D xfA,
-    in Transform3D xfB,
+    in VectorSingle incPos,
+    in VectorSingle incRot,
+    in VectorSingle posA,
+    in VectorSingle posB,
     in b8 refIsA,
     in f32 maxDistance
 ){
     Manifold m;
-    const Transform3D incToRef = RelativeTransform(refXf, incXf);
+    VectorSingle incToRefPos(0.0f);
+    VectorSingle incToRefRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(refPos, refRot, incPos, incRot, incToRefPos, incToRefRot);
 
     const VectorSingle refLocalN = VectorSingle(refHull.facePlanes[refFaceIdx].normalOffset, 0.0f);
     const f32 refLocalOffset = refHull.facePlanes[refFaceIdx].normalOffset.w;
-    const VectorSingle refNInInc = Vector3InverseRotate(Vector3Rotate(refLocalN, VectorSingle(refXf.rotation)), VectorSingle(incXf.rotation));
+    const VectorSingle refNInInc = Vector3InverseRotate(Vector3Rotate(refLocalN, refRot), incRot);
 
     usize incFaceIdx = 0u;
     f32 minDot = s_MaxF32;
@@ -375,7 +376,7 @@ Manifold CollideHullFaces(
     for(u8 i = 0u; i < incFace.vertexCount; ++i){
         in HalfEdge he = incHull.halfEdges[incEdge];
         ClipVertex cv;
-        cv.position = PackVec3U(TransformPoint(incToRef, Vec3FromU(incHull.vertices[he.tail])));
+        cv.position = f32x3u(TransformPointValues(incToRefPos, incToRefRot, VectorSingle(incHull.vertices[he.tail], 0.0f)));
         cv.id0 = he.tail;
         cv.id1 = cast<u8>(incFaceIdx);
         polyA.push_back(cv);
@@ -387,8 +388,8 @@ Manifold CollideHullFaces(
     b8 useA = true;
     for(u8 i = 0u; i < refFace.vertexCount; ++i){
         in HalfEdge he = refHull.halfEdges[refEdge];
-        const VectorSingle v0 = Vec3FromU(refHull.vertices[he.tail]);
-        const VectorSingle v1 = Vec3FromU(refHull.vertices[refHull.halfEdges[he.next].tail]);
+        const VectorSingle v0(refHull.vertices[he.tail], 0.0f);
+        const VectorSingle v1(refHull.vertices[refHull.halfEdges[he.next].tail], 0.0f);
         const VectorSingle sideNormal = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), refLocalN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
         const f32 sideOffset = Vector3Dot(sideNormal, v0).x;
         if(useA){
@@ -411,7 +412,7 @@ Manifold CollideHullFaces(
     const f32 incR = incHull.radius();
     const f32 totalR = refR + incR;
     for(usize i = 0u; i < polyA.size(); ++i){
-        const VectorSingle p = Vec3FromU(polyA[i].position);
+        const VectorSingle p(polyA[i].position, 0.0f);
         const f32 sep = Vector3Dot(refLocalN, p).x - refLocalOffset - totalR;
         if(sep <= maxDistance){
             ClipVertex kept = polyA[i];
@@ -425,7 +426,7 @@ Manifold CollideHullFaces(
 
     ReduceContactPointsTo4(refLocalN, validPoints);
 
-    const VectorSingle worldRefN = SafeNormalizeVec3(Vector3Rotate(refLocalN, VectorSingle(refXf.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle worldRefN = SafeNormalizeVec3(Vector3Rotate(refLocalN, refRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     VectorSingle normalAtoB = -worldRefN;
     if(refIsA)
         normalAtoB = worldRefN;
@@ -438,9 +439,9 @@ Manifold CollideHullFaces(
 
     for(u32 i = 0u; i < cast<u32>(validPoints.size()); ++i){
         const f32 sep = validPoints[i].separation;
-        const VectorSingle clipInRef = Vec3FromU(validPoints[i].position);
-        const VectorSingle pIncWorld = TransformPoint(refXf, clipInRef) - worldRefN * incR;
-        const VectorSingle pRefWorld = TransformPoint(refXf, clipInRef - refLocalN * (sep + totalR - refR));
+        const VectorSingle clipInRef(validPoints[i].position, 0.0f);
+        const VectorSingle pIncWorld = TransformPointValues(refPos, refRot, clipInRef) - worldRefN * incR;
+        const VectorSingle pRefWorld = TransformPointValues(refPos, refRot, clipInRef - refLocalN * (sep + totalR - refR));
         VectorSingle wA = pIncWorld;
         VectorSingle wB = pRefWorld;
         if(refIsA){
@@ -448,7 +449,7 @@ Manifold CollideHullFaces(
             wB = pIncWorld;
         }
 
-        SetManifoldPoint(m, i, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(ownerTag, cast<u8>(refFaceIdx), validPoints[i].id0, validPoints[i].id1));
+        SetManifoldPoint(m, i, (wA + wB) * 0.5f, wA - posA, wB - posB, sep, MakeFeatureId(ownerTag, cast<u8>(refFaceIdx), validPoints[i].id0, validPoints[i].id1));
     }
 
     return m;
@@ -479,45 +480,25 @@ u32 ClipBoxQuadAgainstPlane(
         return 0u;
 
     ClipVertex prev = inVerts[inCount - 1u];
-    f32 prevDist = Vector3Dot(planeNormal, Vec3FromU(prev.position)).x - planeOffset;
+    f32 prevDist = Vector3Dot(planeNormal, VectorSingle(prev.position, 0.0f)).x - planeOffset;
 
     for(u32 i = 0u; i < inCount; ++i){
         const ClipVertex cur = inVerts[i];
-        const f32 curDist = Vector3Dot(planeNormal, Vec3FromU(cur.position)).x - planeOffset;
+        const f32 curDist = Vector3Dot(planeNormal, VectorSingle(cur.position, 0.0f)).x - planeOffset;
 
         if(curDist <= 0.0f){
-            if(prevDist > 0.0f){
-                const f32 denom = prevDist - curDist;
-                f32 t = 0.0f;
-                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-                if(outCount < 8u){
-                    ClipVertex interp;
-                    interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
-                    interp.id0 = edgeTag;
-                    interp.id1 = cur.id1;
-                    outVerts[outCount] = interp;
-                    ++outCount;
-                }
+            if(prevDist > 0.0f && outCount < 8u){
+                outVerts[outCount] = MakeInterpolatedClipVertex(prev, cur, prevDist, curDist, edgeTag, cur.id1);
+                ++outCount;
             }
             if(outCount < 8u){
                 outVerts[outCount] = cur;
                 ++outCount;
             }
         }
-        else if(prevDist <= 0.0f){
-            const f32 denom = prevDist - curDist;
-            f32 t = 0.0f;
-            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-            if(outCount < 8u){
-                ClipVertex interp;
-                interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
-                interp.id0 = cur.id0;
-                interp.id1 = edgeTag;
-                outVerts[outCount] = interp;
-                ++outCount;
-            }
+        else if(prevDist <= 0.0f && outCount < 8u){
+            outVerts[outCount] = MakeInterpolatedClipVertex(prev, cur, prevDist, curDist, cur.id0, edgeTag);
+            ++outCount;
         }
 
         prev = cur;
@@ -539,9 +520,9 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
 
     u32 idx1 = 0u;
     f32 bestDistSq1 = -1.0f;
-    const VectorSingle p0 = Vec3FromU(candidates[idx0].position);
+    const VectorSingle p0(candidates[idx0].position, 0.0f);
     for(u32 i = 0u; i < inOutCount; ++i){
-        const f32 dSq = Vector3LengthSq(VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f)).x;
+        const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(candidates[i].position, 0.0f) - p0, 0.0f)).x;
         if(dSq > bestDistSq1){
             bestDistSq1 = dSq;
             idx1 = i;
@@ -550,12 +531,12 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
 
     u32 idx2 = 0u;
     f32 bestArea2 = -1.0f;
-    const VectorSingle p1 = Vec3FromU(candidates[idx1].position);
+    const VectorSingle p1(candidates[idx1].position, 0.0f);
     const VectorSingle e01 = VectorSingle(p1 - p0, 0.0f);
     for(u32 i = 0u; i < inOutCount; ++i){
         if(i == idx0 || i == idx1)
             continue;
-        const VectorSingle c = Cross(e01, VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f));
+        const VectorSingle c = Cross(e01, VectorSingle(VectorSingle(candidates[i].position, 0.0f) - p0, 0.0f));
         const f32 area = Abs(Vector3Dot(c, refNormal)).x;
         if(area > bestArea2){
             bestArea2 = area;
@@ -567,12 +548,12 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
     f32 bestOutsideArea = -1.0f;
     u32 fallbackIdx3 = 0u;
     f32 bestFallbackArea = -1.0f;
-    const VectorSingle p2 = Vec3FromU(candidates[idx2].position);
+    const VectorSingle p2(candidates[idx2].position, 0.0f);
     const f32 baseSign = Vector3Dot(Cross(e01, VectorSingle(p2 - p0, 0.0f)), refNormal).x;
     for(u32 i = 0u; i < inOutCount; ++i){
         if(i == idx0 || i == idx1 || i == idx2)
             continue;
-        const VectorSingle pi = Vec3FromU(candidates[i].position);
+        const VectorSingle pi(candidates[i].position, 0.0f);
         const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
         const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
         const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
@@ -685,23 +666,31 @@ b8 EvalBoxSatEdgeRow(
     return true;
 }
 
-Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideBoxes(
+    in HullShape hullA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HullShape hullB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     const VectorSingle localCA = hullA.centroid();
-    VectorSingle cA = VectorSingle(xfA.position);
+    VectorSingle cA = posA;
     if(localCA.x != 0.0f || localCA.y != 0.0f || localCA.z != 0.0f)
-        cA = TransformPoint(xfA, localCA);
-    VectorSingle qA = VectorSingle(xfA.rotation);
+        cA = TransformPointValues(posA, rotA, localCA);
+    VectorSingle qA = rotA;
     if(hullA.boxRotation.x != 0.0f || hullA.boxRotation.y != 0.0f || hullA.boxRotation.z != 0.0f || hullA.boxRotation.w != 1.0f)
         qA = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(hullA.boxRotation)));
     const VectorSingle hA = hullA.halfExtents();
     const f32 rA = hullA.radius();
 
     const VectorSingle localCB = hullB.centroid();
-    VectorSingle cB = VectorSingle(xfB.position);
+    VectorSingle cB = posB;
     if(localCB.x != 0.0f || localCB.y != 0.0f || localCB.z != 0.0f)
-        cB = TransformPoint(xfB, localCB);
-    VectorSingle qB = VectorSingle(xfB.rotation);
+        cB = TransformPointValues(posB, rotB, localCB);
+    VectorSingle qB = rotB;
     if(hullB.boxRotation.x != 0.0f || hullB.boxRotation.y != 0.0f || hullB.boxRotation.z != 0.0f || hullB.boxRotation.w != 1.0f)
         qB = SafeNormalizeQuat(QuaternionMultiply(qB, VectorSingle(hullB.boxRotation)));
     const VectorSingle hB = hullB.halfExtents();
@@ -880,7 +869,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
         const VectorSingle wB = cEdgeB - axis * rB;
         m.normalTwist = f32x4(axis, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), bestSep, MakeFeatureId(2u, cast<u8>(bestAxis), 0u, 0u));
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, bestSep, MakeFeatureId(2u, cast<u8>(bestAxis), 0u, 0u));
         return m;
     }
 
@@ -1007,16 +996,16 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
 
     Array<ClipVertex, 8u> poly0;
     Array<ClipVertex, 8u> poly1;
-    poly0[0u].position = PackVec3U(fc - eu - ev);
+    poly0[0u].position = f32x3u(fc - eu - ev);
     poly0[0u].id0 = 0u;
     poly0[0u].id1 = incFaceIdx;
-    poly0[1u].position = PackVec3U(fc + eu - ev);
+    poly0[1u].position = f32x3u(fc + eu - ev);
     poly0[1u].id0 = 1u;
     poly0[1u].id1 = incFaceIdx;
-    poly0[2u].position = PackVec3U(fc + eu + ev);
+    poly0[2u].position = f32x3u(fc + eu + ev);
     poly0[2u].id0 = 2u;
     poly0[2u].id1 = incFaceIdx;
-    poly0[3u].position = PackVec3U(fc - eu + ev);
+    poly0[3u].position = f32x3u(fc - eu + ev);
     poly0[3u].id0 = 3u;
     poly0[3u].id1 = incFaceIdx;
 
@@ -1038,7 +1027,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     Array<ClipVertex, 8u> validPoints;
     u32 validCount = 0u;
     for(u32 p = 0u; p < polyCount; ++p){
-        const VectorSingle pt = Vec3FromU(poly0[p].position);
+        const VectorSingle pt(poly0[p].position, 0.0f);
         const f32 sep = Vector3Dot(refNormal, pt).x - refPlaneDist - totalR;
         if(sep <= maxDistance){
             validPoints[validCount] = poly0[p];
@@ -1059,7 +1048,7 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
 
     for(u32 i = 0u; i < validCount; ++i){
         const f32 sep = validPoints[i].separation;
-        const VectorSingle pt = Vec3FromU(validPoints[i].position);
+        const VectorSingle pt(validPoints[i].position, 0.0f);
         const VectorSingle pIncWorld = pt - refNormal * incR;
         const VectorSingle pRefWorld = pt - refNormal * (sep + totalR - refR);
         VectorSingle wA = pIncWorld;
@@ -1068,37 +1057,47 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
             wA = pRefWorld;
             wB = pIncWorld;
         }
-        SetManifoldPoint(m, i, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(ownerTag, refFaceIdx, validPoints[i].id0, validPoints[i].id1));
+        SetManifoldPoint(m, i, (wA + wB) * 0.5f, wA - posA, wB - posB, sep, MakeFeatureId(ownerTag, refFaceIdx, validPoints[i].id0, validPoints[i].id1));
     }
     return m;
 }
 
-Manifold CollideHulls(in HullShape hullA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideHulls(
+    in HullShape hullA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HullShape hullB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(hullA.facePlanes.empty() || hullB.facePlanes.empty())
         return m;
 
     if(hullA.isBox() && hullB.isBox())
-        return CollideBoxes(hullA, xfA, hullB, xfB, maxDistance);
+        return CollideBoxes(hullA, posA, rotA, hullB, posB, rotB, maxDistance);
 
-    const Transform3D xfBtoA = RelativeTransform(xfA, xfB);
+    VectorSingle relPosBtoA(0.0f);
+    VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
     const f32 rA = hullA.radius();
     const f32 rB = hullB.radius();
     const f32 totalR = rA + rB;
     const f32 cullDist = totalR + maxDistance;
 
     SeparatingAxisResult faceA;
-    QueryFaceAxesA(hullA, hullB, xfBtoA, faceA);
+    QueryFaceAxesA(hullA, hullB, relPosBtoA, relRotBtoA, faceA);
     if(faceA.separation > cullDist)
         return m;
 
     SeparatingAxisResult faceB;
-    QueryFaceAxesB(hullA, hullB, xfBtoA, faceB);
+    QueryFaceAxesB(hullA, hullB, relPosBtoA, relRotBtoA, faceB);
     if(faceB.separation > cullDist)
         return m;
 
     SeparatingAxisResult edgeAxis;
-    QueryEdgeAxes(hullA, hullB, xfBtoA, edgeAxis);
+    QueryEdgeAxes(hullA, hullB, relPosBtoA, relRotBtoA, edgeAxis);
     if(edgeAxis.separation > cullDist)
         return m;
 
@@ -1111,13 +1110,13 @@ Manifold CollideHulls(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     if(best.kind == SeparatingFeatureKind::EdgePairAxis){
         in HalfEdge heA = hullA.halfEdges[best.indexA];
         in HalfEdge twinA = hullA.halfEdges[heA.twin];
-        const VectorSingle pA0 = Vec3FromU(hullA.vertices[heA.tail]);
-        const VectorSingle pA1 = Vec3FromU(hullA.vertices[twinA.tail]);
+        const VectorSingle pA0(hullA.vertices[heA.tail], 0.0f);
+        const VectorSingle pA1(hullA.vertices[twinA.tail], 0.0f);
 
         in HalfEdge heB = hullB.halfEdges[best.indexB];
         in HalfEdge twinB = hullB.halfEdges[heB.twin];
-        const VectorSingle pB0 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[heB.tail]));
-        const VectorSingle pB1 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[twinB.tail]));
+        const VectorSingle pB0 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[heB.tail], 0.0f));
+        const VectorSingle pB1 = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(hullB.vertices[twinB.tail], 0.0f));
 
         f32 s = 0.0f;
         f32 t = 0.0f;
@@ -1126,19 +1125,19 @@ Manifold CollideHulls(in HullShape hullA, in Transform3D xfA, in HullShape hullB
         ClosestPointsBetweenSegments(pA0, pA1, pB0, pB1, s, t, cA, cB);
 
         const VectorSingle localN = VectorSingle(best.normal);
-        const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(localN, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const VectorSingle wA = TransformPoint(xfA, cA) + worldN * rA;
-        const VectorSingle wB = TransformPoint(xfA, cB) - worldN * rB;
+        const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(localN, rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle wA = TransformPointValues(posA, rotA, cA) + worldN * rA;
+        const VectorSingle wB = TransformPointValues(posA, rotA, cB) - worldN * rB;
 
         m.normalTwist = f32x4(worldN, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), best.separation - totalR, MakeFeatureId(0u, cast<u8>(best.indexA), 1u, cast<u8>(best.indexB)));
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, best.separation - totalR, MakeFeatureId(0u, cast<u8>(best.indexA), 1u, cast<u8>(best.indexB)));
         return m;
     }
 
     if(best.kind == SeparatingFeatureKind::FaceAxisA)
-        return CollideHullFaces(hullA, xfA, best.indexA, hullB, xfB, xfA, xfB, true, maxDistance);
-    return CollideHullFaces(hullB, xfB, best.indexB, hullA, xfA, xfA, xfB, false, maxDistance);
+        return CollideHullFaces(hullA, posA, rotA, best.indexA, hullB, posB, rotB, posA, posB, true, maxDistance);
+    return CollideHullFaces(hullB, posB, rotB, best.indexB, hullA, posA, rotA, posA, posB, false, maxDistance);
 }
 
 void ReduceMeshCandidatesAndWriteManifold(
@@ -1155,7 +1154,7 @@ void ReduceMeshCandidatesAndWriteManifold(
         if(Vector3Dot(VectorSingle(candidates[i].normal, 0.0f), normal).x <= 0.7f)
             continue;
         ClipVertex cv;
-        cv.position = PackVec3U(VectorSingle(candidates[i].pointSep));
+        cv.position = f32x3u(VectorSingle(candidates[i].pointSep));
         cv.separation = candidates[i].pointSep.w;
         cv.id0 = cast<u8>(i);
         cv.id1 = 0u;
@@ -1168,7 +1167,7 @@ void ReduceMeshCandidatesAndWriteManifold(
                 bestIdx = i;
         }
         ClipVertex cv;
-        cv.position = PackVec3U(VectorSingle(candidates[bestIdx].pointSep));
+        cv.position = f32x3u(VectorSingle(candidates[bestIdx].pointSep));
         cv.separation = candidates[bestIdx].pointSep.w;
         cv.id0 = cast<u8>(bestIdx);
         cv.id1 = 0u;
@@ -1221,18 +1220,33 @@ void PushMeshCandidate(
         candidates[worstIdx] = c;
 }
 
-Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape meshB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideHullAndMesh(
+    in HullShape hullA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(meshB.nodes.empty() || meshB.triangles.empty() || hullA.vertices.empty() || hullA.facePlanes.empty())
         return m;
 
-    const Transform3D localHullXf = RelativeTransform(xfB, xfA);
-    const VectorSingle localRotA = VectorSingle(localHullXf.rotation);
-    const VectorSingle hullCentroidB = TransformPoint(localHullXf, hullA.centroid());
+    VectorSingle localHullPos(0.0f);
+    VectorSingle localHullRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localHullPos, localHullRot);
+    const VectorSingle hullCentroidB = TransformPointValues(localHullPos, localHullRot, hullA.centroid());
     const f32 hullR = hullA.radius();
     const f32 meshR = meshB.radius();
     const f32 totalR = hullR + meshR;
-    const Aabb3D queryBox = FattenAabb(ComputeHullAabb(hullA, localHullXf), maxDistance + meshR);
+    const f32 queryPadScalar = maxDistance + meshR;
+    const VectorSingle queryPad(queryPadScalar, queryPadScalar, queryPadScalar, 0.0f);
+    VectorSingle hullMin(0.0f);
+    VectorSingle hullMax(0.0f);
+    ComputeHullAabbValues(hullA, localHullPos, localHullRot, hullMin, hullMax);
+    const VectorSingle queryMin = hullMin - queryPad;
+    const VectorSingle queryMax = hullMax + queryPad;
     const ShapeProxy hullProxy = MakeHullProxy(hullA);
     const b8 closedMesh = meshB.isClosed();
 
@@ -1252,7 +1266,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
         --stackCount;
         const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
-        if(!AabbOverlaps(node.aabb(), queryBox))
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
 
         if(node.isLeaf()){
@@ -1260,21 +1274,21 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
                 in MeshTriangle tri = meshB.triangles[ti];
-                const VectorSingle tv0 = Vec3FromU(tri.v0);
-                const VectorSingle tv1 = Vec3FromU(tri.v1);
-                const VectorSingle tv2 = Vec3FromU(tri.v2);
-                const Aabb3D triAabb(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)));
-                if(!AabbOverlaps(triAabb, queryBox))
+                const VectorSingle tv0(tri.v0, 0.0f);
+                const VectorSingle tv1(tri.v1, 0.0f);
+                const VectorSingle tv2(tri.v2, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMin, queryMax))
                     continue;
 
                 const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshR);
                 SimplexCache cache;
-                const DistanceOutput gjk = ShapeDistanceProxies(hullProxy, xfA, triProxy, xfB, false, cache);
+                const DistanceOutput gjk = ShapeDistanceProxies(hullProxy, posA, rotA, triProxy, posB, rotB, false, cache);
 
-                VectorSingle triNLocal = Vec3FromU(tri.normal);
+                const VectorSingle rawTriN(tri.normal, 0.0f);
+                VectorSingle triNLocal = rawTriN;
                 if(!closedMesh && Vector3Dot(VectorSingle(hullCentroidB - tv0, 0.0f), triNLocal).x < 0.0f)
                     triNLocal = -triNLocal;
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triNLocal, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triNLocal, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
 
                 const f32 gjkDist = gjk.distance();
                 if(gjkDist > totalR + maxDistance)
@@ -1288,11 +1302,11 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                     VectorSingle wA = gjk.pointA() + nAtoB * hullR;
                     VectorSingle wB = VectorSingle(gjk.pointB) - nAtoB * meshR;
 
-                    const VectorSingle localPtB = InverseTransformPoint(xfB, VectorSingle(gjk.pointB));
-                    const VectorSingle rawMeshToHullLocal = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+                    const VectorSingle localPtB = InverseTransformPointValues(posB, rotB, VectorSingle(gjk.pointB));
+                    const VectorSingle rawMeshToHullLocal = Vector3InverseRotate(-nAtoB, rotB);
                     VectorSingle smoothedLocal = rawMeshToHullLocal;
-                    if(SmoothMeshContactNormal(tri, edgeFlags, localPtB, rawMeshToHullLocal, smoothedLocal)){
-                        const VectorSingle localPtA = InverseTransformPoint(xfB, gjk.pointA());
+                    if(SmoothMeshContactNormal(tv0, tv1, tv2, rawTriN, edgeFlags, localPtB, rawMeshToHullLocal, smoothedLocal)){
+                        const VectorSingle localPtA = InverseTransformPointValues(posB, rotB, gjk.pointA());
                         const f32 planeDist = Vector3Dot(triNLocal, VectorSingle(localPtA - tv0, 0.0f)).x;
                         if(planeDist - totalR > maxDistance)
                             continue;
@@ -1309,24 +1323,24 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         deepestSep = sep;
                         chosenNormal = nAtoB;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(ti & 0xffu)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(ti & 0xffu)), candidates);
                     continue;
                 }
 
-                const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-triNLocal, localRotA));
-                const VectorSingle supInB = TransformPoint(localHullXf, supLocalA);
+                const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-triNLocal, localHullRot));
+                const VectorSingle supInB = TransformPointValues(localHullPos, localHullRot, supLocalA);
                 const f32 sepTri = Vector3Dot(triNLocal, VectorSingle(supInB - tv0, 0.0f)).x - totalR;
                 if(sepTri > maxDistance)
                     continue;
 
                 if(!hullSatCacheReady){
                     for(usize fi = 0u; fi < hullA.facePlanes.size(); ++fi){
-                        const VectorSingle fNLocal = Vector3Rotate(VectorSingle(hullA.facePlanes[fi].normalOffset, 0.0f), localRotA);
-                        const f32 fOff = hullA.facePlanes[fi].normalOffset.w + Vector3Dot(fNLocal, VectorSingle(localHullXf.position)).x;
+                        const VectorSingle fNLocal = Vector3Rotate(VectorSingle(hullA.facePlanes[fi].normalOffset, 0.0f), localHullRot);
+                        const f32 fOff = hullA.facePlanes[fi].normalOffset.w + Vector3Dot(fNLocal, localHullPos).x;
                         hullPlanesInB.push_back(Plane3D(fNLocal, fOff));
                     }
                     for(usize vi = 0u; vi < hullA.vertices.size(); ++vi)
-                        hullVertsInB.push_back(f32x4(TransformPoint(localHullXf, Vec3FromU(hullA.vertices[vi])), 0.0f));
+                        hullVertsInB.push_back(f32x4(TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[vi], 0.0f)), 0.0f));
                     for(usize eA = 0u; eA < hullA.halfEdges.size(); ++eA){
                         in HalfEdge heA = hullA.halfEdges[eA];
                         if(cast<usize>(heA.twin) < eA)
@@ -1455,13 +1469,13 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                 if(closedMesh && Vector3Dot(-winNInB, triNLocal).x <= 0.0f)
                     continue;
 
-                const VectorSingle worldWinN = SafeNormalizeVec3(Vector3Rotate(winNInB, VectorSingle(xfB.rotation)), -triWorldN);
+                const VectorSingle worldWinN = SafeNormalizeVec3(Vector3Rotate(winNInB, rotB), -triWorldN);
 
                 if(winKind == 2u){
                     in HalfEdge heA = hullA.halfEdges[bestEdgeHullIdx];
                     in HalfEdge twinA = hullA.halfEdges[heA.twin];
-                    const VectorSingle eA0 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[heA.tail]));
-                    const VectorSingle eA1 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[twinA.tail]));
+                    const VectorSingle eA0 = TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[heA.tail], 0.0f));
+                    const VectorSingle eA1 = TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[twinA.tail], 0.0f));
                     VectorSingle eB0 = tv0;
                     VectorSingle eB1 = tv1;
                     if(bestEdgeTriIdx == 1u){
@@ -1477,20 +1491,20 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                     VectorSingle cA(0.0f);
                     VectorSingle cB(0.0f);
                     ClosestPointsBetweenSegments(eA0, eA1, eB0, eB1, sSeg, tSeg, cA, cB);
-                    const VectorSingle wA = TransformPoint(xfB, cA) + worldWinN * hullR;
-                    const VectorSingle wB = TransformPoint(xfB, cB) - worldWinN * meshR;
+                    const VectorSingle wA = TransformPointValues(posB, rotB, cA) + worldWinN * hullR;
+                    const VectorSingle wB = TransformPointValues(posB, rotB, cB) - worldWinN * meshR;
                     if(winSep < deepestSep){
                         deepestSep = winSep;
                         chosenNormal = worldWinN;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, winSep, MakeFeatureId(4u, cast<u8>(bestEdgeHullIdx & 0xffu), 3u, cast<u8>((ti & 0xffu) ^ bestEdgeTriIdx)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, worldWinN, winSep, MakeFeatureId(4u, cast<u8>(bestEdgeHullIdx & 0xffu), 3u, cast<u8>((ti & 0xffu) ^ bestEdgeTriIdx)), candidates);
                 }
                 else if(winKind == 1u){
                     FixedVector<ClipVertex, s_MaxClipPoints> polyA;
                     FixedVector<ClipVertex, s_MaxClipPoints> polyB;
-                    ClipVertex cv0; cv0.position = PackVec3U(tv0); cv0.id0 = 0u; cv0.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv0);
-                    ClipVertex cv1; cv1.position = PackVec3U(tv1); cv1.id0 = 1u; cv1.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv1);
-                    ClipVertex cv2; cv2.position = PackVec3U(tv2); cv2.id0 = 2u; cv2.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv2);
+                    ClipVertex cv0; cv0.position = f32x3u(tv0); cv0.id0 = 0u; cv0.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv0);
+                    ClipVertex cv1; cv1.position = f32x3u(tv1); cv1.id0 = 1u; cv1.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv1);
+                    ClipVertex cv2; cv2.position = f32x3u(tv2); cv2.id0 = 2u; cv2.id1 = cast<u8>(ti & 0xffu); polyA.push_back(cv2);
 
                     in HullFaceTopology fTopo = hullA.faceTopologies[bestHullFace];
                     u8 hEdge = fTopo.edge;
@@ -1498,8 +1512,8 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                     b8 clipEmpty = false;
                     for(u8 ei = 0u; ei < fTopo.vertexCount; ++ei){
                         in HalfEdge he = hullA.halfEdges[hEdge];
-                        const VectorSingle fv0 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[he.tail]));
-                        const VectorSingle fv1 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[hullA.halfEdges[he.next].tail]));
+                        const VectorSingle fv0 = TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[he.tail], 0.0f));
+                        const VectorSingle fv1 = TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[hullA.halfEdges[he.next].tail], 0.0f));
                         const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(fv1 - fv0, 0.0f), bestHullN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                         const f32 sideOff = Vector3Dot(sideN, fv0).x;
                         if(useA){
@@ -1524,24 +1538,24 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         polyA = polyB;
 
                     for(usize k = 0u; k < polyA.size(); ++k){
-                        const VectorSingle ptB = Vec3FromU(polyA[k].position);
+                        const VectorSingle ptB(polyA[k].position, 0.0f);
                         const f32 sep = Vector3Dot(bestHullN, ptB).x - bestHullOff - totalR;
                         if(sep > maxDistance)
                             continue;
-                        const VectorSingle wB = TransformPoint(xfB, ptB) - worldWinN * meshR;
-                        const VectorSingle wA = TransformPoint(xfB, ptB - bestHullN * (sep + totalR - hullR));
+                        const VectorSingle wB = TransformPointValues(posB, rotB, ptB) - worldWinN * meshR;
+                        const VectorSingle wA = TransformPointValues(posB, rotB, ptB - bestHullN * (sep + totalR - hullR));
                         if(sep < deepestSep){
                             deepestSep = sep;
                             chosenNormal = worldWinN;
                         }
-                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, sep, MakeFeatureId(4u, cast<u8>(bestHullFace), polyA[k].id0, polyA[k].id1), candidates);
+                        PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, worldWinN, sep, MakeFeatureId(4u, cast<u8>(bestHullFace), polyA[k].id0, polyA[k].id1), candidates);
                     }
                 }
                 else{
                     usize incFaceIdx = 0u;
                     f32 minDot = s_MaxF32;
                     for(usize fi = 0u; fi < hullA.facePlanes.size(); ++fi){
-                        const VectorSingle fNInB = Vector3Rotate(VectorSingle(hullA.facePlanes[fi].normalOffset, 0.0f), localRotA);
+                        const VectorSingle fNInB = Vector3Rotate(VectorSingle(hullA.facePlanes[fi].normalOffset, 0.0f), localHullRot);
                         const f32 d = Vector3Dot(fNInB, triNLocal).x;
                         if(d < minDot){
                             minDot = d;
@@ -1556,14 +1570,13 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                     for(u8 i = 0u; i < incFace.vertexCount; ++i){
                         in HalfEdge he = hullA.halfEdges[incEdge];
                         ClipVertex cv;
-                        cv.position = PackVec3U(TransformPoint(localHullXf, Vec3FromU(hullA.vertices[he.tail])));
+                        cv.position = f32x3u(TransformPointValues(localHullPos, localHullRot, VectorSingle(hullA.vertices[he.tail], 0.0f)));
                         cv.id0 = he.tail;
                         cv.id1 = cast<u8>(ti & 0xffu);
                         polyA.push_back(cv);
                         incEdge = he.next;
                     }
 
-                    const VectorSingle rawTriN = Vec3FromU(tri.normal);
                     const VectorSingle sn0 = SafeNormalizeVec3(Cross(te0, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                     const VectorSingle sn1 = SafeNormalizeVec3(Cross(te1, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                     const VectorSingle sn2 = SafeNormalizeVec3(Cross(te2, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
@@ -1573,19 +1586,19 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         && ClipPolygonAgainstPlane(polyA, sn2, Vector3Dot(sn2, tv2).x + s_LinearSlop, 2u, polyB) > 0u
                     ){
                         for(usize k = 0u; k < polyB.size(); ++k){
-                            const VectorSingle ptB = Vec3FromU(polyB[k].position);
+                            const VectorSingle ptB(polyB[k].position, 0.0f);
                             const f32 planeDist = Vector3Dot(triNLocal, VectorSingle(ptB - tv0, 0.0f)).x;
                             const f32 sep = planeDist - totalR;
                             if(sep > maxDistance)
                                 continue;
-                            const VectorSingle wV = TransformPoint(xfB, ptB);
+                            const VectorSingle wV = TransformPointValues(posB, rotB, ptB);
                             const VectorSingle wA = wV + worldWinN * hullR;
                             const VectorSingle wB = wV - triWorldN * planeDist - worldWinN * meshR;
                             if(sep < deepestSep){
                                 deepestSep = sep;
                                 chosenNormal = worldWinN;
                             }
-                            PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, sep, MakeFeatureId(4u, polyB[k].id0, 3u, polyB[k].id1), candidates);
+                            PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, worldWinN, sep, MakeFeatureId(4u, polyB[k].id0, 3u, polyB[k].id1), candidates);
                         }
                     }
                 }
@@ -1608,17 +1621,17 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = 0u;
         if(FindClosestPointOnClosedMesh(meshB, hullCentroidB, closePt, closeN, closeTri)){
-            const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle nAtoB = -worldOut;
-            const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-closeN, localRotA));
-            const VectorSingle supW = TransformPoint(xfA, supLocalA);
-            const VectorSingle closeW = TransformPoint(xfB, closePt);
+            const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-closeN, localHullRot));
+            const VectorSingle supW = TransformPointValues(posA, rotA, supLocalA);
+            const VectorSingle closeW = TransformPointValues(posB, rotB, closePt);
             const f32 depth = Vector3Dot(VectorSingle(closeW - supW, 0.0f), worldOut).x;
             const f32 sep = -(SimdMax(depth, 0.0f) + totalR);
             const VectorSingle wA = supW + nAtoB * hullR;
             const VectorSingle wB = closeW - nAtoB * meshR;
             chosenNormal = nAtoB;
-            PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(closeTri & 0xffu)), candidates);
+            PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(closeTri & 0xffu)), candidates);
         }
     }
 
@@ -1627,30 +1640,41 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
     return m;
 }
 
-Aabb3D TransformLocalAabbBetweenShapes(in Aabb3D boxB, in Transform3D xfBtoA){
-    const VectorSingle cB = (VectorSingle(boxB.lowerBound) + VectorSingle(boxB.upperBound)) * 0.5f;
-    const VectorSingle eB = (VectorSingle(boxB.upperBound) - VectorSingle(boxB.lowerBound)) * 0.5f;
-    const VectorSingle cA = TransformPoint(xfBtoA, cB);
-    const VectorSingle qBtoA = VectorSingle(xfBtoA.rotation);
-    const VectorSingle ux = Abs(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), qBtoA));
-    const VectorSingle uy = Abs(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), qBtoA));
-    const VectorSingle uz = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), qBtoA));
+void TransformLocalAabbValuesBetweenShapes(
+    in VectorSingle bMin,
+    in VectorSingle bMax,
+    in VectorSingle relPosBtoA,
+    in VectorSingle relRotBtoA,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    const VectorSingle cB = (bMin + bMax) * 0.5f;
+    const VectorSingle eB = (bMax - bMin) * 0.5f;
+    const VectorSingle cA = TransformPointValues(relPosBtoA, relRotBtoA, cB);
+    const VectorSingle ux = Abs(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), relRotBtoA));
+    const VectorSingle uy = Abs(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), relRotBtoA));
+    const VectorSingle uz = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), relRotBtoA));
     const VectorSingle eA = ux * eB.x + uy * eB.y + uz * eB.z;
-    return Aabb3D(cA - eA, cA + eA);
+    outMin = cA - eA;
+    outMax = cA + eA;
 }
 
 Manifold CollideMeshes(
     in MeshShape meshA,
-    in Transform3D xfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
     in MeshShape meshB,
-    in Transform3D xfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
     in f32 maxDistance
 ){
     Manifold m;
     if(meshA.nodes.empty() || meshA.triangles.empty() || meshB.nodes.empty() || meshB.triangles.empty())
         return m;
 
-    const Transform3D xfBtoA = RelativeTransform(xfA, xfB);
+    VectorSingle relPosBtoA(0.0f);
+    VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
     const f32 rA = meshA.radius();
     const f32 rB = meshB.radius();
     const f32 totalR = rA + rB;
@@ -1671,9 +1695,10 @@ Manifold CollideMeshes(
         in MeshBvhNode nodeA = meshA.nodes[pair.x];
         in MeshBvhNode nodeB = meshB.nodes[pair.y];
 
-        const Aabb3D boxBInA = TransformLocalAabbBetweenShapes(nodeB.aabb(), xfBtoA);
-        const Aabb3D boxAPad(VectorSingle(nodeA.aabb().lowerBound) - padVec, VectorSingle(nodeA.aabb().upperBound) + padVec);
-        if(!AabbOverlaps(boxAPad, boxBInA))
+        VectorSingle boxBInAMin(0.0f);
+        VectorSingle boxBInAMax(0.0f);
+        TransformLocalAabbValuesBetweenShapes(VectorSingle(nodeB.aabbMinLeft, 0.0f), VectorSingle(nodeB.aabbMaxRight, 0.0f), relPosBtoA, relRotBtoA, boxBInAMin, boxBInAMax);
+        if(!AabbOverlapsValues(VectorSingle(nodeA.aabbMinLeft, 0.0f) - padVec, VectorSingle(nodeA.aabbMaxRight, 0.0f) + padVec, boxBInAMin, boxBInAMax))
             continue;
 
         if(nodeA.isLeaf() && nodeB.isLeaf()){
@@ -1683,24 +1708,27 @@ Manifold CollideMeshes(
             const u32 endB = firstB + nodeB.rightOrCount();
             for(u32 tAi = firstA; tAi < endA; ++tAi){
                 in MeshTriangle triA = meshA.triangles[tAi];
-                const VectorSingle av0 = Vec3FromU(triA.v0);
-                const VectorSingle av1 = Vec3FromU(triA.v1);
-                const VectorSingle av2 = Vec3FromU(triA.v2);
-                const Aabb3D tABox(Min(av0, Min(av1, av2)) - padVec, Max(av0, Max(av1, av2)) + padVec);
+                const VectorSingle av0(triA.v0, 0.0f);
+                const VectorSingle av1(triA.v1, 0.0f);
+                const VectorSingle av2(triA.v2, 0.0f);
+                const VectorSingle tAMin = Min(av0, Min(av1, av2)) - padVec;
+                const VectorSingle tAMax = Max(av0, Max(av1, av2)) + padVec;
                 const ShapeProxy triProxyA = MakeTriangleProxy(av0, av1, av2, rA);
 
                 for(u32 tBi = firstB; tBi < endB; ++tBi){
                     in MeshTriangle triB = meshB.triangles[tBi];
-                    const VectorSingle bv0InA = TransformPoint(xfBtoA, Vec3FromU(triB.v0));
-                    const VectorSingle bv1InA = TransformPoint(xfBtoA, Vec3FromU(triB.v1));
-                    const VectorSingle bv2InA = TransformPoint(xfBtoA, Vec3FromU(triB.v2));
-                    const Aabb3D tBBox(Min(bv0InA, Min(bv1InA, bv2InA)), Max(bv0InA, Max(bv1InA, bv2InA)));
-                    if(!AabbOverlaps(tABox, tBBox))
+                    const VectorSingle bv0(triB.v0, 0.0f);
+                    const VectorSingle bv1(triB.v1, 0.0f);
+                    const VectorSingle bv2(triB.v2, 0.0f);
+                    const VectorSingle bv0InA = TransformPointValues(relPosBtoA, relRotBtoA, bv0);
+                    const VectorSingle bv1InA = TransformPointValues(relPosBtoA, relRotBtoA, bv1);
+                    const VectorSingle bv2InA = TransformPointValues(relPosBtoA, relRotBtoA, bv2);
+                    if(!AabbOverlapsValues(tAMin, tAMax, Min(bv0InA, Min(bv1InA, bv2InA)), Max(bv0InA, Max(bv1InA, bv2InA))))
                         continue;
 
-                    const ShapeProxy triProxyB = MakeTriangleProxy(Vec3FromU(triB.v0), Vec3FromU(triB.v1), Vec3FromU(triB.v2), rB);
+                    const ShapeProxy triProxyB = MakeTriangleProxy(bv0, bv1, bv2, rB);
                     SimplexCache cache;
-                    const DistanceOutput gjk = ShapeDistanceProxies(triProxyA, xfA, triProxyB, xfB, false, cache);
+                    const DistanceOutput gjk = ShapeDistanceProxies(triProxyA, posA, rotA, triProxyB, posB, rotB, false, cache);
 
                     if(gjk.distance() > pad)
                         continue;
@@ -1714,12 +1742,12 @@ Manifold CollideMeshes(
                             deepestSep = sep;
                             chosenNormal = nAtoB;
                         }
-                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
+                        PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
                         continue;
                     }
 
-                    const VectorSingle nALocal = Vec3FromU(triA.normal);
-                    const VectorSingle nBInA = SafeNormalizeVec3(Vector3Rotate(Vec3FromU(triB.normal), VectorSingle(xfBtoA.rotation)), nALocal);
+                    const VectorSingle nALocal(triA.normal, 0.0f);
+                    const VectorSingle nBInA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(triB.normal, 0.0f), relRotBtoA), nALocal);
 
                     f32 bestSep = -s_MaxF32;
                     VectorSingle bestAxisInA = nALocal;
@@ -1833,7 +1861,7 @@ Manifold CollideMeshes(
                     if(triSeparated)
                         continue;
 
-                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(bestAxisInA, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(bestAxisInA, rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     VectorSingle wA(0.0f);
                     VectorSingle wB(0.0f);
                     if(winKind == 0u){
@@ -1843,7 +1871,7 @@ Manifold CollideMeshes(
                         if(p1 < minProj){ minProj = p1; bestBv = bv1InA; }
                         const f32 p2 = Vector3Dot(bestAxisInA, bv2InA).x;
                         if(p2 < minProj){ bestBv = bv2InA; }
-                        const VectorSingle wCenter = TransformPoint(xfA, bestBv);
+                        const VectorSingle wCenter = TransformPointValues(posA, rotA, bestBv);
                         wB = wCenter - nAtoB * rB;
                         wA = wCenter - nAtoB * (bestSep + rB);
                     }
@@ -1854,7 +1882,7 @@ Manifold CollideMeshes(
                         if(p1 > maxProj){ maxProj = p1; bestAv = av1; }
                         const f32 p2 = Vector3Dot(bestAxisInA, av2).x;
                         if(p2 > maxProj){ bestAv = av2; }
-                        const VectorSingle wCenter = TransformPoint(xfA, bestAv);
+                        const VectorSingle wCenter = TransformPointValues(posA, rotA, bestAv);
                         wA = wCenter + nAtoB * rA;
                         wB = wCenter + nAtoB * (bestSep + rA);
                     }
@@ -1872,14 +1900,14 @@ Manifold CollideMeshes(
                         VectorSingle cALoc(0.0f);
                         VectorSingle cBLoc(0.0f);
                         ClosestPointsBetweenSegments(a0, a1, b0, b1, sSeg, tSeg, cALoc, cBLoc);
-                        wA = TransformPoint(xfA, cALoc) + nAtoB * rA;
-                        wB = TransformPoint(xfA, cBLoc) - nAtoB * rB;
+                        wA = TransformPointValues(posA, rotA, cALoc) + nAtoB * rA;
+                        wB = TransformPointValues(posA, rotA, cBLoc) - nAtoB * rB;
                     }
                     if(bestSep < deepestSep){
                         deepestSep = bestSep;
                         chosenNormal = nAtoB;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, bestSep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, bestSep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
                 }
             }
         }
@@ -1904,8 +1932,8 @@ Manifold CollideMeshes(
             }
         }
         else{
-            const f32 areaA = AabbPerimeter(nodeA.aabb());
-            const f32 areaB = AabbPerimeter(nodeB.aabb());
+            const f32 areaA = AabbPerimeterValues(VectorSingle(nodeA.aabbMinLeft, 0.0f), VectorSingle(nodeA.aabbMaxRight, 0.0f));
+            const f32 areaB = AabbPerimeterValues(VectorSingle(nodeB.aabbMinLeft, 0.0f), VectorSingle(nodeB.aabbMaxRight, 0.0f));
             if(areaA >= areaB){
                 if(stackCount < 256u){
                     stack[stackCount] = u32x2u(nodeA.leftOrFirst(), pair.y);

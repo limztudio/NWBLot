@@ -54,7 +54,7 @@ extern VectorSingle Vector3RefractV(in VectorSingle a0, in VectorSingle a1, in V
 extern VectorSingle Vector3Rotate(in VectorSingle a0, in VectorSingle a1);
 
 [cpp_name("::Vector3TryNormalize")]
-extern Expected<VectorSingle> Vector3TryNormalize(in VectorSingle a0);
+extern b8 Vector3TryNormalize(in VectorSingle a0, mut VectorSingle outValue);
 
 [cpp_name("::VectorDouble3AngleBetweenNormals")]
 extern VectorDouble VectorDouble3AngleBetweenNormals(in VectorDouble a0, in VectorDouble a1);
@@ -132,7 +132,7 @@ extern VectorDouble VectorDouble3RefractV(in VectorDouble a0, in VectorDouble a1
 extern VectorDouble VectorDouble3Rotate(in VectorDouble a0, in VectorDouble a1);
 
 [cpp_name("::VectorDouble3TryNormalize")]
-extern Expected<VectorDouble> VectorDouble3TryNormalize(in VectorDouble a0);
+extern b8 VectorDouble3TryNormalize(in VectorDouble a0, mut VectorDouble outValue);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

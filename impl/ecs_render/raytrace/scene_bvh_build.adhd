@@ -15,24 +15,36 @@ u32 BuildSceneBvhNode(
     in Span<SceneBvhPrimitiveCalculation> primitiveBounds,
     in Span<u32> instanceLeafCost,
     mut Vector<u32> indices,
-    mut Vector<SceneBvhNodeCalculation> nodes
+    mut Vector<SceneBvhNodeCalculation> nodes,
+    mut VectorSingle outMinBounds,
+    mut VectorSingle outMaxBounds,
+    mut b8 outContainsTransparentOccluder
 ){
     const u32 nodeIndex = cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation());
 
     if((hi - lo) == 1u){
         const u32 instance = indices[cast<usize>(lo)];
-        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(instance)], instance);
+        in SceneBvhPrimitiveCalculation prim = primitiveBounds[cast<usize>(instance)];
+        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhLeafNode(prim, instance);
+        outMinBounds = VectorSingle(prim.aabbMin);
+        outMaxBounds = VectorSingle(prim.aabbMax);
+        outContainsTransparentOccluder = prim.transparentOccluder;
         return nodeIndex;
     }
     if((hi - lo) == 2u){
         const u32 leftInstance = indices[cast<usize>(lo)];
         const u32 rightInstance = indices[cast<usize>(lo + 1u)];
+        in SceneBvhPrimitiveCalculation leftPrim = primitiveBounds[cast<usize>(leftInstance)];
+        in SceneBvhPrimitiveCalculation rightPrim = primitiveBounds[cast<usize>(rightInstance)];
         const u32 leftChild = cast<u32>(nodes.size());
-        nodes.push_back(MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(leftInstance)], leftInstance));
+        nodes.push_back(MakeSceneBvhLeafNode(leftPrim, leftInstance));
         const u32 rightChild = cast<u32>(nodes.size());
-        nodes.push_back(MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(rightInstance)], rightInstance));
-        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(nodes[cast<usize>(leftChild)], nodes[cast<usize>(rightChild)], leftChild, rightChild);
+        nodes.push_back(MakeSceneBvhLeafNode(rightPrim, rightInstance));
+        outMinBounds = Min(VectorSingle(leftPrim.aabbMin), VectorSingle(rightPrim.aabbMin));
+        outMaxBounds = Max(VectorSingle(leftPrim.aabbMax), VectorSingle(rightPrim.aabbMax));
+        outContainsTransparentOccluder = leftPrim.transparentOccluder || rightPrim.transparentOccluder;
+        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(outMinBounds, outMaxBounds, outContainsTransparentOccluder, leftChild, rightChild);
         return nodeIndex;
     }
 
@@ -52,10 +64,19 @@ u32 BuildSceneBvhNode(
 
     mid = ResolveSceneBvhSplitMidpoint(split, lo, hi, mid);
 
-    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes);
-    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes);
+    VectorSingle leftMin = VectorZero();
+    VectorSingle leftMax = VectorZero();
+    b8 leftTransparent = false;
+    VectorSingle rightMin = VectorZero();
+    VectorSingle rightMax = VectorZero();
+    b8 rightTransparent = false;
+    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes, leftMin, leftMax, leftTransparent);
+    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes, rightMin, rightMax, rightTransparent);
 
-    nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(nodes[cast<usize>(leftChild)], nodes[cast<usize>(rightChild)], leftChild, rightChild);
+    outMinBounds = Min(leftMin, rightMin);
+    outMaxBounds = Max(leftMax, rightMax);
+    outContainsTransparentOccluder = leftTransparent || rightTransparent;
+    nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(outMinBounds, outMaxBounds, outContainsTransparentOccluder, leftChild, rightChild);
     return nodeIndex;
 }
 

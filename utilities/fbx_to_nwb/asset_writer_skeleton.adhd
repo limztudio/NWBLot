@@ -103,12 +103,12 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(in Span<UfbxNode> joints, i
         MatrixSingle parentGlobalBindPose = MatrixSingle();
         if(hasParent)
             parentGlobalBindPose = MatrixSingle(bindPoseMatrices[parentIndex]);
-        const auto localBindPoseMatrix = TryBuildFbxLocalBindPoseMatrix(MatrixSingle(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose);
-        if(!localBindPoseMatrix.has_value()){
+        MatrixSingle localBindPoseMatrix = MatrixSingle();
+        if(!TryBuildFbxLocalBindPoseMatrix(MatrixSingle(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose, localBindPoseMatrix)){
             error("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'", sortNames[oldJointIndex]);
             return MakeUnexpected(Failure());
         }
-        const JointMatrix localBindPose = JointMatrix(localBindPoseMatrix.value());
+        const JointMatrix localBindPose = JointMatrix(localBindPoseMatrix);
 
         outData.oldToNewJointIndices[oldJointIndex] = cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);

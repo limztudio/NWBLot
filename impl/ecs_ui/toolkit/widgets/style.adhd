@@ -116,10 +116,10 @@ void ApplySkinPaletteToWidgetStyle(in UiSkinPalette palette, mut WidgetStyle sty
 }
 
 Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density){
-    const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, cast<f64>(density));
-    if(!minimum.has_value())
+    VectorSingle minimum(0.0f);
+    if(!TryLoadUiSkinMinimumSize(region, cast<f64>(density), minimum))
         return MakeUnexpected(Failure());
-    return Point(minimum.value().x, minimum.value().y);
+    return Point(minimum.x, minimum.y);
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){

@@ -18,12 +18,6 @@ namespace AabbTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(SIMDVectorSingle) Bounds{
-    SIMDVectorSingle minBounds;
-    SIMDVectorSingle maxBounds;
-};
-static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
-
 [[nodiscard]] b8 FOUNDATION_SIMD_CALL Valid(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 void FOUNDATION_SIMD_CALL Reset(SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept;
 void FOUNDATION_SIMD_CALL Expand(SIMDVectorSingle point, SIMDVectorSingle& inOutMinBounds, SIMDVectorSingle& inOutMaxBounds)noexcept;
@@ -33,7 +27,7 @@ void FOUNDATION_SIMD_CALL ExpandTriangle(SIMDVectorSingle v0, SIMDVectorSingle v
 [[nodiscard]] SIMDVectorSingle FOUNDATION_SIMD_CALL Extents(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle FOUNDATION_SIMD_CALL SurfaceArea(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle FOUNDATION_SIMD_CALL Radius(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
-[[nodiscard]] Expected<Bounds> FOUNDATION_SIMD_CALL Transform(const SIMDMatrix& localToWorld, SIMDVectorSingle localMinBounds, SIMDVectorSingle localMaxBounds)noexcept;
+[[nodiscard]] b8 FOUNDATION_SIMD_CALL Transform(const SIMDMatrix& localToWorld, SIMDVectorSingle localMinBounds, SIMDVectorSingle localMaxBounds, SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,12 +45,6 @@ namespace AabbDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(SIMDVectorDouble) Bounds{
-    SIMDVectorDouble minBounds;
-    SIMDVectorDouble maxBounds;
-};
-static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
-
 [[nodiscard]] b8 FOUNDATION_SIMD_CALL Valid(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 void FOUNDATION_SIMD_CALL Reset(SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept;
 void FOUNDATION_SIMD_CALL Expand(SIMDVectorDouble point, SIMDVectorDouble& inOutMinBounds, SIMDVectorDouble& inOutMaxBounds)noexcept;
@@ -66,7 +54,7 @@ void FOUNDATION_SIMD_CALL ExpandTriangle(SIMDVectorDouble v0, SIMDVectorDouble v
 [[nodiscard]] SIMDVectorDouble FOUNDATION_SIMD_CALL Extents(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble FOUNDATION_SIMD_CALL SurfaceArea(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble FOUNDATION_SIMD_CALL Radius(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
-[[nodiscard]] Expected<Bounds> FOUNDATION_SIMD_CALL Transform(const SIMDMatrixDouble& localToWorld, SIMDVectorDouble localMinBounds, SIMDVectorDouble localMaxBounds)noexcept;
+[[nodiscard]] b8 FOUNDATION_SIMD_CALL Transform(const SIMDMatrixDouble& localToWorld, SIMDVectorDouble localMinBounds, SIMDVectorDouble localMaxBounds, SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,14 +170,15 @@ FOUNDATION_INLINE void FOUNDATION_SIMD_CALL AabbDoubleTests::ExpandTriangle(cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<AabbTests::Bounds> FOUNDATION_SIMD_CALL AabbTests::Transform(const SIMDMatrix& localToWorld, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds)noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL AabbTests::Transform(const SIMDMatrix& localToWorld, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds, SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept{
     if(!AabbTests::Valid(localMinBounds, localMaxBounds))
-        return MakeUnexpected(Failure{});
+        return false;
     if(MatrixIsNaN(localToWorld) || MatrixIsInfinite(localToWorld))
-        return MakeUnexpected(Failure{});
+        return false;
 
-    Bounds bounds;
-    AabbTests::Reset(bounds.minBounds, bounds.maxBounds);
+    SIMDVectorSingle minBounds{};
+    SIMDVectorSingle maxBounds{};
+    AabbTests::Reset(minBounds, maxBounds);
     for(u32 corner = 0u; corner < CollisionDetail::s_AabbCornerCount; ++corner){
         const SIMDVectorSingle cornerSelect = VectorSelectControl(
             corner & CollisionDetail::s_BoxCornerXSelectBit,
@@ -200,32 +189,30 @@ FOUNDATION_INLINE void FOUNDATION_SIMD_CALL AabbDoubleTests::ExpandTriangle(cons
         const SIMDVectorSingle localPoint = VectorSelect(localMinBounds, localMaxBounds, cornerSelect);
         const SIMDVectorSingle point = Vector3Transform(localPoint, localToWorld);
         if(Vector3IsNaN(point) || Vector3IsInfinite(point))
-            return MakeUnexpected(Failure{});
+            return false;
 
-        AabbTests::Expand(point, bounds.minBounds, bounds.maxBounds);
+        AabbTests::Expand(point, minBounds, maxBounds);
     }
-    if(!AabbTests::Valid(bounds.minBounds, bounds.maxBounds))
-        return MakeUnexpected(Failure{});
-    return bounds;
+    if(!AabbTests::Valid(minBounds, maxBounds))
+        return false;
+    outMinBounds = minBounds;
+    outMaxBounds = maxBounds;
+    return true;
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL TryTransformAabb(const SIMDMatrix& localToWorld, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds, SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept{
-    if(const auto transformed = AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds)){
-        outMinBounds = transformed->minBounds;
-        outMaxBounds = transformed->maxBounds;
-        return true;
-    }
-    return false;
+    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
 }
 
-[[nodiscard]] inline Expected<AabbDoubleTests::Bounds> FOUNDATION_SIMD_CALL AabbDoubleTests::Transform(const SIMDMatrixDouble& localToWorld, const SIMDVectorDouble localMinBounds, const SIMDVectorDouble localMaxBounds)noexcept{
+[[nodiscard]] inline b8 FOUNDATION_SIMD_CALL AabbDoubleTests::Transform(const SIMDMatrixDouble& localToWorld, const SIMDVectorDouble localMinBounds, const SIMDVectorDouble localMaxBounds, SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept{
     if(!AabbDoubleTests::Valid(localMinBounds, localMaxBounds))
-        return MakeUnexpected(Failure{});
+        return false;
     if(MatrixDoubleIsNaN(localToWorld) || MatrixDoubleIsInfinite(localToWorld))
-        return MakeUnexpected(Failure{});
+        return false;
 
-    Bounds bounds;
-    AabbDoubleTests::Reset(bounds.minBounds, bounds.maxBounds);
+    SIMDVectorDouble minBounds{};
+    SIMDVectorDouble maxBounds{};
+    AabbDoubleTests::Reset(minBounds, maxBounds);
     for(u64 corner = 0u; corner < CollisionDoubleDetail::s_DoubleAabbCornerCount; ++corner){
         const SIMDVectorDouble cornerSelect = VectorDoubleSelectControl(
             corner & CollisionDoubleDetail::s_DoubleBoxCornerXSelectBit,
@@ -236,13 +223,15 @@ FOUNDATION_INLINE void FOUNDATION_SIMD_CALL AabbDoubleTests::ExpandTriangle(cons
         const SIMDVectorDouble localPoint = VectorDoubleSelect(localMinBounds, localMaxBounds, cornerSelect);
         const SIMDVectorDouble point = VectorDouble3Transform(localPoint, localToWorld);
         if(VectorDouble3IsNaN(point) || VectorDouble3IsInfinite(point))
-            return MakeUnexpected(Failure{});
+            return false;
 
-        AabbDoubleTests::Expand(point, bounds.minBounds, bounds.maxBounds);
+        AabbDoubleTests::Expand(point, minBounds, maxBounds);
     }
-    if(!AabbDoubleTests::Valid(bounds.minBounds, bounds.maxBounds))
-        return MakeUnexpected(Failure{});
-    return bounds;
+    if(!AabbDoubleTests::Valid(minBounds, maxBounds))
+        return false;
+    outMinBounds = minBounds;
+    outMaxBounds = maxBounds;
+    return true;
 }
 
 

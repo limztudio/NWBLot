@@ -784,11 +784,23 @@ void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPai
 
     in TransformComponent camXf = cameraView.components.value().transform;
     in CameraProjection camProj = cameraView.projection;
+    const PhysicsDebugScreenProjector projector(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight);
+    if(!projector.valid())
+        return;
+
+    const VectorSingle camPos = projector.camPos();
+    const VectorSingle camRight = projector.right();
+    const VectorSingle camUp = projector.up();
+    const VectorSingle camForward = projector.forward();
+    const f32 projX = projector.projX();
+    const f32 projY = projector.projY();
+    const f32 zMin = projector.zMin();
+    const f32 halfWidth = projector.halfWidth();
+    const f32 halfHeight = projector.halfHeight();
     for(usize li = 0u; li < debugLines.size(); ++li){
         in PhysicsDebugLine line = debugLines[li];
-        const Expected<VectorSingle> segment = ProjectPhysicsWorldSegmentToScreen(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight, VectorSingle(line.start), VectorSingle(line.end));
-        if(segment.has_value()){
-            const VectorSingle seg = segment.value();
+        VectorSingle seg(0.0f);
+        if(ProjectPhysicsWorldSegmentValues(camPos, camRight, camUp, camForward, projX, projY, zMin, halfWidth, halfHeight, VectorSingle(line.start), VectorSingle(line.end), seg)){
             context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
         }
     }

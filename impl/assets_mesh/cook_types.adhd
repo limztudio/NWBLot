@@ -55,8 +55,7 @@ b8 IsAllowedSkinInfluenceMetadataField(in StringView fieldName){
     return fieldName == s_SkinJointsField || fieldName == s_SkinWeightsField;
 }
 
-Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in f32x4u weights){
-    const VectorSingle weightVec(weights);
+Expected<void, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in VectorSingle weightVec, mut VectorSingle outWeights){
     if(
         !IsFinite(weightVec)
         || weightVec.x < 0.0f
@@ -74,7 +73,8 @@ Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in
     if(!ValidSkinInfluenceWeights(normalizedWeights))
         return MakeUnexpected(SkinInfluenceWeightFailure::InvalidNormalized);
 
-    return f32x4u(normalizedWeights);
+    outWeights = normalizedWeights;
+    return Expected<void, SkinInfluenceWeightFailure>();
 }
 
 SourceIndexStreamFailure ValidateSourceIndexStreamValues(in Span<u32> indices, in usize vertexRefCount){

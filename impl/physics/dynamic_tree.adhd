@@ -25,9 +25,13 @@ class TreeNode{
         return Aabb3D(VectorSingle(this.aabbMinUser, 0.0f), VectorSingle(this.aabbMaxCategory, 0.0f));
     }
 
+    public void setAabbValues(in VectorSingle lower, in VectorSingle upper){
+        this.aabbMinUser = f32x3_u32(lower, this.aabbMinUser.w);
+        this.aabbMaxCategory = f32x3_u32(upper, this.aabbMaxCategory.w);
+    }
+
     public void setAabb(in Aabb3D box){
-        this.aabbMinUser = f32x3_u32(box.lowerBound.x, box.lowerBound.y, box.lowerBound.z, this.aabbMinUser.w);
-        this.aabbMaxCategory = f32x3_u32(box.upperBound.x, box.upperBound.y, box.upperBound.z, this.aabbMaxCategory.w);
+        this.setAabbValues(VectorSingle(box.lowerBound), VectorSingle(box.upperBound));
     }
 
     public u32 userData()const{
@@ -56,10 +60,12 @@ class DynamicTree{
 
     public u32 createProxy(in Aabb3D aabb, in u32 categoryBits, in u32 userData){
         const u32 proxyId = this.allocateNode();
-        const f32 margin = ComputeAabbMargin(aabb);
-        const Aabb3D fat = FattenAabb(aabb, margin);
-        this.m_nodes[proxyId].aabbMinUser = f32x3_u32(fat.lowerBound.x, fat.lowerBound.y, fat.lowerBound.z, userData);
-        this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(fat.upperBound.x, fat.upperBound.y, fat.upperBound.z, categoryBits);
+        const VectorSingle lower(aabb.lowerBound);
+        const VectorSingle upper(aabb.upperBound);
+        const f32 margin = ComputeAabbMarginValues(lower, upper);
+        const VectorSingle mVec(margin, margin, margin, 0.0f);
+        this.m_nodes[proxyId].aabbMinUser = f32x3_u32(lower - mVec, userData);
+        this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(upper + mVec, categoryBits);
         this.m_nodes[proxyId].height = 0;
         this.m_nodes[proxyId].moved = false;
         this.m_moveIndices[proxyId] = s_NullIndex;
@@ -77,36 +83,44 @@ class DynamicTree{
     public b8 needsMove(in u32 proxyId, in Aabb3D aabb, in b8 keepEnlarged)const{
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
             return false;
-        const Aabb3D curAabb = this.m_nodes[proxyId].aabb();
-        if(!AabbContains(curAabb, aabb))
+        in TreeNode node = this.m_nodes[proxyId];
+        const VectorSingle curMin(node.aabbMinUser, 0.0f);
+        const VectorSingle curMax(node.aabbMaxCategory, 0.0f);
+        const VectorSingle lower(aabb.lowerBound);
+        const VectorSingle upper(aabb.upperBound);
+        if(!AabbContainsValues(curMin, curMax, lower, upper))
             return true;
         if(keepEnlarged)
             return false;
-        const f32 margin = ComputeAabbMargin(aabb);
-        const Aabb3D hugeAabb = FattenAabb(FattenAabb(aabb, margin), 4.0f * margin);
-        return !AabbContains(hugeAabb, curAabb);
+        const f32 hugeMargin = 5.0f * ComputeAabbMarginValues(lower, upper);
+        const VectorSingle hVec(hugeMargin, hugeMargin, hugeMargin, 0.0f);
+        return !AabbContainsValues(lower - hVec, upper + hVec, curMin, curMax);
     }
 
     public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
             return false;
 
-        const f32 margin = ComputeAabbMargin(aabb);
-        const Aabb3D fattened = FattenAabb(aabb, margin);
-        const Aabb3D hugeAabb = FattenAabb(fattened, 4.0f * margin);
-        const Aabb3D curAabb = this.m_nodes[proxyId].aabb();
-        if(AabbContains(curAabb, aabb) && AabbContains(hugeAabb, curAabb))
+        const VectorSingle lower0(aabb.lowerBound);
+        const VectorSingle upper0(aabb.upperBound);
+        const f32 margin = ComputeAabbMarginValues(lower0, upper0);
+        const VectorSingle mVec(margin, margin, margin, 0.0f);
+        const VectorSingle fattenedLower = lower0 - mVec;
+        const VectorSingle fattenedUpper = upper0 + mVec;
+        const VectorSingle hugeVec(4.0f * margin, 4.0f * margin, 4.0f * margin, 0.0f);
+        in TreeNode curNode = this.m_nodes[proxyId];
+        const VectorSingle curMin(curNode.aabbMinUser, 0.0f);
+        const VectorSingle curMax(curNode.aabbMaxCategory, 0.0f);
+        if(AabbContainsValues(curMin, curMax, lower0, upper0) && AabbContainsValues(fattenedLower - hugeVec, fattenedUpper + hugeVec, curMin, curMax))
             return false;
 
         const VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
         const VectorSingle dNeg = VectorLess(d, VectorSingle(0.0f));
-        const VectorSingle fattenedLower = VectorSingle(fattened.lowerBound);
-        const VectorSingle fattenedUpper = VectorSingle(fattened.upperBound);
         const VectorSingle lower = VectorSelect(fattenedLower, fattenedLower + d, dNeg);
         const VectorSingle upper = VectorSelect(fattenedUpper + d, fattenedUpper, dNeg);
 
         this.removeLeaf(proxyId);
-        this.m_nodes[proxyId].setAabb(Aabb3D(lower, upper));
+        this.m_nodes[proxyId].setAabbValues(lower, upper);
         this.insertLeaf(proxyId);
         return true;
     }
@@ -152,6 +166,8 @@ class DynamicTree{
         if(this.m_root == s_NullIndex)
             return;
 
+        const VectorSingle queryMin(queryBox.lowerBound);
+        const VectorSingle queryMax(queryBox.upperBound);
         Array<u32, 256u> fixedStack;
         fixedStack[0u] = this.m_root;
         u32 fixedCount = 1u;
@@ -162,7 +178,7 @@ class DynamicTree{
                 continue;
 
             in TreeNode node = this.m_nodes[nodeId];
-            if(!AabbOverlaps(node.aabb(), queryBox))
+            if(!AabbOverlapsValues(VectorSingle(node.aabbMinUser, 0.0f), VectorSingle(node.aabbMaxCategory, 0.0f), queryMin, queryMax))
                 continue;
 
             if(node.isLeaf()){
@@ -194,9 +210,11 @@ class DynamicTree{
             return;
 
         f32 maxFraction = 1.0f;
-        const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
+        VectorSingle invDir(0.0f);
+        u32 parallelMask = 0u;
+        ComputeRayCastSlabValues(translation, invDir, parallelMask);
         f32 rootTMin = 0.0f;
-        if(!AabbRayCastFast(this.m_nodes[this.m_root].aabb(), ray, maxFraction, rootTMin))
+        if(!AabbRayCastValues(VectorSingle(this.m_nodes[this.m_root].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[this.m_root].aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, rootTMin))
             return;
 
         Array<u32, 256u> fixedStack;
@@ -221,9 +239,9 @@ class DynamicTree{
             }
             else{
                 f32 t1 = 0.0f;
-                const b8 hit1 = node.child1 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child1].aabb(), ray, maxFraction, t1);
+                const b8 hit1 = node.child1 != s_NullIndex && AabbRayCastValues(VectorSingle(this.m_nodes[node.child1].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[node.child1].aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, t1);
                 f32 t2 = 0.0f;
-                const b8 hit2 = node.child2 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child2].aabb(), ray, maxFraction, t2);
+                const b8 hit2 = node.child2 != s_NullIndex && AabbRayCastValues(VectorSingle(this.m_nodes[node.child2].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[node.child2].aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, t2);
                 PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, node.child1, hit1, t1, node.child2, hit2, t2);
             }
         }
@@ -280,32 +298,31 @@ class DynamicTree{
             return;
         }
 
-        const Aabb3D leafAabb = this.m_nodes[leaf].aabb();
+        const VectorSingle leafMin(this.m_nodes[leaf].aabbMinUser, 0.0f);
+        const VectorSingle leafMax(this.m_nodes[leaf].aabbMaxCategory, 0.0f);
         u32 index = this.m_root;
         while(!this.m_nodes[index].isLeaf()){
             const u32 c1 = this.m_nodes[index].child1;
             const u32 c2 = this.m_nodes[index].child2;
-            const Aabb3D idxBox = this.m_nodes[index].aabb();
-            const Aabb3D c1Box = this.m_nodes[c1].aabb();
-            const Aabb3D c2Box = this.m_nodes[c2].aabb();
-            const f32 area = AabbPerimeter(idxBox);
+            const VectorSingle idxMin(this.m_nodes[index].aabbMinUser, 0.0f);
+            const VectorSingle idxMax(this.m_nodes[index].aabbMaxCategory, 0.0f);
+            const VectorSingle c1Min(this.m_nodes[c1].aabbMinUser, 0.0f);
+            const VectorSingle c1Max(this.m_nodes[c1].aabbMaxCategory, 0.0f);
+            const VectorSingle c2Min(this.m_nodes[c2].aabbMinUser, 0.0f);
+            const VectorSingle c2Max(this.m_nodes[c2].aabbMaxCategory, 0.0f);
+            const f32 area = AabbPerimeterValues(idxMin, idxMax);
 
-            const Aabb3D combined = AabbUnion(idxBox, leafAabb);
-            const f32 combinedArea = AabbPerimeter(combined);
+            const f32 combinedArea = AabbPerimeterValues(Min(idxMin, leafMin), Max(idxMax, leafMax));
             const f32 cost = 2.0f * combinedArea;
             const f32 inheritanceCost = 2.0f * (combinedArea - area);
 
-            f32 cost1 = 0.0f;
-            if(this.m_nodes[c1].isLeaf())
-                cost1 = AabbPerimeter(AabbUnion(leafAabb, c1Box)) + inheritanceCost;
-            else
-                cost1 = (AabbPerimeter(AabbUnion(leafAabb, c1Box)) - AabbPerimeter(c1Box)) + inheritanceCost;
+            f32 cost1 = AabbPerimeterValues(Min(leafMin, c1Min), Max(leafMax, c1Max)) + inheritanceCost;
+            if(!this.m_nodes[c1].isLeaf())
+                cost1 -= AabbPerimeterValues(c1Min, c1Max);
 
-            f32 cost2 = 0.0f;
-            if(this.m_nodes[c2].isLeaf())
-                cost2 = AabbPerimeter(AabbUnion(leafAabb, c2Box)) + inheritanceCost;
-            else
-                cost2 = (AabbPerimeter(AabbUnion(leafAabb, c2Box)) - AabbPerimeter(c2Box)) + inheritanceCost;
+            f32 cost2 = AabbPerimeterValues(Min(leafMin, c2Min), Max(leafMax, c2Max)) + inheritanceCost;
+            if(!this.m_nodes[c2].isLeaf())
+                cost2 -= AabbPerimeterValues(c2Min, c2Max);
 
             if(cost < cost1 && cost < cost2)
                 break;
@@ -320,7 +337,10 @@ class DynamicTree{
         const u32 oldParent = this.m_nodes[sibling].parentOrNext;
         const u32 newParent = this.allocateNode();
         this.m_nodes[newParent].parentOrNext = oldParent;
-        this.m_nodes[newParent].setAabb(AabbUnion(leafAabb, this.m_nodes[sibling].aabb()));
+        this.m_nodes[newParent].setAabbValues(
+            Min(leafMin, VectorSingle(this.m_nodes[sibling].aabbMinUser, 0.0f)),
+            Max(leafMax, VectorSingle(this.m_nodes[sibling].aabbMaxCategory, 0.0f))
+        );
         this.m_nodes[newParent].height = cast<i16>(cast<i32>(this.m_nodes[sibling].height) + 1);
 
         if(oldParent != s_NullIndex){
@@ -376,9 +396,19 @@ class DynamicTree{
             const u32 c1 = this.m_nodes[index].child1;
             const u32 c2 = this.m_nodes[index].child2;
             this.m_nodes[index].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[c1].height), cast<i32>(this.m_nodes[c2].height)));
-            this.m_nodes[index].setAabb(AabbUnion(this.m_nodes[c1].aabb(), this.m_nodes[c2].aabb()));
+            this.m_nodes[index].setAabbValues(
+                Min(VectorSingle(this.m_nodes[c1].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[c2].aabbMinUser, 0.0f)),
+                Max(VectorSingle(this.m_nodes[c1].aabbMaxCategory, 0.0f), VectorSingle(this.m_nodes[c2].aabbMaxCategory, 0.0f))
+            );
             index = this.m_nodes[index].parentOrNext;
         }
+    }
+
+    private void syncNodePairBounds(in u32 parent, in u32 leftChild, in u32 rightChild){
+        const VectorSingle lower = Min(VectorSingle(this.m_nodes[leftChild].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[rightChild].aabbMinUser, 0.0f));
+        const VectorSingle upper = Max(VectorSingle(this.m_nodes[leftChild].aabbMaxCategory, 0.0f), VectorSingle(this.m_nodes[rightChild].aabbMaxCategory, 0.0f));
+        this.m_nodes[parent].setAabbValues(lower, upper);
+        this.m_nodes[parent].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[leftChild].height), cast<i32>(this.m_nodes[rightChild].height)));
     }
 
     private u32 balance(in u32 iA){
@@ -408,19 +438,15 @@ class DynamicTree{
                 this.m_nodes[iC].child2 = iF;
                 this.m_nodes[iA].child2 = iG;
                 this.m_nodes[iG].parentOrNext = iA;
-                this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iB].aabb(), this.m_nodes[iG].aabb()));
-                this.m_nodes[iC].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iF].aabb()));
-                this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iB].height), cast<i32>(this.m_nodes[iG].height)));
-                this.m_nodes[iC].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iF].height)));
+                this.syncNodePairBounds(iA, iB, iG);
+                this.syncNodePairBounds(iC, iA, iF);
             }
             else{
                 this.m_nodes[iC].child2 = iG;
                 this.m_nodes[iA].child2 = iF;
                 this.m_nodes[iF].parentOrNext = iA;
-                this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iB].aabb(), this.m_nodes[iF].aabb()));
-                this.m_nodes[iC].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iG].aabb()));
-                this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iB].height), cast<i32>(this.m_nodes[iF].height)));
-                this.m_nodes[iC].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iG].height)));
+                this.syncNodePairBounds(iA, iB, iF);
+                this.syncNodePairBounds(iC, iA, iG);
             }
             return iC;
         }
@@ -444,19 +470,15 @@ class DynamicTree{
                 this.m_nodes[iB].child2 = iD;
                 this.m_nodes[iA].child1 = iE;
                 this.m_nodes[iE].parentOrNext = iA;
-                this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iC].aabb(), this.m_nodes[iE].aabb()));
-                this.m_nodes[iB].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iD].aabb()));
-                this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iC].height), cast<i32>(this.m_nodes[iE].height)));
-                this.m_nodes[iB].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iD].height)));
+                this.syncNodePairBounds(iA, iC, iE);
+                this.syncNodePairBounds(iB, iA, iD);
             }
             else{
                 this.m_nodes[iB].child2 = iE;
                 this.m_nodes[iA].child1 = iD;
                 this.m_nodes[iD].parentOrNext = iA;
-                this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iC].aabb(), this.m_nodes[iD].aabb()));
-                this.m_nodes[iB].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iE].aabb()));
-                this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iC].height), cast<i32>(this.m_nodes[iD].height)));
-                this.m_nodes[iB].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iE].height)));
+                this.syncNodePairBounds(iA, iC, iD);
+                this.syncNodePairBounds(iB, iA, iE);
             }
             return iB;
         }

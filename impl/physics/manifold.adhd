@@ -86,7 +86,7 @@ class Manifold{
     }
 
     public void setRollingImpulse(in VectorSingle v){
-        this.rollingImpulseMeta = PackVec3U32(v, this.rollingImpulseMeta.w);
+        this.rollingImpulseMeta = f32x3_u32(v, this.rollingImpulseMeta.w);
     }
 
     public u32 pointCount()const{
@@ -224,10 +224,18 @@ void ClosestPointsBetweenSegments(
     outC2 = p2 + d2 * t;
 }
 
-Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereShape sphereB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideSpheres(
+    in SphereShape sphereA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in SphereShape sphereB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
-    const VectorSingle pA = TransformPoint(xfA, sphereA.center());
-    const VectorSingle pB = TransformPoint(xfB, sphereB.center());
+    const VectorSingle pA = TransformPointValues(posA, rotA, sphereA.center());
+    const VectorSingle pB = TransformPointValues(posB, rotB, sphereB.center());
     const VectorSingle d = VectorSingle(pB - pA, 0.0f);
     const f32 distSq = Vector3LengthSq(d).x;
     const f32 rA = sphereA.radius();
@@ -244,15 +252,23 @@ Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereSha
 
     m.normalTwist = f32x4(n, 0.0f);
     m.setPointCount(1u);
-    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), dist - totalR, MakeFeatureId(0u, 0u, 1u, 0u));
+    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, dist - totalR, MakeFeatureId(0u, 0u, 1u, 0u));
     return m;
 }
 
-Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in CapsuleShape capsuleB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideSphereAndCapsule(
+    in SphereShape sphereA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in CapsuleShape capsuleB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
-    const VectorSingle pA = TransformPoint(xfA, sphereA.center());
-    const VectorSingle b1 = TransformPoint(xfB, capsuleB.center1());
-    const VectorSingle b2 = TransformPoint(xfB, capsuleB.center2Vec());
+    const VectorSingle pA = TransformPointValues(posA, rotA, sphereA.center());
+    const VectorSingle b1 = TransformPointValues(posB, rotB, capsuleB.center1());
+    const VectorSingle b2 = TransformPointValues(posB, rotB, capsuleB.center2Vec());
     const VectorSingle qB = ClosestPointOnSegmentVec(b1, b2, pA);
 
     const VectorSingle d = VectorSingle(qB - pA, 0.0f);
@@ -271,16 +287,24 @@ Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in 
 
     m.normalTwist = f32x4(n, 0.0f);
     m.setPointCount(1u);
-    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), dist - totalR, MakeFeatureId(0u, 0u, 1u, 1u));
+    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, dist - totalR, MakeFeatureId(0u, 0u, 1u, 1u));
     return m;
 }
 
-Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in CapsuleShape capsuleB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideCapsules(
+    in CapsuleShape capsuleA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in CapsuleShape capsuleB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
-    const VectorSingle a1 = TransformPoint(xfA, capsuleA.center1());
-    const VectorSingle a2 = TransformPoint(xfA, capsuleA.center2Vec());
-    const VectorSingle b1 = TransformPoint(xfB, capsuleB.center1());
-    const VectorSingle b2 = TransformPoint(xfB, capsuleB.center2Vec());
+    const VectorSingle a1 = TransformPointValues(posA, rotA, capsuleA.center1());
+    const VectorSingle a2 = TransformPointValues(posA, rotA, capsuleA.center2Vec());
+    const VectorSingle b1 = TransformPointValues(posB, rotB, capsuleB.center1());
+    const VectorSingle b2 = TransformPointValues(posB, rotB, capsuleB.center2Vec());
 
     const VectorSingle dirA = VectorSingle(a2 - a1, 0.0f);
     const VectorSingle dirB = VectorSingle(b2 - b1, 0.0f);
@@ -331,8 +355,8 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
                 const VectorSingle qB1 = pA1 + (cB - cA);
                 const f32 sep = dist - totalR;
                 m.setPointCount(2u);
-                SetManifoldPoint(m, 0u, (pA0 + n * rA + qB0 - n * rB) * 0.5f, pA0 + n * rA - VectorSingle(xfA.position), qB0 - n * rB - VectorSingle(xfB.position), sep, MakeFeatureId(0u, 0u, 1u, 0u));
-                SetManifoldPoint(m, 1u, (pA1 + n * rA + qB1 - n * rB) * 0.5f, pA1 + n * rA - VectorSingle(xfA.position), qB1 - n * rB - VectorSingle(xfB.position), sep, MakeFeatureId(0u, 1u, 1u, 1u));
+                SetManifoldPoint(m, 0u, (pA0 + n * rA + qB0 - n * rB) * 0.5f, pA0 + n * rA - posA, qB0 - n * rB - posB, sep, MakeFeatureId(0u, 0u, 1u, 0u));
+                SetManifoldPoint(m, 1u, (pA1 + n * rA + qB1 - n * rB) * 0.5f, pA1 + n * rA - posA, qB1 - n * rB - posB, sep, MakeFeatureId(0u, 1u, 1u, 1u));
                 return m;
             }
         }
@@ -341,23 +365,31 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
     const VectorSingle wA = cA + n * rA;
     const VectorSingle wB = cB - n * rB;
     m.setPointCount(1u);
-    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), dist - totalR, MakeFeatureId(0u, 2u, 1u, 2u));
+    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, dist - totalR, MakeFeatureId(0u, 2u, 1u, 2u));
     return m;
 }
 
-Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideSphereAndHull(
+    in SphereShape sphereA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HullShape hullB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(hullB.facePlanes.empty())
         return m;
 
     const f32 sphereR = sphereA.radius();
     const f32 hullR = hullB.radius();
-    const VectorSingle worldSphereC = TransformPoint(xfA, sphereA.center());
+    const VectorSingle worldSphereC = TransformPointValues(posA, rotA, sphereA.center());
     const f32 totalR = sphereR + hullR;
 
     if(hullB.isBox()){
-        const VectorSingle cBox = TransformPoint(xfB, hullB.centroid());
-        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+        const VectorSingle cBox = TransformPointValues(posB, rotB, hullB.centroid());
+        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(rotB, VectorSingle(hullB.boxRotation)));
         const VectorSingle localS = Vector3InverseRotate(VectorSingle(worldSphereC - cBox, 0.0f), qBox);
         const VectorSingle hBox = hullB.halfExtents();
         const VectorSingle negH = VectorSingle(-hBox.x, -hBox.y, -hBox.z, 0.0f);
@@ -441,11 +473,11 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         const VectorSingle wB = worldBoxPt + worldOutward * hullR;
         m.normalTwist = f32x4(nAtoB, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), separation, MakeFeatureId(0u, 0u, 1u, featureIdx));
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, separation, MakeFeatureId(0u, 0u, 1u, featureIdx));
         return m;
     }
 
-    const VectorSingle localSphereC = InverseTransformPoint(xfB, worldSphereC);
+    const VectorSingle localSphereC = InverseTransformPointValues(posB, rotB, worldSphereC);
 
     f32 maxPlaneDist = -s_MaxF32;
     usize bestFace = 0u;
@@ -462,33 +494,33 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
 
     if(maxPlaneDist <= 0.0f){
         const VectorSingle localOutward = VectorSingle(hullB.facePlanes[bestFace].normalOffset, 0.0f);
-        const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle nAtoB = -worldOutward;
         const VectorSingle wB = worldSphereC + worldOutward * (hullR - maxPlaneDist);
         const VectorSingle wA = worldSphereC + nAtoB * sphereR;
         m.normalTwist = f32x4(nAtoB, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), maxPlaneDist - totalR, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, maxPlaneDist - totalR, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
         return m;
     }
 
     const ShapeProxy sphereProxy = MakePointProxy(sphereA.center(), sphereR);
     const ShapeProxy hullProxy = MakeHullProxy(hullB);
     SimplexCache cache;
-    const DistanceOutput dist = ShapeDistanceProxies(sphereProxy, xfA, hullProxy, xfB, false, cache);
+    const DistanceOutput dist = ShapeDistanceProxies(sphereProxy, posA, rotA, hullProxy, posB, rotB, false, cache);
     if(dist.distance() > totalR + maxDistance)
         return m;
 
     VectorSingle nAtoB = dist.normal();
     if(dist.distance() <= 1.0e-6f){
         const VectorSingle localOutward = VectorSingle(hullB.facePlanes[bestFace].normalOffset, 0.0f);
-        nAtoB = -SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        nAtoB = -SafeNormalizeVec3(Vector3Rotate(localOutward, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     }
     const VectorSingle wA = dist.pointA() + nAtoB * sphereR;
     const VectorSingle wB = VectorSingle(dist.pointB) - nAtoB * hullR;
     m.normalTwist = f32x4(nAtoB, 0.0f);
     m.setPointCount(1u);
-    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), dist.distance() - totalR, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
+    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, dist.distance() - totalR, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
     return m;
 }
 
@@ -629,20 +661,28 @@ void ClipCapsuleIntervalAxis(in f32 p0, in f32 d, in f32 hExt, mut f32 tMin, mut
     tMax = SimdMin(tMax, t1);
 }
 
-Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideCapsuleAndHull(
+    in CapsuleShape capsuleA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HullShape hullB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(hullB.facePlanes.empty())
         return m;
 
     const f32 capR = capsuleA.radius();
     const f32 hullR = hullB.radius();
-    const VectorSingle w1 = TransformPoint(xfA, capsuleA.center1());
-    const VectorSingle w2 = TransformPoint(xfA, capsuleA.center2Vec());
+    const VectorSingle w1 = TransformPointValues(posA, rotA, capsuleA.center1());
+    const VectorSingle w2 = TransformPointValues(posA, rotA, capsuleA.center2Vec());
     const f32 totalR = capR + hullR;
 
     if(hullB.isBox()){
-        const VectorSingle cBox = TransformPoint(xfB, hullB.centroid());
-        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+        const VectorSingle cBox = TransformPointValues(posB, rotB, hullB.centroid());
+        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(rotB, VectorSingle(hullB.boxRotation)));
         const VectorSingle hBox = hullB.halfExtents();
         const VectorSingle l0 = Vector3InverseRotate(VectorSingle(w1 - cBox, 0.0f), qBox);
         const VectorSingle l1 = Vector3InverseRotate(VectorSingle(w2 - cBox, 0.0f), qBox);
@@ -835,7 +875,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
                     const VectorSingle wB = wFace + worldOut * hullR;
                     const f32 ptSep = Vector3Dot(VectorSingle(wB - wA, 0.0f), nAtoB).x;
                     if(ptSep <= maxDistance){
-                        SetManifoldPoint(m, emitted, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), ptSep, MakeFeatureId(0u, cast<u8>(emitted), 1u, bestFace));
+                        SetManifoldPoint(m, emitted, (wA + wB) * 0.5f, wA - posA, wB - posB, ptSep, MakeFeatureId(0u, cast<u8>(emitted), 1u, bestFace));
                         ++emitted;
                     }
                 }
@@ -847,20 +887,20 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
             const VectorSingle wBox = cBox + Vector3Rotate(localBoxSurface, qBox);
             const VectorSingle wA = wSeg + nAtoB * capR;
             const VectorSingle wB = wBox + worldOut * hullR;
-            SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), singleSep, MakeFeatureId(0u, 2u, 1u, bestFace));
+            SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, singleSep, MakeFeatureId(0u, 2u, 1u, bestFace));
             emitted = 1u;
         }
         m.setPointCount(emitted);
         return m;
     }
 
-    const VectorSingle l1 = InverseTransformPoint(xfB, w1);
-    const VectorSingle l2 = InverseTransformPoint(xfB, w2);
+    const VectorSingle l1 = InverseTransformPointValues(posB, rotB, w1);
+    const VectorSingle l2 = InverseTransformPointValues(posB, rotB, w2);
 
     const ShapeProxy capProxy = MakeCapsuleProxy(capsuleA);
     const ShapeProxy hullProxy = MakeHullProxy(hullB);
     SimplexCache cache;
-    const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, hullProxy, xfB, false, cache);
+    const DistanceOutput gjk = ShapeDistanceProxies(capProxy, posA, rotA, hullProxy, posB, rotB, false, cache);
     if(gjk.distance() > totalR + maxDistance)
         return m;
 
@@ -882,7 +922,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
 
     if(gjk.distance() > 1.0e-5f){
         const VectorSingle nAtoB = gjk.normal();
-        const VectorSingle localN = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+        const VectorSingle localN = Vector3InverseRotate(-nAtoB, rotB);
         const VectorSingle faceN = VectorSingle(hullB.facePlanes[bestFace].normalOffset, 0.0f);
         if(Vector3Dot(localN, faceN).x > 0.995f && maxFaceSep <= totalR + maxDistance){
             VectorSingle clip0 = l1;
@@ -892,8 +932,8 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
             b8 clippedOut = false;
             for(u8 vi = 0u; vi < faceTopo.vertexCount; ++vi){
                 in HalfEdge he = hullB.halfEdges[eIdx];
-                const VectorSingle v0 = Vec3FromU(hullB.vertices[he.tail]);
-                const VectorSingle v1 = Vec3FromU(hullB.vertices[hullB.halfEdges[he.next].tail]);
+                const VectorSingle v0 = VectorSingle(hullB.vertices[he.tail], 0.0f);
+                const VectorSingle v1 = VectorSingle(hullB.vertices[hullB.halfEdges[he.next].tail], 0.0f);
                 const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), faceN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 const f32 sideOff = Vector3Dot(sideN, v0).x;
                 const f32 d0 = Vector3Dot(sideN, clip0).x - sideOff;
@@ -914,21 +954,21 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
             }
             if(!clippedOut){
                 const f32 faceOff = hullB.facePlanes[bestFace].normalOffset.w;
-                const VectorSingle worldN = SafeNormalizeVec3(-Vector3Rotate(faceN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle worldN = SafeNormalizeVec3(-Vector3Rotate(faceN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const f32 sep0 = Vector3Dot(faceN, clip0).x - faceOff - totalR;
                 const f32 sep1 = Vector3Dot(faceN, clip1).x - faceOff - totalR;
                 m.normalTwist = f32x4(worldN, 0.0f);
                 u32 count = 0u;
                 if(sep0 <= maxDistance){
-                    const VectorSingle wpA = TransformPoint(xfB, clip0) + worldN * capR;
-                    const VectorSingle wpB = TransformPoint(xfB, clip0 - faceN * (sep0 + capR));
-                    SetManifoldPoint(m, count, (wpA + wpB) * 0.5f, wpA - VectorSingle(xfA.position), wpB - VectorSingle(xfB.position), sep0, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
+                    const VectorSingle wpA = TransformPointValues(posB, rotB, clip0) + worldN * capR;
+                    const VectorSingle wpB = TransformPointValues(posB, rotB, clip0 - faceN * (sep0 + capR));
+                    SetManifoldPoint(m, count, (wpA + wpB) * 0.5f, wpA - posA, wpB - posB, sep0, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
                     ++count;
                 }
                 if(sep1 <= maxDistance && Vector3LengthSq(VectorSingle(clip1 - clip0, 0.0f)).x > s_MinCapsuleLength * s_MinCapsuleLength){
-                    const VectorSingle wpA = TransformPoint(xfB, clip1) + worldN * capR;
-                    const VectorSingle wpB = TransformPoint(xfB, clip1 - faceN * (sep1 + capR));
-                    SetManifoldPoint(m, count, (wpA + wpB) * 0.5f, wpA - VectorSingle(xfA.position), wpB - VectorSingle(xfB.position), sep1, MakeFeatureId(0u, 1u, 1u, cast<u8>(bestFace)));
+                    const VectorSingle wpA = TransformPointValues(posB, rotB, clip1) + worldN * capR;
+                    const VectorSingle wpB = TransformPointValues(posB, rotB, clip1 - faceN * (sep1 + capR));
+                    SetManifoldPoint(m, count, (wpA + wpB) * 0.5f, wpA - posA, wpB - posB, sep1, MakeFeatureId(0u, 1u, 1u, cast<u8>(bestFace)));
                     ++count;
                 }
                 m.setPointCount(count);
@@ -941,7 +981,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
         const VectorSingle wB = VectorSingle(gjk.pointB) - nAtoB * hullR;
         m.normalTwist = f32x4(nAtoB, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), gjk.distance() - totalR, MakeFeatureId(0u, 2u, 1u, cast<u8>(bestFace)));
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, gjk.distance() - totalR, MakeFeatureId(0u, 2u, 1u, cast<u8>(bestFace)));
         return m;
     }
 
@@ -949,7 +989,7 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const f32 faceOff = hullB.facePlanes[bestFace].normalOffset.w;
     const f32 d1 = Vector3Dot(faceN, l1).x - faceOff;
     const f32 d2 = Vector3Dot(faceN, l2).x - faceOff;
-    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(faceN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(faceN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const VectorSingle nAtoB = -worldOut;
     m.normalTwist = f32x4(nAtoB, 0.0f);
     const f32 minD = SimdMin(d1, d2);
@@ -957,11 +997,11 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     VectorSingle deepLocal = l1;
     if(d2 < d1)
         deepLocal = l2;
-    const VectorSingle deepWorld = TransformPoint(xfB, deepLocal);
+    const VectorSingle deepWorld = TransformPointValues(posB, rotB, deepLocal);
     const VectorSingle wA = deepWorld + nAtoB * capR;
     const VectorSingle wB = deepWorld + worldOut * (hullR - minD);
     m.setPointCount(1u);
-    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(0u, 3u, 1u, cast<u8>(bestFace)));
+    SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, sep, MakeFeatureId(0u, 3u, 1u, cast<u8>(bestFace)));
     return m;
 }
 
@@ -993,7 +1033,10 @@ b8 IsPointOnMeshTriangleEdgeLocal(in VectorSingle p, in VectorSingle a, in Vecto
 }
 
 b8 SmoothMeshContactNormal(
-    in MeshTriangle tri,
+    in VectorSingle v0,
+    in VectorSingle v1,
+    in VectorSingle v2,
+    in VectorSingle triN,
     in u8 edgeFlags,
     in VectorSingle closestPt,
     in VectorSingle rawNormalMeshToOtherLocal,
@@ -1003,13 +1046,9 @@ b8 SmoothMeshContactNormal(
     if(edgeFlags == 0u)
         return false;
 
-    const VectorSingle triN = Vec3FromU(tri.normal);
     if(Vector3Dot(rawNormalMeshToOtherLocal, triN).x <= 0.0f)
         return false;
 
-    const VectorSingle v0 = Vec3FromU(tri.v0);
-    const VectorSingle v1 = Vec3FromU(tri.v1);
-    const VectorSingle v2 = Vec3FromU(tri.v2);
     const f32 vertEpsSq = 1.0e-10f;
 
     b8 hitSmooth = false;
@@ -1033,19 +1072,28 @@ b8 SmoothMeshContactNormal(
     return true;
 }
 
-Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in MeshShape meshB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideSphereAndMesh(
+    in SphereShape sphereA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(meshB.nodes.empty() || meshB.triangles.empty())
         return m;
 
     const f32 sphereR = sphereA.radius();
     const f32 meshR = meshB.radius();
-    const VectorSingle wcA = TransformPoint(xfA, sphereA.center());
-    const VectorSingle lcA = InverseTransformPoint(xfB, wcA);
+    const VectorSingle wcA = TransformPointValues(posA, rotA, sphereA.center());
+    const VectorSingle lcA = InverseTransformPointValues(posB, rotB, wcA);
     const f32 totalR = sphereR + meshR;
     const f32 queryR = totalR + maxDistance;
     const VectorSingle rVec(queryR, queryR, queryR, 0.0f);
-    const Aabb3D queryBox(lcA - rVec, lcA + rVec);
+    const VectorSingle queryMin = lcA - rVec;
+    const VectorSingle queryMax = lcA + rVec;
     const b8 closedMesh = meshB.isClosed();
 
     f32 bestSep = s_MaxF32;
@@ -1062,7 +1110,7 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
         --stackCount;
         const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
-        if(!AabbOverlaps(node.aabb(), queryBox))
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
 
         if(node.isLeaf()){
@@ -1070,12 +1118,12 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
                 in MeshTriangle tri = meshB.triangles[ti];
-                const VectorSingle tv0 = Vec3FromU(tri.v0);
-                const VectorSingle tv1 = Vec3FromU(tri.v1);
-                const VectorSingle tv2 = Vec3FromU(tri.v2);
-                if(!AabbOverlaps(Aabb3D(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2))), queryBox))
+                const VectorSingle tv0(tri.v0, 0.0f);
+                const VectorSingle tv1(tri.v1, 0.0f);
+                const VectorSingle tv2(tri.v2, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMin, queryMax))
                     continue;
-                const VectorSingle triN = Vec3FromU(tri.normal);
+                const VectorSingle triN(tri.normal, 0.0f);
                 if(closedMesh && Vector3Dot(triN, VectorSingle(lcA - tv0, 0.0f)).x < -s_LinearSlop)
                     continue;
                 VectorSingle qLocal = ClosestPointOnTriangleLocal(lcA, tv0, tv1, tv2);
@@ -1097,7 +1145,7 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
 
                 const u8 edgeFlags = meshB.triangleEdgeFlag(ti);
                 VectorSingle smoothedMeshToSphere = -nLocal;
-                if(SmoothMeshContactNormal(tri, edgeFlags, qLocal, -nLocal, smoothedMeshToSphere)){
+                if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlags, qLocal, -nLocal, smoothedMeshToSphere)){
                     const f32 planeDist = Vector3Dot(triN, VectorSingle(lcA - tv0, 0.0f)).x;
                     if(planeDist - totalR > maxDistance)
                         continue;
@@ -1106,8 +1154,8 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
                     qLocal = lcA - triN * planeDist;
                 }
 
-                const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(nLocal, VectorSingle(xfB.rotation)), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
-                const VectorSingle worldQ = TransformPoint(xfB, qLocal);
+                const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(nLocal, rotB), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                const VectorSingle worldQ = TransformPointValues(posB, rotB, qLocal);
 
                 if(!foundHit || sep < bestSep){
                     foundHit = true;
@@ -1136,9 +1184,9 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = 0u;
         if(FindClosestPointOnClosedMesh(meshB, lcA, closePt, closeN, closeTri)){
-            const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle worldN = -worldOut;
-            const VectorSingle worldQ = TransformPoint(xfB, closePt);
+            const VectorSingle worldQ = TransformPointValues(posB, rotB, closePt);
             const f32 interiorDist = Sqrt(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
             foundHit = true;
             bestSep = -(interiorDist + totalR);
@@ -1152,27 +1200,87 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
     if(foundHit){
         m.normalTwist = f32x4(bestNormal, 0.0f);
         m.setPointCount(1u);
-        SetManifoldPoint(m, 0u, (bestWorldA + bestWorldB) * 0.5f, bestWorldA - VectorSingle(xfA.position), bestWorldB - VectorSingle(xfB.position), bestSep, MakeFeatureId(2u, 0u, 3u, cast<u8>(bestTriIdx & 0xffu)));
+        SetManifoldPoint(m, 0u, (bestWorldA + bestWorldB) * 0.5f, bestWorldA - posA, bestWorldB - posB, bestSep, MakeFeatureId(2u, 0u, 3u, cast<u8>(bestTriIdx & 0xffu)));
     }
     return m;
 }
 
-Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in MeshShape meshB, in Transform3D xfB, in f32 maxDistance){
+b8 ClipSegmentAgainstTriangleEdgePlane(
+    in VectorSingle ev0,
+    in VectorSingle ev1,
+    in VectorSingle triNormal,
+    mut VectorSingle ioClip0,
+    mut VectorSingle ioClip1
+){
+    const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(ev1 - ev0, 0.0f), triNormal), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const f32 sideOff = Vector3Dot(sideN, ev0).x + s_LinearSlop;
+    const f32 d0 = Vector3Dot(sideN, ioClip0).x - sideOff;
+    const f32 d1 = Vector3Dot(sideN, ioClip1).x - sideOff;
+    if(d0 > 0.0f && d1 > 0.0f)
+        return false;
+    if(d0 > 0.0f)
+        ioClip0 = Lerp(ioClip0, ioClip1, VectorSingle(SimdClamp(d0 / (d0 - d1), 0.0f, 1.0f)));
+    else if(d1 > 0.0f)
+        ioClip1 = Lerp(ioClip0, ioClip1, VectorSingle(SimdClamp(d0 / (d0 - d1), 0.0f, 1.0f)));
+    return true;
+}
+
+void TryAppendCapsuleTriangleClipPoint(
+    in VectorSingle clipPt,
+    in VectorSingle triVertex,
+    in VectorSingle triNormal,
+    in b8 flippedSide,
+    in f32 totalR,
+    in f32 capR,
+    in f32 maxDistance,
+    in VectorSingle posA,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle bestNormal,
+    in u32 bestTriIdx,
+    mut u32 ioEmitted,
+    mut Manifold ioManifold
+){
+    const f32 planeD = Vector3Dot(triNormal, VectorSingle(clipPt - triVertex, 0.0f)).x;
+    f32 ptSep = planeD - totalR;
+    if(flippedSide)
+        ptSep = -planeD - totalR;
+    if(ptSep <= maxDistance){
+        const VectorSingle wSeg = TransformPointValues(posB, rotB, clipPt);
+        const VectorSingle wA = wSeg + bestNormal * capR;
+        const VectorSingle wB = wA + bestNormal * ptSep;
+        SetManifoldPoint(ioManifold, ioEmitted, (wA + wB) * 0.5f, wA - posA, wB - posB, ptSep, MakeFeatureId(3u, cast<u8>(ioEmitted), 3u, cast<u8>(bestTriIdx & 0xffu)));
+        ++ioEmitted;
+    }
+}
+
+Manifold CollideCapsuleAndMesh(
+    in CapsuleShape capA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
     Manifold m;
     if(meshB.nodes.empty() || meshB.triangles.empty())
         return m;
 
     const f32 capR = capA.radius();
     const f32 meshR = meshB.radius();
-    const Transform3D localCapXf = RelativeTransform(xfB, xfA);
+    VectorSingle localCapPos(0.0f);
+    VectorSingle localCapRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localCapPos, localCapRot);
     const VectorSingle c1 = capA.center1();
     const VectorSingle c2 = capA.center2Vec();
-    const VectorSingle l1 = TransformPoint(localCapXf, c1);
-    const VectorSingle l2 = TransformPoint(localCapXf, c2);
+    const VectorSingle l1 = TransformPointValues(localCapPos, localCapRot, c1);
+    const VectorSingle l2 = TransformPointValues(localCapPos, localCapRot, c2);
     const f32 totalR = capR + meshR;
     const f32 queryR = totalR + maxDistance;
     const VectorSingle rVec(queryR, queryR, queryR, 0.0f);
-    const Aabb3D queryBox(Min(l1, l2) - rVec, Max(l1, l2) + rVec);
+    const VectorSingle queryMin = Min(l1, l2) - rVec;
+    const VectorSingle queryMax = Max(l1, l2) + rVec;
     const ShapeProxy capProxy = MakeCapsuleProxy(capA);
     const b8 closedMesh = meshB.isClosed();
 
@@ -1190,7 +1298,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
         --stackCount;
         const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
-        if(!AabbOverlaps(node.aabb(), queryBox))
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
 
         if(node.isLeaf()){
@@ -1198,13 +1306,13 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
                 in MeshTriangle tri = meshB.triangles[ti];
-                const VectorSingle tv0 = Vec3FromU(tri.v0);
-                const VectorSingle tv1 = Vec3FromU(tri.v1);
-                const VectorSingle tv2 = Vec3FromU(tri.v2);
-                if(!AabbOverlaps(Aabb3D(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2))), queryBox))
+                const VectorSingle tv0(tri.v0, 0.0f);
+                const VectorSingle tv1(tri.v1, 0.0f);
+                const VectorSingle tv2(tri.v2, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMin, queryMax))
                     continue;
 
-                const VectorSingle triN = Vec3FromU(tri.normal);
+                const VectorSingle triN(tri.normal, 0.0f);
                 const f32 sDist1 = Vector3Dot(triN, VectorSingle(l1 - tv0, 0.0f)).x;
                 const f32 sDist2 = Vector3Dot(triN, VectorSingle(l2 - tv0, 0.0f)).x;
                 if(closedMesh && sDist1 < -s_LinearSlop && sDist2 < -s_LinearSlop)
@@ -1212,11 +1320,11 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
 
                 const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshR);
                 SimplexCache cache;
-                const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, triProxy, xfB, false, cache);
+                const DistanceOutput gjk = ShapeDistanceProxies(capProxy, posA, rotA, triProxy, posB, rotB, false, cache);
 
-                VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle wCapMid = (TransformPoint(xfA, c1) + TransformPoint(xfA, c2)) * 0.5f;
-                const VectorSingle wTriRef = TransformPoint(xfB, tv0);
+                VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle wCapMid = (TransformPointValues(posA, rotA, c1) + TransformPointValues(posA, rotA, c2)) * 0.5f;
+                const VectorSingle wTriRef = TransformPointValues(posB, rotB, tv0);
                 if(!closedMesh && Vector3Dot(VectorSingle(wCapMid - wTriRef, 0.0f), triWorldN).x < 0.0f)
                     triWorldN = -triWorldN;
 
@@ -1229,17 +1337,17 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
                     if(sep > maxDistance)
                         continue;
                     nAtoB = SafeNormalizeVec3(gjk.normal(), -triWorldN);
-                    const VectorSingle localPtB = InverseTransformPoint(xfB, VectorSingle(gjk.pointB));
-                    const VectorSingle rawMeshToCapLocal = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+                    const VectorSingle localPtB = InverseTransformPointValues(posB, rotB, VectorSingle(gjk.pointB));
+                    const VectorSingle rawMeshToCapLocal = Vector3InverseRotate(-nAtoB, rotB);
                     const u8 edgeFlags = meshB.triangleEdgeFlag(ti);
                     VectorSingle smoothedMeshToCap = rawMeshToCapLocal;
-                    if(SmoothMeshContactNormal(tri, edgeFlags, localPtB, rawMeshToCapLocal, smoothedMeshToCap)){
-                        const VectorSingle localPtA = InverseTransformPoint(xfB, gjk.pointA());
+                    if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlags, localPtB, rawMeshToCapLocal, smoothedMeshToCap)){
+                        const VectorSingle localPtA = InverseTransformPointValues(posB, rotB, gjk.pointA());
                         const f32 planeDist = Vector3Dot(triN, VectorSingle(localPtA - tv0, 0.0f)).x;
                         if(planeDist - totalR > maxDistance)
                             continue;
                         sep = planeDist - totalR;
-                        const VectorSingle sWorldN = SafeNormalizeVec3(Vector3Rotate(smoothedMeshToCap, VectorSingle(xfB.rotation)), triWorldN);
+                        const VectorSingle sWorldN = SafeNormalizeVec3(Vector3Rotate(smoothedMeshToCap, rotB), triWorldN);
                         nAtoB = -sWorldN;
                         wA = gjk.pointA() + nAtoB * capR;
                         wB = wA + nAtoB * sep;
@@ -1273,7 +1381,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
                         }
                         sep = -Abs(VectorSingle(signedD)).x - totalR;
                     }
-                    const VectorSingle deepW = TransformPoint(xfB, deepL);
+                    const VectorSingle deepW = TransformPointValues(posB, rotB, deepL);
                     wA = deepW + nAtoB * capR;
                     wB = deepW + nAtoB * (capR + sep);
                 }
@@ -1331,10 +1439,10 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
                 }
             }
             if(foundInt){
-                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestIntN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestIntN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle worldN = -worldOut;
-                const VectorSingle wCap = TransformPoint(xfB, bestCapPt);
-                const VectorSingle wSurf = TransformPoint(xfB, bestIntPt);
+                const VectorSingle wCap = TransformPointValues(posB, rotB, bestCapPt);
+                const VectorSingle wSurf = TransformPointValues(posB, rotB, bestIntPt);
                 foundHit = true;
                 bestSep = -(Sqrt(VectorSingle(bestIntDistSq)).x + totalR);
                 bestNormal = worldN;
@@ -1349,11 +1457,11 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
         m.normalTwist = f32x4(bestNormal, 0.0f);
         u32 emitted = 0u;
         in MeshTriangle bTri = meshB.triangles[bestTriIdx];
-        const VectorSingle bt0 = Vec3FromU(bTri.v0);
-        const VectorSingle bt1 = Vec3FromU(bTri.v1);
-        const VectorSingle bt2 = Vec3FromU(bTri.v2);
-        const VectorSingle bTriN = Vec3FromU(bTri.normal);
-        const VectorSingle bTriWorldN = SafeNormalizeVec3(Vector3Rotate(bTriN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle bt0(bTri.v0, 0.0f);
+        const VectorSingle bt1(bTri.v1, 0.0f);
+        const VectorSingle bt2(bTri.v2, 0.0f);
+        const VectorSingle bTriN(bTri.normal, 0.0f);
+        const VectorSingle bTriWorldN = SafeNormalizeVec3(Vector3Rotate(bTriN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle seg = VectorSingle(l2 - l1, 0.0f);
         const f32 segLenSq = Vector3LengthSq(seg).x;
         if(segLenSq > s_MinCapsuleLength * s_MinCapsuleLength && Abs(Vector3Dot(bestNormal, bTriWorldN)).x > 0.99f){
@@ -1361,59 +1469,21 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
             if(Abs(Vector3Dot(segDir, bTriN)).x < 0.08f){
                 VectorSingle clip0 = l1;
                 VectorSingle clip1 = l2;
-                b8 clipOk = true;
-                Array<f32x4, 3u> edgeVerts;
-                edgeVerts[0u] = f32x4(bt0, 0.0f);
-                edgeVerts[1u] = f32x4(bt1, 0.0f);
-                edgeVerts[2u] = f32x4(bt2, 0.0f);
-                for(usize ei = 0u; ei < 3u; ++ei){
-                    const VectorSingle ev0 = VectorSingle(edgeVerts[ei]);
-                    const VectorSingle ev1 = VectorSingle(edgeVerts[(ei + 1u) % 3u]);
-                    const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(ev1 - ev0, 0.0f), bTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                    const f32 sideOff = Vector3Dot(sideN, ev0).x + s_LinearSlop;
-                    const f32 d0 = Vector3Dot(sideN, clip0).x - sideOff;
-                    const f32 d1 = Vector3Dot(sideN, clip1).x - sideOff;
-                    if(d0 > 0.0f && d1 > 0.0f){
-                        clipOk = false;
-                        break;
-                    }
-                    if(d0 > 0.0f){
-                        const f32 t = d0 / (d0 - d1);
-                        clip0 = Lerp(clip0, clip1, VectorSingle(SimdClamp(t, 0.0f, 1.0f)));
-                    }
-                    else if(d1 > 0.0f){
-                        const f32 t = d0 / (d0 - d1);
-                        clip1 = Lerp(clip0, clip1, VectorSingle(SimdClamp(t, 0.0f, 1.0f)));
-                    }
-                }
-                if(clipOk){
+                if(
+                    ClipSegmentAgainstTriangleEdgePlane(bt0, bt1, bTriN, clip0, clip1)
+                    && ClipSegmentAgainstTriangleEdgePlane(bt1, bt2, bTriN, clip0, clip1)
+                    && ClipSegmentAgainstTriangleEdgePlane(bt2, bt0, bTriN, clip0, clip1)
+                ){
                     const b8 flippedSide = Vector3Dot(bestNormal, bTriWorldN).x > 0.0f;
-                    Array<f32x4, 2u> clipPts;
-                    clipPts[0u] = f32x4(clip0, 0.0f);
-                    clipPts[1u] = f32x4(clip1, 0.0f);
-                    usize candCount = 1u;
+                    TryAppendCapsuleTriangleClipPoint(clip0, bt0, bTriN, flippedSide, totalR, capR, maxDistance, posA, posB, rotB, bestNormal, bestTriIdx, emitted, m);
                     if(Vector3LengthSq(VectorSingle(clip1 - clip0, 0.0f)).x > 2.5e-5f)
-                        candCount = 2u;
-                    for(usize ci = 0u; ci < candCount; ++ci){
-                        const VectorSingle cl = VectorSingle(clipPts[ci]);
-                        const f32 planeD = Vector3Dot(bTriN, VectorSingle(cl - bt0, 0.0f)).x;
-                        f32 ptSep = planeD - totalR;
-                        if(flippedSide)
-                            ptSep = -planeD - totalR;
-                        if(ptSep <= maxDistance){
-                            const VectorSingle wSeg = TransformPoint(xfB, cl);
-                            const VectorSingle wA = wSeg + bestNormal * capR;
-                            const VectorSingle wB = wA + bestNormal * ptSep;
-                            SetManifoldPoint(m, emitted, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), ptSep, MakeFeatureId(3u, cast<u8>(emitted), 3u, cast<u8>(bestTriIdx & 0xffu)));
-                            ++emitted;
-                        }
-                    }
+                        TryAppendCapsuleTriangleClipPoint(clip1, bt0, bTriN, flippedSide, totalR, capR, maxDistance, posA, posB, rotB, bestNormal, bestTriIdx, emitted, m);
                 }
             }
         }
         if(emitted == 0u){
             m.setPointCount(1u);
-            SetManifoldPoint(m, 0u, (bestWorldA + bestWorldB) * 0.5f, bestWorldA - VectorSingle(xfA.position), bestWorldB - VectorSingle(xfB.position), bestSep, MakeFeatureId(3u, 0u, 3u, cast<u8>(bestTriIdx & 0xffu)));
+            SetManifoldPoint(m, 0u, (bestWorldA + bestWorldB) * 0.5f, bestWorldA - posA, bestWorldB - posB, bestSep, MakeFeatureId(3u, 0u, 3u, cast<u8>(bestTriIdx & 0xffu)));
         }
         else{
             m.setPointCount(emitted);

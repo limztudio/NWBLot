@@ -144,18 +144,24 @@ inline void FOUNDATION_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDouble
 
 
 inline void BoundingFrustum::getCorners(Float3U (&corners)[s_CornerCount])const noexcept{
-    SIMDVectorSingle cornerVectors[s_CornerCount];
-    CollisionDetail::FrustumCorners(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, cornerVectors);
+    const SIMDVectorSingle frustumOrigin = LoadFloat(origin);
+    const SIMDVectorSingle frustumOrientation = LoadFloat(orientation);
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(rightSlope, leftSlope, topSlope, bottomSlope);
+    const SIMDVectorSingle nearDepth = VectorReplicate(nearPlane);
+    const SIMDVectorSingle farDepth = VectorReplicate(farPlane);
     for(u32 i = 0u; i < s_CornerCount; ++i)
-        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
+        StoreFloat(VectorSetW(CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, i), 0.0f), corners[i]);
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCount])const noexcept{
-    SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, cornerVectors);
+    const SIMDVectorDouble frustumOrigin = LoadDouble(origin);
+    const SIMDVectorDouble frustumOrientation = LoadDouble(orientation);
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlope, leftSlope, topSlope, bottomSlope);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(nearPlane);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(farPlane);
     for(u64 i = 0u; i < s_DoubleCornerCount; ++i)
-        StoreDouble(VectorDoubleSetW(cornerVectors[i], 0.0), corners[i]);
+        StoreDouble(VectorDoubleSetW(CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, i), 0.0), corners[i]);
 }
 
 
@@ -299,37 +305,43 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
 
 
 inline void BoundingFrustum::getPlanes(SIMDVectorSingle* nearPlaneOut, SIMDVectorSingle* farPlaneOut, SIMDVectorSingle* rightPlaneOut, SIMDVectorSingle* leftPlaneOut, SIMDVectorSingle* topPlaneOut, SIMDVectorSingle* bottomPlaneOut)const noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
+    const SIMDVectorSingle frustumOrigin = LoadFloat(origin);
+    const SIMDVectorSingle frustumOrientation = LoadFloat(orientation);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, index);
+    };
     if(nearPlaneOut)
-        *nearPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Near];
+        *nearPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Near);
     if(farPlaneOut)
-        *farPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Far];
+        *farPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Far);
     if(rightPlaneOut)
-        *rightPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Right];
+        *rightPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Right);
     if(leftPlaneOut)
-        *leftPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Left];
+        *leftPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Left);
     if(topPlaneOut)
-        *topPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Top];
+        *topPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Top);
     if(bottomPlaneOut)
-        *bottomPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Bottom];
+        *bottomPlaneOut = planeAt(CollisionDetail::FrustumPlaneIndex::Bottom);
 }
 
 inline void BoundingDoubleFrustum::getPlanes(SIMDVectorDouble* nearPlaneOut, SIMDVectorDouble* farPlaneOut, SIMDVectorDouble* rightPlaneOut, SIMDVectorDouble* leftPlaneOut, SIMDVectorDouble* topPlaneOut, SIMDVectorDouble* bottomPlaneOut)const noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
+    const SIMDVectorDouble frustumOrigin = LoadDouble(origin);
+    const SIMDVectorDouble frustumOrientation = LoadDouble(orientation);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, index);
+    };
     if(nearPlaneOut)
-        *nearPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Near];
+        *nearPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Near);
     if(farPlaneOut)
-        *farPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Far];
+        *farPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Far);
     if(rightPlaneOut)
-        *rightPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Right];
+        *rightPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Right);
     if(leftPlaneOut)
-        *leftPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Left];
+        *leftPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Left);
     if(topPlaneOut)
-        *topPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Top];
+        *topPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Top);
     if(bottomPlaneOut)
-        *bottomPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Bottom];
+        *bottomPlaneOut = planeAt(CollisionDoubleDetail::FrustumPlaneIndex::Bottom);
 }
 
 

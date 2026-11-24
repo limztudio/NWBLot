@@ -984,7 +984,7 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
         StepPhysicsWorld(physWorld, 1.0f / 60.0f, 4u, scheduler);
 
     const Transform3D pXf = physWorld.tryGetBodyTransform(pendBody).value();
-    const VectorSingle pivotB = TransformPoint(pXf, VectorSingle(-1.5f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle pivotB = TransformPointValues(VectorSingle(pXf.position), VectorSingle(pXf.rotation), VectorSingle(-1.5f, 0.0f, 0.0f, 0.0f));
     EXPECT_LT(Vector3Length(VectorSingle(pivotB - VectorSingle(-4.0f, 4.0f, 0.0f, 0.0f), 0.0f)).x, 0.05f);
 
     const VectorSingle dPos = VectorSingle(physWorld.tryGetBodyTransform(distB).value().position);
@@ -2020,8 +2020,9 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_PI / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
     ASSERT_TRUE(projRes.has_value());
-    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f)).has_value());
-    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f)).has_value());
+    VectorSingle projectedSegment(0.0f);
+    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f), projectedSegment));
+    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), projectedSegment));
 
     const BodyId oldBody = tw.world.getComponent<RigidBodyComponent>(dropEnt.id()).runtimeBodyId;
     tw.world.destroyEntity(dropEnt.id());
@@ -2195,7 +2196,9 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     SphereShape slideSphere;
     slideSphere.centerRadius = f32x4(0.0f, 0.0f, 0.0f, 0.5f);
     Transform3D seamXf(VectorSingle(0.02f, 0.45f, 0.0f, 0.0f), QuaternionIdentity());
-    const Manifold seamManifold = CollideSphereAndMesh(slideSphere, seamXf, quadMesh, Transform3D(), s_SpeculativeDistance);
+    const VectorSingle zeroPos(0.0f);
+    const VectorSingle identRot = QuaternionIdentity();
+    const Manifold seamManifold = CollideSphereAndMesh(slideSphere, VectorSingle(seamXf.position), VectorSingle(seamXf.rotation), quadMesh, zeroPos, identRot, s_SpeculativeDistance);
     ASSERT_GE(seamManifold.pointCount(), 1u);
     EXPECT_NEAR(seamManifold.normal().y, -1.0f, 1.0e-3f);
     EXPECT_NEAR(seamManifold.normal().x, 0.0f, 1.0e-3f);
@@ -2203,7 +2206,7 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
 
     const Expected<HullShape> boxHullRes = MakeBoxHull(0.4f, 0.4f, 0.4f, 0.0f);
     ASSERT_TRUE(boxHullRes.has_value());
-    const Manifold hullSeamManifold = CollideHullAndMesh(boxHullRes.value(), Transform3D(VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), QuaternionIdentity()), quadMesh, Transform3D(), s_SpeculativeDistance);
+    const Manifold hullSeamManifold = CollideHullAndMesh(boxHullRes.value(), VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), identRot, quadMesh, zeroPos, identRot, s_SpeculativeDistance);
     ASSERT_GE(hullSeamManifold.pointCount(), 1u);
     EXPECT_NEAR(hullSeamManifold.normal().y, -1.0f, 1.0e-3f);
 
@@ -2238,9 +2241,11 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
 
     const Manifold dualMeshM = CollideMeshes(
         closedMesh,
-        Transform3D(VectorSingle(0.0f, 1.95f, 0.0f, 0.0f), QuaternionIdentity()),
+        VectorSingle(0.0f, 1.95f, 0.0f, 0.0f),
+        identRot,
         closedMesh,
-        Transform3D(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity()),
+        zeroPos,
+        identRot,
         s_SpeculativeDistance
     );
     EXPECT_GE(dualMeshM.pointCount(), 1u);
@@ -2639,9 +2644,11 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     const HullShape box = MakeBoxHull(1.0f, 0.5f, 1.0f, 0.0f).value();
     const Manifold gapM = CollideCapsuleAndHull(
         cap,
-        Transform3D(VectorSingle(0.0f, 0.77f, 0.0f, 0.0f), QuaternionIdentity()),
+        VectorSingle(0.0f, 0.77f, 0.0f, 0.0f),
+        QuaternionIdentity(),
         box,
-        Transform3D(),
+        VectorSingle(0.0f),
+        QuaternionIdentity(),
         0.05f
     );
     ASSERT_GE(gapM.pointCount(), 1u);

@@ -50,12 +50,6 @@ class SceneBvhBuildWorkItem{
     public b8 transparentOccluder = false;
 }
 
-class SceneBvhBoundsSummary{
-    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 containsTransparentOccluder = false;
-}
-
 class SceneBvhSubtreeJob{
     public u32 lo = 0u;
     public u32 hi = 0u;
@@ -112,17 +106,18 @@ SceneBvhNodeCalculation MakeSceneBvhLeafNode(in SceneBvhPrimitiveCalculation pri
 }
 
 SceneBvhNodeCalculation MakeSceneBvhInternalNode(
-    in SceneBvhNodeCalculation leftNode,
-    in SceneBvhNodeCalculation rightNode,
+    in VectorSingle minBounds,
+    in VectorSingle maxBounds,
+    in b8 containsTransparentOccluder,
     in u32 leftChild,
     in u32 rightChild
 ){
     SceneBvhNodeCalculation node;
-    node.aabbMin = f32x4(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
-    node.aabbMax = f32x4(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
+    node.aabbMin = f32x4(minBounds);
+    node.aabbMax = f32x4(maxBounds);
     node.leftChild = leftChild;
     node.rightChild = rightChild;
-    node.containsTransparentOccluder = leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder;
+    node.containsTransparentOccluder = containsTransparentOccluder;
     return node;
 }
 
@@ -329,38 +324,31 @@ NwbBvhNodeGpu PackSceneBvhLeafNodeGpu(in SceneBvhBuildWorkItem item){
     return node;
 }
 
-NwbBvhNodeGpu PackSceneBvhInternalNodeGpu(in SceneBvhBoundsSummary leftNode, in SceneBvhBoundsSummary rightNode, in u32 leftChild, in u32 rightChild){
+NwbBvhNodeGpu PackSceneBvhInternalNodeGpu(
+    in VectorSingle minBounds,
+    in VectorSingle maxBounds,
+    in b8 containsTransparentOccluder,
+    in u32 leftChild,
+    in u32 rightChild
+){
     NwbBvhNodeGpu node;
-    node.aabbMinLeftChild = f32x3_u32(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)), leftChild);
+    node.aabbMinLeftChild = f32x3_u32(minBounds, leftChild);
     u32 taggedRightChild = rightChild;
-    if(leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder)
+    if(containsTransparentOccluder)
         taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
-    node.aabbMaxRightChild = f32x3_u32(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)), taggedRightChild);
+    node.aabbMaxRightChild = f32x3_u32(maxBounds, taggedRightChild);
     return node;
 }
 
-SceneBvhBoundsSummary ExtractSceneBvhBoundsSummaryFromGpuNode(in NwbBvhNodeGpu node){
-    SceneBvhBoundsSummary summary;
-    summary.aabbMin = f32x4(node.aabbMinLeftChild.x, node.aabbMinLeftChild.y, node.aabbMinLeftChild.z, 0.0f);
-    summary.aabbMax = f32x4(node.aabbMaxRightChild.x, node.aabbMaxRightChild.y, node.aabbMaxRightChild.z, 0.0f);
-    summary.containsTransparentOccluder = (node.aabbMaxRightChild.w & cast<u32>(BvhNodeIndex::TransparentSubtreeFlag)) != 0u;
-    return summary;
-}
-
-SceneBvhBoundsSummary MakeSceneBvhLeafSummary(in SceneBvhBuildWorkItem item){
-    SceneBvhBoundsSummary summary;
-    summary.aabbMin = item.aabbMin;
-    summary.aabbMax = item.aabbMax;
-    summary.containsTransparentOccluder = item.transparentOccluder;
-    return summary;
-}
-
-SceneBvhBoundsSummary MergeSceneBvhBoundsSummaries(in SceneBvhBoundsSummary leftNode, in SceneBvhBoundsSummary rightNode){
-    SceneBvhBoundsSummary summary;
-    summary.aabbMin = f32x4(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
-    summary.aabbMax = f32x4(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
-    summary.containsTransparentOccluder = leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder;
-    return summary;
+void ExtractSceneBvhBoundsFromGpuNode(
+    in NwbBvhNodeGpu node,
+    mut VectorSingle outAabbMin,
+    mut VectorSingle outAabbMax,
+    mut b8 outContainsTransparentOccluder
+){
+    outAabbMin = VectorSingle(node.aabbMinLeftChild.x, node.aabbMinLeftChild.y, node.aabbMinLeftChild.z, 0.0f);
+    outAabbMax = VectorSingle(node.aabbMaxRightChild.x, node.aabbMaxRightChild.y, node.aabbMaxRightChild.z, 0.0f);
+    outContainsTransparentOccluder = (node.aabbMaxRightChild.w & cast<u32>(BvhNodeIndex::TransparentSubtreeFlag)) != 0u;
 }
 
 SceneBvhSahSplit SelectSceneBvhSahSplitWork(
@@ -588,20 +576,26 @@ void PartitionSceneBvhWorkRange(
     ComputeSceneBvhCentroidBoundsRange(work, mid, hi, outRightCentroidMin, outRightCentroidMax);
 }
 
-SceneBvhBoundsSummary BuildSceneBvhSubtreeDirect(
+void BuildSceneBvhSubtreeDirect(
     in u32 lo,
     in u32 hi,
     in u32 nodeIndex,
     in VectorSingle centroidMin,
     in VectorSingle centroidMax,
     mut Span<SceneBvhBuildWorkItem> work,
-    mut Span<NwbBvhNodeGpu> outNodes
+    mut Span<NwbBvhNodeGpu> outNodes,
+    mut VectorSingle outAabbMin,
+    mut VectorSingle outAabbMax,
+    mut b8 outContainsTransparentOccluder
 ){
     const u32 count = hi - lo;
     if(count == 1u){
         in SceneBvhBuildWorkItem item = work[cast<usize>(lo)];
         outNodes[cast<usize>(nodeIndex)] = PackSceneBvhLeafNodeGpu(item);
-        return MakeSceneBvhLeafSummary(item);
+        outAabbMin = VectorSingle(item.aabbMin);
+        outAabbMax = VectorSingle(item.aabbMax);
+        outContainsTransparentOccluder = item.transparentOccluder;
+        return;
     }
     if(count == 2u){
         in SceneBvhBuildWorkItem leftItem = work[cast<usize>(lo)];
@@ -610,10 +604,11 @@ SceneBvhBoundsSummary BuildSceneBvhSubtreeDirect(
         const u32 rightChild = nodeIndex + 2u;
         outNodes[cast<usize>(leftChild)] = PackSceneBvhLeafNodeGpu(leftItem);
         outNodes[cast<usize>(rightChild)] = PackSceneBvhLeafNodeGpu(rightItem);
-        const SceneBvhBoundsSummary leftSummary = MakeSceneBvhLeafSummary(leftItem);
-        const SceneBvhBoundsSummary rightSummary = MakeSceneBvhLeafSummary(rightItem);
-        outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, leftChild, rightChild);
-        return MergeSceneBvhBoundsSummaries(leftSummary, rightSummary);
+        outAabbMin = Min(VectorSingle(leftItem.aabbMin), VectorSingle(rightItem.aabbMin));
+        outAabbMax = Max(VectorSingle(leftItem.aabbMax), VectorSingle(rightItem.aabbMax));
+        outContainsTransparentOccluder = leftItem.transparentOccluder || rightItem.transparentOccluder;
+        outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(outAabbMin, outAabbMax, outContainsTransparentOccluder, leftChild, rightChild);
+        return;
     }
 
     const SceneBvhSahSplit split = SelectSceneBvhSahSplitWork(lo, hi, centroidMin, centroidMax, work);
@@ -626,10 +621,18 @@ SceneBvhBoundsSummary BuildSceneBvhSubtreeDirect(
 
     const u32 leftChild = nodeIndex + 1u;
     const u32 rightChild = nodeIndex + 2u * (mid - lo);
-    const SceneBvhBoundsSummary leftSummary = BuildSceneBvhSubtreeDirect(lo, mid, leftChild, leftCentroidMin, leftCentroidMax, work, outNodes);
-    const SceneBvhBoundsSummary rightSummary = BuildSceneBvhSubtreeDirect(mid, hi, rightChild, rightCentroidMin, rightCentroidMax, work, outNodes);
-    outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, leftChild, rightChild);
-    return MergeSceneBvhBoundsSummaries(leftSummary, rightSummary);
+    VectorSingle leftMin = VectorZero();
+    VectorSingle leftMax = VectorZero();
+    b8 leftTransparent = false;
+    VectorSingle rightMin = VectorZero();
+    VectorSingle rightMax = VectorZero();
+    b8 rightTransparent = false;
+    BuildSceneBvhSubtreeDirect(lo, mid, leftChild, leftCentroidMin, leftCentroidMax, work, outNodes, leftMin, leftMax, leftTransparent);
+    BuildSceneBvhSubtreeDirect(mid, hi, rightChild, rightCentroidMin, rightCentroidMax, work, outNodes, rightMin, rightMax, rightTransparent);
+    outAabbMin = Min(leftMin, rightMin);
+    outAabbMax = Max(leftMax, rightMax);
+    outContainsTransparentOccluder = leftTransparent || rightTransparent;
+    outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(outAabbMin, outAabbMax, outContainsTransparentOccluder, leftChild, rightChild);
 }
 
 void BuildSceneBvhDirectInto(
@@ -640,7 +643,10 @@ void BuildSceneBvhDirectInto(
 ){
     const u32 instanceCount = cast<u32>(work.size());
     if(instanceCount < s_SceneBvhParallelThreshold){
-        BuildSceneBvhSubtreeDirect(0u, instanceCount, 0u, rootCentroidMin, rootCentroidMax, work, outNodes);
+        VectorSingle rootMin = VectorZero();
+        VectorSingle rootMax = VectorZero();
+        b8 rootTransparent = false;
+        BuildSceneBvhSubtreeDirect(0u, instanceCount, 0u, rootCentroidMin, rootCentroidMax, work, outNodes, rootMin, rootMax, rootTransparent);
         return;
     }
 
@@ -709,6 +715,9 @@ void BuildSceneBvhDirectInto(
     const usize jobCount = jobs.size();
     parallel_for(usize jobIdx = 0u; jobIdx < jobCount; ++jobIdx){
         in SceneBvhSubtreeJob job = jobs[jobIdx];
+        VectorSingle jobMin = VectorZero();
+        VectorSingle jobMax = VectorZero();
+        b8 jobTransparent = false;
         BuildSceneBvhSubtreeDirect(
             job.lo,
             job.hi,
@@ -716,15 +725,30 @@ void BuildSceneBvhDirectInto(
             VectorSingle(job.centroidMin),
             VectorSingle(job.centroidMax),
             work,
-            outNodes
+            outNodes,
+            jobMin,
+            jobMax,
+            jobTransparent
         );
     }
 
     for(usize idx = topInternals.size(); idx >= 1u; --idx){
         in SceneBvhTopInternalNode internalNode = topInternals[idx - 1u];
-        const SceneBvhBoundsSummary leftSummary = ExtractSceneBvhBoundsSummaryFromGpuNode(outNodes[cast<usize>(internalNode.leftChild)]);
-        const SceneBvhBoundsSummary rightSummary = ExtractSceneBvhBoundsSummaryFromGpuNode(outNodes[cast<usize>(internalNode.rightChild)]);
-        outNodes[cast<usize>(internalNode.nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, internalNode.leftChild, internalNode.rightChild);
+        VectorSingle leftMin = VectorZero();
+        VectorSingle leftMax = VectorZero();
+        b8 leftTransparent = false;
+        VectorSingle rightMin = VectorZero();
+        VectorSingle rightMax = VectorZero();
+        b8 rightTransparent = false;
+        ExtractSceneBvhBoundsFromGpuNode(outNodes[cast<usize>(internalNode.leftChild)], leftMin, leftMax, leftTransparent);
+        ExtractSceneBvhBoundsFromGpuNode(outNodes[cast<usize>(internalNode.rightChild)], rightMin, rightMax, rightTransparent);
+        outNodes[cast<usize>(internalNode.nodeIndex)] = PackSceneBvhInternalNodeGpu(
+            Min(leftMin, rightMin),
+            Max(leftMax, rightMax),
+            leftTransparent || rightTransparent,
+            internalNode.leftChild,
+            internalNode.rightChild
+        );
     }
 }
 

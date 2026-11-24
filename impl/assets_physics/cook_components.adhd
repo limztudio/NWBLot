@@ -95,12 +95,8 @@ b8 ReadPhysicsOptionalRotationField(
         value.visitField(
             quatField,
             lambda[in file, in prefix, in quatField, mut ok, mut parsed](in MetascriptValue fv) -> void{
-                const Expected<VectorSingle> q = ParseSceneQuaternionValue(file, fv, prefix, quatField);
-                if(!q.has_value()){
+                if(!ParseSceneQuaternionValue(file, fv, prefix, quatField, parsed))
                     ok = false;
-                    return;
-                }
-                parsed = q.value();
             }
         );
         if(!ok)
@@ -112,14 +108,14 @@ b8 ReadPhysicsOptionalRotationField(
         VectorSingle euler(0.0f);
         if(!ReadOptionalSceneFloat3Field(file, value, prefix, eulerField, euler))
             return false;
-        inOutQuat = VectorSingle(BuildTransformEulerQuaternion(euler, false));
+        inOutQuat = BuildTransformEulerQuaternion(euler, false);
         return true;
     }
     if(hasEulerDeg){
         VectorSingle euler(0.0f);
         if(!ReadOptionalSceneFloat3Field(file, value, prefix, eulerDegField, euler))
             return false;
-        inOutQuat = VectorSingle(BuildTransformEulerQuaternion(euler, true));
+        inOutQuat = BuildTransformEulerQuaternion(euler, true);
         return true;
     }
     return true;
@@ -147,12 +143,12 @@ b8 ReadPhysicsFloat3ArrayField(
             outPoints.clear();
             outPoints.reserve(items.size());
             for(usize i = 0u; i < items.size(); ++i){
-                const Expected<VectorSingle> pt = ReadSceneFloatListValue(file, items[i], prefix, field, s_SceneFloat3ComponentCount);
-                if(!pt.has_value()){
+                VectorSingle pt(0.0f);
+                if(!ReadSceneFloatListValue(file, items[i], prefix, field, s_SceneFloat3ComponentCount, pt)){
                     ok = false;
                     return;
                 }
-                outPoints.push_back(f32x4(pt.value(), 0.0f));
+                outPoints.push_back(f32x4(pt, 0.0f));
             }
         }
     );

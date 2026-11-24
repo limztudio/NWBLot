@@ -733,7 +733,8 @@ void VerifyEcsGraphics_MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude()
 }
 
 void VerifyEcsGraphics_NonUniformScaleCannotBecomeRigidJointRotation(){
-    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(MakeNonUniformScaleJointMatrix(), s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon).has_value());
+    VectorSingle quaternion(0.0f);
+    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(MakeNonUniformScaleJointMatrix(), s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon, quaternion));
 }
 
 void VerifyEcsGraphics_InvalidSkeletonParentsAndJointCountsAreRejected(){

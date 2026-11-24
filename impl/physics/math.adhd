@@ -8,82 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RayCastSlabData{
-    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invDir(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 parallelMask = 0u;
-}
-
-f32x3_u32 PackVec3U32(in VectorSingle v, in u32 w){
-    return f32x3_u32(v.x, v.y, v.z, w);
-}
-
-VectorSingle Vec3FromU(in f32x3u v){
-    return VectorSingle(v.x, v.y, v.z, 0.0f);
-}
-
-f32x3u PackVec3U(in VectorSingle v){
-    return f32x3u(v.x, v.y, v.z);
-}
-
 SymMat3 ZeroSymMat3(){
     return SymMat3();
 }
 
-SymMat3 SymMat3FromMat3(in Mat3 m){
-    return SymMat3(m.row0.x, m.row0.y, m.row0.z, m.row1.y, m.row1.z, m.row2.z);
+SymMat3 SymMat3FromMatrix3(in MatrixSingle m){
+    return SymMat3(m[0u].x, m[0u].y, m[0u].z, m[1u].y, m[1u].z, m[2u].z);
 }
 
-Mat3 Mat3FromSymMat3(in SymMat3 m){
-    return Mat3(
+MatrixSingle Matrix3FromSymMat3(in SymMat3 m){
+    return MatrixSingle(
         VectorSingle(m.m00, m.m01, m.m02, 0.0f),
         VectorSingle(m.m01, m.m11, m.m12, 0.0f),
         VectorSingle(m.m02, m.m12, m.m22, 0.0f)
-    );
-}
-
-SymMat3 AddSymMat3(in SymMat3 a, in SymMat3 b){
-    return SymMat3(
-        a.m00 + b.m00,
-        a.m01 + b.m01,
-        a.m02 + b.m02,
-        a.m11 + b.m11,
-        a.m12 + b.m12,
-        a.m22 + b.m22
-    );
-}
-
-VectorSingle MulSymMat3Vec(in SymMat3 m, in VectorSingle v){
-    const VectorSingle row0(m.m00, m.m01, m.m02, 0.0f);
-    const VectorSingle row1(m.m01, m.m11, m.m12, 0.0f);
-    const VectorSingle row2(m.m02, m.m12, m.m22, 0.0f);
-    return row0 * v.x + row1 * v.y + row2 * v.z;
-}
-
-SymMat3 InvertSymMat3(in SymMat3 a){
-    const f32 c11 = a.m11 * a.m22 - a.m12 * a.m12;
-    const f32 c12 = a.m02 * a.m12 - a.m01 * a.m22;
-    const f32 c13 = a.m01 * a.m12 - a.m02 * a.m11;
-    const f32 det = a.m00 * c11 + a.m01 * c12 + a.m02 * c13;
-
-    if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-30f)
-        return ZeroSymMat3();
-
-    const f32 invDet = 1.0f / det;
-    if(!IsFinite(VectorSingle(invDet)))
-        return ZeroSymMat3();
-
-    const f32 c22 = a.m00 * a.m22 - a.m02 * a.m02;
-    const f32 c23 = a.m01 * a.m02 - a.m00 * a.m12;
-    const f32 c33 = a.m00 * a.m11 - a.m01 * a.m01;
-
-    return SymMat3(
-        c11 * invDet,
-        c12 * invDet,
-        c13 * invDet,
-        c22 * invDet,
-        c23 * invDet,
-        c33 * invDet
     );
 }
 
@@ -138,27 +75,25 @@ VectorSingle SafeNormalizeQuat(in VectorSingle q){
     return QuaternionIdentity();
 }
 
-VectorSingle TransformPoint(in Transform3D xf, in VectorSingle localPoint){
-    const VectorSingle q = VectorSingle(xf.rotation);
-    const VectorSingle p = VectorSingle(xf.position);
-    return VectorSingle(p + Vector3Rotate(VectorSingle(localPoint, 0.0f), q), 0.0f);
+VectorSingle TransformPointValues(in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle localPoint){
+    return VectorSingle(xfPos + Vector3Rotate(VectorSingle(localPoint, 0.0f), xfRot), 0.0f);
 }
 
-VectorSingle InverseTransformPoint(in Transform3D xf, in VectorSingle worldPoint){
-    const VectorSingle q = VectorSingle(xf.rotation);
-    const VectorSingle p = VectorSingle(xf.position);
-    return VectorSingle(Vector3InverseRotate(VectorSingle(worldPoint - p, 0.0f), q), 0.0f);
+VectorSingle InverseTransformPointValues(in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle worldPoint){
+    return VectorSingle(Vector3InverseRotate(VectorSingle(worldPoint - xfPos, 0.0f), xfRot), 0.0f);
 }
 
-Transform3D RelativeTransform(in Transform3D frameA, in Transform3D frameB){
-    const VectorSingle qA = VectorSingle(frameA.rotation);
-    const VectorSingle qB = VectorSingle(frameB.rotation);
-    const VectorSingle pA = VectorSingle(frameA.position);
-    const VectorSingle pB = VectorSingle(frameB.position);
-    const VectorSingle qAInv = QuaternionConjugate(qA);
-    const VectorSingle relQ = SafeNormalizeQuat(QuaternionMultiply(qAInv, qB));
-    const VectorSingle relP = Vector3InverseRotate(VectorSingle(pB - pA, 0.0f), qA);
-    return Transform3D(relP, relQ);
+void RelativeTransformValues(
+    in VectorSingle frameAPos,
+    in VectorSingle frameARot,
+    in VectorSingle frameBPos,
+    in VectorSingle frameBRot,
+    mut VectorSingle outRelPos,
+    mut VectorSingle outRelRot
+){
+    const VectorSingle qAInv = QuaternionConjugate(frameARot);
+    outRelRot = SafeNormalizeQuat(QuaternionMultiply(qAInv, frameBRot));
+    outRelPos = Vector3InverseRotate(VectorSingle(frameBPos - frameAPos, 0.0f), frameARot);
 }
 
 VectorSingle IntegrateDeltaQuaternion(in VectorSingle q, in VectorSingle omega, in f32 h){
@@ -167,46 +102,30 @@ VectorSingle IntegrateDeltaQuaternion(in VectorSingle q, in VectorSingle omega, 
     return SafeNormalizeQuat(q + prod);
 }
 
-Mat3 ZeroMat3(){
-    return Mat3(VectorSingle(0.0f), VectorSingle(0.0f), VectorSingle(0.0f));
+MatrixSingle Matrix3Add(in MatrixSingle a, in MatrixSingle b){
+    return MatrixSingle(a[0u] + b[0u], a[1u] + b[1u], a[2u] + b[2u]);
 }
 
-Mat3 AddMat3(in Mat3 a, in Mat3 b){
-    return Mat3(
-        VectorSingle(a.row0) + VectorSingle(b.row0),
-        VectorSingle(a.row1) + VectorSingle(b.row1),
-        VectorSingle(a.row2) + VectorSingle(b.row2)
-    );
+MatrixSingle Matrix3Sub(in MatrixSingle a, in MatrixSingle b){
+    return MatrixSingle(a[0u] - b[0u], a[1u] - b[1u], a[2u] - b[2u]);
 }
 
-Mat3 SubMat3(in Mat3 a, in Mat3 b){
-    return Mat3(
-        VectorSingle(a.row0) - VectorSingle(b.row0),
-        VectorSingle(a.row1) - VectorSingle(b.row1),
-        VectorSingle(a.row2) - VectorSingle(b.row2)
-    );
+MatrixSingle Matrix3Scale(in MatrixSingle a, in f32 s){
+    return MatrixSingle(a[0u] * s, a[1u] * s, a[2u] * s);
 }
 
-Mat3 ScaleMat3(in Mat3 a, in f32 s){
-    return Mat3(
-        VectorSingle(a.row0) * s,
-        VectorSingle(a.row1) * s,
-        VectorSingle(a.row2) * s
-    );
-}
-
-Mat3 SkewSymmetricMat3(in VectorSingle v){
-    return Mat3(
+MatrixSingle Matrix3SkewSymmetric(in VectorSingle v){
+    return MatrixSingle(
         VectorSingle(0.0f, -v.z, v.y, 0.0f),
         VectorSingle(v.z, 0.0f, -v.x, 0.0f),
         VectorSingle(-v.y, v.x, 0.0f, 0.0f)
     );
 }
 
-VectorSingle SolveMat3Linear(in Mat3 m, in VectorSingle b){
-    const VectorSingle r0 = VectorSingle(m.row0);
-    const VectorSingle r1 = VectorSingle(m.row1);
-    const VectorSingle r2 = VectorSingle(m.row2);
+VectorSingle Matrix3SolveLinear(in MatrixSingle m, in VectorSingle b){
+    const VectorSingle r0 = m[0u];
+    const VectorSingle r1 = m[1u];
+    const VectorSingle r2 = m[2u];
 
     const VectorSingle c0 = Cross(r1, r2);
     const f32 det = Vector3Dot(r0, c0).x;
@@ -222,7 +141,7 @@ VectorSingle SolveMat3Linear(in Mat3 m, in VectorSingle b){
     return VectorSingle((c0 * b.x + c1 * b.y + c2 * b.z) * invDet, 0.0f);
 }
 
-Mat3 Mat3FromQuaternion(in VectorSingle q){
+MatrixSingle Matrix3FromQuaternion(in VectorSingle q){
     const f32 x = q.x;
     const f32 y = q.y;
     const f32 z = q.z;
@@ -237,61 +156,61 @@ Mat3 Mat3FromQuaternion(in VectorSingle q){
     const f32 wy = w * y;
     const f32 wz = w * z;
 
-    return Mat3(
+    return MatrixSingle(
         VectorSingle(1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz), 2.0f * (xz + wy), 0.0f),
         VectorSingle(2.0f * (xy + wz), 1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx), 0.0f),
         VectorSingle(2.0f * (xz - wy), 2.0f * (yz + wx), 1.0f - 2.0f * (xx + yy), 0.0f)
     );
 }
 
-VectorSingle MulMat3Vec(in Mat3 m, in VectorSingle v){
+VectorSingle Matrix3MulVec(in MatrixSingle m, in VectorSingle v){
     const VectorSingle v0 = VectorSingle(v, 0.0f);
-    const f32 x = Vector3Dot(VectorSingle(m.row0), v0).x;
-    const f32 y = Vector3Dot(VectorSingle(m.row1), v0).x;
-    const f32 z = Vector3Dot(VectorSingle(m.row2), v0).x;
+    const f32 x = Vector3Dot(m[0u], v0).x;
+    const f32 y = Vector3Dot(m[1u], v0).x;
+    const f32 z = Vector3Dot(m[2u], v0).x;
     return VectorSingle(x, y, z, 0.0f);
 }
 
-Mat3 MulMat3(in Mat3 a, in Mat3 b){
-    const VectorSingle b0 = VectorSingle(b.row0);
-    const VectorSingle b1 = VectorSingle(b.row1);
-    const VectorSingle b2 = VectorSingle(b.row2);
+MatrixSingle Matrix3Mul(in MatrixSingle a, in MatrixSingle b){
+    const VectorSingle b0 = b[0u];
+    const VectorSingle b1 = b[1u];
+    const VectorSingle b2 = b[2u];
 
-    const VectorSingle a0 = VectorSingle(a.row0);
-    const VectorSingle a1 = VectorSingle(a.row1);
-    const VectorSingle a2 = VectorSingle(a.row2);
+    const VectorSingle a0 = a[0u];
+    const VectorSingle a1 = a[1u];
+    const VectorSingle a2 = a[2u];
 
-    return Mat3(
+    return MatrixSingle(
         b0 * a0.x + b1 * a0.y + b2 * a0.z,
         b0 * a1.x + b1 * a1.y + b2 * a1.z,
         b0 * a2.x + b1 * a2.y + b2 * a2.z
     );
 }
 
-Mat3 TransposeMat3(in Mat3 m){
-    const VectorSingle r0 = VectorSingle(m.row0);
-    const VectorSingle r1 = VectorSingle(m.row1);
-    const VectorSingle r2 = VectorSingle(m.row2);
-    return Mat3(
+MatrixSingle Matrix3Transpose(in MatrixSingle m){
+    const VectorSingle r0 = m[0u];
+    const VectorSingle r1 = m[1u];
+    const VectorSingle r2 = m[2u];
+    return MatrixSingle(
         VectorSingle(r0.x, r1.x, r2.x, 0.0f),
         VectorSingle(r0.y, r1.y, r2.y, 0.0f),
         VectorSingle(r0.z, r1.z, r2.z, 0.0f)
     );
 }
 
-Mat3 RotateSymmetricMat3(in VectorSingle q, in Mat3 localMat){
-    const Mat3 r = Mat3FromQuaternion(q);
-    const Mat3 rt = TransposeMat3(r);
-    return MulMat3(r, MulMat3(localMat, rt));
+MatrixSingle Matrix3RotateSymmetric(in VectorSingle q, in MatrixSingle localMat){
+    const MatrixSingle r = Matrix3FromQuaternion(q);
+    const MatrixSingle rt = Matrix3Transpose(r);
+    return Matrix3Mul(r, Matrix3Mul(localMat, rt));
 }
 
-Mat3 InvertSymmetricMat3(in Mat3 a){
-    const f32 a11 = a.row0.x;
-    const f32 a12 = a.row0.y;
-    const f32 a13 = a.row0.z;
-    const f32 a22 = a.row1.y;
-    const f32 a23 = a.row1.z;
-    const f32 a33 = a.row2.z;
+MatrixSingle Matrix3InvertSymmetric(in MatrixSingle a){
+    const f32 a11 = a[0u].x;
+    const f32 a12 = a[0u].y;
+    const f32 a13 = a[0u].z;
+    const f32 a22 = a[1u].y;
+    const f32 a23 = a[1u].z;
+    const f32 a33 = a[2u].z;
 
     const f32 c11 = a22 * a33 - a23 * a23;
     const f32 c12 = a13 * a23 - a12 * a33;
@@ -299,29 +218,78 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
     const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
 
     if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-30f)
-        return ZeroMat3();
+        return MatrixSingle(0.0f);
 
     const f32 invDet = 1.0f / det;
     if(!IsFinite(VectorSingle(invDet)))
-        return ZeroMat3();
+        return MatrixSingle(0.0f);
     const f32 c22 = a11 * a33 - a13 * a13;
     const f32 c23 = a12 * a13 - a11 * a23;
     const f32 c33 = a11 * a22 - a12 * a12;
 
-    return Mat3(
+    return MatrixSingle(
         VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
         VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
         VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
     );
 }
 
-SymMat3 RotateSymMat3(in VectorSingle q, in SymMat3 localMat){
-    if(localMat.m01 == 0.0f && localMat.m02 == 0.0f && localMat.m12 == 0.0f && localMat.m00 == localMat.m11 && localMat.m11 == localMat.m22)
+MatrixSingle RotateSymMatrix3(in VectorSingle q, in MatrixSingle localMat){
+    if(
+        localMat[0u].y == 0.0f
+        && localMat[0u].z == 0.0f
+        && localMat[1u].z == 0.0f
+        && localMat[0u].x == localMat[1u].y
+        && localMat[1u].y == localMat[2u].z
+    )
         return localMat;
     if(q.x * q.x + q.y * q.y + q.z * q.z <= 1.0e-12f)
         return localMat;
-    const Mat3 m = RotateSymmetricMat3(q, Mat3FromSymMat3(localMat));
-    return SymMat3FromMat3(m);
+    return Matrix3RotateSymmetric(q, localMat);
+}
+
+MatrixSingle Matrix3MaskAngularLocks(in MatrixSingle m, in u32 bodyFlags){
+    if((bodyFlags & 0x38u) == 0u)
+        return m;
+    VectorSingle r0 = m[0u];
+    VectorSingle r1 = m[1u];
+    VectorSingle r2 = m[2u];
+    if((bodyFlags & 0x08u) != 0u){
+        r0 = VectorSingle(0.0f);
+        r1.x = 0.0f;
+        r2.x = 0.0f;
+    }
+    if((bodyFlags & 0x10u) != 0u){
+        r0.y = 0.0f;
+        r1 = VectorSingle(0.0f);
+        r2.y = 0.0f;
+    }
+    if((bodyFlags & 0x20u) != 0u){
+        r0.z = 0.0f;
+        r1.z = 0.0f;
+        r2 = VectorSingle(0.0f);
+    }
+    return MatrixSingle(r0, r1, r2);
+}
+
+MatrixSingle Matrix3NegSkewSymSkew(in MatrixSingle m, in VectorSingle r){
+    const VectorSingle c0(0.0f, r.z, -r.y, 0.0f);
+    const VectorSingle c1(-r.z, 0.0f, r.x, 0.0f);
+    const VectorSingle c2(r.y, -r.x, 0.0f, 0.0f);
+    const VectorSingle mc0 = Matrix3MulVec(m, c0);
+    const VectorSingle mc1 = Matrix3MulVec(m, c1);
+    const VectorSingle mc2 = Matrix3MulVec(m, c2);
+    const f32 k00 = Vector3Dot(c0, mc0).x;
+    const f32 k01 = Vector3Dot(c0, mc1).x;
+    const f32 k02 = Vector3Dot(c0, mc2).x;
+    const f32 k11 = Vector3Dot(c1, mc1).x;
+    const f32 k12 = Vector3Dot(c1, mc2).x;
+    const f32 k22 = Vector3Dot(c2, mc2).x;
+    return MatrixSingle(
+        VectorSingle(k00, k01, k02, 0.0f),
+        VectorSingle(k01, k11, k12, 0.0f),
+        VectorSingle(k02, k12, k22, 0.0f)
+    );
 }
 
 Softness MakeSoftness(in f32 hertz, in f32 zeta, in f32 h){
@@ -352,43 +320,26 @@ void ComputeTangentBasis(in VectorSingle normal, mut VectorSingle outT1, mut Vec
     outT2 = SafeNormalizeVec3(Cross(n, outT1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
-Aabb3D AabbUnion(in Aabb3D a, in Aabb3D b){
-    return Aabb3D(Min(VectorSingle(a.lowerBound), VectorSingle(b.lowerBound)), Max(VectorSingle(a.upperBound), VectorSingle(b.upperBound)));
-}
-
-b8 AabbOverlaps(in Aabb3D a, in Aabb3D b){
-    const VectorSingle minA = VectorSingle(a.lowerBound);
-    const VectorSingle maxA = VectorSingle(a.upperBound);
-    const VectorSingle minB = VectorSingle(b.lowerBound);
-    const VectorSingle maxB = VectorSingle(b.upperBound);
+b8 AabbOverlapsValues(in VectorSingle minA, in VectorSingle maxA, in VectorSingle minB, in VectorSingle maxB){
     return minA.x <= maxB.x && minA.y <= maxB.y && minA.z <= maxB.z && minB.x <= maxA.x && minB.y <= maxA.y && minB.z <= maxA.z;
 }
 
-b8 AabbContains(in Aabb3D outerBox, in Aabb3D innerBox){
-    const VectorSingle oMin = VectorSingle(outerBox.lowerBound);
-    const VectorSingle oMax = VectorSingle(outerBox.upperBound);
-    const VectorSingle iMin = VectorSingle(innerBox.lowerBound);
-    const VectorSingle iMax = VectorSingle(innerBox.upperBound);
+b8 AabbContainsValues(in VectorSingle oMin, in VectorSingle oMax, in VectorSingle iMin, in VectorSingle iMax){
     return oMin.x <= iMin.x && oMin.y <= iMin.y && oMin.z <= iMin.z && oMax.x >= iMax.x && oMax.y >= iMax.y && oMax.z >= iMax.z;
 }
 
-f32 AabbPerimeter(in Aabb3D box){
-    const VectorSingle d = VectorSingle(box.upperBound) - VectorSingle(box.lowerBound);
+f32 AabbPerimeterValues(in VectorSingle bMin, in VectorSingle bMax){
+    const VectorSingle d = bMax - bMin;
     return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
 }
 
-f32 ComputeAabbMargin(in Aabb3D box){
-    const VectorSingle extent = (VectorSingle(box.upperBound) - VectorSingle(box.lowerBound)) * 0.5f;
+f32 ComputeAabbMarginValues(in VectorSingle bMin, in VectorSingle bMax){
+    const VectorSingle extent = (bMax - bMin) * 0.5f;
     const f32 maxExtent = Vector3MaxComponent(extent).x;
     return SimdClamp(maxExtent * s_AabbMarginFraction, s_SpeculativeDistance, s_MaxAabbMargin);
 }
 
-Aabb3D FattenAabb(in Aabb3D box, in f32 margin){
-    const VectorSingle m = VectorSingle(margin, margin, margin, 0.0f);
-    return Aabb3D(VectorSingle(box.lowerBound) - m, VectorSingle(box.upperBound) + m);
-}
-
-RayCastSlabData MakeRayCastSlabData(in VectorSingle origin, in VectorSingle translation){
+void ComputeRayCastSlabValues(in VectorSingle translation, mut VectorSingle outInvDir, mut u32 outParallelMask){
     Array<f32, 3u> invAxes;
     u32 mask = 0u;
     for(usize axis = 0u; axis < 3u; ++axis){
@@ -401,20 +352,20 @@ RayCastSlabData MakeRayCastSlabData(in VectorSingle origin, in VectorSingle tran
             invAxes[axis] = 1.0f / d;
         }
     }
-    RayCastSlabData slab;
-    slab.origin = f32x4(origin, 0.0f);
-    slab.invDir = f32x4(invAxes[0u], invAxes[1u], invAxes[2u], 0.0f);
-    slab.parallelMask = mask;
-    return slab;
+    outInvDir = VectorSingle(invAxes[0u], invAxes[1u], invAxes[2u], 0.0f);
+    outParallelMask = mask;
 }
 
-b8 AabbRayCastFast(in Aabb3D box, in RayCastSlabData ray, in f32 maxFraction, mut f32 outMinFraction){
-    const VectorSingle bMin = VectorSingle(box.lowerBound);
-    const VectorSingle bMax = VectorSingle(box.upperBound);
-    const VectorSingle origin = VectorSingle(ray.origin);
-    const VectorSingle invDir = VectorSingle(ray.invDir);
-
-    if(ray.parallelMask == 0u){
+b8 AabbRayCastValues(
+    in VectorSingle bMin,
+    in VectorSingle bMax,
+    in VectorSingle origin,
+    in VectorSingle invDir,
+    in u32 parallelMask,
+    in f32 maxFraction,
+    mut f32 outMinFraction
+){
+    if(parallelMask == 0u){
         const VectorSingle t1 = (bMin - origin) * invDir;
         const VectorSingle t2 = (bMax - origin) * invDir;
         const VectorSingle tNear = Min(t1, t2);
@@ -433,7 +384,7 @@ b8 AabbRayCastFast(in Aabb3D box, in RayCastSlabData ray, in f32 maxFraction, mu
         const f32 o = VectorGetByIndex(origin, cast<isize>(axis));
         const f32 minV = VectorGetByIndex(bMin, cast<isize>(axis));
         const f32 maxV = VectorGetByIndex(bMax, cast<isize>(axis));
-        if((ray.parallelMask & (1u << cast<u32>(axis))) != 0u){
+        if((parallelMask & (1u << cast<u32>(axis))) != 0u){
             if(o < minV || o > maxV)
                 return false;
         }
@@ -493,16 +444,6 @@ void PushRayCastChildrenOrdered(
         stackTMins[stackCount] = secondT;
         ++stackCount;
     }
-}
-
-b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction, mut f32 outMinFraction){
-    const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
-    return AabbRayCastFast(box, ray, maxFraction, outMinFraction);
-}
-
-b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
-    f32 unusedMinFraction = 0.0f;
-    return AabbRayCast(box, origin, translation, maxFraction, unusedMinFraction);
 }
 
 VectorSingle ApplyLinearLocks(in VectorSingle v, in u32 flags){

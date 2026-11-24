@@ -23,6 +23,61 @@ class PhysicsDebugLine{
     public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
+b8 ProjectPhysicsWorldSegmentValues(
+    in VectorSingle camPos,
+    in VectorSingle right,
+    in VectorSingle up,
+    in VectorSingle forward,
+    in f32 projX,
+    in f32 projY,
+    in f32 zMin,
+    in f32 halfWidth,
+    in f32 halfHeight,
+    in VectorSingle worldP0,
+    in VectorSingle worldP1,
+    mut VectorSingle outSegment
+){
+    const VectorSingle d0 = VectorSingle(worldP0 - camPos, 0.0f);
+    const VectorSingle d1 = VectorSingle(worldP1 - camPos, 0.0f);
+    VectorSingle v0(Vector3Dot(d0, right).x, Vector3Dot(d0, up).x, Vector3Dot(d0, forward).x, 0.0f);
+    VectorSingle v1(Vector3Dot(d1, right).x, Vector3Dot(d1, up).x, Vector3Dot(d1, forward).x, 0.0f);
+
+    if(v0.z <= zMin && v1.z <= zMin)
+        return false;
+
+    if(v0.z < zMin){
+        const f32 denom = v1.z - v0.z;
+        if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
+            return false;
+        const f32 t = SimdClamp((zMin - v0.z) / denom, 0.0f, 1.0f);
+        v0 = v0 + (v1 - v0) * t;
+    }
+    else if(v1.z < zMin){
+        const f32 denom = v0.z - v1.z;
+        if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
+            return false;
+        const f32 t = SimdClamp((zMin - v1.z) / denom, 0.0f, 1.0f);
+        v1 = v1 + (v0 - v1) * t;
+    }
+
+    const VectorSingle invZ = VectorSingle(1.0f) / VectorSingle(v0.z, v0.z, v1.z, v1.z);
+    const VectorSingle ndc = VectorSingle(v0.x, v0.y, v1.x, v1.y) * VectorSingle(projX, projY, projX, projY) * invZ;
+    if(!IsFinite(ndc))
+        return false;
+
+    const f32 ndcX0 = ndc.x;
+    const f32 ndcY0 = ndc.y;
+    const f32 ndcX1 = ndc.z;
+    const f32 ndcY1 = ndc.w;
+    if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
+        return false;
+    if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
+        return false;
+
+    outSegment = (VectorSingle(1.0f) + ndc * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f)) * VectorSingle(halfWidth, halfHeight, halfWidth, halfHeight);
+    return true;
+}
+
 class PhysicsDebugScreenProjector{
     private f32x4 m_right(1.0f, 0.0f, 0.0f, 0.0f);
     private f32x4 m_up(0.0f, 1.0f, 0.0f, 0.0f);
@@ -67,55 +122,68 @@ class PhysicsDebugScreenProjector{
         this.m_halfHeight = 0.5f * viewportHeight;
     }
 
-    public Expected<VectorSingle> projectSegment(
+    public b8 valid()const{
+        return this.m_valid;
+    }
+
+    public VectorSingle camPos()const{
+        return VectorSingle(this.m_camPos);
+    }
+
+    public VectorSingle right()const{
+        return VectorSingle(this.m_right);
+    }
+
+    public VectorSingle up()const{
+        return VectorSingle(this.m_up);
+    }
+
+    public VectorSingle forward()const{
+        return VectorSingle(this.m_forward);
+    }
+
+    public f32 projX()const{
+        return this.m_projX;
+    }
+
+    public f32 projY()const{
+        return this.m_projY;
+    }
+
+    public f32 zMin()const{
+        return this.m_zMin;
+    }
+
+    public f32 halfWidth()const{
+        return this.m_halfWidth;
+    }
+
+    public f32 halfHeight()const{
+        return this.m_halfHeight;
+    }
+
+    public b8 projectSegment(
         in VectorSingle worldP0,
-        in VectorSingle worldP1
+        in VectorSingle worldP1,
+        mut VectorSingle outSegment
     )const{
         if(!this.m_valid)
-            return MakeUnexpected(Failure());
+            return false;
 
-        const VectorSingle camPos = VectorSingle(this.m_camPos);
-        const VectorSingle right = VectorSingle(this.m_right);
-        const VectorSingle up = VectorSingle(this.m_up);
-        const VectorSingle forward = VectorSingle(this.m_forward);
-        const VectorSingle d0 = VectorSingle(worldP0 - camPos, 0.0f);
-        const VectorSingle d1 = VectorSingle(worldP1 - camPos, 0.0f);
-        VectorSingle v0(Vector3Dot(d0, right).x, Vector3Dot(d0, up).x, Vector3Dot(d0, forward).x, 0.0f);
-        VectorSingle v1(Vector3Dot(d1, right).x, Vector3Dot(d1, up).x, Vector3Dot(d1, forward).x, 0.0f);
-
-        if(v0.z <= this.m_zMin && v1.z <= this.m_zMin)
-            return MakeUnexpected(Failure());
-
-        if(v0.z < this.m_zMin){
-            const f32 denom = v1.z - v0.z;
-            if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
-                return MakeUnexpected(Failure());
-            const f32 t = SimdClamp((this.m_zMin - v0.z) / denom, 0.0f, 1.0f);
-            v0 = v0 + (v1 - v0) * t;
-        }
-        else if(v1.z < this.m_zMin){
-            const f32 denom = v0.z - v1.z;
-            if(Abs(VectorSingle(denom)).x <= 1.0e-8f)
-                return MakeUnexpected(Failure());
-            const f32 t = SimdClamp((this.m_zMin - v1.z) / denom, 0.0f, 1.0f);
-            v1 = v1 + (v0 - v1) * t;
-        }
-
-        const VectorSingle invZ = VectorSingle(1.0f) / VectorSingle(v0.z, v0.z, v1.z, v1.z);
-        const VectorSingle ndc = VectorSingle(v0.x, v0.y, v1.x, v1.y) * VectorSingle(this.m_projX, this.m_projY, this.m_projX, this.m_projY) * invZ;
-        if(!IsFinite(ndc))
-            return MakeUnexpected(Failure());
-
-        const f32 ndcX0 = ndc.x;
-        const f32 ndcY0 = ndc.y;
-        const f32 ndcX1 = ndc.z;
-        const f32 ndcY1 = ndc.w;
-        if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
-            return MakeUnexpected(Failure());
-        if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
-            return MakeUnexpected(Failure());
-
-        return (VectorSingle(1.0f) + ndc * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f)) * VectorSingle(this.m_halfWidth, this.m_halfHeight, this.m_halfWidth, this.m_halfHeight);
+        return ProjectPhysicsWorldSegmentValues(
+            VectorSingle(this.m_camPos),
+            VectorSingle(this.m_right),
+            VectorSingle(this.m_up),
+            VectorSingle(this.m_forward),
+            this.m_projX,
+            this.m_projY,
+            this.m_zMin,
+            this.m_halfWidth,
+            this.m_halfHeight,
+            worldP0,
+            worldP1,
+            outSegment
+        );
     }
 }
 
@@ -281,7 +349,8 @@ void AppendPhysicsDebugAabbEdges(
 
 void AppendPhysicsDebugBoxEdges(
     in u32 maxLines,
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in VectorSingle localCenter,
     in VectorSingle halfExtents,
     in VectorSingle boxRotation,
@@ -290,8 +359,8 @@ void AppendPhysicsDebugBoxEdges(
 ){
     if(outLines.size() >= cast<usize>(maxLines))
         return;
-    const VectorSingle worldCenter = TransformPoint(xf, localCenter);
-    const VectorSingle worldRot = SafeNormalizeQuat(QuaternionMultiply(SafeNormalizeQuat(VectorSingle(xf.rotation)), boxRotation));
+    const VectorSingle worldCenter = TransformPointValues(xfPos, xfRot, localCenter);
+    const VectorSingle worldRot = SafeNormalizeQuat(QuaternionMultiply(SafeNormalizeQuat(xfRot), boxRotation));
     const VectorSingle ex = Vector3Rotate(VectorSingle(halfExtents.x, 0.0f, 0.0f, 0.0f), worldRot);
     const VectorSingle ey = Vector3Rotate(VectorSingle(0.0f, halfExtents.y, 0.0f, 0.0f), worldRot);
     const VectorSingle ez = Vector3Rotate(VectorSingle(0.0f, 0.0f, halfExtents.z, 0.0f), worldRot);
@@ -300,7 +369,8 @@ void AppendPhysicsDebugBoxEdges(
 
 void AppendPhysicsDebugHull(
     in u32 maxLines,
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in HullShape hull,
     in VectorSingle color,
     mut Vector<PhysicsDebugLine> outLines
@@ -318,8 +388,8 @@ void AppendPhysicsDebugHull(
         const u8 headIdx = hull.halfEdges[edge.next].tail;
         if(cast<usize>(edge.tail) >= hull.vertices.size() || cast<usize>(headIdx) >= hull.vertices.size())
             continue;
-        const VectorSingle w0 = TransformPoint(xf, Vec3FromU(hull.vertices[edge.tail]));
-        const VectorSingle w1 = TransformPoint(xf, Vec3FromU(hull.vertices[headIdx]));
+        const VectorSingle w0 = TransformPointValues(xfPos, xfRot, VectorSingle(hull.vertices[edge.tail], 0.0f));
+        const VectorSingle w1 = TransformPointValues(xfPos, xfRot, VectorSingle(hull.vertices[headIdx], 0.0f));
         AppendPhysicsDebugLine(maxLines, w0, w1, color, outLines);
         if(outLines.size() >= cast<usize>(maxLines))
             return;
@@ -383,7 +453,7 @@ void BuildPhysicsDebugLines(
             const VectorSingle color = ResolveDebugShapeColor(shape, body);
             if(shape.type == ShapeType::Sphere){
                 const SphereShape sphere = shape.sphereShape();
-                const VectorSingle c = TransformPoint(xf, sphere.center());
+                const VectorSingle c = TransformPointValues(VectorSingle(xf.position), VectorSingle(xf.rotation), sphere.center());
                 const VectorSingle rx = Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), VectorSingle(xf.rotation));
                 const VectorSingle ry = Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(xf.rotation));
                 const VectorSingle rz = Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(xf.rotation));
@@ -393,8 +463,10 @@ void BuildPhysicsDebugLines(
             }
             else if(shape.type == ShapeType::Capsule){
                 const CapsuleShape capsule = shape.capsuleShape();
-                const VectorSingle p0 = TransformPoint(xf, capsule.center1());
-                const VectorSingle p1 = TransformPoint(xf, capsule.center2Vec());
+                const VectorSingle xfPos = VectorSingle(xf.position);
+                const VectorSingle xfRot = VectorSingle(xf.rotation);
+                const VectorSingle p0 = TransformPointValues(xfPos, xfRot, capsule.center1());
+                const VectorSingle p1 = TransformPointValues(xfPos, xfRot, capsule.center2Vec());
                 const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 VectorSingle u(0.0f);
                 VectorSingle v(0.0f);
@@ -415,22 +487,26 @@ void BuildPhysicsDebugLines(
                 if(cast<usize>(shape.geometryIndex) >= world.m_hullShapes.size())
                     continue;
                 in HullShape hull = world.m_hullShapes[shape.geometryIndex];
+                const VectorSingle xfPos = VectorSingle(xf.position);
+                const VectorSingle xfRot = VectorSingle(xf.rotation);
                 if(hull.isBox())
-                    AppendPhysicsDebugBoxEdges(options.maxLines, xf, hull.centroid(), hull.halfExtents(), SafeNormalizeQuat(VectorSingle(hull.boxRotation)), color, outLines);
+                    AppendPhysicsDebugBoxEdges(options.maxLines, xfPos, xfRot, hull.centroid(), hull.halfExtents(), SafeNormalizeQuat(VectorSingle(hull.boxRotation)), color, outLines);
                 else
-                    AppendPhysicsDebugHull(options.maxLines, xf, hull, color, outLines);
+                    AppendPhysicsDebugHull(options.maxLines, xfPos, xfRot, hull, color, outLines);
             }
             else if(shape.type == ShapeType::Mesh){
                 if(cast<usize>(shape.geometryIndex) >= world.m_meshShapes.size())
                     continue;
                 in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
+                const VectorSingle xfPos = VectorSingle(xf.position);
+                const VectorSingle xfRot = VectorSingle(xf.rotation);
                 for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
                     if(outLines.size() >= cast<usize>(options.maxLines))
                         break;
                     in MeshTriangle tri = mesh.triangles[ti];
-                    const VectorSingle v0 = TransformPoint(xf, Vec3FromU(tri.v0));
-                    const VectorSingle v1 = TransformPoint(xf, Vec3FromU(tri.v1));
-                    const VectorSingle v2 = TransformPoint(xf, Vec3FromU(tri.v2));
+                    const VectorSingle v0 = TransformPointValues(xfPos, xfRot, VectorSingle(tri.v0, 0.0f));
+                    const VectorSingle v1 = TransformPointValues(xfPos, xfRot, VectorSingle(tri.v1, 0.0f));
+                    const VectorSingle v2 = TransformPointValues(xfPos, xfRot, VectorSingle(tri.v2, 0.0f));
                     AppendPhysicsDebugLine(options.maxLines, v0, v1, color, outLines);
                     AppendPhysicsDebugLine(options.maxLines, v1, v2, color, outLines);
                     AppendPhysicsDebugLine(options.maxLines, v2, v0, color, outLines);
@@ -478,14 +554,18 @@ void BuildPhysicsDebugLines(
                 continue;
             in BodySim simA = world.m_solverSets[bA.setIndex].sims[bA.localIndex];
             in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
-            const VectorSingle aA = TransformPoint(simA.transform, j.localAnchorA());
-            const VectorSingle aB = TransformPoint(simB.transform, j.localAnchorB());
+            const VectorSingle posA = VectorSingle(simA.transform.position);
+            const VectorSingle rawRotA = VectorSingle(simA.transform.rotation);
+            const VectorSingle posB = VectorSingle(simB.transform.position);
+            const VectorSingle rawRotB = VectorSingle(simB.transform.rotation);
+            const VectorSingle aA = TransformPointValues(posA, rawRotA, j.localAnchorA());
+            const VectorSingle aB = TransformPointValues(posB, rawRotB, j.localAnchorB());
             AppendPhysicsDebugLine(options.maxLines, simA.center(), aA, jointColor, outLines);
             AppendPhysicsDebugLine(options.maxLines, aA, aB, jointColor, outLines);
             AppendPhysicsDebugLine(options.maxLines, aB, simB.center(), jointColor, outLines);
 
-            const VectorSingle qA = SafeNormalizeQuat(VectorSingle(simA.transform.rotation));
-            const VectorSingle qB = SafeNormalizeQuat(VectorSingle(simB.transform.rotation));
+            const VectorSingle qA = SafeNormalizeQuat(rawRotA);
+            const VectorSingle qB = SafeNormalizeQuat(rawRotB);
             const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             VectorSingle jU(0.0f);
@@ -553,7 +633,7 @@ void BuildPhysicsDebugLines(
                 AppendPhysicsDebugLine(options.maxLines, aB, aB + Vector3Rotate(VectorSingle(0.15f, 0.0f, 0.0f, 0.0f), qB), jointColor, outLines);
             }
             else if(j.type == JointType::Motor){
-                const VectorSingle targetPos = TransformPoint(simA.transform, j.localAnchorA() + j.linearOffset());
+                const VectorSingle targetPos = TransformPointValues(posA, rawRotA, j.localAnchorA() + j.linearOffset());
                 AppendPhysicsDebugLine(options.maxLines, aA, targetPos, jointColor, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, targetPos, jU, jV, 0.08f, jointColor, outLines);
             }
@@ -577,16 +657,17 @@ void BuildPhysicsDebugLines(
     }
 }
 
-Expected<VectorSingle> ProjectPhysicsWorldSegmentToScreen(
+b8 ProjectPhysicsWorldSegmentToScreen(
     in TransformComponent cameraTransform,
     in CameraProjection projection,
     in f32 viewportWidth,
     in f32 viewportHeight,
     in VectorSingle worldP0,
-    in VectorSingle worldP1
+    in VectorSingle worldP1,
+    mut VectorSingle outSegment
 ){
     const PhysicsDebugScreenProjector projector(cameraTransform, projection, viewportWidth, viewportHeight);
-    return projector.projectSegment(worldP0, worldP1);
+    return projector.projectSegment(worldP0, worldP1, outSegment);
 }
 
 

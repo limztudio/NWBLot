@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
+#include <impl/ecs_ui/toolkit/gpu/scissor.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +25,7 @@ Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterG
     return outPush;
 }
 
-Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
+Expected<GpuScissorRect> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
     const VectorSingle clipEnd = VectorSingle(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y) + VectorSingle(draw.clip.width, draw.clip.height, draw.clip.width, draw.clip.height);
     const VectorSingle coordinates(draw.clip.x, draw.clip.y, clipEnd.x, clipEnd.y);
     const VectorSingle physicalClip = coordinates * VectorSingle(geometry.pixelScale);
@@ -34,7 +35,7 @@ Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in Dra
     const VectorSingle maximum = Min(last, VectorSingle(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
     if(maximum.x <= minimum.x || maximum.y <= minimum.y)
         return MakeUnexpected(Failure());
-    return i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
+    return GpuScissorRect(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
 }
 
 GpuOutputPushConstants MakeGpuOutputPushConstants(in u32 textureSlot, in u32 samplerSlot, in u32 presentationMode){

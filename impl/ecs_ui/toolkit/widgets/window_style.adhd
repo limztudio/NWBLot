@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<VectorDouble> TryLoadWindowPointerDisplacement(in PointerGesture gesture){
+b8 TryLoadWindowPointerDisplacement(in PointerGesture gesture, mut VectorDouble outDisplacement){
     if(
         !gesture.id.valid()
         || !IsFinite(VectorSingle(gesture.origin.x, gesture.origin.y, gesture.position.x, gesture.position.y))
@@ -16,9 +16,10 @@ Expected<VectorDouble> TryLoadWindowPointerDisplacement(in PointerGesture gestur
         || gesture.referenceRectangle.width <= 0.0f || gesture.referenceRectangle.height <= 0.0f
         || gesture.state > PointerGestureState::Completed
     )
-        return MakeUnexpected(Failure());
-    return VectorDouble(cast<f64>(gesture.position.x), cast<f64>(gesture.position.y), 0.0, 0.0)
+        return false;
+    outDisplacement = VectorDouble(cast<f64>(gesture.position.x), cast<f64>(gesture.position.y), 0.0, 0.0)
         - VectorDouble(cast<f64>(gesture.origin.x), cast<f64>(gesture.origin.y), 0.0, 0.0);
+    return true;
 }
 
 b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut WindowState state){
@@ -50,8 +51,8 @@ b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut W
 }
 
 b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
-    const Expected<VectorDouble> displacement = TryLoadWindowPointerDisplacement(gesture);
-    if(!displacement.has_value())
+    VectorDouble displacement(0.0);
+    if(!TryLoadWindowPointerDisplacement(gesture, displacement))
         return false;
     WindowGestureState movement = state.moveGesture;
     if(movement.id != gesture.id){
@@ -59,7 +60,7 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
         movement.initialBounds = gesture.referenceRectangle;
     }
     const VectorDouble origin(cast<f64>(movement.initialBounds.x), cast<f64>(movement.initialBounds.y), 0.0, 0.0);
-    const VectorDouble moved = origin + displacement.value();
+    const VectorDouble moved = origin + displacement;
     const f64 left = moved.x;
     const f64 top = moved.y;
     const VectorDouble mag = VectorDoubleAbs(VectorDouble(cast<f64>(left), cast<f64>(top), 0.0, 0.0));
@@ -76,8 +77,8 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
 }
 
 b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut WindowState state){
-    const Expected<VectorDouble> displacement = TryLoadWindowPointerDisplacement(gesture);
-    if(!displacement.has_value() || !IsFinite(VectorSingle(minimumSize.x, minimumSize.y, 0.0f, 0.0f)) || minimumSize.x <= 0.0f || minimumSize.y <= 0.0f)
+    VectorDouble displacement(0.0);
+    if(!TryLoadWindowPointerDisplacement(gesture, displacement) || !IsFinite(VectorSingle(minimumSize.x, minimumSize.y, 0.0f, 0.0f)) || minimumSize.x <= 0.0f || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
     if(resizing.id != gesture.id){
@@ -85,7 +86,7 @@ b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut Win
         resizing.initialBounds = gesture.referenceRectangle;
     }
     const VectorDouble initialSize(cast<f64>(resizing.initialBounds.width), cast<f64>(resizing.initialBounds.height), 0.0, 0.0);
-    const VectorDouble resized = initialSize + displacement.value();
+    const VectorDouble resized = initialSize + displacement;
     const VectorDouble size = Max(VectorDouble(cast<f64>(minimumSize.x), cast<f64>(minimumSize.y), cast<f64>(minimumSize.x), cast<f64>(minimumSize.y)), resized);
     const f64 width = size.x;
     const f64 height = size.y;

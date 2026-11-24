@@ -128,13 +128,12 @@ MatrixSingle LoadTransformMatrix(in TransformComponent transform){
 }
 
 b8 TryDecomposeAndAssignTransformComponent(in MatrixSingle matrix, mut TransformComponent outTransform){
-    const Expected<MatrixDecomposition> decomposed = MatrixDecompose(matrix);
-    if(!decomposed.has_value())
+    MatrixSingle value = MatrixSingle();
+    if(!MatrixDecompose(matrix, value))
         return false;
-    const MatrixDecomposition value = decomposed.value();
-    if(!IsFinite(value.scale) || !IsFinite(value.rotation))
+    if(!IsFinite(value[0u]) || !IsFinite(value[1u]))
         return false;
-    AssignDecomposedTransformComponent(value.translation, value.rotation, value.scale, outTransform);
+    AssignDecomposedTransformComponent(value[2u], value[1u], value[0u], outTransform);
     return true;
 }
 

@@ -70,10 +70,10 @@ Expected<Point> TryAdvanceTextGlyphPosition(
     if(!FitsTextCoordinate(advanced.x) || !FitsTextCoordinate(advanced.y) || !FitsTextCoordinate(advanced.z))
         return MakeUnexpected(Failure());
     const Point position(cast<f32>(advanced.x), cast<f32>(advanced.y));
-    const Expected<VectorDouble> translatedInk = TryTranslateTextInk(position, ink);
-    if(!translatedInk.has_value() || !TryIncludeTextInk(translatedInk.value(), inOutInkBounds, inOutHasInk))
+    VectorDouble translatedInk(0.0);
+    if(!TryTranslateTextInk(position, ink, translatedInk) || !TryIncludeTextInk(translatedInk, inOutInkBounds, inOutHasInk))
         return MakeUnexpected(Failure());
-    if(coverage.known && !TryTranslateTextInk(position, coverage.ink).has_value())
+    if(coverage.known && !TryTranslateTextInk(position, coverage.ink, translatedInk))
         return MakeUnexpected(Failure());
     inOutPen = cast<f32>(advanced.z);
     return position;

@@ -239,27 +239,28 @@ class TextService : NoCopy{
     }
 
     [cpp_unwind]
-    private Expected<VectorDouble> loadSdfSupportCached(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
-        const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
-        if(!plane.has_value())
-            return MakeUnexpected(Failure());
-        const VectorDouble rectangle = plane.value();
-        if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
-            return plane;
+    private b8 loadSdfSupportCached(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display, mut VectorDouble outBounds){
+        VectorDouble rectangle(0.0);
+        if(!LoadAtlasRectangle(placed, atlas, fontSize, Point(), rectangle))
+            return false;
+        if(rectangle.z <= 0.0 || rectangle.w <= 0.0){
+            outBounds = rectangle;
+            return true;
+        }
         const SdfSupportCacheKey key(atlas.identity(), placed.glyphId, bit_cast<u32>(fontSize), bit_cast<u32>(display.pixelScaleX), bit_cast<u32>(display.pixelScaleY));
         const auto found = this.m_sdfSupportCache.find(key);
         if(found != this.m_sdfSupportCache.end())
-            return ResolveSdfGlyphSupportBounds(rectangle, found.value());
+            return ResolveSdfGlyphSupportBounds(rectangle, found.value(), outBounds);
         in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
         in SdfAtlasPage page = atlas.page(glyph.group).deref();
         in SdfAtlasPageBindingRecord<Font> binding = page.binding();
         const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(rectangle.z, rectangle.w, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
         if(!offset.has_value())
-            return MakeUnexpected(Failure());
+            return false;
         if(this.m_sdfSupportCache.size() >= s_TextSdfSupportCacheMaxEntries)
             this.m_sdfSupportCache.clear();
         this.m_sdfSupportCache.try_emplace(key, offset.value());
-        return ResolveSdfGlyphSupportBounds(rectangle, offset.value());
+        return ResolveSdfGlyphSupportBounds(rectangle, offset.value(), outBounds);
     }
 
     [cpp_unwind]
@@ -275,10 +276,10 @@ class TextService : NoCopy{
         for(in PlacedGlyph glyph : layout.glyphs()){
             const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
             if(atlas.has_value()){
-                const Expected<VectorDouble> support = this.loadSdfSupportCached(glyph, atlas.value(), layout.fontSize(), display);
-                if(!support.has_value())
+                VectorDouble support(0.0);
+                if(!this.loadSdfSupportCached(glyph, atlas.value(), layout.fontSize(), display, support))
                     return MakeUnexpected(Failure());
-                ExpandMeasuredTextBoundsWithSdfSupport(support.value(), bounds);
+                ExpandMeasuredTextBoundsWithSdfSupport(support, bounds);
                 continue;
             }
             if(!glyph.face.valid() || !glyph.face.deref().valid())
@@ -343,16 +344,16 @@ class TextService : NoCopy{
                     return false;
                 in BakedFontAtlas baked = atlas.value();
                 in FontAtlasGlyph record = baked.glyph(glyph.glyphId);
-                const Expected<VectorDouble> rawRectangle = TryLoadGlyphAtlasRectangle(glyph.position, topLeft, layout.fontSize(), baked.unitsPerEm(), record);
-                if(!rawRectangle.has_value())
+                VectorDouble rawRectangle(0.0);
+                if(!TryLoadGlyphAtlasRectangle(glyph.position, topLeft, layout.fontSize(), baked.unitsPerEm(), record, rawRectangle))
                     return false;
-                const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle.value(), clip);
+                const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle, clip);
                 if(candidateStatus == TextGlyphIntersection::Invalid)
                     return false;
                 if(candidateStatus == TextGlyphIntersection::Invisible)
                     continue;
                 ResolvedGlyphDraw item;
-                item.rectangle = ToTextGlyphAtlasRect(rawRectangle.value());
+                item.rectangle = ToTextGlyphAtlasRect(rawRectangle);
                 if(HasPositivePreparedGlyphExtent(item.rectangle)){
                     in SharedSdfAtlasPage sdfPage = baked.page(record.group);
                     in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
@@ -488,17 +489,18 @@ usize ComputeTextLayoutCacheHash(in ShapeRequest request){
     return HashCombineValue(seed, cast<u8>(request.direction));
 }
 
-Expected<VectorDouble> LoadSdfSupport(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
-    const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
-    if(!plane.has_value())
-        return MakeUnexpected(Failure());
-    const VectorDouble rectangle = plane.value();
-    if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
-        return plane;
+b8 LoadSdfSupport(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display, mut VectorDouble outBounds){
+    VectorDouble rectangle(0.0);
+    if(!LoadAtlasRectangle(placed, atlas, fontSize, Point(), rectangle))
+        return false;
+    if(rectangle.z <= 0.0 || rectangle.w <= 0.0){
+        outBounds = rectangle;
+        return true;
+    }
     in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
     in SdfAtlasPage page = atlas.page(glyph.group).deref();
     in SdfAtlasPageBindingRecord<Font> binding = page.binding();
-    return TryLoadSdfGlyphSupport(rectangle, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
+    return TryLoadSdfGlyphSupport(rectangle, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display, outBounds);
 }
 
 u32 InternPreparedPage<TPage>(mut Vector<Shared<TPage>> pages, in Shared<TPage> page){

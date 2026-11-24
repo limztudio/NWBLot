@@ -28,10 +28,10 @@ b8 PrepareLinearPlane(in BasisFloatImage mask, in TexConvAlphaSource alpha, in b
             f32 maskAlpha = 0.0f;
             if(alpha.mode == AlphaSourceMode::Image)
                 maskAlpha = mask.pixel(x, y).x;
-            const auto prepared = TryPrepareTexConvLinearPixel(VectorSingle(pixel, 0.0f), pixel.w, alpha.mode, alpha.constant, maskAlpha, maxRgb, srgb);
-            if(!prepared.has_value())
+            VectorSingle prepared(0.0f);
+            if(!TryPrepareTexConvLinearPixel(VectorSingle(pixel, 0.0f), pixel.w, alpha.mode, alpha.constant, maskAlpha, maxRgb, srgb, prepared))
                 return false;
-            plane.setPixel(x, y, prepared.value());
+            plane.setPixel(x, y, prepared);
         }
     }
     return true;

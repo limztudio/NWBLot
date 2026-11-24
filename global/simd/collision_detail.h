@@ -6,7 +6,6 @@
 
 
 #include "../expected.h"
-#include "../span.h"
 #include "matrix.h"
 #include "collision_types.h"
 
@@ -86,17 +85,47 @@ namespace FrustumPlaneIndex{
     return VectorSelect(center, radius, s_SIMDMaskW);
 }
 
-[[nodiscard]] inline SIMDVectorSingle CreateSphereFromVectorPoints(const Span<const SIMDVectorSingle> points)noexcept{
-    FOUNDATION_ASSERT(!points.empty());
+template<typename VectorT>
+[[nodiscard]] FOUNDATION_INLINE VectorT SelectVector3(const usize index, const VectorT v0, const VectorT v1, const VectorT v2)noexcept{
+    switch(index){
+        case 0u: return v0;
+        case 1u: return v1;
+        default: return v2;
+    }
+}
+
+template<typename VectorT>
+[[nodiscard]] FOUNDATION_INLINE VectorT SelectPlane6(
+    const usize index,
+    const VectorT plane0,
+    const VectorT plane1,
+    const VectorT plane2,
+    const VectorT plane3,
+    const VectorT plane4,
+    const VectorT plane5
+)noexcept{
+    switch(index){
+        case 0u: return plane0;
+        case 1u: return plane1;
+        case 2u: return plane2;
+        case 3u: return plane3;
+        case 4u: return plane4;
+        default: return plane5;
+    }
+}
+
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline SIMDVectorSingle CreateSphereFromPointSeries(PointAtFn&& pointAt)noexcept{
+    static_assert(PointCount > 0u);
 
     SIMDVectorSingle centerVector = VectorZero();
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex)
-        centerVector = VectorAdd(centerVector, points[pointIndex]);
-    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(points.size())));
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex)
+        centerVector = VectorAdd(centerVector, pointAt(pointIndex));
+    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(PointCount)));
 
     SIMDVectorSingle radiusSq = VectorZero();
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorSingle delta = VectorSubtract(points[pointIndex], centerVector);
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorSingle delta = VectorSubtract(pointAt(pointIndex), centerVector);
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
@@ -132,19 +161,22 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 PointsInsideMinMax(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorSingle outside = VectorOrInt(VectorLess(points[pointIndex], minBounds), VectorGreater(points[pointIndex], maxBounds));
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline b8 PointSeriesInsideMinMax(PointAtFn&& pointAt, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorSingle point = pointAt(pointIndex);
+        const SIMDVectorSingle outside = VectorOrInt(VectorLess(point, minBounds), VectorGreater(point, maxBounds));
         if(Vector3AnyTrue(outside))
             return false;
     }
     return true;
 }
 
-[[nodiscard]] inline b8 PointsInsideSphere(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline b8 PointSeriesInsideSphere(PointAtFn&& pointAt, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
     const SIMDVectorSingle radiusSq = VectorMultiply(radius, radius);
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorSingle delta = VectorSubtract(points[pointIndex], center);
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorSingle delta = VectorSubtract(pointAt(pointIndex), center);
         if(Vector4AnyTrue(VectorGreater(Vector3LengthSq(delta), radiusSq)))
             return false;
     }
@@ -261,17 +293,21 @@ namespace FrustumPlaneIndex{
     return VectorDoubleSelect(center, radius, s_DoubleSIMDMaskW);
 }
 
-[[nodiscard]] inline SIMDVectorDouble CreateSphereFromVectorPoints(const Span<const SIMDVectorDouble> points)noexcept{
-    FOUNDATION_ASSERT(!points.empty());
+using CollisionDetail::SelectVector3;
+using CollisionDetail::SelectPlane6;
+
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline SIMDVectorDouble CreateSphereFromPointSeries(PointAtFn&& pointAt)noexcept{
+    static_assert(PointCount > 0u);
 
     SIMDVectorDouble centerVector = VectorDoubleZero();
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex)
-        centerVector = VectorDoubleAdd(centerVector, points[pointIndex]);
-    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(points.size())));
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex)
+        centerVector = VectorDoubleAdd(centerVector, pointAt(pointIndex));
+    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(PointCount)));
 
     SIMDVectorDouble radiusSq = VectorDoubleZero();
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(points[pointIndex], centerVector);
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorDouble delta = VectorDoubleSubtract(pointAt(pointIndex), centerVector);
         radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
     }
 
@@ -307,19 +343,22 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 PointsInsideMinMax(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorDouble outside = VectorDoubleOrInt(VectorDoubleLess(points[pointIndex], minBounds), VectorDoubleGreater(points[pointIndex], maxBounds));
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline b8 PointSeriesInsideMinMax(PointAtFn&& pointAt, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorDouble point = pointAt(pointIndex);
+        const SIMDVectorDouble outside = VectorDoubleOrInt(VectorDoubleLess(point, minBounds), VectorDoubleGreater(point, maxBounds));
         if(VectorDouble3AnyTrue(outside))
             return false;
     }
     return true;
 }
 
-[[nodiscard]] inline b8 PointsInsideSphere(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
+template<usize PointCount, typename PointAtFn>
+[[nodiscard]] inline b8 PointSeriesInsideSphere(PointAtFn&& pointAt, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
     const SIMDVectorDouble radiusSq = VectorDoubleMultiply(radius, radius);
-    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(points[pointIndex], center);
+    for(usize pointIndex = 0u; pointIndex < PointCount; ++pointIndex){
+        const SIMDVectorDouble delta = VectorDoubleSubtract(pointAt(pointIndex), center);
         if(VectorDouble4AnyTrue(VectorDoubleGreater(VectorDouble3LengthSq(delta), radiusSq)))
             return false;
     }

@@ -26,29 +26,63 @@ namespace CollisionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AabbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount])noexcept{
-    for(u32 i = 0u; i < BoundingBox::s_CornerCount; ++i)
-        outCorners[i] = VectorMultiplyAdd(extents, BoxCornerOffset(i), center);
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle AabbCorner(const SIMDVectorSingle center, const SIMDVectorSingle extents, const u32 index)noexcept{
+    return VectorMultiplyAdd(extents, BoxCornerOffset(index), center);
 }
 
-inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle (&outCorners)[BoundingOrientedBox::s_CornerCount])noexcept{
-    SIMDVectorSingle axis0{};
-    SIMDVectorSingle axis1{};
-    SIMDVectorSingle axis2{};
-    ObbAxes(orientation, axis0, axis1, axis2);
-    axis0 = VectorMultiply(axis0, VectorSplatX(extents));
-    axis1 = VectorMultiply(axis1, VectorSplatY(extents));
-    axis2 = VectorMultiply(axis2, VectorSplatZ(extents));
-    for(u32 i = 0u; i < BoundingOrientedBox::s_CornerCount; ++i){
-        const SIMDVectorSingle offset = BoxCornerOffset(i);
-        SIMDVectorSingle corner = VectorMultiply(axis0, VectorSplatX(offset));
-        corner = VectorMultiplyAdd(axis1, VectorSplatY(offset), corner);
-        corner = VectorMultiplyAdd(axis2, VectorSplatZ(offset), corner);
-        outCorners[i] = VectorAdd(corner, center);
+FOUNDATION_INLINE void ObbCornerAxes(const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle& outAxis0, SIMDVectorSingle& outAxis1, SIMDVectorSingle& outAxis2)noexcept{
+    ObbAxes(orientation, outAxis0, outAxis1, outAxis2);
+    outAxis0 = VectorMultiply(outAxis0, VectorSplatX(extents));
+    outAxis1 = VectorMultiply(outAxis1, VectorSplatY(extents));
+    outAxis2 = VectorMultiply(outAxis2, VectorSplatZ(extents));
+}
+
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle ObbCornerFromAxes(const SIMDVectorSingle center, const SIMDVectorSingle axis0, const SIMDVectorSingle axis1, const SIMDVectorSingle axis2, const u32 index)noexcept{
+    const SIMDVectorSingle offset = BoxCornerOffset(index);
+    SIMDVectorSingle corner = VectorMultiply(axis0, VectorSplatX(offset));
+    corner = VectorMultiplyAdd(axis1, VectorSplatY(offset), corner);
+    corner = VectorMultiplyAdd(axis2, VectorSplatZ(offset), corner);
+    return VectorAdd(corner, center);
+}
+
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle FrustumCornerSlopes(const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope)noexcept{
+    return VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
+}
+
+[[nodiscard]] inline SIMDVectorSingle FrustumCornerFromSlopes(
+    const SIMDVectorSingle origin,
+    const SIMDVectorSingle orientation,
+    const SIMDVectorSingle slopes,
+    const SIMDVectorSingle nearDepth,
+    const SIMDVectorSingle farDepth,
+    const u32 index
+)noexcept{
+    const SIMDVectorSingle zero = VectorZero();
+    const SIMDVectorSingle depth = (index < 4u) ? nearDepth : farDepth;
+    const SIMDVectorSingle scaledSlopes = VectorMultiply(slopes, depth);
+    const SIMDVectorSingle right = VectorSplatX(scaledSlopes);
+    const SIMDVectorSingle left = VectorSplatY(scaledSlopes);
+    const SIMDVectorSingle bottom = VectorSplatZ(scaledSlopes);
+    const SIMDVectorSingle top = VectorSplatW(scaledSlopes);
+    SIMDVectorSingle localCorner{};
+    switch(index & 3u){
+        case 0u:
+            localCorner = VectorMergeX(right, top, depth, zero);
+            break;
+        case 1u:
+            localCorner = VectorMergeX(left, top, depth, zero);
+            break;
+        case 2u:
+            localCorner = VectorMergeX(left, bottom, depth, zero);
+            break;
+        default:
+            localCorner = VectorMergeX(right, bottom, depth, zero);
+            break;
     }
+    return VectorAdd(Vector3Rotate(localCorner, orientation), origin);
 }
 
-inline void FrustumCorners(
+[[nodiscard]] inline SIMDVectorSingle FrustumCorner(
     const SIMDVectorSingle origin,
     const SIMDVectorSingle orientation,
     const f32 rightSlope,
@@ -57,29 +91,16 @@ inline void FrustumCorners(
     const f32 bottomSlope,
     const f32 nearPlane,
     const f32 farPlane,
-    SIMDVectorSingle (&outCorners)[BoundingFrustum::s_CornerCount]
+    const u32 index
 )noexcept{
-    const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
-    const SIMDVectorSingle depths[2] = { VectorReplicate(nearPlane), VectorReplicate(farPlane), };
-    const SIMDVectorSingle zero = VectorZero();
-    u32 corner = 0u;
-    for(const SIMDVectorSingle depth : depths){
-        const SIMDVectorSingle scaledSlopes = VectorMultiply(slopes, depth);
-        const SIMDVectorSingle right = VectorSplatX(scaledSlopes);
-        const SIMDVectorSingle left = VectorSplatY(scaledSlopes);
-        const SIMDVectorSingle bottom = VectorSplatZ(scaledSlopes);
-        const SIMDVectorSingle top = VectorSplatW(scaledSlopes);
-        const SIMDVectorSingle localCorners[4] = {
-            VectorMergeX(right, top, depth, zero),
-            VectorMergeX(left, top, depth, zero),
-            VectorMergeX(left, bottom, depth, zero),
-            VectorMergeX(right, bottom, depth, zero),
-        };
-        for(const SIMDVectorSingle localCorner : localCorners){
-            outCorners[corner] = VectorAdd(Vector3Rotate(localCorner, orientation), origin);
-            ++corner;
-        }
-    }
+    return FrustumCornerFromSlopes(
+        origin,
+        orientation,
+        FrustumCornerSlopes(rightSlope, leftSlope, topSlope, bottomSlope),
+        VectorReplicate(nearPlane),
+        VectorReplicate(farPlane),
+        index
+    );
 }
 
 
@@ -98,29 +119,63 @@ namespace CollisionDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AabbCorners(const SIMDVectorDouble center, const SIMDVectorDouble extents, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount])noexcept{
-    for(u64 i = 0u; i < BoundingDoubleBox::s_DoubleCornerCount; ++i)
-        outCorners[i] = VectorDoubleMultiplyAdd(extents, BoxCornerOffset(i), center);
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble AabbCorner(const SIMDVectorDouble center, const SIMDVectorDouble extents, const u64 index)noexcept{
+    return VectorDoubleMultiplyAdd(extents, BoxCornerOffset(index), center);
 }
 
-inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation, SIMDVectorDouble (&outCorners)[BoundingDoubleOrientedBox::s_DoubleCornerCount])noexcept{
-    SIMDVectorDouble axis0{};
-    SIMDVectorDouble axis1{};
-    SIMDVectorDouble axis2{};
-    ObbAxes(orientation, axis0, axis1, axis2);
-    axis0 = VectorDoubleMultiply(axis0, VectorDoubleSplatX(extents));
-    axis1 = VectorDoubleMultiply(axis1, VectorDoubleSplatY(extents));
-    axis2 = VectorDoubleMultiply(axis2, VectorDoubleSplatZ(extents));
-    for(u64 i = 0u; i < BoundingDoubleOrientedBox::s_DoubleCornerCount; ++i){
-        const SIMDVectorDouble offset = BoxCornerOffset(i);
-        SIMDVectorDouble corner = VectorDoubleMultiply(axis0, VectorDoubleSplatX(offset));
-        corner = VectorDoubleMultiplyAdd(axis1, VectorDoubleSplatY(offset), corner);
-        corner = VectorDoubleMultiplyAdd(axis2, VectorDoubleSplatZ(offset), corner);
-        outCorners[i] = VectorDoubleAdd(corner, center);
+FOUNDATION_INLINE void ObbCornerAxes(const SIMDVectorDouble extents, const SIMDVectorDouble orientation, SIMDVectorDouble& outAxis0, SIMDVectorDouble& outAxis1, SIMDVectorDouble& outAxis2)noexcept{
+    ObbAxes(orientation, outAxis0, outAxis1, outAxis2);
+    outAxis0 = VectorDoubleMultiply(outAxis0, VectorDoubleSplatX(extents));
+    outAxis1 = VectorDoubleMultiply(outAxis1, VectorDoubleSplatY(extents));
+    outAxis2 = VectorDoubleMultiply(outAxis2, VectorDoubleSplatZ(extents));
+}
+
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble ObbCornerFromAxes(const SIMDVectorDouble center, const SIMDVectorDouble axis0, const SIMDVectorDouble axis1, const SIMDVectorDouble axis2, const u64 index)noexcept{
+    const SIMDVectorDouble offset = BoxCornerOffset(index);
+    SIMDVectorDouble corner = VectorDoubleMultiply(axis0, VectorDoubleSplatX(offset));
+    corner = VectorDoubleMultiplyAdd(axis1, VectorDoubleSplatY(offset), corner);
+    corner = VectorDoubleMultiplyAdd(axis2, VectorDoubleSplatZ(offset), corner);
+    return VectorDoubleAdd(corner, center);
+}
+
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FrustumCornerSlopes(const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope)noexcept{
+    return VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
+}
+
+[[nodiscard]] inline SIMDVectorDouble FrustumCornerFromSlopes(
+    const SIMDVectorDouble origin,
+    const SIMDVectorDouble orientation,
+    const SIMDVectorDouble slopes,
+    const SIMDVectorDouble nearDepth,
+    const SIMDVectorDouble farDepth,
+    const u64 index
+)noexcept{
+    const SIMDVectorDouble zero = VectorDoubleZero();
+    const SIMDVectorDouble depth = (index < 4u) ? nearDepth : farDepth;
+    const SIMDVectorDouble scaledSlopes = VectorDoubleMultiply(slopes, depth);
+    const SIMDVectorDouble right = VectorDoubleSplatX(scaledSlopes);
+    const SIMDVectorDouble left = VectorDoubleSplatY(scaledSlopes);
+    const SIMDVectorDouble bottom = VectorDoubleSplatZ(scaledSlopes);
+    const SIMDVectorDouble top = VectorDoubleSplatW(scaledSlopes);
+    SIMDVectorDouble localCorner{};
+    switch(index & 3u){
+        case 0u:
+            localCorner = VectorDoubleMergeX(right, top, depth, zero);
+            break;
+        case 1u:
+            localCorner = VectorDoubleMergeX(left, top, depth, zero);
+            break;
+        case 2u:
+            localCorner = VectorDoubleMergeX(left, bottom, depth, zero);
+            break;
+        default:
+            localCorner = VectorDoubleMergeX(right, bottom, depth, zero);
+            break;
     }
+    return VectorDoubleAdd(VectorDouble3Rotate(localCorner, orientation), origin);
 }
 
-inline void FrustumCorners(
+[[nodiscard]] inline SIMDVectorDouble FrustumCorner(
     const SIMDVectorDouble origin,
     const SIMDVectorDouble orientation,
     const f64 rightSlope,
@@ -129,29 +184,16 @@ inline void FrustumCorners(
     const f64 bottomSlope,
     const f64 nearPlane,
     const f64 farPlane,
-    SIMDVectorDouble (&outCorners)[BoundingDoubleFrustum::s_DoubleCornerCount]
+    const u64 index
 )noexcept{
-    const SIMDVectorDouble slopes = VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
-    const SIMDVectorDouble depths[2] = { VectorDoubleReplicate(nearPlane), VectorDoubleReplicate(farPlane), };
-    const SIMDVectorDouble zero = VectorDoubleZero();
-    u64 corner = 0u;
-    for(const SIMDVectorDouble depth : depths){
-        const SIMDVectorDouble scaledSlopes = VectorDoubleMultiply(slopes, depth);
-        const SIMDVectorDouble right = VectorDoubleSplatX(scaledSlopes);
-        const SIMDVectorDouble left = VectorDoubleSplatY(scaledSlopes);
-        const SIMDVectorDouble bottom = VectorDoubleSplatZ(scaledSlopes);
-        const SIMDVectorDouble top = VectorDoubleSplatW(scaledSlopes);
-        const SIMDVectorDouble localCorners[4] = {
-            VectorDoubleMergeX(right, top, depth, zero),
-            VectorDoubleMergeX(left, top, depth, zero),
-            VectorDoubleMergeX(left, bottom, depth, zero),
-            VectorDoubleMergeX(right, bottom, depth, zero),
-        };
-        for(const SIMDVectorDouble localCorner : localCorners){
-            outCorners[corner] = VectorDoubleAdd(VectorDouble3Rotate(localCorner, orientation), origin);
-            ++corner;
-        }
-    }
+    return FrustumCornerFromSlopes(
+        origin,
+        orientation,
+        FrustumCornerSlopes(rightSlope, leftSlope, topSlope, bottomSlope),
+        VectorDoubleReplicate(nearPlane),
+        VectorDoubleReplicate(farPlane),
+        index
+    );
 }
 
 

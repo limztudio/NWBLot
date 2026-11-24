@@ -22,18 +22,6 @@ enum<u8> RayTraceReadTokenStatus{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CsgClipReceiverTransform{
-    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 rotation(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 scale(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 present = false;
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ShouldAdvanceRayTraceReadToken(in b8 previousValid, in b8 matchesQueue, in u64 tokenValue, in u64 previousValue){
     return !previousValid || !matchesQueue || tokenValue > previousValue;
 }
@@ -51,42 +39,52 @@ RayTraceReadTokenStatus ClassifyRayTraceReadTokenStatus(
     return RayTraceReadTokenStatus::Pending;
 }
 
-CsgClipReceiverTransform ReadCsgClipReceiverTransform(in Optional<in TransformComponent> transform){
-    CsgClipReceiverTransform pose;
-    if(transform.has_value()){
-        pose.present = true;
-        pose.position = f32x4(VectorSingle(transform.value().position));
-        pose.rotation = f32x4(VectorSingle(transform.value().rotation));
-        pose.scale = f32x4(VectorSingle(transform.value().scale));
-    }
-    return pose;
+b8 LoadCsgClipReceiverTransform(
+    in Optional<in TransformComponent> transform,
+    mut VectorSingle outPosition,
+    mut VectorSingle outRotation,
+    mut VectorSingle outScale
+){
+    if(!transform.has_value())
+        return false;
+    outPosition = VectorSingle(transform.value().position);
+    outRotation = VectorSingle(transform.value().rotation);
+    outScale = VectorSingle(transform.value().scale);
+    return true;
 }
 
 b8 VisitReceiverClipCutters<Visitor>(
     in CsgShapeRegistry registry,
     in CsgFrameReceiverLookup lookup,
     in CsgReceiverDrawState state,
-    in CsgClipWorkBounds receiverBounds,
+    in b8 receiverBoundsValid,
+    in VectorSingle receiverMinBounds,
+    in VectorSingle receiverMaxBounds,
     mut forward Visitor visit
 ){
     if(lookup.hasPrecomputedCutters()){
         for(in CsgPrecomputedCutter cutter : lookup.precomputedReceiverCutters(state)){
             if(!cutter.valid)
                 continue;
-            CsgClipWorkBounds work;
-            if(CsgClipCutterRequiresShapeBounds(receiverBounds.valid, cutter.hasShaderModule, cutter.shapeName)){
-                const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(
-                    receiverBounds,
+            b8 workValid = false;
+            VectorSingle workMin = VectorZero();
+            VectorSingle workMax = VectorZero();
+            if(CsgClipCutterRequiresShapeBounds(receiverBoundsValid, cutter.hasShaderModule, cutter.shapeName)){
+                if(!ResolveCsgClipWorkBoundsValues(
+                    receiverBoundsValid,
+                    receiverMinBounds,
+                    receiverMaxBounds,
                     cutter.boundsResolved,
                     cutter.finiteBounds,
                     VectorSingle(cutter.boundsMin),
-                    VectorSingle(cutter.boundsMax)
-                );
-                if(!resolved.has_value())
+                    VectorSingle(cutter.boundsMax),
+                    workValid,
+                    workMin,
+                    workMax
+                ))
                     continue;
-                work = resolved.value();
             }
-            if(!visit(cutter.shapeTypeId, cutter.shaderModule, cutter.parameterByteSize, MatrixSingle(cutter.worldToShape), Span<u8>(cutter.parameterBytes), work))
+            if(!visit(cutter.shapeTypeId, cutter.shaderModule, cutter.parameterByteSize, MatrixSingle(cutter.worldToShape), Span<u8>(cutter.parameterBytes), workValid, workMin, workMax))
                 return false;
         }
         return true;
@@ -102,11 +100,29 @@ b8 VisitReceiverClipCutters<Visitor>(
         const auto parameters = TryResolveCsgCutterParameterBytes(shape.value().desc.parameterByteSize, shape.value().desc.defaultParameterBytes, cutter.parameterBytes);
         if(!parameters.has_value())
             continue;
-        const Expected<CsgClipWorkBounds> work = ResolveCsgClipWorkBounds(registry, shape.value(), MatrixSingle(cutter.shapeToWorld), parameters.value(), receiverBounds);
-        if(work.has_value()){
-            if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, MatrixSingle(cutter.worldToShape), parameters.value(), work.value()))
-                return false;
+        b8 workValid = false;
+        VectorSingle workMin = VectorZero();
+        VectorSingle workMax = VectorZero();
+        if(CsgClipCutterRequiresShapeBounds(receiverBoundsValid, shape.value().desc.shaderModule != s_NameNone, shape.value().desc.name)){
+            const auto cutterBounds = registry.buildShapeBounds(shape.value().id, MatrixSingle(cutter.shapeToWorld), parameters.value());
+            if(!cutterBounds.has_value())
+                continue;
+            if(!ResolveCsgClipWorkBoundsValues(
+                receiverBoundsValid,
+                receiverMinBounds,
+                receiverMaxBounds,
+                true,
+                cutterBounds.value().finiteBounds,
+                VectorSingle(cutterBounds.value().minBounds),
+                VectorSingle(cutterBounds.value().maxBounds),
+                workValid,
+                workMin,
+                workMax
+            ))
+                continue;
         }
+        if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, MatrixSingle(cutter.worldToShape), parameters.value(), workValid, workMin, workMax))
+            return false;
     }
     return true;
 }
@@ -119,12 +135,18 @@ Expected<CsgReceiverClipDrawInfo> ResolveCsgReceiverClipDrawInfoImpl(
     in Optional<in TransformComponent> transform
 ){
     CsgReceiverClipDrawInfo info;
-    const CsgClipReceiverTransform pose = ReadCsgClipReceiverTransform(transform);
-    const CsgClipWorkBounds worldBounds = LoadCsgReceiverWorldBoundsFromTransform(bounds, pose.present, VectorSingle(pose.position), VectorSingle(pose.rotation), VectorSingle(pose.scale));
-    auto accumulate = lambda[mut info](in CsgShapeTypeId shapeTypeId, in Name shaderModule, in u32 parameterByteSize, in MatrixSingle worldToShape, in Span<u8> parameters, in CsgClipWorkBounds work) -> b8{
+    VectorSingle posePosition(0.0f);
+    VectorSingle poseRotation(0.0f);
+    VectorSingle poseScale(0.0f);
+    const b8 posePresent = LoadCsgClipReceiverTransform(transform, posePosition, poseRotation, poseScale);
+    b8 worldBoundsValid = false;
+    VectorSingle worldMinBounds = VectorZero();
+    VectorSingle worldMaxBounds = VectorZero();
+    LoadCsgReceiverWorldBoundsValuesFromTransform(bounds, posePresent, posePosition, poseRotation, poseScale, worldBoundsValid, worldMinBounds, worldMaxBounds);
+    auto accumulate = lambda[mut info](in CsgShapeTypeId shapeTypeId, in Name shaderModule, in u32 parameterByteSize, in MatrixSingle worldToShape, in Span<u8> parameters, in b8 workValid, in VectorSingle workMin, in VectorSingle workMax) -> b8{
         return TryAccumulateCsgReceiverClipDrawInfo(shaderModule, info);
     };
-    if(!VisitReceiverClipCutters(registry, lookup, state, worldBounds, accumulate))
+    if(!VisitReceiverClipCutters(registry, lookup, state, worldBoundsValid, worldMinBounds, worldMaxBounds, accumulate))
         return MakeUnexpected(Failure());
     return info;
 }
@@ -143,13 +165,19 @@ Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
 ){
     if(data.cutters.size() > cast<usize>(u32.max) || !bounds.valid())
         return MakeUnexpected(Failure());
-    const CsgClipReceiverTransform pose = ReadCsgClipReceiverTransform(transform);
+    VectorSingle posePosition(0.0f);
+    VectorSingle poseRotation(0.0f);
+    VectorSingle poseScale(0.0f);
+    const b8 posePresent = LoadCsgClipReceiverTransform(transform, posePosition, poseRotation, poseScale);
     MatrixSingle localToWorld = MatrixIdentity();
-    if(pose.present)
-        localToWorld = MatrixAffineTransformation(VectorSingle(pose.scale), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(pose.rotation), VectorSingle(pose.position));
-    const CsgClipWorkBounds worldBounds = LoadCsgReceiverWorldBoundsFromMatrix(bounds, pose.present, localToWorld);
-    const auto worldToReceiver = TryInvertCsgReceiverLocalToWorld(pose.present, localToWorld);
-    if(!worldToReceiver.has_value())
+    if(posePresent)
+        localToWorld = MatrixAffineTransformation(poseScale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), poseRotation, posePosition);
+    b8 worldBoundsValid = false;
+    VectorSingle worldMinBounds = VectorZero();
+    VectorSingle worldMaxBounds = VectorZero();
+    LoadCsgReceiverWorldBoundsValuesFromMatrix(bounds, posePresent, localToWorld, worldBoundsValid, worldMinBounds, worldMaxBounds);
+    MatrixSingle worldToReceiver = MatrixIdentity();
+    if(!TryInvertCsgReceiverLocalToWorld(posePresent, localToWorld, worldToReceiver))
         return MakeUnexpected(Failure());
     b8 viewReady = false;
     MatrixSingle worldToClip = MatrixIdentity();
@@ -165,24 +193,24 @@ Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
         }
     }
     CsgReceiverRangeGpuData range;
-    range.worldToReceiver = f32x3x4(worldToReceiver.value());
+    range.worldToReceiver = f32x3x4(worldToReceiver);
     range.localBounds = bounds;
     range.firstCutter = cast<u32>(data.cutters.size());
     CsgFrameWorkRegion receiverRegion;
     in MatrixSingle worldToClipRef = worldToClip;
     auto append = lambda[mut data, mut range, mut receiverRegion, in frameWidth, in frameHeight, in viewReady, in worldToClipRef](
-        in CsgShapeTypeId shapeTypeId, in Name shaderModule, in u32 parameterByteSize, in MatrixSingle worldToShape, in Span<u8> parameters, in CsgClipWorkBounds work
+        in CsgShapeTypeId shapeTypeId, in Name shaderModule, in u32 parameterByteSize, in MatrixSingle worldToShape, in Span<u8> parameters, in b8 workValid, in VectorSingle workMin, in VectorSingle workMax
     ) -> b8{
         if(data.cutters.size() >= cast<usize>(u32.max))
             return false;
         assert(parameters.size() == cast<usize>(parameterByteSize));
         assert(parameters.empty() || HasSpanStorage<u8>(parameters));
-        const CsgCutterGpuData gpu = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(shapeTypeId, worldToShape, parameters, work, viewReady, worldToClipRef, frameWidth, frameHeight, receiverRegion);
+        const CsgCutterGpuData gpu = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(shapeTypeId, worldToShape, parameters, workValid, workMin, workMax, viewReady, worldToClipRef, frameWidth, frameHeight, receiverRegion);
         data.cutters.push_back(gpu);
         ++range.cutterCount;
         return true;
     };
-    const b8 appended = VisitReceiverClipCutters(registry, lookup, state, worldBounds, append);
+    const b8 appended = VisitReceiverClipCutters(registry, lookup, state, worldBoundsValid, worldMinBounds, worldMaxBounds, append);
     FinalizeCsgReceiverRangeWorkRegion(receiverRegion, frameWidth, frameHeight, range, data.workRegion);
     if(!appended || range.cutterCount == 0u)
         return MakeUnexpected(Failure());

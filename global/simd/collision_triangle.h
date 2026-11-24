@@ -323,9 +323,9 @@ namespace TriangleDoubleTests{
     const SIMDVectorSingle plane4,
     const SIMDVectorSingle plane5
 )noexcept{
-    const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
-    const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(points, planes);
+    const auto pointAt = [&](const usize index)noexcept{ return CollisionDetail::SelectVector3(index, v0, v1, v2); };
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDetail::ContainmentFromPlaneSeriesTests<CollisionDetail::s_TriangleVertexCount, CollisionDetail::s_FrustumPlaneCount>(pointAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL TriangleDoubleTests::ContainedBy(
@@ -339,9 +339,9 @@ namespace TriangleDoubleTests{
     const SIMDVectorDouble plane4,
     const SIMDVectorDouble plane5
 )noexcept{
-    const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
-    const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, planes);
+    const auto pointAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::SelectVector3(index, v0, v1, v2); };
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<CollisionDoubleDetail::s_DoubleTriangleVertexCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(pointAt, planeAt);
 }
 
 

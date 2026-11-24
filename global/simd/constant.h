@@ -16,7 +16,6 @@ struct alignas(16) SIMDVectorConstF{
 
     union{
         f32 f[4];
-        SIMDVectorSingle v;
     };
 
     FOUNDATION_INLINE operator const ScalarArray&()const noexcept{ return f; }
@@ -28,7 +27,6 @@ struct alignas(32) SIMDVectorDoubleConstF{
 
     union{
         f64 f[4];
-        SIMDVectorDouble v;
     };
 
     FOUNDATION_INLINE operator const ScalarArray&()const noexcept{ return f; }
@@ -38,7 +36,6 @@ struct alignas(32) SIMDVectorDoubleConstF{
 struct alignas(16) SIMDVectorConstI{
     union{
         i32 i[4];
-        SIMDVectorSingle v;
     };
 
     FOUNDATION_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
@@ -47,7 +44,6 @@ struct alignas(16) SIMDVectorConstI{
 struct alignas(32) SIMDVectorDoubleConstI{
     union{
         i64 i[4];
-        SIMDVectorDouble v;
     };
 
     FOUNDATION_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
@@ -56,7 +52,6 @@ struct alignas(32) SIMDVectorDoubleConstI{
 struct alignas(16) SIMDVectorConstU{
     union{
         u32 u[4];
-        SIMDVectorSingle v;
     };
 
     FOUNDATION_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
@@ -65,7 +60,6 @@ struct alignas(16) SIMDVectorConstU{
 struct alignas(32) SIMDVectorDoubleConstU{
     union{
         u64 u[4];
-        SIMDVectorDouble v;
     };
 
     FOUNDATION_SIMD_VECTOR_DOUBLE_CONST_CONVERSION

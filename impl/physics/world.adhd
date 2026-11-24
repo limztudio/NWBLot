@@ -744,7 +744,10 @@ class PhysicsWorld{
         }
         if(this.m_hullLocalAabbs.size() < this.m_hullShapes.size())
             this.m_hullLocalAabbs.resize(this.m_hullShapes.size());
-        this.m_hullLocalAabbs[slot] = ComputeHullAabb(this.m_hullShapes[slot], Transform3D());
+        VectorSingle lMin(0.0f);
+        VectorSingle lMax(0.0f);
+        ComputeHullAabbValues(this.m_hullShapes[slot], VectorSingle(0.0f), QuaternionIdentity(), lMin, lMax);
+        this.m_hullLocalAabbs[slot] = Aabb3D(lMin, lMax);
         return slot;
     }
 
@@ -852,7 +855,10 @@ class PhysicsWorld{
         ++body.shapeCount;
 
         in BodySim bodySim = this.m_solverSets[body.setIndex].sims[body.localIndex];
-        shape.aabb = ComputeShapeWorldAabb(shape, bodySim.transform, this.m_hullShapes, this.m_meshShapes);
+        VectorSingle boxMin(0.0f);
+        VectorSingle boxMax(0.0f);
+        ComputeShapeWorldAabbValues(shape, VectorSingle(bodySim.transform.position), VectorSingle(bodySim.transform.rotation), this.m_hullShapes, this.m_meshShapes, boxMin, boxMax);
+        shape.aabb = Aabb3D(boxMin, boxMax);
 
         if(body.setIndex != s_DisabledSetIndex){
             u32 proxyKey = s_NullIndex;
@@ -916,7 +922,7 @@ class PhysicsWorld{
         if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(VectorSingle(hull.radius())) || hull.radius() < 0.0f)
             return MakeUnexpected(Failure());
         for(usize i = 0u; i < hull.vertices.size(); ++i){
-            if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
+            if(!IsValidPositionVec3(VectorSingle(hull.vertices[i], 0.0f)))
                 return MakeUnexpected(Failure());
         }
         return this.attachShapeInternal(bodyId, def, ShapeType::Hull, SphereShape(), CapsuleShape(), hull, MeshShape());
@@ -1044,15 +1050,19 @@ class PhysicsWorld{
                     r2 = r2 + VectorSingle(md.inertia.row2);
                 }
             }
-            const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, this.m_hullShapes, this.m_hullLocalAabbs, this.m_meshShapes);
-            minLocal = Min(minLocal, VectorSingle(localBox.lowerBound));
-            maxLocal = Max(maxLocal, VectorSingle(localBox.upperBound));
+            VectorSingle lMin(0.0f);
+            VectorSingle lMax(0.0f);
+            ComputeShapeLocalAabbCachedValues(shape, this.m_hullShapes, this.m_hullLocalAabbs, this.m_meshShapes, lMin, lMax);
+            minLocal = Min(minLocal, lMin);
+            maxLocal = Max(maxLocal, lMax);
             shapeIdx = shape.nextShapeId;
         }
 
         if(totalMass > 0.0f){
+            const VectorSingle bodyPos = VectorSingle(sim.transform.position);
+            const VectorSingle bodyRot = VectorSingle(sim.transform.rotation);
             const VectorSingle localCom = weightedCenter / totalMass;
-            const VectorSingle worldCom = TransformPoint(sim.transform, localCom);
+            const VectorSingle worldCom = TransformPointValues(bodyPos, bodyRot, localCom);
             body.mass = totalMass;
             sim.setInvMass(1.0f / totalMass);
             sim.setLocalCenter(localCom);
@@ -1067,13 +1077,14 @@ class PhysicsWorld{
             const VectorSingle minI(1.0e-6f);
             const VectorSingle diagI = VectorSelect(minI, rawDiag, VectorGreater(rawDiag, minI));
 
-            const Mat3 inertiaMat = Mat3(
+            const MatrixSingle inertiaMat(
                 VectorSingle(diagI.x, r0.y + offAdd.y, r0.z + offAdd.x, 0.0f),
                 VectorSingle(r0.y + offAdd.y, diagI.y, r1.z + offAdd.z, 0.0f),
                 VectorSingle(r0.z + offAdd.x, r1.z + offAdd.z, diagI.z, 0.0f)
             );
-            sim.invInertiaLocal = InvertSymMat3(SymMat3FromMat3(inertiaMat));
-            sim.invInertiaWorld = RotateSymMat3(VectorSingle(sim.transform.rotation), sim.invInertiaLocal);
+            const MatrixSingle invLocalMat = Matrix3InvertSymmetric(inertiaMat);
+            sim.invInertiaLocal = SymMat3FromMatrix3(invLocalMat);
+            sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(bodyRot, invLocalMat));
         }
         else{
             const VectorSingle worldPos = VectorSingle(sim.transform.position);
@@ -1116,17 +1127,20 @@ class PhysicsWorld{
         mut BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
         const VectorSingle prevCenter = sim.center();
         sim.transform = Transform3D(position, normQ);
-        const VectorSingle newCenter = TransformPoint(sim.transform, sim.localCenter());
+        const VectorSingle newCenter = TransformPointValues(position, normQ, sim.localCenter());
         sim.setCenter(newCenter);
         sim.setCenter0(newCenter);
         sim.rotation0 = f32x4(normQ);
-        sim.invInertiaWorld = RotateSymMat3(normQ, sim.invInertiaLocal);
+        sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(normQ, Matrix3FromSymMat3(sim.invInertiaLocal)));
 
         const VectorSingle displacement = VectorSingle(newCenter - prevCenter, 0.0f);
         u32 shapeIdx = body.headShapeId;
         while(shapeIdx != s_NullIndex){
             mut Shape shape = this.m_shapes[shapeIdx];
-            shape.aabb = ComputeShapeWorldAabb(shape, sim.transform, this.m_hullShapes, this.m_meshShapes);
+            VectorSingle shapeMin(0.0f);
+            VectorSingle shapeMax(0.0f);
+            ComputeShapeWorldAabbValues(shape, position, normQ, this.m_hullShapes, this.m_meshShapes, shapeMin, shapeMax);
+            shape.aabb = Aabb3D(shapeMin, shapeMax);
             if(shape.proxyKey != s_NullIndex){
                 this.m_broadPhase.moveProxy(shape.proxyKey, shape.aabb, displacement);
                 if(body.type != BodyType::Dynamic)
@@ -1140,12 +1154,14 @@ class PhysicsWorld{
     }
 
     public b8 setKinematicTarget(in BodyId bodyId, in Transform3D targetTransform, in f32 dt){
+        const VectorSingle targetPos = VectorSingle(targetTransform.position);
+        const VectorSingle rawTargetRot = VectorSingle(targetTransform.rotation);
         if(
             !this.isValidBody(bodyId)
             || !IsFinite(VectorSingle(dt))
             || dt <= 0.0f
-            || !IsValidPositionVec3(VectorSingle(targetTransform.position))
-            || !IsFiniteQuat(VectorSingle(targetTransform.rotation))
+            || !IsValidPositionVec3(targetPos)
+            || !IsFiniteQuat(rawTargetRot)
         )
             return false;
 
@@ -1158,9 +1174,9 @@ class PhysicsWorld{
         in BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
         const VectorSingle curPos = VectorSingle(sim.transform.position);
         const VectorSingle curQ = SafeNormalizeQuat(VectorSingle(sim.transform.rotation));
-        const VectorSingle targetQ = SafeNormalizeQuat(VectorSingle(targetTransform.rotation));
+        const VectorSingle targetQ = SafeNormalizeQuat(rawTargetRot);
 
-        const VectorSingle linVel = ApplyLinearLocks(VectorSingle(VectorSingle(targetTransform.position) - curPos, 0.0f) * invDt, body.flags);
+        const VectorSingle linVel = ApplyLinearLocks(VectorSingle(targetPos - curPos, 0.0f) * invDt, body.flags);
 
         VectorSingle qDelta = QuaternionMultiply(targetQ, QuaternionConjugate(curQ));
         if(qDelta.w < 0.0f)
@@ -1316,7 +1332,7 @@ class PhysicsWorld{
             return true;
         in BodySim sim = this.m_solverSets[s_AwakeSetIndex].sims[body.localIndex];
         mut BodyState state = this.m_solverSets[s_AwakeSetIndex].states[body.localIndex];
-        const VectorSingle w = VectorSingle(state.angularVelocity) + MulSymMat3Vec(sim.invInertiaWorld, VectorSingle(impulse, 0.0f));
+        const VectorSingle w = VectorSingle(state.angularVelocity) + Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), VectorSingle(impulse, 0.0f));
         state.angularVelocity = f32x4(ApplyAngularLocks(w, body.flags), 0.0f);
         return true;
     }
@@ -1390,14 +1406,20 @@ class PhysicsWorld{
 
         mut Body body = this.m_bodies[bodyId.index];
         mut BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
-        const VectorSingle worldCenter = TransformPoint(sim.transform, massCenter);
+        const VectorSingle worldCenter = TransformPointValues(VectorSingle(sim.transform.position), VectorSingle(sim.transform.rotation), massCenter);
         body.mass = massVal;
         sim.setInvMass(1.0f / massVal);
         sim.setLocalCenter(massCenter);
         sim.setCenter(worldCenter);
         sim.setCenter0(worldCenter);
-        sim.invInertiaLocal = InvertSymMat3(SymMat3FromMat3(massData.inertia));
-        sim.invInertiaWorld = RotateSymMat3(VectorSingle(sim.transform.rotation), sim.invInertiaLocal);
+        const MatrixSingle bodyInertia(
+            VectorSingle(massData.inertia.row0),
+            VectorSingle(massData.inertia.row1),
+            VectorSingle(massData.inertia.row2)
+        );
+        const MatrixSingle invLocalInertia = Matrix3InvertSymmetric(bodyInertia);
+        sim.invInertiaLocal = SymMat3FromMatrix3(invLocalInertia);
+        sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(VectorSingle(sim.transform.rotation), invLocalInertia));
         body.flags &= ~cast<u32>(BodyFlags::DirtyMass);
         sim.flags = body.flags;
         if(body.setIndex == s_AwakeSetIndex && body.localIndex < this.m_solverSets[s_AwakeSetIndex].states.size())
@@ -1412,7 +1434,8 @@ class PhysicsWorld{
         in BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
         MassData outMass;
         outMass.setCenterMass(sim.localCenter(), body.mass);
-        outMass.inertia = Mat3FromSymMat3(InvertSymMat3(sim.invInertiaLocal));
+        const MatrixSingle inertia = Matrix3InvertSymmetric(Matrix3FromSymMat3(sim.invInertiaLocal));
+        outMass.inertia = Mat3(inertia[0u], inertia[1u], inertia[2u]);
         return outMass;
     }
 
@@ -1420,7 +1443,8 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId))
             return MakeUnexpected(Failure());
         in Body body = this.m_bodies[bodyId.index];
-        return Mat3FromSymMat3(InvertSymMat3(this.m_solverSets[body.setIndex].sims[body.localIndex].invInertiaLocal));
+        const MatrixSingle inertia = Matrix3InvertSymmetric(Matrix3FromSymMat3(this.m_solverSets[body.setIndex].sims[body.localIndex].invInertiaLocal));
+        return Mat3(inertia[0u], inertia[1u], inertia[2u]);
     }
 
     public Expected<f32x4> tryGetLocalCenterOfMass(in BodyId bodyId)const{
@@ -1899,7 +1923,10 @@ class PhysicsWorld{
 
         in Body body = this.m_bodies[bodyIdx];
         in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-        this.m_shapes[shapeIdx].aabb = ComputeShapeWorldAabb(this.m_shapes[shapeIdx], xf, this.m_hullShapes, this.m_meshShapes);
+        VectorSingle aabbMin(0.0f);
+        VectorSingle aabbMax(0.0f);
+        ComputeShapeWorldAabbValues(this.m_shapes[shapeIdx], VectorSingle(xf.position), VectorSingle(xf.rotation), this.m_hullShapes, this.m_meshShapes, aabbMin, aabbMax);
+        this.m_shapes[shapeIdx].aabb = Aabb3D(aabbMin, aabbMax);
         if(this.m_shapes[shapeIdx].proxyKey != s_NullIndex)
             this.m_broadPhase.moveProxy(this.m_shapes[shapeIdx].proxyKey, this.m_shapes[shapeIdx].aabb, VectorSingle(0.0f));
         if(body.type == BodyType::Static)
@@ -1950,7 +1977,7 @@ class PhysicsWorld{
         if(hull.vertices.empty() || hull.facePlanes.empty() || hull.halfEdges.empty() || !IsFinite(VectorSingle(hull.radius())) || hull.radius() < 0.0f)
             return false;
         for(usize i = 0u; i < hull.vertices.size(); ++i){
-            if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
+            if(!IsValidPositionVec3(VectorSingle(hull.vertices[i], 0.0f)))
                 return false;
         }
         const u32 idx = shapeId.index;
@@ -1999,6 +2026,8 @@ class PhysicsWorld{
     private void rebuildBodyShapesBroadphase(in u32 bodyIdx, in b8 includeInBroadPhase){
         in Body body = this.m_bodies[bodyIdx];
         in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+        const VectorSingle xfPos(xf.position);
+        const VectorSingle xfRot(xf.rotation);
         u32 shapeIdx = body.headShapeId;
         while(shapeIdx != s_NullIndex){
             mut Shape shape = this.m_shapes[shapeIdx];
@@ -2006,7 +2035,10 @@ class PhysicsWorld{
                 this.m_broadPhase.destroyProxy(shape.proxyKey);
                 shape.proxyKey = s_NullIndex;
             }
-            shape.aabb = ComputeShapeWorldAabb(shape, xf, this.m_hullShapes, this.m_meshShapes);
+            VectorSingle aabbMin(0.0f);
+            VectorSingle aabbMax(0.0f);
+            ComputeShapeWorldAabbValues(shape, xfPos, xfRot, this.m_hullShapes, this.m_meshShapes, aabbMin, aabbMax);
+            shape.aabb = Aabb3D(aabbMin, aabbMax);
             if(includeInBroadPhase){
                 u32 proxyKey = s_NullIndex;
                 this.m_broadPhase.createProxy(body.type, shape.aabb, shape.filter.categoryBits, shapeIdx, true, proxyKey);
@@ -2085,7 +2117,7 @@ class PhysicsWorld{
         const VectorSingle p(impulse, 0.0f);
         const VectorSingle r(worldPoint - sim.center(), 0.0f);
         const VectorSingle v = VectorSingle(state.linearVelocity) + p * sim.invMass();
-        const VectorSingle w = VectorSingle(state.angularVelocity) + MulSymMat3Vec(sim.invInertiaWorld, Cross(r, p));
+        const VectorSingle w = VectorSingle(state.angularVelocity) + Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), Cross(r, p));
         state.linearVelocity = f32x4(ApplyLinearLocks(v, body.flags), 0.0f);
         state.angularVelocity = f32x4(ApplyAngularLocks(w, body.flags), 0.0f);
         return true;
@@ -2959,12 +2991,14 @@ class PhysicsWorld{
         in Body bB = this.m_bodies[j.edges[1u].bodyId];
         in Transform3D xfA = this.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
         in Transform3D xfB = this.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-        const VectorSingle pA = TransformPoint(xfA, j.localAnchorA());
-        const VectorSingle pB = TransformPoint(xfB, j.localAnchorB());
+        const VectorSingle posA(xfA.position);
+        const VectorSingle rotA(xfA.rotation);
+        const VectorSingle pA = TransformPointValues(posA, rotA, j.localAnchorA());
+        const VectorSingle pB = TransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), j.localAnchorB());
         const VectorSingle delta(pB - pA, 0.0f);
         if(j.type == JointType::Distance)
             return Vector3Length(delta).x;
-        const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         return Vector3Dot(delta, axisA).x;
     }
 
@@ -3272,15 +3306,17 @@ class PhysicsWorld{
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                    const VectorSingle xfPos(xf.position);
+                    const VectorSingle xfRot(xf.rotation);
                     LocalRayHit localHit;
                     if(shape.type == ShapeType::Sphere)
-                        localHit = RayCastSphere(shape.sphereShape(), xf, origin, translation, maxFraction);
+                        localHit = RayCastSphere(shape.sphereShape(), xfPos, xfRot, origin, translation, maxFraction);
                     else if(shape.type == ShapeType::Capsule)
-                        localHit = RayCastCapsule(shape.capsuleShape(), xf, origin, translation, maxFraction);
+                        localHit = RayCastCapsule(shape.capsuleShape(), xfPos, xfRot, origin, translation, maxFraction);
                     else if(shape.type == ShapeType::Mesh)
-                        localHit = RayCastMesh(this.m_meshShapes[shape.geometryIndex], xf, origin, translation, maxFraction);
+                        localHit = RayCastMesh(this.m_meshShapes[shape.geometryIndex], xfPos, xfRot, origin, translation, maxFraction);
                     else
-                        localHit = RayCastHull(this.m_hullShapes[shape.geometryIndex], xf, origin, translation, maxFraction);
+                        localHit = RayCastHull(this.m_hullShapes[shape.geometryIndex], xfPos, xfRot, origin, translation, maxFraction);
 
                     if(localHit.hit() && (!best.hit || localHit.fraction() < best.fraction)){
                         best.hit = true;
@@ -3325,15 +3361,17 @@ class PhysicsWorld{
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                    const VectorSingle xfPos(xf.position);
+                    const VectorSingle xfRot(xf.rotation);
                     LocalRayHit localHit;
                     if(shape.type == ShapeType::Sphere)
-                        localHit = RayCastSphere(shape.sphereShape(), xf, origin, translation, 1.0f);
+                        localHit = RayCastSphere(shape.sphereShape(), xfPos, xfRot, origin, translation, 1.0f);
                     else if(shape.type == ShapeType::Capsule)
-                        localHit = RayCastCapsule(shape.capsuleShape(), xf, origin, translation, 1.0f);
+                        localHit = RayCastCapsule(shape.capsuleShape(), xfPos, xfRot, origin, translation, 1.0f);
                     else if(shape.type == ShapeType::Mesh)
-                        localHit = RayCastMesh(this.m_meshShapes[shape.geometryIndex], xf, origin, translation, 1.0f);
+                        localHit = RayCastMesh(this.m_meshShapes[shape.geometryIndex], xfPos, xfRot, origin, translation, 1.0f);
                     else
-                        localHit = RayCastHull(this.m_hullShapes[shape.geometryIndex], xf, origin, translation, 1.0f);
+                        localHit = RayCastHull(this.m_hullShapes[shape.geometryIndex], xfPos, xfRot, origin, translation, 1.0f);
 
                     if(localHit.hit()){
                         RayCastHit hit;
@@ -3357,13 +3395,14 @@ class PhysicsWorld{
     public void overlapAabb(in Aabb3D queryBox, in Filter filter, in b8 hitSensors, mut Vector<ShapeId> outShapes)const{
         outShapes.clear();
         const u32 queryMask = this.broadPhaseQueryMask(filter);
-        in Aabb3D queryBoxRef = queryBox;
+        const VectorSingle queryMin(queryBox.lowerBound);
+        const VectorSingle queryMax(queryBox.upperBound);
         in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in queryBoxRef, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in queryMin, in queryMax, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
@@ -3371,7 +3410,7 @@ class PhysicsWorld{
                         return true;
                     if(!ShouldCollideFilters(filterRef, shape.filter))
                         return true;
-                    if(AabbOverlaps(shape.aabb, queryBoxRef))
+                    if(AabbOverlapsValues(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), queryMin, queryMax))
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
                 }
@@ -3381,21 +3420,21 @@ class PhysicsWorld{
 
     public ShapeCastHit shapeCastClosest(in ShapeProxy queryProxy, in ShapeCastInput input)const{
         ShapeCastHit best;
-        if(queryProxy.points.empty() || !IsValidPositionVec3(VectorSingle(input.originTransform.position)) || !IsFiniteVec3(VectorSingle(input.translation)))
+        const VectorSingle originPos(input.originTransform.position);
+        const VectorSingle originRot(input.originTransform.rotation);
+        const VectorSingle trans = VectorSingle(input.translation);
+        if(queryProxy.points.empty() || !IsValidPositionVec3(originPos) || !IsFiniteVec3(trans))
             return best;
 
-        const VectorSingle trans = VectorSingle(input.translation);
-        VectorSingle minP = TransformPoint(input.originTransform, Vec3FromU(queryProxy.points[0u]));
+        VectorSingle minP = TransformPointValues(originPos, originRot, VectorSingle(queryProxy.points[0u], 0.0f));
         VectorSingle maxP = minP;
         for(usize i = 1u; i < queryProxy.points.size(); ++i){
-            const VectorSingle wp = TransformPoint(input.originTransform, Vec3FromU(queryProxy.points[i]));
+            const VectorSingle wp = TransformPointValues(originPos, originRot, VectorSingle(queryProxy.points[i], 0.0f));
             minP = Min(minP, wp);
             maxP = Max(maxP, wp);
         }
         const VectorSingle rVec = VectorSingle(queryProxy.radius + input.radius, queryProxy.radius + input.radius, queryProxy.radius + input.radius, 0.0f);
-        const Aabb3D startBox(minP - rVec, maxP + rVec);
-        const Aabb3D endBox(minP + trans - rVec, maxP + trans + rVec);
-        const Aabb3D sweepBox = AabbUnion(startBox, endBox);
+        const Aabb3D sweepBox(Min(minP, minP + trans) - rVec, Max(maxP, maxP + trans) + rVec);
 
         ShapeProxy effectiveProxy = queryProxy;
         effectiveProxy.radius += input.radius;
@@ -3410,7 +3449,7 @@ class PhysicsWorld{
             this.m_broadPhase.trees[t].queryAabb(
                 sweepBox,
                 queryMask,
-                lambda[in this, in effectiveProxyRef, in inputRef, in trans, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in effectiveProxyRef, in inputRef, in originPos, in originRot, in trans, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
@@ -3421,18 +3460,22 @@ class PhysicsWorld{
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                    const VectorSingle posB(xfB.position);
+                    const VectorSingle rotB(xfB.rotation);
                     LocalRayHit castHit;
                     if(shape.type == ShapeType::Mesh){
-                        castHit = ShapeCastMesh(effectiveProxyRef, inputRef.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, best.fraction);
+                        castHit = ShapeCastMesh(effectiveProxyRef, originPos, originRot, trans, this.m_meshShapes[shape.geometryIndex], posB, rotB, best.fraction);
                     }
                     else{
                         const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                         castHit = ShapeCastProxies(
                             effectiveProxyRef,
-                            inputRef.originTransform,
+                            originPos,
+                            originRot,
                             trans,
                             targetProxy,
-                            xfB,
+                            posB,
+                            rotB,
                             VectorSingle(0.0f),
                             best.fraction
                         );
@@ -3454,21 +3497,21 @@ class PhysicsWorld{
 
     public void shapeCastAll(in ShapeProxy queryProxy, in ShapeCastInput input, mut Vector<ShapeCastHit> outHits)const{
         outHits.clear();
-        if(queryProxy.points.empty() || !IsValidPositionVec3(VectorSingle(input.originTransform.position)) || !IsFiniteVec3(VectorSingle(input.translation)))
+        const VectorSingle originPos(input.originTransform.position);
+        const VectorSingle originRot(input.originTransform.rotation);
+        const VectorSingle trans = VectorSingle(input.translation);
+        if(queryProxy.points.empty() || !IsValidPositionVec3(originPos) || !IsFiniteVec3(trans))
             return;
 
-        const VectorSingle trans = VectorSingle(input.translation);
-        VectorSingle minP = TransformPoint(input.originTransform, Vec3FromU(queryProxy.points[0u]));
+        VectorSingle minP = TransformPointValues(originPos, originRot, VectorSingle(queryProxy.points[0u], 0.0f));
         VectorSingle maxP = minP;
         for(usize i = 1u; i < queryProxy.points.size(); ++i){
-            const VectorSingle wp = TransformPoint(input.originTransform, Vec3FromU(queryProxy.points[i]));
+            const VectorSingle wp = TransformPointValues(originPos, originRot, VectorSingle(queryProxy.points[i], 0.0f));
             minP = Min(minP, wp);
             maxP = Max(maxP, wp);
         }
         const VectorSingle rVec(queryProxy.radius + input.radius, queryProxy.radius + input.radius, queryProxy.radius + input.radius, 0.0f);
-        const Aabb3D startBox(minP - rVec, maxP + rVec);
-        const Aabb3D endBox(minP + trans - rVec, maxP + trans + rVec);
-        const Aabb3D sweepBox = AabbUnion(startBox, endBox);
+        const Aabb3D sweepBox(Min(minP, minP + trans) - rVec, Max(maxP, maxP + trans) + rVec);
 
         ShapeProxy effectiveProxy = queryProxy;
         effectiveProxy.radius += input.radius;
@@ -3480,7 +3523,7 @@ class PhysicsWorld{
             this.m_broadPhase.trees[t].queryAabb(
                 sweepBox,
                 queryMask,
-                lambda[in this, in effectiveProxyRef, in inputRef, in trans, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in effectiveProxyRef, in inputRef, in originPos, in originRot, in trans, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
@@ -3491,18 +3534,22 @@ class PhysicsWorld{
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                    const VectorSingle posB(xfB.position);
+                    const VectorSingle rotB(xfB.rotation);
                     LocalRayHit castHit;
                     if(shape.type == ShapeType::Mesh){
-                        castHit = ShapeCastMesh(effectiveProxyRef, inputRef.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, 1.0f);
+                        castHit = ShapeCastMesh(effectiveProxyRef, originPos, originRot, trans, this.m_meshShapes[shape.geometryIndex], posB, rotB, 1.0f);
                     }
                     else{
                         const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                         castHit = ShapeCastProxies(
                             effectiveProxyRef,
-                            inputRef.originTransform,
+                            originPos,
+                            originRot,
                             trans,
                             targetProxy,
-                            xfB,
+                            posB,
+                            rotB,
                             VectorSingle(0.0f),
                             1.0f
                         );
@@ -3526,8 +3573,8 @@ class PhysicsWorld{
         });
     }
 
-    private b8 testPointInShape(in Shape shape, in Transform3D xf, in VectorSingle worldPoint)const{
-        const VectorSingle localPt = InverseTransformPoint(xf, worldPoint);
+    private b8 testPointInShape(in Shape shape, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle worldPoint)const{
+        const VectorSingle localPt = InverseTransformPointValues(xfPos, xfRot, worldPoint);
         if(shape.type == ShapeType::Sphere){
             const SphereShape sphere = shape.sphereShape();
             const VectorSingle d(localPt - sphere.center(), 0.0f);
@@ -3551,6 +3598,7 @@ class PhysicsWorld{
                 return false;
             const f32 r = SimdMax(mesh.radius(), 1.0e-4f);
             const f32 rSq = r * r;
+            const VectorSingle rVec(r, r, r, 0.0f);
             Array<u32, 256u> stack;
             stack[0u] = 0u;
             u32 stackCount = 1u;
@@ -3558,13 +3606,13 @@ class PhysicsWorld{
                 --stackCount;
                 const u32 nodeIdx = stack[stackCount];
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
-                if(!AabbContains(FattenAabb(node.aabb(), r), Aabb3D(localPt, localPt)))
+                if(!AabbContainsValues(VectorSingle(node.aabbMinLeft, 0.0f) - rVec, VectorSingle(node.aabbMaxRight, 0.0f) + rVec, localPt, localPt))
                     continue;
                 if(node.isLeaf()){
                     const u32 endTri = node.leftOrFirst() + node.rightOrCount();
                     for(u32 ti = node.leftOrFirst(); ti < endTri; ++ti){
                         in MeshTriangle tri = mesh.triangles[ti];
-                        const VectorSingle cp = ClosestPointOnTriangleLocal(localPt, Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2));
+                        const VectorSingle cp = ClosestPointOnTriangleLocal(localPt, VectorSingle(tri.v0, 0.0f), VectorSingle(tri.v1, 0.0f), VectorSingle(tri.v2, 0.0f));
                         if(Vector3LengthSq(VectorSingle(localPt - cp, 0.0f)).x <= rSq)
                             return true;
                     }
@@ -3589,9 +3637,8 @@ class PhysicsWorld{
         ptProxy.points.push_back(f32x3u(0.0f, 0.0f, 0.0f));
         ptProxy.radius = 0.0f;
         const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
-        const Transform3D ptXf(worldPoint, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
         SimplexCache cache;
-        const DistanceOutput dist = ShapeDistanceProxies(ptProxy, ptXf, targetProxy, xf, false, cache);
+        const DistanceOutput dist = ShapeDistanceProxies(ptProxy, worldPoint, QuaternionIdentity(), targetProxy, xfPos, xfRot, false, cache);
         return dist.distance() <= this.m_hullShapes[shape.geometryIndex].radius() + 1.0e-5f;
     }
 
@@ -3601,7 +3648,7 @@ class PhysicsWorld{
         in Shape shape = this.m_shapes[shapeId.index];
         in Body body = this.m_bodies[shape.bodyId];
         in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-        return this.testPointInShape(shape, xf, worldPoint);
+        return this.testPointInShape(shape, VectorSingle(xf.position), VectorSingle(xf.rotation), worldPoint);
     }
 
     public void overlapPoint(in VectorSingle worldPoint, in Filter filter, in b8 hitSensors, mut Vector<ShapeId> outShapes)const{
@@ -3626,7 +3673,7 @@ class PhysicsWorld{
                         return true;
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-                    if(this.testPointInShape(shape, xf, worldPoint))
+                    if(this.testPointInShape(shape, VectorSingle(xf.position), VectorSingle(xf.rotation), worldPoint))
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
                 }
@@ -3642,13 +3689,15 @@ class PhysicsWorld{
         mut Vector<ShapeId> outShapes
     )const{
         outShapes.clear();
-        if(queryProxy.points.empty() || !IsValidPositionVec3(VectorSingle(queryTransform.position)))
+        const VectorSingle queryPos(queryTransform.position);
+        const VectorSingle queryRot(queryTransform.rotation);
+        if(queryProxy.points.empty() || !IsValidPositionVec3(queryPos))
             return;
 
-        VectorSingle minP = TransformPoint(queryTransform, Vec3FromU(queryProxy.points[0u]));
+        VectorSingle minP = TransformPointValues(queryPos, queryRot, VectorSingle(queryProxy.points[0u], 0.0f));
         VectorSingle maxP = minP;
         for(usize i = 1u; i < queryProxy.points.size(); ++i){
-            const VectorSingle wp = TransformPoint(queryTransform, Vec3FromU(queryProxy.points[i]));
+            const VectorSingle wp = TransformPointValues(queryPos, queryRot, VectorSingle(queryProxy.points[i], 0.0f));
             minP = Min(minP, wp);
             maxP = Max(maxP, wp);
         }
@@ -3657,13 +3706,12 @@ class PhysicsWorld{
 
         const u32 queryMask = this.broadPhaseQueryMask(filter);
         in ShapeProxy queryProxyRef = queryProxy;
-        in Transform3D queryTransformRef = queryTransform;
         in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in queryProxyRef, in queryTransformRef, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in queryProxyRef, in queryPos, in queryRot, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
@@ -3674,22 +3722,27 @@ class PhysicsWorld{
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                    const VectorSingle posB(xfB.position);
+                    const VectorSingle rotB(xfB.rotation);
 
                     if(shape.type == ShapeType::Mesh){
                         in MeshShape mesh = this.m_meshShapes[shape.geometryIndex];
                         if(mesh.nodes.empty() || mesh.triangles.empty())
                             return true;
-                        const Transform3D localQueryXf = RelativeTransform(xfB, queryTransformRef);
-                        VectorSingle lMin = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[0u]));
+                        VectorSingle localQueryPos(0.0f);
+                        VectorSingle localQueryRot(0.0f, 0.0f, 0.0f, 1.0f);
+                        RelativeTransformValues(posB, rotB, queryPos, queryRot, localQueryPos, localQueryRot);
+                        VectorSingle lMin = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(queryProxyRef.points[0u], 0.0f));
                         VectorSingle lMax = lMin;
                         for(usize i = 1u; i < queryProxyRef.points.size(); ++i){
-                            const VectorSingle lp = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[i]));
+                            const VectorSingle lp = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(queryProxyRef.points[i], 0.0f));
                             lMin = Min(lMin, lp);
                             lMax = Max(lMax, lp);
                         }
                         const f32 combR = queryProxyRef.radius + mesh.radius();
                         const VectorSingle crVec(combR, combR, combR, 0.0f);
-                        const Aabb3D localBox(lMin - crVec, lMax + crVec);
+                        const VectorSingle localMin = lMin - crVec;
+                        const VectorSingle localMax = lMax + crVec;
 
                         Array<u32, 256u> stack;
                         stack[0u] = 0u;
@@ -3698,15 +3751,15 @@ class PhysicsWorld{
                             --stackCount;
                             const u32 nodeIdx = stack[stackCount];
                             in MeshBvhNode node = mesh.nodes[nodeIdx];
-                            if(!AabbOverlaps(node.aabb(), localBox))
+                            if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localMin, localMax))
                                 continue;
                             if(node.isLeaf()){
                                 const u32 endTri = node.leftOrFirst() + node.rightOrCount();
                                 for(u32 ti = node.leftOrFirst(); ti < endTri; ++ti){
                                     in MeshTriangle tri = mesh.triangles[ti];
-                                    const ShapeProxy triProxy = MakeTriangleProxy(Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2), mesh.radius());
+                                    const ShapeProxy triProxy = MakeTriangleProxy(VectorSingle(tri.v0, 0.0f), VectorSingle(tri.v1, 0.0f), VectorSingle(tri.v2, 0.0f), mesh.radius());
                                     SimplexCache cache;
-                                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryTransformRef, triProxy, xfB, false, cache);
+                                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryPos, queryRot, triProxy, posB, rotB, false, cache);
                                     if(dist.distance() <= combR){
                                         outShapes.push_back(this.makeShapeId(shapeIdx));
                                         return true;
@@ -3725,7 +3778,7 @@ class PhysicsWorld{
                             }
                         }
                         if(mesh.isClosed()){
-                            const VectorSingle localOrigin = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[0u]));
+                            const VectorSingle localOrigin = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(queryProxyRef.points[0u], 0.0f));
                             if(IsPointInsideClosedMesh(mesh, localOrigin))
                                 outShapes.push_back(this.makeShapeId(shapeIdx));
                         }
@@ -3734,7 +3787,7 @@ class PhysicsWorld{
 
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                     SimplexCache cache;
-                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryTransformRef, targetProxy, xfB, false, cache);
+                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryPos, queryRot, targetProxy, posB, rotB, false, cache);
                     if(dist.distance() <= queryProxyRef.radius + targetProxy.radius)
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
@@ -3776,12 +3829,13 @@ class PhysicsWorld{
         const u32 queryMask = this.broadPhaseQueryMask(def.filter);
         in ExplosionDef defRef = def;
         in ShapeProxy ptProxyRef = ptProxy;
-        in Transform3D ptXfRef = ptXf;
+        const VectorSingle ptPos(ptXf.position);
+        const VectorSingle ptRot(ptXf.rotation);
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in defRef, in ptProxyRef, in ptXfRef, in pos, in maxR, mut bestBodyDist, mut bestBodyPoint, mut hitBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in defRef, in ptProxyRef, in ptPos, in ptRot, in pos, in maxR, mut bestBodyDist, mut bestBodyPoint, mut hitBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
@@ -3798,7 +3852,7 @@ class PhysicsWorld{
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                     SimplexCache cache;
-                    const DistanceOutput distOut = ShapeDistanceProxies(ptProxyRef, ptXfRef, targetProxy, xfB, false, cache);
+                    const DistanceOutput distOut = ShapeDistanceProxies(ptProxyRef, ptPos, ptRot, targetProxy, VectorSingle(xfB.position), VectorSingle(xfB.rotation), false, cache);
                     const f32 surfDist = SimdMax(0.0f, distOut.distance() - targetProxy.radius);
                     if(surfDist >= maxR)
                         return true;

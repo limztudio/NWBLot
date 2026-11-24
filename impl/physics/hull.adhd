@@ -25,12 +25,12 @@ Expected<Plane3D> ComputeTrianglePlane(in VectorSingle a, in VectorSingle b, in 
     return Plane3D(normal, offset);
 }
 
-QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u32 i2, in VectorSingle interior){
+QuickhullFace MakeTriangleFace(in VectorSingle a, in VectorSingle b, in VectorSingle c, in u32 i0, in u32 i1, in u32 i2, in VectorSingle interior){
     QuickhullFace f;
     f.vertices.push_back(i0);
     f.vertices.push_back(i1);
     f.vertices.push_back(i2);
-    const Expected<Plane3D> plane = ComputeTrianglePlane(VectorSingle(points[i0]), VectorSingle(points[i1]), VectorSingle(points[i2]));
+    const Expected<Plane3D> plane = ComputeTrianglePlane(a, b, c);
     if(!plane.has_value()){
         f.alive = false;
         return f;
@@ -335,11 +335,10 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     const VectorSingle interior = (p0 + p1 + p2 + p3) * 0.25f;
 
     Vector<QuickhullFace> faces;
-    const Span<f32x4> ptsSpan(uniquePts);
-    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(thirdIdx), interior));
-    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(fourthIdx), interior));
-    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(maxIdx), cast<u32>(thirdIdx), cast<u32>(fourthIdx), interior));
-    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(thirdIdx), cast<u32>(minIdx), cast<u32>(fourthIdx), interior));
+    faces.push_back(MakeTriangleFace(p0, p1, p2, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(thirdIdx), interior));
+    faces.push_back(MakeTriangleFace(p0, p1, p3, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(fourthIdx), interior));
+    faces.push_back(MakeTriangleFace(p1, p2, p3, cast<u32>(maxIdx), cast<u32>(thirdIdx), cast<u32>(fourthIdx), interior));
+    faces.push_back(MakeTriangleFace(p2, p0, p3, cast<u32>(thirdIdx), cast<u32>(minIdx), cast<u32>(fourthIdx), interior));
 
     for(usize i = 0u; i < uniquePts.size(); ++i){
         if(i == minIdx || i == maxIdx || i == thirdIdx || i == fourthIdx)
@@ -437,10 +436,11 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         }
 
         const usize newFaceBegin = faces.size();
+        const VectorSingle apexPt = VectorSingle(uniquePts[apexIdx]);
         for(usize h = 0u; h < horizonEdges.size(); ++h){
             const u32 va = LowU32Word(cast<isize>(horizonEdges[h]));
             const u32 vb = HighU32Word(cast<isize>(horizonEdges[h]));
-            faces.push_back(MakeTriangleFace(ptsSpan, va, vb, apexIdx, interior));
+            faces.push_back(MakeTriangleFace(VectorSingle(uniquePts[va]), VectorSingle(uniquePts[vb]), apexPt, va, vb, apexIdx, interior));
         }
 
         for(usize c = 0u; c < orphanedConflicts.size(); ++c){
@@ -510,7 +510,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 const u32 newIdx = cast<u32>(result.vertices.size());
                 vertRemap[rawVert] = newIdx;
                 const VectorSingle vp = VectorSingle(uniquePts[rawVert]);
-                result.vertices.push_back(PackVec3U(vp));
+                result.vertices.push_back(f32x3u(vp));
                 minB = Min(minB, vp);
                 maxB = Max(maxB, vp);
                 sumVerts = sumVerts + vp;
@@ -560,7 +560,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     const VectorSingle centroid = sumVerts / cast<f32>(result.vertices.size());
     const VectorSingle halfExt = (maxB - minB) * 0.5f;
     result.centroidRadius = f32x4(centroid, radius);
-    result.halfExtentsFlags = PackVec3U32(halfExt, 0u);
+    result.halfExtentsFlags = f32x3_u32(halfExt, 0u);
     return result;
 }
 

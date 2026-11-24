@@ -322,75 +322,73 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL MatrixDoubleDeterminant(
 FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDeterminant, const SIMDMatrix& matrix)noexcept{
     const SIMDMatrix mt = MatrixTranspose(matrix);
 
-    SIMDVectorSingle v0[SIMDMatrixDetail::s_MatrixRowCount]{};
-    SIMDVectorSingle v1[SIMDMatrixDetail::s_MatrixRowCount]{};
-    v0[0] = VectorSwizzle<0, 0, 1, 1>(mt.v[2]);
-    v1[0] = VectorSwizzle<2, 3, 2, 3>(mt.v[3]);
-    v0[1] = VectorSwizzle<0, 0, 1, 1>(mt.v[0]);
-    v1[1] = VectorSwizzle<2, 3, 2, 3>(mt.v[1]);
-    v0[2] = VectorPermute<0, 2, 4, 6>(mt.v[2], mt.v[0]);
-    v1[2] = VectorPermute<1, 3, 5, 7>(mt.v[3], mt.v[1]);
+    SIMDVectorSingle v00 = VectorSwizzle<0, 0, 1, 1>(mt.v[2]);
+    SIMDVectorSingle v10 = VectorSwizzle<2, 3, 2, 3>(mt.v[3]);
+    SIMDVectorSingle v01 = VectorSwizzle<0, 0, 1, 1>(mt.v[0]);
+    SIMDVectorSingle v11 = VectorSwizzle<2, 3, 2, 3>(mt.v[1]);
+    SIMDVectorSingle v02 = VectorPermute<0, 2, 4, 6>(mt.v[2], mt.v[0]);
+    SIMDVectorSingle v12 = VectorPermute<1, 3, 5, 7>(mt.v[3], mt.v[1]);
 
-    SIMDVectorSingle d0 = VectorMultiply(v0[0], v1[0]);
-    SIMDVectorSingle d1 = VectorMultiply(v0[1], v1[1]);
-    SIMDVectorSingle d2 = VectorMultiply(v0[2], v1[2]);
+    SIMDVectorSingle d0 = VectorMultiply(v00, v10);
+    SIMDVectorSingle d1 = VectorMultiply(v01, v11);
+    SIMDVectorSingle d2 = VectorMultiply(v02, v12);
 
-    v0[0] = VectorSwizzle<2, 3, 2, 3>(mt.v[2]);
-    v1[0] = VectorSwizzle<0, 0, 1, 1>(mt.v[3]);
-    v0[1] = VectorSwizzle<2, 3, 2, 3>(mt.v[0]);
-    v1[1] = VectorSwizzle<0, 0, 1, 1>(mt.v[1]);
-    v0[2] = VectorPermute<1, 3, 5, 7>(mt.v[2], mt.v[0]);
-    v1[2] = VectorPermute<0, 2, 4, 6>(mt.v[3], mt.v[1]);
+    v00 = VectorSwizzle<2, 3, 2, 3>(mt.v[2]);
+    v10 = VectorSwizzle<0, 0, 1, 1>(mt.v[3]);
+    v01 = VectorSwizzle<2, 3, 2, 3>(mt.v[0]);
+    v11 = VectorSwizzle<0, 0, 1, 1>(mt.v[1]);
+    v02 = VectorPermute<1, 3, 5, 7>(mt.v[2], mt.v[0]);
+    v12 = VectorPermute<0, 2, 4, 6>(mt.v[3], mt.v[1]);
 
-    d0 = VectorNegativeMultiplySubtract(v0[0], v1[0], d0);
-    d1 = VectorNegativeMultiplySubtract(v0[1], v1[1], d1);
-    d2 = VectorNegativeMultiplySubtract(v0[2], v1[2], d2);
+    d0 = VectorNegativeMultiplySubtract(v00, v10, d0);
+    d1 = VectorNegativeMultiplySubtract(v01, v11, d1);
+    d2 = VectorNegativeMultiplySubtract(v02, v12, d2);
 
-    v0[0] = VectorSwizzle<1, 2, 0, 1>(mt.v[1]);
-    v1[0] = VectorPermute<5, 1, 3, 0>(d0, d2);
-    v0[1] = VectorSwizzle<2, 0, 1, 0>(mt.v[0]);
-    v1[1] = VectorPermute<3, 5, 1, 2>(d0, d2);
-    v0[2] = VectorSwizzle<1, 2, 0, 1>(mt.v[3]);
-    v1[2] = VectorPermute<7, 1, 3, 0>(d1, d2);
-    v0[3] = VectorSwizzle<2, 0, 1, 0>(mt.v[2]);
-    v1[3] = VectorPermute<3, 7, 1, 2>(d1, d2);
+    v00 = VectorSwizzle<1, 2, 0, 1>(mt.v[1]);
+    v10 = VectorPermute<5, 1, 3, 0>(d0, d2);
+    v01 = VectorSwizzle<2, 0, 1, 0>(mt.v[0]);
+    v11 = VectorPermute<3, 5, 1, 2>(d0, d2);
+    v02 = VectorSwizzle<1, 2, 0, 1>(mt.v[3]);
+    v12 = VectorPermute<7, 1, 3, 0>(d1, d2);
+    SIMDVectorSingle v03 = VectorSwizzle<2, 0, 1, 0>(mt.v[2]);
+    SIMDVectorSingle v13 = VectorPermute<3, 7, 1, 2>(d1, d2);
 
-    SIMDVectorSingle c0 = VectorMultiply(v0[0], v1[0]);
-    SIMDVectorSingle c2 = VectorMultiply(v0[1], v1[1]);
-    SIMDVectorSingle c4 = VectorMultiply(v0[2], v1[2]);
-    SIMDVectorSingle c6 = VectorMultiply(v0[3], v1[3]);
+    SIMDVectorSingle c0 = VectorMultiply(v00, v10);
+    SIMDVectorSingle c2 = VectorMultiply(v01, v11);
+    SIMDVectorSingle c4 = VectorMultiply(v02, v12);
+    SIMDVectorSingle c6 = VectorMultiply(v03, v13);
 
-    v0[0] = VectorSwizzle<2, 3, 1, 2>(mt.v[1]);
-    v1[0] = VectorPermute<3, 0, 1, 4>(d0, d2);
-    v0[1] = VectorSwizzle<3, 2, 3, 1>(mt.v[0]);
-    v1[1] = VectorPermute<2, 1, 4, 0>(d0, d2);
-    v0[2] = VectorSwizzle<2, 3, 1, 2>(mt.v[3]);
-    v1[2] = VectorPermute<3, 0, 1, 6>(d1, d2);
-    v0[3] = VectorSwizzle<3, 2, 3, 1>(mt.v[2]);
-    v1[3] = VectorPermute<2, 1, 6, 0>(d1, d2);
+    v00 = VectorSwizzle<2, 3, 1, 2>(mt.v[1]);
+    v10 = VectorPermute<3, 0, 1, 4>(d0, d2);
+    v01 = VectorSwizzle<3, 2, 3, 1>(mt.v[0]);
+    v11 = VectorPermute<2, 1, 4, 0>(d0, d2);
+    v02 = VectorSwizzle<2, 3, 1, 2>(mt.v[3]);
+    v12 = VectorPermute<3, 0, 1, 6>(d1, d2);
+    v03 = VectorSwizzle<3, 2, 3, 1>(mt.v[2]);
+    v13 = VectorPermute<2, 1, 6, 0>(d1, d2);
 
-    c0 = VectorNegativeMultiplySubtract(v0[0], v1[0], c0);
-    c2 = VectorNegativeMultiplySubtract(v0[1], v1[1], c2);
-    c4 = VectorNegativeMultiplySubtract(v0[2], v1[2], c4);
-    c6 = VectorNegativeMultiplySubtract(v0[3], v1[3], c6);
+    c0 = VectorNegativeMultiplySubtract(v00, v10, c0);
+    c2 = VectorNegativeMultiplySubtract(v01, v11, c2);
+    c4 = VectorNegativeMultiplySubtract(v02, v12, c4);
+    c6 = VectorNegativeMultiplySubtract(v03, v13, c6);
 
-    v0[0] = VectorSwizzle<3, 0, 3, 0>(mt.v[1]);
-    v1[0] = VectorPermute<2, 5, 4, 2>(d0, d2);
-    v0[1] = VectorSwizzle<1, 3, 0, 2>(mt.v[0]);
-    v1[1] = VectorPermute<5, 0, 3, 4>(d0, d2);
-    v0[2] = VectorSwizzle<3, 0, 3, 0>(mt.v[3]);
-    v1[2] = VectorPermute<2, 7, 6, 2>(d1, d2);
-    v0[3] = VectorSwizzle<1, 3, 0, 2>(mt.v[2]);
-    v1[3] = VectorPermute<7, 0, 3, 6>(d1, d2);
+    v00 = VectorSwizzle<3, 0, 3, 0>(mt.v[1]);
+    v10 = VectorPermute<2, 5, 4, 2>(d0, d2);
+    v01 = VectorSwizzle<1, 3, 0, 2>(mt.v[0]);
+    v11 = VectorPermute<5, 0, 3, 4>(d0, d2);
+    v02 = VectorSwizzle<3, 0, 3, 0>(mt.v[3]);
+    v12 = VectorPermute<2, 7, 6, 2>(d1, d2);
+    v03 = VectorSwizzle<1, 3, 0, 2>(mt.v[2]);
+    v13 = VectorPermute<7, 0, 3, 6>(d1, d2);
 
-    SIMDVectorSingle c1 = VectorNegativeMultiplySubtract(v0[0], v1[0], c0);
-    c0 = VectorMultiplyAdd(v0[0], v1[0], c0);
-    SIMDVectorSingle c3 = VectorMultiplyAdd(v0[1], v1[1], c2);
-    c2 = VectorNegativeMultiplySubtract(v0[1], v1[1], c2);
-    SIMDVectorSingle c5 = VectorNegativeMultiplySubtract(v0[2], v1[2], c4);
-    c4 = VectorMultiplyAdd(v0[2], v1[2], c4);
-    SIMDVectorSingle c7 = VectorMultiplyAdd(v0[3], v1[3], c6);
-    c6 = VectorNegativeMultiplySubtract(v0[3], v1[3], c6);
+    SIMDVectorSingle c1 = VectorNegativeMultiplySubtract(v00, v10, c0);
+    c0 = VectorMultiplyAdd(v00, v10, c0);
+    SIMDVectorSingle c3 = VectorMultiplyAdd(v01, v11, c2);
+    c2 = VectorNegativeMultiplySubtract(v01, v11, c2);
+    SIMDVectorSingle c5 = VectorNegativeMultiplySubtract(v02, v12, c4);
+    c4 = VectorMultiplyAdd(v02, v12, c4);
+    SIMDVectorSingle c7 = VectorMultiplyAdd(v03, v13, c6);
+    c6 = VectorNegativeMultiplySubtract(v03, v13, c6);
 
     SIMDMatrix r{};
     r.v[0] = VectorSelect(c0, c1, s_SIMDSelect0101);
@@ -414,75 +412,73 @@ FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixInverse(SIMDVectorSingle
 FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* outDeterminant, const SIMDMatrixDouble& matrix)noexcept{
     const SIMDMatrixDouble mt = MatrixDoubleTranspose(matrix);
 
-    SIMDVectorDouble v0[SIMDMatrixDetail::s_MatrixRowCount]{};
-    SIMDVectorDouble v1[SIMDMatrixDetail::s_MatrixRowCount]{};
-    v0[0] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[2]);
-    v1[0] = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[3]);
-    v0[1] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[0]);
-    v1[1] = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[1]);
-    v0[2] = VectorDoublePermute<0, 2, 4, 6>(mt.v[2], mt.v[0]);
-    v1[2] = VectorDoublePermute<1, 3, 5, 7>(mt.v[3], mt.v[1]);
+    SIMDVectorDouble v00 = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[2]);
+    SIMDVectorDouble v10 = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[3]);
+    SIMDVectorDouble v01 = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[0]);
+    SIMDVectorDouble v11 = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[1]);
+    SIMDVectorDouble v02 = VectorDoublePermute<0, 2, 4, 6>(mt.v[2], mt.v[0]);
+    SIMDVectorDouble v12 = VectorDoublePermute<1, 3, 5, 7>(mt.v[3], mt.v[1]);
 
-    SIMDVectorDouble d0 = VectorDoubleMultiply(v0[0], v1[0]);
-    SIMDVectorDouble d1 = VectorDoubleMultiply(v0[1], v1[1]);
-    SIMDVectorDouble d2 = VectorDoubleMultiply(v0[2], v1[2]);
+    SIMDVectorDouble d0 = VectorDoubleMultiply(v00, v10);
+    SIMDVectorDouble d1 = VectorDoubleMultiply(v01, v11);
+    SIMDVectorDouble d2 = VectorDoubleMultiply(v02, v12);
 
-    v0[0] = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[2]);
-    v1[0] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[3]);
-    v0[1] = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[0]);
-    v1[1] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[1]);
-    v0[2] = VectorDoublePermute<1, 3, 5, 7>(mt.v[2], mt.v[0]);
-    v1[2] = VectorDoublePermute<0, 2, 4, 6>(mt.v[3], mt.v[1]);
+    v00 = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[2]);
+    v10 = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[3]);
+    v01 = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[0]);
+    v11 = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[1]);
+    v02 = VectorDoublePermute<1, 3, 5, 7>(mt.v[2], mt.v[0]);
+    v12 = VectorDoublePermute<0, 2, 4, 6>(mt.v[3], mt.v[1]);
 
-    d0 = VectorDoubleNegativeMultiplySubtract(v0[0], v1[0], d0);
-    d1 = VectorDoubleNegativeMultiplySubtract(v0[1], v1[1], d1);
-    d2 = VectorDoubleNegativeMultiplySubtract(v0[2], v1[2], d2);
+    d0 = VectorDoubleNegativeMultiplySubtract(v00, v10, d0);
+    d1 = VectorDoubleNegativeMultiplySubtract(v01, v11, d1);
+    d2 = VectorDoubleNegativeMultiplySubtract(v02, v12, d2);
 
-    v0[0] = VectorDoubleSwizzle<1, 2, 0, 1>(mt.v[1]);
-    v1[0] = VectorDoublePermute<5, 1, 3, 0>(d0, d2);
-    v0[1] = VectorDoubleSwizzle<2, 0, 1, 0>(mt.v[0]);
-    v1[1] = VectorDoublePermute<3, 5, 1, 2>(d0, d2);
-    v0[2] = VectorDoubleSwizzle<1, 2, 0, 1>(mt.v[3]);
-    v1[2] = VectorDoublePermute<7, 1, 3, 0>(d1, d2);
-    v0[3] = VectorDoubleSwizzle<2, 0, 1, 0>(mt.v[2]);
-    v1[3] = VectorDoublePermute<3, 7, 1, 2>(d1, d2);
+    v00 = VectorDoubleSwizzle<1, 2, 0, 1>(mt.v[1]);
+    v10 = VectorDoublePermute<5, 1, 3, 0>(d0, d2);
+    v01 = VectorDoubleSwizzle<2, 0, 1, 0>(mt.v[0]);
+    v11 = VectorDoublePermute<3, 5, 1, 2>(d0, d2);
+    v02 = VectorDoubleSwizzle<1, 2, 0, 1>(mt.v[3]);
+    v12 = VectorDoublePermute<7, 1, 3, 0>(d1, d2);
+    SIMDVectorDouble v03 = VectorDoubleSwizzle<2, 0, 1, 0>(mt.v[2]);
+    SIMDVectorDouble v13 = VectorDoublePermute<3, 7, 1, 2>(d1, d2);
 
-    SIMDVectorDouble c0 = VectorDoubleMultiply(v0[0], v1[0]);
-    SIMDVectorDouble c2 = VectorDoubleMultiply(v0[1], v1[1]);
-    SIMDVectorDouble c4 = VectorDoubleMultiply(v0[2], v1[2]);
-    SIMDVectorDouble c6 = VectorDoubleMultiply(v0[3], v1[3]);
+    SIMDVectorDouble c0 = VectorDoubleMultiply(v00, v10);
+    SIMDVectorDouble c2 = VectorDoubleMultiply(v01, v11);
+    SIMDVectorDouble c4 = VectorDoubleMultiply(v02, v12);
+    SIMDVectorDouble c6 = VectorDoubleMultiply(v03, v13);
 
-    v0[0] = VectorDoubleSwizzle<2, 3, 1, 2>(mt.v[1]);
-    v1[0] = VectorDoublePermute<3, 0, 1, 4>(d0, d2);
-    v0[1] = VectorDoubleSwizzle<3, 2, 3, 1>(mt.v[0]);
-    v1[1] = VectorDoublePermute<2, 1, 4, 0>(d0, d2);
-    v0[2] = VectorDoubleSwizzle<2, 3, 1, 2>(mt.v[3]);
-    v1[2] = VectorDoublePermute<3, 0, 1, 6>(d1, d2);
-    v0[3] = VectorDoubleSwizzle<3, 2, 3, 1>(mt.v[2]);
-    v1[3] = VectorDoublePermute<2, 1, 6, 0>(d1, d2);
+    v00 = VectorDoubleSwizzle<2, 3, 1, 2>(mt.v[1]);
+    v10 = VectorDoublePermute<3, 0, 1, 4>(d0, d2);
+    v01 = VectorDoubleSwizzle<3, 2, 3, 1>(mt.v[0]);
+    v11 = VectorDoublePermute<2, 1, 4, 0>(d0, d2);
+    v02 = VectorDoubleSwizzle<2, 3, 1, 2>(mt.v[3]);
+    v12 = VectorDoublePermute<3, 0, 1, 6>(d1, d2);
+    v03 = VectorDoubleSwizzle<3, 2, 3, 1>(mt.v[2]);
+    v13 = VectorDoublePermute<2, 1, 6, 0>(d1, d2);
 
-    c0 = VectorDoubleNegativeMultiplySubtract(v0[0], v1[0], c0);
-    c2 = VectorDoubleNegativeMultiplySubtract(v0[1], v1[1], c2);
-    c4 = VectorDoubleNegativeMultiplySubtract(v0[2], v1[2], c4);
-    c6 = VectorDoubleNegativeMultiplySubtract(v0[3], v1[3], c6);
+    c0 = VectorDoubleNegativeMultiplySubtract(v00, v10, c0);
+    c2 = VectorDoubleNegativeMultiplySubtract(v01, v11, c2);
+    c4 = VectorDoubleNegativeMultiplySubtract(v02, v12, c4);
+    c6 = VectorDoubleNegativeMultiplySubtract(v03, v13, c6);
 
-    v0[0] = VectorDoubleSwizzle<3, 0, 3, 0>(mt.v[1]);
-    v1[0] = VectorDoublePermute<2, 5, 4, 2>(d0, d2);
-    v0[1] = VectorDoubleSwizzle<1, 3, 0, 2>(mt.v[0]);
-    v1[1] = VectorDoublePermute<5, 0, 3, 4>(d0, d2);
-    v0[2] = VectorDoubleSwizzle<3, 0, 3, 0>(mt.v[3]);
-    v1[2] = VectorDoublePermute<2, 7, 6, 2>(d1, d2);
-    v0[3] = VectorDoubleSwizzle<1, 3, 0, 2>(mt.v[2]);
-    v1[3] = VectorDoublePermute<7, 0, 3, 6>(d1, d2);
+    v00 = VectorDoubleSwizzle<3, 0, 3, 0>(mt.v[1]);
+    v10 = VectorDoublePermute<2, 5, 4, 2>(d0, d2);
+    v01 = VectorDoubleSwizzle<1, 3, 0, 2>(mt.v[0]);
+    v11 = VectorDoublePermute<5, 0, 3, 4>(d0, d2);
+    v02 = VectorDoubleSwizzle<3, 0, 3, 0>(mt.v[3]);
+    v12 = VectorDoublePermute<2, 7, 6, 2>(d1, d2);
+    v03 = VectorDoubleSwizzle<1, 3, 0, 2>(mt.v[2]);
+    v13 = VectorDoublePermute<7, 0, 3, 6>(d1, d2);
 
-    SIMDVectorDouble c1 = VectorDoubleNegativeMultiplySubtract(v0[0], v1[0], c0);
-    c0 = VectorDoubleMultiplyAdd(v0[0], v1[0], c0);
-    SIMDVectorDouble c3 = VectorDoubleMultiplyAdd(v0[1], v1[1], c2);
-    c2 = VectorDoubleNegativeMultiplySubtract(v0[1], v1[1], c2);
-    SIMDVectorDouble c5 = VectorDoubleNegativeMultiplySubtract(v0[2], v1[2], c4);
-    c4 = VectorDoubleMultiplyAdd(v0[2], v1[2], c4);
-    SIMDVectorDouble c7 = VectorDoubleMultiplyAdd(v0[3], v1[3], c6);
-    c6 = VectorDoubleNegativeMultiplySubtract(v0[3], v1[3], c6);
+    SIMDVectorDouble c1 = VectorDoubleNegativeMultiplySubtract(v00, v10, c0);
+    c0 = VectorDoubleMultiplyAdd(v00, v10, c0);
+    SIMDVectorDouble c3 = VectorDoubleMultiplyAdd(v01, v11, c2);
+    c2 = VectorDoubleNegativeMultiplySubtract(v01, v11, c2);
+    SIMDVectorDouble c5 = VectorDoubleNegativeMultiplySubtract(v02, v12, c4);
+    c4 = VectorDoubleMultiplyAdd(v02, v12, c4);
+    SIMDVectorDouble c7 = VectorDoubleMultiplyAdd(v03, v13, c6);
+    c6 = VectorDoubleNegativeMultiplySubtract(v03, v13, c6);
 
     SIMDMatrixDouble r{};
     r.v[0] = VectorDoubleSelect(c0, c1, s_DoubleSIMDSelect0101);

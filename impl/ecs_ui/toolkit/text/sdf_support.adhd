@@ -20,16 +20,17 @@ class SdfGlyphSupportOffset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
+b8 TryTranslateTextInk(in Point position, in Rect ink, mut VectorDouble outInk){
     const VectorDouble origin = VectorDouble(cast<f64>(position.x), cast<f64>(position.y), 0.0, 0.0) + VectorDouble(cast<f64>(ink.x), cast<f64>(ink.y), 0.0, 0.0);
     const VectorDouble end = origin + VectorDouble(cast<f64>(ink.width), cast<f64>(ink.height), 0.0, 0.0);
     if(!FitsTextCoordinates(VectorDouble(origin.x, origin.y, end.x, end.y)))
-        return MakeUnexpected(Failure());
+        return false;
     const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), ink.width, ink.height);
     const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
     if(!IsFinite(roundedEnds.xy))
-        return MakeUnexpected(Failure());
-    return VectorDouble(rounded);
+        return false;
+    outInk = VectorDouble(rounded);
+    return true;
 }
 
 b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 inoutHasInk){
@@ -151,21 +152,26 @@ Expected<SdfGlyphSupportOffset> TryComputeSdfGlyphSupportOffset(
     return result;
 }
 
-Expected<VectorDouble> ResolveSdfGlyphSupportBounds(in VectorDouble plane, in SdfGlyphSupportOffset offset){
-    if(plane.z <= 0.0 || plane.w <= 0.0)
-        return plane;
-    if(!offset.visible)
-        return VectorDouble(0.0, 0.0, 0.0, 0.0);
+b8 ResolveSdfGlyphSupportBounds(in VectorDouble plane, in SdfGlyphSupportOffset offset, mut VectorDouble outBounds){
+    if(plane.z <= 0.0 || plane.w <= 0.0){
+        outBounds = plane;
+        return true;
+    }
+    if(!offset.visible){
+        outBounds = VectorDouble(0.0);
+        return true;
+    }
     const VectorDouble planeOrigin(plane.x, plane.y, plane.x, plane.y);
     const VectorDouble minXY = VectorDouble(offset.minX, offset.minY, offset.minX, offset.minY) + planeOrigin;
     const VectorDouble maxXY = VectorDouble(offset.maxX, offset.maxY, offset.maxX, offset.maxY) + planeOrigin;
     const Expected<Rect> measured = TryMakeMeasuredTextRect(minXY.x, minXY.y, maxXY.x, maxXY.y);
     if(!measured.has_value())
-        return MakeUnexpected(Failure());
-    return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
+        return false;
+    outBounds = VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
+    return true;
 }
 
-Expected<VectorDouble> TryLoadSdfGlyphSupport(
+b8 TryLoadSdfGlyphSupport(
     in VectorDouble plane,
     in FontAtlasGlyph glyph,
     in u32 pageWidth,
@@ -173,14 +179,17 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
     in u32 channelCount,
     in u32 spreadPixels,
     in Span<u8> pixels,
-    in DisplayMetrics display
+    in DisplayMetrics display,
+    mut VectorDouble outBounds
 ){
-    if(plane.z <= 0.0 || plane.w <= 0.0)
-        return plane;
+    if(plane.z <= 0.0 || plane.w <= 0.0){
+        outBounds = plane;
+        return true;
+    }
     const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(plane.z, plane.w, glyph, pageWidth, pageHeight, channelCount, spreadPixels, pixels, display);
     if(!offset.has_value())
-        return MakeUnexpected(Failure());
-    return ResolveSdfGlyphSupportBounds(plane, offset.value());
+        return false;
+    return ResolveSdfGlyphSupportBounds(plane, offset.value(), outBounds);
 }
 
 

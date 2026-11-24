@@ -83,15 +83,21 @@
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingSphere::ContainsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
-    const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
-    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    if(
+        !CollisionDetail::Vector4AnyTrue(VectorGreater(Vector3LengthSq(VectorSubtract(v0, CollisionDetail::SphereCenter(sphereValue))), VectorMultiply(CollisionDetail::SphereRadius(sphereValue), CollisionDetail::SphereRadius(sphereValue))))
+        && !CollisionDetail::Vector4AnyTrue(VectorGreater(Vector3LengthSq(VectorSubtract(v1, CollisionDetail::SphereCenter(sphereValue))), VectorMultiply(CollisionDetail::SphereRadius(sphereValue), CollisionDetail::SphereRadius(sphereValue))))
+        && !CollisionDetail::Vector4AnyTrue(VectorGreater(Vector3LengthSq(VectorSubtract(v2, CollisionDetail::SphereCenter(sphereValue))), VectorMultiply(CollisionDetail::SphereRadius(sphereValue), CollisionDetail::SphereRadius(sphereValue))))
+    )
         return ContainmentType::Contains;
     return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleSphere::ContainsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
-    const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
-    if(CollisionDoubleDetail::PointsInsideSphere(points, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    if(
+        !CollisionDoubleDetail::VectorDouble4AnyTrue(VectorDoubleGreater(VectorDouble3LengthSq(VectorDoubleSubtract(v0, CollisionDoubleDetail::SphereCenter(sphereValue))), VectorDoubleMultiply(CollisionDoubleDetail::SphereRadius(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue))))
+        && !CollisionDoubleDetail::VectorDouble4AnyTrue(VectorDoubleGreater(VectorDouble3LengthSq(VectorDoubleSubtract(v1, CollisionDoubleDetail::SphereCenter(sphereValue))), VectorDoubleMultiply(CollisionDoubleDetail::SphereRadius(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue))))
+        && !CollisionDoubleDetail::VectorDouble4AnyTrue(VectorDoubleGreater(VectorDouble3LengthSq(VectorDoubleSubtract(v2, CollisionDoubleDetail::SphereCenter(sphereValue))), VectorDoubleMultiply(CollisionDoubleDetail::SphereRadius(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue))))
+    )
         return ContainmentType::Contains;
     return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -173,15 +179,15 @@
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingSphere::ContainedByValue(
     SIMDVectorSingle sphereValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
 )noexcept{
-    const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDetail::ContainmentFromSpherePlaneSeries(sphereValue, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL BoundingDoubleSphere::ContainedByValue(
     SIMDVectorDouble sphereValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
 )noexcept{
-    const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDoubleDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDoubleDetail::ContainmentFromSpherePlaneSeries(sphereValue, planeAt);
 }
 
 
@@ -328,15 +334,27 @@ inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphe
 }
 
 inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
+    const SIMDVectorSingle frustumOrigin = LoadFloat(frustum.origin);
+    const SIMDVectorSingle frustumOrientation = LoadFloat(frustum.orientation);
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope);
+    const SIMDVectorSingle nearDepth = VectorReplicate(frustum.nearPlane);
+    const SIMDVectorSingle farDepth = VectorReplicate(frustum.farPlane);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, static_cast<u32>(index));
+    };
+    StoreFloat(CollisionDetail::CreateSphereFromPointSeries<BoundingFrustum::s_CornerCount>(cornerAt), outSphere.centerRadius);
 }
 
 inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreDouble(CollisionDoubleDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
+    const SIMDVectorDouble frustumOrigin = LoadDouble(frustum.origin);
+    const SIMDVectorDouble frustumOrientation = LoadDouble(frustum.orientation);
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(frustum.nearPlane);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(frustum.farPlane);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index);
+    };
+    StoreDouble(CollisionDoubleDetail::CreateSphereFromPointSeries<BoundingDoubleFrustum::s_DoubleCornerCount>(cornerAt), outSphere.centerRadius);
 }
 
 
@@ -381,9 +399,8 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     if(!intersectsBoxValues(sphereValue, boxCenter, boxExtents))
         return ContainmentType::Disjoint;
 
-    SIMDVectorSingle corners[BoundingBox::s_CornerCount];
-    CollisionDetail::AabbCorners(boxCenter, boxExtents, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDetail::AabbCorner(boxCenter, boxExtents, static_cast<u32>(index)); };
+    if(CollisionDetail::PointSeriesInsideSphere<BoundingBox::s_CornerCount>(cornerAt, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -392,9 +409,8 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     if(!intersectsBoxValues(sphereValue, boxCenter, boxExtents))
         return ContainmentType::Disjoint;
 
-    SIMDVectorDouble corners[BoundingDoubleBox::s_DoubleCornerCount];
-    CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::AabbCorner(boxCenter, boxExtents, index); };
+    if(CollisionDoubleDetail::PointSeriesInsideSphere<BoundingDoubleBox::s_DoubleCornerCount>(cornerAt, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -403,9 +419,12 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     if(!intersectsOrientedBoxValues(sphereValue, boxCenter, boxExtents, boxOrientation))
         return ContainmentType::Disjoint;
 
-    SIMDVectorSingle corners[BoundingOrientedBox::s_CornerCount];
-    CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    SIMDVectorSingle axis0{};
+    SIMDVectorSingle axis1{};
+    SIMDVectorSingle axis2{};
+    CollisionDetail::ObbCornerAxes(boxExtents, boxOrientation, axis0, axis1, axis2);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDetail::ObbCornerFromAxes(boxCenter, axis0, axis1, axis2, static_cast<u32>(index)); };
+    if(CollisionDetail::PointSeriesInsideSphere<BoundingOrientedBox::s_CornerCount>(cornerAt, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -416,9 +435,12 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     if(!intersectsOrientedBoxValues(sphereValue, boxCenter, boxExtents, boxOrientation))
         return ContainmentType::Disjoint;
 
-    SIMDVectorDouble corners[BoundingDoubleOrientedBox::s_DoubleCornerCount];
-    CollisionDoubleDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    SIMDVectorDouble axis0{};
+    SIMDVectorDouble axis1{};
+    SIMDVectorDouble axis2{};
+    CollisionDoubleDetail::ObbCornerAxes(boxExtents, boxOrientation, axis0, axis1, axis2);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::ObbCornerFromAxes(boxCenter, axis0, axis1, axis2, index); };
+    if(CollisionDoubleDetail::PointSeriesInsideSphere<BoundingDoubleOrientedBox::s_DoubleCornerCount>(cornerAt, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -427,9 +449,13 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     const SIMDVectorSingle sphereValue, const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue,
     const f32 farPlaneValue
 )const noexcept{
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle nearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle farDepth = VectorReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, static_cast<u32>(index));
+    };
+    if(CollisionDetail::PointSeriesInsideSphere<BoundingFrustum::s_CornerCount>(cornerAt, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -438,9 +464,13 @@ inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSph
     const SIMDVectorDouble sphereValue, const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue,
     const f64 farPlaneValue
 )const noexcept{
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index);
+    };
+    if(CollisionDoubleDetail::PointSeriesInsideSphere<BoundingDoubleFrustum::s_DoubleCornerCount>(cornerAt, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }

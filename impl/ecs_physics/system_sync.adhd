@@ -183,11 +183,11 @@ u32 ResolvePhysicsParentDepth(in World world, in EntityID entity){
     return depth;
 }
 
-f32x4 ResolveEntityWorldScale(in World world, in EntityID entity){
+VectorSingle ResolveEntityWorldScale(in World world, in EntityID entity){
     if(!entity.valid() || !world.alive(entity) || !world.hasComponent<TransformComponent>(entity))
-        return f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        return VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
     if(!world.hasComponent<PhysicsParentComponent>(entity))
-        return world.getComponent<TransformComponent>(entity).scale;
+        return VectorSingle(world.getComponent<TransformComponent>(entity).scale);
 
     FixedVector<EntityID, 33u> chain;
     chain.push_back(entity);
@@ -214,10 +214,10 @@ f32x4 ResolveEntityWorldScale(in World world, in EntityID entity){
     }
 
     const usize rootIdx = chain.size() - 1u;
-    f32x4 accScale = world.getComponent<TransformComponent>(chain[rootIdx]).scale;
+    VectorSingle accScale = VectorSingle(world.getComponent<TransformComponent>(chain[rootIdx]).scale);
     for(isize ci = cast<isize>(rootIdx) - 1; ci >= 0; --ci){
-        const f32x4 cScale = world.getComponent<TransformComponent>(chain[cast<usize>(ci)]).scale;
-        accScale = f32x4(VectorSingle(accScale) * VectorSingle(cScale), 0.0f);
+        const VectorSingle cScale = VectorSingle(world.getComponent<TransformComponent>(chain[cast<usize>(ci)]).scale);
+        accScale = VectorSetW(accScale * cScale, 0.0f);
     }
     return accScale;
 }
@@ -593,7 +593,7 @@ Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in VectorSing
         if(hasRot){
             h.boxRotation = f32x4(localRot);
             for(usize vi = 0u; vi < h.vertices.size(); ++vi)
-                h.vertices[vi] = PackVec3U(Vector3Rotate(Vec3FromU(h.vertices[vi]), localRot) + scaledOffset);
+                h.vertices[vi] = f32x3u(Vector3Rotate(VectorSingle(h.vertices[vi], 0.0f), localRot) + scaledOffset);
             for(usize fi = 0u; fi < h.facePlanes.size(); ++fi){
                 const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(h.facePlanes[fi].normalOffset), localRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const f32 d = h.facePlanes[fi].normalOffset.w + Vector3Dot(rotN, scaledOffset).x;
@@ -602,7 +602,7 @@ Expected<HullShape> BuildEcsHullShape(in ColliderShapeEntry entry, in VectorSing
         }
         else{
             for(usize vi = 0u; vi < h.vertices.size(); ++vi)
-                h.vertices[vi] = PackVec3U(Vec3FromU(h.vertices[vi]) + scaledOffset);
+                h.vertices[vi] = f32x3u(VectorSingle(h.vertices[vi], 0.0f) + scaledOffset);
             for(usize fi = 0u; fi < h.facePlanes.size(); ++fi){
                 const VectorSingle n = VectorSingle(h.facePlanes[fi].normalOffset);
                 const f32 d = h.facePlanes[fi].normalOffset.w + Vector3Dot(n, scaledOffset).x;
@@ -703,8 +703,7 @@ Expected<ShapeId> AttachEcsColliderEntry(
             in Vector<f32x3u> posStream = loadedMesh.positionStream();
             transformedVerts.resize(posStream.size());
             for(usize vi = 0u; vi < posStream.size(); ++vi){
-                in f32x3u p = posStream[vi];
-                VectorSingle rPt = Vec3FromU(p);
+                VectorSingle rPt = VectorSingle(posStream[vi], 0.0f);
                 if(hasRot)
                     rPt = Vector3Rotate(rPt, localRot);
                 rPt = (rPt + VectorSingle(entry.center)) * signedScale;
@@ -1378,7 +1377,7 @@ void SyncEcsEntitiesToPhysicsWorld(
             BodyId targetBodyId;
             b8 useCustomMass = false;
             BodyType targetBodyType = BodyType::Static;
-            f32x4 worldScale = xf.scale;
+            VectorSingle worldScale = VectorSingle(xf.scale);
             b8 hasExistingRecord = false;
             if(rbOpt.has_value()){
                 in RigidBodyComponent rb = rbOpt.value();
@@ -1402,7 +1401,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     }
                     if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity)){
                         const EcsWorldPose worldPose = ResolveEntityWorldPose(world, entity);
-                        worldScale = worldPose.scale;
+                        worldScale = VectorSingle(worldPose.scale);
                         const b8 poseMoved = !existingRec.hasBodyPose || !EcsTransformsNearlyEqual(existingRec.syncedBodyPose.transform, worldPose.transform);
                         if(col.dirty || poseMoved){
                             physicsWorld.setBodyTransform(targetBodyId, VectorSingle(worldPose.transform.position), VectorSingle(worldPose.transform.rotation));
@@ -1435,7 +1434,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                         worldPose.transform = Transform3D(VectorSingle(xf.position), SafeNormalizeQuat(VectorSingle(xf.rotation)));
                         worldPose.scale = xf.scale;
                     }
-                    worldScale = worldPose.scale;
+                    worldScale = VectorSingle(worldPose.scale);
                     BodyDef bd;
                     bd.type = BodyType::Static;
                     bd.position = worldPose.transform.position;
@@ -1465,7 +1464,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                             targetBodyId,
                             useCustomMass,
                             targetBodyType,
-                            VectorSingle(worldScale),
+                            worldScale,
                             physicsWorld,
                             shapeIndexToEntity,
                             newRec
@@ -1488,7 +1487,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     targetBodyId,
                     useCustomMass,
                     targetBodyType,
-                    VectorSingle(worldScale),
+                    worldScale,
                     physicsWorld,
                     shapeIndexToEntity,
                     initialRecIt.value()
@@ -1505,7 +1504,7 @@ void SyncEcsEntitiesToPhysicsWorld(
                     targetBodyId,
                     useCustomMass,
                     targetBodyType,
-                    VectorSingle(worldScale),
+                    worldScale,
                     physicsWorld,
                     shapeIndexToEntity,
                     newRec
@@ -1591,22 +1590,21 @@ void SyncEcsEntitiesToPhysicsWorld(
                 return;
             }
 
-            f32x4 scaleA(1.0f, 1.0f, 1.0f, 0.0f);
+            VectorSingle scaleA(1.0f, 1.0f, 1.0f, 0.0f);
             if(hasAnyPhysicsParents)
                 scaleA = ResolveEntityWorldScale(worldForJoints, entA);
             else if(entA.valid() && worldForJoints.alive(entA) && worldForJoints.hasComponent<TransformComponent>(entA))
-                scaleA = worldForJoints.getComponent<TransformComponent>(entA).scale;
+                scaleA = VectorSingle(worldForJoints.getComponent<TransformComponent>(entA).scale);
 
-            f32x4 scaleB(1.0f, 1.0f, 1.0f, 0.0f);
+            VectorSingle scaleB(1.0f, 1.0f, 1.0f, 0.0f);
             if(hasAnyPhysicsParents)
                 scaleB = ResolveEntityWorldScale(worldForJoints, entB);
             else if(entB.valid() && worldForJoints.alive(entB) && worldForJoints.hasComponent<TransformComponent>(entB))
-                scaleB = worldForJoints.getComponent<TransformComponent>(entB).scale;
+                scaleB = VectorSingle(worldForJoints.getComponent<TransformComponent>(entB).scale);
 
-            const VectorSingle scaleAVec(scaleA);
-            const f32x4 scaledAnchorA(VectorSingle(jc.localAnchorA) * scaleAVec, 0.0f);
-            const f32x4 scaledAnchorB(VectorSingle(jc.localAnchorB) * VectorSingle(scaleB), 0.0f);
-            const f32x4 scaledOffset(VectorSingle(jc.linearOffset) * scaleAVec, 0.0f);
+            const f32x4 scaledAnchorA(VectorSingle(jc.localAnchorA) * scaleA, 0.0f);
+            const f32x4 scaledAnchorB(VectorSingle(jc.localAnchorB) * scaleB, 0.0f);
+            const f32x4 scaledOffset(VectorSingle(jc.linearOffset) * scaleA, 0.0f);
 
             EcsJointStructuralSnapshot curStruct;
             curStruct.type = jc.type;
@@ -1974,7 +1972,17 @@ void WriteBackPhysicsTransformsToEcs(
                     in PhysicsParentComponent pp = ppOpt.value();
                     if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
                         const EcsWorldPose parentPose = ResolveEntityWorldPose(world, pp.parent);
-                        const Transform3D localXf = RelativeTransform(parentPose.transform, physXf);
+                        VectorSingle localPos(0.0f);
+                        VectorSingle localRot(0.0f, 0.0f, 0.0f, 1.0f);
+                        RelativeTransformValues(
+                            VectorSingle(parentPose.transform.position),
+                            VectorSingle(parentPose.transform.rotation),
+                            VectorSingle(physXf.position),
+                            VectorSingle(physXf.rotation),
+                            localPos,
+                            localRot
+                        );
+                        const Transform3D localXf(localPos, localRot);
                         VectorSingle locPos = VectorSingle(localXf.position);
                         if(pp.inheritScale){
                             const VectorSingle pScale = VectorSingle(parentPose.scale);

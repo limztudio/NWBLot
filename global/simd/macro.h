@@ -108,17 +108,17 @@
 
 
 #define FOUNDATION_SIMD_VECTOR_CONST_CONVERSIONS \
-    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return v; } \
-    FOUNDATION_INLINE operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
-    FOUNDATION_INLINE operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return BitCast<SIMDVectorSingle>(*this); } \
+    FOUNDATION_INLINE operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(BitCast<SIMDVectorSingle>(*this)); } \
+    FOUNDATION_INLINE operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(BitCast<SIMDVectorSingle>(*this)); }
 
 #define FOUNDATION_SIMD_VECTOR_CONST_X86_CONVERSIONS \
-    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return v; } \
-    FOUNDATION_INLINE operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
-    FOUNDATION_INLINE operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return BitCast<SIMDVectorSingle>(*this); } \
+    FOUNDATION_INLINE operator __m128i()const noexcept{ return _mm_castps_si128(BitCast<SIMDVectorSingle>(*this)); } \
+    FOUNDATION_INLINE operator __m128d()const noexcept{ return _mm_castps_pd(BitCast<SIMDVectorSingle>(*this)); }
 
 #define FOUNDATION_SIMD_VECTOR_CONST_SCALAR_CONVERSION \
-    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return v; }
+    FOUNDATION_INLINE operator SIMDVectorSingle()const noexcept{ return BitCast<SIMDVectorSingle>(*this); }
 
 #if defined(FOUNDATION_HAS_NEON)
 #define FOUNDATION_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS FOUNDATION_SIMD_VECTOR_CONST_CONVERSIONS
@@ -129,7 +129,7 @@
 #endif
 
 #define FOUNDATION_SIMD_VECTOR_DOUBLE_CONST_CONVERSION \
-    FOUNDATION_INLINE operator SIMDVectorDouble()const noexcept{ return v; }
+    FOUNDATION_INLINE operator SIMDVectorDouble()const noexcept{ return BitCast<SIMDVectorDouble>(*this); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

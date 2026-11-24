@@ -177,7 +177,7 @@ The CSG shadow tail is conditional on a ready light-space snapshot with CSG enab
 ## ECS API Shape
 
 1. `World` is still the ownership/lifecycle source of truth for component storage.
-2. Keep `World` component APIs (`add/remove/get/hasComponent`) private and expose them only through the generic `NWB::Core::ECS::Entity` facade.
+2. `World` publicly exposes component operations (`add/remove/get/hasComponent`) by `EntityID`; the generic `NWB::Core::ECS::Entity` facade forwards those operations for its bound entity.
 3. Treat `EntityID` as a lightweight ID and `Entity` as the component operation surface.
 4. Do not introduce ad-hoc or project-local ECS wrappers for this role.
 

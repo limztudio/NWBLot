@@ -26,8 +26,8 @@ FOUNDATION_INLINE void InlineCandidateCopy(const NWB::Tests::ReadAddress source,
 }
 
 inline void AccumulateMemoryChecksum(const u64 value)noexcept{
-    static volatile u64 checksum = 0u;
-    checksum = checksum + value;
+    static volatile u64 s_Checksum = 0u;
+    s_Checksum = s_Checksum + value;
 }
 
 };

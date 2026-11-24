@@ -13,7 +13,7 @@ LIT_HARDWARE = "hardware"
 LIT_SOFTWARE = "software"
 LIT_DISABLED = "disabled"
 LIT_TERMINAL65 = "terminal65"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
 LIT_ROUTE = "route"
 LIT_RGB = "rgb"
 LIT_RETAINED = "retained"
@@ -64,10 +64,10 @@ class CsgOpenShadowRuntimeEvidence:
             "SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 budget_bytes=268435456 coverage=0 blocker_search=0 capture_cadence=0"]
         if route == LIT_SOFTWARE:
             required.append("Loader: hardware ray tracing disabled before device creation")
-            if LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA in log_text:
+            if LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG in log_text:
                 raise SmokeFailure("software arm used hardware transparent shadows")
         if case in ORDINARY_CASES:
-            required.append(LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else "RendererSystem: dispatched light-space shadow maps")
+            required.append(LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG if route == LIT_HARDWARE else "RendererSystem: dispatched light-space shadow maps")
             if "RendererSystem: dispatched CSG light-space shadows" in log_text:
                 raise SmokeFailure("ordinary open reference admitted CSG shadow work")
         else:

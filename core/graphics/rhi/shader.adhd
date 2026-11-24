@@ -18,7 +18,7 @@ extern enum ShaderType : u8{
     MissStage,
     IntersectionStage,
     CallableStage,
-    Count,
+    kCount,
     Invalid
 };
 

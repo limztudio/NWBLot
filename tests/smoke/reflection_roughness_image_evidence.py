@@ -3,7 +3,7 @@ from reflection_roughness_reference import frame_grid
 from window_capture_smoke import SmokeFailure
 
 
-LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_ = "matched scene captures have different dimensions"
+LIT_MATCHED_CAPTURE_DIMENSION_MISMATCH = "matched scene captures have different dimensions"
 LIT_MEAN_CHANNEL_BYTE_ERROR = "mean_channel_byte_error"
 LIT_CHANNELS_DIFFERING_BY_MORE_THAN_TWO = "channels_differing_by_more_than_two"
 
@@ -12,7 +12,7 @@ class ReflectionRoughnessImageEvidence:
     @staticmethod
     def compare_exact_scene(left, right, maximum_mean_error=0.15):
         if left[:2] != right[:2]:
-            raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
+            raise SmokeFailure(LIT_MATCHED_CAPTURE_DIMENSION_MISMATCH)
         width, height, rows = ReflectionImageAnalysis.validate_frame(left)
         differences = [abs(a - b) for y in range(height) for x in range(width) for a, b in zip(rows[y][x], right[2][y][x])]
         mean = sum(differences) / len(differences)
@@ -24,7 +24,7 @@ class ReflectionRoughnessImageEvidence:
     @staticmethod
     def compare_smooth_glass_scene(left, right, maximum_mean_error=0.30):
         if left[:2] != right[:2]:
-            raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
+            raise SmokeFailure(LIT_MATCHED_CAPTURE_DIMENSION_MISMATCH)
         width, height, rows = ReflectionImageAnalysis.validate_frame(left)
         differences = [abs(a - b) for y in range(height) for x in range(width) for a, b in zip(rows[y][x], right[2][y][x])]
         mean = sum(differences) / len(differences)

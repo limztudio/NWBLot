@@ -151,7 +151,7 @@ b8 GpuTaskGraphCompiler::compile(
     }
 
     FOUNDATION_ASSERT(topology.queues && topology.queueCount != 0u);
-    if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
+    if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
         return false;
 
     if(!GpuTaskGraphOwnershipValidator::ValidateCompletionQueues(graph, topology))

@@ -394,7 +394,7 @@ private:
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     Array<b8, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
-    Array<FormatSupport::Mask, static_cast<usize>(Format::Count)> m_compressedFormatSupport = {};
+    Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;

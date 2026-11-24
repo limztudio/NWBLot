@@ -30,14 +30,14 @@ LIT_B_ORIGINAL_FAILURE_EVIDENCE = b"original failure evidence"
 LIT_TOTAL_MS = "total_ms"
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
-LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_SOFTWARE_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched software shadow traversal"
 LIT_MODIFIED = "modified"
 LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32 = "AvboitTimingProbe: in-flight ranges 32"
 LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1 = "AvboitTimingProbe: render unfocused 1"
-LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
+LIT_DEFERRED_TARGETS_READY_LOG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
 LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU = "GraphicsRuntime: created device 'Example GPU'"
-LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
+LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
 LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
 LIT_SOURCE = "source"
 LIT_REVISION = "revision"
@@ -98,11 +98,11 @@ LIT_MAIN = "__main__"
 
 def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
     distance = PRESETS[preset]
-    text = "\n".join((LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED, "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware", LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
+    text = "\n".join((LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG, "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware", LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG,
         LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1, "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
         "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED), "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false", "CausticTimingProbe: scene single-static-sphere-ground-v1",
         f"CausticTimingProbe: camera {preset} distance {distance} height 0.85", "CausticTimingProbe: fixed delta 0.016666667 yaw 0 sphere scale 0.7", "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
-        "CausticTimingProbe: vertical FOV radians 1.0471976", "CausticTimingProbe: photon phases 2", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
+        "CausticTimingProbe: vertical FOV radians 1.0471976", "CausticTimingProbe: photon phases 2", LIT_DEFERRED_TARGETS_READY_LOG, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
     if enabled:
         text += "\nRendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, 262144 full-grid budget, 1 caustic lights, 1 refractive instances)"
     if capture:
@@ -150,15 +150,15 @@ class CausticMeasurementTests(unittest.TestCase):
         workload = RendererWorkloadRegistry.workloads()[LIT_CAUSTIC_POPULATED]
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
-        hardware_marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
-        legacy = text.replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE).replace(hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
+        hardware_marker = LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG
+        legacy = text.replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE).replace(hardware_marker, LIT_SOFTWARE_SHADOW_DISPATCH_LOG)
         with self.assertRaises(benchmark.SmokeFailure):
             CausticWorkload().validate_log(legacy, settings)
         retired_route = next(line for line in legacy.splitlines() if LIT_NATURAL_HYBRID_SHADOW_ROUTE in line)
         for altered in (legacy, text + "\n" + retired_route):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 workload.validate_log(altered, workload, True)
-        for altered in (text.replace(hardware_marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
+        for altered in (text.replace(hardware_marker, ""), text + "\n" + LIT_SOFTWARE_SHADOW_DISPATCH_LOG):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 CausticWorkload().validate_log(altered, settings)
 

@@ -282,7 +282,7 @@ function(nwb_microhttpd_generate_config output_file)
         int main(void) { nwb_mhd_chk(\"%d\", 1); return 0; }
     " HAVE_MHD_FUNC_)
 
-    configure_file("${CMAKE_CURRENT_LIST_DIR}/MHD_config.h.in" "${output_file}" @ONLY)
+    configure_file("${CMAKE_CURRENT_LIST_DIR}/mhd_config.h.in" "${output_file}" @ONLY)
 endfunction()
 
 # --------------------------------------------------------------------------- #

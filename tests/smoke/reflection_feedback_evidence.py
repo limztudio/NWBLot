@@ -28,15 +28,15 @@ LIT_SCREEN_LIMIT_MISSES = "screen_limit_misses"
 LIT_REFLECTIONSMOKEFEEDBACK = "ReflectionSmokeFeedback:"
 LIT_SCREEN_HITS = "screen_hits"
 LIT_SCREEN_ATTEMPTS = "screen_attempts"
-LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA = "FramebufferCapture: graphics source frame ([0-9]+)"
+LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME = "FramebufferCapture: graphics source frame ([0-9]+)"
 LIT_CAPTURED_GRAPHICS_FRAME = "captured_graphics_frame"
 LIT_STABLE_FEEDBACK = "stable_feedback"
 LIT_STATISTICS = "statistics"
 LIT_REFLECTIONSMOKESTATISTICS = "ReflectionSmokeStatistics:"
 LIT_REFLECTIONSMOKEHISTORY = "ReflectionSmokeHistory:"
 LIT_REFLECTIONSMOKEOPTICS = "ReflectionSmokeOptics:"
-LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK = "ReflectionSmokeProject: screen feedback {v}"
-LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP = "ReflectionSmokeProject: screen steps {v}"
+LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE = "ReflectionSmokeProject: screen feedback {v}"
+LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE = "ReflectionSmokeProject: screen steps {v}"
 LIT_DIAGNOSTICS = "diagnostics"
 
 FEEDBACK_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_FEEDBACK_SEQUENCE, LIT_EPOCH, LIT_START_GRAPHICS_FRAME, LIT_PROBE_INDEX, LIT_REQUESTED, LIT_ENABLED, LIT_REUSED, LIT_RESET, LIT_REASON, LIT_SCHEDULING_VALID, LIT_POTENTIAL_RECEIVERS,
@@ -139,7 +139,7 @@ class ReflectionFeedbackEvidence:
                     if sample[LIT_BYPASSED_PIXELS] and previous[LIT_POTENTIAL_RECEIVERS] > stats["effective_budget"]:
                         raise SmokeFailure("feedback bypass violated the compatible receiver upper-bound budget guard")
             previous = sample
-        anchors = re.findall(LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, log_text)
+        anchors = re.findall(LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME, log_text)
         if len(anchors) != 1:
             raise SmokeFailure("feedback capture lacks one exact Graphics source frame")
         source = int(anchors[0])
@@ -172,10 +172,10 @@ class ReflectionFeedbackEvidence:
             raise SmokeFailure("diagnostics-off image proof requires a supported frozen smooth scene")
         if any(prefix in log_text for prefix in (LIT_REFLECTIONSMOKESTATISTICS, LIT_REFLECTIONSMOKEHISTORY, LIT_REFLECTIONSMOKEFEEDBACK, LIT_REFLECTIONSMOKEOPTICS)):
             raise SmokeFailure("diagnostics-off capture unexpectedly published completed reflection counters")
-        for message in (LIT_REFLECTIONSMOKEPROJECT_SCREEN_FEEDBACK.format(v=int(spec.enabled)), LIT_REFLECTIONSMOKEPROJECT_SCREEN_STEPS_SP.format(v=spec.screen_steps)):
+        for message in (LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE.format(v=int(spec.enabled)), LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE.format(v=spec.screen_steps)):
             if message not in log_text:
                 raise SmokeFailure("diagnostics-off capture lacks accepted typed settings")
-        anchors = re.findall(LIT_FRAMEBUFFERCAPTURE_GRAPHICS_SOURCE_FRA, log_text)
+        anchors = re.findall(LIT_FRAMEBUFFER_GRAPHICS_SOURCE_FRAME, log_text)
         if len(anchors) != 1 or int(anchors[0]) < max(64, spec.accepted_frames):
             raise SmokeFailure("diagnostics-off readback completed before its bounded Graphics warm-up")
         return {LIT_DIAGNOSTICS: False, LIT_CAPTURED_GRAPHICS_FRAME: int(anchors[0]), "requested_prepared_graphics_frames": max(64, spec.accepted_frames) + 1, "completed_feedback_observations": None, "completed_feedback_counters": None,

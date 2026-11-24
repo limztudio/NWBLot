@@ -133,7 +133,7 @@ class StressCsgScene{
             error("StressTestSmokeProject: nonfinite CSG cutter yaw");
             return false;
         }
-        const VectorSingle phases = VectorSingle(yaw) + VectorSingle(0.0f, s_PI, 0.0f, 0.0f);
+        const VectorSingle phases = VectorSingle(yaw) + VectorSingle(0.0f, s_Pi, 0.0f, 0.0f);
         const VectorSingle heights = Sin(phases) * VectorSingle(s_StressCutterAmplitude) + VectorSingle(s_StressCutterHeight);
         const f32 heightFront = heights.x;
         const f32 heightBack = heights.y;
@@ -360,8 +360,8 @@ class StressCrowdScene{
             world
         );
         if(entity.valid()){
-            const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, 0.0f, 0.0f, 0.0f));
-            const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_PI / 180.0f));
+            const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_HalfPi, 0.0f, 0.0f, 0.0f));
+            const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_Pi / 180.0f));
             const VectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
             if(!SetSmokeEntityRotation(entity, wallRotation, world))
                 return s_InvalidEntityId;
@@ -380,7 +380,7 @@ class StressCrowdScene{
             world
         );
         if(entity.valid()){
-            const VectorSingle ceilingRotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PI, 0.0f, 0.0f, 0.0f));
+            const VectorSingle ceilingRotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_Pi, 0.0f, 0.0f, 0.0f));
             if(!SetSmokeEntityRotation(entity, ceilingRotation, world))
                 return s_InvalidEntityId;
         }

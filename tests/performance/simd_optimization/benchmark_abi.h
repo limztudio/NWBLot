@@ -88,8 +88,8 @@ inline constexpr b8 s_HasAvx = false;
 }
 
 inline void ConsumeChecksum(const u64 value)noexcept{
-    [[maybe_unused]] static volatile u64 checksum;
-    checksum = value;
+    [[maybe_unused]] static volatile u64 s_Checksum;
+    s_Checksum = value;
 }
 
 };

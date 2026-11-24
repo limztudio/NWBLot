@@ -392,7 +392,7 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
             const u64 entrySubmissionID = batchEntries[entryIndex].submissionID;
             for(usize i = 0u; i < entry.numCmd; ++i){
                 auto& commandList = *MakeNotNull(entry.ppCmd[i]);
-                m_commandBuffersInFlight.push_back_reserved(Move(commandList.m_currentCmdBuf));
+                m_commandBuffersInFlight.pushBackReserved(Move(commandList.m_currentCmdBuf));
                 m_commandBuffersInFlight.back()->m_submissionID = entrySubmissionID;
                 commandList.m_nativeRecordingID = 0u;
             }
@@ -422,7 +422,7 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         }
         for(usize i = 0u; i < totalCmdCount; ++i){
             TrackedCommandBufferPtr rejected = Move(m_commandBuffersInFlight.back());
-            m_commandBuffersInFlight.pop_back();
+            m_commandBuffersInFlight.popBack();
             recycleCommandBuffer(Move(rejected));
         }
 

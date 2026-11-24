@@ -103,7 +103,7 @@ GpuGraphResourceType::Enum GpuTaskGraphDeclarationReadView::resourceTypeAt(const
 }
 
 GpuGraphPipelineType::Enum GpuTaskGraphDeclarationReadView::pipelineTypeAt(const usize index)const noexcept{
-    return m_graph && index < m_graph->m_pipelines.size() ? m_graph->m_pipelines[index].type : GpuGraphPipelineType::Count;
+    return m_graph && index < m_graph->m_pipelines.size() ? m_graph->m_pipelines[index].type : GpuGraphPipelineType::kCount;
 }
 
 ResourceStates::Mask GpuTaskGraphDeclarationReadView::resourceInitialStateAt(const usize index)const noexcept{

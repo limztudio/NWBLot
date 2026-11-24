@@ -11,13 +11,13 @@ from window_capture_smoke import SmokeFailure
 LIT_MINIMUM_COMPLEX_GI_SETTLE_SECONDS = 30.0
 LIT_ENABLED_FLAG = "1"
 LIT_NWB_GI_SMOKE_COMPLEX_SCENE = "NWB_GI_SMOKE_COMPLEX_SCENE"
-LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT = "complex GI profile requires its selected complex scene"
+LIT_COMPLEX_GI_SCENE_REQUIRED = "complex GI profile requires its selected complex scene"
 LIT_F = "f"
 LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "NWB_GI_SMOKE_MIN_SETTLE_SECONDS"
 LIT_START = "start"
 LIT_END = "end"
 LIT_READBACK = "readback"
-LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E = "complex GI has malformed live warmup evidence"
+LIT_COMPLEX_GI_MALFORMED_WARMUP_EVIDENCE = "complex GI has malformed live warmup evidence"
 LIT_CAPTURE_SOURCE_FRAME = "capture_source_frame"
 LIT_CAPTURE = "capture"
 
@@ -28,7 +28,7 @@ class BaselineWarmupEvidence:
         if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
             return None
         if frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
-            raise SmokeFailure(LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT)
+            raise SmokeFailure(LIT_COMPLEX_GI_SCENE_REQUIRED)
         try:
             requested_seconds = struct.unpack(LIT_F, struct.pack(LIT_F, float(frozen_environment.get(LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS, "30"))))[0]
         except (ValueError, OverflowError, struct.error) as error:
@@ -54,12 +54,12 @@ class BaselineWarmupEvidence:
         numeric_pattern = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
         for value in (matches[LIT_START].group(4), matches[LIT_END].group(3)):
             if not re.fullmatch(numeric_pattern, value):
-                raise SmokeFailure(LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E)
+                raise SmokeFailure(LIT_COMPLEX_GI_MALFORMED_WARMUP_EVIDENCE)
         try:
             required_seconds = float(matches[LIT_START].group(4))
             elapsed_seconds = float(matches[LIT_END].group(3))
         except ValueError as error:
-            raise SmokeFailure(LIT_COMPLEX_GI_HAS_MALFORMED_LIVE_WARMUP_E) from error
+            raise SmokeFailure(LIT_COMPLEX_GI_MALFORMED_WARMUP_EVIDENCE) from error
         if required_presentations != profile.capture_freeze_frame or start_presentations < required_presentations:
             raise SmokeFailure("complex GI live warmup began before the presentation warmup")
         if not math.isfinite(required_seconds) or required_seconds != requested_seconds:

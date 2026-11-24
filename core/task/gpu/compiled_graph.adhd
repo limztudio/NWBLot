@@ -7,7 +7,7 @@ extern enum GpuOwnershipTransferRoute : u8{
     Internal,
     ExternalImport,
     ExternalExport,
-    Count
+    kCount
 };
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskPacketizationDecision::Enum")]
@@ -24,7 +24,7 @@ extern enum GpuTaskPacketizationDecision : u8{
     MergedExplicit,
     MergedFrontierScored,
     ScoredMergeDomainMismatch,
-    Count
+    kCount
 };
 
 

@@ -19,14 +19,14 @@ const usize s_LightSpaceMeshletCasterBufferPairCount = 2u;
 
 
 class LightSpaceViewTask{
-    private mut GraphicsRuntime graphics;
-    private in b8 shadowPrepared;
-    private FrozenLightSpaceShadowHandle snapshot;
+    private mut GraphicsRuntime m_graphics;
+    private in b8 m_shadowPrepared;
+    private FrozenLightSpaceShadowHandle m_snapshot;
 
     public LightSpaceViewTask(in LightSpaceShadowGraphInputs inputs){
-        this.graphics = inputs.graphics;
-        this.shadowPrepared = inputs.shadowPrepared;
-        this.snapshot = inputs.snapshot;
+        this.m_graphics = inputs.graphics;
+        this.m_shadowPrepared = inputs.shadowPrepared;
+        this.m_snapshot = inputs.snapshot;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
@@ -35,25 +35,25 @@ class LightSpaceViewTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(context.commandIrCapture)
             return false;
-        if(!this.shadowPrepared)
+        if(!this.m_shadowPrepared)
             return true;
-        if(!this.snapshot.valid())
+        if(!this.m_snapshot.valid())
             return false;
-        GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowViews, this.graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeLightSpaceShadowViews, this.m_graphics.getDevice(), commandList);
 
-        return LightSpaceShadowRecorder().views(this.snapshot.deref().snapshot, commandList, this.graphics.getDevice().getDescriptorHeap());
+        return LightSpaceShadowRecorder().views(this.m_snapshot.deref().snapshot, commandList, this.m_graphics.getDevice().getDescriptorHeap());
     }
 }
 
 class LightSpaceShadeTask{
-    private mut GraphicsRuntime graphics;
-    private in b8 shadowPrepared;
-    private FrozenLightSpaceShadowHandle snapshot;
+    private mut GraphicsRuntime m_graphics;
+    private in b8 m_shadowPrepared;
+    private FrozenLightSpaceShadowHandle m_snapshot;
 
     public LightSpaceShadeTask(in LightSpaceShadowGraphInputs inputs){
-        this.graphics = inputs.graphics;
-        this.shadowPrepared = inputs.shadowPrepared;
-        this.snapshot = inputs.snapshot;
+        this.m_graphics = inputs.graphics;
+        this.m_shadowPrepared = inputs.shadowPrepared;
+        this.m_snapshot = inputs.snapshot;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
@@ -62,14 +62,14 @@ class LightSpaceShadeTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(context.commandIrCapture)
             return false;
-        if(!this.shadowPrepared)
+        if(!this.m_shadowPrepared)
             return true;
-        if(!this.snapshot.valid())
+        if(!this.m_snapshot.valid())
             return false;
-        GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowShade, this.graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeLightSpaceShadowShade, this.m_graphics.getDevice(), commandList);
 
-        in LightSpaceShadowSnapshot snap = this.snapshot.deref().snapshot;
-        if(!LightSpaceShadowRecorder().shade(snap, commandList, this.graphics.getDevice().getDescriptorHeap()))
+        in LightSpaceShadowSnapshot snap = this.m_snapshot.deref().snapshot;
+        if(!LightSpaceShadowRecorder().shade(snap, commandList, this.m_graphics.getDevice().getDescriptorHeap()))
             return false;
         if(snap.captureHistory.has_value())
             snap.captureHistory.value().recordCapture(snap.captureTicket);
@@ -78,18 +78,18 @@ class LightSpaceShadeTask{
 }
 
 class LightSpaceDiagnosticTask{
-    private in b8 shadowPrepared;
-    private BufferHandle sourceBuffer;
-    private BufferHandle readback;
-    private mut LightSpaceShadowDiagnostics diagnostics;
-    private u32 frameIndex;
+    private in b8 m_shadowPrepared;
+    private BufferHandle m_sourceBuffer;
+    private BufferHandle m_readback;
+    private mut LightSpaceShadowDiagnostics m_diagnostics;
+    private u32 m_frameIndex;
 
     public LightSpaceDiagnosticTask(in LightSpaceShadowGraphInputs inputs){
-        this.shadowPrepared = inputs.shadowPrepared;
-        this.sourceBuffer = inputs.snapshot.deref().snapshot.csgContext;
-        this.readback = inputs.snapshot.deref().snapshot.diagnosticReadback;
-        this.diagnostics = inputs.snapshot.deref().snapshot.diagnostics.value();
-        this.frameIndex = inputs.snapshot.deref().snapshot.diagnosticFrame;
+        this.m_shadowPrepared = inputs.shadowPrepared;
+        this.m_sourceBuffer = inputs.snapshot.deref().snapshot.csgContext;
+        this.m_readback = inputs.snapshot.deref().snapshot.diagnosticReadback;
+        this.m_diagnostics = inputs.snapshot.deref().snapshot.diagnostics.value();
+        this.m_frameIndex = inputs.snapshot.deref().snapshot.diagnosticFrame;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
@@ -98,33 +98,33 @@ class LightSpaceDiagnosticTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(context.commandIrCapture)
             return false;
-        if(!this.shadowPrepared)
+        if(!this.m_shadowPrepared)
             return true;
-        commandList.setBufferState(this.sourceBuffer.deref(), ResourceStates::CopySource);
+        commandList.setBufferState(this.m_sourceBuffer.deref(), ResourceStates::CopySource);
         commandList.commitBarriers();
-        commandList.copyBuffer(this.readback.deref(), 0u, this.sourceBuffer.deref(), s_CsgShadowRayFailureOffset, sizeof(u32));
-        commandList.setBufferState(this.sourceBuffer.deref(), ResourceStates::UnorderedAccess);
+        commandList.copyBuffer(this.m_readback.deref(), 0u, this.m_sourceBuffer.deref(), s_CsgShadowRayFailureOffset, sizeof(u32));
+        commandList.setBufferState(this.m_sourceBuffer.deref(), ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         return true;
     }
 
     public void accepted(in QueueSubmissionToken token){
-        if(this.shadowPrepared && this.diagnostics.readback == this.readback){
-            this.diagnostics.submission = token;
-            this.diagnostics.acceptedFrame = this.frameIndex;
+        if(this.m_shadowPrepared && this.m_diagnostics.readback == this.m_readback){
+            this.m_diagnostics.submission = token;
+            this.m_diagnostics.acceptedFrame = this.m_frameIndex;
         }
     }
 }
 
 class LightSpaceCullTask{
-    private mut GraphicsRuntime graphics;
-    private in b8 shadowPrepared;
-    private FrozenLightSpaceShadowHandle snapshot;
+    private mut GraphicsRuntime m_graphics;
+    private in b8 m_shadowPrepared;
+    private FrozenLightSpaceShadowHandle m_snapshot;
 
     public LightSpaceCullTask(in LightSpaceShadowGraphInputs inputs){
-        this.graphics = inputs.graphics;
-        this.shadowPrepared = inputs.shadowPrepared;
-        this.snapshot = inputs.snapshot;
+        this.m_graphics = inputs.graphics;
+        this.m_shadowPrepared = inputs.shadowPrepared;
+        this.m_snapshot = inputs.snapshot;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
@@ -133,27 +133,27 @@ class LightSpaceCullTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(context.commandIrCapture)
             return false;
-        if(!this.shadowPrepared)
+        if(!this.m_shadowPrepared)
             return true;
-        if(!this.snapshot.valid())
+        if(!this.m_snapshot.valid())
             return false;
-        GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowCull, this.graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeLightSpaceShadowCull, this.m_graphics.getDevice(), commandList);
 
-        return LightSpaceShadowRecorder().cull(this.snapshot.deref().snapshot, commandList, this.graphics.getDevice().getDescriptorHeap());
+        return LightSpaceShadowRecorder().cull(this.m_snapshot.deref().snapshot, commandList, this.m_graphics.getDevice().getDescriptorHeap());
     }
 }
 
 class LightSpaceCaptureTask{
-    private mut GraphicsRuntime graphics;
-    private in b8 shadowPrepared;
-    private FrozenLightSpaceShadowHandle snapshot;
-    private b8 transparent;
+    private mut GraphicsRuntime m_graphics;
+    private in b8 m_shadowPrepared;
+    private FrozenLightSpaceShadowHandle m_snapshot;
+    private b8 m_transparent;
 
     public LightSpaceCaptureTask(in LightSpaceShadowGraphInputs inputs, in b8 transparent){
-        this.graphics = inputs.graphics;
-        this.shadowPrepared = inputs.shadowPrepared;
-        this.snapshot = inputs.snapshot;
-        this.transparent = transparent;
+        this.m_graphics = inputs.graphics;
+        this.m_shadowPrepared = inputs.shadowPrepared;
+        this.m_snapshot = inputs.snapshot;
+        this.m_transparent = transparent;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics); }
@@ -162,14 +162,14 @@ class LightSpaceCaptureTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(context.commandIrCapture)
             return false;
-        if(!this.shadowPrepared)
+        if(!this.m_shadowPrepared)
             return true;
-        if(!this.snapshot.valid())
+        if(!this.m_snapshot.valid())
             return false;
-        const GpuTimingScopeDefinition scope = LightSpaceCaptureTimingScope(this.transparent);
-        GpuTimingMeasure timing(this.graphics.gpuTiming(), scope, this.graphics.getDevice(), commandList);
+        const GpuTimingScopeDefinition scope = LightSpaceCaptureTimingScope(this.m_transparent);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), scope, this.m_graphics.getDevice(), commandList);
 
-        return LightSpaceShadowRecorder().captureAllViews(this.snapshot.deref().snapshot, this.transparent, commandList, this.graphics.getDevice().getDescriptorHeap());
+        return LightSpaceShadowRecorder().captureAllViews(this.m_snapshot.deref().snapshot, this.m_transparent, commandList, this.m_graphics.getDevice().getDescriptorHeap());
     }
 }
 

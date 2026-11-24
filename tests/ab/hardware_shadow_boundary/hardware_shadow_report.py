@@ -23,7 +23,7 @@ LIT_UTF_8 = "utf-8"
 LIT_NAME = "name"
 LIT_PASSED = "passed"
 LIT_HEALTHY = "healthy"
-LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU = "optional hardware transparent frame budget"
+LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BUDGET = "optional hardware transparent frame budget"
 LIT_PASS = "pass"
 LIT_FAIL = "fail"
 LIT_INCONCLUSIVE = "inconclusive"
@@ -34,7 +34,7 @@ LIT_VERDICT = "verdict"
 LIT_GATES = "gates"
 LIT_FRAME_TRANSPARENT_DELTA_PERCENT = "frame_transparent_delta_percent"
 LIT_SCOPE_COMPARISONS = "scope_comparisons"
-LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN = "maximum_transparent_frame_regression_percent"
+LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCENT = "maximum_transparent_frame_regression_percent"
 LIT_COLLECTION_ERROR = "collection_error"
 FRAME_SCOPE = "render.frame"
 OPAQUE_TRACE_SCOPE = "render.shadow_opaque_trace"
@@ -123,7 +123,7 @@ class HardwareShadowReport:
                 "no forbidden runtime or validation log messages" if runtime_logs_passed else f"healthy={healthy.runtime_forbidden_log_messages}, baseline={baseline.runtime_forbidden_log_messages}",),]
         if self.args.maximum_transparent_frame_regression_percent is not None:
             threshold = self.args.maximum_transparent_frame_regression_percent
-            gates.append(self.gate(LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU, frame_delta_percent <= threshold, f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, " f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",))
+            gates.append(self.gate(LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BUDGET, frame_delta_percent <= threshold, f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, " f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",))
 
         if healthy_semantics_passed and baseline_semantics_passed and runtime_logs_passed and not intervals_passed:
             verdict = LIT_INCONCLUSIVE
@@ -135,7 +135,7 @@ class HardwareShadowReport:
         baseline_payload.update(frame_median_ms=baseline_frame.median_ms, frame_sample_count=baseline_frame.sample_count,)
         return { LIT_SCHEMA: LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1, LIT_GENERATED_UTC: datetime.now(timezone.utc).isoformat(), LIT_VERDICT: verdict, LIT_GATES: gates, LIT_HEALTHY: healthy_payload, LIT_BASELINE: baseline_payload,
             LIT_FRAME_TRANSPARENT_DELTA_PERCENT: frame_delta_percent, LIT_SCOPE_COMPARISONS: scope_comparisons, "parameters": { "frozen_yaw": self.args.frozen_yaw, "warmup_seconds": self.args.warmup_seconds, "measure_seconds": self.args.measure_seconds,
-                "minimum_samples": self.args.minimum_samples, "gpu_validation": self.args.gpu_validation, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN: self.args.maximum_transparent_frame_regression_percent, }, }
+                "minimum_samples": self.args.minimum_samples, "gpu_validation": self.args.gpu_validation, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCENT: self.args.maximum_transparent_frame_regression_percent, }, }
 
     def format_scope_value(self, summary: Optional[Mapping[str, object]]) -> str:
         if not summary:

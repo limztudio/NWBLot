@@ -55,9 +55,9 @@ class GraphicsVolumeMetadata{
 }
 
 class GraphicsVolumeWriter{
-    private Vector<u8> bytecode;
-    private Vector<u8> payload;
-    private Vector<Record> records;
+    private Vector<u8> m_bytecode;
+    private Vector<u8> m_payload;
+    private Vector<Record> m_records;
 
     private b8 appendVariant(in PreparedShaderEntry prepared, in Name shader, in Name stage, in ShaderDefineCombo defines, in u64 fingerprint, mut CookVolumeWriteContext context);
     public b8 write(in GraphicsVolumeMetadata metadata, mut CookVolumeWriteContext context);
@@ -272,7 +272,7 @@ b8 GraphicsVolumeWriter::appendVariant(in PreparedShaderEntry prepared, in Name 
     String hex;
     AppendHexU64(sourceChecksum, hex);
     const Path cache = BuildShaderVariantBytecodeCachePath(context.preparation.resolvedPaths.cacheDirectory, context.preparation.configurationSafeName, hex);
-    if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.bytecode))
+    if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.m_bytecode))
         return false;
     const Expected<Name> path = BuildVirtualPathName(shader, variant, stage);
     if(!path.has_value()){
@@ -283,18 +283,18 @@ b8 GraphicsVolumeWriter::appendVariant(in PreparedShaderEntry prepared, in Name 
         error("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')", path.value().resolvedText(), entry.name, variant);
         return false;
     }
-    const u64 bytecodeChecksum = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.bytecode));
+    const u64 bytecodeChecksum = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.m_bytecode));
     const u64 cookKey = BuildShaderVariantCookKeyHash(path.value().hash(), sourceChecksum, bytecodeChecksum);
-    const AssetPayloadEncodeFailure failure = EncodeAssetPayload(entry.entryPoint, this.bytecode, this.payload);
+    const AssetPayloadEncodeFailure failure = EncodeAssetPayload(entry.entryPoint, this.m_bytecode, this.m_payload);
     if(failure != AssetPayloadEncodeFailure::None){
         error("Failed to package shader payload '{}' (failure {})", path.value().resolvedText(), cast<u32>(failure));
         return false;
     }
-    if(!context.appendPayload(path.value(), this.payload, cookKey)){
+    if(!context.appendPayload(path.value(), this.m_payload, cookKey)){
         error("Failed to append shader payload '{}' to manifest", path.value().resolvedText());
         return false;
     }
-    mut Record record = AppendCookRecord<Record>(context, this.records);
+    mut Record record = AppendCookRecord<Record>(context, this.m_records);
     record.shaderName = shader;
     record.variantName.assign(StringView(variant));
     record.stage = stage;
@@ -313,7 +313,7 @@ b8 GraphicsVolumeWriter::write(in GraphicsVolumeMetadata metadata, mut CookVolum
     const Expected<usize> capacity = ValidatePreparedShaderRecordCountFitsCapacity(count);
     if(!capacity.has_value())
         return false;
-    this.records.reserve(capacity.value());
+    this.m_records.reserve(capacity.value());
     u64 fingerprint = 0u;
     if(!metadata.preparedPlan.preparedEntries.empty()){
         const Expected<u64> result = ComputeSlangCompilerFingerprint(context.preparation.resolvedPaths.cacheDirectory);
@@ -349,12 +349,12 @@ b8 GraphicsVolumeWriter::write(in GraphicsVolumeMetadata metadata, mut CookVolum
             }
         }
     }
-    assert(this.records.size() == capacity);
+    assert(this.m_records.size() == capacity);
     if(!context.claim(s_IndexVirtualPathName)){
         error("GraphicsCook: duplicate shader archive index virtual path '{}'", s_IndexVirtualPathName.resolvedText());
         return false;
     }
-    in Vector<Record> records = this.records;
+    in Vector<Record> records = this.m_records;
     if(!context.appendEncodedPayload(s_IndexVirtualPathName, lambda[in records](mut BinaryUpdateContext binary) -> b8{
         if(WriteShaderArchiveIndex(binary, Span<Record>(records)))
             return true;

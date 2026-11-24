@@ -3964,28 +3964,28 @@ namespace basisu
 			return false;
 		}
 
-		int channels[4] = { -1, -1, -1, -1 };
-		int base_channels = 0, single_channel = -1;
+		int rgba_channel_indices[4] = { -1, -1, -1, -1 };
+		int base_channel_count = 0, single_channel_index = -1;
 		for (int c = 0; c < exr.header.num_channels; c++)
 		{
 			if (exr.header.pixel_types[c] == TINYEXR_PIXELTYPE_HALF)
 				exr.header.requested_pixel_types[c] = TINYEXR_PIXELTYPE_FLOAT;
 
 			const char* name = exr.header.channels[c].name;
-			const char* layer = strrchr(name, '.');
-			if (layer)
+			const char* layer_separator = strrchr(name, '.');
+			if (layer_separator)
 			{
 				if (exr.header.num_channels != 1)
 					continue;
-				name = layer + 1;
+				name = layer_separator + 1;
 			}
-			base_channels++;
-			single_channel = c;
+			base_channel_count++;
+			single_channel_index = c;
 			for (int component = 0; component < 4; component++)
 				if (name[0] == "RGBA"[component] && name[1] == '\0')
-					channels[component] = c;
+					rgba_channel_indices[component] = c;
 		}
-		if (!base_channels || (base_channels != 1 && (channels[0] < 0 || channels[1] < 0 || channels[2] < 0)))
+		if (!base_channel_count || (base_channel_count != 1 && (rgba_channel_indices[0] < 0 || rgba_channel_indices[1] < 0 || rgba_channel_indices[2] < 0)))
 		{
 			error_printf("Unsupported base-layer channels in .EXR image \"%s\"!\n", source_name);
 			return false;
@@ -4006,8 +4006,8 @@ namespace basisu
 		}
 
 		// Channel declarations determine grayscale and alpha; equal RGBA values are still genuine RGBA data.
-		if (base_channels == 1)
-			channels[0] = channels[1] = channels[2] = single_channel;
+		if (base_channel_count == 1)
+			rgba_channel_indices[0] = rgba_channel_indices[1] = rgba_channel_indices[2] = single_channel_index;
 		imagef decoded;
 		decoded.resize(exr.image.width, exr.image.height);
 		auto store_pixel = [&](uint32_t x, uint32_t y, unsigned char** planes, size_t index)
@@ -4015,7 +4015,7 @@ namespace basisu
 			vec4F& pixel = decoded(x, y);
 			for (int component = 0; component < 4; component++)
 			{
-				const int channel = channels[component];
+				const int channel = rgba_channel_indices[component];
 				if (channel < 0)
 					pixel[component] = 1.0f;
 				else if (exr.header.requested_pixel_types[channel] == TINYEXR_PIXELTYPE_UINT)
@@ -4048,7 +4048,7 @@ namespace basisu
 					store_pixel(x, y, exr.image.images, x + static_cast<size_t>(y) * decoded.get_width());
 		}
 		img.swap(decoded);
-		n_chans = channels[3] >= 0 ? 4 : base_channels == 1 ? 1 : 3;
+		n_chans = rgba_channel_indices[3] >= 0 ? 4 : base_channel_count == 1 ? 1 : 3;
 		return true;
 	}
 

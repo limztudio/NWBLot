@@ -27,7 +27,7 @@ namespace GpuTaskCostHint{
         Medium,
         Large,
 
-        Count,
+        kCount,
     };
 };
 
@@ -38,7 +38,7 @@ namespace GpuGraphResourceType{
         AccelStruct,
         HazardDomain,
 
-        Count,
+        kCount,
     };
 };
 
@@ -48,7 +48,7 @@ namespace GpuTaskResourceAccess{
         Write,
         ReadWrite,
 
-        Count,
+        kCount,
     };
 };
 
@@ -57,7 +57,7 @@ namespace GpuGraphResourceVersionOrigin{
         TaskProduced,
         ImportedRoot,
 
-        Count,
+        kCount,
     };
 };
 
@@ -66,7 +66,7 @@ namespace GpuTaskResourceVersionRole{
         Produce,
         Consume,
 
-        Count,
+        kCount,
     };
 };
 
@@ -80,7 +80,7 @@ namespace GpuTaskHazardType{
         VersionDependency,
         VersionLifetime,
 
-        Count,
+        kCount,
     };
 };
 
@@ -201,7 +201,7 @@ namespace GpuGraphPipelineType{
         Meshlet,
         RayTracing,
 
-        Count,
+        kCount,
     };
 };
 
@@ -281,7 +281,7 @@ struct GpuTaskResourceUse{
 
 struct GpuTaskResourceVersionUse{
     GpuGraphResourceVersionId version;
-    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::Count;
+    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::kCount;
 };
 
 struct GpuTaskResourceSetUse{
@@ -323,7 +323,7 @@ namespace GpuCompiledBarrierType{
         AccelStructOwnershipAcquire,
         AccelStructStateExport,
 
-        Count,
+        kCount,
     };
 };
 

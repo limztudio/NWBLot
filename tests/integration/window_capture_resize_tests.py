@@ -47,9 +47,9 @@ LIT_SETTLE_SECONDS = "--settle-seconds"
 LIT_NAN = "nan"
 LIT_RESIZE_SETTLE_SECONDS = "--resize-settle-seconds"
 LIT_INF = "inf"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_RESIZE = "resize"
-LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO = "GraphicsRuntime: Back buffer resized to 1001x701"
+LIT_BACK_BUFFER_RESIZED_TO_1001X701 = "GraphicsRuntime: Back buffer resized to 1001x701"
 LIT_MAIN = "__main__"
 
 
@@ -68,7 +68,7 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
                 WindowCaptureArguments(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES).parse_args(self.base_args() + extra)
 
     def test_resize_rejects_active_freeze_and_application_self_capture(self):
-        for name in (LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
+        for name in (LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
             for value in ("1", "120", LIT_NAN, "bad"):
                 with self.subTest(name=name, value=value), self.assertRaises(window_capture_smoke.SmokeFailure):
                     window_capture_environment.validate_resize_environment({name: value})
@@ -78,7 +78,7 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
 
     def test_launch_environment_checks_freeze_only_when_resize_is_requested(self):
         args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
-        with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "6"}, clear=True), \
+        with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "6"}, clear=True), \
              mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
              mock.patch.object(window_capture_environment, "require_windows_interactive_desktop"):
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "active or invalid"):
@@ -106,7 +106,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
             events.append((LIT_CAPTURE, capture_args.output))
             return before if len([event for event in events if isinstance(event, tuple) and event[0] == LIT_CAPTURE]) < 3 else after
         with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=capture), \
-             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO]), \
+             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_BACK_BUFFER_RESIZED_TO_1001X701]), \
              mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 10.1]), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda seconds: events.append((LIT_SLEEP, seconds))):
@@ -115,7 +115,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
             (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
     def test_resize_requires_both_client_extent_and_renderer_acknowledgement(self):
-        for client, log in (((1280, 900), LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), ((1001, 701), "")):
+        for client, log in (((1280, 900), LIT_BACK_BUFFER_RESIZED_TO_1001X701), ((1001, 701), "")):
             with self.subTest(client=client, log=log):
                 args = self.make_args()
                 backend = mock.Mock()
@@ -134,7 +134,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         backend = mock.Mock()
         backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), (1001, 701)]
         with mock.patch.object(WindowFrameCapture, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
-             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, return_value=LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), \
+             mock.patch.object(window_capture_frame, LIT_COLLECT_LOG_DELTA, return_value=LIT_BACK_BUFFER_RESIZED_TO_1001X701), \
              mock.patch.object(window_capture_frame, LIT_WRITE_STATUS), \
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, return_value=10.0), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \

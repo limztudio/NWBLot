@@ -59,8 +59,8 @@ private:
 };
 
 [[nodiscard]] static AStringView StableRegistrationText(const AStringView text){
-    static RegistrationTextPool pool;
-    return pool.intern(text);
+    static RegistrationTextPool s_TextPool;
+    return s_TextPool.intern(text);
 }
 
 

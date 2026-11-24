@@ -237,13 +237,13 @@ void VerifyCurrentMathContractBoundaries_OppositelyOrientedThinBoxesDoNotInventA
     const BoundingDoubleOrientedBox doubleLhs = BoundingDoubleOrientedBox(f64x3u(0.0, 0.0, 0.0), f64x3u(1.0, 1.0, 0.1), f64x4(0.0, 0.0, 0.0, 1.0));
     for(i32 sign = -1; sign <= 1; sign += 2){
         ScopedTestTrace trace(sign);
-        const VectorSingle signedTerms = EvalSignedFlipYSingle(sign) * VectorSingle(s_PIDIV4, 1.1f, 0.0f, 0.0f);
+        const VectorSingle signedTerms = EvalSignedFlipYSingle(sign) * VectorSingle(s_QuarterPi, 1.1f, 0.0f, 0.0f);
         const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), signedTerms.x));
         const BoundingOrientedBox rhs = BoundingOrientedBox(f32x3u(1.1f, signedTerms.y, 0.0f), f32x3u(2.0f, 0.1f, 0.1f), orientation);
         EXPECT_FALSE(lhs.intersects(rhs));
         EXPECT_FALSE(rhs.intersects(lhs));
 
-        const VectorDouble doubleSignedTerms = EvalSignedFlipYDouble(sign) * VectorDouble(s_DoublePIDIV4, 1.1, 0.0, 0.0);
+        const VectorDouble doubleSignedTerms = EvalSignedFlipYDouble(sign) * VectorDouble(s_DoubleQuarterPi, 1.1, 0.0, 0.0);
         const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), doubleSignedTerms.x));
         const BoundingDoubleOrientedBox doubleRhs = BoundingDoubleOrientedBox(f64x3u(1.1, doubleSignedTerms.y, 0.0), f64x3u(2.0, 0.1, 0.1), doubleOrientation);
         EXPECT_FALSE(doubleLhs.intersects(doubleRhs));
@@ -252,9 +252,9 @@ void VerifyCurrentMathContractBoundaries_OppositelyOrientedThinBoxesDoNotInventA
 }
 
 void VerifyCurrentMathContractBoundaries_OrientedBoxTransformationAppliesTheNewRotationAfterItsExistingRotation(){
-    const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV2));
+    const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_HalfPi));
     const BoundingOrientedBox source = BoundingOrientedBox(f32x3u(0.0f, 0.0f, 0.0f), f32x3u(2.0f, 0.1f, 0.1f), orientation);
-    const VectorSingle rotation = MakeQuatRotationNormalSingle(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), s_PIDIV2);
+    const VectorSingle rotation = MakeQuatRotationNormalSingle(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), s_HalfPi);
     BoundingOrientedBox fromSrt = BoundingOrientedBox();
     BoundingOrientedBox fromMatrix = BoundingOrientedBox();
     source.transform(fromSrt, 1.0f, rotation, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
@@ -266,9 +266,9 @@ void VerifyCurrentMathContractBoundaries_OrientedBoxTransformationAppliesTheNewR
     ExpectSingleDirectionNear(Vector3Rotate(axis, VectorSingle(srtOrient)), expected);
     ExpectSingleDirectionNear(Vector3Rotate(axis, VectorSingle(matOrient)), expected);
 
-    const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoublePIDIV2));
+    const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoubleHalfPi));
     const BoundingDoubleOrientedBox doubleSource = BoundingDoubleOrientedBox(f64x3u(0.0, 0.0, 0.0), f64x3u(2.0, 0.1, 0.1), doubleOrientation);
-    const VectorDouble doubleRotation = MakeQuatRotationNormalDouble(VectorDouble(1.0, 0.0, 0.0, 0.0), s_DoublePIDIV2);
+    const VectorDouble doubleRotation = MakeQuatRotationNormalDouble(VectorDouble(1.0, 0.0, 0.0, 0.0), s_DoubleHalfPi);
     BoundingDoubleOrientedBox doubleFromSrt = BoundingDoubleOrientedBox();
     BoundingDoubleOrientedBox doubleFromMatrix = BoundingDoubleOrientedBox();
     doubleSource.transform(doubleFromSrt, 1.0, doubleRotation, VectorDouble(0.0, 0.0, 0.0, 0.0));
@@ -377,9 +377,9 @@ void VerifyCurrentMathContractBoundaries_SphereContainmentAndIntersectionAgreeAt
 }
 
 void VerifyCurrentMathContractBoundaries_FrustumTransformationAppliesTheNewRotationAfterItsExistingRotation(){
-    const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV2));
+    const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_HalfPi));
     const BoundingFrustum source = BoundingFrustum(f32x3u(0.0f, 0.0f, 0.0f), orientation, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 2.0f);
-    const VectorSingle rotation = MakeQuatRotationNormalSingle(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), s_PIDIV2);
+    const VectorSingle rotation = MakeQuatRotationNormalSingle(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), s_HalfPi);
     BoundingFrustum fromSrt = BoundingFrustum();
     BoundingFrustum fromMatrix = BoundingFrustum();
     source.transform(fromSrt, 1.0f, rotation, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
@@ -397,9 +397,9 @@ void VerifyCurrentMathContractBoundaries_FrustumTransformationAppliesTheNewRotat
         ExpectSingleDirectionNear(VectorSingle(matrixCorners[index], 0.0f), expected);
     }
 
-    const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoublePIDIV2));
+    const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoubleHalfPi));
     const BoundingDoubleFrustum doubleSource = BoundingDoubleFrustum(f64x3u(0.0, 0.0, 0.0), doubleOrientation, 1.0, -1.0, 1.0, -1.0, 1.0, 2.0);
-    const VectorDouble doubleRotation = MakeQuatRotationNormalDouble(VectorDouble(1.0, 0.0, 0.0, 0.0), s_DoublePIDIV2);
+    const VectorDouble doubleRotation = MakeQuatRotationNormalDouble(VectorDouble(1.0, 0.0, 0.0, 0.0), s_DoubleHalfPi);
     BoundingDoubleFrustum doubleFromSrt = BoundingDoubleFrustum();
     BoundingDoubleFrustum doubleFromMatrix = BoundingDoubleFrustum();
     doubleSource.transform(doubleFromSrt, 1.0, doubleRotation, VectorDouble(0.0, 0.0, 0.0, 0.0));
@@ -419,13 +419,13 @@ void VerifyCurrentMathContractBoundaries_FrustumTransformationAppliesTheNewRotat
 }
 
 void VerifyCurrentMathContractBoundaries_NonuniformOrientedBoxTransformBoundsItsRotatedAxesAndReflections(){
-    const VectorSingle orientation = MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_PIDIV4);
+    const VectorSingle orientation = MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_QuarterPi);
     const f32x4 orientationStorage = f32x4(orientation);
     const BoundingOrientedBox source = BoundingOrientedBox(f32x3u(0.0f, 0.0f, 0.0f), f32x3u(1.0f, 2.0f, 1.0f), orientationStorage);
     const VectorSingle sourcePoint = Vector3Rotate(VectorSingle(0.9f, -1.8f, 0.9f, 0.0f), orientation);
     ASSERT_EQ(source.contains(sourcePoint), ContainmentType::Contains);
 
-    const VectorDouble doubleOrientation = MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoublePIDIV4);
+    const VectorDouble doubleOrientation = MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), s_DoubleQuarterPi);
     const f64x4 doubleOrientationStorage = f64x4(doubleOrientation);
     const BoundingDoubleOrientedBox doubleSource = BoundingDoubleOrientedBox(f64x3u(0.0, 0.0, 0.0), f64x3u(1.0, 2.0, 1.0), doubleOrientationStorage);
     const VectorDouble doubleSourcePoint = RotateVector3Double(VectorDouble(0.9, -1.8, 0.9, 0.0), doubleOrientation);
@@ -1041,7 +1041,7 @@ void VerifyMath_DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundarie
     const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
 
     const VectorDouble huge = VectorDouble(f64.max, -f64.max, pow900, -pow900);
-    const VectorDouble tiesIn = VectorDouble(s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI);
+    const VectorDouble tiesIn = VectorDouble(s_DoublePi, -s_DoublePi, 3.0 * s_DoublePi, -3.0 * s_DoublePi);
     const VectorDouble exIn = VectorDouble(posInf, negInf, qnan, -0.0);
 
     const VectorDouble reduced = EvalVectorDoubleModAngles(huge);
@@ -1049,16 +1049,16 @@ void VerifyMath_DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundarie
     const VectorDouble exceptional = EvalVectorDoubleModAngles(exIn);
     Array<u64, 4> expectedHugeBits = Array<u64, 4>();
     for(usize lane = 0u; lane < 4u; ++lane)
-        expectedHugeBits[lane] = bit_cast<u64>(Remainder(huge[lane], s_Double2PI));
+        expectedHugeBits[lane] = bit_cast<u64>(Remainder(huge[lane], s_DoubleTwoPi));
 
     for(usize lane = 0u; lane < 4u; ++lane){
         const f64 laneVal = GetDoubleLaneFloat(reduced, lane);
         EXPECT_TRUE(IsFinite(laneVal));
         EXPECT_EQ(GetDoubleLaneBits(reduced, lane), expectedHugeBits[lane]);
-        EXPECT_LE(Abs(laneVal), s_DoublePI);
+        EXPECT_LE(Abs(laneVal), s_DoublePi);
     }
 
-    const Array<f64, 4> tiesExpected = MakeF64Array4(s_DoublePI, -s_DoublePI, -s_DoublePI, s_DoublePI);
+    const Array<f64, 4> tiesExpected = MakeF64Array4(s_DoublePi, -s_DoublePi, -s_DoublePi, s_DoublePi);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneFloat(ties, lane), tiesExpected[lane]);
 

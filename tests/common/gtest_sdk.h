@@ -60,22 +60,22 @@ template<typename Fixture>
 class HostedTestFixture : public ::testing::Test{
 protected:
     void SetUp()override{
-        if constexpr(requires{ value.setup(); })
-            value.setup();
+        if constexpr(requires{ m_fixture.setup(); })
+            m_fixture.setup();
     }
     void TearDown()override{
-        if constexpr(requires{ value.teardown(); })
-            value.teardown();
+        if constexpr(requires{ m_fixture.teardown(); })
+            m_fixture.teardown();
     }
 
 public:
-    [[nodiscard]] Fixture& fixture()noexcept{ return value; }
+    [[nodiscard]] Fixture& fixture()noexcept{ return m_fixture; }
 
 private:
-    Core::Alloc::GlobalArena arena{Name("tests/fixture")};
-    Fixture value = [&]() -> Fixture{
+    Core::Alloc::GlobalArena m_arena{Name("tests/fixture")};
+    Fixture m_fixture = [&]() -> Fixture{
         if constexpr(IsConstructible_V<Fixture, ::ArenaBase&>)
-            return Fixture(arena);
+            return Fixture(m_arena);
         else
             return Fixture();
     }();

@@ -17,12 +17,12 @@ LIT_GLASS_HOLE = "glass_hole"
 LIT_OVERLAP = "overlap"
 LIT_POINT = "point"
 LIT_DIRECTIONAL = "directional"
-LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA = "CSG shadow capture dimensions are invalid"
+LIT_INVALID_CSG_SHADOW_CAPTURE_DIMENSIONS = "CSG shadow capture dimensions are invalid"
 LIT_RGB = "rgb"
 LIT_EXPECTED_RGB = "expected_rgb"
 LIT_MAXIMUM_MEAN_BYTE_ERROR = "maximum_mean_byte_error"
 LIT_SAMPLE_COUNT = "sample_count"
-LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT = "CSG shadow captures have different extents"
+LIT_CSG_SHADOW_CAPTURE_EXTENT_MISMATCH = "CSG shadow captures have different extents"
 LIT_LIGHT = "light"
 LIT_EXTENT = "extent"
 LIT_MEAN_RGB_TOLERANCE_BYTES = "mean_rgb_tolerance_bytes"
@@ -58,7 +58,7 @@ def region_pixels(region, width, height, camera_x=0.0, spacing=0.015):
 def measure_frame(frame, arm, light):
     width, height, rows = frame
     if width < 320 or height < 240 or len(rows) != height or any(len(row) != width for row in rows):
-        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA)
+        raise SmokeFailure(LIT_INVALID_CSG_SHADOW_CAPTURE_DIMENSIONS)
     camera_x = 0.3 if arm == LIT_CAMERA_SHIFT else 0.0
     measurements = {}
     for region in REGIONS:
@@ -77,7 +77,7 @@ def compare_frames(frames, light=LIT_DIRECTIONAL):
     if light not in (LIT_DIRECTIONAL, LIT_POINT) or set(frames) != set(ARMS):
         raise SmokeFailure("CSG shadow comparison requires all five arms and a supported light")
     if len({frame[:2] for frame in frames.values()}) != 1:
-        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT)
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_EXTENT_MISMATCH)
     measurements = {arm: measure_frame(frames[arm], arm, light) for arm in ARMS}
     reference = measurements[LIT_REFERENCE]
     for arm in (LIT_CUT, LIT_MOVED, LIT_CAMERA_SHIFT):
@@ -106,7 +106,7 @@ def receiver_pixel_world(x, y, width, height):
 def measure_analytic_frame(frame, arm):
     width, height, rows = frame
     if width < 320 or height < 240 or len(rows) != height or any(len(row) != width for row in rows):
-        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA)
+        raise SmokeFailure(LIT_INVALID_CSG_SHADOW_CAPTURE_DIMENSIONS)
     measurements = {}
     for region in ANALYTIC_REGIONS:
         pixels = region_pixels(region, width, height, spacing=ANALYTIC_REGION_SPACING)
@@ -128,7 +128,7 @@ def compare_analytic_frames(frames):
     if set(frames) != set(ANALYTIC_ARMS):
         raise SmokeFailure("CSG analytic comparison requires a cut/uncut pair")
     if len({frame[:2] for frame in frames.values()}) != 1:
-        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT)
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_EXTENT_MISMATCH)
     measurements = {arm: measure_analytic_frame(frames[arm], arm) for arm in ANALYTIC_ARMS}
     for name in (LIT_PLANE_LEFT, LIT_ELLIPSOID_CENTER, LIT_CAPSULE_BODY, LIT_AXIAL_CAPSULE_CENTER, LIT_SPHERE_UNION_CENTER):
         gain = max(a - b for a, b in zip(measurements[LIT_CUT][name][LIT_RGB], measurements[LIT_UNCUT][name][LIT_RGB]))

@@ -288,7 +288,7 @@ MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
     if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
-    const f32 volume = (4.0f / 3.0f) * s_PI * r * r * r;
+    const f32 volume = (4.0f / 3.0f) * s_Pi * r * r * r;
     const f32 mass = density * volume;
     const f32 iCenter = 0.4f * mass * r * r;
 
@@ -319,8 +319,8 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     const f32 length = Vector3Length(d).x;
     const f32 rr = r * r;
 
-    const f32 cylMass = density * s_PI * rr * length;
-    const f32 sphMass = density * (4.0f / 3.0f) * s_PI * rr * r;
+    const f32 cylMass = density * s_Pi * rr * length;
+    const f32 sphMass = density * (4.0f / 3.0f) * s_Pi * rr * r;
     const f32 totalMass = cylMass + sphMass;
     if(totalMass <= 0.0f)
         return outMass;

@@ -57,7 +57,7 @@ namespace GpuTaskQueueAssignmentReason{
         Conservative,
         Scored,
 
-        Count,
+        kCount,
     };
 };
 
@@ -110,7 +110,7 @@ namespace GpuTaskGraphPacketizationPolicy{
         FrontierSafe,
         FrontierScored,
 
-        Count,
+        kCount,
     };
 };
 

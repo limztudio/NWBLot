@@ -40,31 +40,31 @@ class OwnedPipe{
 
 [ordered]
 class ClipboardPipeContext{
-    private HeapStorage storage = HeapStorage();
-    private OwnedPipe pipe;
-    private TestValueSlot<ClipboardTextAccumulator> receiveSlot;
-    private mut ClipboardTextAccumulator received;
-    private TestValueSlot<ClipboardPipeWriter> writerSlot;
-    private mut ClipboardPipeWriter writer;
+    private HeapStorage m_storage = HeapStorage();
+    private OwnedPipe m_pipe;
+    private TestValueSlot<ClipboardTextAccumulator> m_receiveSlot;
+    private mut ClipboardTextAccumulator m_received;
+    private TestValueSlot<ClipboardPipeWriter> m_writerSlot;
+    private mut ClipboardPipeWriter m_writer;
     public String input;
     public String expected;
 
     public ClipboardPipeContext(){
-        this.received = this.receiveSlot.constructIn(this.storage);
-        this.writer = this.writerSlot.constructIn(this.storage);
+        this.m_received = this.m_receiveSlot.constructIn(this.m_storage);
+        this.m_writer = this.m_writerSlot.constructIn(this.m_storage);
     }
 
-    public b8 openPipe(){ return this.pipe.open(); }
-    public void closeWriteEnd(){ CloseClipboardPipe(this.pipe.writeFd); }
-    public void closeReadEnd(){ CloseClipboardPipe(this.pipe.readFd); }
-    public i32 releaseWriteFd(){ return this.pipe.releaseWrite(); }
-    public isize writeRaw(in StringView bytes){ return WriteOsFd(this.pipe.writeFd, bytes); }
-    public Expected<b8, ClipboardPipeReadFailure> readPipe(){ return ReadClipboardPipe(this.pipe.readFd, this.received); }
-    public StringView receivedText()const{ return this.received.textView(); }
-    public void clearReceived(){ this.received.clear(); }
-    public b8 beginWriter(in i32 fd, in StringView text){ return this.writer.begin(fd, text); }
-    public ClipboardStatus advanceWriter(){ return this.writer.advance(); }
-    public b8 writerFinished()const{ return this.writer.finished(); }
+    public b8 openPipe(){ return this.m_pipe.open(); }
+    public void closeWriteEnd(){ CloseClipboardPipe(this.m_pipe.writeFd); }
+    public void closeReadEnd(){ CloseClipboardPipe(this.m_pipe.readFd); }
+    public i32 releaseWriteFd(){ return this.m_pipe.releaseWrite(); }
+    public isize writeRaw(in StringView bytes){ return WriteOsFd(this.m_pipe.writeFd, bytes); }
+    public Expected<b8, ClipboardPipeReadFailure> readPipe(){ return ReadClipboardPipe(this.m_pipe.readFd, this.m_received); }
+    public StringView receivedText()const{ return this.m_received.textView(); }
+    public void clearReceived(){ this.m_received.clear(); }
+    public b8 beginWriter(in i32 fd, in StringView text){ return this.m_writer.begin(fd, text); }
+    public ClipboardStatus advanceWriter(){ return this.m_writer.advance(); }
+    public b8 writerFinished()const{ return this.m_writer.finished(); }
     public i32 queryFdFlags(in i32 fd)const{ return OsFdFlags(fd, s_OsGetFileFlags); }
     public b8 hasNonblockFlag(in i32 flags)const{ return (flags & s_OsNonBlocking) != 0; }
     public i32 pollPipeWritable(in i32 fd)const{

@@ -160,7 +160,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleATan(SIMDVec
 
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
-    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_3PIDIV4);
+    const SIMDVectorSingle constants = VectorSet(s_Pi, s_HalfPi, s_QuarterPi, s_ThreePiOverFour);
     SIMDVectorSingle v = VectorDivide(y, x);
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATan(v), constants);
 }

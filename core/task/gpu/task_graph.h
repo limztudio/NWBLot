@@ -563,17 +563,17 @@ private:
 
 private:
     [[nodiscard]] static u32 CachedCurrentThreadId()noexcept{
-        thread_local const u32 id = []()noexcept{
+        thread_local const u32 s_ThreadId = []()noexcept{
             const u32 tid = CurrentThreadId();
             return tid != 0u ? tid : 1u;
         }();
-        return id;
+        return s_ThreadId;
     }
 
     [[nodiscard]] static u8 LocalReaderStripeIndex()noexcept{
         static Atomic<u32> s_NextStripe{ 0u };
-        thread_local const u8 stripe = static_cast<u8>(s_NextStripe.fetch_add(1u, MemoryOrder::relaxed) & (s_ReaderStripeCount - 1u));
-        return stripe;
+        thread_local const u8 s_StripeIndex = static_cast<u8>(s_NextStripe.fetch_add(1u, MemoryOrder::relaxed) & (s_ReaderStripeCount - 1u));
+        return s_StripeIndex;
     }
 
     [[nodiscard]] b8 hasAnyActiveDeclarationReader(const MemoryOrder order)const noexcept{

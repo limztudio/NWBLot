@@ -30,7 +30,7 @@ namespace GpuCommandIrOpcode{
         UploadBuffer,
         UploadTexture,
 
-        Count,
+        kCount,
     };
 };
 
@@ -60,7 +60,7 @@ namespace GpuCommandIrWireOpcode{
         SetPushConstants,
         EndRenderPass,
 
-        Count,
+        kCount,
     };
 };
 

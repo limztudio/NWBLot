@@ -69,7 +69,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
         );
         [essential] assert(receiver.valid(), "CsgShadowSmokeProject: camera/receiver creation failed");
         mut TransformComponent receiverTransform = world.entity(receiver).getComponent<TransformComponent>();
-        receiverTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_PIDIV2, 0.0f, 0.0f, 0.0f)));
+        receiverTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_HalfPi, 0.0f, 0.0f, 0.0f)));
 
         EntityID light = s_InvalidEntityId;
         if(this.m_mode.pointLight)

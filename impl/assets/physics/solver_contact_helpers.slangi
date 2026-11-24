@@ -12,7 +12,7 @@
 
 
 void nwbPhysicsApplyPointImpulse(
-    const float3 P,
+    const float3 pointImpulse,
     const float3 rA,
     const float3 rB,
     const float invMassA,
@@ -31,16 +31,16 @@ void nwbPhysicsApplyPointImpulse(
     inout float3 wB
 ){
     if(dynA){
-        vA -= invMassA * P;
-        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, P));
+        vA -= invMassA * pointImpulse;
+        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, pointImpulse));
         if((flagsA & 0x3Fu) != 0u){
             vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
             wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
         }
     }
     if(dynB){
-        vB += invMassB * P;
-        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, P));
+        vB += invMassB * pointImpulse;
+        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, pointImpulse));
         if((flagsB & 0x3Fu) != 0u){
             vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
             wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
@@ -199,8 +199,8 @@ void nwbPhysicsWarmStartContact(
             continue;
         const float3 rA = pt.rABaseSep.xyz;
         const float3 rB = pt.rBRelVel.xyz;
-        const float3 P = normalImpulse * normal;
-        nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
+        const float3 pointImpulse = normalImpulse * normal;
+        nwbPhysicsApplyPointImpulse(pointImpulse, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
         anyWarmApplied = true;
     }
 
@@ -490,8 +490,8 @@ void nwbPhysicsSolveContactVelocity(
         const float2 appliedF = newF - tmf.zw;
         if(appliedF.x != 0.0f || appliedF.y != 0.0f){
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw = newF;
-            const float3 P = appliedF.x * tangent1 + appliedF.y * tangent2;
-            nwbPhysicsApplyPointImpulse(P, centerA, centerB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
+            const float3 pointImpulse = appliedF.x * tangent1 + appliedF.y * tangent2;
+            nwbPhysicsApplyPointImpulse(pointImpulse, centerA, centerB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
             anyApplied = true;
         }
     }

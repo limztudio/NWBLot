@@ -68,8 +68,8 @@ enum Enum : i32{
 
 
 [[nodiscard]] inline u64 NextProcessSequence()noexcept{
-    static Atomic<u64> sequence{0u};
-    return sequence.fetch_add(1u, MemoryOrder::relaxed);
+    static Atomic<u64> s_Sequence{0u};
+    return s_Sequence.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 

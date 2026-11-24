@@ -29,7 +29,7 @@ const f32 s_CsgSkinnedDefaultDirectionalLightIntensity = 3.0f;
 const f32 s_CsgSkinnedCutterAnimationSpeed = 0.18f;
 const f32 s_CsgSkinnedReceiverYawSpeed = 0.92f;
 const f32 s_CsgSkinnedMaxAnimationDelta = s_SmokeSpinMaxDelta;
-const f32 s_CsgSkinnedInitialAnimationTime = s_PIDIV2 / s_CsgSkinnedReceiverYawSpeed;
+const f32 s_CsgSkinnedInitialAnimationTime = s_HalfPi / s_CsgSkinnedReceiverYawSpeed;
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 const f32 s_CsgSkinnedTransparentReceiverAlpha = 0.44f;
 #endif
@@ -309,7 +309,7 @@ VectorSingle BuildCsgSkinnedReceiverPosition(){
 }
 
 VectorSingle BuildCsgSkinnedCutterLocalRotation(in f32 animationTime){
-    const VectorSingle horizontalCapsule = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, s_PIDIV2, 0.0f, 0.0f));
+    const VectorSingle horizontalCapsule = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_HalfPi, s_HalfPi, 0.0f, 0.0f));
     const VectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedCutterGentleRollSpeed);
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }

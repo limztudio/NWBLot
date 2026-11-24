@@ -51,7 +51,7 @@ b8 GpuTaskGraph::applyCompiledBarrierValidated(
     const GpuCompiledBarrier& barrier,
     CommandList& commandList
 )const{
-    if(!validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
+    if(!validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];

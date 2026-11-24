@@ -24,8 +24,8 @@ struct NameOperand{
 
 struct NameProvider{
     static NameOperand& AssetTypeName()noexcept{
-        static NameOperand operand;
-        return operand;
+        static NameOperand s_Operand;
+        return s_Operand;
     }
 };
 

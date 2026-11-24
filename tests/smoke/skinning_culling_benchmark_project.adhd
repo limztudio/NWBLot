@@ -258,7 +258,7 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
         switch(view){
         case BenchmarkView::Back:
             position = VectorSingle(0.0f, s_SkinningCameraHeight, s_BackCameraDistance, 0.0f);
-            rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_PI, 0.0f, 0.0f));
+            rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_Pi, 0.0f, 0.0f));
             break;
         case BenchmarkView::Close:
             position = VectorSingle(0.0f, s_SkinningCameraHeight, -s_CloseCameraDistance, 0.0f);

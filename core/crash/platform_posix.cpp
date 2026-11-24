@@ -48,7 +48,7 @@ inline constexpr int s_AndroidEmergencyFileMode = 0644;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
 inline constexpr int s_HandlerExecFailureExitCode = 127;
 
-alignas(MaxAlign) static Array<u8, s_SignalStackSize> g_SignalStack = {};
+alignas(MaxAlign) static Array<u8, s_SignalStackSize> s_SignalStack = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,8 +76,8 @@ static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanup
 
 [[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> InstallSignalHandlers()noexcept{
     stack_t stack = {};
-    stack.ss_sp = g_SignalStack.data();
-    stack.ss_size = sizeof(g_SignalStack);
+    stack.ss_sp = s_SignalStack.data();
+    stack.ss_size = sizeof(s_SignalStack);
     if(sigaltstack(&stack, &CrashDetail::g_State.previousSignalStack) != 0)
         return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::InstallSignalStack, errno));
     CrashDetail::g_State.signalStackInstalled = true;
@@ -508,7 +508,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
             observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
             pending = true;
         }
-        else if((current.ss_flags & SS_DISABLE) == 0 && current.ss_sp == g_SignalStack.data()){
+        else if((current.ss_flags & SS_DISABLE) == 0 && current.ss_sp == s_SignalStack.data()){
             if(sigaltstack(&g_State.previousSignalStack, nullptr) != 0){
                 observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
                 pending = true;

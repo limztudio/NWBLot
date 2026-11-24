@@ -4,7 +4,7 @@
 
 const f32 s_CameraDefaultVerticalFovDegrees = 60.0f;
 const f32 s_CameraDegreesPerHalfTurn = 180.0f;
-const f32 s_CameraVerticalFovRadians = s_CameraDefaultVerticalFovDegrees * (s_PI / s_CameraDegreesPerHalfTurn);
+const f32 s_CameraVerticalFovRadians = s_CameraDefaultVerticalFovDegrees * (s_Pi / s_CameraDegreesPerHalfTurn);
 const f32 s_CameraNearPlane = 0.001f;
 const f32 s_CameraFarPlane = 10000.0f;
 const f32 s_CameraAutoAspectRatio = 0.0f;
@@ -52,7 +52,7 @@ CameraProjection MakeFallbackCameraProjection(){
 }
 
 Expected<f32> TryComputeCameraTanHalfVerticalFov(in f32 verticalFovRadians){
-    if(!IsFinite(VectorSingle(verticalFovRadians)) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
+    if(!IsFinite(VectorSingle(verticalFovRadians)) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_Pi))
         return MakeUnexpected(Failure());
 
     const VectorDouble halfFovVec(cast<f64>(verticalFovRadians) * cast<f64>(s_HalfFovWeight));

@@ -77,7 +77,7 @@ namespace GpuTaskTimingPolicy{
         PacketOnly,
         Task,
 
-        Count,
+        kCount,
     };
 };
 
@@ -149,7 +149,7 @@ public:
 struct GpuGraphResourceVersionDesc{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
-    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::Count;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
 
 
 public:
@@ -182,7 +182,7 @@ public:
 struct GpuGraphPipelineDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
 
 
 public:
@@ -359,7 +359,7 @@ namespace GpuClearTextureTaskValueType{
         Int,
         DepthStencil,
 
-        Count,
+        kCount,
     };
 };
 

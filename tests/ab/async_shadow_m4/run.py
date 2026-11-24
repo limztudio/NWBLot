@@ -57,11 +57,11 @@ LIT_SYNC_EXECUTABLE = "--sync-executable"
 LIT_ASYNC_EXECUTABLE = "--async-executable"
 LIT_RUNTIME_DIR = "--runtime-dir"
 LIT_OUTPUT_DIR = "--output-dir"
-LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE = "--frozen-yaw must be a finite float32 decimal"
+LIT_INVALID_FROZEN_YAW = "--frozen-yaw must be a finite float32 decimal"
 
-LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO = "cannot safely continue after an unresolved frame recovery submission"
+LIT_UNRESOLVED_FRAME_RECOVERY_SUBMISSION = "cannot safely continue after an unresolved frame recovery submission"
 LIT_NWB_STRESS_TEST_SPIN_ANGLE = "NWB_STRESS_TEST_SPIN_ANGLE"
-LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU = "benchmark runner could not select a runtime-log directory"
+LIT_RUNTIME_LOG_DIRECTORY_SELECTION_FAILED = "benchmark runner could not select a runtime-log directory"
 LIT_BENCHMARK_LOGSERVER = "benchmark logserver"
 LIT_TESTBED = "testbed"
 LIT_SELF_TEST = "--self-test"
@@ -77,7 +77,7 @@ LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
 
-DEFAULT_FORBIDDEN_LOGS = (*STRICT_LOG_FAILURE_MESSAGES, LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO,)
+DEFAULT_FORBIDDEN_LOGS = (*STRICT_LOG_FAILURE_MESSAGES, LIT_UNRESOLVED_FRAME_RECOVERY_SUBMISSION,)
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
 M4_RENDER_UNFOCUSED_LOG = "AvboitTimingProbe: render unfocused 1"
@@ -194,7 +194,7 @@ class BenchmarkStartup:
 def start_benchmark(args: argparse.Namespace, mode: str, executable: Path, capture_backend, launch_args, environment, startup: BenchmarkStartup) -> None:
     startup.logserver_process, log_port, startup.log_directory, startup.log_baseline, startup.log_pattern = launch_logserver(launch_args, executable, environment)
     if not startup.log_directory:
-        raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
+        raise SmokeFailure(LIT_RUNTIME_LOG_DIRECTORY_SELECTION_FAILED)
     startup.app_process = launch_testbed(launch_args, executable, environment, log_port)
 
     lane = wait_for_lane_status(startup.app_process, startup.log_directory, startup.log_baseline, startup.log_pattern, args.startup_timeout,)
@@ -350,14 +350,14 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         parser.error(f"missing required arguments: {', '.join(missing)}")
     yaw_token = re.fullmatch(r"-?([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", args.frozen_yaw)
     if yaw_token is None:
-        parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
+        parser.error(LIT_INVALID_FROZEN_YAW)
     if any(digit not in "0." for digit in yaw_token[1]):
         try:
             frozen_yaw = Decimal(args.frozen_yaw).copy_abs()
         except InvalidOperation:
-            parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
+            parser.error(LIT_INVALID_FROZEN_YAW)
         if not Decimal.from_float(2.0 ** -150) < frozen_yaw < Decimal(2 ** 128 - 2 ** 103):
-            parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
+            parser.error(LIT_INVALID_FROZEN_YAW)
     require_non_negative(parser, LIT_WARMUP_SECONDS, args.warmup_seconds)
     require_positive(parser, LIT_MEASURE_SECONDS, args.measure_seconds)
     require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)

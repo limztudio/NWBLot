@@ -35,7 +35,7 @@ namespace TextInputChangeCause{
 };
 
 namespace TextInputDeletionBasis{
-    enum Enum : u8{ Caret, Selection, Count };
+    enum Enum : u8{ Caret, Selection, kCount };
 };
 
 namespace TextInputPollResult{

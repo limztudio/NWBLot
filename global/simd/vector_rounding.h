@@ -242,7 +242,7 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorModAngles(SIMDVect
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleModAngles(SIMDVectorDouble angles)noexcept{
-    return VectorDoubleSet(Remainder(angles[0], s_Double2PI), Remainder(angles[1], s_Double2PI), Remainder(angles[2], s_Double2PI), Remainder(angles[3], s_Double2PI));
+    return VectorDoubleSet(Remainder(angles[0], s_DoubleTwoPi), Remainder(angles[1], s_DoubleTwoPi), Remainder(angles[2], s_DoubleTwoPi), Remainder(angles[3], s_DoubleTwoPi));
 }
 
 

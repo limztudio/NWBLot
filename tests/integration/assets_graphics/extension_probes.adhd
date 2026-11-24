@@ -15,52 +15,52 @@ class ExtensionCallerFailure{}
 class ExtensionInsertionFailure{}
 
 class ExtensionMember{
-    private mut MetadataExtensionState state;
-    private Vector<u8> bytes;
+    private mut MetadataExtensionState m_state;
+    private Vector<u8> m_bytes;
     public ExtensionMember(mut MetadataExtensionState state){
-        this.state = state;
-        this.bytes.resize(513u, 0x5au);
+        this.m_state = state;
+        this.m_bytes.resize(513u, 0x5au);
     }
-    public ~ExtensionMember(){ ++this.state.memberDestructions; }
+    public ~ExtensionMember(){ ++this.m_state.memberDestructions; }
 }
 
 [ordered]
 class AlignedExtension{
-    private Alignment128 alignment;
-    private ExtensionMember member;
-    private mut MetadataExtensionState state;
+    private Alignment128 m_alignment;
+    private ExtensionMember m_member;
+    private mut MetadataExtensionState m_state;
     public usize identity;
 
     [cpp_unwind]
     public AlignedExtension(mut MetadataExtensionState state, in b8 fail){
-        this.member = ExtensionMember(state);
-        this.state = state;
+        this.m_member = ExtensionMember(state);
+        this.m_state = state;
         this.identity = ++state.constructions;
         if(fail)
             ThrowTestException(ExtensionConstructionFailure());
     }
-    public ~AlignedExtension(){ ++this.state.destructions; }
+    public ~AlignedExtension(){ ++this.m_state.destructions; }
 }
 
 class TextExtension{
-    private mut MetadataExtensionState state;
+    private mut MetadataExtensionState m_state;
     public Vector<String> strings;
     public TextExtension(mut MetadataExtensionState state){
-        this.state = state;
+        this.m_state = state;
         ++state.constructions;
         this.strings.emplace_back("first separately allocated extension payload");
         this.strings.emplace_back("second separately allocated extension payload");
     }
-    public ~TextExtension(){ ++this.state.destructions; }
+    public ~TextExtension(){ ++this.m_state.destructions; }
 }
 
 class ReentrantExtension{
-    private mut MetadataExtensionState state;
+    private mut MetadataExtensionState m_state;
     public usize identity;
     public usize nested;
 
     public ReentrantExtension(mut ParsedAssetMetadata metadata, in Name name, mut MetadataExtensionState state, in b8 recurse){
-        this.state = state;
+        this.m_state = state;
         this.identity = ++state.constructions;
         this.nested = 0u;
         if(recurse){
@@ -68,7 +68,7 @@ class ReentrantExtension{
             this.nested = TestValueAddress(existing);
         }
     }
-    public ~ReentrantExtension(){ ++this.state.destructions; }
+    public ~ReentrantExtension(){ ++this.m_state.destructions; }
 }
 
 class ThrowingExtensionHasher{
@@ -83,12 +83,12 @@ class ThrowingExtensionHasher{
 
 class RegistryBorrowingExtension{
     public in CookEntryRegistry registry;
-    private mut usize observed;
+    private mut usize m_observed;
     public RegistryBorrowingExtension(in CookEntryRegistry registry, mut usize observed){
         this.registry = registry;
-        this.observed = observed;
+        this.m_observed = observed;
     }
-    public ~RegistryBorrowingExtension(){ this.observed = this.registry.bucketCount(); }
+    public ~RegistryBorrowingExtension(){ this.m_observed = this.registry.bucketCount(); }
 }
 
 static_assert(align_of<AlignedExtension>() >= 128u);

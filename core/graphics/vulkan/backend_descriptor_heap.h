@@ -233,7 +233,7 @@ private:
     FixedTable<BufferHandle> m_resourceDescriptorBuffers;
     FixedTable<TextureHandle> m_resourceDescriptorTextures;
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
-    Array<u32, GpuDescriptorClass::Count> m_classBufferOffset = {};
+    Array<u32, GpuDescriptorClass::kCount> m_classBufferOffset = {};
     u32 m_accelStructBufferBindingOffset = 0u;
 
     SlotAllocator m_resourceSlots;

@@ -189,7 +189,7 @@ b8 GpuTaskGraphCompiler::analyzeInternal(const GpuTaskGraph::DeclarationReadView
 #if defined(NWB_DEBUG)
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
         const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, resourceIndex);
-        FOUNDATION_ASSERT(resource.identity && resource.type < GpuGraphResourceType::Count);
+        FOUNDATION_ASSERT(resource.identity && resource.type < GpuGraphResourceType::kCount);
     }
     for(usize completionIndex = 0u; completionIndex < externalCompletionCount; ++completionIndex)
         FOUNDATION_ASSERT(graph.externalCompletionAt(completionIndex).identity);
@@ -199,7 +199,7 @@ b8 GpuTaskGraphCompiler::analyzeInternal(const GpuTaskGraph::DeclarationReadView
         const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskIndex);
         const GpuTaskId taskId{ .generation = generation, .index = static_cast<u32>(taskIndex) };
         FOUNDATION_ASSERT(task.identity);
-        if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::Count)
+        if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::kCount)
             return fail(GpuTaskGraphAnalysisStatus::InvalidTask, taskId);
         const Span<const GpuTaskId> dependencies = CompilerGraphAccess::TaskDependencies(graph, task);
         for(const GpuTaskId dependency : dependencies){
@@ -221,7 +221,7 @@ b8 GpuTaskGraphCompiler::analyzeInternal(const GpuTaskGraph::DeclarationReadView
 #endif
         const Span<const GpuTaskResourceUse> resourceUses = CompilerGraphAccess::TaskResourceUses(graph, task);
         for(const GpuTaskResourceUse& use : resourceUses){
-            if(!CompilerGraphAccess::ValidResource(graph, use.resource) || use.access >= GpuTaskResourceAccess::Count)
+            if(!CompilerGraphAccess::ValidResource(graph, use.resource) || use.access >= GpuTaskResourceAccess::kCount)
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, taskId, {}, use.resource);
 
             const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);

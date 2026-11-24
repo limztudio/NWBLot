@@ -97,7 +97,7 @@ struct RenderPassAttachmentOperations{
 };
 
 [[nodiscard]] constexpr b8 IsRenderPassAttachmentActionsValid(const RenderPassAttachmentActions& actions)noexcept{
-    return actions.loadAction < RenderPassLoadAction::Count && actions.storeAction < RenderPassStoreAction::Count;
+    return actions.loadAction < RenderPassLoadAction::kCount && actions.storeAction < RenderPassStoreAction::kCount;
 }
 
 [[nodiscard]] constexpr VkAttachmentLoadOp ConvertRenderPassLoadAction(const RenderPassLoadAction::Enum action)noexcept{

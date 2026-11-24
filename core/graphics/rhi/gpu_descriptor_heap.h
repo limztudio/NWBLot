@@ -35,7 +35,7 @@ namespace GpuDescriptorClass{
         SampledImage2DArrayUint,
         SampledImageCube,
 
-        Count
+        kCount
     };
 };
 

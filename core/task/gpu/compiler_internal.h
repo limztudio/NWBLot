@@ -514,12 +514,12 @@ struct GpuTaskQueueScoringData{
     };
 
     struct InterleavedCostWord{
-        u64 groups[GpuTaskCostHint::Count]{};
+        u64 groups[GpuTaskCostHint::kCount]{};
     };
 
     Vector<u64, Alloc::ScratchArena> taskCosts;
     Vector<u8, Alloc::ScratchArena> taskCostGroups;
-    Array<u64, GpuTaskCostHint::Count> costGroupWeights;
+    Array<u64, GpuTaskCostHint::kCount> costGroupWeights;
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
     Vector<OwnershipEdge, Alloc::ScratchArena> ownershipEdges;
     Vector<u64, Alloc::ScratchArena> resourceConcurrentAdmittedMasks;

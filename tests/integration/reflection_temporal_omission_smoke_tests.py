@@ -16,7 +16,7 @@ TIMING_EVIDENCE = GpuTimingEvidence()
 
 LIT_N = "\n"
 LIT_SCOPES = "scopes"
-LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI = "ReflectionSmokeProject: hardware unavailable\n"
+LIT_REFLECTION_HARDWARE_UNAVAILABLE_LOG = "ReflectionSmokeProject: hardware unavailable\n"
 LIT_MAIN = "__main__"
 LIT_UTF_8 = "utf-8"
 
@@ -73,13 +73,13 @@ class TemporalOmissionCapabilityTests(unittest.TestCase):
         self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors("ReflectionSmokeProject: hardware unavailable\nReflectionSmokeProject: hardware available\n"))
 
     def test_repeated_unavailable_marker_is_not_a_capability_proof(self):
-        self.assertTrue(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + "ReflectionSmokeProject: shutdown\n"))
-        self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI * 2))
+        self.assertTrue(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTION_HARDWARE_UNAVAILABLE_LOG + "ReflectionSmokeProject: shutdown\n"))
+        self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTION_HARDWARE_UNAVAILABLE_LOG * 2))
 
     def test_missing_cleanup_artifact_cannot_prove_cleanup_succeeded(self):
         with tempfile.TemporaryDirectory() as root:
             log = Path(root) / "runtime.log"
-            log.write_text(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI, encoding=LIT_UTF_8)
+            log.write_text(LIT_REFLECTION_HARDWARE_UNAVAILABLE_LOG, encoding=LIT_UTF_8)
             error = proof.benchmark.SmokeFailure("GPU benchmark timed out: no hardware")
             cleanup = proof.benchmark.TrialCleanupStatus()
             self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_skip_is_proven(error, log, cleanup))
@@ -96,7 +96,7 @@ class TemporalOmissionCapabilityTests(unittest.TestCase):
     def test_validation_or_error_messages_are_never_masked(self):
         for error in proof.benchmark.STRICT_LOG_FAILURE_MESSAGES:
             with self.subTest(error=error):
-                self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + error + " detected\n"))
+                self.assertFalse(ReflectionTemporalOmissionEvidence.hardware_unavailable_without_errors(LIT_REFLECTION_HARDWARE_UNAVAILABLE_LOG + error + " detected\n"))
 
 
 if __name__ == LIT_MAIN:

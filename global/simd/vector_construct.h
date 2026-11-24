@@ -156,7 +156,7 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleReplicateInt
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorTrueInt()noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(s_SELECT_1, s_SELECT_1, s_SELECT_1, s_SELECT_1);
+    return SIMDConvertDetail::MakeU32(s_SelectTrueMask32, s_SelectTrueMask32, s_SelectTrueMask32, s_SelectTrueMask32);
 #elif defined(FOUNDATION_HAS_NEON)
     return vreinterpretq_f32_s32(vdupq_n_s32(-1));
 #else
@@ -165,7 +165,7 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorTrueInt()noexcept{
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleTrueInt()noexcept{
-    return VectorDoubleReplicateInt(s_DoubleSELECT_1);
+    return VectorDoubleReplicateInt(s_SelectTrueMask64);
 }
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorFalseInt()noexcept{

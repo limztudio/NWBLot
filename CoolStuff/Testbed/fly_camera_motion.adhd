@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_DegreesToRadians = s_PI / 180.0f;
+const f32 s_DegreesToRadians = s_Pi / 180.0f;
 const f32 s_CameraMoveEpsilon = 0.000001f;
 const f32 s_FlyCameraMoveSpeed = 2.5f;
 const f32 s_FlyCameraBoostMultiplier = 4.0f;

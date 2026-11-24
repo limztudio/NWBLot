@@ -409,7 +409,7 @@ b8 RunPhysicsGpuParitySmoke(
         return false;
 
     for(u32 ji = 0u; ji < 26u; ++ji){
-        const f32 ang = cast<f32>(ji) * (2.0f * s_PI / 26.0f);
+        const f32 ang = cast<f32>(ji) * (2.0f * s_Pi / 26.0f);
         BodyDef leafDef;
         leafDef.type = BodyType::Dynamic;
         VectorSingle sinAng(0.0f);

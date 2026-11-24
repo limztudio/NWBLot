@@ -2018,7 +2018,7 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     TransformComponent camXf;
     camXf.position = f32x4(0.0f, 1.0f, -5.0f, 0.0f);
     camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-    const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_PI / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
+    const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_Pi / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
     ASSERT_TRUE(projRes.has_value());
     VectorSingle projectedSegment(0.0f);
     EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f), projectedSegment));
@@ -2712,7 +2712,7 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     bipyramidVerts.push_back(f32x4(0.0f, 1.0f, 0.0f, 0.0f));
     bipyramidVerts.push_back(f32x4(0.0f, -1.0f, 0.0f, 0.0f));
     for(u32 vi = 0u; vi < 42u; ++vi){
-        const f32 ang = (2.0f * s_PI * cast<f32>(vi)) / 42.0f;
+        const f32 ang = (2.0f * s_Pi * cast<f32>(vi)) / 42.0f;
         VectorSingle sinAng(0.0f);
         VectorSingle cosAng(0.0f);
         VectorSinCos(sinAng, cosAng, VectorSingle(ang));

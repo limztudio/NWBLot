@@ -11,22 +11,22 @@
 
 [move_only]
 class OpticalUploadTask{
-    private BufferHandle destination;
-    private GpuUploadBlobId source;
-    private RayTracingOpticalSceneUploadHandle upload;
-    private RayTracingOpticalUploadReservation reservation;
-    private GpuPhysicalQueueId queue;
+    private BufferHandle m_destination;
+    private GpuUploadBlobId m_source;
+    private RayTracingOpticalSceneUploadHandle m_upload;
+    private RayTracingOpticalUploadReservation m_reservation;
+    private GpuPhysicalQueueId m_queue;
 
     public OpticalUploadTask(in BufferHandle destination, in RayTracingOpticalSceneUploadHandle upload, in RayTracingOpticalUploadControlHandle control, in RayTracingOpticalUploadPlan plan){
-        this.destination = destination;
-        this.upload = upload;
-        this.reservation = RayTracingOpticalUploadReservation(control, plan);
-        this.queue = plan.queue;
+        this.m_destination = destination;
+        this.m_upload = upload;
+        this.m_reservation = RayTracingOpticalUploadReservation(control, plan);
+        this.m_queue = plan.queue;
     }
 
-    public b8 reserved()const{ return this.reservation.valid(); }
+    public b8 reserved()const{ return this.m_reservation.valid(); }
 
-    public void setSource(in GpuUploadBlobId source){ this.source = source; }
+    public void setSource(in GpuUploadBlobId source){ this.m_source = source; }
 
     public GpuTaskCommandRequirements commandRequirements()const{
         GpuTaskCommandRequirements commands;
@@ -37,32 +37,32 @@ class OpticalUploadTask{
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        const auto bytes = context.declarations.uploadBlobData(this.source);
-        if(!bytes.has_value() || !this.upload.valid())
+        const auto bytes = context.declarations.uploadBlobData(this.m_source);
+        if(!bytes.has_value() || !this.m_upload.valid())
             return false;
         if(!ValidOpticalUploadRecordState(
-            this.destination.valid(), true, true, bytes.value().size(), this.upload.deref().bytes.size(),
-            this.reservation.valid(), context.commandIrCapture, context.queue == this.queue
+            this.m_destination.valid(), true, true, bytes.value().size(), this.m_upload.deref().bytes.size(),
+            this.m_reservation.valid(), context.commandIrCapture, context.queue == this.m_queue
         ))
             return false;
         commandList.endRenderPass();
         const BufferRange range = BufferRange(0u, bytes.value().size());
-        commandList.setBufferState(this.destination.deref(), ResourceStates::CopyDest, false, range);
+        commandList.setBufferState(this.m_destination.deref(), ResourceStates::CopyDest, false, range);
         commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(this.destination.deref(), bytes.value().span(), 0u))
+        if(!commandList.tryWriteBuffer(this.m_destination.deref(), bytes.value().span(), 0u))
             return false;
-        commandList.setBufferState(this.destination.deref(), ResourceStates::Common, false, range);
+        commandList.setBufferState(this.m_destination.deref(), ResourceStates::Common, false, range);
         commandList.commitBarriers();
         return true;
     }
 
     public void accepted(in QueueSubmissionToken token){
-        if(!this.reservation.accept(token))
+        if(!this.m_reservation.accept(token))
             LogInvalidAcceptedOpticalUploadProvenance();
     }
 
     public void discarded(){
-        this.reservation.discard();
+        this.m_reservation.discard();
     }
 }
 

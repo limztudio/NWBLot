@@ -10,7 +10,7 @@ extern enum GpuTimingScopeSkipReason : u8{
     ScopeNotPrepared,
     QueryCapacityUnavailable,
     RecordingPositionUnavailable,
-    Count
+    kCount
 };
 
 

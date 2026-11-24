@@ -413,7 +413,7 @@ private:
     void visitScopeCursor(CXCursor parentCursor);
 
     template<typename DeclT>
-    [[nodiscard]] static DeclT* findExistingDeclForMerge(
+    [[nodiscard]] static DeclT* FindExistingDeclForMerge(
         const MStringMap<DeclT*>& byExportName,
         const MStringMap<DeclT*>& byName,
         const MStringView adhdName,
@@ -429,7 +429,7 @@ private:
         }
         return nullptr;
     }
-    [[nodiscard]] static b8 methodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept;
+    [[nodiscard]] static b8 MethodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept;
     void tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, b8 isStatic, ClassImportDedupe& dedupe);
     void addUniqueMethod(ClassDecl& target, MethodDecl* method, ClassImportDedupe& dedupe);
 

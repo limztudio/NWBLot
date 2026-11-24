@@ -260,7 +260,7 @@ static_assert(offsetof(GpuCommandIrClearTextureRecord, context) == sizeof(GpuCom
 static_assert(offsetof(GpuCommandIrClearTextureRectUIntRecord, context) == sizeof(GpuCommandIrHeader));
 static_assert(offsetof(GpuCommandIrUploadBufferRecord, context) == sizeof(GpuCommandIrHeader));
 static_assert(offsetof(GpuCommandIrUploadTextureRecord, context) == sizeof(GpuCommandIrHeader));
-static_assert(static_cast<usize>(GpuCommandIrWireOpcode::Count) <= 32u, "Command IR opcode bitmask requires <= 32 opcodes");
+static_assert(static_cast<usize>(GpuCommandIrWireOpcode::kCount) <= 32u, "Command IR opcode bitmask requires <= 32 opcodes");
 
 inline constexpr u32 s_RasterOpcodeBitMask =
     (1u << static_cast<u32>(GpuCommandIrWireOpcode::SetGraphicsState))
@@ -271,8 +271,8 @@ inline constexpr u32 s_RasterOpcodeBitMask =
     | (1u << static_cast<u32>(GpuCommandIrWireOpcode::EndRenderPass))
 ;
 
-[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::Count> MakeRasterWireSizeTable()noexcept{
-    Array<usize, GpuCommandIrWireOpcode::Count> table{};
+[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::kCount> MakeRasterWireSizeTable()noexcept{
+    Array<usize, GpuCommandIrWireOpcode::kCount> table{};
     table[GpuCommandIrWireOpcode::SetGraphicsState] = sizeof(GpuCommandIrSetGraphicsStateRecord);
     table[GpuCommandIrWireOpcode::BindGraphicsHeap] = sizeof(GpuCommandIrBindGraphicsHeapRecord);
     table[GpuCommandIrWireOpcode::SetPushConstants] = sizeof(GpuCommandIrSetPushConstantsRecord);
@@ -282,8 +282,8 @@ inline constexpr u32 s_RasterOpcodeBitMask =
     return table;
 }
 
-[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::Count> MakeBuiltinWireSizeTable()noexcept{
-    Array<usize, GpuCommandIrWireOpcode::Count> table{};
+[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::kCount> MakeBuiltinWireSizeTable()noexcept{
+    Array<usize, GpuCommandIrWireOpcode::kCount> table{};
     table[GpuCommandIrWireOpcode::CopyBuffer] = sizeof(GpuCommandIrCopyBufferRecord);
     table[GpuCommandIrWireOpcode::CopyTexture] = sizeof(GpuCommandIrCopyTextureRecord);
     table[GpuCommandIrWireOpcode::ClearBuffer] = sizeof(GpuCommandIrClearBufferRecord);
@@ -294,8 +294,8 @@ inline constexpr u32 s_RasterOpcodeBitMask =
     return table;
 }
 
-inline constexpr Array<usize, GpuCommandIrWireOpcode::Count> s_RasterRecordWireByteSizes = MakeRasterWireSizeTable();
-inline constexpr Array<usize, GpuCommandIrWireOpcode::Count> s_BuiltinRecordWireByteSizes = MakeBuiltinWireSizeTable();
+inline constexpr Array<usize, GpuCommandIrWireOpcode::kCount> s_RasterRecordWireByteSizes = MakeRasterWireSizeTable();
+inline constexpr Array<usize, GpuCommandIrWireOpcode::kCount> s_BuiltinRecordWireByteSizes = MakeBuiltinWireSizeTable();
 
 [[nodiscard]] FOUNDATION_INLINE b8 IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
     const u32 value = static_cast<u32>(opcode);
@@ -555,7 +555,7 @@ template<typename ColorT>
             wire.destinationResourceIndex == Limit<u32>::s_Max
             || wire.destinationSubresources.numMipLevels == 0u
             || wire.destinationSubresources.numArraySlices == 0u
-            || wire.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::Count)
+            || wire.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::kCount)
             || (clearFlags & ~s_AllowedFlags) != 0u
             || wire.reserved != 0u
             || !clearTypeOk
@@ -601,7 +601,7 @@ template<typename ColorT>
         if(
             wire.destinationResourceIndex == Limit<u32>::s_Max
             || wire.sourceUploadBlobIndex == Limit<u32>::s_Max
-            || wire.aspect >= TextureUploadAspect::Count
+            || wire.aspect >= TextureUploadAspect::kCount
             || wire.reserved0 != 0u
             || wire.reserved1 != 0u
         ){
@@ -741,7 +741,7 @@ public:
 
     void drain()noexcept{
         const u8* recordPtr = nullptr;
-        GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::Count;
+        GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::kCount;
         DecodedRecordContext context;
         b8 unusedMatchesPacket = false;
         while(stepRecord<true, false>(GpuSubmissionPacketId{}, recordPtr, opcode, context, unusedMatchesPacket) == WireStepStatus::Record){}

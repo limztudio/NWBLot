@@ -7,7 +7,7 @@ extern enum BeginFrameStatus : u8{
     Acquired,
     ResizeRequired,
     Failed,
-    Count
+    kCount
 };
 
 [cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationReceiptStatus::Enum")]
@@ -21,7 +21,7 @@ extern enum PresentationReceiptStatus : u8{
 extern enum SwapChainTransitionKind : u8{
     Resize,
     Destroy,
-    Count
+    kCount
 };
 
 

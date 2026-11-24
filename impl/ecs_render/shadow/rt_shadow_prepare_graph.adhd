@@ -20,33 +20,33 @@ const usize s_ShadowPrepareSwBvhBuildResourceUseCount = 7u;
 
 
 class ShadowPrepareGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut ShadowPreparationOutcome outcome;
-    private mut DeferredFrameTargets targets;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private b8 deferredBindlessSlotsWereUploaded;
-    private b8 currentBindlessSlotsGraphOwned;
-    private b8 shadowMaterialContextBatchGraphOwned;
-    private b8 sceneBvhBatchGraphOwned;
-    private b8 sceneTlasBuildGraphOwned;
-    private b8 meshBlasBuildsGraphOwned;
-    private b8 meshBlasGeometryBuildInputStatesGraphOwned;
-    private b8 meshSwBvhBuildsGraphOwned;
-    private b8 preparedMeshSwBvhBuildsRecordedByGraph;
-    private u64 rayTraceMaterialContextSlotsWord0;
-    private u64 rayTraceMaterialContextSlotsWord1;
-    private u64 rayTraceMaterialContextSlotsWord2;
-    private u64 rayTraceMaterialContextSlotsWord3;
-    private usize rayTraceMaterialContextSlotsBufferIdentity;
-    private b8 rayTraceMaterialContextSlotsUploadPending;
-    private u64 csgTraceContextUploadHash;
-    private usize csgTraceContextUploadByteSize;
-    private usize csgTraceContextUploadBufferIdentity;
-    private b8 csgTraceContextUploadPending;
-    private u64 causticEmissionTargetsUploadHash;
-    private usize causticEmissionTargetsUploadByteSize;
-    private usize causticEmissionTargetsUploadBufferIdentity;
-    private b8 causticEmissionTargetsUploadPending;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut ShadowPreparationOutcome m_outcome;
+    private mut DeferredFrameTargets m_targets;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private b8 m_deferredBindlessSlotsWereUploaded;
+    private b8 m_currentBindlessSlotsGraphOwned;
+    private b8 m_shadowMaterialContextBatchGraphOwned;
+    private b8 m_sceneBvhBatchGraphOwned;
+    private b8 m_sceneTlasBuildGraphOwned;
+    private b8 m_meshBlasBuildsGraphOwned;
+    private b8 m_meshBlasGeometryBuildInputStatesGraphOwned;
+    private b8 m_meshSwBvhBuildsGraphOwned;
+    private b8 m_preparedMeshSwBvhBuildsRecordedByGraph;
+    private u64 m_rayTraceMaterialContextSlotsWord0;
+    private u64 m_rayTraceMaterialContextSlotsWord1;
+    private u64 m_rayTraceMaterialContextSlotsWord2;
+    private u64 m_rayTraceMaterialContextSlotsWord3;
+    private usize m_rayTraceMaterialContextSlotsBufferIdentity;
+    private b8 m_rayTraceMaterialContextSlotsUploadPending;
+    private u64 m_csgTraceContextUploadHash;
+    private usize m_csgTraceContextUploadByteSize;
+    private usize m_csgTraceContextUploadBufferIdentity;
+    private b8 m_csgTraceContextUploadPending;
+    private u64 m_causticEmissionTargetsUploadHash;
+    private usize m_causticEmissionTargetsUploadByteSize;
+    private usize m_causticEmissionTargetsUploadBufferIdentity;
+    private b8 m_causticEmissionTargetsUploadPending;
 
     public ShadowPrepareGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -77,33 +77,33 @@ class ShadowPrepareGraphTask{
         in usize causticEmissionTargetsUploadBufferIdentity,
         in b8 causticEmissionTargetsUploadPending
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.outcome = outcome;
-        this.targets = targets;
-        this.timingTicket = timingTicket;
-        this.deferredBindlessSlotsWereUploaded = deferredBindlessSlotsWereUploaded;
-        this.currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned;
-        this.shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned;
-        this.sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned;
-        this.sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned;
-        this.meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned;
-        this.meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned;
-        this.meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned;
-        this.preparedMeshSwBvhBuildsRecordedByGraph = preparedMeshSwBvhBuildsRecordedByGraph;
-        this.rayTraceMaterialContextSlotsWord0 = rayTraceMaterialContextSlotsWord0;
-        this.rayTraceMaterialContextSlotsWord1 = rayTraceMaterialContextSlotsWord1;
-        this.rayTraceMaterialContextSlotsWord2 = rayTraceMaterialContextSlotsWord2;
-        this.rayTraceMaterialContextSlotsWord3 = rayTraceMaterialContextSlotsWord3;
-        this.rayTraceMaterialContextSlotsBufferIdentity = rayTraceMaterialContextSlotsBufferIdentity;
-        this.rayTraceMaterialContextSlotsUploadPending = rayTraceMaterialContextSlotsUploadPending;
-        this.csgTraceContextUploadHash = csgTraceContextUploadHash;
-        this.csgTraceContextUploadByteSize = csgTraceContextUploadByteSize;
-        this.csgTraceContextUploadBufferIdentity = csgTraceContextUploadBufferIdentity;
-        this.csgTraceContextUploadPending = csgTraceContextUploadPending;
-        this.causticEmissionTargetsUploadHash = causticEmissionTargetsUploadHash;
-        this.causticEmissionTargetsUploadByteSize = causticEmissionTargetsUploadByteSize;
-        this.causticEmissionTargetsUploadBufferIdentity = causticEmissionTargetsUploadBufferIdentity;
-        this.causticEmissionTargetsUploadPending = causticEmissionTargetsUploadPending;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_outcome = outcome;
+        this.m_targets = targets;
+        this.m_timingTicket = timingTicket;
+        this.m_deferredBindlessSlotsWereUploaded = deferredBindlessSlotsWereUploaded;
+        this.m_currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned;
+        this.m_shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned;
+        this.m_sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned;
+        this.m_sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned;
+        this.m_meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned;
+        this.m_meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned;
+        this.m_meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned;
+        this.m_preparedMeshSwBvhBuildsRecordedByGraph = preparedMeshSwBvhBuildsRecordedByGraph;
+        this.m_rayTraceMaterialContextSlotsWord0 = rayTraceMaterialContextSlotsWord0;
+        this.m_rayTraceMaterialContextSlotsWord1 = rayTraceMaterialContextSlotsWord1;
+        this.m_rayTraceMaterialContextSlotsWord2 = rayTraceMaterialContextSlotsWord2;
+        this.m_rayTraceMaterialContextSlotsWord3 = rayTraceMaterialContextSlotsWord3;
+        this.m_rayTraceMaterialContextSlotsBufferIdentity = rayTraceMaterialContextSlotsBufferIdentity;
+        this.m_rayTraceMaterialContextSlotsUploadPending = rayTraceMaterialContextSlotsUploadPending;
+        this.m_csgTraceContextUploadHash = csgTraceContextUploadHash;
+        this.m_csgTraceContextUploadByteSize = csgTraceContextUploadByteSize;
+        this.m_csgTraceContextUploadBufferIdentity = csgTraceContextUploadBufferIdentity;
+        this.m_csgTraceContextUploadPending = csgTraceContextUploadPending;
+        this.m_causticEmissionTargetsUploadHash = causticEmissionTargetsUploadHash;
+        this.m_causticEmissionTargetsUploadByteSize = causticEmissionTargetsUploadByteSize;
+        this.m_causticEmissionTargetsUploadBufferIdentity = causticEmissionTargetsUploadBufferIdentity;
+        this.m_causticEmissionTargetsUploadPending = causticEmissionTargetsUploadPending;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -115,81 +115,81 @@ class ShadowPrepareGraphTask{
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        this.outcome.ready = false;
-        if(!this.targets.bindless.valid())
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        this.m_outcome.ready = false;
+        if(!this.m_targets.bindless.valid())
             return false;
-        const auto shadowResourcesPrepared = this.raytracingSystem.recordPreflightShadowVisibilityResources(
+        const auto shadowResourcesPrepared = this.m_raytracingSystem.recordPreflightShadowVisibilityResources(
             commandList,
-            this.targets,
-            this.sceneTlasBuildGraphOwned,
-            this.meshBlasBuildsGraphOwned,
-            this.meshBlasGeometryBuildInputStatesGraphOwned,
-            this.meshSwBvhBuildsGraphOwned,
-            this.preparedMeshSwBvhBuildsRecordedByGraph
+            this.m_targets,
+            this.m_sceneTlasBuildGraphOwned,
+            this.m_meshBlasBuildsGraphOwned,
+            this.m_meshBlasGeometryBuildInputStatesGraphOwned,
+            this.m_meshSwBvhBuildsGraphOwned,
+            this.m_preparedMeshSwBvhBuildsRecordedByGraph
         );
 
         if(!shadowResourcesPrepared.has_value())
             return false;
-        this.outcome.ready = shadowResourcesPrepared.value();
+        this.m_outcome.ready = shadowResourcesPrepared.value();
 
         return true;
     }
 
     public void accepted(in QueueSubmissionToken token){
-        if(this.currentBindlessSlotsGraphOwned)
-            this.targets.bindless.slotsUploaded = true;
-        this.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-        if(this.rayTraceMaterialContextSlotsUploadPending){
-            this.raytracingSystem.confirmPreparedRayTraceMaterialContextSlotsUpload(
-                this.rayTraceMaterialContextSlotsWord0,
-                this.rayTraceMaterialContextSlotsWord1,
-                this.rayTraceMaterialContextSlotsWord2,
-                this.rayTraceMaterialContextSlotsWord3,
-                this.rayTraceMaterialContextSlotsBufferIdentity
+        if(this.m_currentBindlessSlotsGraphOwned)
+            this.m_targets.bindless.slotsUploaded = true;
+        this.m_raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
+        if(this.m_rayTraceMaterialContextSlotsUploadPending){
+            this.m_raytracingSystem.confirmPreparedRayTraceMaterialContextSlotsUpload(
+                this.m_rayTraceMaterialContextSlotsWord0,
+                this.m_rayTraceMaterialContextSlotsWord1,
+                this.m_rayTraceMaterialContextSlotsWord2,
+                this.m_rayTraceMaterialContextSlotsWord3,
+                this.m_rayTraceMaterialContextSlotsBufferIdentity
             );
         }
-        if(this.csgTraceContextUploadPending)
-            this.raytracingSystem.confirmPreparedCsgTraceContextUpload(this.csgTraceContextUploadHash, this.csgTraceContextUploadByteSize, this.csgTraceContextUploadBufferIdentity);
-        if(this.causticEmissionTargetsUploadPending)
-            this.raytracingSystem.confirmPreparedCausticEmissionTargetUpload(this.causticEmissionTargetsUploadHash, this.causticEmissionTargetsUploadByteSize, this.causticEmissionTargetsUploadBufferIdentity);
-        if(this.shadowMaterialContextBatchGraphOwned)
-            this.raytracingSystem.confirmPreparedShadowMaterialContextUploads();
-        if(this.sceneBvhBatchGraphOwned)
-            this.raytracingSystem.confirmPreparedSceneBvhUploads();
+        if(this.m_csgTraceContextUploadPending)
+            this.m_raytracingSystem.confirmPreparedCsgTraceContextUpload(this.m_csgTraceContextUploadHash, this.m_csgTraceContextUploadByteSize, this.m_csgTraceContextUploadBufferIdentity);
+        if(this.m_causticEmissionTargetsUploadPending)
+            this.m_raytracingSystem.confirmPreparedCausticEmissionTargetUpload(this.m_causticEmissionTargetsUploadHash, this.m_causticEmissionTargetsUploadByteSize, this.m_causticEmissionTargetsUploadBufferIdentity);
+        if(this.m_shadowMaterialContextBatchGraphOwned)
+            this.m_raytracingSystem.confirmPreparedShadowMaterialContextUploads();
+        if(this.m_sceneBvhBatchGraphOwned)
+            this.m_raytracingSystem.confirmPreparedSceneBvhUploads();
     }
 
     public void discarded(){
-        this.timingTicket.discard();
+        this.m_timingTicket.discard();
 
-        this.outcome.ready = false;
-        this.outcome.resourcesValid = false;
-        this.targets.bindless.slotsUploaded = this.deferredBindlessSlotsWereUploaded;
-        this.raytracingSystem.discardPreflightShadowVisibilityResources();
+        this.m_outcome.ready = false;
+        this.m_outcome.resourcesValid = false;
+        this.m_targets.bindless.slotsUploaded = this.m_deferredBindlessSlotsWereUploaded;
+        this.m_raytracingSystem.discardPreflightShadowVisibilityResources();
     }
 }
 
 class ShadowPrepareSoftwareBvhBuildGraphTask{
-    private mut RendererRayTracingSystem raytracingSystem;
-    private mut GpuTimingSubmissionTicket timingTicket;
-    private PreparedMeshSwBvhBuild build;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private PreparedMeshSwBvhBuild m_build;
 
     public ShadowPrepareSoftwareBvhBuildGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
         mut GpuTimingSubmissionTicket timingTicket,
         in PreparedMeshSwBvhBuild build
     ){
-        this.raytracingSystem = raytracingSystem;
-        this.timingTicket = timingTicket;
-        this.build = build;
+        this.m_raytracingSystem = raytracingSystem;
+        this.m_timingTicket = timingTicket;
+        this.m_build = build;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        return this.raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, this.build);
+        GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
+        return this.m_raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, this.m_build);
     }
 }
 

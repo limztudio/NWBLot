@@ -223,7 +223,7 @@ b8 ValidGpuTextureImageVersion(in GpuTextureImageVersion version){
     if(!version.m_source.valid() || !ValidUiTextureImageSource(version.m_source.deref()) || !version.m_texture.valid())
         return false;
     in TextureGpuResource resource = version.m_texture;
-    if(resource.format == Format::UNKNOWN || resource.format >= Format::Count)
+    if(resource.format == Format::UNKNOWN || resource.format >= Format::kCount)
         return false;
     const FormatInfo format = GetFormatInfo(resource.format);
     in TextureDesc description = resource.texture.deref().getCreationDescription();

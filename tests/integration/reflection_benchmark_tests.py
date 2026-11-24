@@ -31,7 +31,7 @@ LIT_NAME = "name"
 LIT_ROUGH = "rough"
 LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
 LIT_NWB_REFLECTION_SMOKE_FINAL_STATE = "NWB_REFLECTION_SMOKE_FINAL_STATE"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_N_10 = "10"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_OLD_TXT = "old.txt"
@@ -100,7 +100,7 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
     def test_diagnostics_and_capture_controls_are_sanitized_then_explicit(self):
         args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4, sampling_seed=0, optical_queries=8, screen_steps=96)
         inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_FINAL_STATE: "1", "NWB_REFRACTION_SMOKE_GALLERY": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "4", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_10, LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "1", LIT_PRESERVED: LIT_YES}
+            "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "4", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: LIT_N_10, LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "1", LIT_PRESERVED: LIT_YES}
         env, overrides = benchmark.timed_environment(inherited, args, benchmark.Variant(LIT_RAW, LIT_HARDWARE), Path(LIT_NEW_TXT))
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "0")
@@ -109,7 +109,7 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
         self.assertEqual(env[LIT_PRESERVED], LIT_YES)
         self.assertNotIn(LIT_PRESERVED, overrides)
         self.assertFalse(any(key.startswith("NWB_SMOKE_FRAMEBUFFER_CAPTURE_") for key in env))
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, env)
         self.assertEqual(inherited[LIT_NWB_GPU_TIMING_FILE], LIT_OLD_TXT)
 
     def test_explicit_loader_layers_are_rejected_without_mutating_inherited_controls(self):

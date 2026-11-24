@@ -71,8 +71,8 @@ Span<const u8> BasisMipEncoder::sliceBytes(const u32 index)const{
 }
 
 b8 InitializeBasisEncoder(){
-    static const b8 initialized = basisu::basisu_encoder_init(false);
-    return initialized;
+    static const b8 s_InitializationSucceeded = basisu::basisu_encoder_init(false);
+    return s_InitializationSucceeded;
 }
 
 

@@ -388,12 +388,12 @@ void nwbPhysicsCollideBoxes(
     const float r21 = dot(azA, ayB);
     const float r22 = dot(azA, azB);
 
-    const float R[3][3] = {
+    const float axisDotProducts[3][3] = {
         { r00, r01, r02 },
         { r10, r11, r12 },
         { r20, r21, r22 }
     };
-    const float absR[3][3] = {
+    const float absoluteAxisDotProducts[3][3] = {
         { abs(r00), abs(r01), abs(r02) },
         { abs(r10), abs(r11), abs(r12) },
         { abs(r20), abs(r21), abs(r22) }
@@ -406,7 +406,7 @@ void nwbPhysicsCollideBoxes(
 
     for(int i = 0; i < 3; ++i){
         const float signedProj = tArr[i];
-        const float rBProj = hB.x * absR[i][0] + hB.y * absR[i][1] + hB.z * absR[i][2];
+        const float rBProj = hB.x * absoluteAxisDotProducts[i][0] + hB.y * absoluteAxisDotProducts[i][1] + hB.z * absoluteAxisDotProducts[i][2];
         const float sep = abs(signedProj) - (halfA[i] + rBProj) - totalR;
         if(sep > maxDist)
             return;
@@ -418,8 +418,8 @@ void nwbPhysicsCollideBoxes(
     }
 
     for(int j = 0; j < 3; ++j){
-        const float signedProj = tVec.x * R[0][j] + tVec.y * R[1][j] + tVec.z * R[2][j];
-        const float rAProj = hA.x * absR[0][j] + hA.y * absR[1][j] + hA.z * absR[2][j];
+        const float signedProj = tVec.x * axisDotProducts[0][j] + tVec.y * axisDotProducts[1][j] + tVec.z * axisDotProducts[2][j];
+        const float rAProj = hA.x * absoluteAxisDotProducts[0][j] + hA.y * absoluteAxisDotProducts[1][j] + hA.z * absoluteAxisDotProducts[2][j];
         const float sep = abs(signedProj) - (rAProj + halfB[j]) - totalR;
         if(sep > maxDist)
             return;
@@ -436,15 +436,15 @@ void nwbPhysicsCollideBoxes(
         for(int j = 0; j < 3; ++j){
             const int j1 = (j + 1) % 3;
             const int j2 = (j + 2) % 3;
-            const float c1 = R[i1][j];
-            const float c2 = R[i2][j];
+            const float c1 = axisDotProducts[i1][j];
+            const float c2 = axisDotProducts[i2][j];
             const float lenSq = c1 * c1 + c2 * c2;
             if(lenSq < 1.0e-5f)
                 continue;
             const float invLen = rsqrt(lenSq);
             const float signedProj = tArr[i2] * c1 - tArr[i1] * c2;
-            const float rAU = halfA[i1] * absR[i2][j] + halfA[i2] * absR[i1][j];
-            const float rBU = halfB[j1] * absR[i][j2] + halfB[j2] * absR[i][j1];
+            const float rAU = halfA[i1] * absoluteAxisDotProducts[i2][j] + halfA[i2] * absoluteAxisDotProducts[i1][j];
+            const float rBU = halfB[j1] * absoluteAxisDotProducts[i][j2] + halfB[j2] * absoluteAxisDotProducts[i][j1];
             const float sep = (abs(signedProj) - (rAU + rBU)) * invLen - totalR;
             if(sep > maxDist)
                 return;
@@ -656,66 +656,66 @@ void nwbPhysicsSolveSimplex3(inout float3 sW[4], inout float3 sWA[4], inout floa
     const float d4 = -dot(b, c - a);
     const float d5 = -dot(c, b - a);
     const float d6 = -dot(c, c - a);
-    const float dAB_B = d1;
-    const float dAB_A = -d3;
-    const float dAC_C = d2;
-    const float dAC_A = -d6;
-    const float dBC_C = d4 - d3;
-    const float dBC_B = d5 - d6;
-    const float dABC_C = d1 * d4 - d3 * d2;
-    const float dABC_B = d5 * d2 - d1 * d6;
-    const float dABC_A = d3 * d6 - d5 * d4;
+    const float edgeAbWeightB = d1;
+    const float edgeAbWeightA = -d3;
+    const float edgeAcWeightC = d2;
+    const float edgeAcWeightA = -d6;
+    const float edgeBcWeightC = d4 - d3;
+    const float edgeBcWeightB = d5 - d6;
+    const float triangleWeightC = d1 * d4 - d3 * d2;
+    const float triangleWeightB = d5 * d2 - d1 * d6;
+    const float triangleWeightA = d3 * d6 - d5 * d4;
 
-    if(dAB_B <= 0.0f && dAC_C <= 0.0f){
+    if(edgeAbWeightB <= 0.0f && edgeAcWeightC <= 0.0f){
         sU[0] = 1.0f;
         count = 1u;
         return;
     }
-    if(dAB_A <= 0.0f && dBC_C <= 0.0f){
+    if(edgeAbWeightA <= 0.0f && edgeBcWeightC <= 0.0f){
         sW[0] = b; sWA[0] = sWA[1]; sWB[0] = sWB[1]; sIdxA[0] = sIdxA[1]; sIdxB[0] = sIdxB[1];
         sU[0] = 1.0f;
         count = 1u;
         return;
     }
-    if(dAC_A <= 0.0f && dBC_B <= 0.0f){
+    if(edgeAcWeightA <= 0.0f && edgeBcWeightB <= 0.0f){
         sW[0] = c; sWA[0] = sWA[2]; sWB[0] = sWB[2]; sIdxA[0] = sIdxA[2]; sIdxB[0] = sIdxB[2];
         sU[0] = 1.0f;
         count = 1u;
         return;
     }
-    if(dABC_C <= 0.0f && dAB_A >= 0.0f && dAB_B >= 0.0f && (dAB_A + dAB_B) > 1.0e-12f){
-        const float inv = 1.0f / (dAB_A + dAB_B);
-        sU[0] = dAB_A * inv;
-        sU[1] = dAB_B * inv;
+    if(triangleWeightC <= 0.0f && edgeAbWeightA >= 0.0f && edgeAbWeightB >= 0.0f && (edgeAbWeightA + edgeAbWeightB) > 1.0e-12f){
+        const float inv = 1.0f / (edgeAbWeightA + edgeAbWeightB);
+        sU[0] = edgeAbWeightA * inv;
+        sU[1] = edgeAbWeightB * inv;
         count = 2u;
         return;
     }
-    if(dABC_B <= 0.0f && dAC_A >= 0.0f && dAC_C >= 0.0f && (dAC_A + dAC_C) > 1.0e-12f){
-        const float inv = 1.0f / (dAC_A + dAC_C);
+    if(triangleWeightB <= 0.0f && edgeAcWeightA >= 0.0f && edgeAcWeightC >= 0.0f && (edgeAcWeightA + edgeAcWeightC) > 1.0e-12f){
+        const float inv = 1.0f / (edgeAcWeightA + edgeAcWeightC);
         sW[1] = c; sWA[1] = sWA[2]; sWB[1] = sWB[2]; sIdxA[1] = sIdxA[2]; sIdxB[1] = sIdxB[2];
-        sU[0] = dAC_A * inv;
-        sU[1] = dAC_C * inv;
+        sU[0] = edgeAcWeightA * inv;
+        sU[1] = edgeAcWeightC * inv;
         count = 2u;
         return;
     }
-    if(dABC_A <= 0.0f && dBC_B >= 0.0f && dBC_C >= 0.0f && (dBC_B + dBC_C) > 1.0e-12f){
-        const float inv = 1.0f / (dBC_B + dBC_C);
+    if(triangleWeightA <= 0.0f && edgeBcWeightB >= 0.0f && edgeBcWeightC >= 0.0f && (edgeBcWeightB + edgeBcWeightC) > 1.0e-12f){
+        const float inv = 1.0f / (edgeBcWeightB + edgeBcWeightC);
         sW[0] = b; sWA[0] = sWA[1]; sWB[0] = sWB[1]; sIdxA[0] = sIdxA[1]; sIdxB[0] = sIdxB[1];
         sW[1] = c; sWA[1] = sWA[2]; sWB[1] = sWB[2]; sIdxA[1] = sIdxA[2]; sIdxB[1] = sIdxB[2];
-        sU[0] = dBC_B * inv;
-        sU[1] = dBC_C * inv;
+        sU[0] = edgeBcWeightB * inv;
+        sU[1] = edgeBcWeightC * inv;
         count = 2u;
         return;
     }
-    const float sum = dABC_A + dABC_B + dABC_C;
+    const float sum = triangleWeightA + triangleWeightB + triangleWeightC;
     if(sum <= 1.0e-12f){
         nwbPhysicsSolveSimplex2(sW, sWA, sWB, sIdxA, sIdxB, sU, count);
         return;
     }
     const float inv = 1.0f / sum;
-    sU[0] = dABC_A * inv;
-    sU[1] = dABC_B * inv;
-    sU[2] = dABC_C * inv;
+    sU[0] = triangleWeightA * inv;
+    sU[1] = triangleWeightB * inv;
+    sU[2] = triangleWeightC * inv;
     count = 3u;
 }
 
@@ -752,10 +752,10 @@ void nwbPhysicsSolveSimplex4(
     const float signDet = dot(b - a, cross(c - a, d - a));
     const float sign = (signDet >= 0.0f) ? 1.0f : -1.0f;
 
-    const float dABCD_D = sign * dot(a, cross(b, c));
-    const float dABCD_C = sign * dot(d, cross(b, a));
-    const float dABCD_B = sign * dot(c, cross(d, a));
-    const float dABCD_A = sign * dot(b, cross(d, c));
+    const float tetrahedronWeightD = sign * dot(a, cross(b, c));
+    const float tetrahedronWeightC = sign * dot(d, cross(b, a));
+    const float tetrahedronWeightB = sign * dot(c, cross(d, a));
+    const float tetrahedronWeightA = sign * dot(b, cross(d, c));
 
     const float testABC = dot(d - a, cross(b - a, c - a));
     const float oriABC = dot(-a, cross(b - a, c - a));
@@ -779,13 +779,13 @@ void nwbPhysicsSolveSimplex4(
     }
 
     if(!outABC && !outABD && !outACD && !outBCD){
-        const float total = dABCD_A + dABCD_B + dABCD_C + dABCD_D;
+        const float total = tetrahedronWeightA + tetrahedronWeightB + tetrahedronWeightC + tetrahedronWeightD;
         if(abs(total) > 1.0e-12f){
             const float inv = 1.0f / total;
-            sU[0] = dABCD_A * inv;
-            sU[1] = dABCD_B * inv;
-            sU[2] = dABCD_C * inv;
-            sU[3] = dABCD_D * inv;
+            sU[0] = tetrahedronWeightA * inv;
+            sU[1] = tetrahedronWeightB * inv;
+            sU[2] = tetrahedronWeightC * inv;
+            sU[3] = tetrahedronWeightD * inv;
         }
         else{
             sU[0] = 0.25f;

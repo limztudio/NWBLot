@@ -153,7 +153,7 @@ public:
             if(!appendSlab())
                 return false;
         }
-        CommandList::GraphSubmissionOwnership* const slot = slabSlots(*m_tail) + m_tail->endIndex;
+        CommandList::GraphSubmissionOwnership* const slot = SlabSlots(*m_tail) + m_tail->endIndex;
         new(slot) CommandList::GraphSubmissionOwnership(commandList);
         if(!slot->m_acquired){
             slot->~GraphSubmissionOwnership();
@@ -168,7 +168,7 @@ public:
         while(m_activeCount > targetCount && m_tail){
             if(m_tail->endIndex > m_tail->beginIndex){
                 --m_tail->endIndex;
-                slabSlots(*m_tail)[m_tail->endIndex].~GraphSubmissionOwnership();
+                SlabSlots(*m_tail)[m_tail->endIndex].~GraphSubmissionOwnership();
                 --m_activeCount;
                 continue;
             }
@@ -179,7 +179,7 @@ public:
     void acceptNext(usize acceptCount)noexcept{
         while(acceptCount > 0u && m_head){
             if(m_head->beginIndex < m_head->endIndex){
-                CommandList::GraphSubmissionOwnership& slot = slabSlots(*m_head)[m_head->beginIndex];
+                CommandList::GraphSubmissionOwnership& slot = SlabSlots(*m_head)[m_head->beginIndex];
                 slot.accept();
                 slot.~GraphSubmissionOwnership();
                 ++m_head->beginIndex;
@@ -193,7 +193,7 @@ public:
 
     void acceptAll()noexcept{
         while(m_head){
-            CommandList::GraphSubmissionOwnership* const slots = slabSlots(*m_head);
+            CommandList::GraphSubmissionOwnership* const slots = SlabSlots(*m_head);
             while(m_head->beginIndex < m_head->endIndex){
                 slots[m_head->beginIndex].accept();
                 slots[m_head->beginIndex].~GraphSubmissionOwnership();
@@ -207,7 +207,7 @@ public:
 
     void clear()noexcept{
         while(m_tail){
-            CommandList::GraphSubmissionOwnership* const slots = slabSlots(*m_tail);
+            CommandList::GraphSubmissionOwnership* const slots = SlabSlots(*m_tail);
             while(m_tail->endIndex > m_tail->beginIndex){
                 --m_tail->endIndex;
                 slots[m_tail->endIndex].~GraphSubmissionOwnership();
@@ -230,7 +230,7 @@ private:
         return Max(alignof(SlabHeader), alignof(CommandList::GraphSubmissionOwnership));
     }
 
-    [[nodiscard]] static CommandList::GraphSubmissionOwnership* slabSlots(SlabHeader& slab)noexcept{
+    [[nodiscard]] static CommandList::GraphSubmissionOwnership* SlabSlots(SlabHeader& slab)noexcept{
         return reinterpret_cast<CommandList::GraphSubmissionOwnership*>(reinterpret_cast<u8*>(&slab) + SlabHeaderAlignedBytes());
     }
 

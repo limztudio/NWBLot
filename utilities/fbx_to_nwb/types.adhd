@@ -134,20 +134,20 @@ class OptionPresence{
 }
 
 class FbxMeshSkinningSummary{
-    private b8 sawStatic = false;
-    private b8 sawSkinned = false;
+    private b8 m_sawStatic = false;
+    private b8 m_sawSkinned = false;
 
     public void observe(in b8 hasSkin){
-        this.sawSkinned = this.sawSkinned || hasSkin;
-        this.sawStatic = this.sawStatic || !hasSkin;
+        this.m_sawSkinned = this.m_sawSkinned || hasSkin;
+        this.m_sawStatic = this.m_sawStatic || !hasSkin;
     }
 
     public Expected<b8> resolve()const{
-        if(this.sawStatic && this.sawSkinned){
+        if(this.m_sawStatic && this.m_sawSkinned){
             warning("Model export does not support mixed static and skinned source meshes yet");
             return MakeUnexpected(Failure());
         }
-        return this.sawSkinned;
+        return this.m_sawSkinned;
     }
 }
 

@@ -225,35 +225,35 @@ class StandaloneClipboardCompletion{ public ClipboardCompletion completion = Cli
 
 [ordered]
 class ClipboardTextTestContext{
-    private HeapStorage storage = HeapStorage();
-    private TestValueSlot<ClipboardTextAccumulator> accSlot;
+    private HeapStorage m_storage = HeapStorage();
+    private TestValueSlot<ClipboardTextAccumulator> m_accSlot;
     public mut ClipboardTextAccumulator accumulator;
-    private TestValueSlot<GlobalString> firstSlot;
+    private TestValueSlot<GlobalString> m_firstSlot;
     public mut GlobalString first;
-    private TestValueSlot<GlobalString> secondSlot;
+    private TestValueSlot<GlobalString> m_secondSlot;
     public mut GlobalString second;
 
     public ClipboardTextTestContext(){
-        this.accumulator = this.accSlot.constructIn(this.storage);
-        this.first = this.firstSlot.constructIn(this.storage);
-        this.second = this.secondSlot.constructIn(this.storage);
+        this.accumulator = this.m_accSlot.constructIn(this.m_storage);
+        this.first = this.m_firstSlot.constructIn(this.m_storage);
+        this.second = this.m_secondSlot.constructIn(this.m_storage);
     }
 }
 
 class EncodedCodePointBuffer{
-    private EncodedOsCodePoint bytes;
-    public Expected<usize, TextInputAdmission> encode(in u32 codePoint){ return EncodeOsTextInputCodePoint(codePoint, this.bytes); }
-    public StringView view(in usize length)const{ return EncodedBytesView(this.bytes, length); }
+    private EncodedOsCodePoint m_bytes;
+    public Expected<usize, TextInputAdmission> encode(in u32 codePoint){ return EncodeOsTextInputCodePoint(codePoint, this.m_bytes); }
+    public StringView view(in usize length)const{ return EncodedBytesView(this.m_bytes, length); }
 }
 
 [ordered]
 class UnsupportedClipboardContext{
-    private HeapStorage storage = HeapStorage();
+    private HeapStorage m_storage = HeapStorage();
     public OsClipboardServiceOwner service = OsClipboardServiceOwner();
     public b8 factorySucceeded = false;
     public UnsupportedClipboardContext(){ this.open(); }
     private void open(){
-        auto result = OpenOsClipboardService(this.storage, s_OsNullWindow);
+        auto result = OpenOsClipboardService(this.m_storage, s_OsNullWindow);
         if(result.has_value()){
             this.factorySucceeded = true;
             TestMoveAssign<OsClipboardServiceOwner>(this.service, result.value());
@@ -270,12 +270,12 @@ class UnsupportedClipboardContext{
 
 [ordered]
 class UnsupportedTextInputContext{
-    private HeapStorage storage = HeapStorage();
+    private HeapStorage m_storage = HeapStorage();
     public OsTextServiceOwner service = OsTextServiceOwner();
     public b8 factorySucceeded = false;
     public UnsupportedTextInputContext(){ this.open(); }
     private void open(){
-        auto result = OpenOsTextService(this.storage, s_OsNullWindow);
+        auto result = OpenOsTextService(this.m_storage, s_OsNullWindow);
         if(result.has_value()){
             this.factorySucceeded = true;
             TestMoveAssign<OsTextServiceOwner>(this.service, result.value());

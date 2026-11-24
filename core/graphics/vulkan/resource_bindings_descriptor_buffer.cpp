@@ -135,7 +135,7 @@ b8 DescriptorBufferManager::initialize(){
         return failInitialization();
 
     if(!m_bufferFormatFeaturesCached && m_context.physicalDevice != VK_NULL_HANDLE && m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties){
-        for(u32 formatIndex = 0u; formatIndex < Format::Count; ++formatIndex){
+        for(u32 formatIndex = 0u; formatIndex < Format::kCount; ++formatIndex){
             const VkFormat vkFormat = VulkanDetail::ConvertFormat(static_cast<Format::Enum>(formatIndex));
             if(vkFormat == VK_FORMAT_UNDEFINED){
                 m_cachedBufferFormatFeatures[formatIndex] = 0u;

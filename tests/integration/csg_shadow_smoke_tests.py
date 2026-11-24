@@ -23,7 +23,7 @@ LIT_MOVED = "moved"
 LIT_OS_ENVIRON = "os.environ"
 LIT_NWB_SOFTWARE_SHADOW_BACKEND = "NWB_SOFTWARE_SHADOW_BACKEND"
 LIT_NWB_SHADOW_TRANSPARENT_SAMPLING = "NWB_SHADOW_TRANSPARENT_SAMPLING"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_NWB_CSG_SHADOW_LIGHT_SOURCE = "NWB_CSG_SHADOW_LIGHT_SOURCE"
 LIT_FINITE = "finite"
 LIT_NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH = "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"
@@ -118,7 +118,7 @@ class CsgShadowImageTests(unittest.TestCase):
             compare_frames(frames)
 
     def test_capture_policy_overrides_inherited_quality_and_freeze(self):
-        with patch.dict(LIT_OS_ENVIRON, {LIT_NWB_SOFTWARE_SHADOW_BACKEND: "trace", LIT_NWB_SHADOW_TRANSPARENT_SAMPLING: "temporal_one", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "8", LIT_NWB_CSG_SHADOW_LIGHT_SOURCE: LIT_FINITE,
+        with patch.dict(LIT_OS_ENVIRON, {LIT_NWB_SOFTWARE_SHADOW_BACKEND: "trace", LIT_NWB_SHADOW_TRANSPARENT_SAMPLING: "temporal_one", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "8", LIT_NWB_CSG_SHADOW_LIGHT_SOURCE: LIT_FINITE,
             LIT_NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH: LIT_CENTER1}, clear=True):
             environment = capture_environment(LIT_MOVED, LIT_POINT)
         self.assertEqual(environment[LIT_NWB_SOFTWARE_SHADOW_BACKEND], "automatic")
@@ -126,7 +126,7 @@ class CsgShadowImageTests(unittest.TestCase):
         self.assertEqual(environment[LIT_NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE], "every_frame")
         self.assertEqual(environment[LIT_NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH], "reference_grid9")
         self.assertEqual(environment[LIT_NWB_CSG_SHADOW_LIGHT_SOURCE], "hard")
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, environment)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, environment)
 
     def test_capture_requires_post_motion_settle_interval(self):
         arguments = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, ".", LIT_ROUTE, LIT_SOFTWARE]

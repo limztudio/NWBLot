@@ -112,7 +112,7 @@ private:
     [[nodiscard]] b8 supportsTailContinuation()const noexcept{
         return m_chunkKind == ChunkKind::Upload || m_chunkKind == ChunkKind::AccelStructBuildInput;
     }
-    [[nodiscard]] static Expected<BufferSuballocation> trySuballocateFromChunk(BufferChunk& chunk, u64 size, u32 alignment)noexcept;
+    [[nodiscard]] static Expected<BufferSuballocation> TrySuballocateFromChunk(BufferChunk& chunk, u64 size, u32 alignment)noexcept;
     [[nodiscard]] Expected<BufferSuballocation> suballocateBufferSlow(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u32 alignment, usize chunkSlot, u8 slotBit, BufferChunk* cachedChunk);
     void collectCompletedChunks();
     void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion)noexcept;

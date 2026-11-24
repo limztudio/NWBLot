@@ -22,7 +22,7 @@ from csg_gi_temporal_contract import (
     LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS,
     LIT_CAP_STATE,
     LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN,
-    LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP,
+    LIT_CSG_TEMPORAL_WARMUP_STARTED,
     LIT_DIRECT,
     LIT_EVENT_DATA,
     LIT_EVENT_ORDER,
@@ -32,7 +32,7 @@ from csg_gi_temporal_contract import (
     LIT_FULL,
     LIT_GPU_VALIDATION,
     LIT_LAGGED_LIGHTING,
-    LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B,
+    LIT_HARDWARE_RAY_TRACING_DISABLED_LOG,
     LIT_LOGSERVER_EXECUTABLE,
     LIT_MANIFEST_JSON,
     LIT_MAXIMUM_FRAME_INTERVAL,
@@ -48,8 +48,8 @@ from csg_gi_temporal_contract import (
     LIT_POSITION,
     LIT_REGIONS,
     LIT_REJECT_LOG_MESSAGE,
-    LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE,
-    LIT_RENDERERSYSTEM_FRAME_LAGGED_ASYNC_LIGH,
+    LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG,
+    LIT_LAGGED_LIGHTING_HISTORY_ACCEPTED_LOG,
     LIT_ROUTE,
     LIT_RUNTIME_LOG,
     LIT_SAMPLES,
@@ -101,13 +101,13 @@ def capture_series(args):
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), "--log-output", str(args.output_directory / LIT_RUNTIME_LOG),
         LIT_EXPECT_LOG_MESSAGE, f"CsgVisibleSmokeProject: temporal scene animated={int(args.motion == LIT_ANIMATED)} view={args.view} minimum_frame=360 warmup_seconds=30 interval={args.frame_interval} samples=32",
-        LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP, LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_WARMUP_COMPLETE,
-        LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_SERIES_COMPLETE, LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE,
+        LIT_EXPECT_LOG_MESSAGE, LIT_CSG_TEMPORAL_WARMUP_STARTED, LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_WARMUP_COMPLETE,
+        LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_SERIES_COMPLETE, LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_EXPECT_LOG_MESSAGE, LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG,
         LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if args.route == LIT_SOFTWARE:
-        command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B, LIT_REJECT_LOG_MESSAGE, "RendererSystem: created surfel HW trace compute pipeline"]
+        command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, LIT_HARDWARE_RAY_TRACING_DISABLED_LOG, LIT_REJECT_LOG_MESSAGE, "RendererSystem: created surfel HW trace compute pipeline"]
     if args.lagged_lighting:
-        command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: frame-lagged async lighting bootstrap accepted", LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_FRAME_LAGGED_ASYNC_LIGH,
+        command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: frame-lagged async lighting bootstrap accepted", LIT_EXPECT_LOG_MESSAGE, LIT_LAGGED_LIGHTING_HISTORY_ACCEPTED_LOG,
             "--skip-log-message", "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"]
     if args.view == LIT_EVENT_DATA:
         command += [LIT_EXPECT_LOG_MESSAGE, EVENT_DATA_FLAGS_MARKER]

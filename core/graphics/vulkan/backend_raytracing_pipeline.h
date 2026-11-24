@@ -24,8 +24,8 @@ namespace ShaderTableRecordKind{
         HitGroup,
         Callable,
 
-        Count,
-        Invalid = Count,
+        kCount,
+        Invalid = kCount,
     };
 };
 

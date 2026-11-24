@@ -36,24 +36,24 @@ const Array<StringView, s_CommonCompilerArgumentCount> s_CommonCompilerArguments
 
 class SlangArguments{
     public Vector<StringView> views;
-    private Vector<String> owned;
+    private Vector<String> m_owned;
 
     public void reserve(in usize count, in usize ownedCount){
         this.views.reserve(count);
-        this.owned.reserve(ownedCount);
+        this.m_owned.reserve(ownedCount);
     }
     public b8 appendOwned(in Expected<String> argument){
         if(!argument.has_value())
             return false;
-        AppendArenaElement<String>(this.owned);
-        mut String text = this.owned[this.owned.size() - 1u];
+        AppendArenaElement<String>(this.m_owned);
+        mut String text = this.m_owned[this.m_owned.size() - 1u];
         text.assign(StringView(argument.value()));
         this.views.push_back(StringView(text));
         return true;
     }
     public ~SlangArguments(){
-        while(!this.owned.empty())
-            this.owned.pop_back();
+        while(!this.m_owned.empty())
+            this.m_owned.pop_back();
     }
 }
 

@@ -92,7 +92,7 @@ namespace BeginFrameStatus{
         ResizeRequired,
         Failed,
 
-        Count
+        kCount
     };
 };
 
@@ -114,19 +114,19 @@ namespace SwapChainTransitionKind{
         Resize,
         Destroy,
 
-        Count
+        kCount
     };
 };
 
 struct SwapChainTransitionTicket{
     const void* owner = nullptr;
     u64 epoch = 0u;
-    SwapChainTransitionKind::Enum kind = SwapChainTransitionKind::Count;
+    SwapChainTransitionKind::Enum kind = SwapChainTransitionKind::kCount;
 
 
 public:
     [[nodiscard]] b8 valid()const noexcept{
-        return owner != nullptr && epoch != 0u && kind < SwapChainTransitionKind::Count;
+        return owner != nullptr && epoch != 0u && kind < SwapChainTransitionKind::kCount;
     }
 };
 

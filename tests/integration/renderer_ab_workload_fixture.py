@@ -14,13 +14,13 @@ LIT_TOTAL_MS = "total_ms"
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_MEAN_MS = "mean_ms"
 LIT_HARDWARE = "hardware"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
-LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_SOFTWARE_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched software shadow traversal"
 LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32 = "AvboitTimingProbe: in-flight ranges 32"
 LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1 = "AvboitTimingProbe: render unfocused 1"
-LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
+LIT_DEFERRED_TARGETS_READY_LOG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
 LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU = "GraphicsRuntime: created device 'Example GPU'"
-LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
+LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
 LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
 LIT_TRANSPARENT_MULTI = "transparent-multi"
 LIT_BASELINE = "baseline"
@@ -34,7 +34,7 @@ LIT_OLD_BMP = "old.bmp"
 LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
 LIT_NWB_CAUSTIC_SMOKE_ENABLED = "NWB_CAUSTIC_SMOKE_ENABLED"
 LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE = "NWB_TRANSPARENT_MULTI_SPIN_ANGLE"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_OLD_TXT = "old.txt"
 LIT_PRESERVED = "PRESERVED"
@@ -79,7 +79,7 @@ LIT_CONTROLS = "controls"
 LIT_CONTROL_DRIFT = "control_drift"
 LIT_CONTROL_UNCERTAIN = "control_uncertain"
 LIT_EVERY_PLANNED_TRIAL = "every planned trial"
-LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE = "ShadowTimingProbe: indirect response hemi-ambient"
+LIT_HEMI_AMBIENT_SHADOW_RESPONSE_LOG = "ShadowTimingProbe: indirect response hemi-ambient"
 LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN = "SoftShadowTestSmokeProject: shutdown"
 LIT_SHADOW_ZERO_EXTENT = "shadow-zero-extent"
 LIT_SHADOW_FINITE_EXTENT = "shadow-finite-extent"
@@ -94,28 +94,28 @@ LIT_REFLECTION_ROUGH_FILTERED = "reflection-rough-filtered"
 LIT_REFLECTION_SCREEN_DEPTH = "reflection-screen-depth"
 LIT_REFLECTION_OPTICAL_INSIDE = "reflection-optical-inside"
 LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES = "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES"
-LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
 LIT_NEW_TIMING_TXT = "new_timing.txt"
 LIT_N_16 = "16"
 LIT_INACTIVE_REFLECTION_SCOPES = "inactive reflection scopes"
 LIT_WORKLOAD = "--workload"
-LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG = "--candidate-hardware-dispatches-per-range"
+LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANGE = "--candidate-hardware-dispatches-per-range"
 LIT_MAIN = "__main__"
 
 
 def log_text(route=LIT_HARDWARE):
     natural = next(message for message, name in SHADOW_ROUTES.items() if name == route)
-    return "\n".join((natural, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
-        "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+    return "\n".join((natural, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG if route == LIT_HARDWARE else LIT_SOFTWARE_SHADOW_DISPATCH_LOG, LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
+        "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created", LIT_DEFERRED_TARGETS_READY_LOG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG,
         LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
 
 
 def soft_shadow_log_text(workload, route=LIT_HARDWARE):
     values = dict(workload.environment_overrides)
-    return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1", "ShadowTimingProbe: caustic emission 0", LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE, f"ShadowTimingProbe: natural shadow route {route}",
-        LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA,
+    return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1", "ShadowTimingProbe: caustic emission 0", LIT_HEMI_AMBIENT_SHADOW_RESPONSE_LOG, f"ShadowTimingProbe: natural shadow route {route}",
+        LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG if route == LIT_HARDWARE else LIT_SOFTWARE_SHADOW_DISPATCH_LOG,
         f"ShadowTimingProbe: source extents angular={values[LIT_NWB_SOFT_SHADOW_TEST_ANGLE]} radius={values[LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS]}",
-        "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+        "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad", LIT_DEFERRED_TARGETS_READY_LOG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG,
         LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN))
 
 

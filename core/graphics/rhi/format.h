@@ -148,7 +148,7 @@ namespace Format{
         ASTC_12x12_UNORM_SRGB,
         ASTC_12x12_FLOAT,
 
-        Count
+        kCount
     };
 
     [[nodiscard]] constexpr b8 IsBCCompressedFormat(const Enum format)noexcept{
@@ -179,7 +179,7 @@ namespace FormatKind{
         Float,
         DepthStencil,
 
-        Count
+        kCount
     };
 };
 
@@ -302,7 +302,7 @@ namespace TextureUploadAspect{
         Depth,
         Stencil,
 
-        Count,
+        kCount,
     };
 };
 

@@ -27,7 +27,7 @@ from csg_gi_temporal_contract import (
     LIT_GRAPHICS_FRAME,
     LIT_HORIZONTAL_JUMP_FRACTION,
     LIT_LAGGED_LIGHTING,
-    LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B,
+    LIT_HARDWARE_RAY_TRACING_DISABLED_LOG,
     LIT_MEAN_RGB,
     LIT_MOTION,
     LIT_NATURAL,
@@ -38,7 +38,7 @@ from csg_gi_temporal_contract import (
     LIT_PIXEL,
     LIT_POSITION,
     LIT_REGIONS,
-    LIT_RENDERERSYSTEM_FRAME_LAGGED_ASYNC_LIGH,
+    LIT_LAGGED_LIGHTING_HISTORY_ACCEPTED_LOG,
     LIT_ROUTE,
     LIT_RUNTIME_LOG,
     LIT_SAMPLES,
@@ -194,6 +194,6 @@ class CsgTemporalAnalysis:
                 metrics[name]["equal_pose_differences"] = pairs
         return {LIT_FRAMES: files, LIT_REGIONS: metrics, "region_bounds": region_bounds, "dimensions": list(EXPECTED_EXTENT), LIT_VIEW: view, LIT_MOTION: LIT_ANIMATED if animated == "1" else LIT_STATIC, "frame_interval": frame_interval,
             "warmup_start_graphics_frame": warmup_start_frame, "warmup_elapsed_seconds": warmup_elapsed_seconds, "first_capture_graphics_frame": first_frame, LIT_OVERLAPPING: bool(overlap_count),
-            LIT_ROUTE: LIT_SOFTWARE if LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B in log else LIT_NATURAL, LIT_LAGGED_LIGHTING: LIT_RENDERERSYSTEM_FRAME_LAGGED_ASYNC_LIGH in log,
+            LIT_ROUTE: LIT_SOFTWARE if LIT_HARDWARE_RAY_TRACING_DISABLED_LOG in log else LIT_NATURAL, LIT_LAGGED_LIGHTING: LIT_LAGGED_LIGHTING_HISTORY_ACCEPTED_LOG in log,
             "pose_contract": ("Static initial phase; unchanged camera and light." if animated == "0" else "Front-facing triangle-wave time min(frame%240,240-frame%240)*.3/120; unchanged camera and light."
                 if bounded_motion else "Unidentified archived animated pose; equal-pose comparison omitted.")}

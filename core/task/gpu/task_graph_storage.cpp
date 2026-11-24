@@ -328,7 +328,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         || desc.markerLabel.empty()
         || desc.markerLabel.size() > Limit<u32>::s_Max
         || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
-        || desc.type >= GpuGraphResourceType::Count
+        || desc.type >= GpuGraphResourceType::kCount
         || !ResourceQueueSharing::IsValid(desc.queueSharing)
         || (queueAdmission && (!queueAdmission->valid() || queueAdmission->admittedQueueClasses != desc.queueSharing || queueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()))
         || (desc.initialAvailabilityCompletion.valid() && (desc.type == GpuGraphResourceType::HazardDomain || !validExternalCompletion(desc.initialAvailabilityCompletion)))

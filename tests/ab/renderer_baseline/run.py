@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from baseline_image_comparison import BaselineImageComparison  # noqa: E402
-from baseline_warmup_evidence import BaselineWarmupEvidence, LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT, LIT_ENABLED_FLAG, LIT_NWB_GI_SMOKE_COMPLEX_SCENE  # noqa: E402
+from baseline_warmup_evidence import BaselineWarmupEvidence, LIT_COMPLEX_GI_SCENE_REQUIRED, LIT_ENABLED_FLAG, LIT_NWB_GI_SMOKE_COMPLEX_SCENE  # noqa: E402
 from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
 from window_capture_environment import make_runtime_launch_args  # noqa: E402
 from window_capture_logs import wait_for_log_message  # noqa: E402
@@ -39,8 +39,8 @@ import renderer_baseline_self_test  # noqa: E402
 from renderer_baseline_corpus import CorpusReference, sha256_file, effective_frozen_environment, load_reference, load_corpus_reference, apply_corpus_limits, verify_corpus  # noqa: E402
 
 LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
-LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
-LIT_SETTLE_SECONDS_MUST_BE_POSITIVE_AND_FI = "--settle-seconds must be positive and finite"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
+LIT_INVALID_SETTLE_SECONDS = "--settle-seconds must be positive and finite"
 LIT_SETTLE_SECONDS_2 = "--settle-seconds"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
 LIT_MAXIMUM_MEAN_ABS_2 = "--maximum-mean-abs"
@@ -157,10 +157,10 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
         environment["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = f"{profile.fixed_delta_seconds:.9g}"
     complex_readback = profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == LIT_ENABLED_FLAG
     if complex_readback and frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
-        raise SmokeFailure(LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT)
+        raise SmokeFailure(LIT_COMPLEX_GI_SCENE_REQUIRED)
     if complex_readback:
         environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH] = str(capture_path.resolve())
-        environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO] = str(profile.capture_freeze_frame)
+        environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT] = str(profile.capture_freeze_frame)
     backend = None
     logserver_process = None
     app_process = None
@@ -269,7 +269,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         args.settle_seconds = profile.settle_seconds if args.settle_seconds is None else args.settle_seconds
         if not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0:
-            raise SmokeFailure(LIT_SETTLE_SECONDS_MUST_BE_POSITIVE_AND_FI)
+            raise SmokeFailure(LIT_INVALID_SETTLE_SECONDS)
     frozen_environment = effective_frozen_environment(profile)
     reference_manifest: Optional[Mapping[str, object]] = None
     reference_capture: Optional[Path] = None
@@ -358,7 +358,7 @@ def validate_args(args: argparse.Namespace) -> None:
     if not math.isfinite(args.startup_timeout) or args.startup_timeout <= 0.0:
         raise SmokeFailure("--startup-timeout must be positive and finite")
     if args.settle_seconds is not None and (not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0):
-        raise SmokeFailure(LIT_SETTLE_SECONDS_MUST_BE_POSITIVE_AND_FI)
+        raise SmokeFailure(LIT_INVALID_SETTLE_SECONDS)
     if args.maximum_max_abs is not None and args.maximum_max_abs < 0:
         raise SmokeFailure("--maximum-max-abs must not be negative")
     if args.maximum_mean_abs is not None and (not math.isfinite(args.maximum_mean_abs) or args.maximum_mean_abs < 0.0):

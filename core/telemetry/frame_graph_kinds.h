@@ -51,7 +51,7 @@ namespace FrameGraphQueueClass{
         Compute,
         Transfer,
 
-        Count = s_FrameGraphQueueClassCountValue,
+        kCount = s_FrameGraphQueueClassCountValue,
     };
 };
 
@@ -64,7 +64,7 @@ namespace FrameGraphQueueAssignmentReason{
         Conservative,
         Scored,
 
-        Count = s_FrameGraphQueueAssignmentReasonCountValue,
+        kCount = s_FrameGraphQueueAssignmentReasonCountValue,
     };
 };
 
@@ -95,7 +95,7 @@ namespace FrameGraphQueueAssignmentAcceptance{
         Unchanged,
         Changed,
 
-        Count = s_FrameGraphQueueAssignmentAcceptanceCountValue,
+        kCount = s_FrameGraphQueueAssignmentAcceptanceCountValue,
     };
 };
 
@@ -116,7 +116,7 @@ namespace FrameGraphTaskPacketizationDecision{
         MergedFrontierScored,
         ScoredMergeDomainMismatch,
 
-        Count = s_FrameGraphTaskPacketizationDecisionCountValue,
+        kCount = s_FrameGraphTaskPacketizationDecisionCountValue,
     };
 };
 

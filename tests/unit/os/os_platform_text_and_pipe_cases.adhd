@@ -88,12 +88,12 @@ extern const usize s_MaxOsX11PreeditBytes;
 
 [ordered]
 class PreeditTestContext{
-    private HeapStorage storage = HeapStorage();
-    private TestValueSlot<X11PreeditBuffer> slot;
+    private HeapStorage m_storage = HeapStorage();
+    private TestValueSlot<X11PreeditBuffer> m_slot;
     public mut X11PreeditBuffer preedit;
     public String scratch;
 
-    public PreeditTestContext(){ this.preedit = this.slot.constructIn(this.storage); }
+    public PreeditTestContext(){ this.preedit = this.m_slot.constructIn(this.m_storage); }
 }
 
 class WaylandStateContext{

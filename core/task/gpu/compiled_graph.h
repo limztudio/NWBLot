@@ -104,7 +104,7 @@ namespace GpuTaskPacketizationDecision{
         MergedFrontierScored,
         ScoredMergeDomainMismatch,
 
-        Count,
+        kCount,
     };
 };
 
@@ -206,7 +206,7 @@ namespace GpuOwnershipTransferRoute{
         ExternalImport,
         ExternalExport,
 
-        Count,
+        kCount,
     };
 };
 
@@ -224,7 +224,7 @@ struct GpuCompiledOwnershipTransfer{
     GpuPhysicalQueueId destinationQueue;
     ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
     GpuGraphResourceType::Enum resourceType = GpuGraphResourceType::HazardDomain;
-    GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::Count;
+    GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::kCount;
     b8 concurrentSharingCouldAvoid = false;
 
 
@@ -233,8 +233,8 @@ public:
 };
 
 struct GpuTaskGraphCompileStatistics{
-    static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::Count);
-    static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::Count);
+    static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
+    static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::kCount);
 
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;

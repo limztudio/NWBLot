@@ -19,17 +19,17 @@ class MeshTextReplacement{
 }
 
 class MeshRefreshDocument : NoCopy{
-    private in Path file;
-    private in MetascriptDocument document;
-    private StringView source;
+    private in Path m_file;
+    private in MetascriptDocument m_document;
+    private StringView m_source;
     public Vector<MeshTextReplacement> replacements;
     public SourceMeshCanonicalizeReport report;
     public b8 sawMesh = false;
 
     public MeshRefreshDocument(in Path file, in MetascriptDocument document, in StringView source){
-        this.file = file;
-        this.document = document;
-        this.source = source;
+        this.m_file = file;
+        this.m_document = document;
+        this.m_source = source;
     }
 
     [cpp_unwind]
@@ -203,19 +203,19 @@ b8 MeshRefreshDocument::refreshDeclaration(in StringView typeName, in StringView
     if(!IsMeshRefreshDeclarationType(typeName))
         return true;
     this.sawMesh = true;
-    const auto value = this.document.borrowVariable(variable);
+    const auto value = this.m_document.borrowVariable(variable);
     if(!value.has_value()){
         error("Failed to refresh NWB mesh: missing mesh variable '{}'", variable);
         return false;
     }
-    auto mesh = ParseRefreshMesh(this.file, variable, value.value());
+    auto mesh = ParseRefreshMesh(this.m_file, variable, value.value());
     if(!mesh.has_value())
         return false;
-    const auto canonical = CanonicalizeRefreshMesh(this.file, this.document, variable, mesh.value());
+    const auto canonical = CanonicalizeRefreshMesh(this.m_file, this.m_document, variable, mesh.value());
     if(!canonical.has_value())
         return false;
     ApplyCanonicalizedStreams(canonical.value(), mesh.value());
-    if(!AppendMeshReplacements(this.source, variable, canonical.value().report.before, mesh.value(), this.replacements))
+    if(!AppendMeshReplacements(this.m_source, variable, canonical.value().report.before, mesh.value(), this.replacements))
         return false;
     AccumulateReport(canonical.value().report, this.report);
     return true;

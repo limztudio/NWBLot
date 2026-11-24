@@ -36,7 +36,7 @@ LIT_CREATE_CAPTURE_BACKEND = "create_capture_backend"
 LIT_WRITE_STATUS = "write_status"
 LIT_WINDOW_HANDLE = "--window-handle"
 LIT_SYS_STDERR = "sys.stderr"
-LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR = "benchmark skipped because required hardware is unavailable"
+LIT_BENCHMARK_REQUIRED_HARDWARE_UNAVAILABLE = "benchmark skipped because required hardware is unavailable"
 LIT_TEST_LOG = "test.log"
 LIT_UTF_8 = "utf-8"
 LIT_LOG = "*.log"
@@ -122,7 +122,7 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_capability_marker_is_classified_before_required_log_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            marker = LIT_BENCHMARK_REQUIRED_HARDWARE_UNAVAILABLE
             (log_directory / LIT_TEST_LOG).write_text(marker, encoding=LIT_UTF_8)
 
             self.assertEqual(validate_expected_log_messages(log_directory, {}, LIT_LOG, [LIT_REQUIRED_ROUTE_MARKER], [], [marker],), marker,)
@@ -138,7 +138,7 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_capability_marker_preempts_supported_route_rejection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            marker = LIT_BENCHMARK_REQUIRED_HARDWARE_UNAVAILABLE
             (log_directory / LIT_TEST_LOG).write_text(f"{marker}\nsoftware traversal route", encoding=LIT_UTF_8,)
 
             self.assertEqual(validate_expected_log_messages(log_directory, {}, LIT_LOG, ["required hardware route"], ["software traversal route"], [marker], [LIT_ERROR],), marker,)
@@ -146,7 +146,7 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_rejected_error_takes_precedence_over_capability_skip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            marker = LIT_BENCHMARK_REQUIRED_HARDWARE_UNAVAILABLE
             (log_directory / LIT_TEST_LOG).write_text(f"{marker}\n[ERROR] device failure", encoding=LIT_UTF_8)
 
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_BLOCKING_LOG_MESSAGE):

@@ -36,7 +36,7 @@ namespace DeviceExtensionFeature{
         DescriptorBuffer,
         DeviceFault,
         TextureCompressionAstcHdr,
-        Count,
+        kCount,
     };
 };
 

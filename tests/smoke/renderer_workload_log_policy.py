@@ -20,8 +20,8 @@ LIT_REFLECTION_POLICY = "reflection_policy"
 LIT_REFLECTIONSMOKESTATISTICS = "ReflectionSmokeStatistics:"
 LIT_REFLECTIONSMOKEHISTORY = "ReflectionSmokeHistory:"
 LIT_REFLECTIONSMOKEFEEDBACK = "ReflectionSmokeFeedback:"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
-LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_SOFTWARE_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched software shadow traversal"
 LIT_SHADOW_ROUTE = "shadow_route"
 LIT_NWB_SOFT_SHADOW_TEST_ANGLE = "NWB_SOFT_SHADOW_TEST_ANGLE"
 LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS = "NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"
@@ -90,7 +90,7 @@ class RendererWorkloadLogPolicy:
         if len(routes) != 1 or routes[0] not in (LIT_HARDWARE, LIT_SOFTWARE) or (require_hardware and routes[0] != LIT_HARDWARE):
             raise SmokeFailure(f"natural shadow route is missing, contradictory, or unsupported: {routes}")
         if routes == [LIT_HARDWARE]:
-            validate_expected_log_text(text, [LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA], [LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA])
+            validate_expected_log_text(text, [LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG], [LIT_SOFTWARE_SHADOW_DISPATCH_LOG])
         return {**RendererWorkloadLogPolicy.device_material_signature(text), LIT_SHADOW_ROUTE: routes[0], LIT_EXTENT: list(extents.pop()), LIT_TIMING_IN_FLIGHT_RANGES: 32}
 
     @staticmethod
@@ -134,5 +134,5 @@ class RendererWorkloadLogPolicy:
         if dimensions != {(workload.width, workload.height)}:
             raise SmokeFailure("shadow render extent differs from the frozen workload")
         if routes == [LIT_HARDWARE]:
-            validate_expected_log_text(text, [LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA], [LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA])
+            validate_expected_log_text(text, [LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG], [LIT_SOFTWARE_SHADOW_DISPATCH_LOG])
         return {**RendererWorkloadLogPolicy.device_material_signature(text), LIT_SHADOW_ROUTE: routes[0], LIT_EXTENT: [workload.width, workload.height], "source_extents": actual_extents, "caustic_emission": False, "indirect_response": "hemi-ambient", LIT_TIMING_IN_FLIGHT_RANGES: 32}

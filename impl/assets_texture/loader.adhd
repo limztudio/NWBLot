@@ -229,7 +229,7 @@ GpuDescriptorClass ToSampledImageDescriptorClass(in TexturePayloadDimension dime
     case TexturePayloadDimension::Texture3D:
         return GpuDescriptorClass::SampledImage3D;
     default:
-        return GpuDescriptorClass::Count;
+        return GpuDescriptorClass::kCount;
     }
 }
 
@@ -258,7 +258,7 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     const Name imageName = ResolveTextureUploadDebugName(debugName, textureAsset.virtualPath());
     const TextureDimension textureDimension = ToCoreTextureDimension(textureAsset.dimension());
     const GpuDescriptorClass descriptorClass = ToSampledImageDescriptorClass(textureAsset.dimension());
-    assert(textureDimension != TextureDimension::Unknown && descriptorClass != GpuDescriptorClass::Count);
+    assert(textureDimension != TextureDimension::Unknown && descriptorClass != GpuDescriptorClass::kCount);
 
     TextureDesc textureDesc = TextureDesc();
     textureDesc.setWidth(textureAsset.width());

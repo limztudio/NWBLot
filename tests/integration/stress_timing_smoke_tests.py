@@ -22,8 +22,8 @@ LIT_AUTOMATIC = "automatic"
 LIT_REFERENCE = "reference"
 LIT_REFERENCE_GRID9 = "reference_grid9"
 LIT_EVERY_FRAME = "every_frame"
-LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE = "SurfelGiQualitySmoke: requested resolve_factor=4"
-LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
+LIT_SURFEL_GI_REQUESTED_RESOLVE_FACTOR_LOG = "SurfelGiQualitySmoke: requested resolve_factor=4"
+LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
 LIT_RENDERER_EXE = "renderer.exe"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -67,7 +67,7 @@ LIT_SOFTWARE_SHADOW_COVERAGE = "--software-shadow-coverage"
 LIT_SOFTWARE_SHADOW_BLOCKER_SEARCH = "--software-shadow-blocker-search"
 LIT_NWB_SOFTWARE_SHADOW_BACKEND = "NWB_SOFTWARE_SHADOW_BACKEND"
 LIT_NWB_SOFTWARE_SHADOW_BUDGET_MIB = "NWB_SOFTWARE_SHADOW_BUDGET_MIB"
-LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLU = "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"
+LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION = "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"
 LIT_NWB_SOFTWARE_SHADOW_POINT_RESOLUTION = "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION"
 LIT_NWB_UNREQUESTED_SETTING = "NWB_UNREQUESTED_SETTING"
 LIT_BAD = "bad"
@@ -99,8 +99,8 @@ LIT_TOTAL_20 = "total=20"
 LIT_ROW_SPACING_X_0_72 = "row_spacing_x=0.72"
 LIT_CHARACTERS_PER_CLASS = "--characters-per-class"
 LIT_NWB_STRESS_TEST_SPIN_ANGLE = "NWB_STRESS_TEST_SPIN_ANGLE"
-LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_NWB_STRESS_CHARACTERS_PER_CLASS = "NWB_STRESS_CHARACTERS_PER_CLASS"
 LIT_N_10 = "10"
 LIT_ANIMATE = "--animate"
@@ -145,8 +145,8 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         args = smoke.parse_args(self.argv + [LIT_SURFEL_GI_RESOLVE_RESOLUTION, LIT_QUARTER])
         env = StressLaunchEnvironment.launch_environment({LIT_NWB_SURFEL_GI_RESOLVE_RESOLUTION: LIT_HALF}, args, self.output)
         self.assertEqual(env[LIT_NWB_SURFEL_GI_RESOLVE_RESOLUTION], LIT_QUARTER)
-        setting = LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE
-        dispatch = LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE
+        setting = LIT_SURFEL_GI_REQUESTED_RESOLVE_FACTOR_LOG
+        dispatch = LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG
         observed = smoke.surfel_gi_quality_smoke.verify_settings(setting + "\n" + dispatch, LIT_QUARTER, (1280, 900))
         self.assertTrue(observed[LIT_VERIFIED])
         for text in (setting, setting + "\n" + dispatch.replace("factor=4", "factor=2"), setting + "\n" + dispatch.replace("320x225", "640x450"), setting + "\n" + dispatch.replace("1280x900", "1001x701")):
@@ -229,19 +229,19 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
 
     def test_explicit_environment_overrides_inherited_settings_and_strips_other_controls(self):
         args = smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_BACKEND, LIT_LIGHT_SPACE, LIT_SOFTWARE_SHADOW_BUDGET_MIB, LIT_N_256, LIT_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION, LIT_N_1024, LIT_SOFTWARE_SHADOW_POINT_RESOLUTION, LIT_N_512])
-        inherited = {LIT_NWB_SOFTWARE_SHADOW_BACKEND: LIT_TRACE, LIT_NWB_SOFTWARE_SHADOW_BUDGET_MIB: "1", LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLU: "32", LIT_NWB_SOFTWARE_SHADOW_POINT_RESOLUTION: "64",
+        inherited = {LIT_NWB_SOFTWARE_SHADOW_BACKEND: LIT_TRACE, LIT_NWB_SOFTWARE_SHADOW_BUDGET_MIB: "1", LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION: "32", LIT_NWB_SOFTWARE_SHADOW_POINT_RESOLUTION: "64",
             LIT_NWB_UNREQUESTED_SETTING: LIT_BAD, LIT_PATH: LIT_KEPT}
         env = StressLaunchEnvironment.launch_environment(inherited, args, self.output)
         self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_BACKEND], LIT_LIGHT_SPACE)
         self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_BUDGET_MIB], LIT_N_256)
-        self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLU], LIT_N_1024)
+        self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION], LIT_N_1024)
         self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_POINT_RESOLUTION], LIT_N_512)
         self.assertNotIn(LIT_NWB_UNREQUESTED_SETTING, env)
         self.assertEqual(env[LIT_PATH], LIT_KEPT)
         defaults = StressLaunchEnvironment.launch_environment(inherited, smoke.parse_args(self.argv), self.output)
         self.assertEqual(defaults[LIT_NWB_SOFTWARE_SHADOW_BACKEND], LIT_AUTOMATIC)
         self.assertEqual(defaults[LIT_NWB_SOFTWARE_SHADOW_BUDGET_MIB], LIT_N_256)
-        self.assertEqual(defaults[LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLU], LIT_N_512)
+        self.assertEqual(defaults[LIT_NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION], LIT_N_512)
         self.assertEqual(defaults[LIT_NWB_SOFTWARE_SHADOW_POINT_RESOLUTION], LIT_N_256)
 
     def test_report_requires_one_complete_exact_application_record(self):
@@ -379,11 +379,11 @@ class StressMotionTests(unittest.TestCase):
     def test_rotating_launch_removes_inherited_freezes_and_fixed_simulation_time(self):
         runtime = Path(self.enterContext(TemporaryDirectory()))
         args = stress_arguments(runtime, [LIT_ANIMATE])
-        inherited = {LIT_NWB_STRESS_TEST_SPIN_ANGLE: "1.25", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO: ".25", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "120", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5"}
+        inherited = {LIT_NWB_STRESS_TEST_SPIN_ANGLE: "1.25", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS: ".25", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "120", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5"}
         env = StressLaunchEnvironment.launch_environment(inherited, args, Path("moving"))
         self.assertNotIn(LIT_NWB_STRESS_TEST_SPIN_ANGLE, env)
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO, env)
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS, env)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, env)
         self.assertEqual(env[LIT_NWB_STRESS_CHARACTERS_PER_CLASS], LIT_N_10)
 
     def test_rotating_cli_rejects_conflicting_yaw_and_simulation_controls(self):

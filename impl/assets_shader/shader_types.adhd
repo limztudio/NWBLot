@@ -25,7 +25,7 @@ const Array<AssetTypeDescriptor, 14> s_ShaderAssetTypes(
     DescribeAssetType<CallableShader>()
 );
 
-static_assert(s_ShaderAssetTypes.size() == cast<usize>(ShaderType::Count), "Shader asset types must cover every physical stage");
+static_assert(s_ShaderAssetTypes.size() == cast<usize>(ShaderType::kCount), "Shader asset types must cover every physical stage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

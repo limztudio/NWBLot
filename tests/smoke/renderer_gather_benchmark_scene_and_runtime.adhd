@@ -141,7 +141,7 @@ class RendererGatherBenchmarkScene{
         );
         if(!backdrop.valid())
             return false;
-        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_PIDIV2, 0.0f, 0.0f, 0.0f));
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_HalfPi, 0.0f, 0.0f, 0.0f));
         if(!SetSmokeEntityRotation(backdrop, rotation, world))
             return false;
         if(!SetSmokeSurfaceRoughnessF0(backdrop, Name(s_SmokeSurfaceMaterialInterface), "runtime.specular_f0", "runtime.perceptual_roughness", 0.35f, 0.0f, world))

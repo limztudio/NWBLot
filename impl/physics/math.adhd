@@ -301,7 +301,7 @@ Softness MakeSoftness(in f32 hertz, in f32 zeta, in f32 h){
         return s;
     }
 
-    const f32 omega = 2.0f * s_PI * hertz;
+    const f32 omega = 2.0f * s_Pi * hertz;
     const f32 a1 = 2.0f * zeta + h * omega;
     const f32 a2 = h * omega * a1;
     const f32 a3 = 1.0f / (1.0f + a2);

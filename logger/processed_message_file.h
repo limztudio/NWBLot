@@ -41,7 +41,7 @@ public:
         if(!executableDirectory)
             return false;
 
-        static Atomic<u64> sequence{ 0u };
+        static Atomic<u64> s_Sequence{ 0u };
         constexpr usize s_MaxAttempts = 1024u;
         for(usize attempt = 0u; attempt < s_MaxAttempts; ++attempt){
             const LogString fileName = StringFormat(
@@ -55,7 +55,7 @@ public:
                 localTime->tm_min,
                 localTime->tm_sec,
                 CurrentProcessId(),
-                sequence.fetch_add(1u, MemoryOrder::relaxed)
+                s_Sequence.fetch_add(1u, MemoryOrder::relaxed)
             );
             m_filePath = *executableDirectory / fileName;
             m_stream.open(m_filePath, s_FileOpenWrite | StreamType::noreplace);

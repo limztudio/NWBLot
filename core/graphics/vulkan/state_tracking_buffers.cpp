@@ -223,7 +223,7 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
     if(!existingRanges){
         invalidateBufferCache();
         const auto it = m_bufferStates.emplace(MakeNotNull(&buffer), BufferRangeStates(m_context.objectArena)).first;
-        it.value().push_back(BufferRangeState{ resolvedRange, state });
+        it.value().pushBack(BufferRangeState{ resolvedRange, state });
         if(buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read)
             m_hasReadbackBuffers = true;
         if(buffer.m_creationDesc.keepInitialState)
@@ -243,7 +243,7 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
                 existingRanges->back().range.byteSize += resolvedRange.byteSize;
                 return;
             }
-            existingRanges->push_back(BufferRangeState{ resolvedRange, state });
+            existingRanges->pushBack(BufferRangeState{ resolvedRange, state });
             return;
         }
         if(hasExplicitBufferStateFromRanges(existingRanges, resolvedRange)){
@@ -268,7 +268,7 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
             if(!overflowMerged.empty() && overflowMerged.back().range.end() == piece.byteOffset && overflowMerged.back().state == pieceState)
                 overflowMerged.back().range.byteSize += piece.byteSize;
             else
-                overflowMerged.push_back(BufferRangeState{ piece, pieceState });
+                overflowMerged.pushBack(BufferRangeState{ piece, pieceState });
             return;
         }
         if(inlineMergedCount != 0u && inlineMerged[inlineMergedCount - 1u].range.end() == piece.byteOffset && inlineMerged[inlineMergedCount - 1u].state == pieceState){
@@ -282,7 +282,7 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
         usingOverflow = true;
         overflowMerged.reserve(existingRanges->size() * 2u + 1u);
         overflowMerged.assign(inlineMerged.data(), inlineMergedCount);
-        overflowMerged.push_back(BufferRangeState{ piece, pieceState });
+        overflowMerged.pushBack(BufferRangeState{ piece, pieceState });
     };
 
     u64 cursor = resolvedRange.byteOffset;

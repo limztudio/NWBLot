@@ -26,7 +26,7 @@ LIT_COMBINED = "combined"
 LIT_NWB_REFRACTION_SMOKE_CASE = "NWB_REFRACTION_SMOKE_CASE"
 LIT_NESTED = "nested"
 LIT_NWB_REFLECTION_SMOKE_TEMPORAL = "NWB_REFLECTION_SMOKE_TEMPORAL"
-LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA = "NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP"
+LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP = "NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP"
 LIT_NWB_REFLECTION_SMOKE_MODE = "NWB_REFLECTION_SMOKE_MODE"
 LIT_OUTPUT = "output"
 LIT_APP_EXE = "app.exe"
@@ -83,11 +83,11 @@ class CombinedCausticTests(unittest.TestCase):
             CausticOpticalImageEvidence.analyze_frames(frames)
 
     def test_capture_flags_clear_inherited_optical_state(self):
-        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_TEMPORAL: "1", LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA: "1"}):
+        with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_TEMPORAL: "1", LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP: "1"}):
             environment = caustic.capture_environment(LIT_REFLECTION_DISABLED)
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_CASE, environment)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_TEMPORAL, environment)
-        self.assertNotIn(LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA, environment)
+        self.assertNotIn(LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP, environment)
 
     def test_software_contributions_keep_thresholds_and_exclude_hardware_radiometry(self):
         with patch.object(CausticOpticalImageEvidence, LIT_ANALYZE_EXTERIOR_REFLECTION) as exterior:

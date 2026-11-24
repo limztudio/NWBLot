@@ -126,7 +126,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
     m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
-    constexpr usize s_OptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
+    constexpr usize s_OptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::kCount);
 
     const VulkanDetail::PhysicalDeviceFeatureQueryOptions featureQueryOptions{
         .apiSupportsVulkan13 = apiSupportsVulkan13,

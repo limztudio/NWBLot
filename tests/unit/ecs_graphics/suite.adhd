@@ -271,7 +271,7 @@ Expected<CsgClipWorkBounds> ResolveSuiteCsgTranslatedBoxWorkBounds(
 }
 
 void ExpandSuitePerspectiveWorldBounds(mut CsgFrameWorkRegion region, in VectorSingle minimum, in VectorSingle maximum, in u32 width, in u32 height){
-    region.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), minimum, maximum, width, height);
+    region.expandWorldBounds(MatrixPerspectiveFovLH(s_HalfPi, 1.0f, 0.1f, 100.0f), minimum, maximum, width, height);
 }
 
 Expected<CsgClipWorkBounds> ResolveSuiteCsgEmptyWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgClipWorkBounds receiver){

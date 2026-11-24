@@ -23,8 +23,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_ReflectionHalfPi = s_PIDIV2;
-const f32 s_ReflectionPi = s_PI;
+const f32 s_ReflectionHalfPi = s_HalfPi;
+const f32 s_ReflectionPi = s_Pi;
 const StringView s_ReflectionSpecularParameterPath = "runtime.specular_f0";
 const StringView s_ReflectionRoughnessParameterPath = "runtime.perceptual_roughness";
 const StringView s_OpticalCsgDenseCase = "optical_csg_dense";

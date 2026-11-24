@@ -26,9 +26,9 @@ from renderer_ab_workload_fixture import (
     LIT_GPU_SAMPLES, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_HARDWARE, LIT_IN_FLIGHT_RANGES_2, LIT_IN_FLIGHT_RANGES_32,
     LIT_LOGGER, LIT_LOGSERVER_EXECUTABLE, LIT_MAIN, LIT_MEAN_MS, LIT_MISSING_COMPLETED_GPU_SCOPES,
     LIT_NAN, LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE, LIT_NWB_CAUSTIC_SMOKE_ENABLED, LIT_NWB_GPU_TIMING_FILE,
-    LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE, LIT_N_1280X900,
+    LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE, LIT_N_1280X900,
     LIT_N_960X720, LIT_OLD_BMP, LIT_OLD_TXT, LIT_OUTPUT, LIT_OUTPUT_DIRECTORY,
-    LIT_PRESERVED, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED, LIT_RENDER_DEFERRED_COMPOSITE,
+    LIT_PRESERVED, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, LIT_SOFTWARE_SHADOW_DISPATCH_LOG, LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG, LIT_RENDER_DEFERRED_COMPOSITE,
     LIT_RENDER_DEFERRED_PRESENT, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RESOLVED_GPU_TIME_REDUCTION, LIT_SCOPES,
     LIT_SECONDARY_SCOPE, LIT_SELECTED, LIT_SHADOW_ROUTE, LIT_SOFTWARE, LIT_STATUS,
     LIT_TIMING_TXT, LIT_TOTAL_MS, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN, LIT_TRANSPARENT_MULTI, LIT_VK_INSTANCE_LAYERS,
@@ -40,7 +40,7 @@ class WorkloadPolicyTests(unittest.TestCase):
     def test_inherited_smoke_capture_diagnostics_and_pose_are_cleared(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_TRANSPARENT_MULTI]
         inherited = {LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1", "NWB_TRANSPARENT_CSG_DISABLE_CUTTER": "1",
-            LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: "2", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "5", LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_PRESERVED: LIT_YES}
+            LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: "2", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "5", LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_PRESERVED: LIT_YES}
         env, overrides = benchmark.configure_environment(inherited, workload, Path(LIT_TIMING_TXT))
         self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
         self.assertEqual(overrides[LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE], "0")
@@ -70,7 +70,7 @@ class WorkloadPolicyTests(unittest.TestCase):
 
     def test_material_signature_preserves_mixed_routes_independent_of_creation_order(self):
         indexed = "RendererSystem: material 'glass' selected VertexIndexed + PS from persistent object-space geometry"
-        compute = LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED
+        compute = LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG
         device = LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU
         mixed = RendererWorkloadLogPolicy.device_material_signature("\n".join((device, compute, indexed, compute)))
         reordered = RendererWorkloadLogPolicy.device_material_signature("\n".join((device, indexed, compute)))
@@ -82,8 +82,8 @@ class WorkloadPolicyTests(unittest.TestCase):
 
     def test_current_hardware_route_requires_dispatch_and_rejects_retired_routes(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_TRANSPARENT_MULTI]
-        marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
-        for altered in (log_text().replace(marker, ""), log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
+        marker = LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG
+        for altered in (log_text().replace(marker, ""), log_text() + "\n" + LIT_SOFTWARE_SHADOW_DISPATCH_LOG):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 RendererWorkloadLogPolicy.transparent_multi_log(altered, workload, True)
         retired = log_text().replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE)

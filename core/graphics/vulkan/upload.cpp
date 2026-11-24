@@ -83,7 +83,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBufferSlow(
     if((owner->m_usedUploadChunkMask & slotBit) != 0u){
         for(BufferChunk* prev = nullptr, *chunk = owner->m_activeUploadChunks[chunkSlot]; chunk; prev = chunk, chunk = chunk->nextOwnerChunk){
             if(chunk != cachedChunk && chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID && chunk->physicalQueue == queue){
-                const auto result = trySuballocateFromChunk(*chunk, size, alignment);
+                const auto result = TrySuballocateFromChunk(*chunk, size, alignment);
                 if(result){
                     if(prev){
                         prev->nextOwnerChunk = chunk->nextOwnerChunk;
@@ -156,7 +156,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBufferSlow(
         claimedChunk->nextOwnerChunk = owner->m_activeUploadChunks[chunkSlot];
         owner->m_activeUploadChunks[chunkSlot] = claimedChunk;
         owner->m_usedUploadChunkMask |= slotBit;
-        return trySuballocateFromChunk(*claimedChunk, size, alignment);
+        return TrySuballocateFromChunk(*claimedChunk, size, alignment);
     }
 
     lock.unlock();
@@ -192,7 +192,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBufferSlow(
     BufferChunkPtr createdChunk = MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), this, *owner, nativeRecordingID, queue, chunkSize);
     createdChunk->version = 0u;
     createdChunk->ownerStartAllocated = 0u;
-    const Expected<BufferSuballocation> result = trySuballocateFromChunk(*createdChunk, size, alignment);
+    const Expected<BufferSuballocation> result = TrySuballocateFromChunk(*createdChunk, size, alignment);
     if(!result)
         return MakeUnexpected(Failure{});
 

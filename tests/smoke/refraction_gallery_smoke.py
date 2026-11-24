@@ -31,7 +31,7 @@ LIT_NWB_REFRACTION_SMOKE_CASE = "NWB_REFRACTION_SMOKE_CASE"
 LIT_NWB_REFRACTION_SMOKE_GEOMETRY = "NWB_REFRACTION_SMOKE_GEOMETRY"
 LIT_NWB_REFRACTION_SMOKE_ENABLED = "NWB_REFRACTION_SMOKE_ENABLED"
 LIT_NWB_REFRACTION_SMOKE_HARDWARE = "NWB_REFRACTION_SMOKE_HARDWARE"
-LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
 LIT_CHANGED_PIXELS = "changed_pixels"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -44,7 +44,7 @@ LIT_LIMITS = "limits"
 LIT_CASES = "cases"
 LIT_CAPTURES = "captures"
 LIT_FILE = "file"
-LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ = "Comma-separated selection; defaults to all: "
+LIT_DEFAULT_SELECTION_HELP = "Comma-separated selection; defaults to all: "
 LIT_VARIANTS = "variants"
 LIT_ID = "id"
 LIT_MAIN = "__main__"
@@ -123,14 +123,14 @@ def capture_environment(case, variant, inherited=None):
     env = dict(os.environ if inherited is None else inherited)
     for name in ("NWB_REFRACTION_SMOKE_LIFECYCLE", "NWB_REFRACTION_SMOKE_EXTENT", "NWB_REFRACTION_SMOKE_TIMING", "NWB_REFRACTION_SMOKE_DENSITY", "NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH"):
         env.pop(name, None)
-    for name in (LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY, LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO,
+    for name in (LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY, LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS,
         "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",):
         env.pop(name, None)
     env[LIT_NWB_REFRACTION_SMOKE_CASE] = case
     env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY] = LIT_ENABLED_FLAG if variant == LIT_GEOMETRY else LIT_DISABLED_FLAG
     env[LIT_NWB_REFRACTION_SMOKE_ENABLED] = LIT_DISABLED_FLAG if variant in (LIT_GEOMETRY, LIT_DISABLED) else LIT_ENABLED_FLAG
     env[LIT_NWB_REFRACTION_SMOKE_HARDWARE] = LIT_DISABLED_FLAG if variant == LIT_SCREEN else LIT_ENABLED_FLAG
-    env[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO] = "0.016666667"
+    env[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS] = "0.016666667"
     return env
 
 
@@ -228,8 +228,8 @@ def parse_args(argv):
     parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
-    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, LIT_CASES), default=tuple(CASES), help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(CASES))
-    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, LIT_VARIANTS), default=VARIANTS, help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(VARIANTS))
+    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, LIT_CASES), default=tuple(CASES), help=LIT_DEFAULT_SELECTION_HELP + ", ".join(CASES))
+    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, LIT_VARIANTS), default=VARIANTS, help=LIT_DEFAULT_SELECTION_HELP + ", ".join(VARIANTS))
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument(LIT_TIMEOUT, type=float, default=60.0, help="Capture timeout in seconds for each child run.")
     parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)

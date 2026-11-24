@@ -30,14 +30,14 @@ static_assert(size_of<OpticalBoundsFinalizePushConstants>() == s_ShaderOpticalBo
 
 
 class OpticalBoundsFinalizeTask{
-    private BufferHandle source;
-    private RayTracingOpticalBoundsFinalizeHandle finalize;
-    private GpuUploadBlobId inputUpload;
+    private BufferHandle m_source;
+    private RayTracingOpticalBoundsFinalizeHandle m_finalize;
+    private GpuUploadBlobId m_inputUpload;
 
     public OpticalBoundsFinalizeTask(in BufferHandle source, in RayTracingOpticalBoundsFinalizeHandle finalize, in GpuUploadBlobId inputUpload){
-        this.source = source;
-        this.finalize = finalize;
-        this.inputUpload = inputUpload;
+        this.m_source = source;
+        this.m_finalize = finalize;
+        this.m_inputUpload = inputUpload;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -49,13 +49,13 @@ class OpticalBoundsFinalizeTask{
 
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        const auto inputs = context.declarations.uploadBlobData(this.inputUpload);
-        if(!this.finalize.valid() || !inputs.has_value())
+        const auto inputs = context.declarations.uploadBlobData(this.m_inputUpload);
+        if(!this.m_finalize.valid() || !inputs.has_value())
             return false;
-        in RayTracingOpticalBoundsFinalizeSnapshot resources = this.finalize.deref();
+        in RayTracingOpticalBoundsFinalizeSnapshot resources = this.m_finalize.deref();
         const usize expectedBytes = ComputeOpticalRuntimeInputsByteSize(resources.inputs.size(), size_of<RayTracingOpticalRuntimeInputGpu>());
         if(!ValidOpticalBoundsFinalizeRecordState(
-            this.source.valid(),
+            this.m_source.valid(),
             true,
             inputs.has_value(),
             context.commandIrCapture,
@@ -68,7 +68,7 @@ class OpticalBoundsFinalizeTask{
         ))
             return false;
         commandList.endRenderPass();
-        commandList.setBufferState(this.source.deref(), ResourceStates::ShaderResource);
+        commandList.setBufferState(this.m_source.deref(), ResourceStates::ShaderResource);
         commandList.setBufferState(resources.inputBuffer.deref(), ResourceStates::CopyDest);
         commandList.setBufferState(resources.outputBuffer.deref(), ResourceStates::UnorderedAccess);
         for(in BufferHandle bounds : resources.boundsBuffers)
@@ -98,7 +98,7 @@ class OpticalBoundsFinalizeTask{
         }
         commandList.setBufferState(resources.inputBuffer.deref(), ResourceStates::Common);
         commandList.setBufferState(resources.outputBuffer.deref(), ResourceStates::Common);
-        commandList.setBufferState(this.source.deref(), ResourceStates::Common);
+        commandList.setBufferState(this.m_source.deref(), ResourceStates::Common);
         commandList.commitBarriers();
         return true;
     }

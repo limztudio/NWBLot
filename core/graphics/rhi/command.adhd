@@ -23,14 +23,14 @@ extern enum RenderPassLoadAction : u8{
     Load,
     Clear,
     Discard,
-    Count
+    kCount
 };
 
 [cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassStoreAction::Enum")]
 extern enum RenderPassStoreAction : u8{
     Store,
     Discard,
-    Count
+    kCount
 };
 
 

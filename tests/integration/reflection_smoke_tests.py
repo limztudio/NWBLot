@@ -37,7 +37,7 @@ LIT_NWB_REFLECTION_SMOKE_TIMING = "NWB_REFLECTION_SMOKE_TIMING"
 LIT_NWB_REFRACTION_SMOKE_ENABLED = "NWB_REFRACTION_SMOKE_ENABLED"
 LIT_NWB_REFLECTION_SMOKE_DEBUG = "NWB_REFLECTION_SMOKE_DEBUG"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
-LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_MAIN = "__main__"
 LIT_UTF_8 = "utf-8"
 
@@ -219,13 +219,13 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
             ReflectionImageAnalysis.compare_panel_motion(self.panel_frame(), moved)
 
     def test_capture_environment_removes_inherited_fixture_controls(self):
-        with patch.dict(os.environ, {LIT_NWB_REFLECTION_SMOKE_TIMING: "1", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source", LIT_NWB_GPU_TIMING_FILE: "unexpected.txt", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1"}):
+        with patch.dict(os.environ, {LIT_NWB_REFLECTION_SMOKE_TIMING: "1", LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFLECTION_SMOKE_DEBUG: "source", LIT_NWB_GPU_TIMING_FILE: "unexpected.txt", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME: "1"}):
             result = capture_environment(LIT_MOVED, LIT_HARDWARE)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_TIMING, result)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DEBUG, result)
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_ENABLED, result)
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, result)
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, result)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME, result)
 
     def test_report_resolves_escaped_log_links_to_manifest_capture_paths(self):
         with tempfile.TemporaryDirectory() as directory:

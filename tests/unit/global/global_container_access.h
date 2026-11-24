@@ -21,8 +21,8 @@ NWB_BEGIN
 namespace Tests::GlobalCases{
 
 [[nodiscard]] inline HeapStorage& PropagationDefault(){
-    static HeapStorage storage(s_GlobalArenaCaseAllocatorPropagationDefault);
-    return storage;
+    static HeapStorage s_Storage(s_GlobalArenaCaseAllocatorPropagationDefault);
+    return s_Storage;
 }
 
 [[nodiscard]] inline Core::Alloc::GlobalArena& DefaultContainerOwner(){ return PropagationDefault().arena; }

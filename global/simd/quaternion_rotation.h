@@ -22,8 +22,8 @@ static const SIMDVectorConstF s_SIMDQuaternionSignPNNP = { { { 1.0f, -1.0f, -1.0
 static const SIMDVectorConstF s_SIMDQuaternionSignNPNP = { { { -1.0f, 1.0f, -1.0f, 1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionSignNNPP = { { { -1.0f, -1.0f, 1.0f, 1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionColumnWSign = { { { 1.0f, -1.0f, 1.0f, 1.0f } } };
-static const SIMDVectorConstU s_SIMDQuaternionSelect0110 = { { { s_SELECT_0, s_SELECT_1, s_SELECT_1, s_SELECT_0 } } };
-static const SIMDVectorConstU s_SIMDQuaternionSelect0010 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_1, s_SELECT_0 } } };
+static const SIMDVectorConstU s_SIMDQuaternionSelect0110 = { { { s_SelectFalseMask32, s_SelectTrueMask32, s_SelectTrueMask32, s_SelectFalseMask32 } } };
+static const SIMDVectorConstU s_SIMDQuaternionSelect0010 = { { { s_SelectFalseMask32, s_SelectFalseMask32, s_SelectTrueMask32, s_SelectFalseMask32 } } };
 inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 
 

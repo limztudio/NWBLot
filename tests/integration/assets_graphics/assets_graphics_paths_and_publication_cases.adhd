@@ -54,41 +54,41 @@ class LeafProbe : IAssetCodec{
 }
 
 class BlockingProbe : IAssetCodec{
-    private in AssetRegistry registry;
-    private Name leafType;
-    private mut TestAtomic<b8> entered;
-    private mut TestAtomic<b8> release;
-    private mut TestAtomic<b8> destroyedWhileActive;
-    private mut TestAtomic<b8> inFlight;
+    private in AssetRegistry m_registry;
+    private Name m_leafType;
+    private mut TestAtomic<b8> m_entered;
+    private mut TestAtomic<b8> m_release;
+    private mut TestAtomic<b8> m_destroyedWhileActive;
+    private mut TestAtomic<b8> m_inFlight;
 
     [cpp_base(IAssetCodec, type)]
     public BlockingProbe(in borrow Name type, in AssetRegistry registry, in Name leafType, mut TestAtomic<b8> entered, mut TestAtomic<b8> release, mut TestAtomic<b8> destroyedWhileActive, mut TestAtomic<b8> inFlight){
-        this.registry = registry;
-        this.leafType = leafType;
-        this.entered = entered;
-        this.release = release;
-        this.destroyedWhileActive = destroyedWhileActive;
-        this.inFlight = inFlight;
+        this.m_registry = registry;
+        this.m_leafType = leafType;
+        this.m_entered = entered;
+        this.m_release = release;
+        this.m_destroyedWhileActive = destroyedWhileActive;
+        this.m_inFlight = inFlight;
     }
 
     public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator storage)const override{
-        this.inFlight.store(true, MemoryOrder::seq_cst);
-        const auto nested = this.registry.deserializeAsset(this.leafType, s_AssetCaseProjectProbeLeaf, bytes);
+        this.m_inFlight.store(true, MemoryOrder::seq_cst);
+        const auto nested = this.m_registry.deserializeAsset(this.m_leafType, s_AssetCaseProjectProbeLeaf, bytes);
         if(!nested.has_value()){
-            this.inFlight.store(false, MemoryOrder::seq_cst);
+            this.m_inFlight.store(false, MemoryOrder::seq_cst);
             return MakeUnexpected(Failure());
         }
-        this.entered.store(true, MemoryOrder::seq_cst);
-        while(!this.release.load(MemoryOrder::seq_cst))
+        this.m_entered.store(true, MemoryOrder::seq_cst);
+        while(!this.m_release.load(MemoryOrder::seq_cst))
             YieldThread();
-        this.inFlight.store(false, MemoryOrder::seq_cst);
+        this.m_inFlight.store(false, MemoryOrder::seq_cst);
         UniquePtr<IAsset> result = MakeUnique<NamedRegistryAsset>(ProbeAssetType(this), path);
         return result;
     }
 
     public ~BlockingProbe(){
-        if(this.inFlight.load(MemoryOrder::seq_cst))
-            this.destroyedWhileActive.store(true, MemoryOrder::seq_cst);
+        if(this.m_inFlight.load(MemoryOrder::seq_cst))
+            this.m_destroyedWhileActive.store(true, MemoryOrder::seq_cst);
     }
     public b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const override{ return true; }
 }

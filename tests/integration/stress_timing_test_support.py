@@ -9,10 +9,10 @@ import stress_shadow_evidence as shadow
 import stress_workload as workload
 
 
-LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE = "SurfelGiQualitySmoke: requested resolve_factor=4"
-LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
+LIT_SURFEL_GI_REQUESTED_RESOLVE_FACTOR_LOG = "SurfelGiQualitySmoke: requested resolve_factor=4"
+LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
 LIT_N_96 = "96"
-LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI = "fps=16 presentations=480 seconds=30 first=80 last=560"
+LIT_EXPECTED_STRESS_PRESENTATION_RESULT = "fps=16 presentations=480 seconds=30 first=80 last=560"
 LIT_RENDERER_EXE = "renderer.exe"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -51,15 +51,15 @@ def valid_log(characters_per_class=10):
     lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
     lines.append("Fixture: fixed simulation delta 0.016666667")
     lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
-    lines.append(LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE)
-    lines.append(LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE)
+    lines.append(LIT_SURFEL_GI_REQUESTED_RESOLVE_FACTOR_LOG)
+    lines.append(LIT_SURFEL_GI_RESOLVE_DISPATCH_LOG)
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, " "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
     lines.append(shadow_quality_record())
     lines.append(reflection_diagnostics.REFLECTION_QUALITY_SETTINGS + LIT_N_96)
     for index in range(60):
         lines.append(presentation.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
-    lines.append(presentation.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
-    lines.append(presentation.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI)
+    lines.append(presentation.LIT_STRESS_PRESENTATION_PACING_LOG_PREFIX + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
+    lines.append(presentation.DONE + LIT_EXPECTED_STRESS_PRESENTATION_RESULT)
     lines.append(presentation.SHUTDOWN)
     return "\n\n".join(lines) + "\n"
 

@@ -218,7 +218,7 @@ void nwbCsgIntervalCombineSpan(
 
 void nwbCsgIntervalCombineWriteEntries(
     const uint2 pixel,
-    __constref uint4 spanDatas[NWB_CSG_RECEIVER_SPAN_LAYER_COUNT],
+    __constref uint4 cachedSpanData[NWB_CSG_RECEIVER_SPAN_LAYER_COUNT],
     __constref float4 intervalDepths[NWB_CSG_PEEL_LAYER_COUNT],
     inout half4 cachedCapNormals[NWB_CSG_PEEL_LAYER_COUNT],
     inout uint inOutCachedCapNormalMask,
@@ -243,7 +243,7 @@ void nwbCsgIntervalCombineWriteEntries(
         const uint spanIndex = (firstSource - 1u) / NWB_CSG_PEEL_LAYER_COUNT;
         const uint firstInterval = (firstSource - 1u) % NWB_CSG_PEEL_LAYER_COUNT;
         const uint lastInterval = (lastSource - 1u) % NWB_CSG_PEEL_LAYER_COUNT;
-        const uint4 spanData = (spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT) ? spanDatas[spanIndex] : g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
+        const uint4 spanData = (spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT) ? cachedSpanData[spanIndex] : g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
         const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
         const float4 firstDepth = intervalDepths[firstInterval];
         const float4 lastDepth = intervalDepths[lastInterval];
@@ -317,18 +317,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         entries[layerIndex].sourcePair = 0u;
     }
 
-    uint4 spanDatas[NWB_CSG_RECEIVER_SPAN_LAYER_COUNT];
+    uint4 cachedSpanData[NWB_CSG_RECEIVER_SPAN_LAYER_COUNT];
     const uint cachedSpanCount = min(spanCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
     [loop] for(uint spanIndex = 0u; spanIndex < cachedSpanCount; ++spanIndex)
-        spanDatas[spanIndex] = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
+        cachedSpanData[spanIndex] = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
 
     uint removedIntervalCount = 0u;
     [loop] for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
-        const uint4 spanData = (spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT) ? spanDatas[spanIndex] : g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
+        const uint4 spanData = (spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT) ? cachedSpanData[spanIndex] : g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
         nwbCsgIntervalCombineSpan(pixel, spanData, spanIndex, loadedIntervalCount, removedIntervalLayerCount, intervalIds, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalCount, flags);
     }
 
-    nwbCsgIntervalCombineWriteEntries(pixel, spanDatas, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalLayerCount, removedIntervalCount, flags);
+    nwbCsgIntervalCombineWriteEntries(pixel, cachedSpanData, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalLayerCount, removedIntervalCount, flags);
 }
 
 

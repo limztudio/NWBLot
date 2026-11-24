@@ -110,7 +110,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             ++statistics.payloadObjectCount;
             statistics.payloadObjectBytes += task.payloadObjectSize;
         }
-        FOUNDATION_ASSERT(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::Count);
+        FOUNDATION_ASSERT(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount);
         ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
 
         auto& queue = *MakeNotNull(queueInfo(compiledTask.queue));
@@ -205,7 +205,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         adviceResources.reserve(graph.resourceCount());
     statistics.logicalOwnershipTransferCount = m_ownershipTransfers.size();
     for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
-        FOUNDATION_ASSERT(transfer.route < GpuOwnershipTransferRoute::Count);
+        FOUNDATION_ASSERT(transfer.route < GpuOwnershipTransferRoute::kCount);
         ++statistics.logicalOwnershipTransferCountByRoute[transfer.route];
         if(transfer.concurrentSharingCouldAvoid)
             ++statistics.concurrentSharingCouldAvoidTransferCount;

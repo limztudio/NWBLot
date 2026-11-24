@@ -279,7 +279,7 @@ private:
             m_size = newSize;
         }
 
-        void push_back(const BufferRangeState& value){
+        void pushBack(const BufferRangeState& value){
             if(m_overflow){
                 m_overflow->push_back(value);
                 m_size = m_overflow->size();

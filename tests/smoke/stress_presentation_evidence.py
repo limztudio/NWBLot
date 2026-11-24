@@ -10,14 +10,14 @@ from window_capture_validation import validate_expected_log_text
 
 LIT_MINIMUM_CAPTURE_SECONDS = 30.0
 LIT_MILLISECONDS_PER_SECOND = 1000.0
-LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI = "StressTestSmokeProject: device capability "
+LIT_STRESS_DEVICE_CAPABILITY_LOG_PREFIX = "StressTestSmokeProject: device capability "
 LIT_FPS = "fps"
 LIT_PRESENTATIONS = "presentations"
 LIT_SECONDS = "seconds"
 LIT_FIRST = "first"
 LIT_LAST = "last"
 LIT_STRESS_PRESENTATION_TIMING = "stress presentation timing"
-LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA = "StressTestSmokeProject: presentation pacing "
+LIT_STRESS_PRESENTATION_PACING_LOG_PREFIX = "StressTestSmokeProject: presentation pacing "
 LIT_MEASUREMENT = "measurement"
 LIT_INTERVALS = "intervals"
 LIT_WIDTH = "width"
@@ -90,12 +90,12 @@ class PresentationEvidence:
             raise SmokeFailure("interval counts do not match completion")
         if not math.isclose(sum(row[LIT_SECONDS] for row in intervals), total[LIT_SECONDS], rel_tol=1e-9, abs_tol=1e-9):
             raise SmokeFailure("interval wall times do not match completion")
-        pacing = [line for line in lines if line.startswith(LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA)]
+        pacing = [line for line in lines if line.startswith(LIT_STRESS_PRESENTATION_PACING_LOG_PREFIX)]
         if len(pacing) != 1:
             raise SmokeFailure("exactly one current presentation pacing summary is required")
         if not max(interval_lines) < lines.index(pacing[0]) < lines.index(completions[0]):
             raise SmokeFailure("presentation pacing must follow the measured intervals before completion")
-        pace = re.fullmatch(re.escape(LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA) + r"samples=(\d+) p50ms=(\S+) p95ms=(\S+) maxms=(\S+) stalls50ms=(\d+)", pacing[0])
+        pace = re.fullmatch(re.escape(LIT_STRESS_PRESENTATION_PACING_LOG_PREFIX) + r"samples=(\d+) p50ms=(\S+) p95ms=(\S+) maxms=(\S+) stalls50ms=(\d+)", pacing[0])
         if not pace:
             raise SmokeFailure("malformed presentation pacing summary")
         try:
@@ -107,7 +107,7 @@ class PresentationEvidence:
         if not p50 <= p95 <= maxms:
             raise SmokeFailure("presentation pacing percentiles must be ordered p50 <= p95 <= max")
         pacing_summary = {"samples": samples, "p50ms": p50, "p95ms": p95, "maxms": maxms, "stalls50ms": stalls}
-        capability = [line for line in lines if line.startswith(LIT_STRESSTESTSMOKEPROJECT_DEVICE_CAPABILI)]
+        capability = [line for line in lines if line.startswith(LIT_STRESS_DEVICE_CAPABILITY_LOG_PREFIX)]
         if len(capability) > 1:
             raise SmokeFailure("exactly one device capability report is allowed")
         extents = re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)

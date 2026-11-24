@@ -81,17 +81,17 @@ private:
             m_head = 0u;
             m_mask = nextCapacity - 1u;
         }
-        void push_back(TrackedCommandBufferPtr&& value){
+        void pushBack(TrackedCommandBufferPtr&& value){
             if(m_count == m_storage.size())
                 reserve(m_count + 1u);
-            push_back_reserved(Move(value));
+            pushBackReserved(Move(value));
         }
-        void push_back_reserved(TrackedCommandBufferPtr&& value)noexcept{
+        void pushBackReserved(TrackedCommandBufferPtr&& value)noexcept{
             FOUNDATION_ASSERT(m_count < m_storage.size());
             m_storage[(m_head + m_count) & m_mask] = Move(value);
             ++m_count;
         }
-        void pop_front()noexcept{
+        void popFront()noexcept{
             FOUNDATION_ASSERT(m_count != 0u);
             m_storage[m_head].reset();
             m_head = (m_head + 1u) & m_mask;
@@ -99,7 +99,7 @@ private:
             if(m_count == 0u)
                 m_head = 0u;
         }
-        void pop_back()noexcept{
+        void popBack()noexcept{
             FOUNDATION_ASSERT(m_count != 0u);
             --m_count;
             m_storage[(m_head + m_count) & m_mask].reset();

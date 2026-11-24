@@ -925,7 +925,7 @@ void ImporterContext::extractEnum(CXCursor enumCursor){
     if(!formatDeclName(enumCursor, adhdName, cppNs, cppExportName, isDirect, isFlag))
         return;
 
-    EnumDecl* decl = findExistingDeclForMerge(m_enumByExportName, m_enumByName, adhdName, cppExportName);
+    EnumDecl* decl = FindExistingDeclForMerge(m_enumByExportName, m_enumByName, adhdName, cppExportName);
     const b8 isNew = (decl == nullptr);
     if(isNew){
         decl = AllocateAstNode<EnumDecl>(m_arena);
@@ -987,7 +987,7 @@ void ImporterContext::extractTypeAlias(CXCursor aliasCursor){
     if(!formatDeclName(aliasCursor, adhdName, cppNs, cppExportName, dummyDirect, dummyFlag))
         return;
 
-    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || findExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, {}) != nullptr)
+    if(m_aliasByName.find(adhdName) != m_aliasByName.end() || FindExistingDeclForMerge(m_classByExportName, m_classByName, adhdName, {}) != nullptr)
         return;
 
     const CXType underlying = ::clang_getTypedefDeclUnderlyingType(aliasCursor);

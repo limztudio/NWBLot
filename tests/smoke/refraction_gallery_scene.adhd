@@ -20,8 +20,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_RefractionHalfPi = s_PIDIV2;
-const f32 s_RefractionPi = s_PI;
+const f32 s_RefractionHalfPi = s_HalfPi;
+const f32 s_RefractionPi = s_Pi;
 const f32 s_RefractionNearAirIor = 1.0f + (1.0f / 1024.0f);
 const Name s_RefractionGalleryOpticalInterfaceName = "project/shaders/reflection_optical";
 const SmokeMeshRef s_RefractionGalleryPlaneMesh = "project/meshes/shadow_plane";

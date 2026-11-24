@@ -40,55 +40,55 @@ const StringView s_SkeletonJointRight = "right";
 
 [ordered]
 class ModelMetadata{
-    private HeapStorage metadataArena = HeapStorage(s_AssetCaseTestsModelCookMetadataMetadata);
-    private TestValueSlot<MetascriptValue> assetStorage;
-    private mut MetascriptValue asset;
+    private HeapStorage m_metadataArena = HeapStorage(s_AssetCaseTestsModelCookMetadataMetadata);
+    private TestValueSlot<MetascriptValue> m_assetStorage;
+    private mut MetascriptValue m_asset;
     public ModelCookEntry entry;
-    private HashMap<Name, Name> expectedSkeletons;
+    private HashMap<Name, Name> m_expectedSkeletons;
 
     public ModelMetadata(){
-        this.asset = this.assetStorage.constructIn(this.metadataArena);
-        this.asset.makeMap();
+        this.m_asset = this.m_assetStorage.constructIn(this.m_metadataArena);
+        this.m_asset.makeMap();
     }
 
     public void addSkeleton(in StringView objectName, in StringView skeletonAsset){
-        this.asset.field("skeletons").field(objectName).field(s_ModelMetaSkeletonField).setString(skeletonAsset);
+        this.m_asset.field("skeletons").field(objectName).field(s_ModelMetaSkeletonField).setString(skeletonAsset);
     }
 
     public void addSkinnedMesh(in StringView objectName, in StringView skeleton, in StringView expectedObject){
-        mut MetascriptValue object = this.asset.field(s_ModelMetaSkinnedMeshesField).field(objectName);
+        mut MetascriptValue object = this.m_asset.field(s_ModelMetaSkinnedMeshesField).field(objectName);
         object.field("skin").setString("tests/model_cook_metadata/skin");
         object.field(s_ModelMetaSkeletonField).setString(skeleton);
         const auto key = NameFromText(objectName);
         ASSERT_TRUE(key.has_value());
         const auto expected = NameFromText(expectedObject);
         ASSERT_TRUE(expected.has_value());
-        this.expectedSkeletons.insert_or_assign(key.value(), expected.value());
+        this.m_expectedSkeletons.insert_or_assign(key.value(), expected.value());
     }
 
     public void setNestedFieldString(in StringView group, in StringView objectName, in StringView field, in StringView value){
-        this.asset.field(group).field(objectName).field(field).setString(value);
+        this.m_asset.field(group).field(objectName).field(field).setString(value);
     }
 
     public StringView nestedFieldString(in StringView group, in StringView objectName, in StringView field){
-        return this.asset.field(group).field(objectName).field(field).asString();
+        return this.m_asset.field(group).field(objectName).field(field).asString();
     }
 
     public usize eraseNestedField(in StringView group, in StringView objectName, in StringView field){
-        return this.asset.field(group).field(objectName).asMap().erase(field);
+        return this.m_asset.field(group).field(objectName).asMap().erase(field);
     }
 
     public void setExpectedSkeleton(in StringView objectName, in StringView expectedObject){
-        this.expectedSkeletons.at(NameFromText(objectName).value_or(s_NameNone)) = NameFromText(expectedObject).value_or(s_NameNone);
+        this.m_expectedSkeletons.at(NameFromText(objectName).value_or(s_NameNone)) = NameFromText(expectedObject).value_or(s_NameNone);
     }
 
     private void appendTransformRow(mut MetascriptValue transform, in usize diagonal){
         TestValueSlot<MetascriptValue> rowSlot;
-        mut MetascriptValue row = rowSlot.constructIn(this.metadataArena);
+        mut MetascriptValue row = rowSlot.constructIn(this.m_metadataArena);
         row.makeList();
         for(usize column = 0u; column < 4u; ++column){
             TestValueSlot<MetascriptValue> numberSlot;
-            mut MetascriptValue number = numberSlot.constructIn(this.metadataArena);
+            mut MetascriptValue number = numberSlot.constructIn(this.m_metadataArena);
             number.setInteger(cast<i64>(column == diagonal));
             row.asList().push_back(number);
         }
@@ -96,7 +96,7 @@ class ModelMetadata{
     }
 
     public void initThreeRowStaticTransform(in StringView objectName, in StringView mesh, in f64 translationX){
-        mut MetascriptValue object = this.asset.field(s_StaticMeshesField).field(objectName);
+        mut MetascriptValue object = this.m_asset.field(s_StaticMeshesField).field(objectName);
         object.field(s_ModelMetaMeshField).setString(mesh);
         mut MetascriptValue transform = object.field("transform");
         transform.makeList();
@@ -106,18 +106,18 @@ class ModelMetadata{
     }
 
     public void appendHomogeneousStaticTransformRow(in StringView objectName){
-        mut MetascriptValue transform = this.asset.field(s_StaticMeshesField).field(objectName).field("transform");
+        mut MetascriptValue transform = this.m_asset.field(s_StaticMeshesField).field(objectName).field("transform");
         this.appendTransformRow(transform, 3u);
     }
 
     public void popStaticTransformRow(in StringView objectName){
-        this.asset.field(s_StaticMeshesField).field(objectName).field("transform").asList().pop_back();
+        this.m_asset.field(s_StaticMeshesField).field(objectName).field("transform").asList().pop_back();
     }
 
     public f32 firstStaticTransform14()const{ return this.entry.staticMeshObjects[0u].transform._14; }
 
     public b8 parse(){
-        const auto result = ParseModelCookMetadata(s_AssetCaseTestsModelCookMetadataModel, Path("tests/model_cook_metadata/model.nwb"), this.asset);
+        const auto result = ParseModelCookMetadata(s_AssetCaseTestsModelCookMetadataModel, Path("tests/model_cook_metadata/model.nwb"), this.m_asset);
         if(!result.has_value())
             return false;
         this.entry = result.value();
@@ -125,10 +125,10 @@ class ModelMetadata{
     }
 
     public void verifyObjectReferences()const{
-        ASSERT_EQ(this.entry.skinnedMeshObjects.size(), this.expectedSkeletons.size());
+        ASSERT_EQ(this.entry.skinnedMeshObjects.size(), this.m_expectedSkeletons.size());
         for(in ModelSkinnedMeshObject object : this.entry.skinnedMeshObjects){
-            ASSERT_TRUE(this.expectedSkeletons.contains(object.name));
-            EXPECT_EQ(object.skeletonObject, this.expectedSkeletons.at(object.name));
+            ASSERT_TRUE(this.m_expectedSkeletons.contains(object.name));
+            EXPECT_EQ(object.skeletonObject, this.m_expectedSkeletons.at(object.name));
             EXPECT_EQ(object.skin.name(), Name("tests/model_cook_metadata/skin"));
         }
     }
@@ -137,15 +137,15 @@ class ModelMetadata{
 [ordered]
 class ModelInputs{
     public HeapStorage storage = HeapStorage(s_AssetCaseTestsModelPayloadInputs);
-    private ScratchStorage scratchArena = ScratchStorage(s_AssetCaseTestsModelPayloadValidationScratch);
-    private TestValueSlot<Model> modelStorage;
+    private ScratchStorage m_scratchArena = ScratchStorage(s_AssetCaseTestsModelPayloadValidationScratch);
+    private TestValueSlot<Model> m_modelStorage;
     public mut Model model;
     public SkeletonObjectVector skeletonObjects;
     public StaticMeshObjectVector staticMeshObjects;
     public SkinnedMeshObjectVector skinnedMeshObjects;
 
     public ModelInputs(){
-        this.model = this.modelStorage.constructIn(this.storage, s_AssetCaseTestsModelPayloadModel);
+        this.model = this.m_modelStorage.constructIn(this.storage, s_AssetCaseTestsModelPayloadModel);
         ModelSkeletonObject rig;
         rig.name = Name(s_ModelRigSegment);
         rig.skeleton = AssetRef<Skeleton>(Name("tests/model_payload/skeleton"));
@@ -170,15 +170,15 @@ class ModelInputs{
         Model unnamed = Model();
         return unnamed.validatePayload();
     }
-    public ArenaMemoryStats scratchStats()const{ return this.scratchArena.memoryStats(); }
+    public ArenaMemoryStats scratchStats()const{ return this.m_scratchArena.memoryStats(); }
 }
 
 [ordered]
 class SkeletonInputs{
     public HeapStorage storage = HeapStorage(s_AssetCaseTestsSkeletonPayloadInputs);
-    private ScratchStorage scratchArena = ScratchStorage(s_AssetCaseTestsSkeletonPayloadValidationScratch);
+    private ScratchStorage m_scratchArena = ScratchStorage(s_AssetCaseTestsSkeletonPayloadValidationScratch);
     public SkeletonCookEntry entry;
-    private TestValueSlot<Skeleton> skeletonStorage;
+    private TestValueSlot<Skeleton> m_skeletonStorage;
     public mut Skeleton skeleton;
 
     private void addJoint(in Name name, in Name parent){
@@ -189,7 +189,7 @@ class SkeletonInputs{
     }
 
     public SkeletonInputs(){
-        this.skeleton = this.skeletonStorage.constructIn(this.storage, s_AssetCaseTestsSkeletonPayloadSkeleton);
+        this.skeleton = this.m_skeletonStorage.constructIn(this.storage, s_AssetCaseTestsSkeletonPayloadSkeleton);
         this.entry.virtualPath = this.skeleton.virtualPath();
         this.entry.joints.reserve(4u);
         this.addJoint(Name(s_SkeletonJointRoot), s_NameNone);
@@ -209,7 +209,7 @@ class SkeletonInputs{
         return true;
     }
     public b8 validate(){ return this.skeleton.validatePayload(); }
-    public ArenaMemoryStats scratchStats()const{ return this.scratchArena.memoryStats(); }
+    public ArenaMemoryStats scratchStats()const{ return this.m_scratchArena.memoryStats(); }
     public void setJointIndexOverride(in Name jointName, in u32 value){
         JointIndexMap indices = this.skeleton.jointIndices();
         indices.at(jointName) = value;

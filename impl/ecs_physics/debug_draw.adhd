@@ -219,7 +219,7 @@ void AppendPhysicsDebugCircle(
     if(outLines.size() >= cast<usize>(maxLines))
         return;
     const u32 segments = 12u;
-    const f32 step = (2.0f * s_PI) / cast<f32>(segments);
+    const f32 step = (2.0f * s_Pi) / cast<f32>(segments);
     const VectorSingle stepVec(step);
     const f32 dc = Cos(stepVec).x;
     const f32 ds = Sin(stepVec).x;
@@ -474,10 +474,10 @@ void BuildPhysicsDebugLines(
                 const f32 r = capsule.radius();
                 AppendPhysicsDebugCircle(options.maxLines, p0, u, v, r, color, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, p1, u, v, r, color, outLines);
-                AppendPhysicsDebugArc(options.maxLines, p0, u, -axis, r, 0.0f, s_PI, color, outLines);
-                AppendPhysicsDebugArc(options.maxLines, p0, v, -axis, r, 0.0f, s_PI, color, outLines);
-                AppendPhysicsDebugArc(options.maxLines, p1, u, axis, r, 0.0f, s_PI, color, outLines);
-                AppendPhysicsDebugArc(options.maxLines, p1, v, axis, r, 0.0f, s_PI, color, outLines);
+                AppendPhysicsDebugArc(options.maxLines, p0, u, -axis, r, 0.0f, s_Pi, color, outLines);
+                AppendPhysicsDebugArc(options.maxLines, p0, v, -axis, r, 0.0f, s_Pi, color, outLines);
+                AppendPhysicsDebugArc(options.maxLines, p1, u, axis, r, 0.0f, s_Pi, color, outLines);
+                AppendPhysicsDebugArc(options.maxLines, p1, v, axis, r, 0.0f, s_Pi, color, outLines);
                 AppendPhysicsDebugLine(options.maxLines, p0 + u * r, p1 + u * r, color, outLines);
                 AppendPhysicsDebugLine(options.maxLines, p0 - u * r, p1 - u * r, color, outLines);
                 AppendPhysicsDebugLine(options.maxLines, p0 + v * r, p1 + v * r, color, outLines);
@@ -590,7 +590,7 @@ void BuildPhysicsDebugLines(
                 AppendPhysicsDebugLine(options.maxLines, aA, aA + axisA * 0.25f, jointColor, outLines);
                 AppendPhysicsDebugLine(options.maxLines, aB, aB + axisB * 0.25f, jointColor, outLines);
                 if(j.enableLimit() && j.swingLimit > 0.0f){
-                    const VectorSingle angleVec(SimdMin(j.swingLimit, s_PI * 0.45f));
+                    const VectorSingle angleVec(SimdMin(j.swingLimit, s_Pi * 0.45f));
                     const f32 coneDist = Cos(angleVec).x * 0.25f;
                     const f32 coneRad = Sin(angleVec).x * 0.25f;
                     const VectorSingle coneCenter = aA + axisA * coneDist;

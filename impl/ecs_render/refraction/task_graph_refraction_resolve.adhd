@@ -18,14 +18,14 @@ class RefractionStatisticsReadbackGraphTask{
     public GpuGraphResourceId sourceResource;
     public GpuGraphResourceId destinationResource;
     public RefractionStatisticsReservation reservation;
-    private in b8 hardwareReady;
-    private b8 hardwareEnabled;
+    private in b8 m_hardwareReady;
+    private b8 m_hardwareEnabled;
 
     public RefractionStatisticsReadbackGraphTask(in RefractionStatisticsReadbackSnapshot snapshot, in borrow b8 ready, in b8 enabled){
         this.source = snapshot.counters;
         this.reservation = StatisticsReservation<RefractionStatistics, RefractionStatisticsOutcome>(snapshot.control, snapshot.metadata);
-        this.hardwareReady = ready;
-        this.hardwareEnabled = enabled;
+        this.m_hardwareReady = ready;
+        this.m_hardwareEnabled = enabled;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -36,37 +36,37 @@ class RefractionStatisticsReadbackGraphTask{
     }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
-    public void accepted(in QueueSubmissionToken token){ this.reservation.acceptReservation(token, this.hardwareEnabled && this.hardwareReady); }
+    public void accepted(in QueueSubmissionToken token){ this.reservation.acceptReservation(token, this.m_hardwareEnabled && this.m_hardwareReady); }
     public void discarded(){ this.reservation.discard(); }
 }
 
 class RefractionClassifyTilesGraphTask{
-    private mut RefractionRenderer renderer;
-    private in DeferredFrameTargets targets;
-    private RayTracingRefractionGraphResources resources;
+    private mut RefractionRenderer m_renderer;
+    private in DeferredFrameTargets m_targets;
+    private RayTracingRefractionGraphResources m_resources;
 
     public RefractionClassifyTilesGraphTask(mut RefractionRenderer renderer, in borrow DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources){
-        this.renderer = renderer;
-        this.targets = targets;
-        this.resources = resources;
+        this.m_renderer = renderer;
+        this.m_targets = targets;
+        this.m_resources = resources;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        return this.renderer.recordRefractionTileClassification(commands, this.targets, this.resources);
+        return this.m_renderer.recordRefractionTileClassification(commands, this.m_targets, this.m_resources);
     }
 }
 
 [modular]
 class RefractionResolveGraphTask{
-    private mut RendererRayTracingSystem system;
-    private in DeferredFrameTargets targets;
-    private RayTracingRefractionGraphResources resources;
-    private in b8 hardwareReady;
-    private mut b8 hardwareLogged;
-    private mut b8 screenLogged;
-    private b8 diagnostics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+    private in DeferredFrameTargets m_targets;
+    private RayTracingRefractionGraphResources m_resources;
+    private in b8 m_hardwareReady;
+    private mut b8 m_hardwareLogged;
+    private mut b8 m_screenLogged;
+    private b8 m_diagnostics;
 
     public RefractionResolveGraphTask(
         mut RendererRayTracingSystem system,
@@ -77,19 +77,19 @@ class RefractionResolveGraphTask{
         mut b8 screenLogged,
         in b8 diagnostics
     ){
-        this.system = system;
-        this.targets = targets;
-        this.resources = resources;
-        this.hardwareReady = ready;
-        this.hardwareLogged = hardwareLogged;
-        this.screenLogged = screenLogged;
-        this.diagnostics = diagnostics;
+        this.m_raytracingSystem = system;
+        this.m_targets = targets;
+        this.m_resources = resources;
+        this.m_hardwareReady = ready;
+        this.m_hardwareLogged = hardwareLogged;
+        this.m_screenLogged = screenLogged;
+        this.m_diagnostics = diagnostics;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
         GpuTaskCommandRequirements requirements;
         requirements.requiredCapabilities = GpuQueueCapability::Compute;
-        requirements.requiresPrimaryGraphicsQueue = this.diagnostics;
+        requirements.requiresPrimaryGraphicsQueue = this.m_diagnostics;
         return requirements;
     }
     [cpp_unwind]

@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f64 s_SkinnedCausticTwoPi = cast<f64>(s_2PI);
+const f64 s_SkinnedCausticTwoPi = cast<f64>(s_TwoPi);
 const Name s_SkinnedCausticPlaneShapeName = "engine/csg/plane";
 
 

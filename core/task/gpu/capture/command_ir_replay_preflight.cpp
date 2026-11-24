@@ -190,7 +190,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     GpuCommandIrReplayError::Enum firstBackendError = GpuCommandIrReplayError::None;
     u64 firstBackendErrorRecordIndex = Limit<u64>::s_Max;
     const u8* recordPtr = nullptr;
-    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
+    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::kCount;
     DecodedRecordContext decodedContext;
     for(;;){
         const WireStepStatus::Enum step = cursor.nextView(recordPtr, wireOpcode, decodedContext);

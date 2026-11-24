@@ -44,7 +44,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
     }
 
     const GpuDescriptorClass::Enum descriptorClass = handle.descriptorClass();
-    if(descriptorClass >= GpuDescriptorClass::Count){
+    if(descriptorClass >= GpuDescriptorClass::kCount){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: handle has invalid class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
@@ -231,7 +231,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
     if(descriptorClass == GpuDescriptorClass::SampledBuffer){
         const BufferDesc& bufferDesc = buffer->getCreationDescription();
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : bufferDesc.format;
-        if(format == Format::UNKNOWN || format >= Format::Count){
+        if(format == Format::UNKNOWN || format >= Format::kCount){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-buffer format."));
             return false;
         }

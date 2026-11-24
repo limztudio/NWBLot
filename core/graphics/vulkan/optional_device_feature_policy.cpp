@@ -65,7 +65,7 @@ void* OptionalDeviceFeaturePolicy::FeatureStruct(OptionalDeviceFeatureSet& featu
     case DeviceExtensionFeature::DeviceFault: return &features.deviceFault;
     case DeviceExtensionFeature::TextureCompressionAstcHdr: return &features.textureCompressionAstcHdr;
     case DeviceExtensionFeature::None:
-    case DeviceExtensionFeature::Count:
+    case DeviceExtensionFeature::kCount:
     default:
         return nullptr;
     }
@@ -109,7 +109,7 @@ b8 OptionalDeviceFeaturePolicy::SupportsRequested(const OptionalDeviceFeatureSet
     case DeviceExtensionFeature::TextureCompressionAstcHdr:
         return SupportsRequestedValue(requested.textureCompressionAstcHdr.textureCompressionASTC_HDR, supported.textureCompressionAstcHdr.textureCompressionASTC_HDR);
     case DeviceExtensionFeature::None:
-    case DeviceExtensionFeature::Count:
+    case DeviceExtensionFeature::kCount:
     default:
         return true;
     }
@@ -120,8 +120,8 @@ void OptionalDeviceFeaturePolicy::FinalizeEnablement(OptionalDeviceFeatureSet& e
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
-void OptionalDeviceFeaturePolicy::AppendFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, Array<b8, static_cast<usize>(DeviceExtensionFeature::Count)>& appended)noexcept{
-    if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
+void OptionalDeviceFeaturePolicy::AppendFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, Array<b8, static_cast<usize>(DeviceExtensionFeature::kCount)>& appended)noexcept{
+    if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::kCount)
         return;
 
     const usize featureIndex = static_cast<usize>(feature);

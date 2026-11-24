@@ -32,7 +32,7 @@ LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_ANALYTIC = "analytic"
 LIT_SOFTWARE = "software"
 LIT_REJECT_LOG_MESSAGE = "--reject-log-message"
-LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
 LIT_UNCUT = "uncut"
 LIT_HARDWARE = "hardware"
 LIT_REUSE_ONE_FRAME = "reuse_one_frame"
@@ -75,13 +75,13 @@ def capture_arm(args, arm):
     if arm == "moved":
         command += [LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: cutters moved at update40"]
     if args.route == LIT_SOFTWARE:
-        command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, "Loader: hardware ray tracing disabled before device creation", LIT_REJECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA]
+        command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, "Loader: hardware ray tracing disabled before device creation", LIT_REJECT_LOG_MESSAGE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG]
         if arm in (LIT_REFERENCE, LIT_UNCUT):
             command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched light-space shadow maps"]
     elif args.atlas == LIT_ANALYTIC and arm == "cut":
-        command += [LIT_REJECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA]
+        command += [LIT_REJECT_LOG_MESSAGE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG]
     else:
-        command += [LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA]
+        command += [LIT_EXPECT_LOG_MESSAGE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG]
     if arm not in (LIT_REFERENCE, LIT_UNCUT):
         command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched CSG light-space shadows (hardware_compose=" + ("1" if args.route == LIT_HARDWARE else "0")]
     if args.capture_cadence != LIT_EVERY_FRAME and (args.route == LIT_SOFTWARE or arm not in (LIT_REFERENCE, LIT_UNCUT)):

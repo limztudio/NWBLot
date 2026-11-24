@@ -43,7 +43,7 @@ extern enum TextInputChangeCause : u8{
 extern enum TextInputDeletionBasis : u8{
     Caret,
     Selection,
-    Count
+    kCount
 };
 
 [cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEventKind::Enum")]

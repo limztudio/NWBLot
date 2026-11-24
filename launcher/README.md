@@ -86,6 +86,7 @@ A custom `--profile-logserver-executable` must accept `--readiness-token <token>
 the application. This check identifies the startup listener; it does not authenticate later connections.
 
 Specialized workflows such as `pipeline`, `smoke`, and the A/B runners have their own options; use their `--help` output.
+The asset `pipeline` launcher requires Python 3.10 or newer when `--input` is supplied.
 To build their CMake targets without running the workflow, use the generic `build` command. The Python `ui-skin` generator
 also owns a `launch.py` entry point and is available as `python -m launcher ui-skin`; see [its guide](../utilities/ui_skin/README.md).
 

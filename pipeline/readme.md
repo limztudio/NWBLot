@@ -5,6 +5,7 @@ the `nwb_pipeline` CMake target to produce `adhd_compiler`, `dependency_computer
 `asset_builder`, and `asset_gatherer` (with `.exe` on Windows); `pipeline/launch.py`
 runs the three asset-cooking stages (`dependency_computer`, `asset_builder`, and
 `asset_gatherer`), while `adhd_compiler` compiles `.adhd` sources during the CMake build.
+The launcher requires Python 3.10 or newer when `--input` is supplied.
 `NWB_BUILD_PIPELINE` controls these targets and the asset build libraries.
 
 Run the complete pipeline through the repository launcher:
@@ -39,8 +40,8 @@ That resolution accepts `--repo-root` (default: the working directory) and repea
 unrelated asset documents, and provider ownership follows asset-root order. Unresolved,
 wrong-type, or ambiguous asset references fail before the output list is written.
 Paired encoded texture payloads stay with the texture cooker and are not added as
-separate inputs. Its `--output` is a UTF-8 file containing one resolved provider path
-per line.
+separate inputs. Its `--output` is a UTF-8 file containing one input path per line. Explicit seed paths
+are retained, and transitive dependencies add their resolved provider paths.
 
 ```console
 python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets project/assets --output dependencies.list

@@ -18,7 +18,7 @@ Common tools:
 - CMake 3.25 or newer
 - Ninja
 - LLVM/Clang, including the LLVM linker and archive tools, with a C++23-or-newer standard library providing `std::expected`
-- Python 3.8 or newer for the launcher and string-literal compiler pipeline
+- Python 3.8 or newer for the launcher and string-literal compiler pipeline; the asset pipeline launcher requires Python 3.10 or newer when `--input` is supplied
 - The compiler host's LLVM C API shared library matching the C and C++ Clang version exactly
 - `slangc` for the asset pipeline, which is enabled by default
 - A Vulkan loader and a compatible Vulkan driver for rendering

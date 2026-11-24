@@ -52,7 +52,7 @@
 #include "deflate.h"
 
 const char deflate_copyright[] =
-   " deflate 1.3.2.1 Copyright 1995-2026 Jean-loup Gailly and Mark Adler ";
+   " deflate 1.4 Copyright 1995-2026 Jean-loup Gailly and Mark Adler ";
 /*
   If you use the zlib library in a product, an acknowledgment is welcome
   in the documentation of your product. If for some reason you cannot
@@ -567,7 +567,8 @@ int ZEXPORT deflateSetDictionary(z_streamp strm, const Bytef *dictionary,
         return Z_STREAM_ERROR;
     s = strm->state;
     wrap = s->wrap;
-    if (wrap == 2 || (wrap == 1 && s->status != INIT_STATE) || s->lookahead)
+    if (wrap == 2 || (wrap == 1 && s->status != INIT_STATE) || s->lookahead ||
+        (wrap == 0 && (long)s->strstart != s->block_start))
         return Z_STREAM_ERROR;
 
     /* when using zlib wrappers, compute Adler-32 for provided dictionary */
@@ -672,7 +673,18 @@ int ZEXPORT deflateResetKeep(z_streamp strm) {
 
     s->gzhead = Z_NULL;
 
-    _tr_init(s);
+    {
+        /* Retain the hash work done for level 0. */
+        uInt matches = s->level == 0 ? s->matches : 0;
+        _tr_init(s);
+        s->matches = matches;
+    }
+
+    /* Keep the window and the hash, but drop what was left unfinished */
+    s->block_start = (long)s->strstart;
+    s->lookahead = 0;
+    s->match_length = s->prev_length = MIN_MATCH-1;
+    s->match_available = 0;
 
     return Z_OK;
 }
@@ -684,6 +696,7 @@ local void lm_init(deflate_state *s) {
     s->window_size = (ulg)2L*s->w_size;
 
     CLEAR_HASH(s);
+    s->matches = 0;             /* the hash is clear */
 
     /* Set the default configuration parameters:
      */
@@ -746,18 +759,23 @@ int ZEXPORT deflateUsed(z_streamp strm, int *bits) {
 int ZEXPORT deflatePrime(z_streamp strm, int bits, int value) {
     deflate_state *s;
     int put;
+    int need;
 
     if (deflateStateCheck(strm)) return Z_STREAM_ERROR;
     s = strm->state;
-#ifdef LIT_MEM
-    if (bits < 0 || bits > 16 ||
-        (uchf *)s->d_buf < s->pending_out + ((Buf_size + 7) >> 3))
+    if (bits < 0 || bits > 16)
         return Z_BUF_ERROR;
-#else
-    if (bits < 0 || bits > 16 ||
-        s->sym_buf < s->pending_out + ((Buf_size + 7) >> 3))
+    if (s->pending_out != s->pending_buf) {
+        /* move partially flushed pending output to buffer start */
+        Bytef *to = s->pending_buf, *from = s->pending_out;
+        ulg n = s->pending;
+        while (n--)
+            *to++ = *from++;
+        s->pending_out = s->pending_buf;
+    }
+    need = (s->bi_valid + bits) >> 3;
+    if (s->pending_buf_size - s->pending < (ulg)need)
         return Z_BUF_ERROR;
-#endif
     do {
         put = Buf_size - s->bi_valid;
         if (put > bits)

@@ -1,5 +1,5 @@
 package: pevents
 version: 1.22.11
-updated_utc: 2026-06-23T16:02:45Z
+updated_utc: 2026-11-24T05:57:48Z
 source: https://github.com/neosmart/pevents/releases/tag/1.22.11
-notes: Cross-platform WIN32-style event primitives from official neosmart/pevents. Originally flattened out of rmv/source/third_party; subsequent updates come from the official repo. Registered as nwb::pevents_headers. Used by RmvBackend on Linux only; consumed by #include, not a standalone lib. NWB-local maintenance trims stale and redundant source comments.
+notes: Cross-platform WIN32-style event primitives from official neosmart/pevents. Originally flattened out of rmv/source/third_party; subsequent updates come from the official repo. Registered as nwb::pevents_headers through the shared vendor-header target helper. Used by RmvBackend on Linux only; consumed by #include, not a standalone lib. NWB-local maintenance trims stale and redundant source comments.

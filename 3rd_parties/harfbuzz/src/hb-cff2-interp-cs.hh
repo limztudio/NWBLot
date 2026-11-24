@@ -151,7 +151,12 @@ struct cff2_cs_interp_env_t : cs_interp_env_t<ELEM, CFF2Subrs>
 	region_count = varStore->varStore.get_region_index_count (get_ivs ());
 	if (do_blend)
 	{
-	  if (unlikely (!scalars->resize_exact (region_count)))
+	  /* Evaluating the scalars walks up to axisCount axes for each region
+	   * index, both font-controlled 16-bit counts.  Charge that before
+	   * doing it, so a blend which then fails its operand check has paid. */
+	  unsigned int axis_count = varStore->varStore.get_region_list ().axisCount;
+	  if (unlikely (!SUPER::spend_budget (region_count, hb_max (1u, axis_count)) ||
+			!scalars->resize_exact (region_count)))
 	    SUPER::set_error ();
 	  else
 	    varStore->varStore.get_region_scalars (get_ivs (), coords, num_coords,
@@ -204,6 +209,9 @@ struct cff2_cs_interp_env_t : cs_interp_env_t<ELEM, CFF2Subrs>
   /* Subsetter instancing can defer rounding until absolute points are known. */
   bool round_blends = true;
 
+  /* Some analysis passes need only blend presence, not symbolic deltas. */
+  bool preserve_blends = true;
+
   protected:
   const int     *coords;
   unsigned int  num_coords;
@@ -222,6 +230,9 @@ struct cff2_cs_interp_env_t : cs_interp_env_t<ELEM, CFF2Subrs>
 template <typename OPSET, typename PARAM, typename ELEM, typename PATH=path_procs_null_t<cff2_cs_interp_env_t<ELEM>, PARAM>>
 struct cff2_cs_opset_t : cs_opset_t<ELEM, OPSET, cff2_cs_interp_env_t<ELEM>, PARAM, PATH>
 {
+  /* Retained subroutine collection needs only blend identity. */
+  static constexpr bool preserve_blends = false;
+
   static void process_op (op_code_t op, cff2_cs_interp_env_t<ELEM> &env, PARAM& param)
   {
     switch (op) {
@@ -269,8 +280,20 @@ struct cff2_cs_opset_t : cs_opset_t<ELEM, OPSET, cff2_cs_interp_env_t<ELEM>, PAR
     {
       double v = arg.to_real () + env.blend_deltas (blends);
       arg.set_real (env.round_blends ? round (v) : v);
+      return;
     }
-    else if (unlikely (arg.blending ()))
+
+    /* Without coordinates, the flat delta vector cannot represent a
+     * product of region scalars. Do not discard a delta's own blend. */
+    if (OPSET::preserve_blends && env.preserve_blends)
+      for (const ELEM &delta : blends)
+	if (unlikely (delta.blending ()))
+	{
+	  env.set_error ();
+	  return;
+	}
+
+    if (unlikely (arg.blending ()))
     {
       /* A blend result used as an operand of a later blend: the value is
        * default + inner deltas + outer deltas, so accumulate the deltas. */
@@ -311,7 +334,9 @@ struct cff2_cs_opset_t : cs_opset_t<ELEM, OPSET, cff2_cs_interp_env_t<ELEM>, PAR
       env.set_error ();
       return;
     }
-    if (unlikely (!env.spend_budget (HB_BUDGET_1, total - n)))
+    /* Charge the default values too: with no regions there are no deltas to
+     * pop, so the same operands can be blended over and over. */
+    if (unlikely (!env.spend_budget (HB_BUDGET_1, total)))
     {
       env.set_error ();
       return;

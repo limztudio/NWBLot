@@ -99,6 +99,9 @@ struct hb_extents_t
 
   hb_glyph_extents_t to_glyph_extents (bool xneg = false, bool yneg = false) const
   {
+    if (unlikely (is_void ()))
+      return hb_glyph_extents_t {0, 0, 0, 0};
+
     double x0 = round ((double) xmin);
     double y0 = round ((double) ymin);
     double x1 = round ((double) xmax);
@@ -188,6 +191,9 @@ struct hb_transform_t
 
   void transform_extents (hb_extents_t<Float> &extents) const
   {
+    /* Transforming a void box's sentinel corners would give it area. */
+    if (unlikely (extents.is_void ())) return;
+
     Float quad_x[4], quad_y[4];
 
     quad_x[0] = extents.xmin;

@@ -5,6 +5,8 @@
 [cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelUnwindTracker"), cpp_flags(self_defaulted, no_copy, no_assign)]
 extern class ParallelUnwindTracker{
     void completeWork(in u32 seed)const;
+    [cpp_flags(unwind)]
+    void invokeAfterWorkerStarts(mut Func<void()> callback)const;
     u32 runs()const;
     u32 valueSum()const;
     b8 finished()const;
@@ -56,7 +58,7 @@ void CppUnwindCallback::runParallelUnwind(in ParallelUnwindTracker tracker, mut 
     ParallelLifetimeProbe postProbe(tracker, true);
     Vector<u32> postScratch;
     postScratch.push_back(11u);
-    callback();
+    tracker.invokeAfterWorkerStarts(callback);
     parallel TaskB : TaskA {
         tracker.completeWork(postScratch[0u]);
     }

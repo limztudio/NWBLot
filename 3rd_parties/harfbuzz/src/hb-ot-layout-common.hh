@@ -1616,6 +1616,8 @@ struct ClassDefFormat1_3
     if (use_class_zero)
     {
       const hb_set_t& glyphset = *c->plan->glyphset_gsub ();
+      if (glyph_filter && unlikely (!c->check_ops (glyphset.get_population ())))
+	return_trace (false);
       unsigned glyph_count = glyph_filter
 			     ? hb_len (hb_iter (glyphset) | hb_filter (glyph_filter))
 			     : glyphset.get_population ();
@@ -1667,6 +1669,15 @@ struct ClassDefFormat1_3
     unsigned int count = classValue.len;
     for (unsigned int i = 0; i < count; i++)
       if (classValue[i] == klass) glyphs->add (startGlyph + i);
+    return true;
+  }
+
+  template <typename set_t>
+  bool collect_classes (set_t *glyphs, const hb_set_t &klasses) const
+  {
+    unsigned int count = classValue.len;
+    for (unsigned int i = 0; i < count; i++)
+      if (klasses.has (classValue[i])) glyphs->add (startGlyph + i);
     return true;
   }
 
@@ -1868,8 +1879,13 @@ struct ClassDefFormat2_4
     hb_sorted_vector_t<hb_codepoint_pair_t> glyph_and_klass;
     hb_set_t orig_klasses;
 
-    if (glyph_set.get_population () * hb_bit_storage ((unsigned) rangeRecord.len)
-	< get_population ())
+    /* Either walk is repeated for every offset that points at us. */
+    unsigned glyph_set_cost = glyph_set.get_population () * hb_bit_storage ((unsigned) rangeRecord.len);
+    unsigned population = get_population ();
+    if (unlikely (!c->check_ops (hb_min (glyph_set_cost, population))))
+      return_trace (false);
+
+    if (glyph_set_cost < population)
     {
       for (hb_codepoint_t g : glyph_set)
       {
@@ -1904,6 +1920,8 @@ struct ClassDefFormat2_4
     }
 
     const hb_set_t& glyphset = *c->plan->glyphset_gsub ();
+    if (glyph_filter && unlikely (!c->check_ops (glyphset.get_population ())))
+      return_trace (false);
     unsigned glyph_count = glyph_filter
                            ? hb_len (hb_iter (glyphset) | hb_filter (glyph_filter))
                            : glyphset.get_population ();
@@ -1947,6 +1965,18 @@ struct ClassDefFormat2_4
     return true;
   }
 
+  template <typename set_t>
+  bool collect_classes (set_t *glyphs, const hb_set_t &klasses) const
+  {
+    for (auto &range : rangeRecord)
+    {
+      if (klasses.has (range.value))
+	if (unlikely (!range.collect_coverage (glyphs)))
+	  return false;
+    }
+    return true;
+  }
+
   bool intersects (const hb_set_t *glyphs) const
   {
     if (rangeRecord.len > glyphs->get_population () * hb_bit_storage ((unsigned) rangeRecord.len))
@@ -1974,21 +2004,18 @@ struct ClassDefFormat2_4
       /* Match if there's any glyph that is not listed! */
       hb_codepoint_t g = HB_SET_VALUE_INVALID;
       hb_codepoint_t last = HB_SET_VALUE_INVALID;
-      auto it = hb_iter (rangeRecord);
-      for (auto &range : it)
+      for (auto &range : rangeRecord)
       {
-        if (it->first == last + 1)
+	/* Only probe for a glyph in the gap before this range; a range
+	 * starting right after the previous one (or at glyph 0) has none. */
+	if (range.first != last + 1)
 	{
-	  it++;
-	  continue;
+	  if (!glyphs->next (&g))
+	    break;
+	  if (g < range.first)
+	    return true;
 	}
-
-	if (!glyphs->next (&g))
-	  break;
-	if (g < range.first)
-	  return true;
-	g = range.last;
-	last = g;
+	g = last = range.last;
       }
       if (g != HB_SET_VALUE_INVALID && glyphs->next (&g))
 	return true;
@@ -2132,6 +2159,20 @@ struct ClassDef
     case 4: hb_barrier (); return u.format4.get_population ();
 #endif
     default:return NOT_COVERED;
+    }
+  }
+
+  /* Number of class or range records; what walking the table costs. */
+  unsigned get_record_count () const
+  {
+    switch (u.format.v) {
+    case 1: hb_barrier (); return u.format1.classValue.len;
+    case 2: hb_barrier (); return u.format2.rangeRecord.len;
+#ifndef HB_NO_BEYOND_64K
+    case 3: hb_barrier (); return u.format3.classValue.len;
+    case 4: hb_barrier (); return u.format4.rangeRecord.len;
+#endif
+    default:return 0;
     }
   }
 
@@ -2287,6 +2328,21 @@ struct ClassDef
 #ifndef HB_NO_BEYOND_64K
     case 3: hb_barrier (); return u.format3.collect_class (glyphs, klass);
     case 4: hb_barrier (); return u.format4.collect_class (glyphs, klass);
+#endif
+    default:return false;
+    }
+  }
+
+  /* Like collect_class(), for all of klasses in one walk of the table. */
+  template <typename set_t>
+  bool collect_classes (set_t *glyphs, const hb_set_t &klasses) const
+  {
+    switch (u.format.v) {
+    case 1: hb_barrier (); return u.format1.collect_classes (glyphs, klasses);
+    case 2: hb_barrier (); return u.format2.collect_classes (glyphs, klasses);
+#ifndef HB_NO_BEYOND_64K
+    case 3: hb_barrier (); return u.format3.collect_classes (glyphs, klasses);
+    case 4: hb_barrier (); return u.format4.collect_classes (glyphs, klasses);
 #endif
     default:return false;
     }
@@ -2791,11 +2847,23 @@ struct VarRegionList
     unsigned axis_count = axis_tags.length;
     unsigned region_count = regions.length;
     if (!axis_count || !region_count) return_trace (false);
-    if (unlikely (hb_unsigned_mul_overflows (axis_count * region_count,
-                                             VarRegionAxis::static_size))) return_trace (false);
+    if (unlikely (region_count > 0x7FFFu))
+    {
+      c->err (HB_SERIALIZE_ERROR_INT_OVERFLOW);
+      return_trace (false);
+    }
+    unsigned total_axes;
+    if (unlikely (hb_unsigned_mul_overflows (axis_count, region_count, &total_axes) ||
+                  hb_unsigned_mul_overflows (total_axes, VarRegionAxis::static_size)))
+    {
+      c->err (HB_SERIALIZE_ERROR_INT_OVERFLOW);
+      return_trace (false);
+    }
     if (unlikely (!c->extend_min (this))) return_trace (false);
-    axisCount = axis_count;
-    regionCount = region_count;
+    if (unlikely (!c->check_assign (axisCount, axis_count, HB_SERIALIZE_ERROR_INT_OVERFLOW)))
+      return_trace (false);
+    if (unlikely (!c->check_assign (regionCount, region_count, HB_SERIALIZE_ERROR_INT_OVERFLOW)))
+      return_trace (false);
 
     for (unsigned r = 0; r < region_count; r++)
     {
@@ -2827,11 +2895,23 @@ struct VarRegionList
   bool serialize (hb_serialize_context_t *c, const VarRegionList *src, const hb_inc_bimap_t &region_map)
   {
     TRACE_SERIALIZE (this);
+    unsigned mapped_region_count = region_map.get_population ();
+    if (unlikely (mapped_region_count > 0x7FFFu))
+    {
+      c->err (HB_SERIALIZE_ERROR_INT_OVERFLOW);
+      return_trace (false);
+    }
     if (unlikely (!c->extend_min (this))) return_trace (false);
     axisCount = src->axisCount;
-    regionCount = region_map.get_population ();
-    if (unlikely (hb_unsigned_mul_overflows (axisCount * regionCount,
-					     VarRegionAxis::static_size))) return_trace (false);
+    if (unlikely (!c->check_assign (regionCount, mapped_region_count, HB_SERIALIZE_ERROR_INT_OVERFLOW)))
+      return_trace (false);
+    unsigned total_axes;
+    if (unlikely (hb_unsigned_mul_overflows ((unsigned) axisCount, (unsigned) regionCount, &total_axes) ||
+		  hb_unsigned_mul_overflows (total_axes, VarRegionAxis::static_size)))
+    {
+      c->err (HB_SERIALIZE_ERROR_INT_OVERFLOW);
+      return_trace (false);
+    }
     if (unlikely (!c->extend (this))) return_trace (false);
     unsigned int region_count = src->regionCount;
     for (unsigned int r = 0; r < regionCount; r++)
@@ -2921,12 +3001,9 @@ _hb_avar2_region_is_dead (const hb_hashmap_t<hb_tag_t, Triple> &axis_tuples,
     if (start < 0 && end > 0) continue;
     int lo = (int) roundf ((float) range->minimum * 16384.f);
     int hi = (int) roundf ((float) range->maximum * 16384.f);
-    /* Strict comparisons: the scalar is 1 (not 0) at v == peak, so a tent
-     * whose peak sits exactly on the range boundary is still live there.
-     * (Reachable ranges are padded by one F2Dot14 unit at their producer,
-     * which already covers this; strictness keeps the predicate correct on
-     * its own terms.) */
-    if (hi < start || lo > end)
+    /* Endpoints have zero support unless they are also the peak.
+     * Preserve one-sided peaks exactly on a reachable boundary. */
+    if ((hi <= start && hi < peak) || (lo >= end && lo > peak))
       return true;
   }
   return false;
@@ -2934,10 +3011,15 @@ _hb_avar2_region_is_dead (const hb_hashmap_t<hb_tag_t, Triple> &axis_tuples,
 
 struct SparseVariationRegion
 {
-  float evaluate (const int *coords, unsigned int coord_len) const
+  float evaluate (const int *coords, unsigned int coord_len,
+		  int64_t *budget = nullptr) const
   {
     float v = 1.f;
     unsigned int count = axes.len;
+    /* Each region is walked per uncached delta; charge its axis records. */
+    if (budget &&
+	unlikely (!hb_budget_spend (*budget, HB_BUDGET_1, count)))
+      return 0.;
     for (unsigned int i = 0; i < count; i++)
     {
       float factor = (this+axes[i]).evaluate (coords, coord_len);
@@ -2978,7 +3060,8 @@ struct SparseVarRegionList
   HB_ALWAYS_INLINE
   float evaluate (unsigned int region_index,
 		  const int *coords, unsigned int coord_len,
-		  hb_scalar_cache_t *cache = nullptr) const
+		  hb_scalar_cache_t *cache = nullptr,
+		  int64_t *budget = nullptr) const
   {
     if (unlikely (region_index >= regions.len))
       return 0.;
@@ -2989,7 +3072,7 @@ struct SparseVarRegionList
 
     const SparseVariationRegion &region = this+regions[region_index];
 
-    v = region.evaluate (coords, coord_len);
+    v = region.evaluate (coords, coord_len, budget);
     if (cache)
       cache->set (region_index, v);
 
@@ -3433,18 +3516,24 @@ struct MultiVarData
 		  const int *coords, unsigned int coord_count,
 		  const SparseVarRegionList &regions,
 		  hb_array_t<double> out,
-		  hb_scalar_cache_t *cache = nullptr) const
+		  hb_scalar_cache_t *cache = nullptr,
+		  int64_t *budget = nullptr) const
   {
     auto &deltaSets = get_delta_sets ();
 
     auto values_iter = deltaSets.fetcher (inner);
     unsigned regionCount = regionIndices.len;
+    /* Every listed region is visited, and can add to every value. */
+    if (budget &&
+	unlikely (!hb_budget_spend (*budget, HB_BUDGET_1 + out.length,
+				    regionCount)))
+      return;
     unsigned skip = 0;
     for (unsigned regionIndex = 0; regionIndex < regionCount; regionIndex++)
     {
       float scalar = regions.evaluate (regionIndices.arrayZ[regionIndex],
 				       coords, coord_count,
-				       cache);
+				       cache, budget);
       // We skip lazily. Helps with the tail end.
       if (scalar == 0.0f)
         skip += out.length;
@@ -3859,7 +3948,8 @@ struct MultiItemVariationStore
   void get_delta (unsigned int outer, unsigned int inner,
 		  const int *coords, unsigned int coord_count,
 		  hb_array_t<double> out,
-		  hb_scalar_cache_t *cache = nullptr) const
+		  hb_scalar_cache_t *cache = nullptr,
+		  int64_t *budget = nullptr) const
   {
 #ifdef HB_NO_VAR
     return;
@@ -3872,28 +3962,32 @@ struct MultiItemVariationStore
 					     coords, coord_count,
 					     this+regions,
 					     out,
-					     cache);
+					     cache, budget);
   }
 
   public:
+  /* If BUDGET is given, the work is charged to it; once it is exhausted
+   * (negative), OUT is unspecified and the caller should bail out. */
   void get_delta (unsigned int index,
 		  const int *coords, unsigned int coord_count,
 		  hb_array_t<double> out,
-		  hb_scalar_cache_t *cache = nullptr) const
+		  hb_scalar_cache_t *cache = nullptr,
+		  int64_t *budget = nullptr) const
   {
     unsigned int outer = index >> 16;
     unsigned int inner = index & 0xFFFF;
-    get_delta (outer, inner, coords, coord_count, out, cache);
+    get_delta (outer, inner, coords, coord_count, out, cache, budget);
   }
   void get_delta (unsigned int index,
 		  hb_array_t<const int> coords,
 		  hb_array_t<double> out,
-		  hb_scalar_cache_t *cache = nullptr) const
+		  hb_scalar_cache_t *cache = nullptr,
+		  int64_t *budget = nullptr) const
   {
     return get_delta (index,
 		      coords.arrayZ, coords.length,
 		      out,
-		      cache);
+		      cache, budget);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -4019,6 +4113,7 @@ struct DeltaSetIndexMapFormat01
       return_trace (false);
     if (unlikely (!c->extend_min (this))) return_trace (false);
 
+    format = MapCountT::static_size == HBUINT16::static_size ? 0 : 1;
     entryFormat = ((width-1)<<4)|(inner_bit_count-1);
     mapCount = output_map.length;
     HBUINT8 *p = c->allocate_size<HBUINT8> (width * output_map.length);
@@ -4110,8 +4205,7 @@ struct DeltaSetIndexMap
   {
     TRACE_SERIALIZE (this);
     unsigned length = plan.get_output_map ().length;
-    u.format.v = length <= 0xFFFF ? 0 : 1;
-    switch (u.format.v) {
+    switch (length <= 0xFFFF ? 0 : 1) {
     case 0: hb_barrier (); return_trace (u.format0.serialize (c, plan));
     case 1: hb_barrier (); return_trace (u.format1.serialize (c, plan));
     default:return_trace (false);
@@ -4214,6 +4308,10 @@ struct ItemVarStoreInstancer
   double get_condition_delta (uint32_t varIdx) const
   { return get_delta<double> (varIdx); }
 
+  /* FeatureVariations conditions are evaluated once while building a shape
+   * or subset plan, not under a rendering work budget. */
+  bool charge_condition () const { return true; }
+
   template <typename Float = float>
   Float get_delta (uint32_t varIdx, unsigned short offset = 0) const
   {
@@ -4221,7 +4319,11 @@ struct ItemVarStoreInstancer
    if (!coords || varIdx == VarIdx::NO_VARIATION)
      return Float (0);
 
-    varIdx += offset;
+    unsigned index;
+    if (unlikely (hb_unsigned_add_overflows (varIdx, offset, &index) ||
+		  index == VarIdx::NO_VARIATION))
+      return Float (0);
+    varIdx = index;
     if (varIdxMap)
       varIdx = varIdxMap->map (varIdx);
     return varStore->get_delta<Float> (varIdx, coords, cache);
@@ -4238,8 +4340,10 @@ struct MultiItemVarStoreInstancer
   MultiItemVarStoreInstancer (const MultiItemVariationStore *varStore,
 			      const DeltaSetIndexMap *varIdxMap,
 			      hb_array_t<const int> coords,
-			      hb_scalar_cache_t *cache = nullptr) :
-    varStore (varStore), varIdxMap (varIdxMap), coords (coords), cache (cache)
+			      hb_scalar_cache_t *cache = nullptr,
+			      int64_t *budget = nullptr) :
+    varStore (varStore), varIdxMap (varIdxMap), coords (coords), cache (cache),
+    budget (budget)
   {
     if (!varStore)
       varStore = &Null(MultiItemVariationStore);
@@ -4249,6 +4353,11 @@ struct MultiItemVarStoreInstancer
 
   double get_condition_delta (uint32_t varIdx) const
   { return (double) (*this)[varIdx]; }
+
+  /* Condition trees are evaluated per VARC component visit, so they draw
+   * on the renderer's live work budget when one is attached. */
+  bool charge_condition () const
+  { return !budget || hb_budget_spend (*budget, HB_BUDGET_1); }
 
   double operator[] (uint32_t varIdx) const
   {
@@ -4265,7 +4374,7 @@ struct MultiItemVarStoreInstancer
       varIdx += offset;
       if (varIdxMap)
 	varIdx = varIdxMap->map (varIdx);
-      varStore->get_delta (varIdx, coords, out, cache);
+      varStore->get_delta (varIdx, coords, out, cache, budget);
     }
     else
       for (unsigned i = 0; i < out.length; i++)
@@ -4276,6 +4385,7 @@ struct MultiItemVarStoreInstancer
   const DeltaSetIndexMap *varIdxMap;
   hb_array_t<const int> coords;
   hb_scalar_cache_t *cache;
+  int64_t *budget;
 };
 
 
@@ -4657,6 +4767,11 @@ struct Condition
   bool evaluate (const int *coords, unsigned int coord_len,
 		 Instancer *instancer) const
   {
+    /* And/Or children are offsets that may all share one subtree, so the
+     * evaluated size of a condition tree is not tied to its encoded size.
+     * Charge every node visited; the guard keeps a null instancer safe. */
+    if (unlikely (instancer && !instancer->charge_condition ())) return false;
+
     switch (u.format.v) {
     /* A null condition offset resolves to the nil Condition, whose reserved
      * format 0 represents the True condition required by the specification. */
@@ -5443,6 +5558,18 @@ struct FeatureTableSubstitution
     return nullptr;
   }
 
+  /* Calls visit (feature_index, substitute) until it returns false. */
+  template <typename Visitor>
+  bool visit_substitutes (const hb_set_t *feature_indexes,
+			  Visitor       &visit) const
+  {
+    for (const FeatureTableSubstitutionRecord &record : substitutions)
+      if (feature_indexes->has (record.featureIndex) &&
+	  !visit (record.featureIndex, this+record.feature))
+	return false;
+    return true;
+  }
+
   void collect_lookups (const hb_set_t *feature_indexes,
 			hb_set_t       *lookup_indexes /* OUT */) const
   {
@@ -5966,6 +6093,16 @@ struct FeatureVariations
     return (this+record.substitutions).find_substitute (feature_index);
   }
 
+  template <typename Visitor>
+  bool visit_substitutes (const hb_set_t *feature_indexes,
+			  Visitor       &visit) const
+  {
+    for (const FeatureVariationRecord &record : varRecords)
+      if (!(this+record.substitutions).visit_substitutes (feature_indexes, visit))
+	return false;
+    return true;
+  }
+
   bool collect_lookup_conditions (const int *coords,
                                   unsigned int coord_len,
                                   ItemVarStoreInstancer *instancer,
@@ -6095,16 +6232,10 @@ struct FeatureVariations
       (this+record.substitutions).collect_feature_indices (feature_indices);
   }
 
-  bool has_lookup_variations (unsigned feature_index) const
+  void collect_lookup_variation_feature_indices (hb_set_t *feature_indices) const
   {
     for (const LookupVariationRecord &record : get_lookup_variation_records ())
-    {
-      if (record.featureIndex == feature_index)
-	return true;
-      if (record.featureIndex > feature_index)
-	break;
-    }
-    return false;
+      feature_indices->add (record.featureIndex);
   }
 
   bool subset (hb_subset_context_t *c,
@@ -6408,8 +6539,8 @@ struct Device
   {
     switch (u.b.format)
     {
-    case 1: case 2: case 3:
 #ifndef HB_NO_HINTING
+    case 1: case 2: case 3:
       hb_barrier ();
       return u.hinting.get_y_delta (font);
 #endif

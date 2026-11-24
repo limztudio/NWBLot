@@ -23,9 +23,21 @@ namespace Tests::GlobalCases{
 class RejectingVectorArena final : public ArenaBase{
 public:
     RejectingVectorArena() : ArenaBase(Name("tests/global/vector_allocation_failure")){}
-    void* allocate([[maybe_unused]] usize align, [[maybe_unused]] usize size)override{ return nullptr; }
-    void* reallocate([[maybe_unused]] void* memory, [[maybe_unused]] usize align, [[maybe_unused]] usize size)override{ return nullptr; }
-    void deallocate([[maybe_unused]] void* memory, [[maybe_unused]] usize align, [[maybe_unused]] usize size)noexcept override{}
+    void rejectAllocations()noexcept{ m_reject = true; }
+    void* allocate(const usize align, const usize size)override{
+        return m_reject ? nullptr : m_storage.arena.allocate(align, size);
+    }
+    void* reallocate(void* const memory, const usize align, const usize size)override{
+        return m_reject ? nullptr : m_storage.arena.reallocate(memory, align, size);
+    }
+    void deallocate(void* const memory, const usize align, const usize size)noexcept override{
+        m_storage.arena.deallocate(memory, align, size);
+    }
+
+
+private:
+    HeapStorage m_storage;
+    b8 m_reject = false;
 };
 
 struct AllocationThrowingCopy{
@@ -38,6 +50,7 @@ struct AllocationThrowingCopy{
     RejectingVectorArena arena;
     Vector<u32, RejectingVectorArena> destination(arena);
     const Array<u32, 1u> source{ 1u };
+    arena.rejectAllocations();
     const b8 propagated = static_cast<b8>(ThrowsException<AllocationException>([&](){ return TryCopyVector(destination, Span<const u32>(source)); }));
     return propagated && destination.empty();
 }

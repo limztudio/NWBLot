@@ -76,10 +76,10 @@
 
 
 static inline void
-set_glyph (hb_glyph_info_t &info, hb_font_t *font)
+set_glyph (hb_glyph_info_t &info, hb_font_t *font, hb_codepoint_t not_found)
 {
-  if (!font->get_nominal_glyph (info.codepoint, &info.normalizer_glyph_index()))
-    info.normalizer_glyph_index() = 0;
+  if (!font->get_nominal_glyph (info.codepoint, &info.normalizer_glyph_index(), not_found))
+    info.normalizer_glyph_index() = not_found;
 }
 
 static inline void
@@ -219,7 +219,7 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
       else
       {
 	/* Just pass on the two characters separately, let GSUB do its magic. */
-	set_glyph (buffer->cur(), font);
+	set_glyph (buffer->cur(), font, buffer->not_found);
 	if (unlikely (!buffer->next_glyph ())) return;
 
         buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_VARIATION_SELECTOR_FALLBACK;
@@ -227,7 +227,7 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
 	if (buffer->not_found_variation_selector != HB_CODEPOINT_INVALID)
 	  _hb_glyph_info_clear_default_ignorable (&buffer->cur());
 
-	set_glyph (buffer->cur(), font);
+	set_glyph (buffer->cur(), font, buffer->not_found);
 	if (unlikely (!buffer->next_glyph ())) return;
       }
       /* Skip any further variation selectors. */
@@ -235,19 +235,19 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
 	     buffer->successful &&
 	     unlikely (buffer->unicode->is_variation_selector (buffer->cur().codepoint)))
       {
-	set_glyph (buffer->cur(), font);
+	set_glyph (buffer->cur(), font, buffer->not_found);
 	if (unlikely (!buffer->next_glyph ())) return;
       }
     }
     else
     {
-      set_glyph (buffer->cur(), font);
+      set_glyph (buffer->cur(), font, buffer->not_found);
       if (unlikely (!buffer->next_glyph ())) return;
     }
   }
   if (likely (buffer->idx < end))
   {
-    set_glyph (buffer->cur(), font);
+    set_glyph (buffer->cur(), font, buffer->not_found);
     if (unlikely (!buffer->next_glyph ())) return;
   }
 }
@@ -365,6 +365,9 @@ _hb_ot_shape_normalize (const hb_ot_shape_plan_t *plan,
       decompose_multi_char_cluster (&c, end, always_short_circuit);
     }
     while (buffer->idx < count && buffer->successful);
+    /* Decomposition can introduce marks into otherwise simple input. */
+    if (buffer->successful && buffer->out_len != count)
+      all_simple = false;
     buffer->sync ();
     if (unlikely (!buffer->message (font, "end decompose")))
       DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");

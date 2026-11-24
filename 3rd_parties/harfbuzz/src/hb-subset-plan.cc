@@ -31,6 +31,7 @@
 #include "hb-set.hh"
 #include "hb-subset.h"
 #include "hb-unicode.h"
+#include "hb-subset-hinting.hh"
 
 #include "hb-ot-cmap-table.hh"
 #include "hb-ot-glyf-table.hh"
@@ -62,10 +63,11 @@ hb_subset_accelerator_t::~hb_subset_accelerator_t ()
 static inline bool
 _add_cff_seac_components (const OT::cff1::accelerator_subset_t &cff,
 			  hb_codepoint_t gid,
-			  hb_set_t *gids_to_retain)
+			  hb_set_t *gids_to_retain,
+			  int64_t *budget)
 {
   hb_codepoint_t base_gid, accent_gid;
-  if (cff.get_seac_components (gid, &base_gid, &accent_gid))
+  if (cff.get_seac_components (gid, &base_gid, &accent_gid, budget))
   {
     gids_to_retain->add (base_gid);
     gids_to_retain->add (accent_gid);
@@ -112,14 +114,17 @@ _cmap_closure (hb_face_t	   *face,
 static void _colr_closure (hb_subset_plan_t* plan,
                            hb_set_t *glyphs_colred)
 {
+#ifndef HB_NO_COLOR
+  const auto &colr = *plan->source->table.COLR;
+#else
   OT::COLR::accelerator_t colr (plan->source);
+#endif
   if (!colr.is_valid ()) return;
 
   hb_set_t palette_indices, layer_indices;
   // Collect all glyphs referenced by COLRv0
   hb_set_t glyphset_colrv0;
-  for (hb_codepoint_t gid : *glyphs_colred)
-    colr.closure_glyphs (gid, &glyphset_colrv0);
+  colr.closure_glyphs (glyphs_colred, &glyphset_colrv0);
 
   glyphs_colred->union_ (glyphset_colrv0);
 
@@ -144,8 +149,7 @@ static void _colr_closure (hb_subset_plan_t* plan,
   {
     const OT::ItemVariationStore &var_store = colr.get_var_store ();
     // generated inner_maps is used by ItemVariationStore serialize(), which is subset only
-    unsigned subtable_count = var_store.get_sub_table_count ();
-    generate_varstore_inner_maps (variation_indices, subtable_count, plan->colrv1_varstore_inner_maps);
+    generate_varstore_inner_maps (var_store, variation_indices, plan->colrv1_varstore_inner_maps);
 
     if (!plan->all_axes_pinned)
       remap_variation_indices (var_store,
@@ -173,7 +177,6 @@ _math_closure (hb_subset_plan_t *plan,
   hb_blob_ptr_t<OT::MATH> math = plan->source_table<OT::MATH> ();
   if (math->has_data ())
     math->closure_glyphs (glyphset);
-  math.destroy ();
 }
 
 static inline void
@@ -250,6 +253,7 @@ _populate_unicodes_to_retain (const hb_set_t *unicodes_in,
     !(plan->flags & HB_SUBSET_FLAGS_NO_BIDI_CLOSURE));
 
   OT::cmap_accelerator_t cmap (plan->source);
+  cmap.closure_symbol_unicodes (&unicodes);
   unsigned size_threshold = plan->source->get_num_glyphs ();
 
   if (glyphs->is_empty () && unicodes.get_population () < size_threshold)
@@ -392,6 +396,7 @@ _glyf_add_gid_and_children (const OT::glyf_accelerator_t &glyf,
 			    hb_codepoint_t gid,
 			    hb_set_t *gids_to_retain,
 			    int operation_count,
+			    int64_t &bytes_budget,
 			    unsigned depth = 0)
 {
   /* Check if is already visited */
@@ -399,10 +404,16 @@ _glyf_add_gid_and_children (const OT::glyf_accelerator_t &glyf,
 
   gids_to_retain->add (gid);
 
+  auto glyph = glyf.glyph_for_gid (gid);
+
+  /* Every retained glyph is walked here and again when glyf is subset.
+   * Charge its untrimmed bytes before the operation count can bail out,
+   * so that a glyph retained past that point is still paid for. */
+  if (unlikely (!hb_budget_spend (bytes_budget, HB_BUDGET_1, glyph.get_bytes ().length)))
+    return operation_count;
+
   if (unlikely (depth++ > HB_MAX_NESTING_LEVEL)) return operation_count;
   if (unlikely (--operation_count < 0)) return operation_count;
-
-  auto glyph = glyf.glyph_for_gid (gid);
 
   for (auto &item : glyph.get_composite_iterator ())
     operation_count =
@@ -410,6 +421,7 @@ _glyf_add_gid_and_children (const OT::glyf_accelerator_t &glyf,
 				  item.get_gid (glyph.is_extended ()),
 				  gids_to_retain,
 				  operation_count,
+				  bytes_budget,
 				  depth);
 
   return operation_count;
@@ -453,7 +465,6 @@ _populate_gids_to_retain (hb_subset_plan_t* plan,
   plan->_glyphset_gsub.add (0); // Not-def
 
   _cmap_closure (plan->source, &plan->unicodes, &plan->_glyphset_gsub);
-  plan->_glyphset_cmaped = plan->_glyphset_gsub;
 
   if (!drop_tables->has (HB_OT_TAG_MATH))
   {
@@ -468,7 +479,15 @@ _populate_gids_to_retain (hb_subset_plan_t* plan,
 
   _remove_invalid_gids (&plan->_glyphset_gsub, plan->source->get_num_glyphs ());
 
-  hb_set_t cur_glyphset = plan->_glyphset_gsub;
+  /* GSUB outputs can have MATH metrics and variants of their own. */
+  plan->_glyphset_mathed = plan->_glyphset_gsub;
+  if (!drop_tables->has (HB_OT_TAG_MATH))
+  {
+    _math_closure (plan, &plan->_glyphset_mathed);
+    _remove_invalid_gids (&plan->_glyphset_mathed, plan->source->get_num_glyphs ());
+  }
+
+  hb_set_t cur_glyphset = plan->_glyphset_mathed;
   if (!drop_tables->has (HB_OT_TAG_COLR))
   {
     _colr_closure (plan, &cur_glyphset);
@@ -495,19 +514,40 @@ _populate_gids_to_retain (hb_subset_plan_t* plan,
   /* Populate a full set of glyphs to retain by adding all referenced
    * composite glyphs. */
   if (glyf.has_data ())
+  {
+    /* With a monotonic loca the retained glyphs add up to at most the
+     * table; loca need not be monotonic though, and any number of glyph
+     * IDs may alias the same bytes, each of them trimmed separately. */
+    int64_t bytes_budget = (int64_t) glyf.get_table_length () *
+			   HB_SUBSET_GLYF_MAX_BYTES_FACTOR;
     for (hb_codepoint_t gid : cur_glyphset)
       _glyf_add_gid_and_children (glyf, gid, &plan->_glyphset,
-				  cur_glyphset.get_population () * HB_MAX_COMPOSITE_OPERATIONS_PER_GLYPH);
+				  cur_glyphset.get_population () * HB_MAX_COMPOSITE_OPERATIONS_PER_GLYPH,
+				  bytes_budget);
+    if (unlikely (!plan->check_success (bytes_budget >= 0)))
+      return;
+  }
   else
     plan->_glyphset.union_ (cur_glyphset);
 #ifndef HB_NO_SUBSET_CFF
-  if (!plan->accelerator || plan->accelerator->has_seac)
+  /* Component closure cannot add anything when all valid glyphs are already
+   * retained. A new accelerator still needs an accurate has_seac value for
+   * future partial subsets. */
+  bool all_glyphs_retained =
+    cur_glyphset.get_population () == plan->source->get_num_glyphs ();
+  if ((!all_glyphs_retained || plan->attach_accelerator_data) &&
+      (!plan->accelerator || plan->accelerator->has_seac))
   {
     bool has_seac = false;
     if (cff->is_valid ())
+    {
+      int64_t *budget = plan->cff_budget (CFF::get_subset_budget (cff->get_blob ()));
       for (hb_codepoint_t gid : cur_glyphset)
-	if (_add_cff_seac_components (*cff, gid, &plan->_glyphset))
+	if (_add_cff_seac_components (*cff, gid, &plan->_glyphset, budget))
 	  has_seac = true;
+      /* Exhaustion saturates the interpreter budget at exactly 0, not below. */
+      plan->check_success (*budget > 0);
+    }
     plan->has_seac = has_seac;
   }
 #endif
@@ -596,11 +636,27 @@ _create_old_gid_to_new_gid_map (const hb_face_t *face,
         continue;
       }
 
+      if (unlikely (!*new_gid))
+      {
+        DEBUG_MSG (SUBSET, nullptr, "Glyph id 0 is reserved for .notdef.");
+        return false;
+      }
+
       if (*new_gid > max_glyph)
         max_glyph = *new_gid;
       new_to_old_gid_list->push (hb_pair (*new_gid, old_gid));
     }
     new_to_old_gid_list->qsort ();
+
+    // MAXP has the widest glyph-count field, HBUINT24. Include the unmapped
+    // glyphs and the initial .notdef slot before assigning their ids below.
+    constexpr unsigned max_num_glyphs = (1u << (8 * OT::HBUINT24::static_size)) - 1;
+    if (unlikely (max_glyph >= max_num_glyphs ||
+                  remaining.get_population () > max_num_glyphs - (max_glyph + 1)))
+    {
+      DEBUG_MSG (SUBSET, nullptr, "The provided custom glyph mapping is out of range.");
+      return false;
+    }
 
     // Anything that wasn't mapped by the requested mapping should
     // be placed after the requested mapping.
@@ -644,11 +700,88 @@ _create_old_gid_to_new_gid_map (const hb_face_t *face,
   return true;
 }
 
+/* Tables that contain glyph ids but that the subsetter cannot rewrite. Some
+ * are not layout tables, and some (such as Zapf or hvgl) are not otherwise
+ * supported by HarfBuzz, but if they are retained they are passed through
+ * unchanged, so glyph ids must not be renumbered. Tables such as trak, feat,
+ * ltag, Feat, and Sill do not refer to glyphs and are intentionally absent.
+ *
+ * If subset support is added for one of these tables, remove it here. The
+ * test_subset_unsubsettable_glyph_tables() test asserts that all of them are
+ * still passed through byte-for-byte, so it will fail if a subsetter starts
+ * handling one. */
+static const hb_tag_t unsubsettable_glyph_tables[] = {
+  /* OpenType */
+  HB_TAG ('E', 'B', 'D', 'T'),
+  HB_TAG ('E', 'B', 'L', 'C'),
+  HB_TAG ('J', 'S', 'T', 'F'),
+  HB_TAG ('L', 'T', 'S', 'H'),
+  HB_TAG ('S', 'V', 'G', ' '),
+
+  /* Apple */
+  HB_TAG ('Z', 'a', 'p', 'f'),
+  HB_TAG ('b', 'd', 'a', 't'),
+  HB_TAG ('b', 'l', 'o', 'c'),
+  HB_TAG ('g', 'c', 'i', 'd'),
+  HB_TAG ('h', 'v', 'g', 'l'),
+  HB_TAG ('h', 'v', 'p', 'm'),
+
+  /* AAT layout */
+  HB_TAG ('a', 'n', 'k', 'r'),
+  HB_TAG ('b', 's', 'l', 'n'),
+  HB_TAG ('j', 'u', 's', 't'),
+#ifndef HB_NO_SUBSET_LAYOUT
+  /* _should_drop_table() drops these unconditionally when layout subsetting is
+   * compiled out. */
+  HB_TAG ('k', 'e', 'r', 'n'),
+  HB_TAG ('k', 'e', 'r', 'x'),
+  HB_TAG ('m', 'o', 'r', 't'),
+  HB_TAG ('m', 'o', 'r', 'x'),
+#endif
+  HB_TAG ('l', 'c', 'a', 'r'),
+  HB_TAG ('o', 'p', 'b', 'd'),
+  HB_TAG ('p', 'r', 'o', 'p'),
+
+  /* Graphite */
+  HB_TAG ('G', 'l', 'a', 't'),
+  HB_TAG ('G', 'l', 'o', 'c'),
+  HB_TAG ('S', 'i', 'l', 'f'),
+};
+
+static bool
+_has_retained_unsubsettable_glyph_table (hb_face_t *face,
+					 const hb_set_t *drop_tables,
+					 const hb_set_t *no_subset_tables,
+					 unsigned flags)
+{
+  bool passthrough = flags & HB_SUBSET_FLAGS_PASSTHROUGH_UNRECOGNIZED;
+
+  for (hb_tag_t tag : unsubsettable_glyph_tables)
+  {
+    if (drop_tables->has (tag)) continue;
+    if (!passthrough && !no_subset_tables->has (tag)) continue;
+
+    hb_blob_t *blob = hb_face_reference_table (face, tag);
+    bool has_data = hb_blob_get_length (blob) != 0;
+    hb_blob_destroy (blob);
+    if (has_data) return true;
+  }
+
+  return false;
+}
+
 hb_subset_plan_t::hb_subset_plan_t (hb_face_t *face,
 				    const hb_subset_input_t *input)
 {
   successful = true;
   flags = input->flags;
+
+  if ((flags & HB_SUBSET_FLAGS_NO_HINTING) && _hb_subset_face_requires_hinting (face))
+  {
+    DEBUG_MSG (SUBSET, nullptr,
+	       "Keeping hinting because the font requires it.");
+    flags &= ~HB_SUBSET_FLAGS_NO_HINTING;
+  }
 
   unicode_to_new_gid_list.init ();
 
@@ -659,6 +792,20 @@ hb_subset_plan_t::hb_subset_plan_t (hb_face_t *face,
   glyphs_requested = *input->sets.glyphs;
   drop_tables = *input->sets.drop_tables;
   no_subset_tables = *input->sets.no_subset_tables;
+
+  /* If we are going to retain a table that we cannot subset, preserve
+   * glyph ids so the table keeps referring to the right glyphs. */
+  if (!(flags & HB_SUBSET_FLAGS_RETAIN_GIDS) &&
+      _has_retained_unsubsettable_glyph_table (face,
+					      &drop_tables,
+					      &no_subset_tables,
+					      flags))
+  {
+    DEBUG_MSG (SUBSET, nullptr,
+	       "Retaining glyph ids because an unsubsettable glyph table is retained.");
+    flags |= HB_SUBSET_FLAGS_RETAIN_GIDS;
+  }
+
   source = hb_face_reference (face);
   dest = hb_face_builder_create ();
 
@@ -674,6 +821,7 @@ hb_subset_plan_t::hb_subset_plan_t (hb_face_t *face,
   all_axes_pinned = false;
   pinned_at_default = true;
   has_gdef_varstore = false;
+  colrv1_constant_after_pinning = -1;
   has_avar2 = false;
 
 #ifdef HB_EXPERIMENTAL_API
@@ -707,7 +855,7 @@ hb_subset_plan_t::hb_subset_plan_t (hb_face_t *face,
 #ifndef HB_NO_VAR_COMPOSITES
   if (!input->sets.drop_tables->has (OT::VARC::tableTag) &&
       input->sets.no_subset_tables->has (OT::VARC::tableTag) &&
-      !(input->flags & HB_SUBSET_FLAGS_RETAIN_GIDS) &&
+      !(flags & HB_SUBSET_FLAGS_RETAIN_GIDS) &&
       face->table.VARC->has_data ())
   {
     check_success (false);
@@ -738,7 +886,7 @@ hb_subset_plan_t::hb_subset_plan_t (hb_face_t *face,
 
   if (!check_success(_create_old_gid_to_new_gid_map(
           face,
-          input->flags & HB_SUBSET_FLAGS_RETAIN_GIDS,
+          flags & HB_SUBSET_FLAGS_RETAIN_GIDS,
           &_glyphset,
           &input->glyph_map,
           glyph_map,

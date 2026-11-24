@@ -1,5 +1,5 @@
 /* zlib.h -- interface of the 'zlib' general purpose compression library
-  version 1.3.2.1, February xxth, 2026
+  version 1.4, November 4th, 2026
 
   Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler
 
@@ -41,12 +41,12 @@
 extern "C" {
 #endif
 
-#define ZLIB_VERSION "1.3.2.1-motley"
-#define ZLIB_VERNUM 0x1321
+#define ZLIB_VERSION "1.4"
+#define ZLIB_VERNUM 0x1400
 #define ZLIB_VER_MAJOR 1
-#define ZLIB_VER_MINOR 3
-#define ZLIB_VER_REVISION 2
-#define ZLIB_VER_SUBREVISION 1
+#define ZLIB_VER_MINOR 4
+#define ZLIB_VER_REVISION 0
+#define ZLIB_VER_SUBREVISION 0
 
 /*
     The 'zlib' compression library provides in-memory compression and
@@ -871,8 +871,7 @@ ZEXTERN int ZEXPORT inflateInit2(z_streamp strm,
    instead.  windowBits must be greater than or equal to the windowBits value
    provided to deflateInit2() while compressing, or it must be equal to 15 if
    deflateInit2() was not used.  If a compressed stream with a larger window
-   size is given as input, inflate() will return with the error code
-   Z_DATA_ERROR instead of trying to allocate a larger window.
+   size is given as input, inflate() may return with a Z_DATA_ERROR.
 
      windowBits can also be zero to request that inflate use the window size in
    the zlib header of the compressed stream.
@@ -1099,9 +1098,10 @@ ZEXTERN int ZEXPORT inflateGetHeader(z_streamp strm,
    a terminating zero.  If any of extra, name, or comment are not present in
    the header, then that field's pointer is set to Z_NULL.  This allows the use
    of deflateSetHeader() with the returned structure to duplicate the header.
-   Note that if those fields initially pointed to allocated memory, then the
-   application will need to save them elsewhere so that they can be eventually
-   freed.
+   Though take care that none of the fields were truncated before so using it,
+   lest havoc ensue.  Note that if those fields initially pointed to allocated
+   memory, then the application will need to save them elsewhere so that they
+   can be eventually freed.
 
      If inflateGetHeader is not used, then the header information is simply
    discarded.  The header is always checked for validity, including the header
@@ -1981,7 +1981,8 @@ ZEXTERN int ZEXPORT gzgetc_(gzFile file);       /* backward compatibility */
  * change the regular functions to 64 bits if _FILE_OFFSET_BITS is 64 (if
  * both are true, the application gets the *64 functions, and the regular
  * functions are changed to 64 bits) -- in case these are set on systems
- * without large file support, _LFS64_LARGEFILE must also be true
+ * without large file support, _LFS64_LARGEFILE must also be true, except on
+ * native Windows, where 64-bit offsets are always available
  */
 #ifdef Z_LARGE64
    ZEXTERN gzFile ZEXPORT gzopen64(const char *, const char *);
@@ -2038,7 +2039,7 @@ ZEXTERN int ZEXPORT gzgetc_(gzFile file);       /* backward compatibility */
 
 #endif /* !Z_SOLO */
 
-/* undocumented functions */
+/* undocumented functions (not part of the zlib API) */
 ZEXTERN const char   * ZEXPORT zError(int);
 ZEXTERN int            ZEXPORT inflateSyncPoint(z_streamp);
 ZEXTERN const z_crc_t FAR * ZEXPORT get_crc_table(void);

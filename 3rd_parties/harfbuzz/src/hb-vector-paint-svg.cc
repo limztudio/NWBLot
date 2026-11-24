@@ -288,24 +288,6 @@ static void hb_vector_paint_sweep_gradient (hb_paint_funcs_t *, void *, hb_color
 static void hb_vector_paint_push_group (hb_paint_funcs_t *, void *, void *);
 static void hb_vector_paint_pop_group (hb_paint_funcs_t *, void *, hb_paint_composite_mode_t, void *);
 static hb_bool_t hb_vector_paint_color_glyph (hb_paint_funcs_t *, void *, hb_codepoint_t, hb_font_t *, void *);
-static hb_bool_t
-hb_vector_paint_custom_palette_color (hb_paint_funcs_t *pfuncs HB_UNUSED,
-				      void *paint_data,
-				      unsigned color_index,
-				      hb_color_t *color,
-				      void *user_data HB_UNUSED)
-{
-  hb_vector_paint_t *paint = (hb_vector_paint_t *) paint_data;
-  if (!color)
-    return false;
-
-  hb_color_t *value = nullptr;
-  if (!paint->custom_palette_colors.has (color_index, &value) || !value)
-    return false;
-  *color = *value;
-  return true;
-}
-
 static inline void free_static_vector_paint_funcs ();
 static struct hb_vector_paint_funcs_lazy_loader_t
   : hb_paint_funcs_lazy_loader_t<hb_vector_paint_funcs_lazy_loader_t>
@@ -313,23 +295,23 @@ static struct hb_vector_paint_funcs_lazy_loader_t
   static hb_paint_funcs_t *create ()
   {
     hb_paint_funcs_t *funcs = hb_paint_funcs_create ();
-    hb_paint_funcs_set_push_transform_func (funcs, (hb_paint_push_transform_func_t) hb_vector_paint_push_transform, nullptr, nullptr);
-    hb_paint_funcs_set_pop_transform_func (funcs, (hb_paint_pop_transform_func_t) hb_vector_paint_pop_transform, nullptr, nullptr);
-    hb_paint_funcs_set_fill_glyph_func (funcs, (hb_paint_fill_glyph_func_t) hb_vector_paint_fill_glyph, nullptr, nullptr);
-    hb_paint_funcs_set_push_clip_glyph_func (funcs, (hb_paint_push_clip_glyph_func_t) hb_vector_paint_push_clip_glyph, nullptr, nullptr);
-    hb_paint_funcs_set_push_clip_rectangle_func (funcs, (hb_paint_push_clip_rectangle_func_t) hb_vector_paint_push_clip_rectangle, nullptr, nullptr);
-    hb_paint_funcs_set_push_clip_path_start_func (funcs, (hb_paint_push_clip_path_start_func_t) hb_vector_paint_push_clip_path_start, nullptr, nullptr);
-    hb_paint_funcs_set_push_clip_path_end_func (funcs, (hb_paint_push_clip_path_end_func_t) hb_vector_paint_push_clip_path_end, nullptr, nullptr);
-    hb_paint_funcs_set_pop_clip_func (funcs, (hb_paint_pop_clip_func_t) hb_vector_paint_pop_clip, nullptr, nullptr);
-    hb_paint_funcs_set_color_func (funcs, (hb_paint_color_func_t) hb_vector_paint_color, nullptr, nullptr);
-    hb_paint_funcs_set_image_func (funcs, (hb_paint_image_func_t) hb_vector_paint_image, nullptr, nullptr);
-    hb_paint_funcs_set_linear_gradient_func (funcs, (hb_paint_linear_gradient_func_t) hb_vector_paint_linear_gradient, nullptr, nullptr);
-    hb_paint_funcs_set_radial_gradient_func (funcs, (hb_paint_radial_gradient_func_t) hb_vector_paint_radial_gradient, nullptr, nullptr);
-    hb_paint_funcs_set_sweep_gradient_func (funcs, (hb_paint_sweep_gradient_func_t) hb_vector_paint_sweep_gradient, nullptr, nullptr);
-    hb_paint_funcs_set_push_group_func (funcs, (hb_paint_push_group_func_t) hb_vector_paint_push_group, nullptr, nullptr);
-    hb_paint_funcs_set_pop_group_func (funcs, (hb_paint_pop_group_func_t) hb_vector_paint_pop_group, nullptr, nullptr);
-    hb_paint_funcs_set_color_glyph_func (funcs, (hb_paint_color_glyph_func_t) hb_vector_paint_color_glyph, nullptr, nullptr);
-    hb_paint_funcs_set_custom_palette_color_func (funcs, (hb_paint_custom_palette_color_func_t) hb_vector_paint_custom_palette_color, nullptr, nullptr);
+    hb_paint_funcs_set_push_transform_func (funcs, hb_vector_paint_push_transform, nullptr, nullptr);
+    hb_paint_funcs_set_pop_transform_func (funcs, hb_vector_paint_pop_transform, nullptr, nullptr);
+    hb_paint_funcs_set_fill_glyph_func (funcs, hb_vector_paint_fill_glyph, nullptr, nullptr);
+    hb_paint_funcs_set_push_clip_glyph_func (funcs, hb_vector_paint_push_clip_glyph, nullptr, nullptr);
+    hb_paint_funcs_set_push_clip_rectangle_func (funcs, hb_vector_paint_push_clip_rectangle, nullptr, nullptr);
+    hb_paint_funcs_set_push_clip_path_start_func (funcs, hb_vector_paint_push_clip_path_start, nullptr, nullptr);
+    hb_paint_funcs_set_push_clip_path_end_func (funcs, hb_vector_paint_push_clip_path_end, nullptr, nullptr);
+    hb_paint_funcs_set_pop_clip_func (funcs, hb_vector_paint_pop_clip, nullptr, nullptr);
+    hb_paint_funcs_set_color_func (funcs, hb_vector_paint_color, nullptr, nullptr);
+    hb_paint_funcs_set_image_func (funcs, hb_vector_paint_image, nullptr, nullptr);
+    hb_paint_funcs_set_linear_gradient_func (funcs, hb_vector_paint_linear_gradient, nullptr, nullptr);
+    hb_paint_funcs_set_radial_gradient_func (funcs, hb_vector_paint_radial_gradient, nullptr, nullptr);
+    hb_paint_funcs_set_sweep_gradient_func (funcs, hb_vector_paint_sweep_gradient, nullptr, nullptr);
+    hb_paint_funcs_set_push_group_func (funcs, hb_vector_paint_push_group, nullptr, nullptr);
+    hb_paint_funcs_set_pop_group_func (funcs, hb_vector_paint_pop_group, nullptr, nullptr);
+    hb_paint_funcs_set_color_glyph_func (funcs, hb_vector_paint_color_glyph, nullptr, nullptr);
+    hb_paint_funcs_set_custom_palette_color_func (funcs, hb_vector_paint_custom_palette_color, nullptr, nullptr);
     hb_paint_funcs_set_set_budget_func (funcs, hb_vector_paint_set_budget_callback, nullptr, nullptr);
     hb_paint_funcs_set_get_budget_func (funcs, hb_vector_paint_get_budget_callback, nullptr, nullptr);
     hb_paint_funcs_set_get_budget_remaining_func (funcs, hb_vector_paint_get_budget_remaining_callback, nullptr, nullptr);
@@ -576,17 +558,16 @@ hb_vector_paint_push_clip_path_end (hb_paint_funcs_t *,
   unsigned pfx_len = paint->id_prefix_length;
   unsigned clip_id = paint->clip_path_counter++;
 
-  /* The accumulated path is in font Y-up coords (the
-   * convention used inside per-glyph <use scale(_,-sy)>
-   * wrappers); this clip is emitted at base body level
-   * (free-form between glyphs), so flip its geometry inside
-   * the clipPath via the path's own transform attribute,
-   * keeping the body's <g clip-path> at body Y-down. */
+  /* The accumulated path is in font Y-up coords, the same
+   * space as the body's <g clip-path> that references it:
+   * the whole body is wrapped in a single scale(1,-1) at
+   * render time, so no per-clip flip here (matches the
+   * glyph and rectangle clips above). */
   paint->defs.append_str ("<clipPath id=\"");
   paint->defs.append_len (pfx, pfx_len);
   paint->defs.append_str ("cp");
   paint->defs.append_unsigned (clip_id);
-  paint->defs.append_str ("\"><path transform=\"scale(1,-1)\" d=\"");
+  paint->defs.append_str ("\"><path d=\"");
   paint->defs.append_len (paint->path.arrayZ, paint->path.length);
   paint->defs.append_str ("\"/></clipPath>\n");
 
@@ -846,7 +827,11 @@ hb_vector_paint_push_group (hb_paint_funcs_t *,
   auto *paint = (hb_vector_paint_t *) paint_data;
   if (unlikely (!paint->ensure_initialized ()))
     return;
-  if (unlikely (!paint->group_stack.push_or_fail (hb_vector_buf_t {})))
+  /* The group is appended to the enclosing body when popped, so it shares
+   * the document cap with everything already held by the open groups. */
+  hb_vector_buf_t group;
+  group.base = paint->current_body ().base + paint->current_body ().length;
+  if (unlikely (!paint->group_stack.push_or_fail (std::move (group))))
     return;
 }
 
@@ -880,30 +865,17 @@ hb_vector_paint_pop_group (hb_paint_funcs_t *,
 
 static hb_bool_t
 hb_vector_paint_color_glyph (hb_paint_funcs_t *,
-                             void *paint_data,
-                             hb_codepoint_t glyph,
-                             hb_font_t *font,
+                             void *,
+                             hb_codepoint_t,
+                             hb_font_t *,
                              void *)
 {
-  auto *paint = (hb_vector_paint_t *) paint_data;
-  if (unlikely (!paint->ensure_initialized ()))
-    return false;
-  if (unlikely (paint->color_glyph_depth >= HB_MAX_NESTING_LEVEL))
-    return false;
-  if (unlikely (hb_set_has (paint->active_color_glyphs, glyph)))
-    return false;
-
-  paint->color_glyph_depth++;
-  hb_set_add (paint->active_color_glyphs, glyph);
-
-  hb_font_paint_glyph (font, glyph,
-		       hb_vector_paint_svg_funcs_get (),
-		       paint,
-		       paint->palette,
-		       paint->foreground);
-  hb_set_del (paint->active_color_glyphs, glyph);
-  paint->color_glyph_depth--;
-  return true;
+  /* Painting the nested glyph from here would re-enter
+   * hb_font_paint_glyph(), with fresh cycle, depth, and edge limits
+   * for every reference to it, so a DAG with fan-out f over n levels is
+   * walked f^n times.  Decline, as hb-raster and the PDF backend do, so
+   * the caller paints it inline under the limits of the current walk. */
+  return false;
 }
 
 

@@ -1,8 +1,9 @@
 ### Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved. ###
-project(zstd VERSION 1.5.7)
+project(zstd VERSION 1.6.0)
 include("${CMAKE_CURRENT_LIST_DIR}/../../configuration/UnityBuild.cmake")
 add_library(zstd STATIC src/zstd.c)
 target_include_directories(zstd PUBLIC ${CMAKE_CURRENT_LIST_DIR}/inc)
+target_link_libraries(zstd PRIVATE nwb::xxhash)
 
 if(UNIX)
     find_package(Threads REQUIRED)

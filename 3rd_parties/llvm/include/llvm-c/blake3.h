@@ -1,13 +1,13 @@
 /*===-- llvm-c/blake3.h - BLAKE3 C Interface ----------------------*- C -*-===*\
 |*                                                                            *|
 |* Released into the public domain with CC0 1.0                               *|
-|* See 'llvm/lib/Support/BLAKE3/LICENSE' for info.                            *|
+|* See '3rd_parties/blake3/LICENSE_CC0' for info.                             *|
 |* SPDX-License-Identifier: CC0-1.0                                           *|
 |*                                                                            *|
 |*===----------------------------------------------------------------------===*|
 |*                                                                            *|
 |* This header declares the C interface to LLVM's BLAKE3 implementation.      *|
-|* Original BLAKE3 C API: https://github.com/BLAKE3-team/BLAKE3/tree/1.3.1/c  *|
+|* Original BLAKE3 C API: https://github.com/BLAKE3-team/BLAKE3/tree/1.8.7/c  *|
 |*                                                                            *|
 |* Symbols are prefixed with 'llvm' to avoid a potential conflict with        *|
 |* another BLAKE3 version within the same program.                            *|
@@ -18,6 +18,7 @@
 #define LLVM_C_BLAKE3_H
 
 #include "llvm-c/Visibility.h"
+#include <blake3.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -25,35 +26,15 @@
 extern "C" {
 #endif
 
-#define LLVM_BLAKE3_VERSION_STRING "1.8.2"
-#define LLVM_BLAKE3_KEY_LEN 32
-#define LLVM_BLAKE3_OUT_LEN 32
-#define LLVM_BLAKE3_BLOCK_LEN 64
-#define LLVM_BLAKE3_CHUNK_LEN 1024
-#define LLVM_BLAKE3_MAX_DEPTH 54
+#define LLVM_BLAKE3_VERSION_STRING BLAKE3_VERSION_STRING
+#define LLVM_BLAKE3_KEY_LEN BLAKE3_KEY_LEN
+#define LLVM_BLAKE3_OUT_LEN BLAKE3_OUT_LEN
+#define LLVM_BLAKE3_BLOCK_LEN BLAKE3_BLOCK_LEN
+#define LLVM_BLAKE3_CHUNK_LEN BLAKE3_CHUNK_LEN
+#define LLVM_BLAKE3_MAX_DEPTH BLAKE3_MAX_DEPTH
 
-// This struct is a private implementation detail. It has to be here because
-// it's part of llvm_blake3_hasher below.
-typedef struct {
-  uint32_t cv[8];
-  uint64_t chunk_counter;
-  uint8_t buf[LLVM_BLAKE3_BLOCK_LEN];
-  uint8_t buf_len;
-  uint8_t blocks_compressed;
-  uint8_t flags;
-} llvm_blake3_chunk_state;
-
-typedef struct {
-  uint32_t key[8];
-  llvm_blake3_chunk_state chunk;
-  uint8_t cv_stack_len;
-  // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
-  // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
-  // requires a 4th entry, rather than merging everything down to 1, because we
-  // don't know whether more input is coming. This is different from how the
-  // reference implementation does things.
-  uint8_t cv_stack[(LLVM_BLAKE3_MAX_DEPTH + 1) * LLVM_BLAKE3_OUT_LEN];
-} llvm_blake3_hasher;
+typedef blake3_chunk_state llvm_blake3_chunk_state;
+typedef blake3_hasher llvm_blake3_hasher;
 
 LLVM_C_ABI const char *llvm_blake3_version(void);
 LLVM_C_ABI void llvm_blake3_hasher_init(llvm_blake3_hasher *self);

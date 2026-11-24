@@ -708,7 +708,6 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
     const u32 invalidCaseCount = 18u;
     for(u32 variant = 0u; variant < invalidCaseCount; ++variant){
         const ScopedTestTrace trace(variant);
-        const ArenaMemoryStats before = outputArena.memoryStats();
         const usize overLimitGroupCount = 9u;
         usize reportedSize = fixture.sfnt.size();
         b8 present = true;
@@ -741,6 +740,7 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
         TestValueSlot<Vector<u8>> outputSlot;
         mut Vector<u8> output = outputSlot.constructIn(outputArena);
         const Span<PreparedFontImageView> allViews = views;
+        const ArenaMemoryStats before = outputArena.memoryStats();
         const b8 accepted = WritePreparedFontSource(TestByteView(fixture.sfnt, reportedSize, present), faceIndex, allViews.first(groupCount), output).has_value();
         EXPECT_FALSE(accepted);
         EXPECT_EQ(outputArena.memoryStats().allocationCount, before.allocationCount);

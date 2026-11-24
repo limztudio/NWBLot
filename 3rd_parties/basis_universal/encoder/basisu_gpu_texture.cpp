@@ -1224,11 +1224,12 @@ namespace basisu
 
 		if ((m_fmt == texture_format::cPVRTC1_4_RGB) || (m_fmt == texture_format::cPVRTC1_4_RGBA))
 		{
+			// Both grids are at least 2x2 blocks (see init() and pvrtc4_image::resize()).
 			pvrtc4_image pi(m_width, m_height);
-			
+
 			if (get_total_blocks() != pi.get_total_blocks())
 				return false;
-			
+
 			memcpy((void *)&pi.get_blocks()[0], (const void *)get_ptr(), get_size_in_bytes());
 
 			pi.deswizzle();
@@ -2893,23 +2894,16 @@ namespace basisu
 		else
 			printf("  Dimensions   : %ux%u\n", w, h);
 		printf("  Mip levels   : %u\n", mips);
-		// tinydds reports 0 array slices for a non-array texture; show 1 for clarity.
+		// tinydds reports 0 array slices for legacy (non-DX10) files and for older DX10 files that store arraySize 0 for a non-array texture
+		// (including basisu's own, before its writer was fixed); show 1 for clarity.
 		const uint32_t num_slices = maximum<uint32_t>(1, slices);
 		if (is_cube)
 			printf("  Array slices : %u cube(s) x 6 faces = %u image(s) per mip\n", num_slices, num_slices * 6);
 		else
 			printf("  Array slices : %u\n", num_slices);
 		printf("  Cubemap      : %s\n", is_cube ? "yes" : "no");
-		// "Array" reflects a genuine multi-element array. tinydds's IsArray() is true for ANY DX10 file
-		// (arraySize>=1), so without care a plain single 2D texture or a single cubemap would falsely read
-		// "yes". For a cubemap, array-ness means more than one cube (slices > 1). For a 2D texture, annotate
-		// the DX10 1-element quirk ("yes (1 element)") rather than contradict "Texture type : 2D".
-		if (is_cube)
-			printf("  Array        : %s\n", (num_slices > 1) ? "yes" : "no");
-		else if (is_array && (num_slices == 1))
-			printf("  Array        : yes (1 element)\n");
-		else
-			printf("  Array        : %s\n", is_array ? "yes" : "no");
+		// "Array" means more than one element (more than one cube, for a cubemap): TinyDDS_IsArray() is arraySize > 1.
+		printf("  Array        : %s\n", is_array ? "yes" : "no");
 		if (pFmtStr)
 			printf("  Format       : %s  [tinydds %u / 0x%X]\n", pFmtStr, fmt, fmt);
 		else

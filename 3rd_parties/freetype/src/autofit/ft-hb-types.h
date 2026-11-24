@@ -84,7 +84,7 @@ typedef enum {
 } hb_memory_mode_t;
 
 #define HB_NO_SINGLE_HEADER_ERROR
-#include "hb-script-list.h"
+#include <hb-script-list.h>
 #undef HB_NO_SINGLE_HEADER_ERROR
 
 typedef const struct hb_language_impl_t *hb_language_t;

@@ -92,8 +92,10 @@
 #        define vsnprintf _vsnprintf
 #      endif
 #    endif
-#  elif !defined(__STDC_VERSION__) || __STDC_VERSION__-0 < 199901L
-/* Otherwise if C89/90, assume no C99 snprintf() or vsnprintf() */
+#  elif (!defined(__STDC_VERSION__) || __STDC_VERSION__-0 < 199901L) && \
+        (!defined(__cplusplus) || __cplusplus < 201103L)
+/* Otherwise if C89/90 (and not C++11 or later), assume no C99 snprintf() or
+   vsnprintf() */
 #    ifndef NO_snprintf
 #      define NO_snprintf
 #    endif
@@ -126,8 +128,8 @@
 #  include <windows.h>
 #  define zstrerror() gz_strwinerror((DWORD)GetLastError())
 #else
+#  include <errno.h>
 #  ifndef NO_STRERROR
-#    include <errno.h>
 #    define zstrerror() strerror(errno)
 #  else
 #    define zstrerror() "stdio error (consult errno)"

@@ -13,14 +13,14 @@ include(CMakePushCheckState)
 find_package(Threads REQUIRED)
 
 set(PACKAGE_NAME "LLVM")
-set(PACKAGE_VERSION "23.1.5")
-set(PACKAGE_STRING "LLVM 23.1.5")
+set(PACKAGE_VERSION "23.1.6")
+set(PACKAGE_STRING "LLVM 23.1.6")
 set(PACKAGE_BUGREPORT "https://github.com/llvm/llvm-project/issues/")
 set(BUG_REPORT_URL "https://github.com/llvm/llvm-project/issues/")
 
 set(LLVM_VERSION_MAJOR 23)
 set(LLVM_VERSION_MINOR 1)
-set(LLVM_VERSION_PATCH 5)
+set(LLVM_VERSION_PATCH 6)
 set(LLVM_DEFAULT_TARGET_TRIPLE "")
 set(LLVM_ENABLE_THREADS 1)
 set(LLVM_HAS_ATOMICS 1)
@@ -195,7 +195,7 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/cmake/Config/config.h.cmake" "${_nwb_l
 configure_file("${CMAKE_CURRENT_LIST_DIR}/cmake/Config/abi-breaking.h.cmake" "${_nwb_llvm_gen_inc}/llvm/Config/abi-breaking.h")
 
 file(CONFIGURE OUTPUT "${_nwb_llvm_gen_inc}/llvm/Support/Extension.def" CONTENT "//extension handlers\n#undef HANDLE_EXTENSION\n" @ONLY)
-file(CONFIGURE OUTPUT "${_nwb_llvm_gen_inc}/llvm/Support/VCSRevision.h" CONTENT "#define LLVM_REVISION \"392dfff97d29b59d77e5cac6d4b6ef2585fe7117\"\n#define LLVM_REPOSITORY \"https://github.com/llvm/llvm-project.git\"\n" @ONLY)
+file(CONFIGURE OUTPUT "${_nwb_llvm_gen_inc}/llvm/Support/VCSRevision.h" CONTENT "#define LLVM_REVISION \"5b10d2d74929eae78912771222c9855af97496f4\"\n#define LLVM_REPOSITORY \"https://github.com/llvm/llvm-project.git\"\n" @ONLY)
 
 include("${CMAKE_CURRENT_LIST_DIR}/sources.cmake")
 
@@ -223,10 +223,6 @@ target_compile_definitions(nwb_vendor_llvm
         __STDC_CONSTANT_MACROS
         __STDC_FORMAT_MACROS
         __STDC_LIMIT_MACROS
-        BLAKE3_NO_AVX512
-        BLAKE3_NO_AVX2
-        BLAKE3_NO_SSE41
-        BLAKE3_NO_SSE2
 )
 
 if(NWB_COMPILER_FRONTEND_MSVC)
@@ -238,9 +234,12 @@ else()
 endif()
 
 target_link_libraries(nwb_vendor_llvm
+    PUBLIC
+        nwb::blake3
     PRIVATE
         nwb::siphash
         nwb::llvm_libc
+        nwb::xxhash
 )
 
 if(WIN32)
@@ -280,6 +279,7 @@ nwb_skip_unity_build_sources(
     "${CMAKE_CURRENT_LIST_DIR}/lib/Support/MSP430AttributeParser.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lib/Support/ManagedStatic.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lib/Support/RewriteRope.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/lib/Support/xxhash.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lib/TargetParser/AMDGPUTargetParser.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lib/TargetParser/CSKYTargetParser.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lib/TargetParser/X86TargetParser.cpp"

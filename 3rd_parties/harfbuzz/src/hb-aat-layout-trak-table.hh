@@ -156,10 +156,13 @@ struct TrackData
     float t0 = trackTable[i].get_track_value ();
     float t1 = trackTable[j].get_track_value ();
 
-    float t = (track - t0) / (t1 - t0);
-
     float a = trackTable[i].get_value (ptem, base, size_table);
     float b = trackTable[j].get_value (ptem, base, size_table);
+
+    // Deal with font bugs.
+    if (unlikely (t0 == t1)) return (a + b) * 0.5f;
+
+    float t = (track - t0) / (t1 - t0);
     return a + t * (b - a);
   }
 
@@ -201,14 +204,16 @@ struct trak
     float ptem = font->ptem > 0.f ? font->ptem : HB_CORETEXT_DEFAULT_FONT_SIZE;
     return font->em_scalef_y ((this+vertData).get_tracking (this, ptem, track));
   }
-  hb_position_t get_tracking (hb_font_t *font, hb_direction_t dir, float track = 0.f) const
+  hb_position_t get_coretext_tracking (hb_font_t *font, hb_direction_t dir, float track = 0.f) const
   {
 #ifndef HB_NO_STYLE
     if (!font->face->table.STAT->has_data ())
       return 0;
+    /* CoreText adds horizontal tracking in both orientations. */
+    float ptem = font->ptem > 0.f ? font->ptem : HB_CORETEXT_DEFAULT_FONT_SIZE;
+    float value = (this+horizData).get_tracking (this, ptem, track);
     return HB_DIRECTION_IS_HORIZONTAL (dir) ?
-      get_h_tracking (font, track) :
-      get_v_tracking (font, track);
+      font->em_scalef_x (value) : font->em_scalef_y (value);
 #else
     return 0;
 #endif
@@ -236,7 +241,7 @@ struct trak
     {
       hb_position_t advance_to_add = get_v_tracking (c->font, track);
       foreach_grapheme (buffer, start, end)
-	buffer->pos[start].y_advance = hb_saturate_add (buffer->pos[start].y_advance, advance_to_add);
+	buffer->pos[start].y_advance = hb_saturate_sub (buffer->pos[start].y_advance, advance_to_add);
     }
 
     return_trace (true);

@@ -23,10 +23,6 @@
 #include <unordered_set>
 #include <unordered_map>
 
-#if BASISU_SUPPORT_SSE
-#define CPPSPMD_NAME(a) a##_sse41
-#include "basisu_kernels_declares.h"
-#endif
 
 #define BASISU_FRONTEND_VERIFY(c) do { if (!(c)) handle_verify_failure(__LINE__); } while(0)
 
@@ -1838,9 +1834,6 @@ namespace basisu
 								}
 								else
 								{
-#if BASISU_SUPPORT_SSE
-									find_lowest_error_perceptual_rgb_4_N_sse41((int64_t*)&total_err, subblock_colors, pSubblock_pixels, num_subblock_pixels, best_cluster_err);
-#endif
 								}
 							}
 							else
@@ -1866,9 +1859,6 @@ namespace basisu
 								}
 								else
 								{
-#if BASISU_SUPPORT_SSE
-									find_lowest_error_linear_rgb_4_N_sse41((int64_t*)&total_err, subblock_colors, pSubblock_pixels, num_subblock_pixels, best_cluster_err);
-#endif
 								}
 							}
 #endif

@@ -6,8 +6,6 @@
 # License: the .dll / .so are the redistributable portions per the bundled LICENSE; the headers and
 # import lib are build-time only. See LICENSE and nsight-aftermath-usage-guidelines.txt.
 
-set(_nwb_aftermath_include "${CMAKE_CURRENT_LIST_DIR}/include")
-
 if(WIN32 AND NWB_OUTPUT_ARCH STREQUAL "x64")
     set(_nwb_aftermath_runtime "${CMAKE_CURRENT_LIST_DIR}/lib/windows/x64/GFSDK_Aftermath_Lib.x64.dll")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NWB_OUTPUT_ARCH STREQUAL "x64")
@@ -16,13 +14,11 @@ else()
     set(_nwb_aftermath_runtime "")
 endif()
 
-add_library(nwb_vendor_aftermath_headers INTERFACE)
-target_include_directories(nwb_vendor_aftermath_headers SYSTEM INTERFACE "${_nwb_aftermath_include}")
+nwb_declare_vendor_headers(nwb_vendor_aftermath_headers nwb::aftermath_headers "${CMAKE_CURRENT_LIST_DIR}/include")
 if(_nwb_aftermath_runtime AND EXISTS "${_nwb_aftermath_runtime}")
     target_compile_definitions(nwb_vendor_aftermath_headers INTERFACE NWB_WITH_AFTERMATH=1)
     set_property(GLOBAL PROPERTY NWB_AFTERMATH_RUNTIME "${_nwb_aftermath_runtime}")
 endif()
-add_library(nwb::aftermath_headers ALIAS nwb_vendor_aftermath_headers)
 
 # Copy the Aftermath runtime next to ${target}'s executable so the dynamic load resolves it from the
 # application directory. No-op when the runtime is unavailable for the current platform.

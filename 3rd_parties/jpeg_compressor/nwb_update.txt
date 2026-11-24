@@ -1,0 +1,5 @@
+package: jpeg_compressor
+version: commit 92cb85398975de03581a57a2e61a9d4f54b37703
+updated_utc: 2026-11-24T06:08:01Z
+source: https://github.com/richgel999/jpeg-compressor/tree/92cb85398975de03581a57a2e61a9d4f54b37703
+notes: Official JPEG decoder jpgd.cpp and jpgd.h. The independent upstream replaces the snapshot from Basis Universal. The STATIC wrapper uses the scalar path on all architectures, so optional jpgd_idct.h is pruned with the unused JPEG encoder, PNG/STB example dependencies and utilities. Retain the Basis Universal copyright notice and the narrow-image chroma filter guard and WASI fallback from its decoder. Correct the explicitly zero-filled scanline allocations and remove the impossible bitmask check in the Huffman table header. The original decoder license notice is in jpgd.cpp; LICENSE carries the Apache-2.0 text.

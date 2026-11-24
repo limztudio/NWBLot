@@ -37,8 +37,8 @@ add_subdirectory(tinyxml2)
 add_subdirectory(nlohmann_json)
 add_subdirectory(rapidjson)
 add_subdirectory(zlib)
-add_subdirectory(freetype)
 add_subdirectory(harfbuzz)
+add_subdirectory(freetype)
 add_subdirectory(vulkan_headers)
 add_subdirectory(volk)
 add_subdirectory(aftermath)
@@ -49,6 +49,8 @@ add_subdirectory(libmicrohttpd)
 add_subdirectory(oneTBB)
 add_subdirectory(siphash)
 add_subdirectory(llvm_libc)
+add_subdirectory(blake3)
+add_subdirectory(xxhash)
 add_subdirectory(llvm)
 add_subdirectory(libclang)
 add_subdirectory(googletest)                       # unit-test framework (gtest) for the engine test suites
@@ -67,6 +69,8 @@ foreach(_nwb_engine_static_vendor_target
     nwb_vendor_freetype
     nwb_vendor_harfbuzz
     nwb_vendor_wmi
+    nwb_vendor_xxhash
+    nwb_vendor_blake3
     nwb_vendor_llvm
     nwb_vendor_libclang
 )
@@ -75,7 +79,9 @@ endforeach()
 
 # Radeon GPU Detective (RGD) in-process .rgd decoder + its vendored dependencies.
 add_subdirectory(zstd)                             # rdf's compression backend (flattened out of rdf/imported)
+add_subdirectory(jpeg_compressor)
 add_subdirectory(basis_universal)                  # UASTC encoder; shares miniz/zstd and official image codecs
+nwb_match_engine_runtime(nwb_vendor_jpeg_compressor)
 nwb_match_engine_runtime(nwb_vendor_basis_universal)
 add_subdirectory(rdf)
 add_subdirectory(comgr)

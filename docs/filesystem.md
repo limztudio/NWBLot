@@ -94,9 +94,15 @@ custom implementation and may be a no-op.
 
 `readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes; reading beyond EOF returns an unexpected failure. Check admission before reading the count; zero is a successful value. A nonzero capacity requires a valid buffer.
 
-`readFile(path, byteContainer)` obtains the file size, sizes the caller's container, and reads the complete
-payload through the virtual range operation. It clears the container on failure. Container overloads require
-one-byte element types.
+`readFile(path, byteContainer)` clears and sizes the caller's container through the virtual
+`readWholeFile` operation, then checks that the returned byte count matches. It clears the container on
+failure. The default `readWholeFile` implementation queries the size and calls the virtual range read;
+backends may override it. Container overloads require one-byte element types.
+
+`visitWholeFile` optionally lends a byte span to a synchronous visitor. The default implementation returns
+an empty `Optional` when it cannot provide a view. The volume backend can visit an empty file or a file
+contained in one mapped segment of a read-only mount; a present boolean carries the visitor's result or a
+read failure. A caller must not retain the borrowed span after the callback.
 
 `openFile(path)` returns `Expected<FileCursor>` bound to that filesystem without owning backend resources. Cursor reads return `Expected<usize>` and advance by
 the number of bytes actually read. `seekFile(cursor, offset, origin)` supports `Begin`, `Current`, and `End`,
@@ -105,9 +111,11 @@ without changing the cursor. `closeFile` clears the cursor. Cursors do not retai
 all cursors when unmounting, remounting, or destroying it.
 
 The default backend uses a reader/writer lock for mutable volume state: reads can share the lock and writes take it exclusively. Some read paths omit the lock for an immutable read-only mount. A cursor is caller-owned
-and requires caller synchronization when shared between threads. Whole-container reads consist of a size
-query followed by a range read; clients requiring a stable snapshot must prevent concurrent replacement or
-removal of that file for the complete operation. Runtime asset volumes are normally immutable while mounted.
+and requires caller synchronization when shared between threads. On mutable volume mounts, the volume
+backend holds its shared lock across whole-file lookup, buffer preparation, and copying. The interface's
+default implementation performs separate size and range operations, so clients using that implementation
+must prevent concurrent replacement or removal when they need a stable snapshot. Runtime asset volumes
+are normally immutable while mounted.
 Writable access to a volume requires one owner across filesystem instances and processes; their locks do not
 coordinate with one another. If compaction cannot restore a failed publication, it unmounts the affected
 instance and retains its stage and backup directories for recovery. A later operation using the same work

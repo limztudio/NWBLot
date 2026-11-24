@@ -117,7 +117,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `return`
   - `    value.valid() && value.visible`
   - `;`
-- Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
+- Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchArena> visitedVertices{scratchArena};`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
 - Prefer single-line logger macro and `.adhd` diagnostic calls (`error`, `warning`, `info`, `assert`) when they contain a single message and a small number of short formatting arguments.
 - For multiline logger macro or `.adhd` diagnostic calls with formatting arguments, never use trailing commas after the message or between formatting arguments; put every subsequent formatting argument on its own continuation line with a leading comma (whether the message is on the opener line or on the first indented line):
   - `NWB_LOGGER_WARNING(FOUNDATION_TEXT("message {}")`
@@ -302,7 +302,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - For borrowed contiguous sequences, prefer `Span<const T>` (or `Span<T>` for in-place element mutation without resizing) from `global/span.h` over owning container references (`const Vector<T, Arena>&`, `Vector<T, Arena>&`, `const FixedVector<T, N>&`, `const Array<T, N>&`, or domain vector aliases) when the callee only reads or mutates existing elements in place and does not resize, reallocate, or transfer ownership. This avoids container-header indirection, decouples APIs from specific arena/allocator types, eliminates arena-only template instantiations, and lets callers pass stack arrays, slices, or scratch-backed buffers without copying. Keep owning container references or value/rvalue parameters when the function mutates container size/capacity (`push_back`, `resize`, `clear`, `reserve`, `erase`, `assign`, `swap`) or takes ownership, and ensure any stored `Span` borrows storage that outlives its use without reallocation invalidation.
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing, add a focused project-level feature under `global/` and use it rather than repeating direct `std::` usage across modules or tests. Do not add a test-local standard-library alias to bypass this rule.
-- For function-local containers that are only temporary working storage and do not escape the function, prefer `Core::Alloc::ScratchArena` with `Core::Alloc::ScratchAllocator` over the default heap allocator.
+- For function-local containers that are only temporary working storage and do not escape the function, prefer an arena-backed container using `Core::Alloc::ScratchArena`.
   - Keep default/custom owning allocators for containers that are returned, moved into persistent asset/component/runtime state, stored as members, or passed to APIs that intentionally own the result.
   - When using scratch-backed containers, reserve or size them so normal execution does not depend on interleaved reallocations.
 - For non-temporary containers inside a subsystem/domain that already owns an arena, use that domain arena explicitly (`ContainerDetail::ArenaAllocator`, `Alloc::PersistentArena`, or a local domain alias) instead of the default allocator.
@@ -411,7 +411,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Use the shared CPU task scheduler and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
-- For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `GlobalArena` or another owning domain arena only when data must outlive the current scope.
+- For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena`; use `GlobalArena` or another owning domain arena only when data must outlive the current scope.
 - Data captured by asynchronous tasks/callbacks submitted to `CpuTaskScheduler`/`CpuTaskScope` can outlive the submitting scope; do not back escaping captures with `ScratchArena`. Synchronous task batches may reference local scratch storage only when their complete task subtree joins before that storage is released.
 - Do not repeat structural validation in hot paths that run every frame or for many draw/dispatch items.
   - Move asset/payload/layout validation to cook, load, resource creation, or cache insertion time whenever possible.
@@ -424,9 +424,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Do not hide repeated `LoadFloat()` / `StoreFloat()` traffic inside small math helpers called from loops.
   - Load from struct or asset storage at the call-site boundary, keep intermediate values in SIMD variables while composing operations, then store once when the result leaves the SIMD domain.
   - Boundary helpers with explicit names such as `LoadFoo(...)` or `StoreFoo(...)` are fine, but accumulation, validation, blending, and transform helpers should operate directly on already-loaded vectors.
-- Use `StreamFloat()` only for aligned, write-only output streams that are large enough to justify non-temporal stores.
-  - Do not use streaming stores for values that will be read back soon, read-modify-write accumulators, or unaligned `Float*U` payloads.
-  - Call `StreamFloatFence()` before publishing streamed data across a synchronization boundary.
+- Use `StreamDouble()` only for aligned, write-only output streams that are large enough to justify non-temporal stores.
+  - Do not use streaming stores for values that will be read back soon, read-modify-write accumulators, or unaligned `Double*U` payloads.
+  - Call `StreamDoubleFence()` before publishing streamed data across a synchronization boundary.
 
 ## 10. Practical checklist for new code
 - Before every code create/modify action, re-read the current `.helper/standard.md` and apply it as the source of truth (do not rely on memory).
@@ -489,53 +489,15 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - Definition order: `Y()`, then `X()`
 
 ## 14. Mutex Selection Guide (`global/sync.h`)
-- Default choice: use `Futex` for non-recursive mutual exclusion in engine/runtime code.
-- Use `ScopedLock`/`LockGuard` for simple scope-based locking; use `UniqueLock` only when lock state must be manually controlled (unlock/relock, condition wait patterns).
-
-### 14.1 Quick decision order
-- If the same thread must re-enter the same lock by design, use `RecursiveMutex`.
-- Else if the lock is read-mostly and read/write split is meaningful, use a shared mutex type:
-  - `SharedMutex` for very short read/write critical sections and low latency spin behavior.
-  - `SharedQueuingMutex` when fairness under contention is more important than lowest raw latency.
-- Else if the lock protects initialization/static allocator bootstrap memory with zero-init/no-constructor constraints, use `MallocMutex`.
-- Else if the critical section is extremely short and never blocks/sleeps/allocates, use `SpinMutex`.
-- Else if contention is high and fairness matters for short sections, use `QueuingMutex`.
-- Otherwise, use `Futex`.
-
-### 14.2 Type-by-type guidance
-- `Futex`:
-  - Best for general-purpose engine locks.
-  - Good when contention may happen and threads should park instead of hot-spinning.
-  - Preferred default for `m_mutex` fields in systems code.
-- `SpinMutex`:
-  - Use only for tiny critical sections (few instructions, metadata/state flips).
-  - Do not hold across calls that may block, allocate heavily, or trigger OS waits.
-- `QueuingMutex`:
-  - Use for short sections with sustained contention where FIFO-like fairness helps avoid starvation.
-- `SharedMutex` (`tbb::spin_rw_mutex`):
-  - Use for read-heavy data with tiny read-side critical sections and infrequent writes.
-  - Avoid if read sections can become long or block.
-- `SharedQueuingMutex` (`tbb::queuing_rw_mutex`):
-  - Use for read-heavy scenarios with heavier contention/fairness needs than `SharedMutex`.
-- `RecursiveMutex`:
-  - Use only when reentrancy is required by API/call-graph design.
-  - Do not use as a workaround for lock-order or ownership bugs.
-- `MallocMutex`:
-  - Use only where zero-initialized storage and constructor-free mutex behavior is required (allocator/bootstrap/early init paths).
-
-### 14.3 Condition variable pairing
-- Prefer `ConditionVariableAny` with `Futex`, `SpinMutex`, `QueuingMutex`, `RecursiveMutex`, or TBB mutex wrappers.
-- `ConditionVariable` (`std::condition_variable`) requires `std::unique_lock<std::mutex>`; do not pair it with `Futex`/TBB mutex types.
-
-### 14.4 Practical defaults
-- If unsure, start with `Futex`.
-- Upgrade to `QueuingMutex`/`SharedQueuingMutex` only after observing contention/fairness issues.
-- Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.
+- Use `Futex` for general non-recursive mutual exclusion. It spins briefly and then waits when contended.
+- Use `ScopedLock` or `FutexGuard` for scope-based locking; use `UniqueLock` when a condition wait or explicit unlock/relock requires it.
+- Use `RecursiveMutex` only when reentry is required by the API or call graph. Use `MallocMutex` for allocator bootstrap paths that require zero-initialized storage.
+- Pair `ConditionVariableAny` with a compatible lock and mutex; choose the lock lifetime and ordering to match the protected state.
 
 ## 15. Shader And Asset Text Style
 - Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `CoolStuff/Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
 - Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
-- Shader volume cooking calls the single `SlangShaderCompiler` module directly for fingerprinting and compilation. Keep source scanning and include resolution in the separate `ShaderSourceDependencies` module, shared by dependency planning and BOM overlays. `ShaderCook` owns metadata, define variants, dependencies, and checksums; it consumes the already-parsed metascript `Document` from discovery. Do not retain unused compiler interfaces, factories, injection paths, compile forwarding methods, or file-parsing convenience overloads. Keep test-owned file parsing helpers under `tests/`, and preserve all 14 current physical stages even if a stage has no authored fixture yet.
+- Shader volume cooking calls `ComputeSlangCompilerFingerprint` and `CompileSlangShaderVariant` in `cook_slang_compiler.adhd`. Keep source scanning and include resolution in `source_dependencies.adhd`, shared by dependency planning and BOM overlays. `ShaderCook` owns metadata, define variants, dependencies, and checksums; it consumes the already-parsed metascript `Document` from discovery. Do not retain unused compiler interfaces, factories, injection paths, compile forwarding methods, or file-parsing convenience overloads. Keep test-owned file parsing helpers under `tests/`, and preserve all 14 current physical stages even if a stage has no authored fixture yet.
 - Shader source checksums include the configured compiler executable content/version and shared compiler arguments, capabilities, stage mappings, and optimization options; compute that fingerprint once per nonempty shader-volume append. Store each shader cache record as one source-checksum-named `.spv`, with no paired checksum sidecar. Validate the complete bounded SPIR-V stream and exact requested physical-stage entry point for both fresh output and cache hits before publishing. Compile in a unique process/invocation directory, require readable diagnostics, and atomically promote validated output; clean temporary diagnostics and BOM overlays through RAII.
 - Shader dependency scanning splices escaped line endings and masks comments before recognizing directives. Track literal includes and reject unplanned macro includes, `#include_next`, and `#import` rather than silently omitting dependencies. Explicit caller-declared macro includes are allowed only when that caller separately prepares and tracks the generated source, as with the current CSG evaluator contract.
 - Detect BOM presence while reading dependency bytes for their checksum and carry that result through preparation. Only BOM inputs need a copied, stripped source overlay; preserve relative include hierarchy and encode absolute-root bytes without placing platform root syntax in directory names. Authored define names must be ASCII shader identifiers; reject semicolons, NUL/CR/LF, and leading/trailing whitespace in values that cannot round-trip the variant grammar.
@@ -575,7 +537,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Avoid macro-generated function signatures. Use explicit declarations for shader authoring hooks unless a Slang/preprocessor constraint requires a macro.
 - Do not leave prose comments in shader sources; express resource packing, layout, and contract intent through clear names and typed declarations.
 - Declare each shader with its concrete physical-stage asset type: `vertex_shader`, `hull_shader`, `domain_shader`, `geometry_shader`, `pixel_shader`, `compute_shader`, `amplification_shader`, `mesh_shader`, `ray_generation_shader`, `any_hit_shader`, `closest_hit_shader`, `miss_shader`, `intersection_shader`, or `callable_shader`. The declaration determines its stage; reject the retired generic `shader` declaration and authored `asset.stage`, including a matching redundant value. Keep metadata small and declarative with `asset.entry_point`, optional `asset.ray_query`, `asset.include_roots`, `asset.defines`, and the supported optimization/mesh choices.
-- Shader runtime types belong in `impl/assets_shader`: `interface IShader` defines the pure entry-point/bytecode/stage contract (`entryPoint()`, `bytecode()`, `valid()`, `stage()`), while final `[arena, asset("...")]` concrete physical-stage classes own `ShaderPayload` storage and concrete codecs and derive their stage via `s_ShaderAssetTypes` and `RequireAssetTypeIndex`. Reuse the shared typed implementation, binary payload layout, serialization, compiler, and variant machinery. Use `AssetRef<PixelShader>`, `AssetRef<ComputeShader>`, and other concrete references where the physical stage is known; reserve `AssetRef<IShader>` for heterogeneous storage. Typed loaders derive the stage; an explicitly named dynamic-stage loader is allowed for genuinely heterogeneous requests. Do not restore an untyped `Shader` asset, unspecialized codec, or stage-taking overload as compatibility.
+- Shader runtime types belong in `impl/assets_shader`: `interface IShader` defines the pure `entryPoint()`, `bytecode()`, and `loadBinary(...)` contract, while `[arena, asset("...")]` concrete physical-stage classes own their entry-point ranges and bytecode and use stage-specific codecs and loaders. Reuse the shared typed implementation, binary payload layout, serialization, compiler, and variant machinery. Use `AssetRef<PixelShader>`, `AssetRef<ComputeShader>`, and other concrete references where the physical stage is known; reserve `AssetRef<IShader>` for heterogeneous storage. Typed loaders derive the stage; an explicitly named dynamic-stage loader is allowed for genuinely heterogeneous requests. Do not restore an untyped `Shader` asset, unspecialized codec, or stage-taking overload as compatibility.
 - Keep physical shader stage separate from its archive role. `mesh_compute` resolves `ComputeShader` assets, and `mesh_object_vertex` resolves a `VertexShader`; these role names do not create additional shader classes or authored stage fields. Material stage maps remain the supported semantic `mesh`/`ps` contract.
 - At concrete shader admission, validate the current payload and complete bounded SPIR-V instruction stream, and require the exact recorded entry point for that concrete physical stage before publishing any state. Preserve previously loaded entry-point/bytecode storage on failure. Consume byte views without alignment assumptions or a temporary word copy. Preserve backend module validation and the selected graphics boundary; keep admission validation out of steady draw/dispatch paths. The type split must not add per-object stage fields, duplicated bytecode, allocation layers, or per-frame virtual stage dispatch.
 
@@ -639,9 +601,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Support only current first-party APIs, authored schemas, binary layouts, CLI/config contracts, and prepared rendering contracts. Remove backward-compatibility readers, migrations, aliases, forwarding shims, deprecated overloads, and old-path adapters; migrate repository callers and generators to the canonical contract in the same change.
 - When retiring a path, remove its orphaned helpers, declarations, constants, test support, and build registrations together. Trace templates, macro expansion, generated shader consumers, and current authoring APIs as well as direct callers; a low reference count alone does not establish stale code. Retain current generic contracts and serialized identifiers, and remove reserved result-enum slots that existed only for an unused experiment when the enum has no wire-format consumer.
 - Before removing an apparently unused Python import, trace imports from that module, module-attribute access, and intentional reexports. Move dependent callers to the symbol's owning module, then import affected entry modules with their normal search paths. Syntax compilation alone does not verify importability.
-- Use types from their current owner instead of preserving retired namespace reexports. `NamedEnumCase` belongs to global scope in `global/text_utils.h`; use `::NamedEnumCase` rather than restoring `Core::Assets::NamedEnumCase`. The logger interface, registration guard, and severity type belong to `Core::Common` in `core/common/log.h`: `ILogger`, `LoggerRegistrationGuard`, and `LogType`. Do not restore their former `Log` adapters. Keep current logger-domain `LogArena`, `LogString`, and `BreakPolicy` policy aliases; trace their meaning before classifying an alias as backward compatibility.
+- Use types from their current owner instead of preserving retired namespace reexports. `NamedEnumCase` belongs to global scope in `global/text_utils.h`; use `::NamedEnumCase` rather than restoring `Core::Assets::NamedEnumCase`. The logger interface, registration guard, and severity type belong to `Core::Common` in `core/common/log.h`: `ILogger`, `LoggerRegistrationGuard`, and `LogType`. Do not restore their former `Log` adapters. Keep current logger-domain `LogArena` and `LogString` aliases and `Core::Common::LoggerBreakPolicy`; trace their meaning before classifying an alias as backward compatibility.
 - First-party compilation requires a Clang-based toolchain, enforced by CMake and `global/compile.h`. Preserve GNU-style Clang/AppleClang and clang-cl frontend support, plus the Windows/MSVC ABI, runtime, SDK, and frontend-specific flags. CMake owns real compiler/frontend detection; do not restore unused C++ compiler-ID/frontend adapter macros or native-MSVC compiler branches, including `NWB_COMPILER_IS_MSVC` and `NWB_COMPILER_MSVC`. Native `cl.exe` is outside the current compiler contract. Use Clang's supplied `__has_attribute`, `__has_builtin`, and `__has_declspec_attribute` queries directly instead of retaining non-Clang emulations.
-- First-party C++ requires C++23 or newer with the current standard-library features, including `std::expected` and `char8_t`. The filesystem `Path` API always accepts `char8_t` input, and `genericU8String()` always returns `std::u8string`; do not restore pre-`char8_t` language guards or alternate result types. Keep current SIMD capability selection and ABI/platform interoperability; remove unreachable older-compiler paths without altering active Clang operations.
+- First-party C++ requires C++23 or newer with the current standard-library features, including `std::expected` and `char8_t`. The arena-backed filesystem `Path` API accepts `char8_t` input and exposes native text through a borrowed `native()` view; preserve the arena and view lifetime contracts. Keep current SIMD capability selection and ABI/platform interoperability; remove unreachable older-compiler paths without altering active Clang operations.
 - CMake emits `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` directly. First-party headers must not infer those modes from `DEBUG`, `_DEBUG`, `NDEBUG`, or `_NDEBUG`; these external CRT/SDK spellings retain their own ownership. Build configuration names are exactly lowercase `dbg`, `opt`, and `fin`. In a single-config tree, omitted or explicitly empty `CMAKE_BUILD_TYPE` defaults to `dbg`; every nonempty unsupported value fails, including `Debug`, `Release`, unknown names, `OFF`, `0`, and case variants. Multi-config trees expose the same canonical names. Preserve imported third-party configuration mappings to vendor `Debug`/`Release` layouts; these are current dependency integration, not alternate first-party configuration names.
 - Validate internal protocol/binary versions at the existing admission boundary and reject every noncurrent version. Do not reinterpret old or unknown payloads as the current layout. Regenerate or recook old assets instead of retaining conversion code.
 - Do not silently fall back to an older API, guessed build artifact, or pre-graph recorder when required current preparation/discovery fails. Report the failure before publishing state or recording work. Keep normal omission defaults explicit in current contracts.

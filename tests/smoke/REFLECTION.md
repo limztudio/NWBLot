@@ -488,9 +488,10 @@ Two banks of 8x8 tile/surface-class entries occupy 172,832 bytes at 960x720,
 including their 16-byte headers, about 168.8 KiB. The 953x713 NPOT fixture has the
 same rounded tile extent. Existing classification and argument-building tasks
 write disjoint entry/header ranges; feedback adds no separate GPU dispatch.
-The shared parameter block is 176 bytes and diagnostic counters are 100 bytes
-(`NWB_REFLECTION_COUNTER_SIZE = 100u`, 25 `u32` counters in
-`impl/assets/graphics/reflection/frame_constants.h`).
+The shared parameter block is 176 bytes. The diagnostic readback covers 100 bytes
+(`NWB_REFLECTION_COUNTER_SIZE`, 25 `u32` counters); the allocated counter buffer
+is 104 bytes because it also contains the optical-candidate work counter at byte
+100. Both sizes are defined in `impl/assets/graphics/reflection/frame_constants.h`.
 The parameter block omits unused fields; its CPU mirror, shader declaration,
 upload size, and offset checks use the same current layout. Payload size is a
 layout fact; timing qualification remains separate.

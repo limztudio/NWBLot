@@ -37,7 +37,7 @@ Shader-volume cooking computes a fingerprint of the configured compiler executab
 
 Dependency discovery ignores commented directives and resolves literal includes across escaped line endings. Unplanned macro includes, `#include_next`, and `#import` are rejected so cache keys cannot omit compiler inputs. The existing generated CSG evaluator macro is explicitly declared by its preparation caller, which separately tracks its generated source. Language-level Slang import dependency discovery is not implemented; current first-party shaders use includes.
 
-Dependency checksums also record whether any compiler input has a UTF-8 BOM. Inputs without BOMs compile directly. BOM inputs use a stripped overlay that preserves nested relative includes and encodes each absolute root into a safe directory component. Temporary source overlays and diagnostics are cleaned on success and failure.
+Dependency checksums also record whether any compiler input has a UTF-8 BOM. Inputs without BOMs compile directly. BOM inputs use a stripped overlay that preserves nested relative includes and encodes each absolute root into a safe directory component. Cleanup of temporary source overlays and diagnostics is attempted on success and failure; a removal failure emits a diagnostic.
 
 Use `Core::Assets::AssetRef<ComputeShader>` or the required concrete type for a known stage. `ShaderAssetLoader::Load<ComputeShader>(...)` derives the stage from that type. A heterogeneous material stage array uses `AssetRef<IShader>`, while known AVBOIT pixel bindings use `AssetRef<PixelShader>`. `IShader` is abstract and is not registered as a generic loadable asset.
 

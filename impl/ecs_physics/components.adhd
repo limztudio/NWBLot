@@ -18,7 +18,6 @@ class PhysicsParentComponent{
     public Name parentEntityName = s_NameNone;
     public b8 inheritScale = true;
     public b8 attachColliderToParentBody = false;
-    public Name syncedParentName = s_NameNone;
 }
 
 class EcsRayCastHit{
@@ -49,7 +48,6 @@ class RigidBodyComponent{
     public f32x4 customInertiaDiag(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 customInertiaOffDiag(0.0f, 0.0f, 0.0f, 0.0f);
     public Name entityTag = s_NameNone;
-    public Name syncedEntityTag = s_NameNone;
     public b8 enableSleep = true;
     public b8 isAwake = true;
     public b8 isBullet = false;
@@ -138,7 +136,6 @@ class ColliderComponent{
     public i32 groupIndex = 0;
     public u64 userData = 0u;
     public Name entityTag = s_NameNone;
-    public Name syncedEntityTag = s_NameNone;
     public b8 isBox = true;
     public b8 isSensor = false;
     public b8 enableContactEvents = false;
@@ -181,8 +178,6 @@ class ColliderComponent{
     public ShapeId runtimeShapeId;
     public Vector<ShapeId> runtimeExtraShapeIds;
     public BodyId boundBodyId;
-    public f32x4 syncedWorldScale(1.0f, 1.0f, 1.0f, 0.0f);
-    public b8 hasSyncedWorldScale = false;
 }
 
 [arena, reflect]

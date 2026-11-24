@@ -4079,10 +4079,11 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         colAsset.component.radius = 0.5f;
         Entity applyEnt = tw.world.createEntity();
         mut ColliderComponent preCol = applyEnt.addComponent<ColliderComponent>();
-        preCol.syncedWorldScale = f32x4(2.0f, 2.0f, 2.0f, 0.0f);
-        preCol.hasSyncedWorldScale = true;
+        preCol.dirty = false;
+        preCol.runtimeShapeId = ShapeId(7u, 1u);
         colAsset.applyToEntity(applyEnt);
-        EXPECT_FALSE(applyEnt.getComponent<ColliderComponent>().hasSyncedWorldScale);
+        EXPECT_TRUE(applyEnt.getComponent<ColliderComponent>().dirty);
+        EXPECT_FALSE(applyEnt.getComponent<ColliderComponent>().runtimeShapeId.valid());
 
         JointComponentAsset jApplyAsset(Name("physics/audit_j_apply"));
         Entity entRefA = tw.world.createEntity();

@@ -744,7 +744,6 @@ class PhysicsComponentBinaryCodec{
         c.customInertiaDiag = bin.customInertiaDiag;
         c.customInertiaOffDiag = bin.customInertiaOffDiag;
         c.dirty = true;
-        c.syncedEntityTag = s_NameNone;
         if(!this.validRigidBodyData(c)){
             error("RigidBodyComponentAsset::loadComponentPayload failed: invalid rigid body fields");
             return MakeUnexpected(Failure());
@@ -2451,7 +2450,6 @@ class PhysicsComponentBinaryCodec{
             p.parentEntityName = s_NameNone;
         else
             p.parentEntityName = Name(bin.parentEntityNameHash);
-        p.syncedParentName = s_NameNone;
         if(!this.validPhysicsParentData(p)){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid parent component");
             return MakeUnexpected(Failure());

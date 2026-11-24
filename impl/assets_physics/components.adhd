@@ -21,7 +21,6 @@ class RigidBodyComponentAsset : IComponent{
         dst = this.component;
         dst.dirty = true;
         dst.runtimeBodyId = BodyId();
-        dst.syncedEntityTag = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
@@ -41,9 +40,6 @@ class ColliderComponentAsset : IComponent{
         dst.runtimeShapeId = ShapeId();
         dst.runtimeExtraShapeIds.clear();
         dst.boundBodyId = BodyId();
-        dst.syncedWorldScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-        dst.hasSyncedWorldScale = false;
-        dst.syncedEntityTag = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
@@ -88,7 +84,6 @@ class PhysicsParentComponentAsset : IComponent{
         mut PhysicsParentComponent dst = entity.addComponent<PhysicsParentComponent>();
         dst = this.component;
         dst.parent = s_InvalidEntityId;
-        dst.syncedParentName = s_NameNone;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
@@ -123,7 +118,6 @@ class CharacterControllerComponentAsset : IComponent{
         dst.dirty = true;
         dst.initialized = false;
         dst.syncFromTransform = false;
-        dst.hasPrevSnapshot = false;
         dst.def.ignoreBodyId = BodyId();
         dst.def.ignoreShapeId = ShapeId();
     }
@@ -160,7 +154,6 @@ class RagdollComponentAsset : IComponent{
         dst = this.component;
         dst.dirty = true;
         dst.initialized = false;
-        dst.syncedKinematic = false;
         dst.instance.reset();
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;

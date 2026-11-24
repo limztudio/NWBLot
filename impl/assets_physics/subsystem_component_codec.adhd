@@ -990,7 +990,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         r.dirty = true;
         r.initialized = false;
-        r.syncedKinematic = false;
         if(!this.validRagdollData(r)){
             error("RagdollComponentAsset::loadComponentPayload failed: invalid ragdoll fields");
             return MakeUnexpected(Failure());

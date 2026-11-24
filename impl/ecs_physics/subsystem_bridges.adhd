@@ -12,6 +12,7 @@ class EcsTrackedRagdoll{
     public Vector<BodyId> boneBodies;
     public Vector<ShapeId> boneShapes;
     public Vector<JointId> joints;
+    public b8 syncedKinematic = false;
 }
 
 void EraseSlotOwnerFromList(
@@ -197,19 +198,23 @@ BodyId ResolveEntityOwnPhysicsBody(
 }
 
 void ResolveArticulationProxyBodies(
+    in EntityID entity,
     mut ArticulationComponent ac,
     in HashMap<Name, EntityID> namedEntities,
     in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
     in PhysicsWorld physicsWorld,
-    in u64 namedEntitiesVersion
+    in u64 namedEntitiesVersion,
+    mut HashMap<EntityID, EcsArticulationProxySyncState> proxySyncStates
 ){
-    if(
-        ac.initialized
-        && !ac.dirty
-        && ac.syncedProxyTopologyVersion == physicsWorld.m_topologyVersion
-        && ac.syncedProxyNamedVersion == namedEntitiesVersion
-    )
-        return;
+    if(ac.initialized && !ac.dirty){
+        const auto syncIt = proxySyncStates.find(entity);
+        if(
+            syncIt != proxySyncStates.end()
+            && syncIt.value().syncedProxyTopologyVersion == physicsWorld.m_topologyVersion
+            && syncIt.value().syncedProxyNamedVersion == namedEntitiesVersion
+        )
+            return;
+    }
     for(usize i = 0u; i < ac.proxyEntityNames.size(); ++i){
         const Name targetName = ac.proxyEntityNames[i];
         if(targetName == s_NameNone)
@@ -228,8 +233,10 @@ void ResolveArticulationProxyBodies(
         if(ac.initialized && i < ac.articulation.linkDefs.size())
             ac.articulation.linkDefs[i].proxyBodyId = bId;
     }
-    ac.syncedProxyTopologyVersion = physicsWorld.m_topologyVersion;
-    ac.syncedProxyNamedVersion = namedEntitiesVersion;
+    EcsArticulationProxySyncState syncState;
+    syncState.syncedProxyTopologyVersion = physicsWorld.m_topologyVersion;
+    syncState.syncedProxyNamedVersion = namedEntitiesVersion;
+    proxySyncStates.insert_or_assign(entity, syncState);
 }
 
 void PruneRemovedEcsRagdolls(
@@ -333,17 +340,21 @@ void StepEcsPhysicsSubsystemBridges(
     if(charView.candidateCount() > 0u){
         in HashMap<EntityID, EcsEntityPhysicsRecord> charRecordsRef = entityRecords;
         charView.each(
-            lambda[in dt, in writeBackCharacters, in charRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+            lambda[in dt, in writeBackCharacters, in charRecordsRef, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut CharacterControllerComponent cc) -> void{
                 if(!cc.enabled)
                     return;
+                EcsCharacterControllerSyncState syncState;
+                const auto syncIt = scratch.characterSyncStates.find(entity);
+                if(syncIt != scratch.characterSyncStates.end())
+                    syncState = syncIt.value();
                 const u64 curTopoVer = physicsWorld.m_topologyVersion;
                 if(!cc.def.ignoreBodyId.valid()){
-                    if(!cc.ownBodyChecked || cc.ownBodyCheckedTopologyVersion != curTopoVer){
+                    if(!syncState.ownBodyChecked || syncState.ownBodyCheckedTopologyVersion != curTopoVer){
                         const BodyId ownBodyId = ResolveEntityOwnPhysicsBody(entity, world, charRecordsRef, physicsWorld);
                         if(ownBodyId.valid())
                             cc.def.ignoreBodyId = ownBodyId;
-                        cc.ownBodyChecked = true;
-                        cc.ownBodyCheckedTopologyVersion = curTopoVer;
+                        syncState.ownBodyChecked = true;
+                        syncState.ownBodyCheckedTopologyVersion = curTopoVer;
                     }
                 }
                 if(!cc.initialized || cc.dirty){
@@ -359,11 +370,11 @@ void StepEcsPhysicsSubsystemBridges(
                     cc.initialized = true;
                     cc.dirty = false;
                     cc.syncFromTransform = false;
-                    cc.prevPosition = cc.controller.position;
-                    cc.prevRotation = cc.controller.rotation;
-                    cc.currPosition = cc.controller.position;
-                    cc.currRotation = cc.controller.rotation;
-                    cc.hasPrevSnapshot = true;
+                    syncState.prevPosition = cc.controller.position;
+                    syncState.prevRotation = cc.controller.rotation;
+                    syncState.currPosition = cc.controller.position;
+                    syncState.currRotation = cc.controller.rotation;
+                    syncState.hasPrevSnapshot = true;
                 }
                 else{
                     if(!cc.controller.def.ignoreBodyId.valid() && cc.def.ignoreBodyId.valid())
@@ -374,28 +385,43 @@ void StepEcsPhysicsSubsystemBridges(
                             cc.controller.position = worldPose.transform.position;
                             cc.controller.rotation = f32x4(SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation)));
                         }
-                        cc.prevPosition = cc.controller.position;
-                        cc.prevRotation = cc.controller.rotation;
-                        cc.currPosition = cc.controller.position;
-                        cc.currRotation = cc.controller.rotation;
-                        cc.hasPrevSnapshot = true;
+                        syncState.prevPosition = cc.controller.position;
+                        syncState.prevRotation = cc.controller.rotation;
+                        syncState.currPosition = cc.controller.position;
+                        syncState.currRotation = cc.controller.rotation;
+                        syncState.hasPrevSnapshot = true;
                         cc.syncFromTransform = false;
                     }
                     else{
-                        cc.prevPosition = cc.controller.position;
-                        cc.prevRotation = cc.controller.rotation;
-                        cc.hasPrevSnapshot = true;
+                        syncState.prevPosition = cc.controller.position;
+                        syncState.prevRotation = cc.controller.rotation;
+                        syncState.hasPrevSnapshot = true;
                     }
                 }
                 cc.controller.update(physicsWorld, dt);
-                cc.currPosition = cc.controller.position;
-                cc.currRotation = cc.controller.rotation;
+                syncState.currPosition = cc.controller.position;
+                syncState.currRotation = cc.controller.rotation;
+                scratch.characterSyncStates.insert_or_assign(entity, syncState);
                 if(writeBackCharacters && world.hasComponent<TransformComponent>(entity)){
                     const Transform3D worldXf(VectorSingle(cc.controller.position), SafeNormalizeQuat(VectorSingle(cc.controller.rotation)));
                     WriteWorldPoseBackToEntityTransform(entity, worldXf, world);
                 }
             }
         );
+        if(!scratch.characterSyncStates.empty()){
+            scratch.deadRagdolls.clear();
+            for(in auto kv : scratch.characterSyncStates){
+                const EntityID ent = kv.first;
+                if(!world.alive(ent) || !world.hasComponent<CharacterControllerComponent>(ent))
+                    scratch.deadRagdolls.push_back(ent);
+            }
+            for(usize i = 0u; i < scratch.deadRagdolls.size(); ++i)
+                scratch.characterSyncStates.erase(scratch.deadRagdolls[i]);
+            scratch.deadRagdolls.clear();
+        }
+    }
+    else if(!scratch.characterSyncStates.empty()){
+        scratch.characterSyncStates.clear();
     }
 
     const auto vehicleView = world.view<VehicleComponent>();
@@ -486,10 +512,10 @@ void StepEcsPhysicsSubsystemBridges(
                     if(createdOk){
                         rc.initialized = true;
                         rc.dirty = false;
-                        rc.syncedKinematic = rc.kinematic;
                         if(rc.kinematic)
                             rc.instance.setKinematic(physicsWorld, true);
                         EcsTrackedRagdoll tracked;
+                        tracked.syncedKinematic = rc.kinematic;
                         RegisterTrackedRagdollSlots(entity, rc.instance, physicsWorld, bodyIndexToEntity, shapeIndexToEntity, jointIndexToEntity, tracked);
                         activeRagdolls.insert_or_assign(entity, tracked);
                     }
@@ -497,9 +523,12 @@ void StepEcsPhysicsSubsystemBridges(
                         rc.initialized = false;
                     }
                 }
-                else if(rc.kinematic != rc.syncedKinematic){
-                    rc.instance.setKinematic(physicsWorld, rc.kinematic);
-                    rc.syncedKinematic = rc.kinematic;
+                else{
+                    const auto trackedIt = activeRagdolls.find(entity);
+                    if(trackedIt != activeRagdolls.end() && rc.kinematic != trackedIt.value().syncedKinematic){
+                        rc.instance.setKinematic(physicsWorld, rc.kinematic);
+                        trackedIt.value().syncedKinematic = rc.kinematic;
+                    }
                 }
                 if(rc.initialized && rc.driveToPose && !rc.kinematic && !rc.targetPose.empty() && dt > 0.0f)
                     rc.instance.driveToPose(physicsWorld, Span<Transform3D>(rc.targetPose.data(), rc.targetPose.size()), rc.driveStrengthMultiplier, dt);
@@ -567,13 +596,13 @@ void StepEcsPhysicsSubsystemBridges(
         in HashMap<EntityID, EcsEntityPhysicsRecord> artRecordsRef = entityRecords;
         const u64 namedVersion = scratch.namedEntitiesVersion;
         artView.each(
-            lambda[in dt, in namedVersion, in artNamedRef, in artRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut ArticulationComponent ac) -> void{
+            lambda[in dt, in namedVersion, in artNamedRef, in artRecordsRef, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut ArticulationComponent ac) -> void{
                 if(!ac.enabled)
                     return;
                 if(!ac.initialized || ac.dirty){
                     EcsWorldPose rootPose;
                     const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, rootPose);
-                    ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion);
+                    ResolveArticulationProxyBodies(entity, ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion, scratch.articulationProxySyncStates);
                     Transform3D rootXf;
                     if(hasXf)
                         rootXf = rootPose.transform;
@@ -587,7 +616,7 @@ void StepEcsPhysicsSubsystemBridges(
                 }
                 else{
                     if(!ac.proxyEntityNames.empty())
-                        ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion);
+                        ResolveArticulationProxyBodies(entity, ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion, scratch.articulationProxySyncStates);
                     if(ac.isFixedBase){
                         EcsWorldPose rootPose;
                         if(ResolveEcsSubsystemWorldPose(entity, world, rootPose) && !EcsTransformsNearlyEqual(ac.articulation.baseTransform, rootPose.transform)){
@@ -603,6 +632,20 @@ void StepEcsPhysicsSubsystemBridges(
                 }
             }
         );
+        if(!scratch.articulationProxySyncStates.empty()){
+            scratch.deadRagdolls.clear();
+            for(in auto kv : scratch.articulationProxySyncStates){
+                const EntityID ent = kv.first;
+                if(!world.alive(ent) || !world.hasComponent<ArticulationComponent>(ent))
+                    scratch.deadRagdolls.push_back(ent);
+            }
+            for(usize i = 0u; i < scratch.deadRagdolls.size(); ++i)
+                scratch.articulationProxySyncStates.erase(scratch.deadRagdolls[i]);
+            scratch.deadRagdolls.clear();
+        }
+    }
+    else if(!scratch.articulationProxySyncStates.empty()){
+        scratch.articulationProxySyncStates.clear();
     }
 
     const auto softView = world.view<SoftBodyComponent>();
@@ -631,23 +674,35 @@ void WriteBackEcsRagdollRootPoses(mut World world, in PhysicsWorld physicsWorld)
     );
 }
 
-void ApplyInterpolatedCharacterTransformsToEcs(mut World world, in f32 interpolationAlpha){
+void ApplyInterpolatedCharacterTransformsToEcs(
+    mut World world,
+    in HashMap<EntityID, EcsCharacterControllerSyncState> charSyncStates,
+    in f32 interpolationAlpha
+){
+    if(charSyncStates.empty())
+        return;
     const auto charView = world.view<CharacterControllerComponent>();
     if(charView.candidateCount() == 0u)
         return;
     const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
     const VectorSingle tVec(alpha);
     charView.each(
-        lambda[in tVec, mut world](in EntityID entity, in CharacterControllerComponent cc) -> void{
-            if(!cc.enabled || !cc.initialized || !cc.hasPrevSnapshot)
+        lambda[in charSyncStates, in tVec, mut world](in EntityID entity, in CharacterControllerComponent cc) -> void{
+            if(!cc.enabled || !cc.initialized)
+                return;
+            const auto syncIt = charSyncStates.find(entity);
+            if(syncIt == charSyncStates.end())
+                return;
+            const EcsCharacterControllerSyncState syncState = syncIt.value();
+            if(!syncState.hasPrevSnapshot)
                 return;
             if(!world.hasComponent<TransformComponent>(entity))
                 return;
-            VectorSingle q0 = SafeNormalizeQuat(VectorSingle(cc.prevRotation));
-            VectorSingle q1 = SafeNormalizeQuat(VectorSingle(cc.currRotation));
+            VectorSingle q0 = SafeNormalizeQuat(VectorSingle(syncState.prevRotation));
+            VectorSingle q1 = SafeNormalizeQuat(VectorSingle(syncState.currRotation));
             if(Vector4Dot(q0, q1).x < 0.0f)
                 q1 = -q1;
-            const VectorSingle pos = Lerp(VectorSingle(cc.prevPosition), VectorSingle(cc.currPosition), tVec);
+            const VectorSingle pos = Lerp(VectorSingle(syncState.prevPosition), VectorSingle(syncState.currPosition), tVec);
             const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
             WriteWorldPoseBackToEntityTransform(entity, Transform3D(pos, rot), world);
         }

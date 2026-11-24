@@ -1501,6 +1501,10 @@ class PhysicsSystem{
         ClearDestroyedSlotOwners(this.m_syncScratch);
         this.m_syncScratch.bodySyncedPoses.clear();
         this.m_syncScratch.staticBodyPoseCache.clear();
+        this.m_syncScratch.colliderScaleCache.clear();
+        this.m_syncScratch.syncedParentNames.clear();
+        this.m_syncScratch.characterSyncStates.clear();
+        this.m_syncScratch.articulationProxySyncStates.clear();
         this.m_syncScratch.pendingWriteBackBodyIndices.clear();
         this.m_syncScratch.prevAwakeWriteBackBodyIndices.clear();
         this.m_syncScratch.nextAwakeWriteBackBodyIndices.clear();
@@ -1510,6 +1514,7 @@ class PhysicsSystem{
         this.m_syncScratch.hasSyncedTopologyVersion = false;
         this.m_syncScratch.hasRagdollTopology = false;
         this.m_syncScratch.mutationVersionsValid = false;
+        this.m_syncScratch.tagPrepassVersionsValid = false;
         this.m_accumulator = 0.0f;
         this.m_interpolationAlpha = 1.0f;
         return true;
@@ -1805,7 +1810,7 @@ class PhysicsSystem{
             }
             WriteBackEcsRagdollRootPoses(world, this.m_physicsWorld);
             if(interpolateTransforms)
-                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_interpolationAlpha);
+                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha);
         }
         else{
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
@@ -1821,7 +1826,7 @@ class PhysicsSystem{
                     world,
                     this.m_syncScratch
                 );
-                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_interpolationAlpha);
+                ApplyInterpolatedCharacterTransformsToEcs(world, this.m_syncScratch.characterSyncStates, this.m_interpolationAlpha);
             }
         }
 

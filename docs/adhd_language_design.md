@@ -313,7 +313,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 - **Authoring Boundary**:
   - Raw C++ `native` blocks are retired and prohibited in `.adhd`. C++ code (such as third-party SDK adapters, C-ABI interop, OS window/entry bootstrap in `loader/` and `logger/`, the ADHD compiler `core/metascript/`, and `pipeline/adhd_compiler/`) lives in separate `.h`/`.cpp` files bound into `.adhd` via typed `extern` declarations (`loader/project_entry.adhd`, `logger/rgd/decode.adhd`, `utilities/*_sdk.adhd`, etc.).
 - **libclang C++ Header Importer (`core/metascript/adhd/clang/`)**:
-  - `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, and `--emit-cpp-externs` parse C++ headers using the vendored static libclang (`3rd_parties/llvm`), translate supported declarations into pointer-free `extern` `.adhd` AST nodes (respecting pointer-free, arena, and container mapping rules in `export_cpp_importer.h`), and optionally emit generated `.adhd` `extern` sources.
+  - `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, and `--emit-cpp-externs` parse C++ headers using the vendored static libclang (`3rd_parties/libclang`, with LLVM in `3rd_parties/llvm`), translate supported declarations into pointer-free `extern` `.adhd` AST nodes (respecting pointer-free, arena, and container mapping rules in `export_cpp_importer.h`), and optionally emit generated `.adhd` `extern` sources.
 
 ---
 

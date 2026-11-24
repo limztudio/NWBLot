@@ -57,33 +57,6 @@
 
 #include <freetype/ftbitmap.h>
 
-#if defined( _MSC_VER )      /* Visual C++ (and Intel C++)   */
-  /* We disable the warning `conversion from XXX to YYY,     */
-  /* possible loss of data' in order to compile cleanly with */
-  /* the maximum level of warnings: `md5.c' is non-FreeType  */
-  /* code, and it gets used during development builds only.  */
-#pragma warning( push )
-#pragma warning( disable : 4244 )
-#endif /* _MSC_VER */
-
-  /* It's easiest to include `md5.c' directly.  However, since OpenSSL */
-  /* also provides the same functions, there might be conflicts if     */
-  /* both FreeType and OpenSSL are built as static libraries.  For     */
-  /* this reason, we put the MD5 stuff into the `FT_' namespace.       */
-#define MD5_u32plus  FT_MD5_u32plus
-#define MD5_CTX      FT_MD5_CTX
-#define MD5_Init     FT_MD5_Init
-#define MD5_Update   FT_MD5_Update
-#define MD5_Final    FT_MD5_Final
-
-#undef  HAVE_OPENSSL
-
-#include "md5.c"
-
-#if defined( _MSC_VER )
-#pragma warning( pop )
-#endif
-
   /* This array must stay in sync with the @FT_Pixel_Mode enumeration */
   /* (in file `ftimage.h`).                                           */
 
@@ -4887,10 +4860,7 @@
 #define FT_COMPONENT  checksum
 
     /*
-     * Computing the MD5 checksum is expensive, unnecessarily distorting a
-     * possible profiling of FreeType if compiled with tracing support.  For
-     * this reason, we execute the following code only if explicitly
-     * requested.
+     * Calculate bitmap coverage only when requested by the trace level.
      */
 
     /* we use FT_TRACE3 in this block */
@@ -4904,13 +4874,11 @@
 
       FT_Bitmap_Init( &bitmap );
 
-      /* we convert to a single bitmap format for computing the checksum */
+      /* we convert to a single bitmap format for computing coverage */
       /* this also converts the bitmap flow to `down' (i.e., pitch > 0)  */
       err = FT_Bitmap_Convert( library, &slot->bitmap, &bitmap, 1 );
       if ( !err )
       {
-        MD5_CTX        ctx;
-        unsigned char  md5[16];
         unsigned long  coverage = 0;
         int            i, j;
         int            rows  = (int)bitmap.rows;
@@ -4929,16 +4897,6 @@
 
         FT_TRACE3(( "  Total coverage: %lu\n", coverage ));
 
-        MD5_Init( &ctx );
-        if ( bitmap.buffer )
-          MD5_Update( &ctx, bitmap.buffer,
-                      (unsigned long)rows * (unsigned long)pitch );
-        MD5_Final( md5, &ctx );
-
-        FT_TRACE3(( "  MD5 checksum: " ));
-        for ( i = 0; i < 16; i++ )
-          FT_TRACE3(( "%02X", md5[i] ));
-        FT_TRACE3(( "\n" ));
       }
 
       FT_Bitmap_Done( library, &bitmap );

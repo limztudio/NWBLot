@@ -34,7 +34,7 @@ GpuTaskScheduler::DeviceOperation::~DeviceOperation()noexcept{
         return;
 
     const u32 previous = m_scheduler.m_deviceLifecycleState.fetch_sub(1u, MemoryOrder::release);
-    FOUNDATION_ASSERT((previous & s_DeviceAttachedBit) != 0u && (previous & s_DeviceActiveOpMask) != 0u);
+    FOUNDATION_FATAL_ASSERT_MSG((previous & s_DeviceAttachedBit) != 0u && (previous & s_DeviceActiveOpMask) != 0u, "GPU task scheduler released an invalid device operation");
 }
 
 

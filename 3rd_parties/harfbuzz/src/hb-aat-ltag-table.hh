@@ -71,6 +71,18 @@ struct ltag
 				    range.length);
   }
 
+  /* Equivalent to hb_language_matches (get_language (i), specific), but
+   * without interning the font's tag: hb_language_from_string() appends
+   * every new string to a process-wide, linearly-searched, never-freed list,
+   * so a hostile font with many tags and many feature records referencing
+   * them could make that quadratic. */
+  bool matches_language (unsigned int i, hb_language_t specific) const
+  {
+    const FTStringRange &range = tagRanges[i];
+    return hb_language_matches_string ((const char *) (this+range.tag).arrayZ,
+				       range.length, specific);
+  }
+
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);

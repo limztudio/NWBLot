@@ -31,10 +31,6 @@
 
 // This module is really just a huge grab bag of classes and helper functions needed by the encoder.
 
-#if BASISU_SUPPORT_SSE
-// Declared in basisu_kernels_imp.h, but we can't include that here otherwise it would lead to circular type errors.
-extern void update_covar_matrix_16x16_sse41(uint32_t num_vecs, const void* pWeighted_vecs, const void* pOrigin, const uint32_t *pVec_indices, void* pMatrix16x16);
-#endif
 
 namespace basisu
 {
@@ -51,7 +47,6 @@ namespace basisu
 	bool basisu_encoder_init(bool use_opencl = false, bool opencl_force_serialization = false);
 	void basisu_encoder_deinit();
 
-	// basisu_kernels_sse.cpp - will be a no-op and g_cpu_supports_sse41 will always be false unless compiled with BASISU_SUPPORT_SSE=1
 	extern bool g_cpu_supports_sse41;
 
 	extern void detect_sse41();
@@ -1819,13 +1814,6 @@ namespace basisu
 			}
 			else
 			{
-#if BASISU_SUPPORT_SSE
-				// Specialize the case with 16x16 matrices, which are quite expensive without SIMD.
-				// This SSE function takes pointers to void types, so do some sanity checks.
-				assert(sizeof(TrainingVectorType) == sizeof(float) * 16);
-				assert(sizeof(training_vec_with_weight) == sizeof(std::pair<vec16F, uint64_t>));
-				update_covar_matrix_16x16_sse41(node.m_training_vecs.size_u32(), m_training_vecs.data(), &node.m_origin, node.m_training_vecs.data(), &cmatrix);
-#endif
 			}
 
 			const float renorm_scale = 1.0f / node.m_weight;

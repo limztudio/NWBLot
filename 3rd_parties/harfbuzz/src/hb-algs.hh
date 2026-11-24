@@ -451,25 +451,33 @@ HB_FUNCOBJ (hb_bool);
 			(void) ((h) *= 0x2127599bf4325c37ULL),	\
 			(h) ^= (h) >> 47)
 
+/* Lets an aligned word be fetched as cheaply as it was before words were
+ * fetched with memcpy, on machines where an unaligned load costs more. */
+#if hb_has_builtin(__builtin_assume_aligned)
+#define fasthash_aligned(p) __builtin_assume_aligned ((p), 8)
+#else
+#define fasthash_aligned(p) (p)
+#endif
+
 static inline uint64_t fasthash64(const void *buf, size_t len, uint64_t seed)
 {
-	struct __attribute__((packed)) packed_uint64_t { uint64_t v; };
 	const uint64_t    m = 0x880355f21e6d1965ULL;
-	const packed_uint64_t *pos = (const packed_uint64_t *)buf;
-	const packed_uint64_t *end = pos + (len / 8);
+	const unsigned char *pos = (const unsigned char *)buf;
+	const unsigned char *end = pos + (len / 8) * 8;
 	const unsigned char *pos2;
 	uint64_t h = seed ^ (len * m);
 	uint64_t v;
 
+	/* The buffer holds objects of any type.  Fetch its words with memcpy:
+	 * reading them through a uint64_t pointer would let the compiler
+	 * assume that the reads never see what was stored there as another
+	 * type, and drop the stores that filled a caller's local buffer. */
 #ifndef HB_OPTIMIZE_SIZE
 	if (((uintptr_t) pos & 7) == 0)
 	{
-	  while (pos != end)
+	  for (; pos != end; pos += 8)
 	  {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-align"
-	    v  = * (const uint64_t *) (pos++);
-#pragma GCC diagnostic pop
+	    memcpy (&v, fasthash_aligned (pos), sizeof (v));
 	    h ^= fasthash_mix(v);
 	    h *= m;
 	  }
@@ -477,15 +485,15 @@ static inline uint64_t fasthash64(const void *buf, size_t len, uint64_t seed)
 	else
 #endif
 	{
-	  while (pos != end)
+	  for (; pos != end; pos += 8)
 	  {
-	    v  = pos++->v;
+	    memcpy (&v, pos, sizeof (v));
 	    h ^= fasthash_mix(v);
 	    h *= m;
 	  }
 	}
 
-	pos2 = (const unsigned char*)pos;
+	pos2 = pos;
 	v = 0;
 
 	switch (len & 7) {
@@ -1218,16 +1226,26 @@ static inline unsigned char TOHEX (uint8_t c)
 static inline uint8_t FROMHEX (unsigned char c)
 { return (c >= '0' && c <= '9') ? c - '0' : TOLOWER (c) - 'a' + 10; }
 
+/* Library-internal; defined in hb-common.cc.  Same as
+ * hb_language_matches (hb_language_from_string (str, len), specific),
+ * without interning str. */
+HB_INTERNAL bool
+hb_language_matches_string (const char    *str,
+			    unsigned int   len,
+			    hb_language_t  specific);
+
 static inline unsigned int DIV_CEIL (const unsigned int a, unsigned int b)
 { return (a + (b - 1)) / b; }
 
 
-#undef  ARRAY_LENGTH
-template <typename Type, unsigned int n>
-static inline unsigned int ARRAY_LENGTH (const Type (&)[n]) { return n; }
-/* A const version, but does not detect erratically being called on pointers. */
-#define ARRAY_LENGTH_CONST(__array) ((signed int) (sizeof (__array) / sizeof (__array[0])))
+/* ARRAY_LENGTH (array) is a constant expression even for reference parameters,
+ * and does not evaluate array. */
+template <typename Type> struct hb_array_length;
+template <typename Type, size_t n>
+struct hb_array_length<Type[n]> : std::integral_constant<size_t, n> {};
 
+#undef  ARRAY_LENGTH
+#define ARRAY_LENGTH(array) (hb_array_length<hb_remove_reference<decltype (array)>>::value)
 
 static inline void *
 hb_memcpy (void *__restrict dst, const void *__restrict src, size_t len)
@@ -1462,6 +1480,39 @@ hb_bsearch (const K& key, V* base,
 }
 
 
+/* Heapsort: O(n log n) worst case.  Used by hb_qsort_loop below
+ * as the fallback when quicksort partitioning degenerates. */
+template <typename T, typename Compar>
+static inline void
+hb_heapsort_sift_down (T *base, size_t root, size_t end, Compar compar)
+{
+  for (size_t child; (child = 2 * root + 1) < end; root = child)
+  {
+    if (child + 1 < end && compar (base[child], base[child + 1]) < 0)
+      child++;
+    if (compar (base[root], base[child]) >= 0)
+      break;
+    hb_swap (base[root], base[child]);
+  }
+}
+template <typename T, typename Compar>
+static inline void
+hb_heapsort_inline (T *base, size_t nel, Compar compar)
+{
+  if (nel < 2) return;
+
+  /* Build a max-heap. */
+  for (size_t i = nel / 2; i--;)
+    hb_heapsort_sift_down (base, i, nel, compar);
+
+  /* Pop the maximum to the end, one at a time. */
+  for (size_t end = nel; --end;)
+  {
+    hb_swap (base[0], base[end]);
+    hb_heapsort_sift_down (base, 0, end, compar);
+  }
+}
+
 /* Quicksort partitioning loop: median-of-three pivot, two-way
  * Hoare partition, tail-call elimination on the larger side.
  * Stops partitioning when subranges shrink below the threshold;
@@ -1475,15 +1526,26 @@ hb_bsearch (const K& key, V* base,
  * Stops partitioning when subranges shrink below the threshold;
  * a single insertion-sort pass over the whole array (run by
  * hb_qsort_inline below) finishes the job.  Same shape libstdc++
- * uses for std::sort.
+ * uses for std::sort, including the introsort depth limit: once
+ * a range has been partitioned depth_limit times without
+ * finishing, it is handed to heapsort instead.  Without that an
+ * input ordered against the pivot selection (which a font can
+ * arrange, e.g. the lookup indices of a Feature) costs O(n^2).
  *
  * Not stable; equivalent values may be swapped. */
 template <typename T, typename Compar>
 static inline void
-hb_qsort_loop (T *base, size_t nel, Compar compar)
+hb_qsort_loop (T *base, size_t nel, Compar compar, unsigned depth_limit)
 {
   while (nel > 24)
   {
+    if (unlikely (!depth_limit))
+    {
+      hb_heapsort_inline (base, nel, compar);
+      return;
+    }
+    depth_limit--;
+
     T *last = base + nel - 1;
     T *mid = base + nel / 2;
 
@@ -1516,13 +1578,13 @@ hb_qsort_loop (T *base, size_t nel, Compar compar)
     size_t right = nel - left - 1;
     if (left < right)
     {
-      hb_qsort_loop (base, left, compar);
+      hb_qsort_loop (base, left, compar, depth_limit);
       base = i + 1;
       nel  = right;
     }
     else
     {
-      hb_qsort_loop (i + 1, right, compar);
+      hb_qsort_loop (i + 1, right, compar, depth_limit);
       nel  = left;
     }
   }
@@ -1532,7 +1594,7 @@ template <typename T, typename Compar>
 static inline void
 hb_qsort_inline (T *base, size_t nel, Compar compar)
 {
-  hb_qsort_loop (base, nel, compar);
+  hb_qsort_loop (base, nel, compar, 2 * hb_bit_storage (nel));
 
   /* Single final insertion sort over the whole array.  After
    * the partitioning loop, every element is within the threshold
@@ -1819,6 +1881,32 @@ static inline hb_scope_guard_t<F> hb_make_scope_guard (F &&f)
   auto HB_SCOPE_GUARD_NAME(__LINE__) = \
     hb_make_scope_guard ([&]() { stmt; }); \
   (void) HB_SCOPE_GUARD_NAME(__LINE__)
+
+
+/* Handles 0..308; anything larger overflows double and returns HUGE_VAL. */
+static inline double hb_pow10 (unsigned n)
+{
+  static const double small_powers_of_10[] =
+  { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15 };
+  static const double large_powers_of_10[] =
+  { 1e0, 1e16, 1e32, 1e48, 1e64, 1e80, 1e96, 1e112, 1e128, 1e144,
+    1e160, 1e176, 1e192, 1e208, 1e224, 1e240, 1e256, 1e272, 1e288, 1e304 };
+
+  /* DBL_MAX is between 10^308 and 10^309 */
+  constexpr unsigned MAX_POW10_EXP = 308;
+  constexpr unsigned POW10_SHIFT   = 4;
+  constexpr unsigned POW10_SMALL   = 1u << POW10_SHIFT;   /* 16 */
+  constexpr unsigned POW10_MASK    = POW10_SMALL - 1;     /* 15 */
+
+  static_assert (ARRAY_LENGTH (small_powers_of_10) == POW10_SMALL,
+    "_small_powers_of_10: size must be 2^POW10_SHIFT");
+  static_assert ((MAX_POW10_EXP >> POW10_SHIFT) < ARRAY_LENGTH (large_powers_of_10),
+    "_large_powers_of_10: must cover MAX_POW10_EXP >> POW10_SHIFT");
+
+  if (unlikely (n > MAX_POW10_EXP)) return HUGE_VAL;
+  if (likely (n < POW10_SMALL)) return small_powers_of_10[n];
+  return large_powers_of_10[n >> POW10_SHIFT] * small_powers_of_10[n & POW10_MASK];
+}
 
 
 #endif /* HB_ALGS_HH */

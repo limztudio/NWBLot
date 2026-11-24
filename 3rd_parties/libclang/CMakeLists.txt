@@ -32,10 +32,10 @@ set(CLANG_SPAWN_CC1 0)
 set(CLANG_ENABLE_CIR 0)
 set(CLANG_USE_EXPERIMENTAL_CONST_INTERP 0)
 
-set(CLANG_VERSION "23.1.5")
+set(CLANG_VERSION "23.1.6")
 set(CLANG_VERSION_MAJOR 23)
 set(CLANG_VERSION_MINOR 1)
-set(CLANG_VERSION_PATCHLEVEL 5)
+set(CLANG_VERSION_PATCHLEVEL 6)
 set(MAX_CLANG_ABI_COMPAT_VERSION 23)
 
 cmake_push_check_state(RESET)
@@ -63,7 +63,7 @@ file(MAKE_DIRECTORY "${_nwb_clang_gen_inc}/clang/Config" "${_nwb_clang_gen_inc}/
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/cmake/config.h.cmake" "${_nwb_clang_gen_inc}/clang/Config/config.h")
 configure_file("${CMAKE_CURRENT_LIST_DIR}/cmake/Version.inc.in" "${_nwb_clang_gen_inc}/clang/Basic/Version.inc" @ONLY)
-file(CONFIGURE OUTPUT "${_nwb_clang_gen_basic_lib}/VCSVersion.inc" CONTENT "#define LLVM_REVISION \"392dfff97d29b59d77e5cac6d4b6ef2585fe7117\"\n#define LLVM_REPOSITORY \"https://github.com/llvm/llvm-project.git\"\n" @ONLY)
+file(CONFIGURE OUTPUT "${_nwb_clang_gen_basic_lib}/VCSVersion.inc" CONTENT "#define LLVM_REVISION \"5b10d2d74929eae78912771222c9855af97496f4\"\n#define LLVM_REPOSITORY \"https://github.com/llvm/llvm-project.git\"\n" @ONLY)
 
 include("${CMAKE_CURRENT_LIST_DIR}/sources.cmake")
 

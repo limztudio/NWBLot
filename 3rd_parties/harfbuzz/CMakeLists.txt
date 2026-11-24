@@ -1,3 +1,5 @@
+nwb_declare_vendor_headers(nwb_vendor_harfbuzz_script_list nwb::harfbuzz_script_list "${CMAKE_CURRENT_LIST_DIR}/src")
+
 add_library(nwb_vendor_harfbuzz STATIC
     "${CMAKE_CURRENT_LIST_DIR}/src/harfbuzz.cc"
 )

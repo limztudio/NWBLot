@@ -1,0 +1,5 @@
+package: xxhash
+version: 0.8.4
+updated_utc: 2026-11-24
+source: https://github.com/Cyan4973/xxHash/releases/tag/v0.8.4
+notes: Official xxhash.c, xxhash.h, and BSD-2-Clause LICENSE. Replaces the inlined xxHash in the Zstandard amalgamation and the adapted LLVM XXH3 implementation. The shared static library uses prefix NWB_XXHASH_ and preserves the upstream headers and implementation.

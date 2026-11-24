@@ -79,7 +79,8 @@ hb_shape_plan_key_t::init (bool                           copy,
 			   unsigned int                   num_user_features,
 			   const int                     *coords,
 			   unsigned int                   num_coords,
-			   const char * const            *shaper_list)
+			   const char * const            *shaper_list,
+			   const hb_shape_plan_key_t     *cached HB_UNUSED)
 {
   hb_feature_t *features = nullptr;
   if (copy && num_user_features && !(features = (hb_feature_t *) hb_calloc (num_user_features, sizeof (hb_feature_t))))
@@ -94,16 +95,26 @@ hb_shape_plan_key_t::init (bool                           copy,
     /* Make start/end uniform to easier catch bugs. */
     for (unsigned int i = 0; i < num_user_features; i++)
     {
-      if (features[0].start != HB_FEATURE_GLOBAL_START)
-	features[0].start = 1;
-      if (features[0].end   != HB_FEATURE_GLOBAL_END)
-	features[0].end   = 2;
+      if (features[i].start != HB_FEATURE_GLOBAL_START)
+	features[i].start = 1;
+      if (features[i].end   != HB_FEATURE_GLOBAL_END)
+	features[i].end   = 2;
     }
   }
   this->shaper_func = nullptr;
   this->shaper_name = nullptr;
 #ifndef HB_NO_OT_SHAPE
-  if (unlikely (!this->ot.init (face, coords, num_coords)))
+  default_coords = !num_coords;
+  /* The same face and coordinates have the same variation state. At the
+   * default location we can reuse the indices if both condition lists are empty. */
+  if (cached && default_coords && cached->default_coords &&
+      !cached->ot.lookup_conditions[0].length &&
+      !cached->ot.lookup_conditions[1].length)
+  {
+    ot.variations_index[0] = cached->ot.variations_index[0];
+    ot.variations_index[1] = cached->ot.variations_index[1];
+  }
+  else if (unlikely (!ot.init (face, coords, num_coords)))
     goto bail;
 #endif
 
@@ -253,13 +264,11 @@ hb_shape_plan_create2 (hb_face_t                     *face,
 		  num_coords,
 		  shaper_list);
 
-  if (unlikely (!HB_DIRECTION_IS_VALID (props->direction)))
+  if (unlikely (!props || !HB_DIRECTION_IS_VALID (props->direction)))
     return hb_shape_plan_get_empty ();
 
   hb_shape_plan_t *shape_plan;
 
-  if (unlikely (!props))
-    goto bail;
   if (!(shape_plan = hb_object_create<hb_shape_plan_t> ()))
     goto bail;
 
@@ -429,10 +438,15 @@ _hb_shape_plan_execute_internal (hb_shape_plan_t    *shape_plan,
   assert (shape_plan->face_unsafe == font->face);
   assert (hb_segment_properties_equal (&shape_plan->key.props, &buffer->props));
 
+  /* Install the per-text work limits (max_len, max_ops) around the actual
+   * shaping, so that hb_shape_plan_execute() is as bounded as hb_shape(). */
 #define HB_SHAPER_EXECUTE(shaper) \
 	HB_STMT_START { \
-	  return font->data.shaper && \
-		 _hb_##shaper##_shape (shape_plan, font, buffer, features, num_features); \
+	  buffer->enter (); \
+	  bool ret = font->data.shaper && \
+		     _hb_##shaper##_shape (shape_plan, font, buffer, features, num_features); \
+	  buffer->leave (); \
+	  return ret; \
 	} HB_STMT_END
 
   if (false)
@@ -539,11 +553,35 @@ hb_shape_plan_create_cached2 (hb_face_t                     *face,
 			      unsigned int                   num_coords,
 			      const char * const            *shaper_list)
 {
+  hb_shape_plan_t *uncached_plan;
+  hb_shape_plan_t *plan = _hb_shape_plan_get_cached (face, props, user_features, num_user_features,
+                                                     coords, num_coords, shaper_list, &uncached_plan);
+  return uncached_plan ? uncached_plan : hb_shape_plan_reference (plan);
+}
+
+/* The face owns all published plans. If a new plan cannot be cached,
+ * give its reference to the caller instead. */
+hb_shape_plan_t *
+_hb_shape_plan_get_cached (hb_face_t                     *face,
+                           const hb_segment_properties_t *props,
+                           const hb_feature_t            *user_features,
+                           unsigned int                   num_user_features,
+                           const int                     *coords,
+                           unsigned int                   num_coords,
+                           const char * const            *shaper_list,
+                           hb_shape_plan_t              **uncached_plan)
+{
+  *uncached_plan = nullptr;
   DEBUG_MSG_FUNC (SHAPE_PLAN, nullptr,
 		  "face=%p num_features=%u shaper_list=%p",
 		  face,
 		  num_user_features,
 		  shaper_list);
+
+  if (unlikely (!props))
+    return hb_shape_plan_get_empty ();
+  if (unlikely (!face))
+    face = hb_face_get_empty ();
 
 retry:
   hb_face_t::plan_node_t *cached_plan_nodes = face->shape_plans;
@@ -552,6 +590,7 @@ retry:
 
   if (likely (!dont_cache))
   {
+    hb_face_t::plan_node_t *cached = face->last_shape_plan.get_acquire ();
     hb_shape_plan_key_t key;
     if (!key.init (false,
 		   face,
@@ -560,14 +599,22 @@ retry:
 		   num_user_features,
 		   coords,
 		   num_coords,
-		   shaper_list))
+		   shaper_list,
+		   cached ? &cached->shape_plan->key : nullptr))
       return hb_shape_plan_get_empty ();
+
+    if (cached && cached->shape_plan->key.equal (&key))
+    {
+      DEBUG_MSG_FUNC (SHAPE_PLAN, cached->shape_plan, "fulfilled from last-plan cache");
+      return cached->shape_plan;
+    }
 
     for (hb_face_t::plan_node_t *node = cached_plan_nodes; node; node = node->next)
       if (node->shape_plan->key.equal (&key))
       {
 	DEBUG_MSG_FUNC (SHAPE_PLAN, node->shape_plan, "fulfilled from cache");
-	return hb_shape_plan_reference (node->shape_plan);
+	face->last_shape_plan.set_release (node);
+	return node->shape_plan;
       }
   }
 
@@ -577,11 +624,17 @@ retry:
 						       shaper_list);
 
   if (unlikely (dont_cache))
+  {
+    *uncached_plan = shape_plan;
     return shape_plan;
+  }
 
   hb_face_t::plan_node_t *node = (hb_face_t::plan_node_t *) hb_calloc (1, sizeof (hb_face_t::plan_node_t));
   if (unlikely (!node))
+  {
+    *uncached_plan = shape_plan;
     return shape_plan;
+  }
 
   node->shape_plan = shape_plan;
   node->next = cached_plan_nodes;
@@ -593,8 +646,9 @@ retry:
     goto retry;
   }
   DEBUG_MSG_FUNC (SHAPE_PLAN, shape_plan, "inserted into cache");
+  face->last_shape_plan.set_release (node);
 
-  return hb_shape_plan_reference (shape_plan);
+  return shape_plan;
 }
 
 

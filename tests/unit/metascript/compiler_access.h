@@ -49,6 +49,9 @@ inline void ConfigureNativeImport(CompilerApi::CppHeaderImportOptions& options, 
 #elif defined(NWB_FINAL)
     defines.push_back(MetaApi::MString("NWB_FINAL", arena));
 #endif
+#if defined(_MSC_VER) && defined(_DEBUG)
+    defines.push_back(MetaApi::MString("_DEBUG", arena));
+#endif
     options.defines = Span<const MetaApi::MString>(defines.data(), defines.size());
 }
 

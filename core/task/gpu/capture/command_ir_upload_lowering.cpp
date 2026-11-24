@@ -60,7 +60,19 @@ namespace __hidden_gpu_command_ir_upload_lowering{
     return !commandList.commandRecordingFailed();
 }
 
-[[nodiscard]] static b8 LowerUploadTextureImpl(const GpuGraphResourceId destinationId, const u64 blobOffsetBytes, const u64 blobSizeBytes, const TextureSlice& slice, const u64 rowPitch, const u64 depthPitch, const TextureUploadAspect::Enum uploadAspect, const ResourceStates::Mask finalState, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
+[[nodiscard]] static b8 LowerUploadTextureImpl(
+    const GpuGraphResourceId destinationId,
+    const u64 blobOffsetBytes,
+    [[maybe_unused]] const u64 blobSizeBytes,
+    const TextureSlice& slice,
+    const u64 rowPitch,
+    const u64 depthPitch,
+    const TextureUploadAspect::Enum uploadAspect,
+    const ResourceStates::Mask finalState,
+    const BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    CommandList& commandList
+){
     FOUNDATION_ASSERT(blobBytes.data() && blobSizeBytes != 0u && blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && blobSizeBytes <= static_cast<u64>(blobBytes.size()) - blobOffsetBytes);
     const auto bytes = MakeNotNull(static_cast<const void*>(blobBytes.data() + static_cast<usize>(blobOffsetBytes)));
     commandList.endRenderPass();

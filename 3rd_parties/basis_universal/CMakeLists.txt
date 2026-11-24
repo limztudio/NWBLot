@@ -18,10 +18,8 @@ add_library(nwb_vendor_basis_universal STATIC
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_bc7e_scalar.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_dds_export.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_bc7enc.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/encoder/jpgd.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_kernels_sse.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_bc15_spmd.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_bc15_spmd_sse.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_opencl.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/pvpngreader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/encoder/basisu_uastc_hdr_4x4_enc.cpp"
@@ -46,11 +44,11 @@ target_link_libraries(nwb_vendor_basis_universal PUBLIC
     nwb::tinyexr
     nwb::tinydds
     zstd
+    PRIVATE nwb::jpeg_compressor
 )
 target_compile_definitions(nwb_vendor_basis_universal PRIVATE
     BASISD_SUPPORT_KTX2=1
     BASISD_SUPPORT_KTX2_ZSTD=1
-    BASISU_SUPPORT_SSE=0
     BASISU_SUPPORT_OPENCL=0
     BASISU_SUPPORT_ASTCENC=0
     BASISU_DISABLE_ANDROID_ASTC_DECOMP=1

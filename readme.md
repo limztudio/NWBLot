@@ -31,7 +31,7 @@ Configuration selects a supported C++23-or-newer frontend mode and compiles a re
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
 
-Linux builds require X11, zlib, libcurl, and oneTBB development packages. Wayland support is enabled when the Wayland client, scanner, protocols, and xkbcommon development files are available.
+Linux builds require X11, zlib, libcurl, and oneTBB development packages. The `NWB_ENABLE_WAYLAND` option defaults to on for Linux; Wayland support is enabled when that option is on and the Wayland client, scanner, protocols, and xkbcommon development files are available.
 
 See [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for installation details, tool discovery, every preset, output locations, and focused test commands.
 
@@ -126,9 +126,11 @@ The runtime texture loader selects formats according to device support, includin
 
 ## Physics
 
-The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor attaches the graphics runtime and asset manager; a world-only constructor is available for CPU use.
+The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor takes the graphics runtime, asset manager, and shader-path resolver; a world-only constructor is available for CPU use.
 
-Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes; automatic dispatch considers the configured body threshold. Testbed integrates `PhysicsSystem`, and physics tests live under `tests/unit/physics` in target `nwb_physics_tests`.
+Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes. In `auto`, the dispatcher compares the awake-body count with the configured threshold; if GPU dispatch is not admitted or ready, the step falls back to the CPU solver. The asset layer also provides physics materials, collision-layer matrices, convex hulls, and collision meshes. A collision-layer matrix supports up to 32 uniquely named layers and symmetric enable/disable pairs, selected by layer name or index.
+
+The ECS integration includes character controllers, vehicles, ragdolls, articulations, soft bodies, fluid volumes, and force fields. `PhysicsWorld` exposes ray casts, shape casts, overlap queries, and closest-point queries, with optional GPU collision and resident-mode settings. Testbed integrates `PhysicsSystem`, and physics tests live under `tests/unit/physics` in target `nwb_physics_tests`.
 
 ## Macro and namespace ownership
 

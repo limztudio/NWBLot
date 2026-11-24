@@ -333,10 +333,9 @@ hb_buffer_t::enter ()
   {
     max_len = hb_max (mul, (unsigned) HB_BUFFER_MAX_LEN_MIN);
   }
-  if (likely (!hb_unsigned_mul_overflows (len, HB_BUFFER_MAX_OPS_FACTOR, &mul)))
-  {
-    max_ops = hb_max (mul, (unsigned) HB_BUFFER_MAX_OPS_MIN);
-  }
+  max_ops = (int) hb_clamp ((uint64_t) len * HB_BUFFER_MAX_OPS_FACTOR,
+			  (uint64_t) HB_BUFFER_MAX_OPS_MIN,
+			  (uint64_t) HB_BUFFER_MAX_OPS_DEFAULT);
 }
 void
 hb_buffer_t::leave ()
@@ -362,6 +361,8 @@ hb_buffer_t::add (hb_codepoint_t  codepoint,
   glyph->codepoint = codepoint;
   glyph->mask = 0;
   glyph->cluster = cluster;
+  if (unlikely (have_positions))
+    hb_memset (&pos[len], 0, sizeof (pos[len]));
 
   len++;
 }
@@ -561,9 +562,9 @@ void
 hb_buffer_t::merge_clusters_impl (unsigned int start,
 				  unsigned int end)
 {
-  max_ops -= end - start;
-  if (unlikely (max_ops < 0))
-    successful = false;
+  /* Callers keep merging after the buffer has failed; don't walk then. */
+  if (unlikely (!successful))
+    return;
 
   unsigned int cluster = info[start].cluster;
 
@@ -581,9 +582,15 @@ hb_buffer_t::merge_clusters_impl (unsigned int start,
       start--;
 
   /* If we hit the start of buffer, continue in out-buffer. */
+  unsigned int j = out_len;
   if (idx == start && info[start].cluster != cluster)
-    for (unsigned int i = out_len; i && out_info[i - 1].cluster == info[start].cluster; i--)
-      set_cluster (out_info[i - 1], cluster);
+    for (; j && out_info[j - 1].cluster == info[start].cluster; j--)
+      set_cluster (out_info[j - 1], cluster);
+
+  /* Charge the extended ranges; neighboring runs are font/text controlled. */
+  max_ops -= (end - start) + (out_len - j);
+  if (unlikely (max_ops < 0))
+    successful = false;
 
   for (unsigned int i = start; i < end; i++)
     set_cluster (info[i], cluster);
@@ -592,9 +599,9 @@ void
 hb_buffer_t::merge_out_clusters_impl (unsigned int start,
 				      unsigned int end)
 {
-  max_ops -= end - start;
-  if (unlikely (max_ops < 0))
-    successful = false;
+  /* Callers keep merging after the buffer has failed; don't walk then. */
+  if (unlikely (!successful))
+    return;
 
   unsigned int cluster = out_info[start].cluster;
 
@@ -602,17 +609,25 @@ hb_buffer_t::merge_out_clusters_impl (unsigned int start,
     cluster = hb_min (cluster, out_info[i].cluster);
 
   /* Extend start */
-  while (start && out_info[start - 1].cluster == out_info[start].cluster)
-    start--;
+  if (cluster != out_info[start].cluster)
+    while (start && out_info[start - 1].cluster == out_info[start].cluster)
+      start--;
 
   /* Extend end */
-  while (end < out_len && out_info[end - 1].cluster == out_info[end].cluster)
-    end++;
+  if (cluster != out_info[end - 1].cluster)
+    while (end < out_len && out_info[end - 1].cluster == out_info[end].cluster)
+      end++;
 
   /* If we hit the end of out-buffer, continue in buffer. */
+  unsigned int j = idx;
   if (end == out_len)
-    for (unsigned int i = idx; i < len && info[i].cluster == out_info[end - 1].cluster; i++)
-      set_cluster (info[i], cluster);
+    for (; j < len && info[j].cluster == out_info[end - 1].cluster; j++)
+      set_cluster (info[j], cluster);
+
+  /* Charge the extended ranges; neighboring runs are font/text controlled. */
+  max_ops -= (end - start) + (j - idx);
+  if (unlikely (max_ops < 0))
+    successful = false;
 
   for (unsigned int i = start; i < end; i++)
     set_cluster (out_info[i], cluster);
@@ -633,12 +648,17 @@ hb_buffer_t::delete_glyph ()
   if (out_len)
   {
     /* Merge cluster backward. */
-    if (cluster < out_info[out_len - 1].cluster)
+    if (cluster < out_info[out_len - 1].cluster && likely (successful))
     {
       unsigned int mask = info[idx].mask;
       unsigned int old_cluster = out_info[out_len - 1].cluster;
-      for (unsigned i = out_len; i && out_info[i - 1].cluster == old_cluster; i--)
+      unsigned int i;
+      for (i = out_len; i && out_info[i - 1].cluster == old_cluster; i--)
 	set_cluster (out_info[i - 1], cluster, mask);
+
+      max_ops -= out_len - i;
+      if (unlikely (max_ops < 0))
+	successful = false;
     }
     goto done;
   }
@@ -675,12 +695,17 @@ hb_buffer_t::delete_glyphs_inplace (bool (*filter) (const hb_glyph_info_t *info)
       if (j)
       {
 	/* Merge cluster backward. */
-	if (cluster < info[j - 1].cluster)
+	if (cluster < info[j - 1].cluster && likely (successful))
 	{
 	  unsigned int mask = info[i].mask;
 	  unsigned int old_cluster = info[j - 1].cluster;
-	  for (unsigned k = j; k && info[k - 1].cluster == old_cluster; k--)
+	  unsigned int k;
+	  for (k = j; k && info[k - 1].cluster == old_cluster; k--)
 	    set_cluster (info[k - 1], cluster, mask);
+
+	  max_ops -= j - k;
+	  if (unlikely (max_ops < 0))
+	    successful = false;
 	}
 	continue;
       }
@@ -806,6 +831,9 @@ hb_buffer_t *
 hb_buffer_create_similar (const hb_buffer_t *src)
 {
   hb_buffer_t *buffer = hb_buffer_create ();
+
+  if (unlikely (hb_object_is_immutable (buffer)))
+    return buffer;
 
   buffer->similar (*src);
 
@@ -1428,6 +1456,9 @@ void
 hb_buffer_set_not_found_variation_selector_glyph (hb_buffer_t    *buffer,
 						  hb_codepoint_t  not_found_variation_selector)
 {
+  if (unlikely (hb_object_is_immutable (buffer)))
+    return;
+
   buffer->not_found_variation_selector = not_found_variation_selector;
 }
 
@@ -1810,6 +1841,9 @@ hb_buffer_reverse_clusters (hb_buffer_t *buffer)
 void
 hb_buffer_guess_segment_properties (hb_buffer_t *buffer)
 {
+  if (unlikely (hb_object_is_immutable (buffer)))
+    return;
+
   buffer->guess_segment_properties ();
 }
 
@@ -1868,10 +1902,31 @@ hb_buffer_add_utf (hb_buffer_t  *buffer,
   const T *end = next + item_length;
   while (next < end)
   {
-    hb_codepoint_t u;
-    const T *old_next = next;
-    next = utf_t::next (next, end, &u, replacement);
-    buffer->add (u, old_next - (const T *) text);
+    if (unlikely (!buffer->ensure (buffer->len + 1)))
+    {
+      next = end;
+      break;
+    }
+    /* Each remaining code unit produces at most one glyph. Decode up to
+     * the available space before checking capacity again. */
+    const T *limit = next + hb_min ((unsigned) (end - next),
+				    buffer->allocated - buffer->len - 1);
+    unsigned start = buffer->len;
+    hb_glyph_info_t *out = buffer->info + start;
+    do
+    {
+      hb_codepoint_t u;
+      const T *old_next = next;
+      next = utf_t::next (next, end, &u, replacement);
+      *out = {};
+      out->codepoint = u;
+      out->cluster = old_next - text;
+      out++;
+    } while (next < limit);
+    buffer->len = out - buffer->info;
+    if (unlikely (buffer->have_positions))
+      hb_memset (buffer->pos + start, 0,
+		 (buffer->len - start) * sizeof (buffer->pos[0]));
   }
 
   /* Add post-context */

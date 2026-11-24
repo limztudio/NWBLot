@@ -12827,11 +12827,11 @@ CODEGEN_OPTION_WITH_MARSHALLING(1, 57442 /* -mrelax-all */, mrelax_all, Flag, m_
 #endif // CODEGEN_OPTION_WITH_MARSHALLING
 #ifdef CODEGEN_OPTION_WITH_MARSHALLING
 CODEGEN_OPTION_WITH_MARSHALLING(1, 51411 /* -mincremental-linker-compatible */, mincremental_linker_compatible, Flag, m_Group, INVALID, nullptr, 0, DefaultVis | CC1Option | CC1AsOption | DefaultVis | CLOption, 0,
-       "(integrated-as) Emit an object file which can be used with an incremental linker", (std::array<std::pair<std::array<unsigned, 2>, const char*>, 1>{{ {std::array<unsigned, 2>{{0, 0}}, nullptr} }}), nullptr, nullptr, 0, true, 0, CodeGenOpts.IncrementalLinkerCompatible, false, false, false, normalizeSimpleFlag, denormalizeSimpleFlag, -1)
+       "(integrated-as) Emit an object file which can be used with an incremental linker", (std::array<std::pair<std::array<unsigned, 2>, const char*>, 1>{{ {std::array<unsigned, 2>{{0, 0}}, nullptr} }}), nullptr, nullptr, 0, true, 0, CodeGenOpts.IncrementalLinkerCompatible, T.isDefaultIncrementalLinkerCompatibleByDefault(), false, false, makeBooleanOptionNormalizer(true, false, OPT_mno_incremental_linker_compatible), makeBooleanOptionDenormalizer(true), -1)
 #endif // CODEGEN_OPTION_WITH_MARSHALLING
 #ifdef CODEGEN_OPTION_WITH_MARSHALLING
 CODEGEN_OPTION_WITH_MARSHALLING(1, 54314 /* -mno-incremental-linker-compatible */, mno_incremental_linker_compatible, Flag, m_Group, INVALID, nullptr, 0, DefaultVis | CC1Option | CC1AsOption | DefaultVis | CLOption, 0,
-       "(integrated-as) Emit an object file which cannot be used with an incremental linker", (std::array<std::pair<std::array<unsigned, 2>, const char*>, 1>{{ {std::array<unsigned, 2>{{0, 0}}, nullptr} }}), nullptr, nullptr, 0, true, 0, CodeGenOpts.IncrementalLinkerCompatible, true, false, true, normalizeSimpleNegativeFlag, denormalizeSimpleFlag, -1)
+       "(integrated-as) Emit an object file which cannot be used with an incremental linker", (std::array<std::pair<std::array<unsigned, 2>, const char*>, 1>{{ {std::array<unsigned, 2>{{0, 0}}, nullptr} }}), nullptr, nullptr, 0, true, 0, CodeGenOpts.IncrementalLinkerCompatible, T.isDefaultIncrementalLinkerCompatibleByDefault(), false, false, makeBooleanOptionNormalizer(false, true, OPT_mincremental_linker_compatible), makeBooleanOptionDenormalizer(false), -1)
 #endif // CODEGEN_OPTION_WITH_MARSHALLING
 #ifdef CODEGEN_OPTION_WITH_MARSHALLING
 CODEGEN_OPTION_WITH_MARSHALLING(1, 58033 /* -msoft-float */, msoft_float, Flag, m_Group, INVALID, nullptr, 0, DefaultVis | CC1Option | DefaultVis | CLOption, 0,

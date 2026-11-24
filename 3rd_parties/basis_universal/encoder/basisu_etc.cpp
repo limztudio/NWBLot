@@ -14,10 +14,6 @@
 // limitations under the License.
 #include "basisu_etc.h"
 
-#if BASISU_SUPPORT_SSE
-#define CPPSPMD_NAME(a) a##_sse41
-#include "basisu_kernels_declares.h"
-#endif
 
 #define BASISU_DEBUG_ETC_ENCODER 0
 #define BASISU_DEBUG_ETC_ENCODER_DEEPER 0
@@ -1212,25 +1208,6 @@ namespace basisu
 			}
 			else
 			{
-#if BASISU_SUPPORT_SSE
-				if (pSelectors_to_use)
-				{
-					if (m_pParams->m_perceptual)
-						perceptual_distance_rgb_4_N_sse41((int64_t*)&total_error, pSelectors_to_use, block_colors, pSrc_pixels, n, trial_solution.m_error);
-					else
-						linear_distance_rgb_4_N_sse41((int64_t*)&total_error, pSelectors_to_use, block_colors, pSrc_pixels, n, trial_solution.m_error);
-					
-					for (uint32_t i = 0; i < n; i++)
-						m_temp_selectors[i] = pSelectors_to_use[i];
-				}
-				else
-				{
-					if (m_pParams->m_perceptual)
-						find_selectors_perceptual_rgb_4_N_sse41((int64_t*)&total_error, &m_temp_selectors[0], block_colors, pSrc_pixels, n, trial_solution.m_error);
-					else
-						find_selectors_linear_rgb_4_N_sse41((int64_t*)&total_error, &m_temp_selectors[0], block_colors, pSrc_pixels, n, trial_solution.m_error);
-				}
-#endif
 			}
 
 			if (total_error < trial_solution.m_error)
@@ -1375,33 +1352,6 @@ namespace basisu
 					}
 					else
 					{
-#if BASISU_SUPPORT_SSE
-						uint32_t cur_selector = 0, c;
-
-						for (c = 0; c < n; c++)
-						{
-							const uint32_t y = m_pSorted_luma[c];
-							while ((y * 2) >= block_inten_midpoints[cur_selector])
-							{
-								if (++cur_selector > 2)
-									goto done3;
-							}
-							const uint32_t sorted_pixel_index = m_pSorted_luma_indices[c];
-							m_temp_selectors[sorted_pixel_index] = static_cast<uint8_t>(cur_selector);
-						}
-					done3:
-
-						while (c < n)
-						{
-							const uint32_t sorted_pixel_index = m_pSorted_luma_indices[c];
-							m_temp_selectors[sorted_pixel_index] = 3;
-							++c;
-						}
-
-						int64_t block_error;
-						perceptual_distance_rgb_4_N_sse41(&block_error, &m_temp_selectors[0], block_colors, pSrc_pixels, n, INT64_MAX);
-						total_error += block_error;
-#endif
 					}
 				}
 			}

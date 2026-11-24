@@ -226,7 +226,8 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     }
 
     const Name cacheInterface(s_ProjectMaterialInterfacesTestSurface);
-    MaterialBindTypedLayoutCache layoutCache(testArena.arena);
+    TestValueSlot<MaterialBindTypedLayoutCache> layoutCacheStorage;
+    mut MaterialBindTypedLayoutCache layoutCache = layoutCacheStorage.constructIn(testArena);
     {
         const ScopedTestTrace trace("material_bind_float1_default_cache");
         CapturingLogger failureLogger = CapturingLogger();

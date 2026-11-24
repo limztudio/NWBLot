@@ -21,14 +21,6 @@ namespace Tests::UiRootFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RejectingRootArena final : public ArenaBase{
-public:
-    RejectingRootArena() : ArenaBase(Name("tests/ui/root_allocation_failure")){}
-    void* allocate([[maybe_unused]] usize align, [[maybe_unused]] usize size)override{ return nullptr; }
-    void* reallocate([[maybe_unused]] void* memory, [[maybe_unused]] usize align, [[maybe_unused]] usize size)override{ return nullptr; }
-    void deallocate([[maybe_unused]] void* memory, [[maybe_unused]] usize align, [[maybe_unused]] usize size)noexcept override{}
-};
-
 class ToggleRootArena final : public ArenaBase{
 public:
     ToggleRootArena() : ArenaBase(Name("tests/ui/snapshot_allocation_failure")), m_backing(Name("tests/ui/snapshot_backing")){}
@@ -45,10 +37,10 @@ private:
 
 [[nodiscard]] inline b8 AllocationFailurePreservesEditSnapshot(){
     HeapStorage storage;
-    RejectingRootArena arena;
+    ToggleRootArena arena;
     AString<Core::Alloc::GlobalArena> display(storage.arena);
     display.assign("old");
-    Vector<Impl::Ui::EditCaretMapping, RejectingRootArena> mapping(arena);
+    Vector<Impl::Ui::EditCaretMapping, ToggleRootArena> mapping(arena);
     const Array<usize, 4u> boundaries{ 0u, 1u, 2u, 3u };
     Impl::Ui::EditCompositionView composition;
     Impl::Ui::EditBoxRange selection;
@@ -60,6 +52,7 @@ private:
     Impl::Ui::EditTextMode::Enum mode = Impl::Ui::EditTextMode::SingleLine;
     b8 composing = false;
     b8 ready = true;
+    arena.rejectAllocations();
     const b8 propagated = static_cast<b8>(ThrowsException<AllocationException>([&](){
         return Impl::Ui::EditBoxSnapshotBuilder().commit("abc", Span<const usize>(boundaries), composition, mode, 0u, 0u, 0u, 1u,
             display, mapping, selection, preedit, replacement, caret, committedBytes, revision, mode, composing, ready);
@@ -96,8 +89,8 @@ private:
 }
 
 [[nodiscard]] inline b8 AllocationFailurePreservesRootState(){
-    RejectingRootArena arena;
-    Vector<Impl::Ui::WidgetId, RejectingRootArena> scopes(arena);
+    ToggleRootArena arena;
+    Vector<Impl::Ui::WidgetId, ToggleRootArena> scopes(arena);
     Impl::Ui::WidgetRoot requested;
     requested.value = 12u;
     requested.generation = 1u;
@@ -105,6 +98,7 @@ private:
     stored.value = 37u;
     stored.generation = 9u;
     b8 active = false;
+    arena.rejectAllocations();
     const b8 propagated = static_cast<b8>(ThrowsException<AllocationException>([&](){
         return Impl::Ui::TryBeginContextRoot(false, 1u, false, requested, stored, active, scopes);
     }));

@@ -157,11 +157,11 @@ static struct hb_vector_draw_svg_funcs_lazy_loader_t
   static hb_draw_funcs_t *create ()
   {
     hb_draw_funcs_t *funcs = hb_draw_funcs_create ();
-    hb_draw_funcs_set_move_to_func (funcs, (hb_draw_move_to_func_t) hb_vector_draw_svg_move_to, nullptr, nullptr);
-    hb_draw_funcs_set_line_to_func (funcs, (hb_draw_line_to_func_t) hb_vector_draw_svg_line_to, nullptr, nullptr);
-    hb_draw_funcs_set_quadratic_to_func (funcs, (hb_draw_quadratic_to_func_t) hb_vector_draw_svg_quadratic_to, nullptr, nullptr);
-    hb_draw_funcs_set_cubic_to_func (funcs, (hb_draw_cubic_to_func_t) hb_vector_draw_svg_cubic_to, nullptr, nullptr);
-    hb_draw_funcs_set_close_path_func (funcs, (hb_draw_close_path_func_t) hb_vector_draw_svg_close_path, nullptr, nullptr);
+    hb_draw_funcs_set_move_to_func (funcs, hb_vector_draw_svg_move_to, nullptr, nullptr);
+    hb_draw_funcs_set_line_to_func (funcs, hb_vector_draw_svg_line_to, nullptr, nullptr);
+    hb_draw_funcs_set_quadratic_to_func (funcs, hb_vector_draw_svg_quadratic_to, nullptr, nullptr);
+    hb_draw_funcs_set_cubic_to_func (funcs, hb_vector_draw_svg_cubic_to, nullptr, nullptr);
+    hb_draw_funcs_set_close_path_func (funcs, hb_vector_draw_svg_close_path, nullptr, nullptr);
     hb_draw_funcs_set_set_budget_func (funcs, hb_vector_draw_set_budget, nullptr, nullptr);
     hb_draw_funcs_set_get_budget_func (funcs, hb_vector_draw_get_budget, nullptr, nullptr);
     hb_draw_funcs_set_get_budget_remaining_func (funcs, hb_vector_draw_get_budget_remaining, nullptr, nullptr);
@@ -179,11 +179,11 @@ static struct hb_vector_draw_pdf_funcs_lazy_loader_t
   static hb_draw_funcs_t *create ()
   {
     hb_draw_funcs_t *funcs = hb_draw_funcs_create ();
-    hb_draw_funcs_set_move_to_func (funcs, (hb_draw_move_to_func_t) hb_vector_draw_pdf_move_to, nullptr, nullptr);
-    hb_draw_funcs_set_line_to_func (funcs, (hb_draw_line_to_func_t) hb_vector_draw_pdf_line_to, nullptr, nullptr);
+    hb_draw_funcs_set_move_to_func (funcs, hb_vector_draw_pdf_move_to, nullptr, nullptr);
+    hb_draw_funcs_set_line_to_func (funcs, hb_vector_draw_pdf_line_to, nullptr, nullptr);
     /* No quadratic_to: null fallback auto-promotes to cubic. */
-    hb_draw_funcs_set_cubic_to_func (funcs, (hb_draw_cubic_to_func_t) hb_vector_draw_pdf_cubic_to, nullptr, nullptr);
-    hb_draw_funcs_set_close_path_func (funcs, (hb_draw_close_path_func_t) hb_vector_draw_pdf_close_path, nullptr, nullptr);
+    hb_draw_funcs_set_cubic_to_func (funcs, hb_vector_draw_pdf_cubic_to, nullptr, nullptr);
+    hb_draw_funcs_set_close_path_func (funcs, hb_vector_draw_pdf_close_path, nullptr, nullptr);
     hb_draw_funcs_set_set_budget_func (funcs, hb_vector_draw_set_budget, nullptr, nullptr);
     hb_draw_funcs_set_get_budget_func (funcs, hb_vector_draw_get_budget, nullptr, nullptr);
     hb_draw_funcs_set_get_budget_remaining_func (funcs, hb_vector_draw_get_budget_remaining, nullptr, nullptr);
@@ -730,9 +730,8 @@ hb_vector_draw_render_pdf (hb_vector_draw_t *draw)
   if (!draw->has_extents)
     return nullptr;
 
-  /* Collect the content stream.  The path coordinates are in
-   * SVG space (Y-down).  Prepend a CTM that flips Y so the
-   * PDF page (Y-up) renders correctly. */
+  /* Collect the content stream.  Extents and path coordinates are
+   * both in Y-up (font) space, same as the PDF page. */
   float ex = draw->extents.x;
   float ey = draw->extents.y;
   float ew = draw->extents.width;
@@ -758,7 +757,7 @@ hb_vector_draw_render_pdf (hb_vector_draw_t *draw)
     stream.append_str (" rg\n");
     stream.append_num (ex);
     stream.append_c (' ');
-    stream.append_num (-(ey + eh));
+    stream.append_num (ey);
     stream.append_c (' ');
     stream.append_num (ew);
     stream.append_c (' ');
@@ -787,17 +786,16 @@ hb_vector_draw_render_pdf (hb_vector_draw_t *draw)
   offsets[1] = out.length;
   out.append_str ("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
 
-  /* Object 3: Page.  Extents are in SVG space (y = -font_y).
-   * Convert back: font Y range = [-(ey+eh) .. -ey]. */
+  /* Object 3: Page */
   offsets[2] = out.length;
   out.append_str ("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [");
   out.append_num (ex);
   out.append_c (' ');
-  out.append_num (-(ey + eh));
+  out.append_num (ey);
   out.append_c (' ');
   out.append_num (ex + ew);
   out.append_c (' ');
-  out.append_num (-ey);
+  out.append_num (ey + eh);
   out.append_str ("] /Contents 4 0 R");
   if (draw->pdf_extgstate_dict.length)
   {
@@ -1002,8 +1000,10 @@ hb_vector_draw_reset (hb_vector_draw_t *draw)
  * Provides a blob for internal buffer reuse by later render calls.
  * The caller transfers ownership of one reference to @draw and must
  * not destroy that reference after this call. Finish accessing @blob
- * and its data before recycling: later renders may reuse the blob
- * and overwrite its data.
+ * and its data before recycling, and do not keep other references
+ * to it: later renders may reuse the blob and overwrite its data.
+ * An immutable blob, such as one that a sub-blob was created from,
+ * is not reused; it is simply destroyed.
  *
  * Since: 13.0.0
  */
@@ -1015,5 +1015,10 @@ hb_vector_draw_recycle_blob (hb_vector_draw_t *draw,
   draw->recycled_blob = nullptr;
   if (!blob || blob == hb_blob_get_empty ())
     return;
+  if (hb_blob_is_immutable (blob))
+  {
+    hb_blob_destroy (blob);
+    return;
+  }
   draw->recycled_blob = blob;
 }

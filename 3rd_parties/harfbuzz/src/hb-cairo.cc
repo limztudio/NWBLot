@@ -54,11 +54,9 @@ hb_cairo_move_to (hb_draw_funcs_t *dfuncs HB_UNUSED,
 		  float to_x, float to_y,
 		  void *user_data HB_UNUSED)
 {
-  hb_cairo_context_t *c = (hb_cairo_context_t *) draw_data;
-  if (unlikely (!c->spend (HB_BUDGET_1)))
-    return;
+  cairo_t *cr = (cairo_t *) draw_data;
 
-  cairo_move_to (c->cr, (double) to_x, (double) to_y);
+  cairo_move_to (cr, (double) to_x, (double) to_y);
 }
 
 static void
@@ -68,11 +66,9 @@ hb_cairo_line_to (hb_draw_funcs_t *dfuncs HB_UNUSED,
 		  float to_x, float to_y,
 		  void *user_data HB_UNUSED)
 {
-  hb_cairo_context_t *c = (hb_cairo_context_t *) draw_data;
-  if (unlikely (!c->spend (HB_BUDGET_1)))
-    return;
+  cairo_t *cr = (cairo_t *) draw_data;
 
-  cairo_line_to (c->cr, (double) to_x, (double) to_y);
+  cairo_line_to (cr, (double) to_x, (double) to_y);
 }
 
 static void
@@ -84,11 +80,9 @@ hb_cairo_cubic_to (hb_draw_funcs_t *dfuncs HB_UNUSED,
 		   float to_x, float to_y,
 		   void *user_data HB_UNUSED)
 {
-  hb_cairo_context_t *c = (hb_cairo_context_t *) draw_data;
-  if (unlikely (!c->spend (HB_BUDGET_1)))
-    return;
+  cairo_t *cr = (cairo_t *) draw_data;
 
-  cairo_curve_to (c->cr,
+  cairo_curve_to (cr,
                   (double) control1_x, (double) control1_y,
                   (double) control2_x, (double) control2_y,
                   (double) to_x, (double) to_y);
@@ -100,36 +94,9 @@ hb_cairo_close_path (hb_draw_funcs_t *dfuncs HB_UNUSED,
 		     hb_draw_state_t *st HB_UNUSED,
 		     void *user_data HB_UNUSED)
 {
-  hb_cairo_context_t *c = (hb_cairo_context_t *) draw_data;
-  if (unlikely (!c->spend (HB_BUDGET_1)))
-    return;
+  cairo_t *cr = (cairo_t *) draw_data;
 
-  cairo_close_path (c->cr);
-}
-
-static hb_bool_t
-hb_cairo_draw_set_budget (hb_draw_funcs_t *dfuncs HB_UNUSED,
-			  void *draw_data,
-			  int64_t budget,
-			  void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) draw_data)->set_budget (budget);
-}
-
-static int64_t
-hb_cairo_draw_get_budget (hb_draw_funcs_t *dfuncs HB_UNUSED,
-			  void *draw_data,
-			  void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) draw_data)->get_budget ();
-}
-
-static int64_t *
-hb_cairo_draw_get_budget_remaining (hb_draw_funcs_t *dfuncs HB_UNUSED,
-				    void *draw_data,
-				    void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) draw_data)->get_budget_remaining ();
+  cairo_close_path (cr);
 }
 
 static inline void free_static_cairo_draw_funcs ();
@@ -144,9 +111,6 @@ static struct hb_cairo_draw_funcs_lazy_loader_t : hb_draw_funcs_lazy_loader_t<hb
     hb_draw_funcs_set_line_to_func (funcs, hb_cairo_line_to, nullptr, nullptr);
     hb_draw_funcs_set_cubic_to_func (funcs, hb_cairo_cubic_to, nullptr, nullptr);
     hb_draw_funcs_set_close_path_func (funcs, hb_cairo_close_path, nullptr, nullptr);
-    hb_draw_funcs_set_set_budget_func (funcs, hb_cairo_draw_set_budget, nullptr, nullptr);
-    hb_draw_funcs_set_get_budget_func (funcs, hb_cairo_draw_get_budget, nullptr, nullptr);
-    hb_draw_funcs_set_get_budget_remaining_func (funcs, hb_cairo_draw_get_budget_remaining, nullptr, nullptr);
 
     hb_draw_funcs_make_immutable (funcs);
 
@@ -217,7 +181,7 @@ hb_cairo_fill_glyph (hb_paint_funcs_t *pfuncs HB_UNUSED,
   cairo_save (cr);
 
   cairo_new_path (cr);
-  hb_font_draw_glyph (font, glyph, hb_cairo_draw_get_funcs (), c);
+  hb_font_draw_glyph (font, glyph, hb_cairo_draw_get_funcs (), cr);
   cairo_close_path (cr);
   _hb_cairo_set_source_color (c, use_foreground, color);
   cairo_fill (cr);
@@ -227,31 +191,18 @@ hb_cairo_fill_glyph (hb_paint_funcs_t *pfuncs HB_UNUSED,
 
 static hb_bool_t
 hb_cairo_paint_color_glyph (hb_paint_funcs_t *pfuncs HB_UNUSED,
-			    void *paint_data,
-			    hb_codepoint_t glyph,
-			    hb_font_t *font,
+			    void *paint_data HB_UNUSED,
+			    hb_codepoint_t glyph HB_UNUSED,
+			    hb_font_t *font HB_UNUSED,
 			    void *user_data HB_UNUSED)
 {
-  hb_cairo_context_t *c = (hb_cairo_context_t *) paint_data;
-  cairo_t *cr = c->cr;
-
-  if (unlikely (!c->spend (HB_BUDGET_1)))
-    return true;
-
-  cairo_save (cr);
-
-  hb_position_t x_scale, y_scale;
-  hb_font_get_scale (font, &x_scale, &y_scale);
-  cairo_scale (cr, x_scale, -y_scale);
-
-  cairo_glyph_t cairo_glyph = { glyph, 0, 0 };
-  cairo_set_scaled_font (cr, c->scaled_font);
-  cairo_set_font_size (cr, 1);
-  cairo_show_glyphs (cr, &cairo_glyph, 1);
-
-  cairo_restore (cr);
-
-  return true;
+  /* Showing the nested glyph through cairo_show_glyphs() would re-enter
+   * hb_font_paint_glyph() on a scaled font of its own, with a fresh paint
+   * context: the glyph decycler and nesting depth of the walk in progress
+   * do not carry over, so two glyphs painting each other recurse until
+   * the stack is exhausted.  Decline, and let the caller paint the nested
+   * glyph inline under the limits of the current walk. */
+  return false;
 }
 
 static void
@@ -267,7 +218,7 @@ hb_cairo_push_clip_glyph (hb_paint_funcs_t *pfuncs HB_UNUSED,
   cairo_save (cr);
   cairo_new_path (cr);
 
-  hb_font_draw_glyph (font, glyph, hb_cairo_draw_get_funcs (), c);
+  hb_font_draw_glyph (font, glyph, hb_cairo_draw_get_funcs (), cr);
 
   cairo_close_path (cr);
   cairo_clip (cr);
@@ -283,6 +234,7 @@ hb_cairo_push_clip_rectangle (hb_paint_funcs_t *pfuncs HB_UNUSED,
   cairo_t *cr = c->cr;
 
   cairo_save (cr);
+  cairo_new_path (cr);
   cairo_rectangle (cr,
                    (double) xmin, (double) ymin,
                    (double) (xmax - xmin), (double) (ymax - ymin));
@@ -300,7 +252,7 @@ hb_cairo_push_clip_path_start (hb_paint_funcs_t *pfuncs HB_UNUSED,
 
   cairo_save (cr);
   cairo_new_path (cr);
-  *draw_data = c;
+  *draw_data = cr;
   return hb_cairo_draw_get_funcs ();
 }
 
@@ -488,31 +440,6 @@ hb_cairo_paint_custom_palette_color (hb_paint_funcs_t *funcs,
   return false;
 }
 
-static hb_bool_t
-hb_cairo_paint_set_budget (hb_paint_funcs_t *pfuncs HB_UNUSED,
-			   void *paint_data,
-			   int64_t budget,
-			   void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) paint_data)->set_budget (budget);
-}
-
-static int64_t
-hb_cairo_paint_get_budget (hb_paint_funcs_t *pfuncs HB_UNUSED,
-			   void *paint_data,
-			   void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) paint_data)->get_budget ();
-}
-
-static int64_t *
-hb_cairo_paint_get_budget_remaining (hb_paint_funcs_t *pfuncs HB_UNUSED,
-				     void *paint_data,
-				     void *user_data HB_UNUSED)
-{
-  return ((hb_cairo_context_t *) paint_data)->get_budget_remaining ();
-}
-
 static inline void free_static_cairo_paint_funcs ();
 
 static struct hb_cairo_paint_funcs_lazy_loader_t : hb_paint_funcs_lazy_loader_t<hb_cairo_paint_funcs_lazy_loader_t>
@@ -538,9 +465,6 @@ static struct hb_cairo_paint_funcs_lazy_loader_t : hb_paint_funcs_lazy_loader_t<
     hb_paint_funcs_set_radial_gradient_func (funcs, hb_cairo_paint_radial_gradient, nullptr, nullptr);
     hb_paint_funcs_set_sweep_gradient_func (funcs, hb_cairo_paint_sweep_gradient, nullptr, nullptr);
     hb_paint_funcs_set_custom_palette_color_func (funcs, hb_cairo_paint_custom_palette_color, nullptr, nullptr);
-    hb_paint_funcs_set_set_budget_func (funcs, hb_cairo_paint_set_budget, nullptr, nullptr);
-    hb_paint_funcs_set_get_budget_func (funcs, hb_cairo_paint_get_budget, nullptr, nullptr);
-    hb_paint_funcs_set_get_budget_remaining_func (funcs, hb_cairo_paint_get_budget_remaining, nullptr, nullptr);
 
     hb_paint_funcs_make_immutable (funcs);
 
@@ -568,17 +492,9 @@ static const cairo_user_data_key_t hb_cairo_font_user_data_key = {0};
 static const cairo_user_data_key_t hb_cairo_font_init_func_user_data_key = {0};
 static const cairo_user_data_key_t hb_cairo_font_init_user_data_user_data_key = {0};
 static const cairo_user_data_key_t hb_cairo_scale_factor_user_data_key = {0};
-static const cairo_user_data_key_t hb_cairo_budget_user_data_key = {0};
 
 static void hb_cairo_face_destroy (void *p) { hb_face_destroy ((hb_face_t *) p); }
 static void hb_cairo_font_destroy (void *p) { hb_font_destroy ((hb_font_t *) p); }
-static void
-hb_cairo_budget_destroy (void *p)
-{
-  hb_cairo_budget_t *budget = (hb_cairo_budget_t *) p;
-  budget->~hb_cairo_budget_t ();
-  hb_free (budget);
-}
 
 static cairo_status_t
 hb_cairo_init_scaled_font (cairo_scaled_font_t  *scaled_font,
@@ -590,7 +506,11 @@ hb_cairo_init_scaled_font (cairo_scaled_font_t  *scaled_font,
   hb_font_t *font = (hb_font_t *) cairo_font_face_get_user_data (font_face,
 								 &hb_cairo_font_user_data_key);
 
-  if (!font)
+  if (font)
+    /* Shared font owned by the cairo font face (the font-based
+     * constructor).  Take our own reference to hand to the scaled font. */
+    hb_font_reference (font);
+  else
   {
     hb_face_t *face = (hb_face_t *) cairo_font_face_get_user_data (font_face,
 								   &hb_cairo_face_user_data_key);
@@ -635,29 +555,27 @@ hb_cairo_init_scaled_font (cairo_scaled_font_t  *scaled_font,
     {
       void *user_data = cairo_font_face_get_user_data (font_face,
 						       &hb_cairo_font_init_user_data_user_data_key);
-      font = init_func (font, scaled_font, user_data);
+      hb_font_t *new_font = init_func (font, scaled_font, user_data);
+      /* Preserve the historical ownership behavior for a callback that
+       * returns a different font: reference it, rather than assuming it
+       * transfers ownership.  The font we created is the callback's to
+       * release, as before. */
+      if (new_font != font)
+	hb_font_reference (new_font);
+      font = new_font;
     }
 
     hb_font_make_immutable (font);
   }
 
-  cairo_scaled_font_set_user_data (scaled_font,
-				   &hb_cairo_font_user_data_key,
-				   (void *) hb_font_reference (font),
-				   hb_cairo_font_destroy);
-
-  hb_cairo_budget_t *budget = (hb_cairo_budget_t *) hb_malloc (sizeof (hb_cairo_budget_t));
-  if (unlikely (!budget))
-    return CAIRO_STATUS_NO_MEMORY;
-  new (budget) hb_cairo_budget_t ();
-  cairo_status_t status = cairo_scaled_font_set_user_data (scaled_font,
-						   &hb_cairo_budget_user_data_key,
-						   budget,
-						   hb_cairo_budget_destroy);
-  if (unlikely (status != CAIRO_STATUS_SUCCESS))
+  /* The scaled font takes over our one reference to font. */
+  if (unlikely (CAIRO_STATUS_SUCCESS != cairo_scaled_font_set_user_data (scaled_font,
+									 &hb_cairo_font_user_data_key,
+									 (void *) font,
+									 hb_cairo_font_destroy)))
   {
-    hb_cairo_budget_destroy (budget);
-    return status;
+    hb_font_destroy (font);
+    return CAIRO_STATUS_NO_MEMORY;
   }
 
   hb_position_t x_scale, y_scale;
@@ -725,11 +643,6 @@ hb_cairo_render_glyph (cairo_scaled_font_t  *scaled_font,
 {
   hb_font_t *font = (hb_font_t *) cairo_scaled_font_get_user_data (scaled_font,
 								   &hb_cairo_font_user_data_key);
-  hb_cairo_budget_t *budget = (hb_cairo_budget_t *) cairo_scaled_font_get_user_data (scaled_font,
-									     &hb_cairo_budget_user_data_key);
-  if (unlikely (!budget))
-    return CAIRO_STATUS_NO_MEMORY;
-  hb_cairo_context_t c {scaled_font, cr, nullptr, budget};
 
   hb_position_t x_scale, y_scale;
   hb_font_get_scale (font, &x_scale, &y_scale);
@@ -737,7 +650,7 @@ hb_cairo_render_glyph (cairo_scaled_font_t  *scaled_font,
   cairo_scale (cr,
 	       +1. / (x_scale ? x_scale : 1),
 	       -1. / (y_scale ? y_scale : 1));
-  if (hb_font_draw_glyph_or_fail (font, glyph, hb_cairo_draw_get_funcs (), &c))
+  if (hb_font_draw_glyph_or_fail (font, glyph, hb_cairo_draw_get_funcs (), cr))
     cairo_fill (cr);
 
   // If draw fails, we still return SUCCESS, as we want empty drawing, not
@@ -755,10 +668,6 @@ hb_cairo_render_color_glyph (cairo_scaled_font_t  *scaled_font,
 {
   hb_font_t *font = (hb_font_t *) cairo_scaled_font_get_user_data (scaled_font,
 								   &hb_cairo_font_user_data_key);
-  hb_cairo_budget_t *budget = (hb_cairo_budget_t *) cairo_scaled_font_get_user_data (scaled_font,
-									     &hb_cairo_budget_user_data_key);
-  if (unlikely (!budget))
-    return CAIRO_STATUS_NO_MEMORY;
 
   unsigned int palette = 0;
 #ifdef CAIRO_COLOR_PALETTE_DEFAULT
@@ -775,10 +684,10 @@ hb_cairo_render_color_glyph (cairo_scaled_font_t  *scaled_font,
 	       +1. / (x_scale ? x_scale : 1),
 	       -1. / (y_scale ? y_scale : 1));
 
-  hb_cairo_context_t c {scaled_font,
-			cr,
-			(hb_map_t *) cairo_scaled_font_get_user_data (scaled_font, &color_cache_key),
-			budget};
+  hb_cairo_context_t c;
+  c.scaled_font = scaled_font;
+  c.cr = cr;
+  c.color_cache = (hb_map_t *) cairo_scaled_font_get_user_data (scaled_font, &color_cache_key);
 
   /* Synthesizing variant: mono glyphs render here too via the
    * fill_glyph foreground fallback inside hb_font_paint_glyph.
@@ -1065,6 +974,10 @@ hb_cairo_font_face_get_scale_factor (cairo_font_face_t *font_face)
  * If the value @clusters points at has changed after the call, the caller
  * will free the allocated cluster array using cairo_text_cluster_free().
  *
+ * Cairo can only represent monotone clusters.  If the cluster values in
+ * @buffer are not monotone in the buffer's direction, a single cluster
+ * mapping all of @utf8 to all of the glyphs is returned.
+ *
  * See hb_cairo_font_face_set_scale_factor() for the details of
  * the @scale_factor argument.
  *
@@ -1099,13 +1012,26 @@ hb_cairo_glyphs_from_buffer (hb_buffer_t *buffer,
   if (orig_num_glyphs < *num_glyphs + 1)
     *glyphs = cairo_glyph_allocate (*num_glyphs + 1);
 
+  hb_bool_t backward = HB_DIRECTION_IS_BACKWARD (hb_buffer_get_direction (buffer));
+  bool monotone = true;
   if (clusters && utf8)
   {
     unsigned orig_num_clusters = *num_clusters;
     *num_clusters = *num_glyphs ? 1 : 0;
     for (unsigned int i = 1; i < *num_glyphs; i++)
       if (hb_glyph[i].cluster != hb_glyph[i-1].cluster)
+      {
+	if (unlikely ((hb_glyph[i].cluster < hb_glyph[i-1].cluster) != (bool) backward))
+	{
+	  /* Cairo can only represent monotone clusters.  Non-monotone
+	   * cluster levels, shaper bugs, or shaping that failed midway
+	   * can all get us here.  Map all of the text to all of the glyphs. */
+	  monotone = false;
+	  *num_clusters = 1;
+	  break;
+	}
 	(*num_clusters)++;
+      }
     if (orig_num_clusters < *num_clusters)
       *clusters = cairo_text_cluster_allocate (*num_clusters);
   }
@@ -1131,24 +1057,30 @@ hb_cairo_glyphs_from_buffer (hb_buffer_t *buffer,
   if (clusters && *num_clusters && utf8)
   {
     hb_memset ((void *) *clusters, 0, *num_clusters * sizeof ((*clusters)[0]));
-    hb_bool_t backward = HB_DIRECTION_IS_BACKWARD (hb_buffer_get_direction (buffer));
     *cluster_flags = backward ? CAIRO_TEXT_CLUSTER_FLAG_BACKWARD : (cairo_text_cluster_flags_t) 0;
     unsigned int cluster = 0;
     const char *start = utf8, *end;
     (*clusters)[cluster].num_glyphs++;
-    if (backward)
+    if (unlikely (!monotone))
+    {
+      (*clusters)[cluster].num_glyphs = *num_glyphs;
+      (*clusters)[cluster].num_bytes = utf8_len;
+    }
+    else if (backward)
     {
       for (i = *num_glyphs - 2; i >= 0; i--)
       {
 	if (hb_glyph[i].cluster != hb_glyph[i+1].cluster)
 	{
 	  assert (hb_glyph[i].cluster > hb_glyph[i+1].cluster);
+	  unsigned delta = hb_min ((unsigned) (hb_glyph[i].cluster - hb_glyph[i+1].cluster),
+				   (unsigned) (utf8 + utf8_len - start));
 	  if (utf8_clusters)
-	    end = start + hb_glyph[i].cluster - hb_glyph[i+1].cluster;
+	    end = start + delta;
 	  else
 	    end = (const char *) hb_utf_offset_to_pointer<hb_utf8_t> ((const uint8_t *) start,
 								      (const uint8_t *) utf8, utf8_len,
-								      (signed) (hb_glyph[i].cluster - hb_glyph[i+1].cluster));
+								      (signed) delta);
 	  (*clusters)[cluster].num_bytes = end - start;
 	  start = end;
 	  cluster++;
@@ -1164,12 +1096,14 @@ hb_cairo_glyphs_from_buffer (hb_buffer_t *buffer,
 	if (hb_glyph[i].cluster != hb_glyph[i-1].cluster)
 	{
 	  assert (hb_glyph[i].cluster > hb_glyph[i-1].cluster);
+	  unsigned delta = hb_min ((unsigned) (hb_glyph[i].cluster - hb_glyph[i-1].cluster),
+				   (unsigned) (utf8 + utf8_len - start));
 	  if (utf8_clusters)
-	    end = start + hb_glyph[i].cluster - hb_glyph[i-1].cluster;
+	    end = start + delta;
 	  else
 	    end = (const char *) hb_utf_offset_to_pointer<hb_utf8_t> ((const uint8_t *) start,
 								      (const uint8_t *) utf8, utf8_len,
-								      (signed) (hb_glyph[i].cluster - hb_glyph[i-1].cluster));
+								      (signed) delta);
 	  (*clusters)[cluster].num_bytes = end - start;
 	  start = end;
 	  cluster++;

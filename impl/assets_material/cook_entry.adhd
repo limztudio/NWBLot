@@ -67,32 +67,37 @@ class MaterialBindDependency{
 }
 
 class MaterialBindTypedLayout{
+    [cpp_unwind]
+    public MaterialBindTypedLayout(){}
+
     public String interfacePath = "<unknown>";
     public u64 layoutHash = 0u;
-    public TypedLayoutBlockVector typedLayoutBlocks;
-    public TypedLayoutFieldVector typedLayoutFields;
-    public TypedBlockByteVector typedBlockBytes;
+    public TypedLayoutBlockVector typedLayoutBlocks = TypedLayoutBlockVector(0u);
+    public TypedLayoutFieldVector typedLayoutFields = TypedLayoutFieldVector(0u);
+    public TypedBlockByteVector typedBlockBytes = TypedBlockByteVector(0u);
     public MaterialBindTypedLayoutBlockLookup blockLookup;
     public MaterialBindTypedLayoutParameterLookup parameterLookup;
 }
 
 class MaterialBindTypedLayoutCache{
-    public Vector<MaterialBindTypedLayout> entries;
+    [cpp_unwind]
+    public MaterialBindTypedLayoutCache(){}
+
+    public Deque<MaterialBindTypedLayout> entries;
     public HashMap<Name, usize> lookup;
 
     [cpp_unwind]
     public void reserve(in usize count){
-        this.entries.reserve(count);
         this.lookup.reserve(count);
     }
 }
 
 class MaterialBindTypedLayoutEntryGuard : NoCopy{
-    private mut Vector<MaterialBindTypedLayout> m_entries;
+    private mut Deque<MaterialBindTypedLayout> m_entries;
     private usize m_previousSize;
     private b8 m_armed;
 
-    public MaterialBindTypedLayoutEntryGuard(mut Vector<MaterialBindTypedLayout> entries, in usize previousSize){
+    public MaterialBindTypedLayoutEntryGuard(mut Deque<MaterialBindTypedLayout> entries, in usize previousSize){
         this.m_entries = entries;
         this.m_previousSize = previousSize;
         this.m_armed = false;
@@ -146,10 +151,9 @@ Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in
         return index;
     }
     const usize index = cache.entries.size();
-    cache.entries.reserve(index + 1u);
     MaterialBindTypedLayoutEntryGuard entryGuard(cache.entries, index);
     entryGuard.arm();
-    AppendArenaElement<MaterialBindTypedLayout>(cache.entries);
+    cache.entries.emplace_back();
     mut MaterialBindTypedLayout layout = cache.entries[index];
     layout.interfacePath.assign(bindEntry.virtualPath);
     const Expected<u64> layoutHash = BuildMaterialBindTypedLayoutData(bindEntry.virtualPath, materialInterface, bindEntry.structs, bindEntry.instances,

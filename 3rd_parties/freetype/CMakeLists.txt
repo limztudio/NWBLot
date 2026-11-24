@@ -47,6 +47,7 @@ target_include_directories(nwb_vendor_freetype SYSTEM PUBLIC
     "${CMAKE_CURRENT_BINARY_DIR}/include"
     "${CMAKE_CURRENT_LIST_DIR}/include"
 )
+target_link_libraries(nwb_vendor_freetype PRIVATE nwb::harfbuzz_script_list)
 target_compile_definitions(nwb_vendor_freetype PRIVATE FT2_BUILD_LIBRARY)
 nwb_disable_vendor_warnings(nwb_vendor_freetype)
 nwb_apply_debug_symbols(nwb_vendor_freetype)

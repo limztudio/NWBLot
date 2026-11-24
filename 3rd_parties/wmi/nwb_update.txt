@@ -1,5 +1,5 @@
 package: wmi
 version: 1.0
-updated_utc: 2026-06-23T16:02:45Z
+updated_utc: 2026-11-24T05:57:48Z
 source: https://github.com/Thomas-Sparber/wmi/releases/tag/v1.0
-notes: C++ wrapper over Windows WMI from official Thomas-Sparber/wmi. Originally flattened out of system_info_utils/source/third_party; subsequent updates come from the official repo. Registered as nwb::wmi with no upstream test executable. UNUSED/dead in this build. NWB-local maintenance trims stale and redundant source comments.
+notes: C++ wrapper over Windows WMI from official Thomas-Sparber/wmi. Originally flattened out of system_info_utils/source/third_party; subsequent updates come from the official repo. Registered as nwb::wmi with no upstream test executable. The non-Windows interface target uses the shared vendor-header target helper. UNUSED/dead in this build. NWB-local maintenance trims stale and redundant source comments.

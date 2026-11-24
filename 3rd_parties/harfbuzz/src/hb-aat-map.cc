@@ -156,6 +156,11 @@ hb_aat_map_builder_t::compile (hb_aat_map_t  &m)
 
       hb_aat_layout_compile_map (this, &m);
 
+      /* Out of budget?  Stop here; the adjustment below extends the ranges
+       * compiled so far to the end of the text. */
+      if (unlikely (!hb_budget_spend (budget, HB_BUDGET_1, active_features.length)))
+	break;
+
       last_index = event->index;
     }
 
@@ -163,9 +168,12 @@ hb_aat_map_builder_t::compile (hb_aat_map_t  &m)
     {
       active_features.push (event->feature);
     } else {
-      feature_info_t *feature = active_features.lsearch (event->feature);
-      if (feature)
-	active_features.remove_ordered (feature - active_features.arrayZ);
+      for (unsigned int j = 0; j < active_features.length; j++)
+	if (active_features[j].seq == event->feature.seq)
+	{
+	  active_features.remove_ordered (j);
+	  break;
+	}
     }
   }
 

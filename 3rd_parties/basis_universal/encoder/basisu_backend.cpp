@@ -17,10 +17,6 @@
 //
 #include "basisu_backend.h"
 
-#if BASISU_SUPPORT_SSE
-#define CPPSPMD_NAME(a) a##_sse41
-#include "basisu_kernels_declares.h"
-#endif
 
 #define BASISU_FASTER_SELECTOR_REORDERING 0
 #define BASISU_BACKEND_VERIFY(c) verify(c, __LINE__);
@@ -894,79 +890,6 @@ namespace basisu
 								}
 								else
 								{
-#if BASISU_SUPPORT_SSE
-									uint8_t block_selectors[16];
-									for (uint32_t i = 0; i < 16; i++)
-										block_selectors[i] = (uint8_t)etc_blk.get_selector(i & 3, i >> 2);
-
-									const int64_t initial_best_trial_err = INT64_MAX;
-									int64_t best_trial_err = initial_best_trial_err;
-									int best_trial_idx = 0;
-																																				
-									const int search_dist = minimum<int>(iabs(endpoint_delta) - 1, MAX_ENDPOINT_SEARCH_DIST);
-									for (int d = -search_dist; d < search_dist; d++)
-									{
-										int trial_idx = prev_endpoint_index + d;
-										if (trial_idx < 0)
-											trial_idx += (int)r.get_total_endpoint_clusters();
-										else if (trial_idx >= (int)r.get_total_endpoint_clusters())
-											trial_idx -= (int)r.get_total_endpoint_clusters();
-
-										if (trial_idx == new_endpoint_index)
-											continue;
-
-										// Skip it if this new endpoint palette entry is actually never used.
-										if (!m_new_endpoint_was_used[trial_idx])
-											continue;
-
-										const etc1_endpoint_palette_entry& p = m_endpoint_palette[m_endpoint_remap_table_new_to_old[trial_idx]];
-																				
-										if (m_params.m_compression_level <= 1)
-										{
-											if (p.m_inten5 > cur_inten5)
-												continue;
-
-											int delta_r = iabs(cur_endpoints.m_color5.r - p.m_color5.r);
-											int delta_g = iabs(cur_endpoints.m_color5.g - p.m_color5.g);
-											int delta_b = iabs(cur_endpoints.m_color5.b - p.m_color5.b);
-											int color_delta = delta_r + delta_g + delta_b;
-											
-											if (color_delta > COLOR_DELTA_THRESH)
-												continue;
-										}
-
-										color_rgba block_colors[4];
-										etc_block::get_block_colors_etc1s(block_colors, p.m_color5, p.m_inten5);
-
-										int64_t trial_err;
-										if (r.get_params().m_perceptual)
-										{
-											perceptual_distance_rgb_4_N_sse41(&trial_err, block_selectors, block_colors, src_pixels.get_ptr(), 16, best_trial_err);
-										}
-										else
-										{
-											linear_distance_rgb_4_N_sse41(&trial_err, block_selectors, block_colors, src_pixels.get_ptr(), 16, best_trial_err);
-										}
-
-
-										if ((trial_err < best_trial_err) && (trial_err <= (int64_t)thresh_err))
-										{
-											best_trial_err = trial_err;
-											best_trial_idx = trial_idx;
-										}
-									}
-
-									if (best_trial_err != initial_best_trial_err)
-									{
-										m.m_endpoint_index = m_endpoint_remap_table_new_to_old[best_trial_idx];
-
-										new_endpoint_index = best_trial_idx;
-
-										endpoint_delta = new_endpoint_index - prev_endpoint_index;
-
-										total_endpoint_indices_remapped++;
-									}
-#endif // BASISU_SUPPORT_SSE
 								} // if (!g_cpu_supports_sse41)
 															
 							} // if (cur_err)

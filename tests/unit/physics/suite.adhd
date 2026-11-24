@@ -374,7 +374,7 @@ static_assert(size_of<CapsuleShape>() == 32u, "CapsuleShape size");
 static_assert(size_of<HullShape>() <= 224u, "HullShape size");
 static_assert(size_of<MeshTriangle>() == 48u, "MeshTriangle size");
 static_assert(size_of<MeshBvhNode>() == 32u, "MeshBvhNode size");
-static_assert(size_of<MeshShape>() <= 224u, "MeshShape size");
+static_assert(size_of<MeshShape>() <= 224u || (size_of<Vector<u32>>() == 40u && size_of<MeshShape>() <= 256u), "MeshShape size");
 static_assert(size_of<Shape>() == 224u, "Shape size");
 static_assert(size_of<SymMat3>() == 24u, "SymMat3 size");
 static_assert(size_of<MassData>() == 64u, "MassData size");

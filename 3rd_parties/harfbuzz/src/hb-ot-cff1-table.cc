@@ -422,30 +422,14 @@ bool OT::cff1::accelerator_t::get_extents (hb_font_t *font, hb_codepoint_t glyph
   if (!_get_bounds (this, glyph, bounds, false, budget))
     return false;
 
-  if (bounds.min.x >= bounds.max.x)
-  {
-    extents->width = 0;
-    extents->x_bearing = 0;
-  }
-  else
-  {
-    double x_bearing = roundf (bounds.min.x.to_real ());
-    extents->x_bearing = hb_clamp_to<hb_position_t> (x_bearing);
-    extents->width = hb_clamp_to<hb_position_t> ((double) roundf (bounds.max.x.to_real ()) - x_bearing);
-  }
-  if (bounds.min.y >= bounds.max.y)
-  {
-    extents->height = 0;
-    extents->y_bearing = 0;
-  }
-  else
-  {
-    double y_bearing = roundf (bounds.max.y.to_real ());
-    extents->y_bearing = hb_clamp_to<hb_position_t> (y_bearing);
-    extents->height = hb_clamp_to<hb_position_t> ((double) roundf (bounds.min.y.to_real ()) - y_bearing);
-  }
-
-  font->scale_glyph_extents (extents);
+  /* An axis with no extent collapses to the origin. */
+  bool has_x = bounds.min.x < bounds.max.x;
+  bool has_y = bounds.min.y < bounds.max.y;
+  hb_extents_t<> box (has_x ? (float) bounds.min.x.to_real () : 0.f,
+		      has_y ? (float) bounds.min.y.to_real () : 0.f,
+		      has_x ? (float) bounds.max.x.to_real () : 0.f,
+		      has_y ? (float) bounds.max.y.to_real () : 0.f);
+  font->scale_glyph_extents (box, extents);
 
   return true;
 }
@@ -602,8 +586,37 @@ struct cff1_cs_opset_seac_t : cff1_cs_opset_t<cff1_cs_opset_seac_t, get_seac_par
 };
 
 static bool
-_cff1_charstring_may_end_in_seac (const hb_ubytes_t &str)
+_cff1_subrs_may_end_in_seac (const CFF1Subrs &subrs)
 {
+  for (unsigned int i = 0; i < subrs.count; i++)
+    for (const auto byte : subrs[i])
+      if (byte == OpCode_endchar)
+        return true;
+  return false;
+}
+
+OT::cff1::accelerator_subset_t::accelerator_subset_t (hb_face_t *face) : SUPER (face)
+{
+  if (unlikely (!is_valid ())) return;
+
+  subrs_may_end_in_seac = _cff1_subrs_may_end_in_seac (*globalSubrs);
+  for (unsigned int fd = 0; !subrs_may_end_in_seac && fd < fdCount; fd++)
+    subrs_may_end_in_seac =
+      _cff1_subrs_may_end_in_seac (*privateDicts[fd].localSubrs);
+}
+
+static bool
+_cff1_charstring_may_end_in_seac (const hb_ubytes_t &str,
+                                  bool subrs_may_end_in_seac)
+{
+  if (subrs_may_end_in_seac)
+    /* A subroutine can terminate the glyph with endchar, even when the glyph
+     * has no endchar of its own or has unreachable bytes after the call.
+     * False positives from operands and masks are safe. */
+    for (const auto byte : str)
+      if (byte == OpCode_callsubr || byte == OpCode_callgsubr)
+        return true;
+
   if (unlikely (!str.length || str[str.length - 1] != OpCode_endchar))
     return false;
 
@@ -626,20 +639,26 @@ _cff1_charstring_may_end_in_seac (const hb_ubytes_t &str)
     return true;
 
   /* A subroutine can leave the seac operands on the shared stack. */
-  return last == OpCode_callsubr || last == OpCode_callgsubr;
+  if (last == OpCode_callsubr || last == OpCode_callgsubr)
+    return true;
+
+  /* Escaped operators include stack-preserving dotsection. */
+  return end >= 2 && str[end - 2] == OpCode_escape;
 }
 
-bool OT::cff1::accelerator_subset_t::get_seac_components (hb_codepoint_t glyph, hb_codepoint_t *base, hb_codepoint_t *accent) const
+bool OT::cff1::accelerator_subset_t::get_seac_components (hb_codepoint_t glyph, hb_codepoint_t *base, hb_codepoint_t *accent, int64_t *budget) const
 {
   if (unlikely (!is_valid () || (glyph >= num_glyphs))) return false;
+  /* seac uses StandardEncoding names and is not defined in CID-keyed fonts. */
+  if (is_CID ()) return false;
 
   unsigned int fd = fdSelect->get_fd (glyph);
   const hb_ubytes_t str = (*charStrings)[glyph];
-  if (unlikely (!_cff1_charstring_may_end_in_seac (str))) return false;
+  if (unlikely (!_cff1_charstring_may_end_in_seac (str, subrs_may_end_in_seac))) return false;
   cff1_cs_interp_env_t env (str, *this, fd);
   cff1_cs_interpreter_t<cff1_cs_opset_seac_t, get_seac_param_t> interp (env);
   get_seac_param_t  param (this);
-  if (unlikely (!interp.interpret (param))) return false;
+  if (unlikely (!interp.interpret (param, budget))) return false;
 
   if (param.has_seac ())
   {

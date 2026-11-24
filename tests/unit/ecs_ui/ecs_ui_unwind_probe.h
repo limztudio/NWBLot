@@ -82,8 +82,8 @@ private:
 
 inline void TriggerProbeOom(){
     NthFailEcsUiArena arena;
-    arena.arm(1u);
     Vector<u8, NthFailEcsUiArena> probe(arena);
+    arena.arm(1u);
     probe.reserve(128u);
 }
 

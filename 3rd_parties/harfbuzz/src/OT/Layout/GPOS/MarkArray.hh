@@ -12,16 +12,22 @@ static inline hb_position_t
 resolve_cross_offset (const hb_glyph_position_t *pos,
 		      unsigned int len,
 		      unsigned int glyph_pos,
-		      hb_direction_t direction)
+		      hb_direction_t direction,
+		      bool reversed = false)
 {
   bool horizontal = HB_DIRECTION_IS_HORIZONTAL (direction);
   hb_position_t offset = horizontal ? pos[glyph_pos].y_offset : pos[glyph_pos].x_offset;
-  while (pos[glyph_pos].attach_type() & ATTACH_TYPE_CURSIVE)
+  /* An acyclic chain has at most len - 1 links.  Cursive lookups with
+   * different flags can form a cycle, so bound the walk by the glyph count. */
+  for (unsigned int count = 1;
+       count < len && (pos[glyph_pos].attach_type() & ATTACH_TYPE_CURSIVE);
+       count++)
   {
     int chain = pos[glyph_pos].attach_chain();
     if (!chain)
       break;
-    unsigned int parent = (int) glyph_pos + chain;
+    /* AAT keeps attachment chains in the original buffer order. */
+    unsigned int parent = (int) glyph_pos + (reversed ? -chain : chain);
     if (unlikely (parent >= len))
       break;
     glyph_pos = parent;
@@ -62,8 +68,8 @@ apply_mark_attachment (hb_ot_apply_context_t *c,
     goto overflow;
   }
   mark.attach_type() = ATTACH_TYPE_MARK;
-  mark.x_offset = roundf (base_x - mark_x);
-  mark.y_offset = roundf (base_y - mark_y);
+  mark.x_offset = hb_clamp_to<hb_position_t> (roundf (base_x - mark_x));
+  mark.y_offset = hb_clamp_to<hb_position_t> (roundf (base_y - mark_y));
   if (HB_DIRECTION_IS_HORIZONTAL (buffer->props.direction))
     mark.y_offset = hb_saturate_add (mark.y_offset, base_offset);
   else

@@ -103,10 +103,6 @@
  * data.  However, the name stuck.  See: https://behdad.github.io/harfbust/
  */
 
-/* This limits sanitizing time on really broken fonts. */
-#ifndef HB_SANITIZE_MAX_EDITS
-#define HB_SANITIZE_MAX_EDITS 32
-#endif
 #ifndef HB_SANITIZE_MAX_OPS_FACTOR
 #define HB_SANITIZE_MAX_OPS_FACTOR 64
 #endif
@@ -128,7 +124,6 @@ struct hb_sanitize_context_t :
 	length (0),
 	max_ops (0), max_subtables (0),
         recursion_depth (0),
-	writable (false),
 	blob (nullptr),
 	num_glyphs (65536),
 	num_glyphs_set (false),
@@ -180,7 +175,6 @@ struct hb_sanitize_context_t :
   void init (hb_blob_t *b)
   {
     this->blob = hb_blob_reference (b);
-    this->writable = false;
   }
 
   void set_num_glyphs (unsigned int num_glyphs_)
@@ -452,7 +446,6 @@ struct hb_sanitize_context_t :
   mutable int max_ops, max_subtables;
   private:
   int recursion_depth;
-  bool writable;
   hb_blob_t *blob;
   unsigned int num_glyphs;
   bool  num_glyphs_set;

@@ -56,7 +56,6 @@ hb_vector_paint_create_or_fail (hb_vector_format_t format)
     return nullptr;
   paint->format = format;
 
-  paint->active_color_glyphs = hb_set_create ();
   paint->defs.alloc (4096);
   paint->path.alloc (2048);
   paint->captured_scratch.alloc (4096);
@@ -98,7 +97,6 @@ hb_vector_paint_destroy (hb_vector_paint_t *paint)
   if (paint->format == HB_VECTOR_FORMAT_PDF)
     hb_vector_paint_pdf_free_resources (paint);
   hb_blob_destroy (paint->recycled_blob);
-  hb_set_destroy (paint->active_color_glyphs);
   hb_free (paint->id_prefix);
   hb_object_actually_destroy (paint);
   hb_free (paint);
@@ -746,9 +744,7 @@ hb_vector_paint_clear (hb_vector_paint_t *paint)
   paint->clip_path_counter = 0;
   paint->recharge_budget ();
   paint->gradient_counter = 0;
-  paint->color_glyph_depth = 0;
   paint->path_def_count = 0;
-  hb_set_clear (paint->active_color_glyphs);
   paint->color_stops_scratch.clear ();
   paint->captured_scratch.clear ();
 }
@@ -816,8 +812,10 @@ hb_vector_paint_reset (hb_vector_paint_t *paint)
  * Provides a blob for internal buffer reuse by later render calls.
  * The caller transfers ownership of one reference to @paint and must
  * not destroy that reference after this call. Finish accessing @blob
- * and its data before recycling: later renders may reuse the blob
- * and overwrite its data.
+ * and its data before recycling, and do not keep other references
+ * to it: later renders may reuse the blob and overwrite its data.
+ * An immutable blob, such as one that a sub-blob was created from,
+ * is not reused; it is simply destroyed.
  *
  * Since: 13.0.0
  */
@@ -829,5 +827,10 @@ hb_vector_paint_recycle_blob (hb_vector_paint_t *paint,
   paint->recycled_blob = nullptr;
   if (!blob || blob == hb_blob_get_empty ())
     return;
+  if (hb_blob_is_immutable (blob))
+  {
+    hb_blob_destroy (blob);
+    return;
+  }
   paint->recycled_blob = blob;
 }

@@ -12,7 +12,7 @@
 8. Explicit textual config tokens and shader asset type names fail on unknown values; do not silently fall back to a different backend/language. Concrete shader declarations determine the physical stage; the generic `shader` declaration, authored `stage`, and per-asset compiler selectors are rejected.
 9. Vulkan/SPIR-V shader entry points need exact case-sensitive text at pipeline creation time; use `Name` only for identity/cache lookup, and preserve the exact entry-point string separately.
 10. GPU debug markers / Aftermath event labels are debug text, not identity keys; keep them as exact strings instead of `Name`.
-11. Strip UTF-8 BOM on shader source/include text before compilation or include scanning; otherwise the first token/include can fail on BOM-prefixed files. Detect BOM presence in the already-read dependency checksum bytes and carry that fact into compiler preparation. Build stripped overlays only when needed, preserve nested include hierarchy, and encode each absolute root as safe UTF-8 hex directory text. Compiler work directories are unique per process/invocation and cleaned on success or failure.
+11. Strip UTF-8 BOM on shader source/include text before compilation or include scanning; otherwise the first token/include can fail on BOM-prefixed files. Detect BOM presence in the already-read dependency checksum bytes and carry that fact into compiler preparation. Build stripped overlays only when needed, preserve nested include hierarchy, and encode each absolute root as safe UTF-8 hex directory text. Compiler work directories are unique per process/invocation; cleanup is attempted on success or failure and removal failures emit a diagnostic.
 12. Do not store unused case-sensitive shader entry-point metadata in hash-only archive/index formats; keep only the lookup keys and exact text actually required at the consuming API boundary.
 13. Shader define names and variant signatures are exact case-sensitive shader text; do not route them through `Name` or `ACompactString`, or distinct variants can collide.
 14. Short canonical internal shader archive roles are good `ACompactString` candidates; keep `AString` for unbounded or exact-text fields instead. Physical stage comes from the concrete shader asset type rather than an authored metadata token.
@@ -184,7 +184,7 @@ The CSG shadow tail is conditional on a ready light-space snapshot with CSG enab
 ## Math Matrix Layout
 
 1. In `global/simd/matrix.h`, `SIMDMatrix::v[0..3]` stores rows.
-2. Translation lives in the fourth column, the W lanes of `v[0]`, `v[1]`, and `v[2]`; `MatrixTranslation*` and `MatrixLookTo*` already produce the storage layout consumed by `Vector*Transform`.
+2. Translation lives in the fourth column, the W lanes of `v[0]`, `v[1]`, and `v[2]`; `MatrixTranslation*` already produces the storage layout consumed by `Vector*Transform`.
 3. `Vector*Transform` functions evaluate `result = M * v`; if a helper needs row-vector semantics, make the conversion explicit instead of changing the public math convention.
 4. Stream transforms in `global/simd/vector.h` build transposed temporaries for backend efficiency only; those transposes are implementation details, not a different API convention.
 5. Compact affine matrix boundaries are convention-sensitive: `Float34` / `Float34U` are the current 3x4 storage snapshots. Do not add an extra transpose in `LoadFloat` / `StoreFloat` for those types, or translation/basis data will round-trip incorrectly.

@@ -13,9 +13,11 @@ a complete nine-slice can emit nine quads.
 Positions, dimensions, and clip rectangles use logical units with a top-left origin. The initial
 clip is the logical display extent. `pushClip()` intersects its rectangle with the current clip;
 every push must have a matching `popClip()` before `freeze()`. A pop at the initial clip returns
-`false`. Geometry is trimmed to the current clip and UVs are interpolated to match. The snapshot
-also records each command's logical clip and the display's pixel scales; the GPU renderer applies
-those scales when converting positions and scissors to framebuffer pixels.
+`false`. Ordinary axis-aligned quad emission trims geometry to the current clip and interpolates UVs to match.
+Stroke geometry can extend beyond the clip; the GPU renderer applies each command's logical clip
+as a scissor, using the display's pixel scales to convert positions and scissors to framebuffer pixels.
+
+`PaintBuilder` also draws individual lines, line batches, and open or closed polylines. `PaintLineStyle` supplies thickness, cap and join styles, dash lengths and offset, and optional antialiasing. `pushTransform()`, `pushTranslate()`, `pushRotate()`, and `pushScale()` compose a 2D transform stack; balance each push with `popTransform()` before freezing. Transformed clip rectangles use their axis-aligned bounds. An overlay starts with its own transform scope, which must be balanced before `endOverlay()` restores the parent scope.
 
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
 

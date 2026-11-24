@@ -1,0 +1,5 @@
+package: blake3
+version: 1.8.7 (tag 1.8.7, commit f3149ec5bb5449af877ba20377a11008ff499fa2)
+updated_utc: 2026-11-24
+source: https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.8.7
+notes: Official BLAKE3 C library, lifted out of LLVM Support. Keep the public C header, portable and NEON sources, C README, and upstream license texts. Offline static C17 build preserves the portable x64 and NEON ARM64 choices without optional oneTBB parallel hashing, x86 SIMD, assembly sources, or external downloads. LLVM retains its prefixed C ABI as a wrapper over nwb::blake3. Imported text formatting differs from the archive only in trailing whitespace.

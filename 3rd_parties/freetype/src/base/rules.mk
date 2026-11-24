@@ -59,10 +59,7 @@ ifneq ($(ftmac_c),)
   BASE_SRC += $(BASE_DIR)/$(ftmac_c)
 endif
 
-# for simplicity, we also handle `md5.c' (which gets included by `ftobjs.h')
-BASE_H := $(BASE_DIR)/ftbase.h  \
-          $(BASE_DIR)/md5.c     \
-          $(BASE_DIR)/md5.h
+BASE_H := $(BASE_DIR)/ftbase.h
 
 # Base layer `extensions' sources
 #

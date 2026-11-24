@@ -19,7 +19,7 @@
 #include "basisu_etc.h"
 #include "../transcoder/basisu_transcoder.h"
 #include "basisu_bc7enc.h"
-#include "jpgd.h"
+#include <jpgd.h>
 #include "pvpngreader.h"
 #include "basisu_opencl.h"
 #include "basisu_uastc_hdr_4x4_enc.h"
@@ -531,7 +531,7 @@ namespace basisu
 	bool load_jpg(const char *pFilename, image& img)
 	{
 		int width = 0, height = 0, actual_comps = 0;
-		uint8_t *pImage_data = jpgd::decompress_jpeg_image_from_file(pFilename, &width, &height, &actual_comps, 4, jpgd::jpeg_decoder::cFlagLinearChromaFiltering);
+		uint8_t *pImage_data = jpgd::decompress_jpeg_image_from_file(pFilename, &width, &height, &actual_comps, 4);
 		if (!pImage_data)
 			return false;
 		
@@ -551,7 +551,7 @@ namespace basisu
 		}
 
 		int width = 0, height = 0, actual_comps = 0;
-		uint8_t* pImage_data = jpgd::decompress_jpeg_image_from_memory(pBuf, (int)buf_size, &width, &height, &actual_comps, 4, jpgd::jpeg_decoder::cFlagLinearChromaFiltering);
+		uint8_t* pImage_data = jpgd::decompress_jpeg_image_from_memory(pBuf, (int)buf_size, &width, &height, &actual_comps, 4);
 		if (!pImage_data)
 			return false;
 

@@ -205,6 +205,7 @@ struct Encoding
 
     case 1:
     {
+      if (unlikely (!c->check_success (code_ranges.length <= 0xFF))) return_trace (false);
       Encoding1 *fmt1 = c->allocate_size<Encoding1> (Encoding1::min_size + Encoding1_Range::static_size * code_ranges.length);
       if (unlikely (!fmt1)) return_trace (false);
       fmt1->nRanges () = code_ranges.length;
@@ -495,6 +496,19 @@ typedef Charset_Range<HBUINT16> Charset2_Range;
 
 struct Charset
 {
+  static unsigned int get_format1_range_count (const hb_vector_t<code_pair_t>& sid_ranges)
+  {
+    unsigned int count = 0;
+    for (const auto &_ : sid_ranges)
+      count += _.glyph / 0x100 + 1;
+    return count;
+  }
+
+  static size_t get_size_for_format1 (const hb_vector_t<code_pair_t>& sid_ranges)
+  {
+    return Charset1::get_size_for_ranges (get_format1_range_count (sid_ranges));
+  }
+
   /* serialize a fullset Charset */
   bool serialize (hb_serialize_context_t *c, const Charset &src, unsigned int num_glyphs)
   {
@@ -530,18 +544,25 @@ struct Charset
 
     case 1:
     {
-      Charset1 *fmt1 = c->allocate_size<Charset1> (Charset1::get_size_for_ranges (sid_ranges.length), false);
+      Charset1 *fmt1 = c->allocate_size<Charset1> (get_size_for_format1 (sid_ranges), false);
       if (unlikely (!fmt1)) return_trace (false);
-      hb_codepoint_t all_glyphs = 0;
+      unsigned int j = 0;
       for (unsigned int i = 0; i < sid_ranges.length; i++)
       {
-        auto &_ = sid_ranges.arrayZ[i];
-        all_glyphs |= _.glyph;
-	fmt1->ranges[i].first = _.code;
-	fmt1->ranges[i].nLeft = _.glyph;
+        hb_codepoint_t sid = sid_ranges.arrayZ[i].code;
+        unsigned int left = sid_ranges.arrayZ[i].glyph;
+        for (;;)
+        {
+	  unsigned int chunk = hb_min (left, 0xFFu);
+	  fmt1->ranges[j].first = sid;
+	  fmt1->ranges[j].nLeft = chunk;
+	  j++;
+	  if (left <= 0xFF)
+	    break;
+	  sid += 0x100;
+	  left -= 0x100;
+	}
       }
-      if (unlikely (!(all_glyphs <= 0xFF)))
-	return_trace (false);
     }
     break;
 
@@ -1220,6 +1241,10 @@ struct cff1
       topDict.fini ();
       fontDicts.fini ();
       privateDicts.fini ();
+      hb_free (std_code_to_glyph_table.get_relaxed ());
+      std_code_to_glyph_table.set_relaxed (nullptr);
+      hb_free (glyph_to_sid_table.get_relaxed ());
+      glyph_to_sid_table.set_relaxed (nullptr);
       hb_blob_destroy (blob);
       blob = nullptr;
     }
@@ -1238,10 +1263,86 @@ struct cff1
 	return 0;
 
       if (charset != &Null (Charset))
-	return charset->get_glyph (sid, num_glyphs);
+      {
+	/* Charset::get_glyph() is a linear scan of the charset, and seac
+	 * charstrings look their components up on every load.  Build a
+	 * code-to-glyph table for the 256 StandardEncoding codes in one
+	 * pass over the charset on first use instead. */
+	const uint16_t *table = get_std_code_to_glyph_table ();
+	if (unlikely (!table))
+	  return charset->get_glyph (sid, num_glyphs);
+	return table[code];
+      }
       else if ((topDict.CharsetOffset == ISOAdobeCharset)
 	      && (code <= 228 /*zcaron*/)) return sid;
       return 0;
+    }
+
+    private:
+    const uint16_t *get_std_code_to_glyph_table () const
+    {
+    retry:
+      uint16_t *table = std_code_to_glyph_table.get_acquire ();
+      if (likely (table))
+	return table;
+
+      table = (uint16_t *) hb_calloc (256, sizeof (uint16_t));
+      if (unlikely (!table))
+	return nullptr;
+
+      /* Record the first glyph carrying each StandardEncoding SID,
+       * matching Charset::get_glyph(). */
+      code_pair_t glyph_to_sid_cache {0, HB_CODEPOINT_INVALID};
+      for (hb_codepoint_t glyph = 1; glyph < num_glyphs; glyph++)
+      {
+	hb_codepoint_t sid = charset->get_sid (glyph, num_glyphs, &glyph_to_sid_cache);
+	if (!sid) continue;
+	hb_codepoint_t code = lookup_standard_encoding_for_code (sid);
+	if (code && code < 256 &&
+	    lookup_standard_encoding_for_sid (code) == sid &&
+	    !table[code])
+	  table[code] = glyph;
+      }
+
+      if (unlikely (!std_code_to_glyph_table.cmpexch (nullptr, table)))
+      {
+	hb_free (table);
+	goto retry;
+      }
+      return table;
+    }
+    public:
+
+    /* Charset::get_sid() without a cache walks the charset ranges from the
+     * start, which made naming every glyph of a shaped run quadratic-ish.
+     * Build a glyph-to-SID table in one pass over the charset on first use
+     * instead.  Preserve the full SID value, since malformed ranges can
+     * extend beyond Card16. */
+    const hb_codepoint_t *get_glyph_to_sid_table () const
+    {
+      /* Predefined charsets and format 0 already have direct lookups. */
+      if (is_predef_charset () || charset->format == 0)
+	return nullptr;
+
+    retry:
+      hb_codepoint_t *table = glyph_to_sid_table.get_acquire ();
+      if (likely (table))
+	return table;
+
+      table = (hb_codepoint_t *) hb_calloc (num_glyphs, sizeof (hb_codepoint_t));
+      if (unlikely (!table))
+	return nullptr;
+
+      code_pair_t glyph_to_sid_cache {0, HB_CODEPOINT_INVALID};
+      for (hb_codepoint_t glyph = 0; glyph < num_glyphs; glyph++)
+	table[glyph] = charset->get_sid (glyph, num_glyphs, &glyph_to_sid_cache);
+
+      if (unlikely (!glyph_to_sid_table.cmpexch (nullptr, table)))
+      {
+	hb_free (table);
+	goto retry;
+      }
+      return table;
     }
 
     bool is_predef_encoding () const { return topDict.EncodingOffset <= ExpertEncoding; }
@@ -1249,6 +1350,8 @@ struct cff1
     hb_codepoint_t glyph_to_code (hb_codepoint_t glyph,
 				  code_pair_t *glyph_to_sid_cache = nullptr) const
     {
+      if (unlikely (glyph >= num_glyphs)) return CFF_UNDEF_CODE;
+
       if (encoding != &Null (Encoding))
 	return encoding->get_code (glyph);
       else
@@ -1360,6 +1463,10 @@ struct cff1
 
     unsigned int	     num_glyphs = 0;
     unsigned int	     num_charset_entries = 0;
+
+    private:
+    mutable hb_atomic_t<uint16_t *> std_code_to_glyph_table {nullptr};
+    mutable hb_atomic_t<hb_codepoint_t *> glyph_to_sid_table {nullptr};
   };
 
   struct accelerator_t : accelerator_templ_t<cff1_private_dict_opset_t, cff1_private_dict_values_t>
@@ -1388,7 +1495,8 @@ struct cff1
       if (unlikely (!is_valid ())) return false;
       if (is_CID()) return false;
       if (unlikely (!buf_len)) return true;
-      hb_codepoint_t sid = glyph_to_sid (glyph);
+      const hb_codepoint_t *table = get_glyph_to_sid_table ();
+      hb_codepoint_t sid = table ? table[glyph] : glyph_to_sid (glyph);
       const char *str;
       size_t str_len;
       if (sid < cff1_std_strings_length)
@@ -1497,7 +1605,7 @@ struct cff1
 
   struct accelerator_subset_t : accelerator_templ_t<cff1_private_dict_opset_subset_t, cff1_private_dict_values_subset_t>
   {
-    accelerator_subset_t (hb_face_t *face) : SUPER (face) {}
+    HB_INTERNAL accelerator_subset_t (hb_face_t *face);
     ~accelerator_subset_t ()
     {
       if (cff_accelerator)
@@ -1507,9 +1615,10 @@ struct cff1
     HB_INTERNAL bool subset (hb_subset_context_t *c) const;
     HB_INTERNAL bool serialize (hb_serialize_context_t *c,
 				struct cff1_subset_plan &plan) const;
-    HB_INTERNAL bool get_seac_components (hb_codepoint_t glyph, hb_codepoint_t *base, hb_codepoint_t *accent) const;
+    HB_INTERNAL bool get_seac_components (hb_codepoint_t glyph, hb_codepoint_t *base, hb_codepoint_t *accent, int64_t *budget = nullptr) const;
 
     mutable CFF::cff_subset_accelerator_t* cff_accelerator = nullptr;
+    bool subrs_may_end_in_seac = false;
 
     typedef accelerator_templ_t<cff1_private_dict_opset_subset_t, cff1_private_dict_values_subset_t> SUPER;
   };
@@ -1542,15 +1651,21 @@ struct cff1_subset_accelerator_t : cff1::accelerator_subset_t {
   void depend (hb_depend_data_builder_t *builder) const
   {
     if (!is_valid ()) return;
+    int64_t budget = CFF::get_subset_budget (blob);
     for (hb_codepoint_t gid = 0; gid < num_glyphs; gid++)
     {
       hb_codepoint_t base_gid, accent_gid;
-      if (get_seac_components (gid, &base_gid, &accent_gid))
+      if (get_seac_components (gid, &base_gid, &accent_gid, &budget))
       {
         builder->add_depend (gid, HB_TAG('C','F','F',' '), base_gid);
         builder->add_depend (gid, HB_TAG('C','F','F',' '), accent_gid);
       }
     }
+    /* The charstring interpreter caps each glyph at the remaining budget and
+     * never overshoots, so exhaustion leaves the budget at exactly 0 rather
+     * than negative; treat that as failure too. */
+    if (unlikely (budget <= 0))
+      builder->fail ();
   }
 };
 

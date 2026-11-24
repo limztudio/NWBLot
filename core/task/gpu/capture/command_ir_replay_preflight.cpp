@@ -68,7 +68,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateRecordContext(
     const GpuTaskId recordTask,
-    const GpuSubmissionPacketId recordPacket,
+    [[maybe_unused]] const GpuSubmissionPacketId recordPacket,
     const GpuPhysicalQueueId recordQueue,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,

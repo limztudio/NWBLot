@@ -321,10 +321,10 @@ CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 
 The lighting sequences enable the quality gate; normal/position sequences enable
 the geometry gate; cap-state sequences enable the cap-state gate; overlapping
-span-state sequences enable the span gate. All request
-GPU validation, use the matching runtime directory
-and logserver when available, overwrite only their own known capture artifacts,
-and serialize display use through the test resource lock. Unsupported capture
+span-state sequences enable the span gate. They request GPU validation in `dbg`
+and `opt` and disable that request in `fin`. They use the matching runtime
+directory and logserver when available, overwrite only their own known capture
+artifacts, and serialize display use through the test resource lock. Unsupported capture
 environments may skip with exit 77. A passing gate verifies those finite
 regression conditions on the actual run; broader optical correctness and
 performance still require their own matched comparisons. Interval-1 GPU

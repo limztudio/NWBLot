@@ -9,7 +9,6 @@
 #include <global/algorithm.h>
 #include <global/binary.h>
 #include <global/simd/vector.h>
-#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,9 +28,6 @@ namespace __hidden_frame_graph_statistics_validators{
 
 inline constexpr usize s_RuntimeScalarDurationCount = 21u;
 inline constexpr usize s_PhysicalQueueScalarDurationCount = 5u;
-inline constexpr usize s_RuntimePackedDurationCount = 6u;
-inline constexpr usize s_PhysicalQueuePackedDurationCount = 2u;
-inline constexpr usize s_OwnerPackedDurationCount = 7u;
 
 
 #if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_NEON64)
@@ -53,27 +49,20 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 }
 #endif
 
-[[nodiscard]] static b8 DurationsAreOrdinary(const Span<const SIMDVectorDouble> durations)noexcept{
+template<typename... PacksT>
+[[nodiscard]] static b8 DurationsAreOrdinary(const PacksT... packs)noexcept{
 #if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_NEON64)
-    for(const SIMDVectorDouble pack : durations){
-        if(HasExceptionalDurationPack(pack))
-            return false;
-    }
-    return true;
+    return (!HasExceptionalDurationPack(packs) && ...);
 #else
-    if(durations.empty())
-        return true;
-    return false;
+    return sizeof...(packs) == 0u;
 #endif
 }
 
-[[nodiscard]] static b8 DurationsAreValid(const Span<const SIMDVectorDouble> durations)noexcept{
+template<typename... PacksT>
+[[nodiscard]] static b8 DurationsAreValid(const PacksT... packs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble zero = VectorDoubleZero();
-    for(const SIMDVectorDouble pack : durations)
-        if(!VectorDouble4GreaterOrEqual(pack, zero))
-            return false;
-    return true;
+    return (VectorDouble4GreaterOrEqual(packs, zero) && ...);
 }
 
 [[nodiscard]] static b8 DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
@@ -448,52 +437,46 @@ template<typename StatisticsT>
 }
 
 b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_RuntimePackedDurationCount> durations = {
-        VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
-        VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
-        VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds),
-        VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
-        VectorDoubleSet(statistics.recording.recordingElapsedSeconds, statistics.recording.readyFrontierElapsedSeconds, statistics.recording.readyFrontierWorkerBusySeconds, statistics.recording.readyFrontierWorkerCapacitySeconds),
-        VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
-    };
-    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
+    const SIMDVectorDouble compile0 = VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds);
+    const SIMDVectorDouble compile1 = VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds);
+    const SIMDVectorDouble compile2 = VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds);
+    const SIMDVectorDouble recording0 = VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds);
+    const SIMDVectorDouble recording1 = VectorDoubleSet(statistics.recording.recordingElapsedSeconds, statistics.recording.readyFrontierElapsedSeconds, statistics.recording.readyFrontierWorkerBusySeconds, statistics.recording.readyFrontierWorkerCapacitySeconds);
+    const SIMDVectorDouble submission0 = VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0);
+    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(compile0, compile1, compile2, recording0, recording1, submission0))
         return ScalarIsValidFrameGraphRuntimeStatistics(statistics);
 
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
-    return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
+    return __hidden_frame_graph_statistics_validators::DurationsAreValid(compile0, compile1, compile2, recording0, recording1, submission0);
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_PhysicalQueuePackedDurationCount> durations = {
-        VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
-        VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
-    };
-    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
+    const SIMDVectorDouble recording0 = VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds);
+    const SIMDVectorDouble submission0 = VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0);
+    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(recording0, submission0))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics);
 
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueCompileAndRecordingCountsAreValid(statistics))
         return false;
-    if(statistics.recording.packetCount == 0u && !__hidden_frame_graph_statistics_validators::DurationsAreZero(durations[0u]))
+    if(statistics.recording.packetCount == 0u && !__hidden_frame_graph_statistics_validators::DurationsAreZero(recording0))
         return false;
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueSubmissionCountsAreValid(statistics))
         return false;
 
-    return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
+    return __hidden_frame_graph_statistics_validators::DurationsAreValid(recording0, submission0);
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_OwnerPackedDurationCount> durations = {
-        VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
-        VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
-        VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds),
-        VectorDoubleSet(ownerStatistics.recording.commandListAcquisitionSeconds, ownerStatistics.recording.graphBarrierRecordingSeconds, ownerStatistics.recording.taskRecordSeconds, ownerStatistics.recording.recordingSeconds),
-        VectorDoubleSet(ownerStatistics.recording.recordingElapsedSeconds, ownerStatistics.recording.readyFrontierElapsedSeconds, ownerStatistics.recording.readyFrontierWorkerBusySeconds, ownerStatistics.recording.readyFrontierWorkerCapacitySeconds),
-        VectorDoubleSet(ownerStatistics.submission.submissionSeconds, statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds),
-        VectorDoubleSet(statistics.recording.recordingSeconds, statistics.submission.submissionSeconds, 0.0, 0.0),
-    };
-    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
+    const SIMDVectorDouble ownerCompile0 = VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds);
+    const SIMDVectorDouble ownerCompile1 = VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds);
+    const SIMDVectorDouble ownerCompile2 = VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds);
+    const SIMDVectorDouble ownerRecording0 = VectorDoubleSet(ownerStatistics.recording.commandListAcquisitionSeconds, ownerStatistics.recording.graphBarrierRecordingSeconds, ownerStatistics.recording.taskRecordSeconds, ownerStatistics.recording.recordingSeconds);
+    const SIMDVectorDouble ownerRecording1 = VectorDoubleSet(ownerStatistics.recording.recordingElapsedSeconds, ownerStatistics.recording.readyFrontierElapsedSeconds, ownerStatistics.recording.readyFrontierWorkerBusySeconds, ownerStatistics.recording.readyFrontierWorkerCapacitySeconds);
+    const SIMDVectorDouble tail0 = VectorDoubleSet(ownerStatistics.submission.submissionSeconds, statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds);
+    const SIMDVectorDouble tail1 = VectorDoubleSet(statistics.recording.recordingSeconds, statistics.submission.submissionSeconds, 0.0, 0.0);
+    if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(ownerCompile0, ownerCompile1, ownerCompile2, ownerRecording0, ownerRecording1, tail0, tail1))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(statistics, ownerStatistics);
 
     if(!IsValidFrameGraphRuntimeStatistics(ownerStatistics) || !IsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics) || !__hidden_frame_graph_statistics_validators::PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(statistics, ownerStatistics))

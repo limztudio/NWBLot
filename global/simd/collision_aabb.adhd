@@ -2,22 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::AabbTests::Bounds"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class AabbBounds{
-    VectorSingle maxBounds;
-    VectorSingle minBounds;
-};
-
-[cpp_name("::AabbDoubleTests::Bounds"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class AabbDoubleBounds{
-    VectorDouble maxBounds;
-    VectorDouble minBounds;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [cpp_name("::AabbTests::Center")]
 extern VectorSingle AabbCenter(in VectorSingle a0, in VectorSingle a1);
 
@@ -46,7 +30,7 @@ extern void AabbDoubleReset(mut VectorDouble a0, mut VectorDouble a1);
 extern VectorDouble AabbDoubleSurfaceArea(in VectorDouble a0, in VectorDouble a1);
 
 [cpp_name("::AabbDoubleTests::Transform")]
-extern Expected<AabbDoubleBounds> AabbDoubleTransform(in MatrixDouble a0, in VectorDouble a1, in VectorDouble a2);
+extern b8 AabbDoubleTransform(in MatrixDouble a0, in VectorDouble a1, in VectorDouble a2, mut VectorDouble outMinBounds, mut VectorDouble outMaxBounds);
 
 [cpp_name("::AabbDoubleTests::Valid")]
 extern b8 AabbDoubleValid(in VectorDouble a0, in VectorDouble a1);
@@ -73,7 +57,7 @@ extern void AabbReset(mut VectorSingle a0, mut VectorSingle a1);
 extern VectorSingle AabbSurfaceArea(in VectorSingle a0, in VectorSingle a1);
 
 [cpp_name("::AabbTests::Transform")]
-extern Expected<AabbBounds> AabbTransform(in MatrixSingle a0, in VectorSingle a1, in VectorSingle a2);
+extern b8 AabbTransform(in MatrixSingle a0, in VectorSingle a1, in VectorSingle a2, mut VectorSingle outMinBounds, mut VectorSingle outMaxBounds);
 
 [cpp_name("::AabbTests::Valid")]
 extern b8 AabbValid(in VectorSingle a0, in VectorSingle a1);

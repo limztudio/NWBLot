@@ -54,10 +54,19 @@ void ReadFrustumCorners(const Frustum& frustum, Array<Point, Count>& output)noex
 }
 
 inline void ReadFrustumPlanes(const BoundingFrustum& frustum, Array<Float4, CollisionDetail::s_FrustumPlaneCount>& output)noexcept{
-    Array<SIMDVectorSingle, CollisionDetail::s_FrustumPlaneCount> planes{};
-    frustum.getPlanes(&planes[0], &planes[1], &planes[2], &planes[3], &planes[4], &planes[5]);
-    for(usize index = 0u; index < planes.size(); ++index)
-        StoreFloat(planes[index], output[index]);
+    SIMDVectorSingle planeNear{};
+    SIMDVectorSingle planeFar{};
+    SIMDVectorSingle planeRight{};
+    SIMDVectorSingle planeLeft{};
+    SIMDVectorSingle planeTop{};
+    SIMDVectorSingle planeBottom{};
+    frustum.getPlanes(&planeNear, &planeFar, &planeRight, &planeLeft, &planeTop, &planeBottom);
+    StoreFloat(planeNear, output[CollisionDetail::FrustumPlaneIndex::Near]);
+    StoreFloat(planeFar, output[CollisionDetail::FrustumPlaneIndex::Far]);
+    StoreFloat(planeRight, output[CollisionDetail::FrustumPlaneIndex::Right]);
+    StoreFloat(planeLeft, output[CollisionDetail::FrustumPlaneIndex::Left]);
+    StoreFloat(planeTop, output[CollisionDetail::FrustumPlaneIndex::Top]);
+    StoreFloat(planeBottom, output[CollisionDetail::FrustumPlaneIndex::Bottom]);
 }
 
 inline SIMDVectorDoubleConstF MakeDoubleConstant(const f64 x, const f64 y, const f64 z, const f64 w)noexcept{

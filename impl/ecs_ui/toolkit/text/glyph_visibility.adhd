@@ -16,17 +16,17 @@ Optional<in BakedFontAtlas> BorrowSelectedAtlas(in borrow PlacedGlyph glyph, in 
     return Optional<in BakedFontAtlas>(glyph.face.deref().bakedAtlas().deref());
 }
 
-Expected<VectorDouble> LoadAtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft){
+b8 LoadAtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft, mut VectorDouble outRectangle){
     if(!atlas.valid() || !atlas.hasGlyph(glyph.glyphId))
-        return MakeUnexpected(Failure());
-    return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), atlas.glyph(glyph.glyphId));
+        return false;
+    return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), atlas.glyph(glyph.glyphId), outRectangle);
 }
 
 Expected<Rect> AtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft){
-    const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
-    if(!rectangle.has_value())
-        return MakeUnexpected(rectangle.error());
-    return ToTextGlyphAtlasRect(rectangle.value());
+    VectorDouble rectangle(0.0);
+    if(!LoadAtlasRectangle(glyph, atlas, fontSize, topLeft, rectangle))
+        return MakeUnexpected(Failure());
+    return ToTextGlyphAtlasRect(rectangle);
 }
 
 TextGlyphIntersection CandidateBorrowed(in PlacedGlyph glyph, in Optional<in BakedFontAtlas> selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
@@ -34,10 +34,10 @@ TextGlyphIntersection CandidateBorrowed(in PlacedGlyph glyph, in Optional<in Bak
     if(input != TextGlyphIntersection::Visible)
         return input;
     if(selectedAtlas.has_value()){
-        const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, selectedAtlas.value(), fontSize, topLeft);
-        if(!rectangle.has_value())
+        VectorDouble rectangle(0.0);
+        if(!LoadAtlasRectangle(glyph, selectedAtlas.value(), fontSize, topLeft, rectangle))
             return TextGlyphIntersection::Invalid;
-        return IntersectGlyphAtlasRectangle(rectangle.value(), clip);
+        return IntersectGlyphAtlasRectangle(rectangle, clip);
     }
     const b8 hasValidFace = glyph.face.valid() && glyph.face.deref().valid();
     const b8 coverageInkReliable = hasValidFace && glyph.face.deref().coverageInkReliable();

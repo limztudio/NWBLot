@@ -18,12 +18,10 @@ const u32 s_SkinningBenchmarkTestJointCount = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 JointMatricesEqual(in Span<f32x3x4> lhs, in Span<f32x3x4> rhs, in usize index){
-    const f32x3x4 a = lhs[index];
-    const f32x3x4 b = rhs[index];
-    return EqualF32x4Bits(LoadFloat(a.rows[0u]), LoadFloat(b.rows[0u]))
-        && EqualF32x4Bits(LoadFloat(a.rows[1u]), LoadFloat(b.rows[1u]))
-        && EqualF32x4Bits(LoadFloat(a.rows[2u]), LoadFloat(b.rows[2u]));
+b8 JointMatrixBitsEqual(in MatrixSingle a, in MatrixSingle b){
+    return EqualF32x4Bits(a[0u], b[0u])
+        && EqualF32x4Bits(a[1u], b[1u])
+        && EqualF32x4Bits(a[2u], b[2u]);
 }
 
 void AnimateSkinningBenchmarkTestEntities(mut EcsTestWorld context, in Span<EntityID> entities, in Span<f32x3x4> bindJoints, in f32 timeSeconds, in b8 staticPreview){
@@ -46,11 +44,11 @@ void ReadSkinningBenchmarkPoseJoints(in EcsTestWorld context, in EntityID entity
 }
 
 void VerifySkinningBenchmarkPoseStep1(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints, mut Vector<f32x3x4> firstPose){
-    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    EXPECT_TRUE(JointMatrixBitsEqual(MatrixSingle(localJoints[0u]), MatrixSingle(bindJoints[0u])));
     u32 changedJoints = 0u;
     for(usize i = 0u; i < bindJoints.size(); ++i){
         firstPose.push_back(localJoints[i]);
-        if(!JointMatricesEqual(localJoints, bindJoints, i))
+        if(!JointMatrixBitsEqual(MatrixSingle(localJoints[i]), MatrixSingle(bindJoints[i])))
             ++changedJoints;
     }
     EXPECT_GT(changedJoints, 0u);
@@ -58,21 +56,21 @@ void VerifySkinningBenchmarkPoseStep1(in Span<f32x3x4> bindJoints, in Span<f32x3
 
 void VerifySkinningBenchmarkPoseStep2(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
     for(usize i = 0u; i < firstPose.size(); ++i)
-        EXPECT_TRUE(JointMatricesEqual(localJoints, firstPose, i));
+        EXPECT_TRUE(JointMatrixBitsEqual(MatrixSingle(localJoints[i]), MatrixSingle(firstPose[i])));
 }
 
 void VerifySkinningBenchmarkPoseStep3(in Span<f32x3x4> firstPose, in Span<f32x3x4> localJoints){
     b8 changedWithTime = false;
     for(usize i = 1u; i < firstPose.size(); ++i)
-        changedWithTime = changedWithTime || !JointMatricesEqual(localJoints, firstPose, i);
+        changedWithTime = changedWithTime || !JointMatrixBitsEqual(MatrixSingle(localJoints[i]), MatrixSingle(firstPose[i]));
     EXPECT_TRUE(changedWithTime);
 }
 
 void VerifySkinningBenchmarkPoseStep4(in Span<f32x3x4> bindJoints, in Span<f32x3x4> localJoints){
-    EXPECT_TRUE(JointMatricesEqual(localJoints, bindJoints, 0u));
+    EXPECT_TRUE(JointMatrixBitsEqual(MatrixSingle(localJoints[0u]), MatrixSingle(bindJoints[0u])));
     b8 changedInBenchmarkMode = false;
     for(usize i = 1u; i < bindJoints.size(); ++i)
-        changedInBenchmarkMode = changedInBenchmarkMode || !JointMatricesEqual(localJoints, bindJoints, i);
+        changedInBenchmarkMode = changedInBenchmarkMode || !JointMatrixBitsEqual(MatrixSingle(localJoints[i]), MatrixSingle(bindJoints[i]));
     EXPECT_TRUE(changedInBenchmarkMode);
 }
 

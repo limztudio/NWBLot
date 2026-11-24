@@ -161,7 +161,7 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
             shapeVol = 8.0f * he.x * he.y * he.z;
         }
         else if(!hull.faceTopologies.empty() && !hull.vertices.empty()){
-            const VectorSingle refPoint = Vec3FromU(hull.vertices[0u]);
+            const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
             f32 volume6 = 0.0f;
             const f32 r = hull.radius();
             f32 skinVol = 0.0f;
@@ -170,14 +170,14 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
                 if(face.vertexCount < 3u)
                     continue;
                 u8 eIdx = face.edge;
-                const VectorSingle w0 = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]);
+                const VectorSingle w0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
                 const VectorSingle v0 = w0 - refPoint;
                 eIdx = hull.halfEdges[eIdx].next;
-                VectorSingle wPrev = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]);
+                VectorSingle wPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
                 VectorSingle vPrev = wPrev - refPoint;
                 for(u8 t = 2u; t < face.vertexCount; ++t){
                     eIdx = hull.halfEdges[eIdx].next;
-                    const VectorSingle wCurr = Vec3FromU(hull.vertices[hull.halfEdges[eIdx].tail]);
+                    const VectorSingle wCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
                     const VectorSingle vCurr = wCurr - refPoint;
                     volume6 += Vector3Dot(v0, Cross(vPrev, vCurr)).x;
                     if(r > 0.0f){
@@ -229,11 +229,13 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             continue;
 
         if(shape.type == ShapeType::Sphere && fluid.shape == FluidVolumeShape::HalfSpacePlane){
-            const Transform3D xf = shape.worldTransform(bodyXf);
+            VectorSingle xfPos(0.0f);
+            VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
+            shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), xfPos, xfRot);
             const SphereShape s = shape.sphereShape();
             const f32 r = SimdMax(1.0e-3f, s.radius());
             const f32 v = (4.0f / 3.0f) * s_PI * r * r * r;
-            const VectorSingle wc = TransformPoint(xf, s.center());
+            const VectorSingle wc = TransformPointValues(xfPos, xfRot, s.center());
             const f32 d = fluid.signedDepthWithNormal(wc, surfNorm);
             totalVol += v;
             if(d + r <= 0.0f)
@@ -252,7 +254,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             b8 dry = false;
             b8 fullSub = false;
             if(fluid.shape == FluidVolumeShape::BoxAabb){
-                if(!AabbOverlaps(shape.aabb, fluid.bounds)){
+                if(!AabbOverlapsValues(bMin, bMax, VectorSingle(fluid.bounds.lowerBound), VectorSingle(fluid.bounds.upperBound))){
                     dry = true;
                 }
                 else if(
@@ -528,7 +530,7 @@ b8 ComputeFluidBodyWrenchDirect(
         const VectorSingle angDir = angV * invAngSpeed;
         const f32 rawTorqueMag = fluid.angularDrag * sub.submergedFraction * SimdMax(0.1f, sim.maxExtent()) * angSpeed;
         f32 clampedTorqueMag = rawTorqueMag;
-        const f32 kInvI = Vector3Dot(angDir, MulSymMat3Vec(sim.invInertiaWorld, angDir)).x;
+        const f32 kInvI = Vector3Dot(angDir, Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), angDir)).x;
         if(kInvI > 1.0e-10f){
             const f32 maxSafeTorque = (1.0f / kInvI) * angSpeed * invDt * 0.9f;
             clampedTorqueMag = SimdMin(rawTorqueMag, maxSafeTorque);

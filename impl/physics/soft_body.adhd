@@ -190,7 +190,6 @@ void CollideSoftBodyParticlesRange(
         const f32 pMaxZ = curPos.z + particleRadius;
 
         ovHits.clear();
-        const Transform3D ptXf(curPos, identRot);
         for(usize si = 0u; si < activeCandCount; ++si){
             usize ci = si;
             if(useChunkFilter)
@@ -202,7 +201,7 @@ void CollideSoftBodyParticlesRange(
                 && pMaxY >= sBox.lowerBound.y && pMinY <= sBox.upperBound.y
                 && pMaxZ >= sBox.lowerBound.z && pMinZ <= sBox.upperBound.z
             ){
-                worldRef.overlapSingleShapePointWithTransform(cand.shapeId, cand.worldXf, pProxy, pSphere, ptXf, ovHits);
+                worldRef.overlapSingleShapePoint(cand.shapeId, VectorSingle(cand.worldXf.position), VectorSingle(cand.worldXf.rotation), pProxy, pSphere, curPos, identRot, ovHits);
             }
         }
         if(ovHits.empty())
@@ -458,7 +457,8 @@ class SoftBody{
                 continue;
             }
             this.m_scratchAttValid[ai] = 1u;
-            this.m_scratchAttAnchorW[ai] = f32x4(TransformPoint(bXfRes.value(), VectorSingle(att.localAnchor)), 0.0f);
+            in Transform3D bXf = bXfRes.value();
+            this.m_scratchAttAnchorW[ai] = f32x4(TransformPointValues(VectorSingle(bXf.position), VectorSingle(bXf.rotation), VectorSingle(att.localAnchor)), 0.0f);
             const Expected<BodyType> bTypeRes = world.tryGetBodyType(att.bodyId);
             if(bTypeRes.has_value() && bTypeRes.value() == BodyType::Dynamic){
                 const Expected<f32> massRes = world.tryGetBodyMass(att.bodyId);
@@ -485,7 +485,11 @@ class SoftBody{
             SoftBodyCandShapeCache entry;
             entry.shapeId = sId;
             entry.aabb = shape.aabb;
-            entry.worldXf = shape.worldTransform(world.m_solverSets[body.setIndex].sims[body.localIndex].transform);
+            in Transform3D bodyXf = world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+            VectorSingle wPos(0.0f);
+            VectorSingle wRot(0.0f, 0.0f, 0.0f, 1.0f);
+            shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), wPos, wRot);
+            entry.worldXf = Transform3D(wPos, wRot);
             this.m_scratchCandCache.push_back(entry);
         }
     }

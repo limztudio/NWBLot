@@ -69,22 +69,25 @@ b8 IsValidTextGlyphLocation(in Point glyphPosition, in Point topLeft){
     return IsFinite(VectorSingle(glyphPosition.x, glyphPosition.y, topLeft.x, topLeft.y));
 }
 
-Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
+b8 TryLoadGlyphAtlasRectangle(
     in Point glyphPosition,
     in Point topLeft,
     in f32 fontSize,
     in u32 unitsPerEm,
-    in FontAtlasGlyph record
+    in FontAtlasGlyph record,
+    mut VectorDouble outRectangle
 ){
     if(!IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || unitsPerEm == 0u)
-        return MakeUnexpected(Failure());
-    if(record.drawable == 0u)
-        return VectorDouble(0.0, 0.0, 0.0, 0.0);
+        return false;
+    if(record.drawable == 0u){
+        outRectangle = VectorDouble(0.0);
+        return true;
+    }
     if(
         !IsFinite(VectorSingle(record.planeLeft, record.planeTop, record.planeRight, record.planeBottom))
         || record.planeRight <= record.planeLeft || record.planeBottom <= record.planeTop
     )
-        return MakeUnexpected(Failure());
+        return false;
     const VectorDouble scaleVec(cast<f64>(fontSize) / cast<f64>(unitsPerEm));
     const VectorDouble origin = VectorDouble(cast<f64>(topLeft.x), cast<f64>(topLeft.y), 0.0, 0.0) + VectorDouble(cast<f64>(glyphPosition.x), cast<f64>(glyphPosition.y), 0.0, 0.0);
     const VectorDouble planeOrigin(cast<f64>(record.planeLeft), cast<f64>(record.planeTop), 0.0, 0.0);
@@ -94,14 +97,15 @@ Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
     const VectorDouble wh = planeExtent * scaleVec;
     const VectorDouble candidate(xy.x, xy.y, wh.x, wh.y);
     if(!FitsTextCoordinates(candidate) || wh.x < 0.0 || wh.y < 0.0)
-        return MakeUnexpected(Failure());
+        return false;
     if(!FitsTextCoordinate(xy.x + wh.x) || !FitsTextCoordinate(xy.y + wh.y))
-        return MakeUnexpected(Failure());
+        return false;
     const VectorSingle rounded(cast<f32>(xy.x), cast<f32>(xy.y), cast<f32>(wh.x), cast<f32>(wh.y));
     const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
     if(!IsFinite(rounded) || !IsFinite(roundedEnds.xy))
-        return MakeUnexpected(Failure());
-    return VectorDouble(rounded);
+        return false;
+    outRectangle = VectorDouble(rounded);
+    return true;
 }
 
 TextGlyphIntersection IntersectTextCoverageInk(

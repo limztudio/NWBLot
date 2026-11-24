@@ -15,11 +15,11 @@ const usize s_SceneQuaternionComponentCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f32x4 BuildTransformEulerQuaternion(in VectorSingle eulerAngles, in b8 inDegrees){
+VectorSingle BuildTransformEulerQuaternion(in VectorSingle eulerAngles, in b8 inDegrees){
     VectorSingle angles = VectorSingle(eulerAngles.xyz, 0.0f);
     if(inDegrees)
         angles = angles * s_SceneDegreesToRadians;
-    return f32x4(QuaternionRotationRollPitchYawFromVector(angles));
+    return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
 b8 ValidateOptionalSceneMetadataMap(in Path nwbFilePath, in MetascriptValue asset, in StringView diagnosticPrefix){
@@ -30,12 +30,13 @@ b8 ValidateOptionalSceneMetadataMap(in Path nwbFilePath, in MetascriptValue asse
     return false;
 }
 
-Expected<VectorSingle> ReadSceneFloatListValue(
+b8 ReadSceneFloatListValue(
     in Path nwbFilePath,
     in MetascriptValue listValue,
     in StringView diagnosticPrefix,
     in StringView fieldLabel,
-    in usize expectedCount
+    in usize expectedCount,
+    mut VectorSingle outValue
 ){
     usize count = 0u;
     if(listValue.isList())
@@ -49,7 +50,7 @@ Expected<VectorSingle> ReadSceneFloatListValue(
             , fieldLabel
             , expectedCount
         );
-        return MakeUnexpected(Failure());
+        return false;
     }
 
     Array<f32, 4> components = Array<f32, 4>();
@@ -61,30 +62,30 @@ Expected<VectorSingle> ReadSceneFloatListValue(
         in MetascriptValue item = items[i];
         const Expected<f32> element = ReadMetadataFiniteF32Value(nwbFilePath, item, diagnosticPrefix, fieldLabel);
         if(!element.has_value())
-            return MakeUnexpected(Failure());
+            return false;
         components[i] = element.value();
     }
 
-    return VectorSingle(components[0u], components[1u], components[2u], components[3u]);
+    outValue = VectorSingle(components[0u], components[1u], components[2u], components[3u]);
+    return true;
 }
 
-Expected<VectorSingle> ParseSceneQuaternionValue(
+b8 ParseSceneQuaternionValue(
     in Path nwbFilePath,
     in MetascriptValue listValue,
     in StringView diagnosticPrefix,
-    in StringView fieldLabel
+    in StringView fieldLabel,
+    mut VectorSingle outQuaternion
 ){
-    const Expected<VectorSingle> parsed = ReadSceneFloatListValue(nwbFilePath, listValue, diagnosticPrefix, fieldLabel, s_SceneQuaternionComponentCount);
-    if(!parsed.has_value())
-        return MakeUnexpected(Failure());
+    VectorSingle raw(0.0f);
+    if(!ReadSceneFloatListValue(nwbFilePath, listValue, diagnosticPrefix, fieldLabel, s_SceneQuaternionComponentCount, raw))
+        return false;
 
-    const VectorSingle raw = parsed.value();
-    const Expected<VectorSingle> normalized = TryNormalizeTransformQuaternion(raw.x, raw.y, raw.z, raw.w);
-    if(!normalized.has_value()){
+    if(!TryNormalizeTransformQuaternion(raw, outQuaternion)){
         error("{} '{}': field '{}' must be a non-zero quaternion", diagnosticPrefix, PathToString(nwbFilePath), fieldLabel);
-        return MakeUnexpected(Failure());
+        return false;
     }
-    return normalized.value();
+    return true;
 }
 
 b8 ReadOptionalSceneFloat3Field(
@@ -99,12 +100,8 @@ b8 ReadOptionalSceneFloat3Field(
     const b8 found = asset.visitField(
         fieldLabel,
         lambda[in nwbFilePath, in diagnosticPrefix, in fieldLabel, mut parsedOk, mut parsedValue](in MetascriptValue fieldValue) -> void{
-            const Expected<VectorSingle> parsed = ReadSceneFloatListValue(nwbFilePath, fieldValue, diagnosticPrefix, fieldLabel, s_SceneFloat3ComponentCount);
-            if(!parsed.has_value()){
+            if(!ReadSceneFloatListValue(nwbFilePath, fieldValue, diagnosticPrefix, fieldLabel, s_SceneFloat3ComponentCount, parsedValue))
                 parsedOk = false;
-                return;
-            }
-            parsedValue = parsed.value();
         }
     );
     if(!parsedOk)
@@ -151,12 +148,8 @@ Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in
         asset.visitField(
             s_TransformRotationField,
             lambda[in nwbFilePath, mut parsedOk, mut parsedRotation](in MetascriptValue fieldValue) -> void{
-                const Expected<VectorSingle> rotation = ParseSceneQuaternionValue(nwbFilePath, fieldValue, s_TransformDiagnosticPrefix, s_TransformRotationField);
-                if(!rotation.has_value()){
+                if(!ParseSceneQuaternionValue(nwbFilePath, fieldValue, s_TransformDiagnosticPrefix, s_TransformRotationField, parsedRotation))
                     parsedOk = false;
-                    return;
-                }
-                parsedRotation = rotation.value();
             }
         );
         if(!parsedOk)
@@ -167,13 +160,13 @@ Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in
         VectorSingle eulerRadians = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
         if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerField, eulerRadians))
             return MakeUnexpected(Failure());
-        component.rotation = BuildTransformEulerQuaternion(eulerRadians, false);
+        component.rotation = f32x4(BuildTransformEulerQuaternion(eulerRadians, false));
     }
     else if(hasEulerDegrees){
         VectorSingle eulerDegrees = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
         if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerDegreesField, eulerDegrees))
             return MakeUnexpected(Failure());
-        component.rotation = BuildTransformEulerQuaternion(eulerDegrees, true);
+        component.rotation = f32x4(BuildTransformEulerQuaternion(eulerDegrees, true));
     }
 
     VectorSingle scale = VectorSingle(component.scale);

@@ -118,9 +118,8 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
     public b8 emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
         if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
             return false;
-        const Expected<VectorSingle> segment = this.m_projector.projectSegment(p0, p1);
-        if(segment.has_value()){
-            const VectorSingle seg = segment.value();
+        VectorSingle seg(0.0f);
+        if(this.m_projector.projectSegment(p0, p1, seg)){
             PaintLineSegment batchLine;
             batchLine.start = Point(seg.x, seg.y);
             batchLine.end = Point(seg.z, seg.w);

@@ -59,25 +59,6 @@ b8 AreAllMeshPositionsFinite(in Span<f32x3u> positions){
     return true;
 }
 
-b8 IsTriangleDegenerateAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c){
-    if(a == b || b == c || c == a)
-        return true;
-    return DegenerateTriangle(
-        VectorDouble(VectorSingle(positions[cast<usize>(a)])),
-        VectorDouble(VectorSingle(positions[cast<usize>(b)])),
-        VectorDouble(VectorSingle(positions[cast<usize>(c)]))
-    );
-}
-
-f64 ComputeTriangleRelativeVolumeAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c, in VectorDouble origin){
-    return RelativeTriangleVolume(
-        VectorDouble(VectorSingle(positions[cast<usize>(a)])),
-        VectorDouble(VectorSingle(positions[cast<usize>(b)])),
-        VectorDouble(VectorSingle(positions[cast<usize>(c)])),
-        origin
-    );
-}
-
 u32 FindMeshTopologyComponent(in u32 triangle, mut Vector<u32> inOutParents){
     u32 current = triangle;
     while(inOutParents[cast<usize>(current)] != current){
@@ -144,7 +125,16 @@ b8 PrepareMeshTopologyEdges(
             || cast<usize>(c) >= positions.size()
         )
             return false;
-        if(IsTriangleDegenerateAtIndices(positions, a, b, c))
+        if(
+            a == b
+            || b == c
+            || c == a
+            || DegenerateTriangle(
+                VectorDouble(VectorSingle(positions[cast<usize>(a)])),
+                VectorDouble(VectorSingle(positions[cast<usize>(b)])),
+                VectorDouble(VectorSingle(positions[cast<usize>(c)]))
+            )
+        )
             outInvalidTriangles[cast<usize>(triangle)] = 1u;
         for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
             const u32 first = triangleIndices[base + cast<usize>(corner)];
@@ -217,11 +207,10 @@ void FinalizeMeshSolidTriangleWords(
             origin = VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[originBase])]));
             originComponent = component;
         }
-        const VectorDouble triangleVolume(ComputeTriangleRelativeVolumeAtIndices(
-            positions,
-            triangleIndices[base],
-            triangleIndices[base + 1u],
-            triangleIndices[base + 2u],
+        const VectorDouble triangleVolume(RelativeTriangleVolume(
+            VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[base])])),
+            VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[base + 1u])])),
+            VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[base + 2u])])),
             origin
         ));
         const VectorDouble componentVolume = VectorDouble(componentVolumes[cast<usize>(component)]) + triangleVolume;

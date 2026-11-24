@@ -568,7 +568,7 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
         if(!w.writeCount(h.vertices.size()))
             return false;
         for(usize k = 0u; k < h.vertices.size(); ++k)
-            SnapWriteVec3(w, Vec3FromU(h.vertices[k]));
+            SnapWriteVec3(w, VectorSingle(h.vertices[k], 0.0f));
         if(!w.writeCount(h.facePlanes.size()))
             return false;
         for(usize k = 0u; k < h.facePlanes.size(); ++k)
@@ -609,10 +609,10 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
         if(!w.writeCount(m.triangles.size()))
             return false;
         for(usize k = 0u; k < m.triangles.size(); ++k){
-            SnapWriteVec3(w, Vec3FromU(m.triangles[k].v0));
-            SnapWriteVec3(w, Vec3FromU(m.triangles[k].v1));
-            SnapWriteVec3(w, Vec3FromU(m.triangles[k].v2));
-            SnapWriteVec3(w, Vec3FromU(m.triangles[k].normal));
+            SnapWriteVec3(w, VectorSingle(m.triangles[k].v0, 0.0f));
+            SnapWriteVec3(w, VectorSingle(m.triangles[k].v1, 0.0f));
+            SnapWriteVec3(w, VectorSingle(m.triangles[k].v2, 0.0f));
+            SnapWriteVec3(w, VectorSingle(m.triangles[k].normal, 0.0f));
         }
         if(!w.writeCount(m.nodes.size()))
             return false;

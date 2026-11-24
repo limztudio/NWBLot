@@ -137,7 +137,7 @@ class PhysicsAssetBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(mat.friction, mat.staticFriction, mat.restitution, mat.rollingResistance)))
             return false;
-        if(!IsFinite(mat.tangentSpeed))
+        if(!IsFinite(VectorSingle(mat.tangentSpeed)))
             return false;
         if(mat.friction < 0.0f || mat.restitution < 0.0f || mat.rollingResistance < 0.0f)
             return false;
@@ -317,7 +317,7 @@ class PhysicsAssetBinaryCodec{
         )
             return false;
         for(usize i = 0u; i < hull.vertices.size(); ++i){
-            if(!IsValidPositionVec3(Vec3FromU(hull.vertices[i])))
+            if(!IsValidPositionVec3(VectorSingle(hull.vertices[i], 0.0f)))
                 return false;
         }
         for(usize i = 0u; i < hull.facePlanes.size(); ++i){
@@ -504,10 +504,10 @@ class PhysicsAssetBinaryCodec{
         for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
             in MeshTriangle tri = mesh.triangles[ti];
             if(
-                !IsValidPositionVec3(Vec3FromU(tri.v0))
-                || !IsValidPositionVec3(Vec3FromU(tri.v1))
-                || !IsValidPositionVec3(Vec3FromU(tri.v2))
-                || !IsFinite(Vec3FromU(tri.normal))
+                !IsValidPositionVec3(VectorSingle(tri.v0, 0.0f))
+                || !IsValidPositionVec3(VectorSingle(tri.v1, 0.0f))
+                || !IsValidPositionVec3(VectorSingle(tri.v2, 0.0f))
+                || !IsFinite(VectorSingle(tri.normal, 0.0f))
             )
                 return false;
         }

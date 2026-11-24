@@ -153,8 +153,8 @@ MatrixDouble MakeTranslationVecDouble(in VectorDouble translation){
     return MatrixDoubleTranslationFromVector(translation);
 }
 
-MatrixDouble EvalDecomposedAffineDouble(in MatrixDoubleDecomposition decomp){
-    return MatrixDoubleAffineTransformation(decomp.scale, VectorDouble(0.0, 0.0, 0.0, 0.0), decomp.rotation, decomp.translation);
+MatrixDouble EvalDecomposedAffineDouble(in MatrixDouble decomp){
+    return MatrixDoubleAffineTransformation(decomp[0u], VectorDouble(0.0, 0.0, 0.0, 0.0), decomp[1u], decomp[2u]);
 }
 
 VectorDouble EvalQuaternionDoubleSlerp(in VectorDouble q0, in VectorDouble q1, in f64 t){
@@ -165,20 +165,20 @@ VectorDouble EvalQuaternionDoubleInverse(in VectorDouble q){
     return QuaternionDoubleInverse(q);
 }
 
-VectorDouble EvalDualQuatTranslationTermDouble(in RigidDualQuaternionDouble dq){
-    return QuaternionDoubleMultiply(dq.dual, QuaternionDoubleConjugate(dq.real));
+VectorDouble EvalDualQuatTranslationTermDouble(in VectorDouble real, in VectorDouble dual){
+    return QuaternionDoubleMultiply(dual, QuaternionDoubleConjugate(real));
 }
 
-VectorSingle GetDecompScaleSingle(in MatrixDecomposition decomp){
-    return decomp.scale;
+VectorSingle GetDecompScaleSingle(in MatrixSingle decomp){
+    return decomp[0u];
 }
 
-VectorSingle GetDecompRotationSingle(in MatrixDecomposition decomp){
-    return decomp.rotation;
+VectorSingle GetDecompRotationSingle(in MatrixSingle decomp){
+    return decomp[1u];
 }
 
-VectorSingle GetDecompTranslationSingle(in MatrixDecomposition decomp){
-    return decomp.translation;
+VectorSingle GetDecompTranslationSingle(in MatrixSingle decomp){
+    return decomp[2u];
 }
 
 VectorDouble EvalVectorDoubleMod(in VectorDouble lhs, in VectorDouble rhs){
@@ -199,14 +199,6 @@ VectorDouble EvalVectorDouble3Refract(in VectorDouble incident, in VectorDouble 
 
 VectorSingle EvalSuiteVectorAddInt(in VectorSingle lhs, in VectorSingle rhs){
     return VectorAddInt(lhs, rhs);
-}
-
-VectorSingle GetDualQuatRealSingle(in RigidDualQuaternion dq){
-    return dq.real;
-}
-
-VectorSingle GetDualQuatDualSingle(in RigidDualQuaternion dq){
-    return dq.dual;
 }
 
 VectorDouble EvalQuaternionDoubleRotationMatrix(in MatrixDouble matrix){
@@ -339,7 +331,8 @@ void VerifyCurrentMathContractBoundaries_ShearedSphereContainsATransformedSurfac
     const VectorSingle point = TransformVector3Single(VectorSingle(diagonal, diagonal, 0.0f, 1.0f), shear);
     EXPECT_NE(transformed.contains(point), ContainmentType::Disjoint);
     const MatrixSingle srt = Mul(MakeTranslationSingle(7.0f, -11.0f, 5.0f), MakeScalingSingle(2.0f, 3.0f, 4.0f));
-    ASSERT_TRUE(MatrixDecompose(srt).has_value());
+    MatrixSingle decompositionCheck1 = MatrixSingle();
+    ASSERT_TRUE(MatrixDecompose(srt, decompositionCheck1));
     source.transform(transformed, srt);
     const f32x4 centerRadius = transformed.centerRadius;
     EXPECT_FLOAT_EQ(centerRadius.w, 4.0f);
@@ -353,7 +346,8 @@ void VerifyCurrentMathContractBoundaries_ShearedSphereContainsATransformedSurfac
     const VectorDouble doublePoint = TransformVector3Double(VectorDouble(doubleDiagonal, doubleDiagonal, 0.0, 1.0), doubleShear);
     EXPECT_NE(doubleTransformed.contains(doublePoint), ContainmentType::Disjoint);
     const MatrixDouble doubleSrt = Mul(MakeTranslationDouble(7.0, -11.0, 5.0), MakeScalingDouble(2.0, 3.0, 4.0));
-    ASSERT_TRUE(MatrixDoubleDecompose(doubleSrt).has_value());
+    MatrixDouble decompositionCheck2 = MatrixDouble();
+    ASSERT_TRUE(MatrixDoubleDecompose(doubleSrt, decompositionCheck2));
     doubleSource.transform(doubleTransformed, doubleSrt);
     const f64x4 doubleCenterRadius = doubleTransformed.centerRadius;
     EXPECT_DOUBLE_EQ(doubleCenterRadius.w, 4.0);
@@ -439,7 +433,8 @@ void VerifyCurrentMathContractBoundaries_NonuniformOrientedBoxTransformBoundsIts
     for(i32 sign = -1; sign <= 1; sign += 2){
         ScopedTestTrace trace(sign);
         const MatrixSingle matrix = MakeScalingSingle(cast<f32>(sign) * 2.0f, 1.0f, 1.0f);
-        ASSERT_TRUE(MatrixDecompose(matrix).has_value());
+        MatrixSingle decompositionCheck3 = MatrixSingle();
+        ASSERT_TRUE(MatrixDecompose(matrix, decompositionCheck3));
         BoundingOrientedBox transformed = BoundingOrientedBox();
         source.transform(transformed, matrix);
         EXPECT_EQ(transformed.contains(TransformVector3Single(sourcePoint, matrix)), ContainmentType::Contains);
@@ -450,7 +445,8 @@ void VerifyCurrentMathContractBoundaries_NonuniformOrientedBoxTransformBoundsIts
         ExpectSingleDirectionNear(VectorSingle(transformedExtents), expectedExtents);
 
         const MatrixDouble doubleMatrix = MakeScalingDouble(cast<f64>(sign) * 2.0, 1.0, 1.0);
-        ASSERT_TRUE(MatrixDoubleDecompose(doubleMatrix).has_value());
+        MatrixDouble decompositionCheck4 = MatrixDouble();
+        ASSERT_TRUE(MatrixDoubleDecompose(doubleMatrix, decompositionCheck4));
         BoundingDoubleOrientedBox doubleTransformed = BoundingDoubleOrientedBox();
         doubleSource.transform(doubleTransformed, doubleMatrix);
         EXPECT_EQ(doubleTransformed.contains(TransformVector3Double(doubleSourcePoint, doubleMatrix)), ContainmentType::Contains);
@@ -476,14 +472,16 @@ void VerifyCurrentMathContractBoundaries_SphereTransformBoundsSmallShearAdmitted
         const VectorSingle signLanes = VectorSingle(1.0f, signF, 0.0f, 0.0f);
         const VectorDouble doubleSignLanes = VectorDouble(1.0, signD, 0.0, 0.0);
         const MatrixSingle shear = MakeRowsSingle(VectorSingle(1.0f, signF * 0.1f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-        ASSERT_TRUE(MatrixDecompose(shear).has_value());
+        MatrixSingle decompositionCheck5 = MatrixSingle();
+        ASSERT_TRUE(MatrixDecompose(shear, decompositionCheck5));
         BoundingSphere transformed = BoundingSphere();
         source.transform(transformed, shear);
         const VectorSingle point = TransformVector3Single(signLanes * diagonal, shear);
         EXPECT_NE(transformed.contains(point), ContainmentType::Disjoint);
 
         const MatrixDouble doubleShear = MakeRowsDouble(VectorDouble(1.0, signD * 0.001, 0.0, 0.0), VectorDouble(0.0, 1.0, 0.0, 0.0), VectorDouble(0.0, 0.0, 1.0, 0.0), VectorDouble(0.0, 0.0, 0.0, 1.0));
-        ASSERT_TRUE(MatrixDoubleDecompose(doubleShear).has_value());
+        MatrixDouble decompositionCheck6 = MatrixDouble();
+        ASSERT_TRUE(MatrixDoubleDecompose(doubleShear, decompositionCheck6));
         BoundingDoubleSphere doubleTransformed = BoundingDoubleSphere();
         doubleSource.transform(doubleTransformed, doubleShear);
         const VectorDouble doublePoint = TransformVector3Double(doubleSignLanes * doubleDiagonal, doubleShear);
@@ -576,9 +574,10 @@ void VerifyFrustumAffineBoundaries_NegativeUniformScaleRetainsAsymmetricInterior
 void VerifyMathGeometryBoundaries_Vector3TryNormalizeRejectsInvalidValues(){
     const f32 qnan = bit_cast<f32>(s_F32QuietNanBits);
     const f32 inf = bit_cast<f32>(s_F32InfinityBits);
-    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)).has_value());
-    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(qnan, qnan, qnan, qnan)).has_value());
-    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(inf, inf, inf, inf)).has_value());
+    VectorSingle normalized(0.0f);
+    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), normalized));
+    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(qnan, qnan, qnan, qnan), normalized));
+    EXPECT_FALSE(Vector3TryNormalize(VectorSingle(inf, inf, inf, inf), normalized));
 }
 
 void VerifyMathGeometryBoundaries_TriangleAreaRejectsExactThreshold(){
@@ -665,19 +664,21 @@ void VerifyMath_TransformedBoundsRejectInvalidAndOverflowingInputs(){
     const MatrixSingle identity = MakeIdentitySingle();
     const VectorSingle minimum = VectorSingle(-1.0f, -2.0f, -3.0f, 0.0f);
     const VectorSingle maximum = VectorSingle(1.0f, 2.0f, 3.0f, 0.0f);
-    EXPECT_FALSE(AabbTransform(identity, maximum, minimum).has_value());
+    VectorSingle pointMin(7.0f);
+    VectorSingle pointMax(9.0f);
+    EXPECT_FALSE(AabbTransform(identity, maximum, minimum, pointMin, pointMax));
+    EXPECT_TRUE(Vector4Equal(pointMin, VectorSingle(7.0f)));
+    EXPECT_TRUE(Vector4Equal(pointMax, VectorSingle(9.0f)));
     const f32 inf = bit_cast<f32>(s_F32InfinityBits);
     const MatrixSingle invalid = MakeRowsSingle(VectorSingle(inf, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-    EXPECT_FALSE(AabbTransform(invalid, minimum, maximum).has_value());
+    EXPECT_FALSE(AabbTransform(invalid, minimum, maximum, pointMin, pointMax));
     const MatrixSingle overflow = MakeScalingSingle(f32.max, f32.max, f32.max);
-    EXPECT_FALSE(AabbTransform(overflow, minimum, maximum).has_value());
+    EXPECT_FALSE(AabbTransform(overflow, minimum, maximum, pointMin, pointMax));
     const VectorSingle zero = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    const Expected<AabbBounds> point = AabbTransform(identity, zero, zero);
-    ASSERT_TRUE(point.has_value());
-    const AabbBounds pointBounds = point.value();
-    EXPECT_TRUE(AabbValid(pointBounds.minBounds, pointBounds.maxBounds));
-    EXPECT_TRUE(NearlyEqual3(pointBounds.minBounds, 0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual3(pointBounds.maxBounds, 0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(AabbTransform(identity, zero, zero, pointMin, pointMax));
+    EXPECT_TRUE(AabbValid(pointMin, pointMax));
+    EXPECT_TRUE(NearlyEqual3(pointMin, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual3(pointMax, 0.0f, 0.0f, 0.0f));
 }
 
 void VerifyMath_BoxNormalHandlesCornerAndEqualDistanceTie(){
@@ -754,10 +755,9 @@ void VerifyMath_DoubleDecompositionReconstructsNoncommutingRotationsWithNegative
 
     const MatrixDouble rotation = Mul(MakeRotationXDouble(0.5), Mul(MakeRotationYDouble(-0.75), MakeRotationZDouble(1.25)));
     const MatrixDouble matrix = Mul(MakeTranslationDouble(base + 0.25, -7.0 + powNeg40, 11.0 + powNeg40), Mul(rotation, MakeScalingDouble(-2.0, 3.0, 0.5)));
-    const Expected<MatrixDoubleDecomposition> decomposition = MatrixDoubleDecompose(matrix);
-    ASSERT_TRUE(decomposition.has_value());
-    const MatrixDoubleDecomposition decomp = decomposition.value();
-    EXPECT_FALSE(QuaternionDoubleIsNaN(decomp.rotation));
+    MatrixDouble decomp = MatrixDouble();
+    ASSERT_TRUE(MatrixDoubleDecompose(matrix, decomp));
+    EXPECT_FALSE(QuaternionDoubleIsNaN(decomp[1u]));
     const MatrixDouble reconstructed = EvalDecomposedAffineDouble(decomp);
 
     const f64x4x4 actualMat = f64x4x4(reconstructed);
@@ -785,7 +785,8 @@ void VerifyMath_DoubleDecompositionReconstructsNoncommutingRotationsWithNegative
         VectorDouble(0.0, 0.0, 1.0, 0.0),
         VectorDouble(0.0, 0.0, 0.0, 1.0)
     );
-    EXPECT_FALSE(MatrixDoubleDecompose(shear).has_value());
+    MatrixDouble decompositionCheck7 = MatrixDouble();
+    EXPECT_FALSE(MatrixDoubleDecompose(shear, decompositionCheck7));
 }
 
 void VerifyMath_DoubleAffineAdmissionRejectsSingularNonfiniteAndProjectiveMatrices(){
@@ -838,20 +839,20 @@ void VerifyMath_DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTran
 
     const MatrixDouble matrix = Mul(MakeTranslationVecDouble(translation), MakeRotationZDouble(0.75));
     const VectorDouble fromMatrix = EvalVectorDouble3TransformNormal(direction, matrix);
-    const Expected<VectorDouble> quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
-    ASSERT_TRUE(quaternion.has_value());
-    const VectorDouble fromQuaternion = RotateVector3Double(direction, quaternion.value());
+    VectorDouble quaternion(0.0);
+    ASSERT_TRUE(MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12, quaternion));
+    const VectorDouble fromQuaternion = RotateVector3Double(direction, quaternion);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(fromQuaternion, lane), GetDoubleLaneFloat(fromMatrix, lane), 2.0e-15);
 
-    const Expected<RigidDualQuaternionDouble> dualQuaternion = MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12);
-    ASSERT_TRUE(dualQuaternion.has_value());
-    const RigidDualQuaternionDouble dq = dualQuaternion.value();
-    const VectorDouble extractedTranslation = EvalDualQuatTranslationTermDouble(dq) * VectorDouble(2.0, 2.0, 2.0, 2.0);
+    VectorDouble real(0.0);
+    VectorDouble dual(0.0);
+    ASSERT_TRUE(MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12, real, dual));
+    const VectorDouble extractedTranslation = EvalDualQuatTranslationTermDouble(real, dual) * VectorDouble(2.0, 2.0, 2.0, 2.0);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(extractedTranslation, lane), GetDoubleLaneFloat(translation, lane), 4.0e-15);
 
-    const VectorDouble transformed = RotateVector3Double(direction, dq.real) + extractedTranslation;
+    const VectorDouble transformed = RotateVector3Double(direction, real) + extractedTranslation;
     const VectorDouble expected = TransformVector3Double(direction, matrix);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(transformed, lane), GetDoubleLaneFloat(expected, lane), 4.0e-15);
@@ -873,9 +874,8 @@ void VerifyMath_MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTie
         ScopedTestTrace trace(index);
         const f32x4x4 expectedMat = matrices[index];
         const MatrixSingle mat = MatrixSingle(expectedMat);
-        const Expected<MatrixDecomposition> decomposition = MatrixDecompose(mat);
-        ASSERT_TRUE(decomposition.has_value());
-        const MatrixDecomposition decomp = decomposition.value();
+        MatrixSingle decomp = MatrixSingle();
+        ASSERT_TRUE(MatrixDecompose(mat, decomp));
         const VectorSingle decompRotation = GetDecompRotationSingle(decomp);
         EXPECT_FALSE(Vector4IsNaN(decompRotation));
         EXPECT_FALSE(Vector4IsInfinite(decompRotation));
@@ -887,7 +887,8 @@ void VerifyMath_MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTie
     }
 
     const MatrixSingle shear = MakeRowsSingle(VectorSingle(1.0f, 1.0f, 0.0f, 3.0f), VectorSingle(0.0f, 1.0f, 0.0f, -2.0f), VectorSingle(0.0f, 0.0f, 1.0f, 7.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-    EXPECT_FALSE(MatrixDecompose(shear).has_value());
+    MatrixSingle decompositionCheck8 = MatrixSingle();
+    EXPECT_FALSE(MatrixDecompose(shear, decompositionCheck8));
 }
 
 void VerifyMath_AffineQueriesRejectNonrigidSingularOverflowAndProjectiveMatrices(){
@@ -1085,7 +1086,8 @@ void VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengt
 
     for(in f64x4 item : invalid){
         const VectorDouble input = VectorDouble(item);
-        EXPECT_FALSE(VectorDouble3TryNormalize(input).has_value());
+        VectorDouble tryNormalized(0.0);
+        EXPECT_FALSE(VectorDouble3TryNormalize(input, tryNormalized));
         const VectorDouble normalized = EvalVectorDouble3NormalizeOr(input, fallback, 0.0);
         EXPECT_EQ(normalized.x, 0.0);
         EXPECT_EQ(normalized.y, 1.0);
@@ -1137,14 +1139,13 @@ void VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits(){
 void VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection(){
     const MatrixSingle matrix = MakeRowsSingle(VectorSingle(0.0f, -1.0f, 0.0f, 7.0f), VectorSingle(1.0f, 0.0f, 0.0f, -11.0f), VectorSingle(0.0f, 0.0f, 1.0f, 5.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
     const VectorSingle direction = VectorSingle(2.0f, -3.0f, 4.0f, 0.0f);
-    const Expected<VectorSingle> q = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
-    ASSERT_TRUE(q.has_value());
-    ExpectSingleDirectionNear(Vector3Rotate(direction, q.value()), TransformNormal3Single(direction, matrix));
+    VectorSingle q(0.0f);
+    ASSERT_TRUE(MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f, q));
+    ExpectSingleDirectionNear(Vector3Rotate(direction, q), TransformNormal3Single(direction, matrix));
 
-    const Expected<RigidDualQuaternion> dq = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
-    ASSERT_TRUE(dq.has_value());
-    const VectorSingle realPart = GetDualQuatRealSingle(dq.value());
-    const VectorSingle dualPart = GetDualQuatDualSingle(dq.value());
+    VectorSingle realPart(0.0f);
+    VectorSingle dualPart(0.0f);
+    ASSERT_TRUE(MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f, realPart, dualPart));
     const VectorSingle conjugateReal = VectorSingle(-realPart.x, -realPart.y, -realPart.z, realPart.w);
     const VectorSingle translation = QuaternionMultiply(dualPart, conjugateReal) * VectorSingle(2.0f, 2.0f, 2.0f, 2.0f);
     ExpectSingleDirectionNear(translation, VectorSingle(7.0f, -11.0f, 5.0f, 0.0f));

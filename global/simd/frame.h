@@ -80,18 +80,12 @@ static constexpr f32 s_FrameFallbackTangentZAxisAlignmentThreshold = 0.999f;
     return VectorSelect(tangent, handedness, s_SIMDMaskW);
 }
 
-struct alignas(SIMDVectorSingle) TangentFrameDirections{
-    SIMDVectorSingle tangent;
-    SIMDVectorSingle bitangent;
-};
-static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameDirections));
-
-[[nodiscard]] inline Expected<TangentFrameDirections> FrameTriangleTangentDirections(const SIMDVectorSingle uv0, const SIMDVectorSingle uv1, const SIMDVectorSingle uv2, SIMDVectorSingle edge01, SIMDVectorSingle edge02)noexcept{
+[[nodiscard]] inline b8 FrameTriangleTangentDirections(const SIMDVectorSingle uv0, const SIMDVectorSingle uv1, const SIMDVectorSingle uv2, SIMDVectorSingle edge01, SIMDVectorSingle edge02, SIMDVectorSingle& outTangent, SIMDVectorSingle& outBitangent)noexcept{
     const SIMDVectorSingle uvDelta1 = VectorSubtract(uv1, uv0);
     const SIMDVectorSingle uvDelta2 = VectorSubtract(uv2, uv0);
     const SIMDVectorSingle determinantVector = Vector2Cross(uvDelta1, uvDelta2);
     if(!VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW) || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_FrameHandednessEpsilon)))
-        return MakeUnexpected(Failure{});
+        return false;
 
     const SIMDVectorSingle du1 = VectorSplatX(uvDelta1);
     const SIMDVectorSingle dv1 = VectorSplatY(uvDelta1);
@@ -101,8 +95,10 @@ static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameD
     const SIMDVectorSingle tangent = VectorMultiply(VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)), inverseDeterminant);
     const SIMDVectorSingle bitangent = VectorMultiply(VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)), inverseDeterminant);
     if(!FrameValidDirection(tangent) || !FrameValidDirection(bitangent))
-        return MakeUnexpected(Failure{});
-    return TangentFrameDirections{ tangent, bitangent };
+        return false;
+    outTangent = tangent;
+    outBitangent = bitangent;
+    return true;
 }
 
 

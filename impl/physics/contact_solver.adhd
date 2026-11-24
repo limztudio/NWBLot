@@ -118,18 +118,11 @@ class ContactConstraintStepCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VectorSingle ApplySymMat3Local(in SymMat3 m, in VectorSingle v){
-    const VectorSingle row0(m.m00, m.m01, m.m02, 0.0f);
-    const VectorSingle row1(m.m01, m.m11, m.m12, 0.0f);
-    const VectorSingle row2(m.m02, m.m12, m.m22, 0.0f);
-    return row0 * v.x + row1 * v.y + row2 * v.z;
-}
-
 void ApplyVelocityImpulseToBody(
     mut Vector<BodyState> states,
     in u32 index,
     in f32 invMass,
-    in SymMat3 invI,
+    in MatrixSingle invI,
     in VectorSingle r,
     in VectorSingle impulse,
     in f32 sign
@@ -142,7 +135,7 @@ void ApplyVelocityImpulseToBody(
         return;
     const VectorSingle signedP = impulse * sign;
     VectorSingle v = VectorSingle(s.linearVelocity) + signedP * invMass;
-    VectorSingle w = VectorSingle(s.angularVelocity) + ApplySymMat3Local(invI, Cross(VectorSingle(r, 0.0f), signedP));
+    VectorSingle w = VectorSingle(s.angularVelocity) + Matrix3MulVec(invI, Cross(VectorSingle(r, 0.0f), signedP));
     if((bodyFlags & 0x07u) != 0u)
         v = ApplyLinearLocks(v, bodyFlags);
     if((bodyFlags & 0x38u) != 0u)
@@ -154,7 +147,7 @@ void ApplyVelocityImpulseToBody(
 void ApplyAngularImpulseToBody(
     mut Vector<BodyState> states,
     in u32 index,
-    in SymMat3 invI,
+    in MatrixSingle invI,
     in VectorSingle angularImpulse,
     in f32 sign
 ){
@@ -164,32 +157,10 @@ void ApplyAngularImpulseToBody(
     const u32 bodyFlags = s.deltaPositionFlags.w;
     if((bodyFlags & cast<u32>(BodyFlags::Dynamic)) == 0u)
         return;
-    VectorSingle w = VectorSingle(s.angularVelocity) + ApplySymMat3Local(invI, angularImpulse * sign);
+    VectorSingle w = VectorSingle(s.angularVelocity) + Matrix3MulVec(invI, angularImpulse * sign);
     if((bodyFlags & 0x38u) != 0u)
         w = ApplyAngularLocks(w, bodyFlags);
     s.angularVelocity = f32x4(w, 0.0f);
-}
-
-SymMat3 MaskSymMat3AngularLocks(in SymMat3 invI, in u32 bodyFlags){
-    if((bodyFlags & s_BodyFixedRotationFlags) == 0u)
-        return invI;
-    SymMat3 out = invI;
-    if((bodyFlags & cast<u32>(BodyFlags::LockAngularX)) != 0u){
-        out.m00 = 0.0f;
-        out.m01 = 0.0f;
-        out.m02 = 0.0f;
-    }
-    if((bodyFlags & cast<u32>(BodyFlags::LockAngularY)) != 0u){
-        out.m01 = 0.0f;
-        out.m11 = 0.0f;
-        out.m12 = 0.0f;
-    }
-    if((bodyFlags & cast<u32>(BodyFlags::LockAngularZ)) != 0u){
-        out.m02 = 0.0f;
-        out.m12 = 0.0f;
-        out.m22 = 0.0f;
-    }
-    return out;
 }
 
 f32 LinearInvMassDot(in VectorSingle d1, in VectorSingle d2, in f32 invMass, in u32 bodyFlags){
@@ -223,6 +194,8 @@ b8 PrepareContactConstraintSetup(
     mut VectorSingle outWA,
     mut VectorSingle outVB,
     mut VectorSingle outWB,
+    mut MatrixSingle outEffInvIAMat,
+    mut MatrixSingle outEffInvIBMat,
     mut f32 outBaseLinearKN,
     mut f32 outWarmTwistImpulse
 ){
@@ -279,19 +252,19 @@ b8 PrepareContactConstraintSetup(
     f32 invMassB = 0.0f;
     if(indexB != s_NullIndex && (outFlagsB & 0x07u) != 0x07u)
         invMassB = simB.centerInvMass.w;
-    SymMat3 effInvIA = SymMat3();
+    outEffInvIAMat = MatrixSingle(0.0f);
     if(indexA != s_NullIndex)
-        effInvIA = MaskSymMat3AngularLocks(simA.invInertiaWorld, outFlagsA);
-    SymMat3 effInvIB = SymMat3();
+        outEffInvIAMat = Matrix3MaskAngularLocks(Matrix3FromSymMat3(simA.invInertiaWorld), outFlagsA);
+    outEffInvIBMat = MatrixSingle(0.0f);
     if(indexB != s_NullIndex)
-        effInvIB = MaskSymMat3AngularLocks(simB.invInertiaWorld, outFlagsB);
+        outEffInvIBMat = Matrix3MaskAngularLocks(Matrix3FromSymMat3(simB.invInertiaWorld), outFlagsB);
 
     outConstraint.indexA = indexA;
     outConstraint.indexB = indexB;
     outConstraint.invMassA = invMassA;
     outConstraint.invMassB = invMassB;
-    outConstraint.invIA = effInvIA;
-    outConstraint.invIB = effInvIB;
+    outConstraint.invIA = SymMat3FromMatrix3(outEffInvIAMat);
+    outConstraint.invIB = SymMat3FromMatrix3(outEffInvIBMat);
     outConstraint.rollingResistance = contact.rollingResistance;
 
     if(indexA == s_NullIndex || indexB == s_NullIndex || invMassA == 0.0f || invMassB == 0.0f){
@@ -387,8 +360,8 @@ b8 PrepareContactConstraintSetup(
 void PrepareContactConstraintPoint(
     in ManifoldPoint mp,
     in VectorSingle n,
-    in SymMat3 effInvIA,
-    in SymMat3 effInvIB,
+    in MatrixSingle effInvIAMat,
+    in MatrixSingle effInvIBMat,
     in b8 hasA,
     in b8 hasB,
     in b8 enableWarmStarting,
@@ -411,10 +384,10 @@ void PrepareContactConstraintPoint(
     outRnB = Cross(rB, n);
     outInvIArnA = VectorSingle(0.0f);
     if(hasA)
-        outInvIArnA = ApplySymMat3Local(effInvIA, outRnA);
+        outInvIArnA = Matrix3MulVec(effInvIAMat, outRnA);
     outInvIBrnB = VectorSingle(0.0f);
     if(hasB)
-        outInvIBrnB = ApplySymMat3Local(effInvIB, outRnB);
+        outInvIBrnB = Matrix3MulVec(effInvIBMat, outRnB);
 
     const f32 kN =
         baseLinearKN
@@ -450,8 +423,8 @@ void FinalizeContactConstraintFrame(
     in u32 flagsB,
     in f32 invMassA,
     in f32 invMassB,
-    in SymMat3 effInvIA,
-    in SymMat3 effInvIB,
+    in MatrixSingle effInvIAMat,
+    in MatrixSingle effInvIBMat,
     in VectorSingle n,
     in VectorSingle t1,
     in VectorSingle t2,
@@ -497,14 +470,14 @@ void FinalizeContactConstraintFrame(
     outIrt1A = VectorSingle(0.0f);
     outIrt2A = VectorSingle(0.0f);
     if(hasA){
-        outIrt1A = ApplySymMat3Local(effInvIA, rt1A);
-        outIrt2A = ApplySymMat3Local(effInvIA, rt2A);
+        outIrt1A = Matrix3MulVec(effInvIAMat, rt1A);
+        outIrt2A = Matrix3MulVec(effInvIAMat, rt2A);
     }
     outIrt1B = VectorSingle(0.0f);
     outIrt2B = VectorSingle(0.0f);
     if(hasB){
-        outIrt1B = ApplySymMat3Local(effInvIB, rt1B);
-        outIrt2B = ApplySymMat3Local(effInvIB, rt2B);
+        outIrt1B = Matrix3MulVec(effInvIBMat, rt1B);
+        outIrt2B = Matrix3MulVec(effInvIBMat, rt2B);
     }
 
     f32 lin00 = 0.0f;
@@ -546,9 +519,9 @@ void FinalizeContactConstraintFrame(
     outInvIBn = VectorSingle(0.0f);
     if(needNormalsEvenWithoutLever || maxLeverArm > 0.0f){
         if(hasA)
-            outInvIAn = ApplySymMat3Local(effInvIA, n);
+            outInvIAn = Matrix3MulVec(effInvIAMat, n);
         if(hasB)
-            outInvIBn = ApplySymMat3Local(effInvIB, n);
+            outInvIBn = Matrix3MulVec(effInvIBMat, n);
     }
 
     f32 twistMassVal = 0.0f;
@@ -592,6 +565,8 @@ void PrepareContactConstraintWithCache(
     VectorSingle wA(0.0f);
     VectorSingle vB(0.0f);
     VectorSingle wB(0.0f);
+    MatrixSingle effInvIAMat(0.0f);
+    MatrixSingle effInvIBMat(0.0f);
     f32 baseLinearKN = 0.0f;
     f32 warmTwistImpulse = 0.0f;
     if(!PrepareContactConstraintSetup(
@@ -617,6 +592,8 @@ void PrepareContactConstraintWithCache(
         wA,
         vB,
         wB,
+        effInvIAMat,
+        effInvIBMat,
         baseLinearKN,
         warmTwistImpulse
     ))
@@ -639,8 +616,8 @@ void PrepareContactConstraintWithCache(
         PrepareContactConstraintPoint(
             contact.manifold.points[i],
             n,
-            outConstraint.invIA,
-            outConstraint.invIB,
+            effInvIAMat,
+            effInvIBMat,
             hasA,
             hasB,
             enableWarmStarting,
@@ -680,8 +657,8 @@ void PrepareContactConstraintWithCache(
         flagsB,
         outConstraint.invMassA,
         outConstraint.invMassB,
-        outConstraint.invIA,
-        outConstraint.invIB,
+        effInvIAMat,
+        effInvIBMat,
         n,
         t1,
         t2,
@@ -706,14 +683,7 @@ void PrepareContactConstraintWithCache(
     outCache.invIB_n = f32x4(invIBn, 0.0f);
 
     if(contact.rollingResistance > 0.0f){
-        outCache.rollingMass = InvertSymMat3(SymMat3(
-            outConstraint.invIA.m00 + outConstraint.invIB.m00,
-            outConstraint.invIA.m01 + outConstraint.invIB.m01,
-            outConstraint.invIA.m02 + outConstraint.invIB.m02,
-            outConstraint.invIA.m11 + outConstraint.invIB.m11,
-            outConstraint.invIA.m12 + outConstraint.invIB.m12,
-            outConstraint.invIA.m22 + outConstraint.invIB.m22
-        ));
+        outCache.rollingMass = SymMat3FromMatrix3(Matrix3InvertSymmetric(Matrix3Add(effInvIAMat, effInvIBMat)));
     }
     else{
         outCache.rollingMass = SymMat3();
@@ -744,6 +714,8 @@ void PrepareContactConstraint(
     VectorSingle wA(0.0f);
     VectorSingle vB(0.0f);
     VectorSingle wB(0.0f);
+    MatrixSingle effInvIAMat(0.0f);
+    MatrixSingle effInvIBMat(0.0f);
     f32 baseLinearKN = 0.0f;
     f32 warmTwistImpulse = 0.0f;
     if(!PrepareContactConstraintSetup(
@@ -769,6 +741,8 @@ void PrepareContactConstraint(
         wA,
         vB,
         wB,
+        effInvIAMat,
+        effInvIBMat,
         baseLinearKN,
         warmTwistImpulse
     ))
@@ -789,8 +763,8 @@ void PrepareContactConstraint(
         PrepareContactConstraintPoint(
             contact.manifold.points[i],
             n,
-            outConstraint.invIA,
-            outConstraint.invIB,
+            effInvIAMat,
+            effInvIBMat,
             hasA,
             hasB,
             enableWarmStarting,
@@ -825,8 +799,8 @@ void PrepareContactConstraint(
         flagsB,
         outConstraint.invMassA,
         outConstraint.invMassB,
-        outConstraint.invIA,
-        outConstraint.invIB,
+        effInvIAMat,
+        effInvIBMat,
         n,
         t1,
         t2,
@@ -853,23 +827,25 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
 
     const b8 hasA = (c.indexA != s_NullIndex);
     const b8 hasB = (c.indexB != s_NullIndex);
+    const MatrixSingle invIAMat = Matrix3FromSymMat3(c.invIA);
+    const MatrixSingle invIBMat = Matrix3FromSymMat3(c.invIB);
     VectorSingle invIAn(0.0f);
     VectorSingle irt1A(0.0f);
     VectorSingle irt2A(0.0f);
     if(hasA){
-        invIAn = ApplySymMat3Local(c.invIA, n);
+        invIAn = Matrix3MulVec(invIAMat, n);
         const VectorSingle centerA = VectorSingle(c.centerATwistMass, 0.0f);
-        irt1A = ApplySymMat3Local(c.invIA, Cross(centerA, t1));
-        irt2A = ApplySymMat3Local(c.invIA, Cross(centerA, t2));
+        irt1A = Matrix3MulVec(invIAMat, Cross(centerA, t1));
+        irt2A = Matrix3MulVec(invIAMat, Cross(centerA, t2));
     }
     VectorSingle invIBn(0.0f);
     VectorSingle irt1B(0.0f);
     VectorSingle irt2B(0.0f);
     if(hasB){
-        invIBn = ApplySymMat3Local(c.invIB, n);
+        invIBn = Matrix3MulVec(invIBMat, n);
         const VectorSingle centerB = VectorSingle(c.centerBTwistImpulse, 0.0f);
-        irt1B = ApplySymMat3Local(c.invIB, Cross(centerB, t1));
-        irt2B = ApplySymMat3Local(c.invIB, Cross(centerB, t2));
+        irt1B = Matrix3MulVec(invIBMat, Cross(centerB, t1));
+        irt2B = Matrix3MulVec(invIBMat, Cross(centerB, t2));
     }
     outCache.invIA_n = f32x4(invIAn, 0.0f);
     outCache.invIB_n = f32x4(invIBn, 0.0f);
@@ -879,14 +855,7 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
     outCache.irt2B = f32x4(irt2B, 0.0f);
 
     if(c.rollingResistance > 0.0f){
-        outCache.rollingMass = InvertSymMat3(SymMat3(
-            c.invIA.m00 + c.invIB.m00,
-            c.invIA.m01 + c.invIB.m01,
-            c.invIA.m02 + c.invIB.m02,
-            c.invIA.m11 + c.invIB.m11,
-            c.invIA.m12 + c.invIB.m12,
-            c.invIA.m22 + c.invIB.m22
-        ));
+        outCache.rollingMass = SymMat3FromMatrix3(Matrix3InvertSymmetric(Matrix3Add(invIAMat, invIBMat)));
     }
     else{
         outCache.rollingMass = SymMat3();
@@ -898,9 +867,8 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
         mut ContactPointStepCache ptCache = outCache.points[i];
         if(hasA){
             const VectorSingle rnA = Cross(VectorSingle(pt.rABaseSep, 0.0f), n);
-            const VectorSingle invIArnA = ApplySymMat3Local(c.invIA, rnA);
             ptCache.rnACachedSep = f32x4(rnA, pt.rABaseSep.w);
-            ptCache.invIA_rnA = f32x4(invIArnA, 0.0f);
+            ptCache.invIA_rnA = f32x4(Matrix3MulVec(invIAMat, rnA), 0.0f);
         }
         else{
             ptCache.rnACachedSep = f32x4(0.0f, 0.0f, 0.0f, pt.rABaseSep.w);
@@ -908,9 +876,8 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
         }
         if(hasB){
             const VectorSingle rnB = Cross(VectorSingle(pt.rBRelVel, 0.0f), n);
-            const VectorSingle invIBrnB = ApplySymMat3Local(c.invIB, rnB);
             ptCache.rnB = f32x4(rnB, 0.0f);
-            ptCache.invIB_rnB = f32x4(invIBrnB, 0.0f);
+            ptCache.invIB_rnB = f32x4(Matrix3MulVec(invIBMat, rnB), 0.0f);
         }
         else{
             ptCache.rnB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1004,9 +971,9 @@ void WarmStartContactConstraintCached(mut Vector<BodyState> states, in ContactCo
         anyWarmApplied = true;
         const VectorSingle rollP(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         if(dynA)
-            wA = wA - ApplySymMat3Local(c.invIA, rollP);
+            wA = wA - Matrix3MulVec(Matrix3FromSymMat3(c.invIA), rollP);
         if(dynB)
-            wB = wB + ApplySymMat3Local(c.invIB, rollP);
+            wB = wB + Matrix3MulVec(Matrix3FromSymMat3(c.invIB), rollP);
     }
 
     if(!anyWarmApplied)
@@ -1334,7 +1301,7 @@ void SolveContactConstraintCachedWithKinematics(
 
     if((c.rollingResistance > 0.0f && totalNormalImpulse > 0.0f) || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
         const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
-        const VectorSingle deltaR = -ApplySymMat3Local(cache.rollingMass, dw);
+        const VectorSingle deltaR = -Matrix3MulVec(Matrix3FromSymMat3(cache.rollingMass), dw);
         const VectorSingle oldR(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         VectorSingle newR = oldR + deltaR;
         const f32 maxR = c.rollingResistance * totalNormalImpulse;
@@ -1351,12 +1318,12 @@ void SolveContactConstraintCachedWithKinematics(
         if(appliedR.x != 0.0f || appliedR.y != 0.0f || appliedR.z != 0.0f){
             anyApplied = true;
             if(dynA){
-                wA = wA - ApplySymMat3Local(c.invIA, appliedR);
+                wA = wA - Matrix3MulVec(Matrix3FromSymMat3(c.invIA), appliedR);
                 if(angLockedA)
                     wA = ApplyAngularLocks(wA, flagsA);
             }
             if(dynB){
-                wB = wB + ApplySymMat3Local(c.invIB, appliedR);
+                wB = wB + Matrix3MulVec(Matrix3FromSymMat3(c.invIB), appliedR);
                 if(angLockedB)
                     wB = ApplyAngularLocks(wB, flagsB);
             }

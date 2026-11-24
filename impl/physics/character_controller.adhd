@@ -136,10 +136,6 @@ class CharacterController{
         return VectorSingle(this.def.up);
     }
 
-    public Transform3D worldTransform()const{
-        return Transform3D(VectorSingle(this.position), VectorSingle(this.rotation));
-    }
-
     public b8 isWalkableNormal(in VectorSingle normal)const{
         f32 minCos = this.m_minWalkableCos;
         if(this.def.maxSlopeAngleRad != this.m_cachedSlopeAngleRad)
@@ -537,8 +533,8 @@ class CharacterController{
             const Expected<Transform3D> curGroundRes = world.tryGetBodyTransform(this.groundBodyId);
             if(curGroundRes.has_value()){
                 in Transform3D curG = curGroundRes.value();
-                const VectorSingle localP = InverseTransformPoint(this.prevGroundTransform, VectorSingle(this.position));
-                const VectorSingle carriedP = TransformPoint(curG, localP);
+                const VectorSingle localP = InverseTransformPointValues(VectorSingle(this.prevGroundTransform.position), VectorSingle(this.prevGroundTransform.rotation), VectorSingle(this.position));
+                const VectorSingle carriedP = TransformPointValues(VectorSingle(curG.position), VectorSingle(curG.rotation), localP);
                 this.position = f32x4(carriedP, 0.0f);
                 const VectorSingle dQ = QuaternionMultiply(VectorSingle(curG.rotation), QuaternionConjugate(VectorSingle(this.prevGroundTransform.rotation)));
                 this.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(dQ, VectorSingle(this.rotation))));

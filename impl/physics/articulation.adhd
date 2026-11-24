@@ -31,11 +31,19 @@ class SpatialMat6{
     public Mat3 br;
 
     public SpatialMat6(){
-        this.tl = ZeroMat3();
-        this.tr = ZeroMat3();
-        this.bl = ZeroMat3();
-        this.br = ZeroMat3();
+        this.tl = Mat3();
+        this.tr = Mat3();
+        this.bl = Mat3();
+        this.br = Mat3();
     }
+}
+
+MatrixSingle Matrix3FromMat3(in Mat3 m){
+    return MatrixSingle(VectorSingle(m.row0), VectorSingle(m.row1), VectorSingle(m.row2));
+}
+
+Mat3 Mat3FromMatrix3(in MatrixSingle m){
+    return Mat3(m[0u], m[1u], m[2u]);
 }
 
 SpatialVec SpatialVecMake(in VectorSingle a, in VectorSingle l){
@@ -91,26 +99,26 @@ SpatialVec SpatialMulMat6Vec(in SpatialMat6 m, in SpatialVec v){
     const VectorSingle va = VectorSingle(v.ang);
     const VectorSingle vl = VectorSingle(v.lin);
     return SpatialVecMake(
-        MulMat3Vec(m.tl, va) + MulMat3Vec(m.tr, vl),
-        MulMat3Vec(m.bl, va) + MulMat3Vec(m.br, vl)
+        Matrix3MulVec(Matrix3FromMat3(m.tl), va) + Matrix3MulVec(Matrix3FromMat3(m.tr), vl),
+        Matrix3MulVec(Matrix3FromMat3(m.bl), va) + Matrix3MulVec(Matrix3FromMat3(m.br), vl)
     );
 }
 
 SpatialMat6 SpatialMat6Add(in SpatialMat6 a, in SpatialMat6 b){
     SpatialMat6 r;
-    r.tl = AddMat3(a.tl, b.tl);
-    r.tr = AddMat3(a.tr, b.tr);
-    r.bl = AddMat3(a.bl, b.bl);
-    r.br = AddMat3(a.br, b.br);
+    r.tl = Mat3FromMatrix3(Matrix3Add(Matrix3FromMat3(a.tl), Matrix3FromMat3(b.tl)));
+    r.tr = Mat3FromMatrix3(Matrix3Add(Matrix3FromMat3(a.tr), Matrix3FromMat3(b.tr)));
+    r.bl = Mat3FromMatrix3(Matrix3Add(Matrix3FromMat3(a.bl), Matrix3FromMat3(b.bl)));
+    r.br = Mat3FromMatrix3(Matrix3Add(Matrix3FromMat3(a.br), Matrix3FromMat3(b.br)));
     return r;
 }
 
 SpatialMat6 SpatialMat6Sub(in SpatialMat6 a, in SpatialMat6 b){
     SpatialMat6 r;
-    r.tl = SubMat3(a.tl, b.tl);
-    r.tr = SubMat3(a.tr, b.tr);
-    r.bl = SubMat3(a.bl, b.bl);
-    r.br = SubMat3(a.br, b.br);
+    r.tl = Mat3FromMatrix3(Matrix3Sub(Matrix3FromMat3(a.tl), Matrix3FromMat3(b.tl)));
+    r.tr = Mat3FromMatrix3(Matrix3Sub(Matrix3FromMat3(a.tr), Matrix3FromMat3(b.tr)));
+    r.bl = Mat3FromMatrix3(Matrix3Sub(Matrix3FromMat3(a.bl), Matrix3FromMat3(b.bl)));
+    r.br = Mat3FromMatrix3(Matrix3Sub(Matrix3FromMat3(a.br), Matrix3FromMat3(b.br)));
     return r;
 }
 
@@ -128,22 +136,22 @@ SpatialMat6 SpatialMat6FromOuter(in SpatialVec u, in SpatialVec v, in f32 scale)
 }
 
 SpatialMat6 SpatialInertiaMatrix(in f32 mass, in VectorSingle comLocal, in VectorSingle diagInertiaLocal){
-    const Mat3 cSkew = SkewSymmetricMat3(comLocal);
-    const Mat3 cSkewT = TransposeMat3(cSkew);
-    const Mat3 mC = ScaleMat3(cSkew, mass);
-    const Mat3 mCT = ScaleMat3(cSkewT, mass);
-    const Mat3 rotPart = AddMat3(
-        Mat3(
+    const MatrixSingle cSkew = Matrix3SkewSymmetric(comLocal);
+    const MatrixSingle cSkewT = Matrix3Transpose(cSkew);
+    const MatrixSingle mC = Matrix3Scale(cSkew, mass);
+    const MatrixSingle mCT = Matrix3Scale(cSkewT, mass);
+    const MatrixSingle rotPart = Matrix3Add(
+        MatrixSingle(
             VectorSingle(diagInertiaLocal.x, 0.0f, 0.0f, 0.0f),
             VectorSingle(0.0f, diagInertiaLocal.y, 0.0f, 0.0f),
             VectorSingle(0.0f, 0.0f, diagInertiaLocal.z, 0.0f)
         ),
-        ScaleMat3(MulMat3(cSkew, cSkewT), mass)
+        Matrix3Scale(Matrix3Mul(cSkew, cSkewT), mass)
     );
     SpatialMat6 m;
-    m.tl = rotPart;
-    m.tr = mC;
-    m.bl = mCT;
+    m.tl = Mat3FromMatrix3(rotPart);
+    m.tr = Mat3FromMatrix3(mC);
+    m.bl = Mat3FromMatrix3(mCT);
     m.br = Mat3(
         VectorSingle(mass, 0.0f, 0.0f, 0.0f),
         VectorSingle(0.0f, mass, 0.0f, 0.0f),
@@ -152,55 +160,55 @@ SpatialMat6 SpatialInertiaMatrix(in f32 mass, in VectorSingle comLocal, in Vecto
     return m;
 }
 
-SpatialVec SpatialTransformMotionP2C(in Transform3D relP2C, in SpatialVec vParent){
-    const VectorSingle r = VectorSingle(relP2C.position);
-    const VectorSingle qInv = QuaternionConjugate(VectorSingle(relP2C.rotation));
+SpatialVec SpatialTransformMotionP2C(in VectorSingle relPos, in VectorSingle relRot, in SpatialVec vParent){
+    const VectorSingle qInv = QuaternionConjugate(relRot);
     const VectorSingle wC = Vector3Rotate(VectorSingle(vParent.ang), qInv);
-    const VectorSingle vC = Vector3Rotate(VectorSingle(vParent.lin) + Cross(VectorSingle(vParent.ang), r), qInv);
+    const VectorSingle vC = Vector3Rotate(VectorSingle(vParent.lin) + Cross(VectorSingle(vParent.ang), relPos), qInv);
     return SpatialVecMake(wC, vC);
 }
 
-SpatialVec SpatialTransformForceC2P(in Transform3D relP2C, in SpatialVec fChild){
-    const VectorSingle r = VectorSingle(relP2C.position);
-    const VectorSingle q = VectorSingle(relP2C.rotation);
-    const VectorSingle fP = Vector3Rotate(VectorSingle(fChild.lin), q);
-    const VectorSingle tP = Vector3Rotate(VectorSingle(fChild.ang), q) + Cross(r, fP);
+SpatialVec SpatialTransformForceC2P(in VectorSingle relPos, in VectorSingle relRot, in SpatialVec fChild){
+    const VectorSingle fP = Vector3Rotate(VectorSingle(fChild.lin), relRot);
+    const VectorSingle tP = Vector3Rotate(VectorSingle(fChild.ang), relRot) + Cross(relPos, fP);
     return SpatialVecMake(tP, fP);
 }
 
-Mat3 MulSkewLeft(in VectorSingle r, in Mat3 m){
-    const VectorSingle r0 = VectorSingle(m.row0);
-    const VectorSingle r1 = VectorSingle(m.row1);
-    const VectorSingle r2 = VectorSingle(m.row2);
-    return Mat3(
+MatrixSingle MulSkewLeft(in VectorSingle r, in MatrixSingle m){
+    const VectorSingle r0 = m[0u];
+    const VectorSingle r1 = m[1u];
+    const VectorSingle r2 = m[2u];
+    return MatrixSingle(
         r2 * r.y - r1 * r.z,
         r0 * r.z - r2 * r.x,
         r1 * r.x - r0 * r.y
     );
 }
 
-Mat3 MulSkewRight(in Mat3 m, in VectorSingle r){
-    return Mat3(
-        Cross(VectorSingle(m.row0), r),
-        Cross(VectorSingle(m.row1), r),
-        Cross(VectorSingle(m.row2), r)
+MatrixSingle MulSkewRight(in MatrixSingle m, in VectorSingle r){
+    return MatrixSingle(
+        Cross(m[0u], r),
+        Cross(m[1u], r),
+        Cross(m[2u], r)
     );
 }
 
-SpatialMat6 SpatialTransformInertiaC2P(in Transform3D relP2C, in SpatialMat6 iaChild){
-    const Mat3 rMat = Mat3FromQuaternion(VectorSingle(relP2C.rotation));
-    const Mat3 rT = TransposeMat3(rMat);
-    const Mat3 jr = MulMat3(rMat, MulMat3(iaChild.tl, rT));
-    const Mat3 cr = MulMat3(rMat, MulMat3(iaChild.tr, rT));
-    const Mat3 br = MulMat3(rMat, MulMat3(iaChild.bl, rT));
-    const Mat3 mr = MulMat3(rMat, MulMat3(iaChild.br, rT));
-    const VectorSingle rPos = VectorSingle(relP2C.position);
+SpatialMat6 SpatialTransformInertiaC2P(in VectorSingle relPos, in VectorSingle relRot, in SpatialMat6 iaChild){
+    const MatrixSingle rMat = Matrix3FromQuaternion(relRot);
+    const MatrixSingle rT = Matrix3Transpose(rMat);
+    const MatrixSingle jr = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.tl), rT));
+    const MatrixSingle cr = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.tr), rT));
+    const MatrixSingle br = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.bl), rT));
+    const MatrixSingle mr = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.br), rT));
+
+    const MatrixSingle blOut = Matrix3Sub(br, MulSkewRight(mr, relPos));
+    const MatrixSingle trOut = Matrix3Add(cr, MulSkewLeft(relPos, mr));
+    const MatrixSingle tlOut = Matrix3Add(Matrix3Sub(jr, MulSkewRight(cr, relPos)), MulSkewLeft(relPos, blOut));
 
     SpatialMat6 outM;
-    outM.br = mr;
-    outM.tr = AddMat3(cr, MulSkewLeft(rPos, mr));
-    outM.bl = SubMat3(br, MulSkewRight(mr, rPos));
-    outM.tl = AddMat3(SubMat3(jr, MulSkewRight(cr, rPos)), MulSkewLeft(rPos, outM.bl));
+    outM.br = Mat3FromMatrix3(mr);
+    outM.tr = Mat3FromMatrix3(trOut);
+    outM.bl = Mat3FromMatrix3(blOut);
+    outM.tl = Mat3FromMatrix3(tlOut);
     return outM;
 }
 
@@ -497,8 +505,9 @@ class Articulation{
                 biasC[0u] = SpatialVec();
             }
             else{
+                in Transform3D rp = relP2C[i];
                 const SpatialVec vJ = SpatialScale(jointS[i], s.qd);
-                const SpatialVec vPar = SpatialTransformMotionP2C(relP2C[i], this.linkStates[d.parentIndex].spatialVelocity);
+                const SpatialVec vPar = SpatialTransformMotionP2C(VectorSingle(rp.position), VectorSingle(rp.rotation), this.linkStates[d.parentIndex].spatialVelocity);
                 s.spatialVelocity = SpatialAdd(vPar, vJ);
                 biasC[i] = SpatialCrossMotion(s.spatialVelocity, vJ);
             }
@@ -553,8 +562,11 @@ class Articulation{
             const SpatialVec iaBias = SpatialMulMat6Vec(iaMod, biasC[i]);
             const SpatialVec pFull = SpatialAdd(paMod, iaBias);
 
-            iaList[pIdx] = SpatialMat6Add(iaList[pIdx], SpatialTransformInertiaC2P(relP2C[i], iaMod));
-            pAList[pIdx] = SpatialAdd(pAList[pIdx], SpatialTransformForceC2P(relP2C[i], pFull));
+            in Transform3D rp = relP2C[i];
+            const VectorSingle rpPos = VectorSingle(rp.position);
+            const VectorSingle rpRot = VectorSingle(rp.rotation);
+            iaList[pIdx] = SpatialMat6Add(iaList[pIdx], SpatialTransformInertiaC2P(rpPos, rpRot, iaMod));
+            pAList[pIdx] = SpatialAdd(pAList[pIdx], SpatialTransformForceC2P(rpPos, rpRot, pFull));
         }
 
         if(this.fixedBase)
@@ -565,7 +577,8 @@ class Articulation{
         for(usize i = 1u; i < n; ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
             mut ArticulationLinkState s = this.linkStates[i];
-            const SpatialVec aPrime = SpatialAdd(SpatialTransformMotionP2C(relP2C[i], accel[d.parentIndex]), biasC[i]);
+            in Transform3D rp = relP2C[i];
+            const SpatialVec aPrime = SpatialAdd(SpatialTransformMotionP2C(VectorSingle(rp.position), VectorSingle(rp.rotation), accel[d.parentIndex]), biasC[i]);
             if(d.jointType != ArticulationJointType::Fixed && dScalar[i] > 1.0e-9f){
                 s.qdd = (uTau[i] - SpatialDot(uSubVec[i], aPrime)) / dScalar[i];
                 accel[i] = SpatialAdd(aPrime, SpatialScale(jointS[i], s.qdd));
@@ -604,9 +617,13 @@ class Articulation{
                     s.spatialVelocity = this.baseVelocity;
             }
             else{
-                const Transform3D p2c = RelativeTransform(this.linkStates[d.parentIndex].worldTransform, s.worldTransform);
+                in Transform3D parXf = this.linkStates[d.parentIndex].worldTransform;
+                in Transform3D chXf = s.worldTransform;
+                VectorSingle p2cPos(0.0f);
+                VectorSingle p2cRot(0.0f, 0.0f, 0.0f, 1.0f);
+                RelativeTransformValues(VectorSingle(parXf.position), VectorSingle(parXf.rotation), VectorSingle(chXf.position), VectorSingle(chXf.rotation), p2cPos, p2cRot);
                 const SpatialVec vJ = SpatialScale(this.m_linkJointSubspace[i], s.qd);
-                const SpatialVec vPar = SpatialTransformMotionP2C(p2c, this.linkStates[d.parentIndex].spatialVelocity);
+                const SpatialVec vPar = SpatialTransformMotionP2C(p2cPos, p2cRot, this.linkStates[d.parentIndex].spatialVelocity);
                 s.spatialVelocity = SpatialAdd(vPar, vJ);
             }
         }
@@ -659,7 +676,8 @@ class Articulation{
                     }
                     if(hitLimit && i < this.m_relP2C.size() && i < this.m_uSubVec.size()){
                         const f32 dqd = -oldQd;
-                        SpatialVec impCur = SpatialTransformForceC2P(this.m_relP2C[i], SpatialScale(this.m_uSubVec[i], -dqd));
+                        in Transform3D rpI = this.m_relP2C[i];
+                        SpatialVec impCur = SpatialTransformForceC2P(VectorSingle(rpI.position), VectorSingle(rpI.rotation), SpatialScale(this.m_uSubVec[i], -dqd));
                         u32 cur = d.parentIndex;
                         while(cur != s_NullIndex && cur < cast<u32>(n)){
                             if(cur == 0u){
@@ -673,7 +691,8 @@ class Articulation{
                                 this.linkStates[cur].qd += dqdPar;
                                 impCur = SpatialSub(impCur, SpatialScale(this.m_uSubVec[cur], dqdPar));
                             }
-                            impCur = SpatialTransformForceC2P(this.m_relP2C[cur], impCur);
+                            in Transform3D rpC = this.m_relP2C[cur];
+                            impCur = SpatialTransformForceC2P(VectorSingle(rpC.position), VectorSingle(rpC.rotation), impCur);
                             cur = cd.parentIndex;
                         }
                     }

@@ -98,15 +98,16 @@ void WriteWorldPoseBackToEntityTransform(in EntityID entity, in Transform3D worl
         in PhysicsParentComponent pp = ppOpt.value();
         if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
             const EcsWorldPose parentPose = ResolveEntityWorldPose(pp.parent, world);
-            const Transform3D localXf = RelativeTransform(parentPose.transform, worldXf);
-            VectorSingle localPos = VectorSingle(localXf.position, 0.0f);
+            VectorSingle localPos(0.0f);
+            VectorSingle localRot(0.0f, 0.0f, 0.0f, 1.0f);
+            RelativeTransformValues(VectorSingle(parentPose.transform.position), VectorSingle(parentPose.transform.rotation), VectorSingle(worldXf.position), VectorSingle(worldXf.rotation), localPos, localRot);
             if(pp.inheritScale){
                 const VectorSingle safeScale = VectorSingle(parentPose.scale, 1.0f);
                 const VectorSingle denom = VectorSelect(VectorSingle(1.0f), safeScale, VectorGreater(Abs(safeScale), VectorSingle(1.0e-5f)));
                 localPos = localPos / denom;
             }
             xf.position = f32x4(localPos, 0.0f);
-            xf.rotation = localXf.rotation;
+            xf.rotation = f32x4(localRot);
             return;
         }
     }
@@ -114,12 +115,12 @@ void WriteWorldPoseBackToEntityTransform(in EntityID entity, in Transform3D worl
     xf.rotation = worldXf.rotation;
 }
 
-Aabb3D TransformAabbByPoseAndScale(in Aabb3D localBounds, in Transform3D xf, in VectorSingle worldScale){
+Aabb3D TransformAabbByPoseAndScale(in Aabb3D localBounds, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle worldScale){
     const VectorSingle bMin(localBounds.lowerBound.x * worldScale.x, localBounds.lowerBound.y * worldScale.y, localBounds.lowerBound.z * worldScale.z, 0.0f);
     const VectorSingle bMax(localBounds.upperBound.x * worldScale.x, localBounds.upperBound.y * worldScale.y, localBounds.upperBound.z * worldScale.z, 0.0f);
     const VectorSingle lo = Min(bMin, bMax);
     const VectorSingle hi = Max(bMin, bMax);
-    VectorSingle wMin = TransformPoint(xf, lo);
+    VectorSingle wMin = TransformPointValues(xfPos, xfRot, lo);
     VectorSingle wMax = wMin;
     for(u32 mask = 1u; mask < 8u; ++mask){
         f32 cx = lo.x;
@@ -131,7 +132,7 @@ Aabb3D TransformAabbByPoseAndScale(in Aabb3D localBounds, in Transform3D xf, in 
             cy = hi.y;
         if((mask & 4u) != 0u)
             cz = hi.z;
-        const VectorSingle wp = TransformPoint(xf, VectorSingle(cx, cy, cz, 0.0f));
+        const VectorSingle wp = TransformPointValues(xfPos, xfRot, VectorSingle(cx, cy, cz, 0.0f));
         wMin = Min(wMin, wp);
         wMax = Max(wMax, wp);
     }
@@ -151,7 +152,7 @@ FluidVolume BuildWorldTransformedFluidVolume(in FluidVolume src, in Transform3D 
         dst.surfaceNormalOffset = f32x4(worldN, Vector3Dot(worldN, worldPt).x);
     }
     else{
-        dst.bounds = TransformAabbByPoseAndScale(src.bounds, xf, worldScale);
+        dst.bounds = TransformAabbByPoseAndScale(src.bounds, VectorSingle(xf.position), VectorSingle(xf.rotation), worldScale);
     }
     return dst;
 }
@@ -160,7 +161,7 @@ ForceField BuildWorldTransformedForceField(in ForceField src, in Transform3D xf,
     ForceField dst = src;
     const VectorSingle rot = SafeNormalizeQuat(VectorSingle(xf.rotation));
     if(src.useBounds)
-        dst.bounds = TransformAabbByPoseAndScale(src.bounds, xf, worldScale);
+        dst.bounds = TransformAabbByPoseAndScale(src.bounds, VectorSingle(xf.position), VectorSingle(xf.rotation), worldScale);
     if(src.type == ForceFieldType::PointGravity){
         const VectorSingle scaledOrigin(src.originOrDirection.x * worldScale.x, src.originOrDirection.y * worldScale.y, src.originOrDirection.z * worldScale.z, 0.0f);
         dst.originOrDirection = f32x4(VectorSingle(xf.position) + Vector3Rotate(scaledOrigin, rot), 0.0f);
@@ -471,9 +472,9 @@ void StepEcsPhysicsSubsystemBridges(
                         const VectorSingle rootQ = SafeNormalizeQuat(VectorSingle(rootPose.transform.rotation));
                         for(usize bi = 0u; bi < rc.bones.size(); ++bi){
                             RagdollBoneDef bd = rc.bones[bi];
-                            bd.bodyDef.position = f32x4(TransformPoint(rootPose.transform, VectorSingle(bd.bodyDef.position)), 0.0f);
+                            bd.bodyDef.position = f32x4(TransformPointValues(VectorSingle(rootPose.transform.position), VectorSingle(rootPose.transform.rotation), VectorSingle(bd.bodyDef.position)), 0.0f);
                             bd.bodyDef.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(rootQ, SafeNormalizeQuat(VectorSingle(bd.bodyDef.rotation)))));
-                            bd.jointAnchorWorld = f32x4(TransformPoint(rootPose.transform, VectorSingle(bd.jointAnchorWorld)), 0.0f);
+                            bd.jointAnchorWorld = f32x4(TransformPointValues(VectorSingle(rootPose.transform.position), VectorSingle(rootPose.transform.rotation), VectorSingle(bd.jointAnchorWorld)), 0.0f);
                             bd.jointAxisWorld = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(bd.jointAxisWorld), rootQ), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
                             worldBones[bi] = bd;
                         }
@@ -693,19 +694,20 @@ void CollectEcsGpuRenderTransformBindings(
             && bodyIndexToEntity[bodyId.index].generation == bodyId.generation;
         if(!bodyOwnerMatches && !physicsWorld.isValidBody(bodyId))
             continue;
-        f32x4 entityScale(1.0f, 1.0f, 1.0f, 0.0f);
+        VectorSingle entityScale(1.0f, 1.0f, 1.0f, 0.0f);
         if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity)){
             entityScale = ResolveEntityWorldScaleFast(entity, world, poseCache);
         }
         else{
             const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);
             if(xfOpt.has_value())
-                entityScale = xfOpt.value().scale;
+                entityScale = VectorSingle(xfOpt.value().scale);
         }
-        const f32x4 localScale = Get<1>(row).localScale;
+        const f32x4 localScaleRaw = Get<1>(row).localScale;
+        const VectorSingle localScale = VectorSingle(localScaleRaw);
         GpuPhysicsRenderTransformBinding binding;
         binding.bodyDestFlags = u32x4(bodyId.index, Get<1>(row).instanceIndex, entity.index(), Get<1>(row).flags);
-        binding.scalePad = f32x4(entityScale.x * localScale.x, entityScale.y * localScale.y, entityScale.z * localScale.z, 0.0f);
+        binding.scalePad = f32x4(entityScale * localScale, 0.0f);
         outBindings.push_back(binding);
     }
 }

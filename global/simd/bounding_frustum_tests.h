@@ -29,66 +29,66 @@ inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVectorSingle& outOrigin,
     SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
 )noexcept{
-    const auto decomposition = MatrixDecompose(matrix);
-    const SIMDVectorSingle rotation = decomposition ? decomposition->rotation : s_SIMDIdentityR3;
+    SIMDMatrix decomposition{};
+    const SIMDVectorSingle rotation = MatrixDecompose(matrix, decomposition) ? decomposition.v[1] : s_SIMDIdentityR3;
     outOrigin = Vector3Transform(frustumOrigin, matrix);
     outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, frustumOrientation));
 
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle nearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle farDepth = VectorReplicate(farPlaneValue);
     SIMDVectorSingle minBounds{};
     SIMDVectorSingle maxBounds{};
-    for(usize index = 0u; index < BoundingFrustum::s_CornerCount; ++index){
-        corners[index] = Vector3Transform(corners[index], matrix);
+    SIMDVectorSingle fittedMin{};
+    SIMDVectorSingle fittedMax{};
+    b8 hasValidDepth = true;
+    for(u32 index = 0u; index < BoundingFrustum::s_CornerCount; ++index){
+        const SIMDVectorSingle corner = Vector3Transform(
+            CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index),
+            matrix
+        );
         if(index == 0u)
-            minBounds = maxBounds = corners[index];
+            minBounds = maxBounds = corner;
         else
-            CollisionDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
-    }
+            CollisionDetail::ExpandMinMax(corner, minBounds, maxBounds);
 
-    struct alignas(SIMDVectorSingle) LocalBounds{
-        SIMDVectorSingle minimum;
-        SIMDVectorSingle maximum;
-    };
-    static_assert(alignof(Expected<LocalBounds>) >= alignof(LocalBounds));
-    const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
-        LocalBounds bounds{};
-        for(usize index = 0u; index < BoundingFrustum::s_CornerCount; ++index){
-            const SIMDVectorSingle local = Vector3InverseRotate(VectorSubtract(corners[index], outOrigin), outOrientation);
+        if(hasValidDepth){
+            const SIMDVectorSingle local = Vector3InverseRotate(VectorSubtract(corner, outOrigin), outOrientation);
             if(VectorGetZ(local) <= 0.0f)
-                return MakeUnexpected(Failure{});
-            const SIMDVectorSingle slopesAndDepth = VectorSetZ(VectorDivide(local, VectorSplatZ(local)), VectorGetZ(local));
-            if(index == 0u)
-                bounds.minimum = bounds.maximum = slopesAndDepth;
-            else
-                CollisionDetail::ExpandMinMax(slopesAndDepth, bounds.minimum, bounds.maximum);
+                hasValidDepth = false;
+            else{
+                const SIMDVectorSingle slopesAndDepth = VectorSetZ(VectorDivide(local, VectorSplatZ(local)), VectorGetZ(local));
+                if(index == 0u)
+                    fittedMin = fittedMax = slopesAndDepth;
+                else
+                    CollisionDetail::ExpandMinMax(slopesAndDepth, fittedMin, fittedMax);
+            }
         }
-        return bounds;
-    }();
-    if(!fitted){
+    }
+    if(!hasValidDepth){
         const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle depth = VectorSubtract(VectorSplatZ(maxBounds), VectorSplatZ(minBounds));
         const SIMDVectorSingle padding = VectorMax(s_SIMDOne, depth);
         outOrigin = VectorSelect(center, VectorSubtract(VectorSplatZ(minBounds), padding), s_SIMDMaskZ);
         outOrientation = s_SIMDIdentityR3;
-        const SIMDVectorSingle slopes = VectorDivide(VectorSelect(VectorZero(), extents, s_SIMDMaskXY), padding);
-        const SIMDVectorSingle negativeSlopes = VectorNegate(slopes);
-        outRightSlope = VectorGetX(slopes);
+        const SIMDVectorSingle fittedSlopes = VectorDivide(VectorSelect(VectorZero(), extents, s_SIMDMaskXY), padding);
+        const SIMDVectorSingle negativeSlopes = VectorNegate(fittedSlopes);
+        outRightSlope = VectorGetX(fittedSlopes);
         outLeftSlope = VectorGetX(negativeSlopes);
-        outTopSlope = VectorGetY(slopes);
+        outTopSlope = VectorGetY(fittedSlopes);
         outBottomSlope = VectorGetY(negativeSlopes);
         outNearPlane = VectorGetX(padding);
         outFarPlane = VectorGetX(VectorAdd(padding, depth));
         return;
     }
 
-    outRightSlope = VectorGetX(fitted->maximum);
-    outLeftSlope = VectorGetX(fitted->minimum);
-    outTopSlope = VectorGetY(fitted->maximum);
-    outBottomSlope = VectorGetY(fitted->minimum);
-    outNearPlane = VectorGetZ(fitted->minimum);
-    outFarPlane = VectorGetZ(fitted->maximum);
+    outRightSlope = VectorGetX(fittedMax);
+    outLeftSlope = VectorGetX(fittedMin);
+    outTopSlope = VectorGetY(fittedMax);
+    outBottomSlope = VectorGetY(fittedMin);
+    outNearPlane = VectorGetZ(fittedMin);
+    outFarPlane = VectorGetZ(fittedMax);
 }
 
 inline void FOUNDATION_SIMD_CALL Transform(
@@ -115,9 +115,8 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsPoint(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle point
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    for(const SIMDVectorSingle plane : planes){
+    for(usize planeIndex = 0u; planeIndex < CollisionDetail::s_FrustumPlaneCount; ++planeIndex){
+        const SIMDVectorSingle plane = CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planeIndex);
         if(CollisionDetail::Vector4AllTrue(VectorLess(CollisionDetail::PlaneDistance(plane, point), VectorZero())))
             return ContainmentType::Disjoint;
     }
@@ -127,20 +126,25 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsTriangle(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDetail::ContainmentFromPlaneTests(points, planes);
+    const auto pointAt = [&](const usize index)noexcept{ return CollisionDetail::SelectVector3(index, v0, v1, v2); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::ContainmentFromPlaneSeriesTests<CollisionDetail::s_TriangleVertexCount, CollisionDetail::s_FrustumPlaneCount>(pointAt, planeAt);
 }
 
 [[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL IntersectsPlane(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane
 )noexcept{
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle nearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle farDepth = VectorReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, static_cast<u32>(index));
+    };
     SIMDVectorSingle outside{};
     SIMDVectorSingle inside{};
-    CollisionDetail::FastIntersectPointsPlane(corners, plane, outside, inside);
+    CollisionDetail::FastIntersectPointSeriesPlane<BoundingFrustum::s_CornerCount>(cornerAt, plane, outside, inside);
     if(CollisionDetail::Vector4AllTrue(inside))
         return PlaneIntersectionType::Front;
     if(CollisionDetail::Vector4AllTrue(outside))
@@ -151,13 +155,12 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline Expected<f32> FOUNDATION_SIMD_CALL IntersectsRay(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle rayOrigin, SIMDVectorSingle direction
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle rayEpsilon = VectorReplicate(CollisionDetail::s_RayEpsilon);
     SIMDVectorSingle tMin = zero;
     SIMDVectorSingle tMax = VectorReplicate(s_MaxF32);
-    for(const SIMDVectorSingle plane : planes){
+    for(usize planeIndex = 0u; planeIndex < CollisionDetail::s_FrustumPlaneCount; ++planeIndex){
+        const SIMDVectorSingle plane = CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planeIndex);
         const SIMDVectorSingle distance = CollisionDetail::PlaneDistance(plane, rayOrigin);
         const SIMDVectorSingle denominator = Vector3Dot(plane, direction);
         if(Vector4LessOrEqual(VectorAbs(denominator), rayEpsilon)){
@@ -182,104 +185,139 @@ inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1,
     SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
 )noexcept{
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
+    const SIMDVectorSingle slopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle nearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle farDepth = VectorReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, static_cast<u32>(index));
+    };
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDetail::ContainmentFromPlaneSeriesTests<BoundingFrustum::s_CornerCount, CollisionDetail::s_FrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsSphere(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle sphereValue
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::ContainmentFromSpherePlaneSeries(sphereValue, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    SIMDVectorSingle corners[BoundingBox::s_CornerCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDetail::AabbCorners(otherBoxCenter, otherBoxExtents, corners);
-    return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDetail::AabbCorner(otherBoxCenter, otherBoxExtents, static_cast<u32>(index)); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::ContainmentFromPlaneSeriesTests<BoundingBox::s_CornerCount, CollisionDetail::s_FrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsOrientedBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    SIMDVectorSingle corners[BoundingOrientedBox::s_CornerCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDetail::ObbCorners(otherBoxCenter, otherBoxExtents, otherBoxOrientation, corners);
-    return CollisionDetail::ContainmentFromPlaneTests(corners, planes);
+    SIMDVectorSingle axis0{};
+    SIMDVectorSingle axis1{};
+    SIMDVectorSingle axis2{};
+    CollisionDetail::ObbCornerAxes(otherBoxExtents, otherBoxOrientation, axis0, axis1, axis2);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDetail::ObbCornerFromAxes(otherBoxCenter, axis0, axis1, axis2, static_cast<u32>(index)); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::ContainmentFromPlaneSeriesTests<BoundingOrientedBox::s_CornerCount, CollisionDetail::s_FrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsFrustum(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherFrustumOrigin, const SIMDVectorSingle otherFrustumOrientation, const f32 otherRightSlope, const f32 otherLeftSlope, const f32 otherTopSlope, const f32 otherBottomSlope, const f32 otherNearPlane, const f32 otherFarPlane
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, corners);
-    const ContainmentType::Enum containment = CollisionDetail::ContainmentFromPlaneTests(corners, planes);
+    const SIMDVectorSingle otherSlopes = CollisionDetail::FrustumCornerSlopes(otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope);
+    const SIMDVectorSingle otherNearDepth = VectorReplicate(otherNearPlane);
+    const SIMDVectorSingle otherFarDepth = VectorReplicate(otherFarPlane);
+    const auto otherCornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(otherFrustumOrigin, otherFrustumOrientation, otherSlopes, otherNearDepth, otherFarDepth, static_cast<u32>(index));
+    };
+    const auto thisPlaneAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    const ContainmentType::Enum containment = CollisionDetail::ContainmentFromPlaneSeriesTests<BoundingFrustum::s_CornerCount, CollisionDetail::s_FrustumPlaneCount>(otherCornerAt, thisPlaneAt);
     if(containment != ContainmentType::Intersects)
         return containment;
 
-    SIMDVectorSingle otherPlanes[CollisionDetail::s_FrustumPlaneCount];
-    SIMDVectorSingle thisCorners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, thisCorners);
-    return CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    const SIMDVectorSingle thisSlopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle thisNearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle thisFarDepth = VectorReplicate(farPlaneValue);
+    const auto thisCornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, thisSlopes, thisNearDepth, thisFarDepth, static_cast<u32>(index));
+    };
+    const auto otherPlaneAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, index);
+    };
+    return CollisionDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingFrustum::s_CornerCount>(otherPlaneAt, thisCornerAt) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsSphere(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle sphereValue
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::FrustumPlaneSeriesIntersectSphere(planeAt, sphereValue);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::FrustumPlaneSeriesIntersectAxisAlignedBox(planeAt, otherBoxCenter, otherBoxExtents);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDetail::FrustumPlaneSeriesIntersectOrientedBox(planeAt, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsFrustum(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherFrustumOrigin, const SIMDVectorSingle otherFrustumOrientation, const f32 otherRightSlope, const f32 otherLeftSlope, const f32 otherTopSlope, const f32 otherBottomSlope, const f32 otherNearPlane, const f32 otherFarPlane
 )noexcept{
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    SIMDVectorSingle otherPlanes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
+    const auto thisPlaneAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    const auto otherPlaneAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumPlane(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, index);
+    };
 
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    SIMDVectorSingle otherCorners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    CollisionDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherCorners);
+    const SIMDVectorSingle thisSlopes = CollisionDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorSingle thisNearDepth = VectorReplicate(nearPlaneValue);
+    const SIMDVectorSingle thisFarDepth = VectorReplicate(farPlaneValue);
+    const auto thisCornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, thisSlopes, thisNearDepth, thisFarDepth, static_cast<u32>(index));
+    };
 
-    return CollisionDetail::FrustumPlanesIntersectPoints(planes, otherCorners) && CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, corners);
+    const SIMDVectorSingle otherSlopes = CollisionDetail::FrustumCornerSlopes(otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope);
+    const SIMDVectorSingle otherNearDepth = VectorReplicate(otherNearPlane);
+    const SIMDVectorSingle otherFarDepth = VectorReplicate(otherFarPlane);
+    const auto otherCornerAt = [&](const usize index)noexcept{
+        return CollisionDetail::FrustumCornerFromSlopes(otherFrustumOrigin, otherFrustumOrientation, otherSlopes, otherNearDepth, otherFarDepth, static_cast<u32>(index));
+    };
+
+    return
+        CollisionDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingFrustum::s_CornerCount>(thisPlaneAt, otherCornerAt)
+        && CollisionDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingFrustum::s_CornerCount>(otherPlaneAt, thisCornerAt);
 }
 
 
@@ -302,66 +340,66 @@ inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outOrigin,
     SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
 )noexcept{
-    const auto decomposition = MatrixDoubleDecompose(matrix);
-    const SIMDVectorDouble rotation = decomposition ? decomposition->rotation : s_DoubleSIMDIdentityR3;
+    SIMDMatrixDouble decomposition{};
+    const SIMDVectorDouble rotation = MatrixDoubleDecompose(matrix, decomposition) ? decomposition.v[1] : s_DoubleSIMDIdentityR3;
     outOrigin = VectorDouble3Transform(frustumOrigin, matrix);
     outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, frustumOrientation));
 
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(farPlaneValue);
     SIMDVectorDouble minBounds{};
     SIMDVectorDouble maxBounds{};
-    for(usize index = 0u; index < BoundingDoubleFrustum::s_DoubleCornerCount; ++index){
-        corners[index] = VectorDouble3Transform(corners[index], matrix);
+    SIMDVectorDouble fittedMin{};
+    SIMDVectorDouble fittedMax{};
+    b8 hasValidDepth = true;
+    for(u64 index = 0u; index < BoundingDoubleFrustum::s_DoubleCornerCount; ++index){
+        const SIMDVectorDouble corner = VectorDouble3Transform(
+            CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index),
+            matrix
+        );
         if(index == 0u)
-            minBounds = maxBounds = corners[index];
+            minBounds = maxBounds = corner;
         else
-            CollisionDoubleDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
-    }
+            CollisionDoubleDetail::ExpandMinMax(corner, minBounds, maxBounds);
 
-    struct alignas(SIMDVectorDouble) LocalBounds{
-        SIMDVectorDouble minimum;
-        SIMDVectorDouble maximum;
-    };
-    static_assert(alignof(Expected<LocalBounds>) >= alignof(LocalBounds));
-    const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
-        LocalBounds bounds{};
-        for(usize index = 0u; index < BoundingDoubleFrustum::s_DoubleCornerCount; ++index){
-            const SIMDVectorDouble local = VectorDouble3InverseRotate(VectorDoubleSubtract(corners[index], outOrigin), outOrientation);
+        if(hasValidDepth){
+            const SIMDVectorDouble local = VectorDouble3InverseRotate(VectorDoubleSubtract(corner, outOrigin), outOrientation);
             if(VectorDoubleGetZ(local) <= 0.0)
-                return MakeUnexpected(Failure{});
-            const SIMDVectorDouble slopesAndDepth = VectorDoubleSetZ(VectorDoubleDivide(local, VectorDoubleSplatZ(local)), VectorDoubleGetZ(local));
-            if(index == 0u)
-                bounds.minimum = bounds.maximum = slopesAndDepth;
-            else
-                CollisionDoubleDetail::ExpandMinMax(slopesAndDepth, bounds.minimum, bounds.maximum);
+                hasValidDepth = false;
+            else{
+                const SIMDVectorDouble slopesAndDepth = VectorDoubleSetZ(VectorDoubleDivide(local, VectorDoubleSplatZ(local)), VectorDoubleGetZ(local));
+                if(index == 0u)
+                    fittedMin = fittedMax = slopesAndDepth;
+                else
+                    CollisionDoubleDetail::ExpandMinMax(slopesAndDepth, fittedMin, fittedMax);
+            }
         }
-        return bounds;
-    }();
-    if(!fitted){
+    }
+    if(!hasValidDepth){
         const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble depth = VectorDoubleSubtract(VectorDoubleSplatZ(maxBounds), VectorDoubleSplatZ(minBounds));
         const SIMDVectorDouble padding = VectorDoubleMax(s_DoubleSIMDOne, depth);
         outOrigin = VectorDoubleSelect(center, VectorDoubleSubtract(VectorDoubleSplatZ(minBounds), padding), s_DoubleSIMDMaskZ);
         outOrientation = s_DoubleSIMDIdentityR3;
-        const SIMDVectorDouble slopes = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), extents, s_DoubleSIMDMaskXY), padding);
-        const SIMDVectorDouble negativeSlopes = VectorDoubleNegate(slopes);
-        outRightSlope = VectorDoubleGetX(slopes);
+        const SIMDVectorDouble fittedSlopes = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), extents, s_DoubleSIMDMaskXY), padding);
+        const SIMDVectorDouble negativeSlopes = VectorDoubleNegate(fittedSlopes);
+        outRightSlope = VectorDoubleGetX(fittedSlopes);
         outLeftSlope = VectorDoubleGetX(negativeSlopes);
-        outTopSlope = VectorDoubleGetY(slopes);
+        outTopSlope = VectorDoubleGetY(fittedSlopes);
         outBottomSlope = VectorDoubleGetY(negativeSlopes);
         outNearPlane = VectorDoubleGetX(padding);
         outFarPlane = VectorDoubleGetX(VectorDoubleAdd(padding, depth));
         return;
     }
 
-    outRightSlope = VectorDoubleGetX(fitted->maximum);
-    outLeftSlope = VectorDoubleGetX(fitted->minimum);
-    outTopSlope = VectorDoubleGetY(fitted->maximum);
-    outBottomSlope = VectorDoubleGetY(fitted->minimum);
-    outNearPlane = VectorDoubleGetZ(fitted->minimum);
-    outFarPlane = VectorDoubleGetZ(fitted->maximum);
+    outRightSlope = VectorDoubleGetX(fittedMax);
+    outLeftSlope = VectorDoubleGetX(fittedMin);
+    outTopSlope = VectorDoubleGetY(fittedMax);
+    outBottomSlope = VectorDoubleGetY(fittedMin);
+    outNearPlane = VectorDoubleGetZ(fittedMin);
+    outFarPlane = VectorDoubleGetZ(fittedMax);
 }
 
 inline void FOUNDATION_SIMD_CALL Transform(
@@ -388,9 +426,8 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsPoint(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble point
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    for(const SIMDVectorDouble plane : planes){
+    for(usize planeIndex = 0u; planeIndex < CollisionDoubleDetail::s_DoubleFrustumPlaneCount; ++planeIndex){
+        const SIMDVectorDouble plane = CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planeIndex);
         if(CollisionDoubleDetail::VectorDouble4AllTrue(VectorDoubleLess(CollisionDoubleDetail::PlaneDoubleDistance(plane, point), VectorDoubleZero())))
             return ContainmentType::Disjoint;
     }
@@ -400,20 +437,25 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsTriangle(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, planes);
+    const auto pointAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::SelectVector3(index, v0, v1, v2); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<CollisionDoubleDetail::s_DoubleTriangleVertexCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(pointAt, planeAt);
 }
 
 [[nodiscard]] inline PlaneIntersectionType::Enum FOUNDATION_SIMD_CALL IntersectsPlane(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane
 )noexcept{
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index);
+    };
     SIMDVectorDouble outside{};
     SIMDVectorDouble inside{};
-    CollisionDoubleDetail::FastIntersectPointsPlane(corners, plane, outside, inside);
+    CollisionDoubleDetail::FastIntersectPointSeriesPlane<BoundingDoubleFrustum::s_DoubleCornerCount>(cornerAt, plane, outside, inside);
     if(CollisionDoubleDetail::VectorDouble4AllTrue(inside))
         return PlaneIntersectionType::Front;
     if(CollisionDoubleDetail::VectorDouble4AllTrue(outside))
@@ -424,13 +466,12 @@ inline void FOUNDATION_SIMD_CALL Transform(
 [[nodiscard]] inline Expected<f64> FOUNDATION_SIMD_CALL IntersectsRay(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble rayOrigin, SIMDVectorDouble direction
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble rayEpsilon = VectorDoubleReplicate(CollisionDoubleDetail::s_DoubleRayEpsilon);
     SIMDVectorDouble tMin = zero;
     SIMDVectorDouble tMax = VectorDoubleReplicate(Limit<f64>::s_Max);
-    for(const SIMDVectorDouble plane : planes){
+    for(usize planeIndex = 0u; planeIndex < CollisionDoubleDetail::s_DoubleFrustumPlaneCount; ++planeIndex){
+        const SIMDVectorDouble plane = CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planeIndex);
         const SIMDVectorDouble distance = CollisionDoubleDetail::PlaneDoubleDistance(plane, rayOrigin);
         const SIMDVectorDouble denominator = VectorDouble3Dot(plane, direction);
         if(VectorDouble4LessOrEqual(VectorDoubleAbs(denominator), rayEpsilon)){
@@ -455,104 +496,139 @@ inline void FOUNDATION_SIMD_CALL Transform(
     SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1,
     SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
 )noexcept{
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
+    const SIMDVectorDouble slopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble nearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble farDepth = VectorDoubleReplicate(farPlaneValue);
+    const auto cornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, slopes, nearDepth, farDepth, index);
+    };
+    const auto planeAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::SelectPlane6(index, plane0, plane1, plane2, plane3, plane4, plane5); };
+    return CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<BoundingDoubleFrustum::s_DoubleCornerCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsSphere(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble sphereValue
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDoubleDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::ContainmentFromSpherePlaneSeries(sphereValue, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    SIMDVectorDouble corners[BoundingDoubleBox::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDoubleDetail::AabbCorners(otherBoxCenter, otherBoxExtents, corners);
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::AabbCorner(otherBoxCenter, otherBoxExtents, index); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<BoundingDoubleBox::s_DoubleCornerCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsOrientedBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    SIMDVectorDouble corners[BoundingDoubleOrientedBox::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDoubleDetail::ObbCorners(otherBoxCenter, otherBoxExtents, otherBoxOrientation, corners);
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
+    SIMDVectorDouble axis0{};
+    SIMDVectorDouble axis1{};
+    SIMDVectorDouble axis2{};
+    CollisionDoubleDetail::ObbCornerAxes(otherBoxExtents, otherBoxOrientation, axis0, axis1, axis2);
+    const auto cornerAt = [&](const usize index)noexcept{ return CollisionDoubleDetail::ObbCornerFromAxes(otherBoxCenter, axis0, axis1, axis2, index); };
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<BoundingDoubleOrientedBox::s_DoubleCornerCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(cornerAt, planeAt);
 }
 
 [[nodiscard]] inline ContainmentType::Enum FOUNDATION_SIMD_CALL ContainsFrustum(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherFrustumOrigin, const SIMDVectorDouble otherFrustumOrientation, const f64 otherRightSlope, const f64 otherLeftSlope, const f64 otherTopSlope, const f64 otherBottomSlope, const f64 otherNearPlane, const f64 otherFarPlane
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDoubleDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, corners);
-    const ContainmentType::Enum containment = CollisionDoubleDetail::ContainmentFromPlaneTests(corners, planes);
+    const SIMDVectorDouble otherSlopes = CollisionDoubleDetail::FrustumCornerSlopes(otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope);
+    const SIMDVectorDouble otherNearDepth = VectorDoubleReplicate(otherNearPlane);
+    const SIMDVectorDouble otherFarDepth = VectorDoubleReplicate(otherFarPlane);
+    const auto otherCornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(otherFrustumOrigin, otherFrustumOrientation, otherSlopes, otherNearDepth, otherFarDepth, index);
+    };
+    const auto thisPlaneAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    const ContainmentType::Enum containment = CollisionDoubleDetail::ContainmentFromPlaneSeriesTests<BoundingDoubleFrustum::s_DoubleCornerCount, CollisionDoubleDetail::s_DoubleFrustumPlaneCount>(otherCornerAt, thisPlaneAt);
     if(containment != ContainmentType::Intersects)
         return containment;
 
-    SIMDVectorDouble otherPlanes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    SIMDVectorDouble thisCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, thisCorners);
-    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    const SIMDVectorDouble thisSlopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble thisNearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble thisFarDepth = VectorDoubleReplicate(farPlaneValue);
+    const auto thisCornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, thisSlopes, thisNearDepth, thisFarDepth, index);
+    };
+    const auto otherPlaneAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, index);
+    };
+    return CollisionDoubleDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingDoubleFrustum::s_DoubleCornerCount>(otherPlaneAt, thisCornerAt) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsSphere(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble sphereValue
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDoubleDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::FrustumPlaneSeriesIntersectSphere(planeAt, sphereValue);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDoubleDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::FrustumPlaneSeriesIntersectAxisAlignedBox(planeAt, otherBoxCenter, otherBoxExtents);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    return CollisionDoubleDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
+    const auto planeAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    return CollisionDoubleDetail::FrustumPlaneSeriesIntersectOrientedBox(planeAt, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL IntersectsFrustum(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherFrustumOrigin, const SIMDVectorDouble otherFrustumOrientation, const f64 otherRightSlope, const f64 otherLeftSlope, const f64 otherTopSlope, const f64 otherBottomSlope, const f64 otherNearPlane, const f64 otherFarPlane
 )noexcept{
-    SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    SIMDVectorDouble otherPlanes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
-    CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    CollisionDoubleDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
+    const auto thisPlaneAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, index);
+    };
+    const auto otherPlaneAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumPlane(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, index);
+    };
 
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    SIMDVectorDouble otherCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    CollisionDoubleDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherCorners);
+    const SIMDVectorDouble thisSlopes = CollisionDoubleDetail::FrustumCornerSlopes(rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue);
+    const SIMDVectorDouble thisNearDepth = VectorDoubleReplicate(nearPlaneValue);
+    const SIMDVectorDouble thisFarDepth = VectorDoubleReplicate(farPlaneValue);
+    const auto thisCornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(frustumOrigin, frustumOrientation, thisSlopes, thisNearDepth, thisFarDepth, index);
+    };
 
-    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(planes, otherCorners) && CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, corners);
+    const SIMDVectorDouble otherSlopes = CollisionDoubleDetail::FrustumCornerSlopes(otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope);
+    const SIMDVectorDouble otherNearDepth = VectorDoubleReplicate(otherNearPlane);
+    const SIMDVectorDouble otherFarDepth = VectorDoubleReplicate(otherFarPlane);
+    const auto otherCornerAt = [&](const usize index)noexcept{
+        return CollisionDoubleDetail::FrustumCornerFromSlopes(otherFrustumOrigin, otherFrustumOrientation, otherSlopes, otherNearDepth, otherFarDepth, index);
+    };
+
+    return
+        CollisionDoubleDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingDoubleFrustum::s_DoubleCornerCount>(thisPlaneAt, otherCornerAt)
+        && CollisionDoubleDetail::FrustumPlaneSeriesIntersectPointSeries<BoundingDoubleFrustum::s_DoubleCornerCount>(otherPlaneAt, thisCornerAt);
 }
 
 

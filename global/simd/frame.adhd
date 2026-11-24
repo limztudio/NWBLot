@@ -2,16 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::TangentFrameDirections"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class TangentFrameDirections{
-    VectorSingle bitangent;
-    VectorSingle tangent;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [cpp_name("::FrameFallbackTangent")]
 extern VectorSingle FrameFallbackTangent(in VectorSingle a0);
 
@@ -31,7 +21,7 @@ extern VectorSingle FrameResolveTangentHandedness(in VectorSingle a0, in VectorS
 extern VectorSingle FrameTangentHandedness(in VectorSingle a0, in VectorSingle a1);
 
 [cpp_name("::FrameTriangleTangentDirections")]
-extern Expected<TangentFrameDirections> FrameTriangleTangentDirections(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3, in VectorSingle a4);
+extern b8 FrameTriangleTangentDirections(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle a3, in VectorSingle a4, mut VectorSingle outTangent, mut VectorSingle outBitangent);
 
 [cpp_name("::FrameValidDirection")]
 extern b8 FrameValidDirection(in VectorSingle a0);

@@ -84,13 +84,13 @@ b8 IsAllowedLightComponentField(in StringView fieldName){
     ;
 }
 
-Expected<VectorSingle> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
-    const VectorSingle rawQuaternion(x, y, z, w);
+b8 TryNormalizeTransformQuaternion(in VectorSingle rawQuaternion, mut VectorSingle outQuaternion){
     const f32 lenSq = LengthSq(rawQuaternion);
     if(!IsFinite(VectorSingle(lenSq)) || lenSq <= s_SceneMinQuaternionLengthSq)
-        return MakeUnexpected(Failure());
+        return false;
 
-    return Normalize(rawQuaternion);
+    outQuaternion = Normalize(rawQuaternion);
+    return true;
 }
 
 b8 IsValidTransformComponentParameters(in TransformComponent component){

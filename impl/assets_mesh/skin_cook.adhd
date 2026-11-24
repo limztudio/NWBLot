@@ -136,19 +136,20 @@ b8 ParseSkinInfluenceMetadataEntry(
         parsedWeights[componentIndex] = parsedWeight.value();
     }
 
-    const f32x4u packedWeights = f32x4u(parsedWeights[0u], parsedWeights[1u], parsedWeights[2u], parsedWeights[3u]);
+    const VectorSingle rawWeights(parsedWeights[0u], parsedWeights[1u], parsedWeights[2u], parsedWeights[3u]);
     if(normalizeWeights){
-        const Expected<f32x4u, SkinInfluenceWeightFailure> normalizedWeights = TryNormalizeSkinInfluenceWeights(packedWeights);
-        if(!normalizedWeights.has_value()){
-            const StringView reason = ResolveSkinInfluenceWeightFailureReason(normalizedWeights.error());
+        VectorSingle normalizedWeights(0.0f);
+        const Expected<void, SkinInfluenceWeightFailure> normalization = TryNormalizeSkinInfluenceWeights(rawWeights, normalizedWeights);
+        if(!normalization.has_value()){
+            const StringView reason = ResolveSkinInfluenceWeightFailureReason(normalization.error());
             if(!reason.empty())
                 error("{} meta '{}': influences[{}].weights {}", metaKind, nwbFilePath, influenceIndex, reason);
             return false;
         }
-        influence.weight = normalizedWeights.value();
+        influence.weight = f32x4u(normalizedWeights);
     }
     else
-        influence.weight = packedWeights;
+        influence.weight = f32x4u(rawWeights);
 
     outInfluences.push_back(influence);
     return true;

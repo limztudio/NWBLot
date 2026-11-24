@@ -44,16 +44,16 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion reg
     ImageMetrics outMetrics;
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(VectorSingle(density)) || density <= 0.0f)
         return MakeUnexpected(Failure());
-    const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
-    if(!sliceExtents.has_value())
+    VectorDouble sliceExtents(0.0);
+    if(!TryLoadUiSkinSliceExtents(region, sliceExtents))
         return MakeUnexpected(Failure());
-    const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.value().x);
-    const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.value().y);
+    const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.x);
+    const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.y);
     const f64 densityF64 = cast<f64>(density);
-    const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64));
-    if(!minimum.has_value())
+    VectorSingle minimum(0.0f);
+    if(!TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64), minimum))
         return MakeUnexpected(Failure());
-    outMetrics.contentSize = Point(minimum.value().x, minimum.value().y);
+    outMetrics.contentSize = Point(minimum.x, minimum.y);
     return outMetrics;
 }
 

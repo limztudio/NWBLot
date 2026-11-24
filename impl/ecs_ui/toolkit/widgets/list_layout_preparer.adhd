@@ -83,8 +83,8 @@ class ListLayoutPreparer{
             if(!candidate.has_value())
                 return MakeUnexpected(Failure());
             if(revealCursor){
-                const auto span = TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight);
-                if(!span.has_value() || !scroll.ensureVisible(span.value().x, span.value().y, candidate.value().viewport.height))
+                VectorDouble span(0.0);
+                if(!TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight, span) || !scroll.ensureVisible(span.x, span.y, candidate.value().viewport.height))
                     return MakeUnexpected(Failure());
             }
             if(revealCursor)
@@ -143,12 +143,14 @@ class ListLayoutPreparer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
+b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, mut VectorDouble outSpan){
     const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
     const f64 end = start + cast<f64>(rowHeight);
-    if(!IsFinite(VectorSingle(start, end, 0.0f, 0.0f)) || end <= start)
-        return MakeUnexpected(Failure());
-    return f64x2u(start, end);
+    const VectorDouble span(start, end, 0.0, 0.0);
+    if(!IsFinite(span) || end <= start)
+        return false;
+    outSpan = span;
+    return true;
 }
 
 usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){

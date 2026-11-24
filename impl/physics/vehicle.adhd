@@ -314,15 +314,15 @@ class VehicleController{
             this.wheelStates[i].steerAngle = this.m_cachedSteerAngles[i];
     }
 
-    private void prepareWheelTransformsAndSteer(in Transform3D chassisXf, in usize wheelCount, in f32 steerInput){
+    private void prepareWheelTransformsAndSteer(in VectorSingle chassisPos, in VectorSingle chassisRot, in usize wheelCount, in f32 steerInput){
         this.ensureWheelScratch(wheelCount);
         this.updateSteerAngles(wheelCount, steerInput);
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
             mut VehicleWheelState wState = this.wheelStates[i];
             wState.prevSuspensionLength = wState.suspensionLength;
-            this.m_attachW[i] = f32x4(TransformPoint(chassisXf, VectorSingle(wDef.attachmentPoint)), 0.0f);
-            this.m_suspDirW[i] = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), VectorSingle(chassisXf.rotation)), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f)), 0.0f);
+            this.m_attachW[i] = f32x4(TransformPointValues(chassisPos, chassisRot, VectorSingle(wDef.attachmentPoint)), 0.0f);
+            this.m_suspDirW[i] = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), chassisRot), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f)), 0.0f);
         }
     }
 
@@ -609,7 +609,7 @@ class VehicleController{
         if(wheelCount == 0u)
             return;
 
-        this.prepareWheelTransformsAndSteer(chassisXf, wheelCount, input.steer);
+        this.prepareWheelTransformsAndSteer(VectorSingle(chassisXf.position), chassisRot, wheelCount, input.steer);
         for(usize i = 0u; i < wheelCount; ++i){
             this.m_castResults[i] = CastSingleVehicleWheel(
                 world,
@@ -651,7 +651,7 @@ class VehicleController{
         if(this.shiftCooldown > 0.0f)
             this.shiftCooldown = SimdMax(0.0f, this.shiftCooldown - dt);
 
-        this.prepareWheelTransformsAndSteer(chassisXf, wheelCount, input.steer);
+        this.prepareWheelTransformsAndSteer(VectorSingle(chassisXf.position), chassisRot, wheelCount, input.steer);
 
         in PhysicsWorld worldRef = world;
         const BodyId chassisId = this.chassisBodyId;

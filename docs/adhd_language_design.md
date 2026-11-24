@@ -212,7 +212,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 ### 5.2 SIMD Calculation Types vs. Memory Storage Types
 - **Calculation / Register Types**:
   - `VectorSingle` (`::SIMDVectorSingle`), `VectorDouble` (`::SIMDVectorDouble`), `MatrixSingle` (`::SIMDMatrix`), `MatrixDouble` (`::SIMDMatrixDouble`). Used for parameters, local math, and return values (lowering inside `Optional`/`Expected` to `::SIMDVectorSingleResult` / `::SIMDVectorDoubleResult`). Rejected in `class` fields, containers, and file-scope `const` declarations.
-  - Built-in stack-only aggregate results (`AabbBounds`, `MatrixDecomposition`, `TangentFrameDirections`, etc.) that hold SIMD registers are similarly allowed as locals and `in`/`mut` parameters, not stored in classes or heap containers.
+  - Built-in stack-only aggregate results (`MatrixDecomposition`, etc.) that hold SIMD registers are similarly allowed as locals and `in`/`mut` parameters, not stored in classes or heap containers.
 - **Aligned Memory-Layout Types**:
   - `16`-byte aligned: `f32x4` (`Float4`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`), `f32x3x4` (`Float34`), `f32x4x4` (`Float44`).
   - `32`-byte aligned: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`), `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44`).

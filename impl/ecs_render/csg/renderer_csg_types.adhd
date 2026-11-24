@@ -94,7 +94,7 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBounds(in CsgShapeRegistry shapeRe
     if(!cutterBounds.has_value())
         return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
 
-    return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds.value().finiteBounds, LoadFloat(cutterBounds.value().minBounds), LoadFloat(cutterBounds.value().maxBounds));
+    return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds.value().finiteBounds, VectorSingle(cutterBounds.value().minBounds), VectorSingle(cutterBounds.value().maxBounds));
 }
 
 Rect ToCoreRect(in CsgWorkRect rect){

@@ -68,19 +68,20 @@ class SceneWorldBoundsAccumulator{
             CausticEmissionTargetBuilder().resolveLocalBounds(true, resolvedMin, resolvedMax);
             this.approximate = true;
         }
-        const auto worldBounds = AabbTransform(objectToWorld, resolvedMin, resolvedMax);
-        if(!worldBounds.has_value()){
+        VectorSingle worldMin(0.0f);
+        VectorSingle worldMax(0.0f);
+        if(!AabbTransform(objectToWorld, resolvedMin, resolvedMax, worldMin, worldMax)){
             this.valid = false;
             return;
         }
         if(!this.hasBounds){
-            this.minimum = f32x4(worldBounds.value().minBounds, 0.0f);
-            this.maximum = f32x4(worldBounds.value().maxBounds, 0.0f);
+            this.minimum = f32x4(worldMin, 0.0f);
+            this.maximum = f32x4(worldMax, 0.0f);
             this.hasBounds = true;
         }
         else{
-            this.minimum = f32x4(Min(VectorSingle(this.minimum), worldBounds.value().minBounds), 0.0f);
-            this.maximum = f32x4(Max(VectorSingle(this.maximum), worldBounds.value().maxBounds), 0.0f);
+            this.minimum = f32x4(Min(VectorSingle(this.minimum), worldMin), 0.0f);
+            this.maximum = f32x4(Max(VectorSingle(this.maximum), worldMax), 0.0f);
         }
     }
 
@@ -610,14 +611,13 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         const VectorSingle localMin = VectorSingle(meshResult.value().meshResources.csgLocalBounds.minBounds);
         const VectorSingle localMax = VectorSingle(meshResult.value().meshResources.csgLocalBounds.maxBounds);
         sceneBounds.append(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources.csgLocalBounds.valid(), objectToWorld, localMin, localMax);
-        const auto worldBounds = AabbTransform(objectToWorld, localMin, localMax);
-        if(!worldBounds.has_value()){
+        VectorSingle uninflatedWorldMin(0.0f);
+        VectorSingle uninflatedWorldMax(0.0f);
+        if(!AabbTransform(objectToWorld, localMin, localMax, uninflatedWorldMin, uninflatedWorldMax)){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
-        const VectorSingle uninflatedWorldMin = worldBounds.value().minBounds;
-        const VectorSingle uninflatedWorldMax = worldBounds.value().maxBounds;
         VectorSingle worldMin = uninflatedWorldMin;
         VectorSingle worldMax = uninflatedWorldMax;
         InflateSwShadowSceneBounds(worldMin, worldMax);

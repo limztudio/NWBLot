@@ -2113,7 +2113,7 @@ void ApplyGpuBodyOutToBody(in GpuPhysicsBodyOut bo, mut Body body, mut BodySim s
 
     sim.centerInvMass = f32x4(newCenter, sim.centerInvMass.w);
     sim.transform = Transform3D(newPos, newRot);
-    sim.invInertiaWorld = RotateSymMat3(newRot, sim.invInertiaLocal);
+    sim.invInertiaWorld = SymMat3FromMatrix3(RotateSymMatrix3(newRot, Matrix3FromSymMat3(sim.invInertiaLocal)));
     sim.forceLinearDamping = f32x4(0.0f, 0.0f, 0.0f, sim.forceLinearDamping.w);
     sim.torqueAngularDamping = f32x4(0.0f, 0.0f, 0.0f, sim.torqueAngularDamping.w);
 
@@ -3408,9 +3408,9 @@ class PhysicsGpuDispatcher{
             in Shape s = world.m_shapes[sId];
             if(s.alive() && !s.isSensor()){
                 if(s.hasLocalTransform() || cast<u32>(s.type) > cast<u32>(ShapeType::Mesh)){
-                    const Aabb3D box = ComputeShapeWorldAabbWithHeightfields(s, Transform3D(), world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes);
-                    const VectorSingle minP(box.lowerBound);
-                    const VectorSingle maxP(box.upperBound);
+                    VectorSingle minP(0.0f);
+                    VectorSingle maxP(0.0f);
+                    ComputeShapeWorldAabbValues(s, VectorSingle(0.0f), QuaternionIdentity(), world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, minP, maxP);
                     for(u32 cx = 0u; cx < 2u; ++cx){
                         for(u32 cy = 0u; cy < 2u; ++cy){
                             for(u32 cz = 0u; cz < 2u; ++cz){
@@ -3447,7 +3447,7 @@ class PhysicsGpuDispatcher{
                     }
                     else{
                         for(usize vi = 0u; vi < hull.vertices.size(); ++vi)
-                            maxRadius = SimdMax(maxRadius, Vector3Length(VectorSingle(Vec3FromU(hull.vertices[vi]) - localCenter, 0.0f)).x);
+                            maxRadius = SimdMax(maxRadius, Vector3Length(VectorSingle(VectorSingle(hull.vertices[vi], 0.0f) - localCenter, 0.0f)).x);
                     }
                 }
                 else if(s.type == ShapeType::Mesh){
@@ -3522,18 +3522,24 @@ class PhysicsGpuDispatcher{
             VectorSingle sweepMax(-s_MaxF32);
             u32 shapeCheckIdx = bodyInit.headShapeId;
             b8 hasCollider = false;
+            const VectorSingle rotStart(simInit.rotation0);
+            const VectorSingle posStart = simInit.center0() - Vector3Rotate(simInit.localCenter(), rotStart);
+            const VectorSingle posEnd(simInit.transform.position);
+            const VectorSingle rotEnd(simInit.transform.rotation);
             while(shapeCheckIdx != s_NullIndex){
                 in Shape sA = world.m_shapes[shapeCheckIdx];
                 if(sA.alive() && !sA.isSensor()){
                     if(sA.hasLocalTransform() || cast<u32>(sA.type) > cast<u32>(ShapeType::Mesh))
                         return false;
                     if(sA.type != ShapeType::Mesh){
-                        const Transform3D xfStart = Transform3D(simInit.center0() - Vector3Rotate(simInit.localCenter(), VectorSingle(simInit.rotation0)), VectorSingle(simInit.rotation0));
-                        const Aabb3D boxStart = ComputeShapeWorldAabbWithHeightfields(sA, xfStart, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes);
-                        const Aabb3D boxEnd = ComputeShapeWorldAabbWithHeightfields(sA, simInit.transform, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes);
-                        const Aabb3D boxUnion = AabbUnion(boxStart, boxEnd);
-                        sweepMin = Min(sweepMin, VectorSingle(boxUnion.lowerBound));
-                        sweepMax = Max(sweepMax, VectorSingle(boxUnion.upperBound));
+                        VectorSingle minStart(0.0f);
+                        VectorSingle maxStart(0.0f);
+                        ComputeShapeWorldAabbValues(sA, posStart, rotStart, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, minStart, maxStart);
+                        VectorSingle minEnd(0.0f);
+                        VectorSingle maxEnd(0.0f);
+                        ComputeShapeWorldAabbValues(sA, posEnd, rotEnd, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, minEnd, maxEnd);
+                        sweepMin = Min(sweepMin, Min(minStart, minEnd));
+                        sweepMax = Max(sweepMax, Max(maxStart, maxEnd));
                         hasCollider = true;
                     }
                 }
@@ -3567,6 +3573,7 @@ class PhysicsGpuDispatcher{
         pairShapeB.clear();
         b8 requiresCpuFallback = false;
         in PhysicsWorld worldRef = world;
+        const VectorSingle sweepPad(s_SpeculativeDistance, s_SpeculativeDistance, s_SpeculativeDistance, 0.0f);
         for(usize bi = 0u; bi < bulletCount; ++bi){
             const u32 bodyIdA = bulletBodyIds[bi];
             in Body bodyInit = world.m_bodies[bodyIdA];
@@ -3580,7 +3587,7 @@ class PhysicsGpuDispatcher{
             }
             if(bodyQueryMask == 0u)
                 continue;
-            const Aabb3D queryBox = FattenAabb(Aabb3D(VectorSingle(bulletSweepMin[bi]), VectorSingle(bulletSweepMax[bi])), s_SpeculativeDistance);
+            const Aabb3D queryBox(VectorSingle(bulletSweepMin[bi]) - sweepPad, VectorSingle(bulletSweepMax[bi]) + sweepPad);
             for(usize t = 0u; t < s_TreeCount; ++t){
                 if(world.m_broadPhase.trees[t].root() == s_NullIndex)
                     continue;
@@ -3689,7 +3696,7 @@ class PhysicsGpuDispatcher{
                     off = this.m_shapeDataOffset[sIdA];
                     meta = this.m_shapeDataMeta[sIdA];
                 }
-                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdA], world.m_bodies[bIdA], world.m_hullShapes, world.m_meshShapes, bodyToToiSlot[bIdA], sIdA, s_MaxAabbMargin, off, meta));
+                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdA], world.m_bodies[bIdA], world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, bodyToToiSlot[bIdA], sIdA, s_MaxAabbMargin, off, meta));
             }
             if(shapeToToiSlot[sIdB] == s_GpuInvalidIndex){
                 shapeToToiSlot[sIdB] = cast<u32>(this.m_gpuShapesScratch.size());
@@ -3699,7 +3706,7 @@ class PhysicsGpuDispatcher{
                     off = this.m_shapeDataOffset[sIdB];
                     meta = this.m_shapeDataMeta[sIdB];
                 }
-                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdB], world.m_bodies[bIdB], world.m_hullShapes, world.m_meshShapes, bodyToToiSlot[bIdB], sIdB, s_MaxAabbMargin, off, meta));
+                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdB], world.m_bodies[bIdB], world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, bodyToToiSlot[bIdB], sIdB, s_MaxAabbMargin, off, meta));
             }
 
             GpuPhysicsBroadphasePair pairOut;
@@ -3858,9 +3865,13 @@ class PhysicsGpuDispatcher{
                 f32x4 candidateAniso(1.0f, 1.0f, 1.0f, 0.0f);
                 f32x4 candidateFricDir(1.0f, 0.0f, 0.0f, 0.0f);
                 Contact matC;
-                const Transform3D hitXfA = EvalSweepTransform(toiResults[bi].sweepA, candidateFrac);
-                const Transform3D hitXfB = EvalSweepTransform(sweepB, candidateFrac);
-                world.applyCombinedContactMaterials(sA, hitXfA, sB, hitXfB, matC);
+                VectorSingle hitPosA(0.0f);
+                VectorSingle hitRotA(0.0f, 0.0f, 0.0f, 1.0f);
+                VectorSingle hitPosB(0.0f);
+                VectorSingle hitRotB(0.0f, 0.0f, 0.0f, 1.0f);
+                EvalSweepTransformValues(VectorSingle(toiResults[bi].sweepA.c0), VectorSingle(toiResults[bi].sweepA.c1), VectorSingle(toiResults[bi].sweepA.q0), VectorSingle(toiResults[bi].sweepA.q1), VectorSingle(toiResults[bi].sweepA.localCenter), candidateFrac, hitPosA, hitRotA);
+                EvalSweepTransformValues(VectorSingle(sweepB.c0), VectorSingle(sweepB.c1), VectorSingle(sweepB.q0), VectorSingle(sweepB.q1), VectorSingle(sweepB.localCenter), candidateFrac, hitPosB, hitRotB);
+                world.applyCombinedContactMaterials(sA, hitRotA, sB, hitRotB, matC);
                 candidateRest = matC.restitution;
                 candidateFric = matC.friction;
                 candidateTangentSpeed = matC.tangentSpeed;
@@ -4158,8 +4169,10 @@ class PhysicsGpuDispatcher{
                         in Shape shape = world.m_shapes[sId];
                         const u32 nextSId = shape.nextShapeId;
                         if(shape.alive()){
-                            const Aabb3D localBox = ComputeShapeLocalAabbCachedWithHeightfields(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes);
-                            const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
+                            VectorSingle localMin(0.0f);
+                            VectorSingle localMax(0.0f);
+                            ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax);
+                            const VectorSingle localSpan = localMax - localMin;
                             const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
                             if(shapeExtent <= 10.0f){
                                 this.m_cachedStaticExtentAccum += SimdMax(shapeExtent, 0.25f);
@@ -4175,7 +4188,7 @@ class PhysicsGpuDispatcher{
                                 dataOffset = this.m_shapeDataOffset[sId];
                                 dataMeta = this.m_shapeDataMeta[sId];
                             }
-                            this.m_cachedStaticShapes.push_back(PackGpuShapeProxyWithLocalBox(shape, body, world.m_hullShapes, world.m_meshShapes, localBox, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
+                            this.m_cachedStaticShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, body, world.m_hullShapes, world.m_meshShapes, localMin, localMax, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
                         }
                         sId = nextSId;
                     }
@@ -4238,8 +4251,10 @@ class PhysicsGpuDispatcher{
                             in Shape shape = world.m_shapes[sId];
                             const u32 nextSId = shape.nextShapeId;
                             if(shape.alive()){
-                                const Aabb3D localBox = ComputeShapeLocalAabbCachedWithHeightfields(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes);
-                                const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
+                                VectorSingle localMin(0.0f);
+                                VectorSingle localMax(0.0f);
+                                ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax);
+                                const VectorSingle localSpan = localMax - localMin;
                                 const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
                                 if(shapeExtent <= 10.0f){
                                     this.m_cachedSleepingExtentAccum += SimdMax(shapeExtent, 0.25f);
@@ -4255,7 +4270,7 @@ class PhysicsGpuDispatcher{
                                     dataOffset = this.m_shapeDataOffset[sId];
                                     dataMeta = this.m_shapeDataMeta[sId];
                                 }
-                                this.m_cachedSleepingShapes.push_back(PackGpuShapeProxyWithLocalBox(shape, body, world.m_hullShapes, world.m_meshShapes, localBox, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
+                                this.m_cachedSleepingShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, body, world.m_hullShapes, world.m_meshShapes, localMin, localMax, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
                             }
                             sId = nextSId;
                         }
@@ -4407,8 +4422,10 @@ class PhysicsGpuDispatcher{
                                     in Shape shape = worldRef.m_shapes[sId];
                                     const u32 nextSId = shape.nextShapeId;
                                     if(shape.alive()){
-                                        const Aabb3D localBox = ComputeShapeLocalAabbCachedWithHeightfields(shape, worldRef.m_hullShapes, worldRef.m_hullLocalAabbs, worldRef.m_meshShapes, worldRef.m_heightfieldShapes);
-                                        const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
+                                        VectorSingle localMin(0.0f);
+                                        VectorSingle localMax(0.0f);
+                                        ComputeShapeLocalAabbCachedValues(shape, worldRef.m_hullShapes, worldRef.m_hullLocalAabbs, worldRef.m_meshShapes, worldRef.m_heightfieldShapes, localMin, localMax);
+                                        const VectorSingle localSpan = localMax - localMin;
                                         const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
                                         if(shapeExtent <= 10.0f){
                                             locAcc += SimdMax(shapeExtent, 0.25f);
@@ -4424,7 +4441,7 @@ class PhysicsGpuDispatcher{
                                             dataOffset = dataOffSpan[sId];
                                             dataMeta = dataMetaSpan[sId];
                                         }
-                                        outShapes[writeIdx] = PackGpuShapeProxyWithLocalBox(shape, shapeBody, worldRef.m_hullShapes, worldRef.m_meshShapes, localBox, awakeBodyOffset + cast<u32>(idx), sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags);
+                                        outShapes[writeIdx] = PackGpuShapeProxyWithLocalBounds(shape, shapeBody, worldRef.m_hullShapes, worldRef.m_meshShapes, localMin, localMax, awakeBodyOffset + cast<u32>(idx), sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags);
                                         ++writeIdx;
                                     }
                                     sId = nextSId;
@@ -4460,8 +4477,10 @@ class PhysicsGpuDispatcher{
                             in Shape shape = world.m_shapes[sId];
                             const u32 nextSId = shape.nextShapeId;
                             if(shape.alive()){
-                                const Aabb3D localBox = ComputeShapeLocalAabbCachedWithHeightfields(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes);
-                                const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
+                                VectorSingle localMin(0.0f);
+                                VectorSingle localMax(0.0f);
+                                ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax);
+                                const VectorSingle localSpan = localMax - localMin;
                                 const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
                                 if(shapeExtent <= 10.0f){
                                     awakeExtentAccum += SimdMax(shapeExtent, 0.25f);
@@ -4477,7 +4496,7 @@ class PhysicsGpuDispatcher{
                                     dataOffset = this.m_shapeDataOffset[sId];
                                     dataMeta = this.m_shapeDataMeta[sId];
                                 }
-                                this.m_cachedAwakeShapes.push_back(PackGpuShapeProxyWithLocalBox(shape, shapeBody, world.m_hullShapes, world.m_meshShapes, localBox, awakeBodyOffset + idx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
+                                this.m_cachedAwakeShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, shapeBody, world.m_hullShapes, world.m_meshShapes, localMin, localMax, awakeBodyOffset + idx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
                             }
                             sId = nextSId;
                         }
@@ -5892,9 +5911,9 @@ class PhysicsGpuDispatcher{
                 const b8 hasExt = (rf & 0x04u) != 0u;
                 in GpuPhysicsContactConstraint gc = this.m_gpuConstraintsScratch[ci];
                 if(hasRoll){
-                    const SymMat3 effInvIA = ResolveGpuBodyEffectiveInvInertia(simsSpan, statesSpan, gpuUploadCount, gc.indicesCountFlags.x);
-                    const SymMat3 effInvIB = ResolveGpuBodyEffectiveInvInertia(simsSpan, statesSpan, gpuUploadCount, gc.indicesCountFlags.y);
-                    const SymMat3 rollInv = InvertSymMat3(AddSymMat3(effInvIA, effInvIB));
+                    const MatrixSingle effInvIA = ResolveGpuBodyEffectiveInvInertia(simsSpan, statesSpan, gpuUploadCount, gc.indicesCountFlags.x);
+                    const MatrixSingle effInvIB = ResolveGpuBodyEffectiveInvInertia(simsSpan, statesSpan, gpuUploadCount, gc.indicesCountFlags.y);
+                    const SymMat3 rollInv = SymMat3FromMatrix3(Matrix3InvertSymmetric(Matrix3Add(effInvIA, effInvIB)));
                     this.m_gpuRollingMassScratch.push_back(f32x4(rollInv.m00, rollInv.m01, rollInv.m02, rollInv.m11));
                     this.m_gpuRollingMassScratch.push_back(f32x4(rollInv.m12, rollInv.m22, 0.0f, 0.0f));
                 }
@@ -6652,14 +6671,16 @@ class PhysicsGpuDispatcher{
                             in Shape shape = world.m_shapes[sId];
                             const u32 nextSId = shape.nextShapeId;
                             if(shape.alive()){
-                                const Aabb3D localBox = ComputeShapeLocalAabbCachedWithHeightfields(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes);
+                                VectorSingle localMin(0.0f);
+                                VectorSingle localMax(0.0f);
+                                ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax);
                                 u32 dataOffset = 0u;
                                 u32 dataMeta = 0u;
                                 if(sId < this.m_shapeDataOffset.size()){
                                     dataOffset = this.m_shapeDataOffset[sId];
                                     dataMeta = this.m_shapeDataMeta[sId];
                                 }
-                                this.m_queryShapesScratch.push_back(PackGpuQueryShapeProxyWithLocalBox(shape, body, world.m_hullShapes, world.m_meshShapes, localBox, gpuBodyIdx, sId, 0.0f, dataOffset, dataMeta));
+                                this.m_queryShapesScratch.push_back(PackGpuQueryShapeProxyWithLocalBounds(shape, body, world.m_hullShapes, world.m_meshShapes, localMin, localMax, gpuBodyIdx, sId, 0.0f, dataOffset, dataMeta));
                             }
                             sId = nextSId;
                         }
@@ -7165,12 +7186,13 @@ GpuPhysicsBodyState PackGpuBodyState(in BodyState state){
     return outState;
 }
 
-GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
+GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBounds(
     in Shape shape,
     in Body body,
     in Vector<HullShape> hullShapes,
     in Vector<MeshShape> meshShapes,
-    in Aabb3D localBox,
+    in VectorSingle localMin,
+    in VectorSingle localMax,
     in u32 gpuBodyIdx,
     in u32 shapeId,
     in f32 sweepMargin,
@@ -7187,8 +7209,6 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
         filterW = s_GpuInvalidIndex;
         metaW = s_GpuInvalidIndex;
         packedType = cast<u32>(ShapeType::Mesh);
-        const VectorSingle localMin = VectorSingle(localBox.lowerBound);
-        const VectorSingle localMax = VectorSingle(localBox.upperBound);
         const VectorSingle center = (localMin + localMax) * 0.5f;
         const VectorSingle extents = Max((localMax - localMin) * 0.5f, VectorSingle(0.0f));
         outProxy.localCenterRadius = f32x4(center.x, center.y, center.z, 0.0f);
@@ -7215,8 +7235,6 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
         else{
             filterW = dataOffset;
             metaW = dataMeta;
-            const VectorSingle localMin = VectorSingle(localBox.lowerBound);
-            const VectorSingle localMax = VectorSingle(localBox.upperBound);
             const VectorSingle centroid = hull.centroid();
             const f32 r = hull.centroidRadius.w;
             const VectorSingle extents = Max(
@@ -7232,8 +7250,6 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
         in MeshShape mesh = meshShapes[shape.geometryIndex];
         filterW = dataOffset;
         metaW = dataMeta;
-        const VectorSingle localMin = VectorSingle(localBox.lowerBound);
-        const VectorSingle localMax = VectorSingle(localBox.upperBound);
         const VectorSingle center = (localMin + localMax) * 0.5f;
         const f32 r = mesh.localAabbMinRadius.w;
         const VectorSingle extents = Max((localMax - localMin) * 0.5f - VectorSingle(r), VectorSingle(0.0f));
@@ -7248,41 +7264,29 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
     return outProxy;
 }
 
-GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
+GpuPhysicsShapeProxy PackGpuQueryShapeProxyWithLocalBounds(
     in Shape shape,
     in Body body,
     in Vector<HullShape> hullShapes,
     in Vector<MeshShape> meshShapes,
-    in Aabb3D localBox,
+    in VectorSingle localMin,
+    in VectorSingle localMax,
     in u32 gpuBodyIdx,
     in u32 shapeId,
     in f32 sweepMargin,
     in u32 dataOffset,
     in u32 dataMeta
 ){
-    return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta, 0u);
-}
-
-GpuPhysicsShapeProxy PackGpuQueryShapeProxyWithLocalBox(
-    in Shape shape,
-    in Body body,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in Aabb3D localBox,
-    in u32 gpuBodyIdx,
-    in u32 shapeId,
-    in f32 sweepMargin,
-    in u32 dataOffset,
-    in u32 dataMeta
-){
+    GpuPhysicsShapeProxy outProxy = PackGpuShapeProxyWithLocalBounds(shape, body, hullShapes, meshShapes, localMin, localMax, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta, 0u);
     if(!shape.hasLocalTransform())
-        return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+        return outProxy;
 
-    GpuPhysicsShapeProxy outProxy = PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+    const VectorSingle localPos = VectorSingle(shape.localTransform.position);
+    const VectorSingle localRot = VectorSingle(shape.localTransform.rotation);
     const f32 margin = SimdMax(0.0f, sweepMargin);
     u32 shapeFlags = outProxy.bodyIndexTypeShape.w;
     if(shape.type == ShapeType::Sphere){
-        const VectorSingle c = TransformPoint(shape.localTransform, VectorSingle(shape.geom0));
+        const VectorSingle c = TransformPointValues(localPos, localRot, VectorSingle(shape.geom0));
         outProxy.localCenterRadius = f32x4(c.x, c.y, c.z, shape.geom0.w);
         outProxy.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, margin);
         outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -7290,8 +7294,8 @@ GpuPhysicsShapeProxy PackGpuQueryShapeProxyWithLocalBox(
         outProxy.filterData.w = 0u;
     }
     else if(shape.type == ShapeType::Capsule){
-        const VectorSingle p0 = TransformPoint(shape.localTransform, VectorSingle(shape.geom0));
-        const VectorSingle p1 = TransformPoint(shape.localTransform, VectorSingle(shape.geom1));
+        const VectorSingle p0 = TransformPointValues(localPos, localRot, VectorSingle(shape.geom0));
+        const VectorSingle p1 = TransformPointValues(localPos, localRot, VectorSingle(shape.geom1));
         outProxy.localCenterRadius = f32x4(p0.x, p0.y, p0.z, shape.geom0.w);
         outProxy.localExtentOrP1 = f32x4(p1.x, p1.y, p1.z, margin);
         outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -7301,7 +7305,7 @@ GpuPhysicsShapeProxy PackGpuQueryShapeProxyWithLocalBox(
     else if(shape.type == ShapeType::Hull){
         in HullShape hull = hullShapes[shape.geometryIndex];
         if(hull.halfExtentsFlags.w != 0u){
-            const VectorSingle c = TransformPoint(shape.localTransform, VectorSingle(hull.centroidRadius));
+            const VectorSingle c = TransformPointValues(localPos, localRot, VectorSingle(hull.centroidRadius));
             const VectorSingle boxQ = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(shape.localTransform.rotation), VectorSingle(hull.boxRotation)));
             outProxy.localCenterRadius = f32x4(c.x, c.y, c.z, hull.centroidRadius.w);
             outProxy.localExtentOrP1 = f32x4(hull.halfExtentsFlags.x, hull.halfExtentsFlags.y, hull.halfExtentsFlags.z, margin);
@@ -7372,15 +7376,17 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
     in Body body,
     in Vector<HullShape> hullShapes,
     in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes,
     in u32 gpuBodyIdx,
     in u32 shapeId,
     in f32 sweepMargin,
     in u32 dataOffset,
     in u32 dataMeta
 ){
-    Vector<HeightfieldShape> emptyHfs;
-    const Aabb3D localBox = ComputeShapeWorldAabbWithHeightfields(shape, Transform3D(), hullShapes, meshShapes, emptyHfs);
-    return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+    VectorSingle localMin(0.0f);
+    VectorSingle localMax(0.0f);
+    ComputeShapeLocalAabbValues(shape, hullShapes, meshShapes, heightfieldShapes, localMin, localMax);
+    return PackGpuShapeProxyWithLocalBounds(shape, body, hullShapes, meshShapes, localMin, localMax, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta, 0u);
 }
 
 u32 RemapAwakeIndexToGpu(in u32 awakeIdx, in Span<u32> awakeToGpuSlot){
@@ -7389,26 +7395,28 @@ u32 RemapAwakeIndexToGpu(in u32 awakeIdx, in Span<u32> awakeToGpuSlot){
     return awakeToGpuSlot[awakeIdx];
 }
 
-SymMat3 ResolveGpuBodyEffectiveInvInertia(
+MatrixSingle ResolveGpuBodyEffectiveInvInertia(
     in Span<GpuPhysicsBodySim> sims,
     in Span<GpuPhysicsBodyState> states,
     in u32 gpuUploadCount,
     in u32 bodySlot
 ){
     if(bodySlot >= gpuUploadCount)
-        return ZeroSymMat3();
+        return MatrixSingle(0.0f);
     in GpuPhysicsBodySim sim = sims[bodySlot];
     const u32 bodyFlags = bit_cast<u32>(states[bodySlot].deltaPositionFlags.w);
     if(sim.positionInvMass.w <= 0.0f || (bodyFlags & cast<u32>(BodyFlags::Dynamic)) == 0u)
-        return ZeroSymMat3();
-    return MaskSymMat3AngularLocks(
-        SymMat3(
-            sim.invInertiaWorld0.x,
-            sim.invInertiaWorld0.y,
-            sim.invInertiaWorld0.z,
-            sim.invInertiaWorld0.w,
-            sim.invInertiaWorld1.x,
-            sim.invInertiaWorld1.y
+        return MatrixSingle(0.0f);
+    return Matrix3MaskAngularLocks(
+        Matrix3FromSymMat3(
+            SymMat3(
+                sim.invInertiaWorld0.x,
+                sim.invInertiaWorld0.y,
+                sim.invInertiaWorld0.z,
+                sim.invInertiaWorld0.w,
+                sim.invInertiaWorld1.x,
+                sim.invInertiaWorld1.y
+            )
         ),
         bodyFlags
     );
@@ -7496,12 +7504,12 @@ u8 PrepareGpuContactConstraintDirect(
     f32 invMassB = 0.0f;
     if(indexB != s_NullIndex && (flagsB & 0x07u) != 0x07u)
         invMassB = simB.centerInvMass.w;
-    SymMat3 effInvIA = ZeroSymMat3();
+    MatrixSingle effInvIA = MatrixSingle(0.0f);
     if(indexA != s_NullIndex)
-        effInvIA = MaskSymMat3AngularLocks(simA.invInertiaWorld, flagsA);
-    SymMat3 effInvIB = ZeroSymMat3();
+        effInvIA = Matrix3MaskAngularLocks(Matrix3FromSymMat3(simA.invInertiaWorld), flagsA);
+    MatrixSingle effInvIB = MatrixSingle(0.0f);
     if(indexB != s_NullIndex)
-        effInvIB = MaskSymMat3AngularLocks(simB.invInertiaWorld, flagsB);
+        effInvIB = Matrix3MaskAngularLocks(Matrix3FromSymMat3(simB.invInertiaWorld), flagsB);
 
     Softness effSoft = dynamicSoftness;
     if(indexA == s_NullIndex || indexB == s_NullIndex || invMassA == 0.0f || invMassB == 0.0f){
@@ -7600,9 +7608,9 @@ u8 PrepareGpuContactConstraintDirect(
         const VectorSingle rnB = Cross(rB, n);
         f32 kN = baseLinearKN;
         if(hasA)
-            kN += Vector3Dot(rnA, ApplySymMat3Local(effInvIA, rnA)).x;
+            kN += Vector3Dot(rnA, Matrix3MulVec(effInvIA, rnA)).x;
         if(hasB)
-            kN += Vector3Dot(rnB, ApplySymMat3Local(effInvIB, rnB)).x;
+            kN += Vector3Dot(rnB, Matrix3MulVec(effInvIB, rnB)).x;
 
         f32 nMass = 0.0f;
         if(kN > 1.0e-12f)
@@ -7660,14 +7668,14 @@ u8 PrepareGpuContactConstraintDirect(
     VectorSingle irt1A(0.0f);
     VectorSingle irt2A(0.0f);
     if(hasA){
-        irt1A = ApplySymMat3Local(effInvIA, rt1A);
-        irt2A = ApplySymMat3Local(effInvIA, rt2A);
+        irt1A = Matrix3MulVec(effInvIA, rt1A);
+        irt2A = Matrix3MulVec(effInvIA, rt2A);
     }
     VectorSingle irt1B(0.0f);
     VectorSingle irt2B(0.0f);
     if(hasB){
-        irt1B = ApplySymMat3Local(effInvIB, rt1B);
-        irt2B = ApplySymMat3Local(effInvIB, rt2B);
+        irt1B = Matrix3MulVec(effInvIB, rt1B);
+        irt2B = Matrix3MulVec(effInvIB, rt2B);
     }
 
     f32 lin00 = 0.0f;
@@ -7707,9 +7715,9 @@ u8 PrepareGpuContactConstraintDirect(
     if(maxLeverArm > 0.0f){
         f32 kTwist = 0.0f;
         if(hasA)
-            kTwist += Vector3Dot(n, ApplySymMat3Local(effInvIA, n)).x;
+            kTwist += Vector3Dot(n, Matrix3MulVec(effInvIA, n)).x;
         if(hasB)
-            kTwist += Vector3Dot(n, ApplySymMat3Local(effInvIB, n)).x;
+            kTwist += Vector3Dot(n, Matrix3MulVec(effInvIB, n)).x;
         if(kTwist > 1.0e-12f)
             twistMassVal = 1.0f / kTwist;
     }
@@ -7787,8 +7795,8 @@ void PrepareGpuJointConstraintDirect(
     if(indexB != s_NullIndex && (flagsB & 0x07u) != 0x07u)
         effInvMassB = simB.invMass() * joint.invMassScaleB;
 
-    const VectorSingle rA = TransformPoint(simA.transform, joint.localAnchorA()) - simA.center();
-    const VectorSingle rB = TransformPoint(simB.transform, joint.localAnchorB()) - simB.center();
+    const VectorSingle rA = TransformPointValues(VectorSingle(simA.transform.position), VectorSingle(simA.transform.rotation), joint.localAnchorA()) - simA.center();
+    const VectorSingle rB = TransformPointValues(VectorSingle(simB.transform.position), VectorSingle(simB.transform.rotation), joint.localAnchorB()) - simB.center();
 
     const Softness rigidSoft = MakeSoftness(defaultHertz, 1.0f, h);
     Softness linSoft = rigidSoft;
@@ -8262,7 +8270,7 @@ void ResolveGpuManifoldEntryWithBodies(
         const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
         in Shape sA = shapes[c.shapeIdA];
         in Shape sB = shapes[c.shapeIdB];
-        outManifold = CollideContactPairWithSweep(sA, simA.transform, dispA, sB, simB.transform, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair, hullShapes, meshShapes, heightfieldShapes);
+        outManifold = CollideContactPairWithSweep(sA, VectorSingle(simA.transform.position), VectorSingle(simA.transform.rotation), dispA, sB, VectorSingle(simB.transform.position), VectorSingle(simB.transform.rotation), dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair, hullShapes, meshShapes, heightfieldShapes);
     }
     else{
         ConvertGpuManifoldToCpu(gm, simA, simB, swapped, outManifold);
@@ -8274,7 +8282,7 @@ void ResolveGpuManifoldEntryWithBodies(
                 const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, solverSets, gravVec, dt);
                 if(Vector3LengthSq(dispB - dispA).x > s_SpeculativeDistance * s_SpeculativeDistance){
                     const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-                    outManifold = SweepContactPairAfterMiss(sA, simA.transform, dispA, sB, simB.transform, dispB, isBulletPair, hullShapes, meshShapes, heightfieldShapes, outManifold);
+                    outManifold = SweepContactPairAfterMiss(sA, VectorSingle(simA.transform.position), VectorSingle(simA.transform.rotation), dispA, sB, VectorSingle(simB.transform.position), VectorSingle(simB.transform.rotation), dispB, isBulletPair, hullShapes, meshShapes, heightfieldShapes, outManifold);
                 }
             }
         }
@@ -8336,7 +8344,7 @@ void ApplyGpuManifoldInPlaceAt(
     if(!isSensor && (worldRef.m_materialCombineCallback.has_value() || (c.flags & cast<u32>(ContactFlags::DynamicMaterial)) != 0u)){
         in Shape sA = worldRef.m_shapes[c.shapeIdA];
         in Shape sB = worldRef.m_shapes[c.shapeIdB];
-        worldRef.applyCombinedContactMaterials(sA, simA.transform, sB, simB.transform, c);
+        worldRef.applyCombinedContactMaterials(sA, VectorSingle(simA.transform.rotation), sB, VectorSingle(simB.transform.rotation), c);
     }
 
     const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;

@@ -203,24 +203,26 @@ VectorSingle SrgbToLinearRgb(in VectorSingle rgb){
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorSingle(s_SrgbLinearThreshold)));
 }
 
-Expected<VectorSingle> TryPrepareTexConvLinearPixel(
+b8 TryPrepareTexConvLinearPixel(
     in VectorSingle rgb,
     in f32 sourceAlpha,
     in AlphaSourceMode alphaMode,
     in f32 constantAlpha,
     in f32 maskAlpha,
     in f32 maxRgb,
-    in b8 srgb
+    in b8 srgb,
+    mut VectorSingle outPixel
 ){
     if(!ValidateTexConvRgbPixel(rgb, maxRgb))
-        return MakeUnexpected(Failure());
+        return false;
     const Expected<f32> alpha = TryResolveTexConvPixelAlpha(alphaMode, sourceAlpha, constantAlpha, maskAlpha);
     if(!alpha.has_value())
-        return MakeUnexpected(Failure());
+        return false;
     VectorSingle linearRgb = rgb;
     if(srgb)
         linearRgb = SrgbToLinearRgb(rgb);
-    return VectorSingle(linearRgb, alpha.value());
+    outPixel = VectorSingle(linearRgb, alpha.value());
+    return true;
 }
 
 Expected<TexConvAlphaOption> TryParseTexConvAlphaOption(in StringView alphaText){

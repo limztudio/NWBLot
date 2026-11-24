@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop){
+b8 TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop, mut VectorSingle outNormal){
     if(loop.size() < cast<usize>(s_MinLoopVertices))
-        return MakeUnexpected(Failure());
+        return false;
     const CsgDeformVertex originVertex = vertices[cast<usize>(loop[0u])];
     const VectorSingle origin(originVertex.position);
     VectorSingle area(0.0f, 0.0f, 0.0f, 0.0f);
@@ -22,9 +22,10 @@ Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> ve
         area = area + Cross(first - origin, second - origin);
     }
     if(LengthSq(area.xyz) <= s_LoopAreaEpsilonSq)
-        return MakeUnexpected(Failure());
+        return false;
     const VectorSingle normalized = Normalize(area.xyz);
-    return VectorSingle(normalized, 0.0f);
+    outNormal = VectorSingle(normalized, 0.0f);
+    return true;
 }
 
 Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVertex> vertices, in Span<u32> loop, in VectorSingle loopNormal){
@@ -62,10 +63,10 @@ Expected<CsgDeformVertex> TryResolveCsgDeformCapLoopCenter(
 ){
     if(vertices.size() + 1u > s_MaxDeformVertices || loop.size() > s_MaxDeformTriangles || currentTriangleCount > s_MaxDeformTriangles - loop.size())
         return MakeUnexpected(Failure());
-    const Expected<VectorSingle> loopNormal = TryComputeCsgDeformLoopNormal(vertices, loop);
-    if(!loopNormal.has_value())
+    VectorSingle loopNormal(0.0f);
+    if(!TryComputeCsgDeformLoopNormal(vertices, loop, loopNormal))
         return MakeUnexpected(Failure());
-    return TryBuildCsgDeformCapCenterVertex(vertices, loop, loopNormal.value());
+    return TryBuildCsgDeformCapCenterVertex(vertices, loop, loopNormal);
 }
 
 CsgDeformTriangle MakeCsgDeformCapLoopTriangle(in u32 centerIndex, in Span<u32> loop, in usize vertexIndex){

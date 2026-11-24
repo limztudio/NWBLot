@@ -240,12 +240,13 @@ class PhysicsDebugScreenProjector{
         return TestSphereAgainstFrustumPlanesSoa(this.m_planesSoa, center, radius);
     }
 
-    public Expected<VectorSingle> projectSegment(
+    public b8 projectSegment(
         in VectorSingle worldP0,
-        in VectorSingle worldP1
+        in VectorSingle worldP1,
+        mut VectorSingle outSegment
     )const{
         if(!this.m_valid)
-            return MakeUnexpected(Failure());
+            return false;
 
         const VectorSingle col0 = VectorSingle(this.m_projCol0);
         const VectorSingle col1 = VectorSingle(this.m_projCol1);
@@ -255,9 +256,9 @@ class PhysicsDebugScreenProjector{
         const VectorSingle v1 = col0 * worldP1.x + col1 * worldP1.y + col2 * worldP1.z + col3;
 
         if(v0.z < this.m_zMin && v1.z < this.m_zMin)
-            return MakeUnexpected(Failure());
+            return false;
         if(this.m_hasFarPlane && v0.z > this.m_zMax && v1.z > this.m_zMax)
-            return MakeUnexpected(Failure());
+            return false;
 
         const f32 g0 = 1.5f * v0.z;
         const f32 g1 = 1.5f * v1.z;
@@ -267,7 +268,7 @@ class PhysicsDebugScreenProjector{
             || (v0.y < -g0 && v1.y < -g1)
             || (v0.y > g0 && v1.y > g1)
         )
-            return MakeUnexpected(Failure());
+            return false;
 
         VectorSingle c0 = v0;
         VectorSingle c1 = v1;
@@ -287,31 +288,32 @@ class PhysicsDebugScreenProjector{
             f32 t1 = 1.0f;
 
             if(!ClipProjectorHalfSpace(v0.z - this.m_zMin, dv.z, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(this.m_hasFarPlane && !ClipProjectorHalfSpace(this.m_zMax - v0.z, -dv.z, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(!ClipProjectorHalfSpace(v0.x + g0, dv.x + dg, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(!ClipProjectorHalfSpace(g0 - v0.x, dg - dv.x, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(!ClipProjectorHalfSpace(v0.y + g0, dv.y + dg, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(!ClipProjectorHalfSpace(g0 - v0.y, dg - dv.y, t0, t1))
-                return MakeUnexpected(Failure());
+                return false;
             if(t0 > t1)
-                return MakeUnexpected(Failure());
+                return false;
 
             c0 = v0 + dv * t0;
             c1 = v0 + dv * t1;
         }
         if(c0.z <= this.m_zMin * 0.5f || c1.z <= this.m_zMin * 0.5f)
-            return MakeUnexpected(Failure());
+            return false;
 
         const VectorSingle invZ = VectorSingle(1.0f) / VectorSingle(c0.z, c0.z, c1.z, c1.z);
         const VectorSingle ndc = VectorSingle(c0.x, c0.y, c1.x, c1.y) * invZ;
         if(!IsFinite(ndc))
-            return MakeUnexpected(Failure());
-        return ndc * VectorSingle(this.m_screenScale) + VectorSingle(this.m_screenBias);
+            return false;
+        outSegment = ndc * VectorSingle(this.m_screenScale) + VectorSingle(this.m_screenBias);
+        return true;
     }
 }
 
@@ -624,10 +626,10 @@ void ExtractScaledBasisAxes(
     mut VectorSingle outEy,
     mut VectorSingle outEz
 ){
-    const Mat3 m = Mat3FromQuaternion(q);
-    outEx = VectorSingle(m.row0.x, m.row1.x, m.row2.x, 0.0f) * scale.x;
-    outEy = VectorSingle(m.row0.y, m.row1.y, m.row2.y, 0.0f) * scale.y;
-    outEz = VectorSingle(m.row0.z, m.row1.z, m.row2.z, 0.0f) * scale.z;
+    const MatrixSingle m = Matrix3FromQuaternion(q);
+    outEx = VectorSingle(m[0u].x, m[1u].x, m[2u].x, 0.0f) * scale.x;
+    outEy = VectorSingle(m[0u].y, m[1u].y, m[2u].y, 0.0f) * scale.y;
+    outEz = VectorSingle(m[0u].z, m[1u].z, m[2u].z, 0.0f) * scale.z;
 }
 
 void AppendPhysicsDebugOrientedBoxEdges<TSink : IPhysicsDebugLineSink>(
@@ -687,14 +689,15 @@ void AppendPhysicsDebugAabbEdges<TSink : IPhysicsDebugLineSink>(
     );
 }
 
-VectorSingle TransformDebugPoint(in Transform3D xf, in VectorSingle localPoint){
+VectorSingle TransformDebugPoint(in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle localPoint){
     if(localPoint.x == 0.0f && localPoint.y == 0.0f && localPoint.z == 0.0f)
-        return VectorSingle(xf.position, 0.0f);
-    return TransformPoint(xf, localPoint);
+        return VectorSingle(xfPos, 0.0f);
+    return TransformPointValues(xfPos, xfRot, localPoint);
 }
 
 void AppendPhysicsDebugBoxEdges<TSink : IPhysicsDebugLineSink>(
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in VectorSingle localCenter,
     in VectorSingle halfExtents,
     in VectorSingle boxRotation,
@@ -704,8 +707,8 @@ void AppendPhysicsDebugBoxEdges<TSink : IPhysicsDebugLineSink>(
 ){
     if(IsPhysicsDebugPhaseFull(sink, budget))
         return;
-    const VectorSingle worldCenter = TransformDebugPoint(xf, localCenter);
-    VectorSingle worldRot = VectorSingle(xf.rotation);
+    const VectorSingle worldCenter = TransformDebugPoint(xfPos, xfRot, localCenter);
+    VectorSingle worldRot = xfRot;
     if(!Vector3LessOrEqual(Abs(boxRotation), VectorSingle(1.0e-5f)))
         worldRot = SafeNormalizeQuat(QuaternionMultiply(worldRot, SafeNormalizeQuat(boxRotation)));
     VectorSingle ex(0.0f);
@@ -717,7 +720,8 @@ void AppendPhysicsDebugBoxEdges<TSink : IPhysicsDebugLineSink>(
 
 void AppendPhysicsDebugBoxEdges(
     in u32 maxLines,
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in VectorSingle localCenter,
     in VectorSingle halfExtents,
     in VectorSingle boxRotation,
@@ -726,11 +730,12 @@ void AppendPhysicsDebugBoxEdges(
 ){
     PhysicsDebugWorldLineSink sink(maxLines, outLines);
     PhysicsDebugPhaseBudget budget(maxLines);
-    AppendPhysicsDebugBoxEdges(xf, localCenter, halfExtents, boxRotation, color, sink, budget);
+    AppendPhysicsDebugBoxEdges(xfPos, xfRot, localCenter, halfExtents, boxRotation, color, sink, budget);
 }
 
 void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in HullShape hull,
     in VectorSingle color,
     in f32 skinRadius,
@@ -743,12 +748,12 @@ void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
     if(IsPhysicsDebugPhaseFull(sink, budget))
         return;
 
-    const VectorSingle pos = VectorSingle(xf.position);
-    const Mat3 rotMat = Mat3FromQuaternion(VectorSingle(xf.rotation));
+    const VectorSingle pos = xfPos;
+    const MatrixSingle rotMat = Matrix3FromQuaternion(xfRot);
     const usize vertCount = Min(hull.vertices.size(), s_MaxHullVertices);
     Array<f32x4, s_MaxHullVertices> worldVerts;
     for(usize vi = 0u; vi < vertCount; ++vi)
-        worldVerts[vi] = f32x4(pos + MulMat3Vec(rotMat, Vec3FromU(hull.vertices[vi])), 0.0f);
+        worldVerts[vi] = f32x4(pos + Matrix3MulVec(rotMat, VectorSingle(hull.vertices[vi], 0.0f)), 0.0f);
 
     const u32 edgeCount = cast<u32>(hull.halfEdges.size());
     for(u32 ei = 0u; ei < edgeCount; ++ei){
@@ -767,7 +772,7 @@ void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
     }
 
     if(skinRadius > 1.0e-4f && !IsPhysicsDebugPhaseFull(sink, budget)){
-        const VectorSingle worldCen = pos + MulMat3Vec(rotMat, hull.centroid());
+        const VectorSingle worldCen = pos + Matrix3MulVec(rotMat, hull.centroid());
         for(usize vi = 0u; vi < vertCount && !IsPhysicsDebugPhaseFull(sink, budget); ++vi){
             const VectorSingle wv = VectorSingle(worldVerts[vi]);
             const VectorSingle wDir = SafeNormalizeVec3(wv - worldCen, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -812,7 +817,7 @@ b8 TryInsertQuantizedDebugEdge(in u64 ha, in u64 hb, mut HashSet<u64> seenEdges)
 void EmitDebugMeshTriangleNoDedup<TSink : IPhysicsDebugLineSink>(
     in MeshTriangle tri,
     in VectorSingle pos,
-    in Mat3 rotMat,
+    in MatrixSingle rotMat,
     in b8 hasRot,
     in VectorSingle color,
     mut TSink sink,
@@ -824,14 +829,14 @@ void EmitDebugMeshTriangleNoDedup<TSink : IPhysicsDebugLineSink>(
     VectorSingle w1(0.0f);
     VectorSingle w2(0.0f);
     if(hasRot){
-        w0 = pos + MulMat3Vec(rotMat, Vec3FromU(tri.v0));
-        w1 = pos + MulMat3Vec(rotMat, Vec3FromU(tri.v1));
-        w2 = pos + MulMat3Vec(rotMat, Vec3FromU(tri.v2));
+        w0 = pos + Matrix3MulVec(rotMat, VectorSingle(tri.v0, 0.0f));
+        w1 = pos + Matrix3MulVec(rotMat, VectorSingle(tri.v1, 0.0f));
+        w2 = pos + Matrix3MulVec(rotMat, VectorSingle(tri.v2, 0.0f));
     }
     else{
-        w0 = pos + Vec3FromU(tri.v0);
-        w1 = pos + Vec3FromU(tri.v1);
-        w2 = pos + Vec3FromU(tri.v2);
+        w0 = pos + VectorSingle(tri.v0, 0.0f);
+        w1 = pos + VectorSingle(tri.v1, 0.0f);
+        w2 = pos + VectorSingle(tri.v2, 0.0f);
     }
     AppendPhysicsDebugLine(w0, w1, color, sink, budget);
     AppendPhysicsDebugLine(w1, w2, color, sink, budget);
@@ -841,7 +846,7 @@ void EmitDebugMeshTriangleNoDedup<TSink : IPhysicsDebugLineSink>(
 void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
     in MeshTriangle tri,
     in VectorSingle pos,
-    in Mat3 rotMat,
+    in MatrixSingle rotMat,
     in b8 hasRot,
     in VectorSingle color,
     mut HashSet<u64> seenEdges,
@@ -850,9 +855,9 @@ void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
 ){
     if(IsPhysicsDebugPhaseFull(sink, budget))
         return;
-    const VectorSingle v0 = Vec3FromU(tri.v0);
-    const VectorSingle v1 = Vec3FromU(tri.v1);
-    const VectorSingle v2 = Vec3FromU(tri.v2);
+    const VectorSingle v0 = VectorSingle(tri.v0, 0.0f);
+    const VectorSingle v1 = VectorSingle(tri.v1, 0.0f);
+    const VectorSingle v2 = VectorSingle(tri.v2, 0.0f);
     const u64 h0 = HashQuantizedDebugPoint(v0);
     const u64 h1 = HashQuantizedDebugPoint(v1);
     const u64 h2 = HashQuantizedDebugPoint(v2);
@@ -866,8 +871,8 @@ void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
 
     if(TryInsertQuantizedDebugEdge(h0, h1, seenEdges)){
         if(hasRot){
-            w0 = pos + MulMat3Vec(rotMat, v0);
-            w1 = pos + MulMat3Vec(rotMat, v1);
+            w0 = pos + Matrix3MulVec(rotMat, v0);
+            w1 = pos + Matrix3MulVec(rotMat, v1);
         }
         else{
             w0 = pos + v0;
@@ -882,13 +887,13 @@ void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
     if(TryInsertQuantizedDebugEdge(h1, h2, seenEdges)){
         if(!hasW1){
             if(hasRot)
-                w1 = pos + MulMat3Vec(rotMat, v1);
+                w1 = pos + Matrix3MulVec(rotMat, v1);
             else
                 w1 = pos + v1;
             hasW1 = true;
         }
         if(hasRot)
-            w2 = pos + MulMat3Vec(rotMat, v2);
+            w2 = pos + Matrix3MulVec(rotMat, v2);
         else
             w2 = pos + v2;
         hasW2 = true;
@@ -899,13 +904,13 @@ void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
     if(TryInsertQuantizedDebugEdge(h2, h0, seenEdges)){
         if(!hasW2){
             if(hasRot)
-                w2 = pos + MulMat3Vec(rotMat, v2);
+                w2 = pos + Matrix3MulVec(rotMat, v2);
             else
                 w2 = pos + v2;
         }
         if(!hasW0){
             if(hasRot)
-                w0 = pos + MulMat3Vec(rotMat, v0);
+                w0 = pos + Matrix3MulVec(rotMat, v0);
             else
                 w0 = pos + v0;
         }
@@ -914,7 +919,8 @@ void EmitDebugMeshTriangleDedup<TSink : IPhysicsDebugLineSink>(
 }
 
 void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
-    in Transform3D xf,
+    in VectorSingle pos,
+    in VectorSingle q,
     in MeshShape mesh,
     in PhysicsDebugScreenProjector projector,
     in b8 useProjector,
@@ -936,12 +942,10 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
         return;
     }
 
-    const VectorSingle pos = VectorSingle(xf.position);
-    const VectorSingle q = VectorSingle(xf.rotation);
     const b8 hasRot = !Vector3LessOrEqual(Abs(q), VectorSingle(1.0e-5f));
-    Mat3 rotMat = Mat3();
+    MatrixSingle rotMat = MatrixSingle(0.0f);
     if(hasRot)
-        rotMat = Mat3FromQuaternion(q);
+        rotMat = Matrix3FromQuaternion(q);
 
     PhysicsDebugFrustumPlanesSoa localPlanesSoa;
     if(useProjector && (hasBvhToDraw || (hasTrianglesToDraw && !mesh.nodes.empty() && bvhNodeCount > 0u))){
@@ -964,9 +968,9 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
         VectorSingle col1(0.0f, 1.0f, 0.0f, 0.0f);
         VectorSingle col2(0.0f, 0.0f, 1.0f, 0.0f);
         if(hasRot){
-            col0 = VectorSingle(rotMat.row0.x, rotMat.row1.x, rotMat.row2.x, 0.0f);
-            col1 = VectorSingle(rotMat.row0.y, rotMat.row1.y, rotMat.row2.y, 0.0f);
-            col2 = VectorSingle(rotMat.row0.z, rotMat.row1.z, rotMat.row2.z, 0.0f);
+            col0 = VectorSingle(rotMat[0u].x, rotMat[1u].x, rotMat[2u].x, 0.0f);
+            col1 = VectorSingle(rotMat[0u].y, rotMat[1u].y, rotMat[2u].y, 0.0f);
+            col2 = VectorSingle(rotMat[0u].z, rotMat[1u].z, rotMat[2u].z, 0.0f);
         }
         if(useProjector){
             FixedVector<u32, 128u> bvhStack;
@@ -988,7 +992,7 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
                 const VectorSingle he = (VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound)) * 0.5f;
                 VectorSingle centerW(0.0f);
                 if(hasRot)
-                    centerW = pos + MulMat3Vec(rotMat, c);
+                    centerW = pos + Matrix3MulVec(rotMat, c);
                 else
                     centerW = pos + c;
                 AppendPhysicsDebugOrientedBoxEdges(centerW, col0 * he.x, col1 * he.y, col2 * he.z, bvhColor, sink, budget);
@@ -1013,7 +1017,7 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
                 const VectorSingle he = (VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound)) * 0.5f;
                 VectorSingle centerW(0.0f);
                 if(hasRot)
-                    centerW = pos + MulMat3Vec(rotMat, c);
+                    centerW = pos + Matrix3MulVec(rotMat, c);
                 else
                     centerW = pos + c;
                 AppendPhysicsDebugOrientedBoxEdges(centerW, col0 * he.x, col1 * he.y, col2 * he.z, bvhColor, sink, budget);
@@ -1139,15 +1143,23 @@ VectorSingle ClampDebugVectorLength(in VectorSingle v, in f32 maxLen){
     return v * (Rsqrt(lenSq) * maxLen);
 }
 
-Transform3D ResolveDebugBodyTransform(
+void ResolveDebugBodyTransformValues(
     in PhysicsWorld world,
     in Optional<in PhysicsSystem> physicsSystemOpt,
     in u32 bodyIdx,
-    in Body body
+    in Body body,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
 ){
-    if(physicsSystemOpt.has_value())
-        return physicsSystemOpt.value().tryGetInterpolatedBodyTransform(bodyIdx, body.generation);
-    return world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+    if(physicsSystemOpt.has_value()){
+        const Transform3D xf = physicsSystemOpt.value().tryGetInterpolatedBodyTransform(bodyIdx, body.generation);
+        outPos = VectorSingle(xf.position);
+        outRot = VectorSingle(xf.rotation);
+        return;
+    }
+    in Transform3D simXf = world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+    outPos = VectorSingle(simXf.position);
+    outRot = VectorSingle(simXf.rotation);
 }
 
 void AppendPhysicsDebugCapsuleShape<TSink : IPhysicsDebugLineSink>(
@@ -1351,42 +1363,50 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
             if(!options.drawShapes){
                 if(options.drawMeshBvh && shape.type == ShapeType::Mesh && cast<usize>(shape.geometryIndex) < world.m_meshShapes.size()){
-                    const Transform3D bodyXf = ResolveDebugBodyTransform(world, physicsSystemOpt, shape.bodyId, body);
-                    const Transform3D xf = shape.worldTransform(bodyXf);
+                    VectorSingle bodyPos(0.0f);
+                    VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
+                    ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
+                    VectorSingle xfPos(0.0f);
+                    VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
+                    shape.worldTransformValues(bodyPos, bodyRot, xfPos, xfRot);
                     const VectorSingle color = ResolveDebugShapeColor(shape, body);
                     in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
-                    AppendPhysicsDebugMeshLines(xf, mesh, projector, useProjector, options.deduplicateMeshEdges, false, true, color, scratch.seenMeshEdges, sink, budget);
+                    AppendPhysicsDebugMeshLines(xfPos, xfRot, mesh, projector, useProjector, options.deduplicateMeshEdges, false, true, color, scratch.seenMeshEdges, sink, budget);
                 }
                 continue;
             }
 
-            const Transform3D bodyXf = ResolveDebugBodyTransform(world, physicsSystemOpt, shape.bodyId, body);
-            const Transform3D xf = shape.worldTransform(bodyXf);
+            VectorSingle bodyPos(0.0f);
+            VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
+            ResolveDebugBodyTransformValues(world, physicsSystemOpt, shape.bodyId, body, bodyPos, bodyRot);
+            VectorSingle xfPos(0.0f);
+            VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
+            shape.worldTransformValues(bodyPos, bodyRot, xfPos, xfRot);
 
             const VectorSingle color = ResolveDebugShapeColor(shape, body);
             if(shape.type == ShapeType::Sphere){
                 const SphereShape sphere = shape.sphereShape();
-                const VectorSingle c = TransformDebugPoint(xf, sphere.center());
+                const VectorSingle c = TransformDebugPoint(xfPos, xfRot, sphere.center());
                 VectorSingle rx(0.0f);
                 VectorSingle ry(0.0f);
                 VectorSingle rz(0.0f);
                 const f32 r = sphere.radius();
-                ExtractScaledBasisAxes(VectorSingle(xf.rotation), VectorSingle(r, r, r, 0.0f), rx, ry, rz);
+                ExtractScaledBasisAxes(xfRot, VectorSingle(r, r, r, 0.0f), rx, ry, rz);
                 AppendPhysicsDebugCircleAxes(c, rx, ry, color, sink, budget);
                 AppendPhysicsDebugCircleAxes(c, ry, rz, color, sink, budget);
                 AppendPhysicsDebugCircleAxes(c, rx, rz, color, sink, budget);
             }
             else if(shape.type == ShapeType::Capsule){
                 const CapsuleShape capsule = shape.capsuleShape();
-                AppendPhysicsDebugCapsuleShape(TransformDebugPoint(xf, capsule.center1()), TransformDebugPoint(xf, capsule.center2Vec()), capsule.radius(), capsule.radius(), color, sink, budget);
+                AppendPhysicsDebugCapsuleShape(TransformDebugPoint(xfPos, xfRot, capsule.center1()), TransformDebugPoint(xfPos, xfRot, capsule.center2Vec()), capsule.radius(), capsule.radius(), color, sink, budget);
             }
             else if(shape.type == ShapeType::Hull){
                 if(cast<usize>(shape.geometryIndex) >= world.m_hullShapes.size())
                     continue;
                 in HullShape hull = world.m_hullShapes[shape.geometryIndex];
                 if(hull.isBox()){
-                    const VectorSingle worldCenter = TransformDebugPoint(xf, hull.centroid());
-                    VectorSingle worldRot = VectorSingle(xf.rotation);
+                    const VectorSingle worldCenter = TransformDebugPoint(xfPos, xfRot, hull.centroid());
+                    VectorSingle worldRot = xfRot;
                     const VectorSingle boxRot = VectorSingle(hull.boxRotation);
                     if(!Vector3LessOrEqual(Abs(boxRot), VectorSingle(1.0e-5f)))
                         worldRot = SafeNormalizeQuat(QuaternionMultiply(worldRot, SafeNormalizeQuat(boxRot)));
@@ -1404,22 +1424,22 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 }
                 else{
                     const VectorSingle skinColor(color.x, color.y, color.z, color.w * 0.6f);
-                    AppendPhysicsDebugHullWithSkin(xf, hull, color, hull.radius(), skinColor, sink, budget);
+                    AppendPhysicsDebugHullWithSkin(xfPos, xfRot, hull, color, hull.radius(), skinColor, sink, budget);
                 }
             }
             else if(shape.type == ShapeType::Mesh){
                 if(cast<usize>(shape.geometryIndex) >= world.m_meshShapes.size())
                     continue;
                 in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
-                AppendPhysicsDebugMeshLines(xf, mesh, projector, useProjector, options.deduplicateMeshEdges, true, options.drawMeshBvh, color, scratch.seenMeshEdges, sink, budget);
+                AppendPhysicsDebugMeshLines(xfPos, xfRot, mesh, projector, useProjector, options.deduplicateMeshEdges, true, options.drawMeshBvh, color, scratch.seenMeshEdges, sink, budget);
             }
             else if(shape.type == ShapeType::Cylinder){
                 const CylinderShape cyl = shape.cylinderShape();
-                const VectorSingle c = TransformDebugPoint(xf, cyl.center());
+                const VectorSingle c = TransformDebugPoint(xfPos, xfRot, cyl.center());
                 VectorSingle ex(0.0f);
                 VectorSingle ey(0.0f);
                 VectorSingle ez(0.0f);
-                ExtractScaledBasisAxes(VectorSingle(xf.rotation), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
+                ExtractScaledBasisAxes(xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
                 const f32 hh = cyl.halfHeight();
                 const f32 r = cyl.radius();
                 const VectorSingle exR = ex * r;
@@ -1435,11 +1455,11 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
             else if(shape.type == ShapeType::Cone){
                 const ConeShape cone = shape.coneShape();
-                const VectorSingle c = TransformDebugPoint(xf, cone.center());
+                const VectorSingle c = TransformDebugPoint(xfPos, xfRot, cone.center());
                 VectorSingle ex(0.0f);
                 VectorSingle ey(0.0f);
                 VectorSingle ez(0.0f);
-                ExtractScaledBasisAxes(VectorSingle(xf.rotation), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
+                ExtractScaledBasisAxes(xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), ex, ey, ez);
                 const f32 hh = cone.halfHeight();
                 const f32 r = cone.radius();
                 const VectorSingle exR = ex * r;
@@ -1454,19 +1474,19 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
             else if(shape.type == ShapeType::TaperedCapsule){
                 const TaperedCapsuleShape tc = shape.taperedCapsuleShape();
-                AppendPhysicsDebugCapsuleShape(TransformDebugPoint(xf, tc.center1()), TransformDebugPoint(xf, tc.center2()), tc.radius1(), tc.radius2(), color, sink, budget);
+                AppendPhysicsDebugCapsuleShape(TransformDebugPoint(xfPos, xfRot, tc.center1()), TransformDebugPoint(xfPos, xfRot, tc.center2()), tc.radius1(), tc.radius2(), color, sink, budget);
             }
             else if(shape.type == ShapeType::Plane){
                 const PlaneShape pl = shape.planeShape();
                 const VectorSingle localN = SafeNormalizeVec3(pl.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle xfRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
-                const VectorSingle n = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle originPt = TransformDebugPoint(xf, localN * pl.offset());
+                const VectorSingle planeRot = SafeNormalizeQuat(xfRot);
+                const VectorSingle n = SafeNormalizeVec3(Vector3Rotate(localN, planeRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle originPt = TransformDebugPoint(xfPos, xfRot, localN * pl.offset());
                 VectorSingle localU(0.0f);
                 VectorSingle localV(0.0f);
                 ComputePhysicsDebugBasisFromUnitAxis(localN, localU, localV);
-                const VectorSingle u = Vector3Rotate(localU, xfRot);
-                const VectorSingle v = Vector3Rotate(localV, xfRot);
+                const VectorSingle u = Vector3Rotate(localU, planeRot);
+                const VectorSingle v = Vector3Rotate(localV, planeRot);
                 f32 hx = 4.0f;
                 f32 hz = 4.0f;
                 if(pl.isFiniteExtent()){
@@ -1487,8 +1507,8 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             }
             else if(shape.type == ShapeType::Segment){
                 const SegmentShape seg = shape.segmentShape();
-                const VectorSingle p0 = TransformPoint(xf, seg.point1());
-                const VectorSingle p1 = TransformPoint(xf, seg.point2());
+                const VectorSingle p0 = TransformPointValues(xfPos, xfRot, seg.point1());
+                const VectorSingle p1 = TransformPointValues(xfPos, xfRot, seg.point2());
                 AppendPhysicsDebugLine(p0, p1, color, sink, budget);
                 if(seg.radius() > 1.0e-4f){
                     const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -1510,8 +1530,8 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 VectorSingle colX(0.0f);
                 VectorSingle colY(0.0f);
                 VectorSingle colZ(0.0f);
-                ExtractScaledBasisAxes(VectorSingle(xf.rotation), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), colX, colY, colZ);
-                const VectorSingle originW = TransformPoint(xf, VectorSingle(hf.originMaxY.x, hf.originMaxY.y, hf.originMaxY.z, 0.0f));
+                ExtractScaledBasisAxes(xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), colX, colY, colZ);
+                const VectorSingle originW = TransformPointValues(xfPos, xfRot, VectorSingle(hf.originMaxY.x, hf.originMaxY.y, hf.originMaxY.z, 0.0f));
                 const VectorSingle colStepW = colX * hf.scaleMinMaxY.x;
                 const VectorSingle rowStepW = colZ * hf.scaleMinMaxY.z;
                 const VectorSingle upW = colY * hf.scaleMinMaxY.y;
@@ -1568,9 +1588,11 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
             if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex) || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
                 continue;
             in BodySim sim = world.m_solverSets[body.setIndex].sims[body.localIndex];
-            const Transform3D bodyXf = ResolveDebugBodyTransform(world, physicsSystemOpt, cast<u32>(bi), body);
-            const VectorSingle origin = VectorSingle(bodyXf.position);
-            const VectorSingle c = TransformDebugPoint(bodyXf, sim.localCenter());
+            VectorSingle bodyPos(0.0f);
+            VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
+            ResolveDebugBodyTransformValues(world, physicsSystemOpt, cast<u32>(bi), body, bodyPos, bodyRot);
+            const VectorSingle origin = bodyPos;
+            const VectorSingle c = TransformDebugPoint(bodyPos, bodyRot, sim.localCenter());
             if(useProjector && !projector.isSphereVisible(c, 0.35f))
                 continue;
             if(IsPhysicsDebugPhaseFull(sink, budget)){
@@ -1578,7 +1600,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 break;
             }
             if(options.drawBodyAxes){
-                const VectorSingle q = SafeNormalizeQuat(VectorSingle(bodyXf.rotation));
+                const VectorSingle q = SafeNormalizeQuat(bodyRot);
                 VectorSingle ax(0.0f);
                 VectorSingle ay(0.0f);
                 VectorSingle az(0.0f);
@@ -1682,13 +1704,17 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 continue;
             in BodySim simA = world.m_solverSets[bA.setIndex].sims[bA.localIndex];
             in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
-            const Transform3D xfA = ResolveDebugBodyTransform(world, physicsSystemOpt, bAId, bA);
-            const Transform3D xfB = ResolveDebugBodyTransform(world, physicsSystemOpt, bBId, bB);
-            const VectorSingle cA = TransformDebugPoint(xfA, simA.localCenter());
-            const VectorSingle cB = TransformDebugPoint(xfB, simB.localCenter());
-            const VectorSingle aA = TransformPoint(xfA, j.localAnchorA());
-            const VectorSingle aB = TransformPoint(xfB, j.localAnchorB());
-            const VectorSingle qA = SafeNormalizeQuat(VectorSingle(xfA.rotation));
+            VectorSingle posA(0.0f);
+            VectorSingle rotA(0.0f, 0.0f, 0.0f, 1.0f);
+            ResolveDebugBodyTransformValues(world, physicsSystemOpt, bAId, bA, posA, rotA);
+            VectorSingle posB(0.0f);
+            VectorSingle rotB(0.0f, 0.0f, 0.0f, 1.0f);
+            ResolveDebugBodyTransformValues(world, physicsSystemOpt, bBId, bB, posB, rotB);
+            const VectorSingle cA = TransformDebugPoint(posA, rotA, simA.localCenter());
+            const VectorSingle cB = TransformDebugPoint(posB, rotB, simB.localCenter());
+            const VectorSingle aA = TransformPointValues(posA, rotA, j.localAnchorA());
+            const VectorSingle aB = TransformPointValues(posB, rotB, j.localAnchorB());
+            const VectorSingle qA = SafeNormalizeQuat(rotA);
 
             VectorSingle preAxisA(0.0f);
             VectorSingle preDistDir(0.0f);
@@ -1731,7 +1757,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 hasPreLimits = true;
             }
             else if(j.type == JointType::Motor){
-                preTargetPos = TransformPoint(xfA, j.localAnchorA() + j.linearOffset());
+                preTargetPos = TransformPointValues(posA, rotA, j.localAnchorA() + j.linearOffset());
             }
             else if(j.type == JointType::Pulley && j.extraDataIndex < world.m_jointExtraData.size()){
                 in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
@@ -1744,7 +1770,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 scratch.pathWorldScratch.clear();
                 scratch.pathWorldScratch.reserve(ex.pathPoints.size());
                 for(usize pi = 0u; pi < ex.pathPoints.size(); ++pi)
-                    scratch.pathWorldScratch.push_back(f32x4(TransformPoint(xfA, VectorSingle(ex.pathPoints[pi])), 0.0f));
+                    scratch.pathWorldScratch.push_back(f32x4(TransformPointValues(posA, rotA, VectorSingle(ex.pathPoints[pi])), 0.0f));
             }
             else if(j.type == JointType::SixDof && j.extraDataIndex < world.m_jointExtraData.size()){
                 in JointExtraData ex = world.m_jointExtraData[j.extraDataIndex];
@@ -1828,7 +1854,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 }
             }
             else if(j.type == JointType::Spherical){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 AppendPhysicsDebugLine(aA, aA + axisA * 0.25f, activeJointColor, sink, budget);
@@ -1873,7 +1899,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 }
             }
             else if(j.type == JointType::Revolute){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 AppendPhysicsDebugLine(aA - axisA * 0.2f, aA + axisA * 0.2f, activeJointColor, sink, budget);
                 const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
@@ -1907,7 +1933,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugLine(preMaxPt - jU * 0.08f, preMaxPt + jU * 0.08f, activeJointColor, sink, budget);
             }
             else if(j.type == JointType::Fixed){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
                 VectorSingle fx(0.0f);
                 VectorSingle fy(0.0f);
@@ -1943,7 +1969,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 }
             }
             else if(j.type == JointType::Wheel){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 AppendPhysicsDebugLine(preMinPt, preMaxPt, activeJointColor, sink, budget);
                 const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(j.referenceRotation)));
                 VectorSingle steeredAxle = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
@@ -2003,7 +2029,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 }
             }
             else if(j.type == JointType::Gear){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 VectorSingle uA(0.0f); VectorSingle vA(0.0f); ComputePhysicsDebugBasisFromUnitAxis(axisA, uA, vA);
@@ -2021,7 +2047,7 @@ void BuildPhysicsDebugLinesCore<TSink : IPhysicsDebugLineSink>(
                 AppendPhysicsDebugLine(preGroundB, aB, activeJointColor, sink, budget);
             }
             else if(j.type == JointType::RackAndPinion){
-                const VectorSingle qB = SafeNormalizeQuat(VectorSingle(xfB.rotation));
+                const VectorSingle qB = SafeNormalizeQuat(rotB);
                 const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(j.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(j.localAxisB(), qB), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 VectorSingle uA(0.0f); VectorSingle vA(0.0f); ComputePhysicsDebugBasisFromUnitAxis(axisA, uA, vA);
@@ -2133,13 +2159,15 @@ void AppendEcsVehicleDebugLineItem<TSink : IPhysicsDebugLineSink>(
     in Body chBody = physicsWorld.m_bodies[chIdx];
     if(!chBody.alive || chBody.generation != vc.controller.chassisBodyId.generation)
         return;
-    const Transform3D chassisXf = ResolveDebugBodyTransform(physicsWorld, physicsSystemOpt, chIdx, chBody);
-    const VectorSingle chassisQ = SafeNormalizeQuat(VectorSingle(chassisXf.rotation));
+    VectorSingle chassisPos(0.0f);
+    VectorSingle chassisRot(0.0f, 0.0f, 0.0f, 1.0f);
+    ResolveDebugBodyTransformValues(physicsWorld, physicsSystemOpt, chIdx, chBody, chassisPos, chassisRot);
+    const VectorSingle chassisQ = SafeNormalizeQuat(chassisRot);
     const usize wCount = Min(vc.controller.wheelDefs.size(), vc.controller.wheelStates.size());
     for(usize wi = 0u; wi < wCount; ++wi){
         in VehicleWheelDef wd = vc.controller.wheelDefs[wi];
         in VehicleWheelState ws = vc.controller.wheelStates[wi];
-        const VectorSingle attachW = TransformPoint(chassisXf, VectorSingle(wd.attachmentPoint));
+        const VectorSingle attachW = TransformPointValues(chassisPos, chassisRot, VectorSingle(wd.attachmentPoint));
         const VectorSingle sDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wd.suspensionDirection), chassisQ), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
         const VectorSingle wheelPos = attachW + sDirW * ws.suspensionLength;
         if(useProjector && !projector.isSphereVisible((attachW + wheelPos) * 0.5f, wd.wheelRadius + Abs(VectorSingle(ws.suspensionLength)).x * 0.5f + 0.1f))
@@ -2339,9 +2367,11 @@ void AppendEcsSoftBodyDebugLineItem<TSink : IPhysicsDebugLineSink>(
             budget.noteOverflow();
             return;
         }
-        const Transform3D bodyXf = ResolveDebugBodyTransform(physicsWorld, physicsSystemOpt, bIdx, body);
+        VectorSingle bodyPos(0.0f);
+        VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
+        ResolveDebugBodyTransformValues(physicsWorld, physicsSystemOpt, bIdx, body, bodyPos, bodyRot);
         const VectorSingle pPos = VectorSingle(sbc.softBody.particles[att.particleIndex].position);
-        const VectorSingle aPos = TransformPoint(bodyXf, VectorSingle(att.localAnchor));
+        const VectorSingle aPos = TransformPointValues(bodyPos, bodyRot, VectorSingle(att.localAnchor));
         AppendPhysicsDebugLine(pPos, aPos, attCol, sink, budget);
     }
 }
@@ -2547,16 +2577,17 @@ PhysicsDebugDrawStats BuildPhysicsDebugLines(
     return BuildPhysicsDebugLinesToSink(world, options, emptyProjector, sink);
 }
 
-Expected<VectorSingle> ProjectPhysicsWorldSegmentToScreen(
+b8 ProjectPhysicsWorldSegmentToScreen(
     in TransformComponent cameraTransform,
     in CameraProjection projection,
     in f32 viewportWidth,
     in f32 viewportHeight,
     in VectorSingle worldP0,
-    in VectorSingle worldP1
+    in VectorSingle worldP1,
+    mut VectorSingle outSegment
 ){
     const PhysicsDebugScreenProjector projector(cameraTransform, projection, viewportWidth, viewportHeight);
-    return projector.projectSegment(worldP0, worldP1);
+    return projector.projectSegment(worldP0, worldP1, outSegment);
 }
 
 

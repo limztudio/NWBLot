@@ -994,7 +994,7 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
         StepPhysicsWorld(physWorld, 1.0f / 60.0f, 4u, scheduler);
 
     const Transform3D pXf = physWorld.tryGetBodyTransform(pendBody).value();
-    const VectorSingle pivotB = TransformPoint(pXf, VectorSingle(-1.5f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle pivotB = TransformPointValues(VectorSingle(pXf.position), VectorSingle(pXf.rotation), VectorSingle(-1.5f, 0.0f, 0.0f, 0.0f));
     EXPECT_LT(Vector3Length(VectorSingle(pivotB - VectorSingle(-4.0f, 4.0f, 0.0f, 0.0f), 0.0f)).x, 0.05f);
 
     const VectorSingle dPos = VectorSingle(physWorld.tryGetBodyTransform(distB).value().position);
@@ -2030,8 +2030,9 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_PI / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
     ASSERT_TRUE(projRes.has_value());
-    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f)).has_value());
-    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f)).has_value());
+    VectorSingle projectedSegment(0.0f);
+    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f), projectedSegment));
+    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), projectedSegment));
 
     const BodyId oldBody = tw.world.getComponent<RigidBodyComponent>(dropEnt.id()).runtimeBodyId;
     tw.world.destroyEntity(dropEnt.id());
@@ -2205,7 +2206,9 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     SphereShape slideSphere;
     slideSphere.centerRadius = f32x4(0.0f, 0.0f, 0.0f, 0.5f);
     Transform3D seamXf(VectorSingle(0.02f, 0.45f, 0.0f, 0.0f), QuaternionIdentity());
-    const Manifold seamManifold = CollideSphereAndMesh(slideSphere, seamXf, quadMesh, Transform3D(), s_SpeculativeDistance);
+    const VectorSingle zeroPos(0.0f);
+    const VectorSingle identRot = QuaternionIdentity();
+    const Manifold seamManifold = CollideSphereAndMesh(slideSphere, VectorSingle(seamXf.position), VectorSingle(seamXf.rotation), quadMesh, zeroPos, identRot, s_SpeculativeDistance);
     ASSERT_GE(seamManifold.pointCount(), 1u);
     EXPECT_NEAR(seamManifold.normal().y, -1.0f, 1.0e-3f);
     EXPECT_NEAR(seamManifold.normal().x, 0.0f, 1.0e-3f);
@@ -2213,7 +2216,7 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
 
     const Expected<HullShape> boxHullRes = MakeBoxHull(0.4f, 0.4f, 0.4f, 0.0f);
     ASSERT_TRUE(boxHullRes.has_value());
-    const Manifold hullSeamManifold = CollideHullAndMesh(boxHullRes.value(), Transform3D(VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), QuaternionIdentity()), quadMesh, Transform3D(), s_SpeculativeDistance);
+    const Manifold hullSeamManifold = CollideHullAndMesh(boxHullRes.value(), VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), identRot, quadMesh, zeroPos, identRot, s_SpeculativeDistance);
     ASSERT_GE(hullSeamManifold.pointCount(), 1u);
     EXPECT_NEAR(hullSeamManifold.normal().y, -1.0f, 1.0e-3f);
 
@@ -2248,9 +2251,11 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
 
     const Manifold dualMeshM = CollideMeshes(
         closedMesh,
-        Transform3D(VectorSingle(0.0f, 1.95f, 0.0f, 0.0f), QuaternionIdentity()),
+        VectorSingle(0.0f, 1.95f, 0.0f, 0.0f),
+        identRot,
         closedMesh,
-        Transform3D(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity()),
+        zeroPos,
+        identRot,
         s_SpeculativeDistance
     );
     EXPECT_GE(dualMeshM.pointCount(), 1u);
@@ -2649,9 +2654,11 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     const HullShape box = MakeBoxHull(1.0f, 0.5f, 1.0f, 0.0f).value();
     const Manifold gapM = CollideCapsuleAndHull(
         cap,
-        Transform3D(VectorSingle(0.0f, 0.77f, 0.0f, 0.0f), QuaternionIdentity()),
+        VectorSingle(0.0f, 0.77f, 0.0f, 0.0f),
+        QuaternionIdentity(),
         box,
-        Transform3D(),
+        VectorSingle(0.0f),
+        QuaternionIdentity(),
         0.05f
     );
     ASSERT_GE(gapM.pointCount(), 1u);
@@ -2917,6 +2924,7 @@ void VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec(){
         pw.m_bodies[bodyId.index],
         pw.m_hullShapes,
         pw.m_meshShapes,
+        pw.m_heightfieldShapes,
         0u,
         hullShapeId.index,
         0.0f,
@@ -3909,24 +3917,26 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         ASSERT_TRUE(outerMesh.isClosed());
         ASSERT_TRUE(innerMesh.isClosed());
 
-        const Manifold outerInnerM = CollideMeshes(outerMesh, Transform3D(), innerMesh, Transform3D(), s_SpeculativeDistance);
-        const Manifold innerOuterM = CollideMeshes(innerMesh, Transform3D(), outerMesh, Transform3D(), s_SpeculativeDistance);
+        const VectorSingle zeroPos(0.0f);
+        const VectorSingle identRot = QuaternionIdentity();
+        const Manifold outerInnerM = CollideMeshes(outerMesh, zeroPos, identRot, innerMesh, zeroPos, identRot, s_SpeculativeDistance);
+        const Manifold innerOuterM = CollideMeshes(innerMesh, zeroPos, identRot, outerMesh, zeroPos, identRot, s_SpeculativeDistance);
         EXPECT_GE(outerInnerM.pointCount(), 1u);
         EXPECT_GE(innerOuterM.pointCount(), 1u);
 
-        const LocalRayHit rayIn = RayCastMesh(outerMesh, Transform3D(), VectorSingle(0.0f), VectorSingle(20.0f, 0.0f, 0.0f, 0.0f), 1.0f);
+        const LocalRayHit rayIn = RayCastMesh(outerMesh, zeroPos, identRot, VectorSingle(0.0f), VectorSingle(20.0f, 0.0f, 0.0f, 0.0f), 1.0f);
         EXPECT_TRUE(rayIn.hit());
         EXPECT_NEAR(rayIn.fraction(), 0.0f, 1.0e-5f);
 
         ShapeProxy querySphere;
         querySphere.points.push_back(f32x3u(0.0f, 0.0f, 0.0f));
         querySphere.radius = 0.25f;
-        const LocalRayHit castIn = ShapeCastMesh(querySphere, Transform3D(), VectorSingle(20.0f, 0.0f, 0.0f, 0.0f), outerMesh, Transform3D(), 1.0f);
+        const LocalRayHit castIn = ShapeCastMesh(querySphere, zeroPos, identRot, VectorSingle(20.0f, 0.0f, 0.0f, 0.0f), outerMesh, zeroPos, identRot, 1.0f);
         EXPECT_TRUE(castIn.hit());
         EXPECT_NEAR(castIn.fraction(), 0.0f, 1.0e-5f);
 
         ShapeProxy emptyProxy;
-        const LocalRayHit emptyCast = ShapeCastProxies(emptyProxy, Transform3D(), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), querySphere, Transform3D(), VectorSingle(0.0f), 1.0f);
+        const LocalRayHit emptyCast = ShapeCastProxies(emptyProxy, zeroPos, identRot, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), querySphere, zeroPos, identRot, VectorSingle(0.0f), 1.0f);
         EXPECT_FALSE(emptyCast.hit());
     }
 
@@ -4422,8 +4432,8 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         ASSERT_GT(Abs(smallRot).w, 0.99999f);
         Vector<PhysicsDebugLine> idBoxLines;
         Vector<PhysicsDebugLine> rotBoxLines;
-        AppendPhysicsDebugBoxEdges(256u, Transform3D(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
-        AppendPhysicsDebugBoxEdges(256u, Transform3D(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), smallRot, VectorSingle(1.0f), rotBoxLines);
+        AppendPhysicsDebugBoxEdges(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
+        AppendPhysicsDebugBoxEdges(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), smallRot, VectorSingle(1.0f), rotBoxLines);
         ASSERT_EQ(idBoxLines.size(), rotBoxLines.size());
         f32 maxDiff = 0.0f;
         for(usize li = 0u; li < idBoxLines.size(); ++li){
@@ -5114,7 +5124,8 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         finiteProj.farPlane = 20.0f;
         const PhysicsDebugScreenProjector finiteScreen(camXf, finiteProj, 1280.0f, 720.0f);
         ASSERT_TRUE(finiteScreen.valid());
-        EXPECT_FALSE(finiteScreen.projectSegment(VectorSingle(0.0f, 0.0f, 30.0f, 0.0f), VectorSingle(1.0f, 0.0f, 35.0f, 0.0f)).has_value());
+        VectorSingle segOut(0.0f);
+        EXPECT_FALSE(finiteScreen.projectSegment(VectorSingle(0.0f, 0.0f, 30.0f, 0.0f), VectorSingle(1.0f, 0.0f, 35.0f, 0.0f), segOut));
 
         CameraProjection defaultFarProj;
         defaultFarProj.projectionParams = f32x4(1.0f, 1.0f, 0.0f, 0.0f);
@@ -5122,18 +5133,19 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         defaultFarProj.farPlane = 0.0f;
         const PhysicsDebugScreenProjector infScreen(camXf, defaultFarProj, 1280.0f, 720.0f);
         ASSERT_TRUE(infScreen.valid());
-        EXPECT_TRUE(infScreen.projectSegment(VectorSingle(0.0f, 0.0f, 50.0f, 0.0f), VectorSingle(1.0f, 0.0f, 55.0f, 0.0f)).has_value());
+        EXPECT_TRUE(infScreen.projectSegment(VectorSingle(0.0f, 0.0f, 50.0f, 0.0f), VectorSingle(1.0f, 0.0f, 55.0f, 0.0f), segOut));
 
-        const Expected<VectorSingle> nearClipped = finiteScreen.projectSegment(
+        VectorSingle nearClipped(0.0f);
+        ASSERT_TRUE(finiteScreen.projectSegment(
             VectorSingle(-0.05f, 0.0f, -5.0f, 0.0f),
-            VectorSingle(0.25f, 0.1f, 4.0f, 0.0f)
-        );
-        ASSERT_TRUE(nearClipped.has_value());
-        EXPECT_TRUE(IsFinite(VectorSingle(nearClipped.value())));
-        EXPECT_GE(nearClipped.value().x, -321.0f);
-        EXPECT_LE(nearClipped.value().x, 1601.0f);
-        EXPECT_GE(nearClipped.value().z, -321.0f);
-        EXPECT_LE(nearClipped.value().z, 1601.0f);
+            VectorSingle(0.25f, 0.1f, 4.0f, 0.0f),
+            nearClipped
+        ));
+        EXPECT_TRUE(IsFinite(nearClipped));
+        EXPECT_GE(nearClipped.x, -321.0f);
+        EXPECT_LE(nearClipped.x, 1601.0f);
+        EXPECT_GE(nearClipped.z, -321.0f);
+        EXPECT_LE(nearClipped.z, 1601.0f);
 
         PhysicsWorld dbg;
         CpuTaskScheduler scheduler(1u);

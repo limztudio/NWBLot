@@ -62,14 +62,15 @@ b8 ParsePhysicsTransformMap(in Path file, in MetascriptValue mapVal, in StringVi
     u32 rotFieldCount = 0u;
     return mapVal.forEachMapEntry(lambda[in file, in prefix, mut outXf, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "position"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outXf.position = f32x4(v.value(), 0.0f);
+            outXf.position = f32x4(v, 0.0f);
             return true;
         }
         if(key == "rotation" || key == "rotation_euler" || key == "rotation_euler_degrees"){
-            const Expected<VectorSingle> q = ReadPhysicsRotationVectorValue(
+            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+            if(!ReadPhysicsRotationVectorValue(
                 file,
                 fieldVal,
                 prefix,
@@ -79,11 +80,11 @@ b8 ParsePhysicsTransformMap(in Path file, in MetascriptValue mapVal, in StringVi
                 "rotation_euler_degrees",
                 key == "rotation",
                 key == "rotation_euler_degrees",
-                rotFieldCount
-            );
-            if(!q.has_value())
+                rotFieldCount,
+                q
+            ))
                 return false;
-            outXf.rotation = f32x4(q.value());
+            outXf.rotation = f32x4(q);
             return true;
         }
         error("{} '{}': unsupported transform field '{}'", prefix, PathToString(file), key);
@@ -98,17 +99,17 @@ b8 ParsePhysicsAabbMap(in Path file, in MetascriptValue mapVal, in StringView pr
     }
     return mapVal.forEachMapEntry(lambda[in file, in prefix, mut outBounds](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "lower"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outBounds.lowerBound = f32x4(v.value(), 0.0f);
+            outBounds.lowerBound = f32x4(v, 0.0f);
             return true;
         }
         if(key == "upper"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outBounds.upperBound = f32x4(v.value(), 0.0f);
+            outBounds.upperBound = f32x4(v, 0.0f);
             return true;
         }
         error("{} '{}': unsupported aabb field '{}'", prefix, PathToString(file), key);
@@ -137,14 +138,15 @@ b8 ParsePhysicsBodyDefMap(in Path file, in MetascriptValue mapVal, in StringView
             return true;
         }
         if(key == "position"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outDef.position = f32x4(v.value(), 0.0f);
+            outDef.position = f32x4(v, 0.0f);
             return true;
         }
         if(key == "rotation" || key == "rotation_euler" || key == "rotation_euler_degrees"){
-            const Expected<VectorSingle> q = ReadPhysicsRotationVectorValue(
+            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+            if(!ReadPhysicsRotationVectorValue(
                 file,
                 fieldVal,
                 prefix,
@@ -154,25 +156,25 @@ b8 ParsePhysicsBodyDefMap(in Path file, in MetascriptValue mapVal, in StringView
                 "rotation_euler_degrees",
                 key == "rotation",
                 key == "rotation_euler_degrees",
-                rotFieldCount
-            );
-            if(!q.has_value())
+                rotFieldCount,
+                q
+            ))
                 return false;
-            outDef.rotation = f32x4(q.value());
+            outDef.rotation = f32x4(q);
             return true;
         }
         if(key == "linear_velocity"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outDef.linearVelocity = f32x4(v.value(), 0.0f);
+            outDef.linearVelocity = f32x4(v, 0.0f);
             return true;
         }
         if(key == "angular_velocity"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            outDef.angularVelocity = f32x4(v.value(), 0.0f);
+            outDef.angularVelocity = f32x4(v, 0.0f);
             return true;
         }
         if(key == "linear_damping") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outDef.linearDamping);
@@ -241,10 +243,10 @@ Expected<CharacterControllerComponentCookEntry> ParseCharacterControllerComponen
             if(key == "stick_to_floor") return ReadPhysicsBoolValue(file, fieldVal, s_CharacterControllerComponentDiagnosticPrefix, key, d.stickToFloor);
             if(key == "push_dynamic_bodies") return ReadPhysicsBoolValue(file, fieldVal, s_CharacterControllerComponentDiagnosticPrefix, key, d.pushDynamicBodies);
             if(key == "up"){
-                const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_CharacterControllerComponentDiagnosticPrefix, key);
-                if(!v.has_value())
+                VectorSingle v(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_CharacterControllerComponentDiagnosticPrefix, key, v))
                     return false;
-                d.up = f32x4(v.value(), 0.0f);
+                d.up = f32x4(v, 0.0f);
                 return true;
             }
             if(key == "enabled") return ReadPhysicsBoolValue(file, fieldVal, s_CharacterControllerComponentDiagnosticPrefix, key, entry.component.enabled);
@@ -263,27 +265,27 @@ Expected<CharacterControllerComponentCookEntry> ParseCharacterControllerComponen
 b8 ParseVehicleWheelMap(in Path file, in MetascriptValue mapVal, mut VehicleWheelDef outWheel){
     return mapVal.forEachMapEntry(lambda[in file, mut outWheel](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "attachment_point"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outWheel.attachmentPoint = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, v)) return false;
+            outWheel.attachmentPoint = f32x4(v, 0.0f);
             return true;
         }
         if(key == "suspension_direction"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outWheel.suspensionDirection = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, v)) return false;
+            outWheel.suspensionDirection = f32x4(v, 0.0f);
             return true;
         }
         if(key == "axle_axis"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outWheel.axleAxis = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, v)) return false;
+            outWheel.axleAxis = f32x4(v, 0.0f);
             return true;
         }
         if(key == "forward_axis"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outWheel.forwardAxis = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, v)) return false;
+            outWheel.forwardAxis = f32x4(v, 0.0f);
             return true;
         }
         if(key == "suspension_rest_length") return ReadPhysicsF32Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, outWheel.suspensionRestLength);
@@ -387,15 +389,15 @@ b8 ParseRagdollBoneMap(in Path file, in MetascriptValue mapVal, mut RagdollBoneD
         if(key == "parent_index") return ReadPhysicsU32Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.parentIndex);
         if(key == "body_def") return ParsePhysicsBodyDefMap(file, fieldVal, s_RagdollComponentDiagnosticPrefix, outBone.bodyDef);
         if(key == "capsule_center1"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outBone.capsule.center1Radius = f32x4(v.value(), outBone.capsule.radius());
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, v)) return false;
+            outBone.capsule.center1Radius = f32x4(v, outBone.capsule.radius());
             return true;
         }
         if(key == "capsule_center2"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outBone.capsule.center2 = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, v)) return false;
+            outBone.capsule.center2 = f32x4(v, 0.0f);
             return true;
         }
         if(key == "capsule_radius"){
@@ -406,23 +408,23 @@ b8 ParseRagdollBoneMap(in Path file, in MetascriptValue mapVal, mut RagdollBoneD
             return true;
         }
         if(key == "box_half_extents"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outBone.boxHalfExtents = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, v)) return false;
+            outBone.boxHalfExtents = f32x4(v, 0.0f);
             return true;
         }
         if(key == "use_box") return ReadPhysicsBoolValue(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.useBox);
         if(key == "shape_def") return ParsePhysicsShapeDefMap(file, fieldVal, s_RagdollComponentDiagnosticPrefix, outBone.shapeDef);
         if(key == "joint_anchor_world"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outBone.jointAnchorWorld = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, v)) return false;
+            outBone.jointAnchorWorld = f32x4(v, 0.0f);
             return true;
         }
         if(key == "joint_axis_world"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outBone.jointAxisWorld = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, v)) return false;
+            outBone.jointAxisWorld = f32x4(v, 0.0f);
             return true;
         }
         if(key == "swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.swingLimitY);
@@ -533,9 +535,9 @@ Expected<FluidVolumeComponentCookEntry> ParseFluidVolumeComponentCookMetadata(in
             }
             if(key == "bounds") return ParsePhysicsAabbMap(file, fieldVal, s_FluidVolumeComponentDiagnosticPrefix, key, v.bounds);
             if(key == "flow_velocity"){
-                const Expected<VectorSingle> fv = DecodePhysicsFloat3Value(file, fieldVal, s_FluidVolumeComponentDiagnosticPrefix, key);
-                if(!fv.has_value()) return false;
-                v.flowVelocity = f32x4(fv.value(), 0.0f);
+                VectorSingle fv(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_FluidVolumeComponentDiagnosticPrefix, key, fv)) return false;
+                v.flowVelocity = f32x4(fv, 0.0f);
                 return true;
             }
             if(key == "density") return ReadPhysicsF32Value(file, fieldVal, s_FluidVolumeComponentDiagnosticPrefix, key, v.density);
@@ -581,9 +583,9 @@ Expected<ForceFieldComponentCookEntry> ParseForceFieldComponentCookMetadata(in N
             if(key == "bounds") return ParsePhysicsAabbMap(file, fieldVal, s_ForceFieldComponentDiagnosticPrefix, key, f.bounds);
             if(key == "use_bounds") return ReadPhysicsBoolValue(file, fieldVal, s_ForceFieldComponentDiagnosticPrefix, key, f.useBounds);
             if(key == "origin_or_direction"){
-                const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ForceFieldComponentDiagnosticPrefix, key);
-                if(!v.has_value()) return false;
-                f.originOrDirection = f32x4(v.value(), 0.0f);
+                VectorSingle v(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_ForceFieldComponentDiagnosticPrefix, key, v)) return false;
+                f.originOrDirection = f32x4(v, 0.0f);
                 return true;
             }
             if(key == "strength") return ReadPhysicsF32Value(file, fieldVal, s_ForceFieldComponentDiagnosticPrefix, key, f.strength);
@@ -624,22 +626,22 @@ b8 ParseArticulationLinkMap(in Path file, in MetascriptValue mapVal, mut Articul
         if(key == "parent_to_joint") return ParsePhysicsTransformMap(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.parentToJoint);
         if(key == "joint_to_child") return ParsePhysicsTransformMap(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.jointToChild);
         if(key == "joint_axis_local"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outLink.jointAxisLocal = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, v)) return false;
+            outLink.jointAxisLocal = f32x4(v, 0.0f);
             return true;
         }
         if(key == "mass") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.mass);
         if(key == "com_local"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outLink.comLocal = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, v)) return false;
+            outLink.comLocal = f32x4(v, 0.0f);
             return true;
         }
         if(key == "inertia_diag"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outLink.inertiaDiag = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, v)) return false;
+            outLink.inertiaDiag = f32x4(v, 0.0f);
             return true;
         }
         if(key == "enable_limit") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.enableLimit);
@@ -721,27 +723,27 @@ Expected<ArticulationComponentCookEntry> ParseArticulationComponentCookMetadata(
 b8 ParseSoftBodyParticleMap(in Path file, in MetascriptValue mapVal, mut SoftBodyParticle outParticle){
     return mapVal.forEachMapEntry(lambda[in file, mut outParticle](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "position"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outParticle.position = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, v)) return false;
+            outParticle.position = f32x4(v, 0.0f);
             return true;
         }
         if(key == "prev_position"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outParticle.prevPosition = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, v)) return false;
+            outParticle.prevPosition = f32x4(v, 0.0f);
             return true;
         }
         if(key == "velocity"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outParticle.velocity = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, v)) return false;
+            outParticle.velocity = f32x4(v, 0.0f);
             return true;
         }
         if(key == "external_force"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outParticle.externalForce = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, v)) return false;
+            outParticle.externalForce = f32x4(v, 0.0f);
             return true;
         }
         if(key == "inv_mass") return ReadPhysicsF32Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, outParticle.invMass);
@@ -799,9 +801,9 @@ b8 ParseSoftBodyAttachmentMap(in Path file, in MetascriptValue mapVal, mut SoftB
     return mapVal.forEachMapEntry(lambda[in file, mut outAttach](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "particle_index") return ReadPhysicsU32Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, outAttach.particleIndex);
         if(key == "local_anchor"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key);
-            if(!v.has_value()) return false;
-            outAttach.localAnchor = f32x4(v.value(), 0.0f);
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, v)) return false;
+            outAttach.localAnchor = f32x4(v, 0.0f);
             return true;
         }
         if(key == "compliance") return ReadPhysicsF32Value(file, fieldVal, s_SoftBodyComponentDiagnosticPrefix, key, outAttach.compliance);
@@ -942,9 +944,9 @@ Expected<GpuRenderTransformExportComponentCookEntry> ParseGpuRenderTransformExpo
             if(key == "instance_index") return ReadPhysicsU32Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, entry.component.instanceIndex);
             if(key == "flags") return ReadPhysicsU32Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, entry.component.flags);
             if(key == "local_scale"){
-                const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key);
-                if(!v.has_value()) return false;
-                entry.component.localScale = f32x4(v.value(), 0.0f);
+                VectorSingle v(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, v)) return false;
+                entry.component.localScale = f32x4(v, 0.0f);
                 return true;
             }
             error("{} '{}': unsupported asset field '{}'", s_GpuRenderTransformExportComponentDiagnosticPrefix, PathToString(file), key);

@@ -274,7 +274,8 @@ Point ApplyPaintTransform(in PaintTransform2D xf, in Point p){
 b8 IsIdentityPaintTransform(in PaintTransform2D xf){
     const VectorSingle delta0 = Abs(VectorSingle(xf.m00, xf.m01, xf.tx, xf.m10) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     const VectorSingle delta1 = Abs(VectorSingle(xf.m11, xf.ty, 0.0f, 0.0f) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-    return Vector4LessOrEqual(Max(delta0, delta1), VectorSingle(1.0e-6f));
+    const VectorSingle tol(1.0e-6f);
+    return Vector4LessOrEqual(delta0, tol) && Vector4LessOrEqual(delta1, tol);
 }
 
 f32 ResolvePaintTransformScale(in PaintTransform2D xf){

@@ -454,13 +454,8 @@ void UpdateModelStaticMeshAttachmentTransform(
     else{
         if(!world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity))
             return;
-        const Expected<MatrixSingle> resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(
-            world.getComponent<SkeletonPoseComponent>(attachment.parentEntity),
-            attachment.parentJointIndex
-        );
-        if(!resolvedJointMatrix.has_value())
+        if(!TryEvaluateSkeletonPoseJointMatrix(world.getComponent<SkeletonPoseComponent>(attachment.parentEntity), attachment.parentJointIndex, jointMatrix))
             return;
-        jointMatrix = resolvedJointMatrix.value();
     }
     TryDecomposeAndAssignTransformComponent(
         ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix),

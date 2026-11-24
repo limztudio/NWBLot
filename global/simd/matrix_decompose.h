@@ -83,6 +83,31 @@ namespace SIMDMatrixDoubleDetail{
 
 inline constexpr f64 s_DoubleMatrixDecomposeEpsilon = 1.0e-12;
 
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble CanonicalBasisVector(const usize index)noexcept{
+    switch(index){
+        case 0u: return s_DoubleSIMDIdentityR0;
+        case 1u: return s_DoubleSIMDIdentityR1;
+        default: return s_DoubleSIMDIdentityR2;
+    }
+}
+
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle CanonicalBasisSingleVector(const usize index)noexcept{
+    switch(index){
+        case 0u: return s_SIMDIdentityR0;
+        case 1u: return s_SIMDIdentityR1;
+        default: return s_SIMDIdentityR2;
+    }
+}
+
+template<typename VectorT>
+[[nodiscard]] FOUNDATION_INLINE VectorT& SelectBasis3(const usize index, VectorT& b0, VectorT& b1, VectorT& b2)noexcept{
+    switch(index){
+        case 0u: return b0;
+        case 1u: return b1;
+        default: return b2;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -107,136 +132,140 @@ struct alignas(SIMDVectorDouble) MatrixDoubleDecomposition{
 };
 static_assert(alignof(Expected<MatrixDoubleDecomposition>) >= alignof(MatrixDoubleDecomposition));
 
-struct alignas(SIMDVectorSingle) RigidDualQuaternion{
-    SIMDVectorSingle real;
-    SIMDVectorSingle dual;
-};
-static_assert(alignof(Expected<RigidDualQuaternion>) >= alignof(RigidDualQuaternion));
-
-struct alignas(SIMDVectorDouble) RigidDualQuaternionDouble{
-    SIMDVectorDouble real;
-    SIMDVectorDouble dual;
-};
-static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQuaternionDouble));
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] FOUNDATION_INLINE Expected<MatrixDecomposition> FOUNDATION_SIMD_CALL MatrixDecompose(const SIMDMatrix& matrix)noexcept{
-    const SIMDVectorSingle canonicalBasis[3] = { s_SIMDIdentityR0, s_SIMDIdentityR1, s_SIMDIdentityR2 };
-
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDecompose(const SIMDMatrix& matrix, SIMDMatrix& outDecomposition)noexcept{
     SIMDMatrix transposed = MatrixTranspose(matrix);
 
-    SIMDVectorSingle basis[3] = { VectorAndInt(transposed.v[0], s_SIMDMask3), VectorAndInt(transposed.v[1], s_SIMDMask3), VectorAndInt(transposed.v[2], s_SIMDMask3) };
+    SIMDVectorSingle basis0 = VectorAndInt(transposed.v[0], s_SIMDMask3);
+    SIMDVectorSingle basis1 = VectorAndInt(transposed.v[1], s_SIMDMask3);
+    SIMDVectorSingle basis2 = VectorAndInt(transposed.v[2], s_SIMDMask3);
 
-    SIMDVectorSingle scale = VectorMergeX(Vector3Length(basis[0]), Vector3Length(basis[1]), Vector3Length(basis[2]), VectorZero());
+    SIMDVectorSingle scale = VectorMergeX(Vector3Length(basis0), Vector3Length(basis1), Vector3Length(basis2), VectorZero());
 
     usize a{};
     usize b{};
     usize c{};
     SIMDMatrixDetail::RankDecompose(a, b, c, VectorGetX(scale), VectorGetY(scale), VectorGetZ(scale));
 
+    SIMDVectorSingle& basisA = SIMDMatrixDoubleDetail::SelectBasis3(a, basis0, basis1, basis2);
+    SIMDVectorSingle& basisB = SIMDMatrixDoubleDetail::SelectBasis3(b, basis0, basis1, basis2);
+    SIMDVectorSingle& basisC = SIMDMatrixDoubleDetail::SelectBasis3(c, basis0, basis1, basis2);
+
     if(VectorGetByIndex(scale, a) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
-        basis[a] = canonicalBasis[a];
-    basis[a] = Vector3Normalize(basis[a]);
+        basisA = SIMDMatrixDoubleDetail::CanonicalBasisSingleVector(a);
+    basisA = Vector3Normalize(basisA);
 
     if(VectorGetByIndex(scale, b) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon){
         usize aa{};
         usize bb{};
         usize cc{};
-        const SIMDVectorSingle absoluteBasis = VectorAbs(basis[a]);
+        const SIMDVectorSingle absoluteBasis = VectorAbs(basisA);
         SIMDMatrixDetail::RankDecompose(aa, bb, cc, VectorGetX(absoluteBasis), VectorGetY(absoluteBasis), VectorGetZ(absoluteBasis));
-        basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
+        basisB = Vector3Cross(basisA, SIMDMatrixDoubleDetail::CanonicalBasisSingleVector(cc));
     }
-    basis[b] = Vector3Normalize(basis[b]);
+    basisB = Vector3Normalize(basisB);
 
     if(VectorGetByIndex(scale, c) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
-        basis[c] = Vector3Cross(basis[a], basis[b]);
-    basis[c] = Vector3Normalize(basis[c]);
+        basisC = Vector3Cross(basisA, basisB);
+    basisC = Vector3Normalize(basisC);
 
     SIMDMatrix basisAsRows{};
-    basisAsRows.v[0] = basis[0];
-    basisAsRows.v[1] = basis[1];
-    basisAsRows.v[2] = basis[2];
+    basisAsRows.v[0] = basis0;
+    basisAsRows.v[1] = basis1;
+    basisAsRows.v[2] = basis2;
     basisAsRows.v[3] = s_SIMDIdentityR3;
 
     SIMDMatrix rotationMatrix = MatrixTranspose(basisAsRows);
     SIMDVectorSingle determinant = MatrixDeterminant(rotationMatrix);
     if(Vector4Less(determinant, VectorZero())){
         scale = VectorSelect(scale, VectorNegate(scale), VectorSelectControl(a == 0u, a == 1u, a == 2u, a == 3u));
-        basis[a] = VectorNegate(basis[a]);
+        basisA = VectorNegate(basisA);
 
-        basisAsRows.v[0] = basis[0];
-        basisAsRows.v[1] = basis[1];
-        basisAsRows.v[2] = basis[2];
+        basisAsRows.v[0] = basis0;
+        basisAsRows.v[1] = basis1;
+        basisAsRows.v[2] = basis2;
         rotationMatrix = MatrixTranspose(basisAsRows);
         determinant = VectorNegate(determinant);
     }
 
     const SIMDVectorSingle determinantError = VectorSubtract(determinant, s_SIMDOne);
     if(Vector4Greater(VectorMultiply(determinantError, determinantError), VectorReplicate(SIMDMatrixDetail::s_MatrixDecomposeEpsilon)))
-        return MakeUnexpected(Failure{});
+        return false;
 
-    return MatrixDecomposition{ scale, QuaternionRotationMatrix(rotationMatrix), transposed.v[3] };
+    outDecomposition.v[0] = scale;
+    outDecomposition.v[1] = QuaternionRotationMatrix(rotationMatrix);
+    outDecomposition.v[2] = transposed.v[3];
+    outDecomposition.v[3] = VectorZero();
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<MatrixDoubleDecomposition> FOUNDATION_SIMD_CALL MatrixDoubleDecompose(const SIMDMatrixDouble& matrix)noexcept{
-    const SIMDVectorDouble canonicalBasis[3] = { s_DoubleSIMDIdentityR0, s_DoubleSIMDIdentityR1, s_DoubleSIMDIdentityR2 };
-
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDoubleDecompose(const SIMDMatrixDouble& matrix, SIMDMatrixDouble& outDecomposition)noexcept{
     SIMDMatrixDouble transposed = MatrixDoubleTranspose(matrix);
 
-    SIMDVectorDouble basis[3] = { VectorDoubleAndInt(transposed.v[0], s_DoubleSIMDMask3), VectorDoubleAndInt(transposed.v[1], s_DoubleSIMDMask3), VectorDoubleAndInt(transposed.v[2], s_DoubleSIMDMask3) };
+    SIMDVectorDouble basis0 = VectorDoubleAndInt(transposed.v[0], s_DoubleSIMDMask3);
+    SIMDVectorDouble basis1 = VectorDoubleAndInt(transposed.v[1], s_DoubleSIMDMask3);
+    SIMDVectorDouble basis2 = VectorDoubleAndInt(transposed.v[2], s_DoubleSIMDMask3);
 
-    SIMDVectorDouble scale = VectorDoubleMergeX(VectorDouble3Length(basis[0]), VectorDouble3Length(basis[1]), VectorDouble3Length(basis[2]), VectorDoubleZero());
+    SIMDVectorDouble scale = VectorDoubleMergeX(VectorDouble3Length(basis0), VectorDouble3Length(basis1), VectorDouble3Length(basis2), VectorDoubleZero());
 
     usize a{};
     usize b{};
     usize c{};
     SIMDMatrixDetail::RankDecompose(a, b, c, VectorDoubleGetX(scale), VectorDoubleGetY(scale), VectorDoubleGetZ(scale));
 
+    SIMDVectorDouble& basisA = SIMDMatrixDoubleDetail::SelectBasis3(a, basis0, basis1, basis2);
+    SIMDVectorDouble& basisB = SIMDMatrixDoubleDetail::SelectBasis3(b, basis0, basis1, basis2);
+    SIMDVectorDouble& basisC = SIMDMatrixDoubleDetail::SelectBasis3(c, basis0, basis1, basis2);
+
     if(VectorDoubleGetByIndex(scale, a) < SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)
-        basis[a] = canonicalBasis[a];
-    basis[a] = VectorDouble3Normalize(basis[a]);
+        basisA = SIMDMatrixDoubleDetail::CanonicalBasisVector(a);
+    basisA = VectorDouble3Normalize(basisA);
 
     if(VectorDoubleGetByIndex(scale, b) < SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon){
         usize aa{};
         usize bb{};
         usize cc{};
-        const SIMDVectorDouble absoluteBasis = VectorDoubleAbs(basis[a]);
+        const SIMDVectorDouble absoluteBasis = VectorDoubleAbs(basisA);
         SIMDMatrixDetail::RankDecompose(aa, bb, cc, VectorDoubleGetX(absoluteBasis), VectorDoubleGetY(absoluteBasis), VectorDoubleGetZ(absoluteBasis));
-        basis[b] = VectorDouble3Cross(basis[a], canonicalBasis[cc]);
+        basisB = VectorDouble3Cross(basisA, SIMDMatrixDoubleDetail::CanonicalBasisVector(cc));
     }
-    basis[b] = VectorDouble3Normalize(basis[b]);
+    basisB = VectorDouble3Normalize(basisB);
 
     if(VectorDoubleGetByIndex(scale, c) < SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)
-        basis[c] = VectorDouble3Cross(basis[a], basis[b]);
-    basis[c] = VectorDouble3Normalize(basis[c]);
+        basisC = VectorDouble3Cross(basisA, basisB);
+    basisC = VectorDouble3Normalize(basisC);
 
     SIMDMatrixDouble basisAsRows{};
-    basisAsRows.v[0] = basis[0];
-    basisAsRows.v[1] = basis[1];
-    basisAsRows.v[2] = basis[2];
+    basisAsRows.v[0] = basis0;
+    basisAsRows.v[1] = basis1;
+    basisAsRows.v[2] = basis2;
     basisAsRows.v[3] = s_DoubleSIMDIdentityR3;
 
     SIMDMatrixDouble rotationMatrix = MatrixDoubleTranspose(basisAsRows);
     SIMDVectorDouble determinant = MatrixDoubleDeterminant(rotationMatrix);
     if(VectorDouble4Less(determinant, VectorDoubleZero())){
         scale = VectorDoubleSelect(scale, VectorDoubleNegate(scale), VectorDoubleSelectControl(a == 0u, a == 1u, a == 2u, a == 3u));
-        basis[a] = VectorDoubleNegate(basis[a]);
+        basisA = VectorDoubleNegate(basisA);
 
-        basisAsRows.v[0] = basis[0];
-        basisAsRows.v[1] = basis[1];
-        basisAsRows.v[2] = basis[2];
+        basisAsRows.v[0] = basis0;
+        basisAsRows.v[1] = basis1;
+        basisAsRows.v[2] = basis2;
         rotationMatrix = MatrixDoubleTranspose(basisAsRows);
         determinant = VectorDoubleNegate(determinant);
     }
 
     const SIMDVectorDouble determinantError = VectorDoubleSubtract(determinant, s_DoubleSIMDOne);
     if(VectorDouble4Greater(VectorDoubleMultiply(determinantError, determinantError), VectorDoubleReplicate(SIMDMatrixDoubleDetail::s_DoubleMatrixDecomposeEpsilon)))
-        return MakeUnexpected(Failure{});
+        return false;
 
-    return MatrixDoubleDecomposition{ scale, QuaternionDoubleRotationMatrix(rotationMatrix), transposed.v[3] };
+    outDecomposition.v[0] = scale;
+    outDecomposition.v[1] = QuaternionDoubleRotationMatrix(rotationMatrix);
+    outDecomposition.v[2] = transposed.v[3];
+    outDecomposition.v[3] = VectorDoubleZero();
+    return true;
 }
 
 
@@ -329,48 +358,54 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     ;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorSingleResult> FOUNDATION_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon, SIMDVectorSingle& outQuaternion)noexcept{
     if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
-        return MakeUnexpected(Failure{});
+        return false;
 
     const SIMDVectorSingle quaternion = QuaternionRotationMatrix(matrix);
     if(QuaternionIsNaN(quaternion) || QuaternionIsInfinite(quaternion))
-        return MakeUnexpected(Failure{});
-    return SIMDVectorSingleResult{ quaternion };
+        return false;
+    outQuaternion = quaternion;
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorDoubleResult> FOUNDATION_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon, SIMDVectorDouble& outQuaternion)noexcept{
     if(!MatrixDoubleIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
-        return MakeUnexpected(Failure{});
+        return false;
 
     const SIMDVectorDouble quaternion = QuaternionDoubleRotationMatrix(matrix);
     if(QuaternionDoubleIsNaN(quaternion) || QuaternionDoubleIsInfinite(quaternion))
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ quaternion };
+        return false;
+    outQuaternion = quaternion;
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<RigidDualQuaternion> FOUNDATION_SIMD_CALL MatrixTryBuildRigidDualQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
-    const auto real = MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon);
-    if(!real)
-        return MakeUnexpected(real.error());
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixTryBuildRigidDualQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon, SIMDVectorSingle& outReal, SIMDVectorSingle& outDual)noexcept{
+    SIMDVectorSingle real{};
+    if(!MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon, real))
+        return false;
 
     const SIMDVectorSingle translation = VectorMergeX(VectorSplatW(matrix.v[0]), VectorSplatW(matrix.v[1]), VectorSplatW(matrix.v[2]), VectorZero());
-    const SIMDVectorSingle dual = VectorScale(QuaternionMultiply(translation, real->value), SIMDMatrixDetail::s_MatrixHalf);
+    const SIMDVectorSingle dual = VectorScale(QuaternionMultiply(translation, real), SIMDMatrixDetail::s_MatrixHalf);
     if(!VectorIsFinite(dual, VectorComponentMask::s_XYZW))
-        return MakeUnexpected(Failure{});
-    return RigidDualQuaternion{ real->value, dual };
+        return false;
+    outReal = real;
+    outDual = dual;
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<RigidDualQuaternionDouble> FOUNDATION_SIMD_CALL MatrixDoubleTryBuildRigidDualQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
-    const auto real = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon);
-    if(!real)
-        return MakeUnexpected(real.error());
+[[nodiscard]] FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL MatrixDoubleTryBuildRigidDualQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon, SIMDVectorDouble& outReal, SIMDVectorDouble& outDual)noexcept{
+    SIMDVectorDouble real{};
+    if(!MatrixDoubleTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon, real))
+        return false;
 
     const SIMDVectorDouble translation = VectorDoubleMergeX(VectorDoubleSplatW(matrix.v[0]), VectorDoubleSplatW(matrix.v[1]), VectorDoubleSplatW(matrix.v[2]), VectorDoubleZero());
-    const SIMDVectorDouble dual = VectorDoubleScale(QuaternionDoubleMultiply(translation, real->value), SIMDMatrixDoubleDetail::s_DoubleMatrixHalf);
+    const SIMDVectorDouble dual = VectorDoubleScale(QuaternionDoubleMultiply(translation, real), SIMDMatrixDoubleDetail::s_DoubleMatrixHalf);
     if(!VectorDoubleIsFinite(dual, VectorDoubleComponentMask::s_DoubleXYZW))
-        return MakeUnexpected(Failure{});
-    return RigidDualQuaternionDouble{ real->value, dual };
+        return false;
+    outReal = real;
+    outDual = dual;
+    return true;
 }
 
 

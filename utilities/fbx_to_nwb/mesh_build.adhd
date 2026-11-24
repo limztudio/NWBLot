@@ -74,7 +74,7 @@ VectorSingle LoadCornerOutputPositionVector(in UfbxMesh mesh, in UfbxNode node, 
     return LoadUfbxVector(position) * VectorSingle(cast<f32>(options.scale));
 }
 
-Expected<VectorSingle> LoadCornerOutputNormalVector(in UfbxMesh mesh, in UfbxMatrix normalToWorld, in ImportOptions options, in b8 wantsSkinning, in u32 cornerIndex){
+b8 LoadCornerOutputNormalVector(in UfbxMesh mesh, in UfbxMatrix normalToWorld, in ImportOptions options, in b8 wantsSkinning, in u32 cornerIndex, mut VectorSingle outNormal){
     UfbxVec3 normal = UfbxVec3();
     if(options.bakeTransforms){
         if(wantsSkinning)
@@ -87,20 +87,20 @@ Expected<VectorSingle> LoadCornerOutputNormalVector(in UfbxMesh mesh, in UfbxMat
     else
         normal = mesh.normal(cornerIndex);
 
-    return Vector3TryNormalize(LoadUfbxVector(normal));
+    return Vector3TryNormalize(LoadUfbxVector(normal), outNormal);
 }
 
-Expected<VectorSingle> LoadCornerOutputTangentVector(in UfbxMesh mesh, in UfbxMatrix geometryToWorld, in ImportOptions options, in b8 wantsSkinning, in u32 cornerIndex, in VectorSingle normal){
+b8 LoadCornerOutputTangentVector(in UfbxMesh mesh, in UfbxMatrix geometryToWorld, in ImportOptions options, in b8 wantsSkinning, in u32 cornerIndex, in VectorSingle normal, mut VectorSingle outTangent){
     if(!mesh.hasTangent())
-        return MakeUnexpected(Failure());
+        return false;
 
     UfbxVec3 tangent = mesh.tangent(cornerIndex);
     if(ShouldTransformBakedDirection(options.bakeTransforms, wantsSkinning, mesh.skinnedIsLocal()))
         tangent = UfbxTransformDirection(geometryToWorld, tangent);
 
-    const auto outputTangent = Vector3TryNormalize(LoadUfbxVector(tangent));
-    if(!outputTangent.has_value())
-        return MakeUnexpected(Failure());
+    VectorSingle outputTangent(0.0f);
+    if(!Vector3TryNormalize(LoadUfbxVector(tangent), outputTangent))
+        return false;
 
     b8 hasBitangent = false;
     VectorSingle outputBitangentVec = VectorSingle(0.0f);
@@ -109,14 +109,11 @@ Expected<VectorSingle> LoadCornerOutputTangentVector(in UfbxMesh mesh, in UfbxMa
         if(ShouldTransformBakedDirection(options.bakeTransforms, wantsSkinning, mesh.skinnedIsLocal()))
             bitangent = UfbxTransformDirection(geometryToWorld, bitangent);
 
-        const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
-        if(outputBitangent.has_value()){
-            hasBitangent = true;
-            outputBitangentVec = outputBitangent.value();
-        }
+        hasBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent), outputBitangentVec);
     }
 
-    return ResolveImportedFbxTangent(normal, outputTangent.value(), hasBitangent, outputBitangentVec);
+    outTangent = ResolveImportedFbxTangent(normal, outputTangent, hasBitangent, outputBitangentVec);
+    return true;
 }
 
 [cpp_unwind]
@@ -126,14 +123,17 @@ Expected<PositionNormalMap> BuildSmoothPositionNormals(in UfbxMesh mesh, in Ufbx
 
     in ImportOptions importOptions = options;
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, lambda[in mesh, in node, in importOptions, in wantsSkinning, mut outNormals](in TriangleCornerIndices cornerIndices) -> b8{
-        Array<f32x4, s_MeshletTriangleIndexCount> positions;
-        for(usize i = 0u; i < s_MeshletTriangleIndexCount; ++i)
-            positions[i] = f32x4(LoadCornerOutputPositionVector(mesh, node, importOptions, wantsSkinning, cornerIndices[i]));
-        const VectorDouble face = BuildTriangleAreaNormal64(VectorSingle(positions[0u]), VectorSingle(positions[1u]), VectorSingle(positions[2u]));
+        const VectorSingle p0 = LoadCornerOutputPositionVector(mesh, node, importOptions, wantsSkinning, cornerIndices[0u]);
+        const VectorSingle p1 = LoadCornerOutputPositionVector(mesh, node, importOptions, wantsSkinning, cornerIndices[1u]);
+        const VectorSingle p2 = LoadCornerOutputPositionVector(mesh, node, importOptions, wantsSkinning, cornerIndices[2u]);
+        const VectorDouble face = BuildTriangleAreaNormal64(p0, p1, p2);
         if(!HasUsableSourceTriangleArea(TriangleAreaNormalLengthSquared(face).x, importOptions.triangleAreaLengthSquaredEpsilon))
             return true;
-        for(in f32x4 position : positions){
-            const PositionKey key = MakePositionKey(VectorSingle(position));
+        const PositionKey key0 = MakePositionKey(p0);
+        const PositionKey key1 = MakePositionKey(p1);
+        const PositionKey key2 = MakePositionKey(p2);
+        const Array<PositionKey, s_MeshletTriangleIndexCount> keys(key0, key1, key2);
+        for(in PositionKey key : keys){
             PositionNormalRecord record;
             if(outNormals.contains(key))
                 record.value = f64x4u(VectorDouble(outNormals[key].value) + face);
@@ -145,12 +145,12 @@ Expected<PositionNormalMap> BuildSmoothPositionNormals(in UfbxMesh mesh, in Ufbx
     }, inOutTriangleIndices))
         return MakeUnexpected(Failure());
     VisitMutableMappedValues<PositionNormalRecord>(outNormals, lambda[](mut PositionNormalRecord record) -> void{
-        const auto normal = VectorDouble3TryNormalize(VectorDouble(record.value));
-        if(!normal.has_value()){
+        VectorDouble normal(0.0);
+        if(!VectorDouble3TryNormalize(VectorDouble(record.value), normal)){
             warning("Mesh build: degenerate accumulated vertex normal left un-normalized");
             return;
         }
-        record.value = f64x4u(normal.value());
+        record.value = f64x4u(normal);
     });
     return outNormals;
 }
@@ -199,24 +199,29 @@ b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 
     in PositionNormalMap positionNormals = smoothNormals;
     return VisitTriangulatedMeshTriangles(mesh, options.flipWinding, lambda[in mesh, in node, in normalToWorld, in importOptions, in wantsSkinning, in normalMode, in defaultColor, in importUvs, in importColors, in importTangents, in skin, in clusterIndices, in positionNormals, mut inOutMesh, mut inOutSawVertexColors, mut inOutSawVertexUvs, mut inOutUsedDefaultUvs](in TriangleCornerIndices cornerIndices) -> b8{
         Array<SourceTriangleCorner, s_MeshletTriangleIndexCount> triangleCorners;
-        Array<f32x4, s_MeshletTriangleIndexCount> trianglePositions;
-        Array<f32x4, s_MeshletTriangleIndexCount> triangleNormals;
+        VectorSingle p0(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle p1(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle p2(0.0f, 0.0f, 0.0f, 0.0f);
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_MeshletTriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh.vertexIndex(cornerIndex);
 
             SourceTriangleCorner corner;
             const VectorSingle position = LoadCornerOutputPositionVector(mesh, node, importOptions, wantsSkinning, cornerIndex);
-            trianglePositions[triangleCornerIndex] = f32x4(position);
+            corner.position = Vec3(position);
+            if(triangleCornerIndex == 0u)
+                p0 = position;
+            else if(triangleCornerIndex == 1u)
+                p1 = position;
+            else
+                p2 = position;
 
             VectorSingle normal = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
             if(normalMode == NormalMode::Imported){
-                const auto importedNormal = LoadCornerOutputNormalVector(mesh, normalToWorld, importOptions, wantsSkinning, cornerIndex);
-                if(!importedNormal.has_value()){
+                if(!LoadCornerOutputNormalVector(mesh, normalToWorld, importOptions, wantsSkinning, cornerIndex, normal)){
                     error("Failed to build mesh: imported normal is invalid");
                     return false;
                 }
-                normal = importedNormal.value();
             }
             else if(normalMode == NormalMode::Smooth){
                 const PositionKey key = MakePositionKey(position);
@@ -224,14 +229,14 @@ b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 
                     error("Failed to build mesh: failed to generate smooth mesh normal");
                     return false;
                 }
-                const auto generatedNormal = VectorDouble3TryNormalize(VectorDouble(positionNormals.at(key).value));
-                if(!generatedNormal.has_value()){
+                VectorDouble generatedNormal(0.0);
+                if(!VectorDouble3TryNormalize(VectorDouble(positionNormals.at(key).value), generatedNormal)){
                     error("Failed to build mesh: failed to generate smooth mesh normal");
                     return false;
                 }
-                normal = ConvertVectorDoubleToSingle(generatedNormal.value());
+                normal = ConvertVectorDoubleToSingle(generatedNormal);
             }
-            triangleNormals[triangleCornerIndex] = f32x4(normal);
+            corner.normal = Vec3(normal);
 
             if(importUvs){
                 const UfbxVec2 sourceUv0 = mesh.uv(cornerIndex);
@@ -250,10 +255,10 @@ b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 
                 corner.color = defaultColor;
 
             if(importTangents){
-                const auto importedTangent = LoadCornerOutputTangentVector(mesh, node.geometryToWorld(), importOptions, wantsSkinning, cornerIndex, normal);
-                corner.hasTangent = importedTangent.has_value();
-                if(importedTangent.has_value())
-                    corner.tangent = Vec4(importedTangent.value());
+                VectorSingle importedTangent(0.0f);
+                corner.hasTangent = LoadCornerOutputTangentVector(mesh, node.geometryToWorld(), importOptions, wantsSkinning, cornerIndex, normal, importedTangent);
+                if(corner.hasTangent)
+                    corner.tangent = Vec4(importedTangent);
             }
 
             if(wantsSkinning){
@@ -271,25 +276,23 @@ b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 
             triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!TriangleHasArea(VectorSingle(trianglePositions[0u]), VectorSingle(trianglePositions[1u]), VectorSingle(trianglePositions[2u]), importOptions.triangleAreaLengthSquaredEpsilon))
+        if(!TriangleHasArea(p0, p1, p2, importOptions.triangleAreaLengthSquaredEpsilon))
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            const VectorDouble faceNormal64 = BuildTriangleAreaNormal64(VectorSingle(trianglePositions[0u]), VectorSingle(trianglePositions[1u]), VectorSingle(trianglePositions[2u]));
-            const auto normalizedFaceNormal = VectorDouble3TryNormalize(faceNormal64);
-            if(!normalizedFaceNormal.has_value()){
+            const VectorDouble faceNormal64 = BuildTriangleAreaNormal64(p0, p1, p2);
+            VectorDouble normalizedFaceNormal(0.0);
+            if(!VectorDouble3TryNormalize(faceNormal64, normalizedFaceNormal)){
                 error("Failed to build mesh: failed to regenerate mesh face normal");
                 return false;
             }
-            const VectorSingle faceNormal = ConvertVectorDoubleToSingle(normalizedFaceNormal.value());
-            for(mut f32x4 normal : triangleNormals)
-                normal = f32x4(faceNormal);
+            const Vec3 regeneratedNormal(ConvertVectorDoubleToSingle(normalizedFaceNormal));
+            for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_MeshletTriangleIndexCount; ++triangleCornerIndex)
+                triangleCorners[triangleCornerIndex].normal = regeneratedNormal;
         }
 
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_MeshletTriangleIndexCount; ++triangleCornerIndex){
-            mut SourceTriangleCorner corner = triangleCorners[triangleCornerIndex];
-            corner.position = Vec3(VectorSingle(trianglePositions[triangleCornerIndex]));
-            corner.normal = Vec3(VectorSingle(triangleNormals[triangleCornerIndex]));
+            in SourceTriangleCorner corner = triangleCorners[triangleCornerIndex];
             const auto vertexRefIndex = InternSourceCorner(corner, wantsSkinning, inOutMesh);
             if(!vertexRefIndex.has_value())
                 return false;

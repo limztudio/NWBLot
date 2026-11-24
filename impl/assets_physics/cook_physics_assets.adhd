@@ -221,15 +221,16 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
         if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, skinRadius);
         if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, points);
         if(key == "half_extents"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, v))
                 return false;
-            halfExtents = v.value();
+            halfExtents = v;
             hasHalfExtents = true;
             return true;
         }
         if(key == "box_rotation" || key == "box_rotation_euler" || key == "box_rotation_euler_degrees"){
-            const Expected<VectorSingle> q = ReadPhysicsRotationVectorValue(
+            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+            if(!ReadPhysicsRotationVectorValue(
                 file,
                 fieldVal,
                 s_ConvexHullDiagnosticPrefix,
@@ -239,11 +240,11 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
                 "box_rotation_euler_degrees",
                 key == "box_rotation",
                 key == "box_rotation_euler_degrees",
-                rotFieldCount
-            );
-            if(!q.has_value())
+                rotFieldCount,
+                q
+            ))
                 return false;
-            boxRotation = q.value();
+            boxRotation = q;
             return true;
         }
         error("{} '{}': unsupported asset field '{}'", s_ConvexHullDiagnosticPrefix, PathToString(file), key);
@@ -271,7 +272,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
         if(hasRot){
             boxHull.boxRotation = f32x4(boxRotation);
             for(usize vi = 0u; vi < boxHull.vertices.size(); ++vi)
-                boxHull.vertices[vi] = PackVec3U(Vector3Rotate(Vec3FromU(boxHull.vertices[vi]), boxRotation));
+                boxHull.vertices[vi] = f32x3u(Vector3Rotate(VectorSingle(boxHull.vertices[vi], 0.0f), boxRotation));
             for(usize fi = 0u; fi < boxHull.facePlanes.size(); ++fi){
                 const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(boxHull.facePlanes[fi].normalOffset), boxRotation), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 boxHull.facePlanes[fi] = Plane3D(rotN, boxHull.facePlanes[fi].normalOffset.w);

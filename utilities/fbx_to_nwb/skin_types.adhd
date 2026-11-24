@@ -97,14 +97,13 @@ b8 TryAccumulateFbxSkinWeight(
     return true;
 }
 
-b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){
+b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, in VectorSingle rawWeights, mut VectorSingle outWeights){
     if(!IsFinite(VectorDouble(weightSum)) || weightSum <= 0.0){
         error("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights");
         return false;
     }
     const f32 normalization = cast<f32>(s_UniformScaleNumerator / weightSum);
-    const VectorSingle normalized = VectorSingle(inOutInfluence.weight) * VectorSingle(normalization);
-    inOutInfluence.weight = f32x4u(normalized);
+    outWeights = rawWeights * VectorSingle(normalization);
     return true;
 }
 

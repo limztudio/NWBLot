@@ -219,15 +219,20 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
     return hf;
 }
 
-Aabb3D ComputeHeightfieldAabb(in HeightfieldShape hf, in Transform3D xf){
-    if(!hf.isValid())
-        return Aabb3D();
-    return TransformAabb(xf, hf.computeLocalAabb(), 0.0f);
+void ComputeHeightfieldAabbValues(in HeightfieldShape hf, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
+    if(!hf.isValid()){
+        outMin = VectorSingle(0.0f);
+        outMax = VectorSingle(0.0f);
+        return;
+    }
+    const Aabb3D localBox = hf.computeLocalAabb();
+    TransformLocalAabbValuesToWorld(VectorSingle(localBox.lowerBound), VectorSingle(localBox.upperBound), 0.0f, xfPos, xfRot, outMin, outMax);
 }
 
 void TestHeightfieldCellRay(
     in HeightfieldShape hf,
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in u32 cx,
     in u32 cz,
     in VectorSingle localOrigin,
@@ -269,8 +274,8 @@ void TestHeightfieldCellRay(
             curMax = h.fraction();
             outCellIndex = cellIdx;
             outBarycentrics = f32x2u(hitU, hitV);
-            const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(h.normal(), VectorSingle(xf.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            outBest.pointFraction = f32x4(TransformPoint(xf, h.point()), curMax);
+            const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(h.normal(), xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            outBest.pointFraction = f32x4(TransformPointValues(xfPos, xfRot, h.point()), curMax);
             outBest.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
         }
     }
@@ -278,7 +283,8 @@ void TestHeightfieldCellRay(
 
 LocalRayHit RayCastHeightfieldDetailed(
     in HeightfieldShape hf,
-    in Transform3D xf,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
     in VectorSingle origin,
     in VectorSingle translation,
     in f32 maxFraction,
@@ -292,12 +298,14 @@ LocalRayHit RayCastHeightfieldDetailed(
     if(!hf.isValid() || maxFraction < 0.0f)
         return best;
 
-    const VectorSingle localOrigin = InverseTransformPoint(xf, origin);
-    const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), VectorSingle(xf.rotation));
+    const VectorSingle localOrigin = InverseTransformPointValues(xfPos, xfRot, origin);
+    const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), xfRot);
     const Aabb3D localBox = hf.computeLocalAabb();
-    const RayCastSlabData raySlab = MakeRayCastSlabData(localOrigin, localDir);
+    VectorSingle invDir(0.0f);
+    u32 parallelMask = 0u;
+    ComputeRayCastSlabValues(localDir, invDir, parallelMask);
     f32 tEntry = 0.0f;
-    if(!AabbRayCastFast(localBox, raySlab, maxFraction, tEntry))
+    if(!AabbRayCastValues(VectorSingle(localBox.lowerBound), VectorSingle(localBox.upperBound), localOrigin, invDir, parallelMask, maxFraction, tEntry))
         return best;
 
     const f32 sx = hf.cellSizeX();
@@ -354,7 +362,7 @@ LocalRayHit RayCastHeightfieldDetailed(
         if(cx < 0 || cz < 0 || cx >= cast<isize>(cellCols) || cz >= cast<isize>(cellRows))
             break;
 
-        TestHeightfieldCellRay(hf, xf, cast<u32>(cx), cast<u32>(cz), localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+        TestHeightfieldCellRay(hf, xfPos, xfRot, cast<u32>(cx), cast<u32>(cz), localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
         const f32 tCellExit = SimdMin(tMaxX, tMaxZ);
         if(best.hit() && best.fraction() <= tCellExit + 1.0e-5f)
             return best;
@@ -523,7 +531,7 @@ void ComputeHeightfieldOverlappedCells(
         return;
 
     const Aabb3D hfBox = hf.computeLocalAabb();
-    if(!AabbOverlaps(hfBox, localQueryBox))
+    if(!AabbOverlapsValues(VectorSingle(hfBox.lowerBound), VectorSingle(hfBox.upperBound), VectorSingle(localQueryBox.lowerBound), VectorSingle(localQueryBox.upperBound)))
         return;
 
     const f32 sx = hf.cellSizeX();
@@ -551,9 +559,11 @@ void EvalHeightfieldShapeCastCell(
     in f32 minY,
     in f32 maxY,
     in ShapeProxyView queryProxy,
-    in Transform3D xfQuery,
+    in VectorSingle posQuery,
+    in VectorSingle rotQuery,
     in VectorSingle translation,
-    in Transform3D xfHf,
+    in VectorSingle posHf,
+    in VectorSingle rotHf,
     mut f32 curMax,
     mut LocalRayHit best,
     mut u32 outCellIndex,
@@ -606,7 +616,7 @@ void EvalHeightfieldShapeCastCell(
             triPts[2u] = v11;
         }
         const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
-        const LocalRayHit triHit = ShapeCastProxyViews(queryProxy, xfQuery, translation, triView, xfHf, VectorSingle(0.0f), curMax);
+        const LocalRayHit triHit = ShapeCastProxyViews(queryProxy, posQuery, rotQuery, translation, triView, posHf, rotHf, VectorSingle(0.0f), curMax);
         if(triHit.hit()){
             const f32 frac = triHit.fraction();
             const u32 candKey = cellIdx * 2u + cast<u32>(ti);
@@ -615,8 +625,8 @@ void EvalHeightfieldShapeCastCell(
                 best = triHit;
                 outCellIndex = cellIdx;
                 bestKey = candKey;
-                const VectorSingle localHit = InverseTransformPoint(xfHf, triHit.point());
-                outBarycentrics = ComputeTriangleBarycentrics(localHit, Vec3FromU(triPts[0u]), Vec3FromU(triPts[1u]), Vec3FromU(triPts[2u]));
+                const VectorSingle localHit = InverseTransformPointValues(posHf, rotHf, triHit.point());
+                outBarycentrics = ComputeTriangleBarycentrics(localHit, VectorSingle(triPts[0u], 0.0f), VectorSingle(triPts[1u], 0.0f), VectorSingle(triPts[2u], 0.0f));
             }
         }
     }
@@ -624,10 +634,12 @@ void EvalHeightfieldShapeCastCell(
 
 LocalRayHit ShapeCastHeightfieldViewDetailed(
     in ShapeProxyView queryProxy,
-    in Transform3D xfQuery,
+    in VectorSingle posQuery,
+    in VectorSingle rotQuery,
     in VectorSingle translation,
     in HeightfieldShape hf,
-    in Transform3D xfHf,
+    in VectorSingle posHf,
+    in VectorSingle rotHf,
     in f32 maxFraction,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
@@ -638,8 +650,10 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
     if(!hf.isValid() || IsProxyViewEmpty(queryProxy) || maxFraction < 0.0f)
         return best;
 
-    const Transform3D localQueryXf = RelativeTransform(xfHf, xfQuery);
-    const VectorSingle localTrans = Vector3InverseRotate(VectorSingle(translation, 0.0f), VectorSingle(xfHf.rotation));
+    VectorSingle localQueryPos(0.0f);
+    VectorSingle localQueryRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posHf, rotHf, posQuery, rotQuery, localQueryPos, localQueryRot);
+    const VectorSingle localTrans = Vector3InverseRotate(VectorSingle(translation, 0.0f), rotHf);
     VectorSingle qMin(0.0f);
     VectorSingle qMax(0.0f);
     ComputeProxyViewLocalBounds(queryProxy, qMin, qMax);
@@ -652,12 +666,15 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
         if((mask & 1u) != 0u) cx = qMax.x;
         if((mask & 2u) != 0u) cy = qMax.y;
         if((mask & 4u) != 0u) cz = qMax.z;
-        const VectorSingle lp = TransformPoint(localQueryXf, VectorSingle(cx, cy, cz, 0.0f));
+        const VectorSingle lp = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(cx, cy, cz, 0.0f));
         minQ = Min(minQ, lp);
         maxQ = Max(maxQ, lp);
     }
     const VectorSingle pad(queryProxy.radius + hf.thickness, queryProxy.radius + hf.thickness, queryProxy.radius + hf.thickness, 0.0f);
-    const Aabb3D sweepBox = AabbUnion(Aabb3D(minQ - pad, maxQ + pad), Aabb3D(minQ + localTrans * maxFraction - pad, maxQ + localTrans * maxFraction + pad));
+    const VectorSingle startMin = minQ - pad;
+    const VectorSingle startMax = maxQ + pad;
+    const VectorSingle sweepDelta = localTrans * maxFraction;
+    const Aabb3D sweepBox(Min(startMin, startMin + sweepDelta), Max(startMax, startMax + sweepDelta));
 
     u32 minCx = 0u;
     u32 maxCx = 0u;
@@ -683,7 +700,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
         const f32 boxHiY = sweepBox.upperBound.y;
         for(u32 cz = minCz; cz <= maxCz; ++cz){
             for(u32 cx = minCx; cx <= maxCx; ++cx)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, boxLoY, boxHiY, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, boxLoY, boxHiY, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
         return best;
     }
@@ -730,7 +747,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
             const f32 yLo = cLo.y;
             const f32 yHi = cHi.y;
             for(u32 cz = colCz0; cz <= colCz1; ++cz)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
     }
     else{
@@ -773,7 +790,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
             const f32 yLo = cLo.y;
             const f32 yHi = cHi.y;
             for(u32 cx = rowCx0; cx <= rowCx1; ++cx)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
     }
     return best;
@@ -818,9 +835,15 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
     sampleTs[1u] = 0.5f * tMax;
     sampleTs[2u] = tMax;
     for(usize si = 0u; si < 3u; ++si){
-        const Transform3D xfA = EvalSweepTransform(sweepA, sampleTs[si]);
-        const Transform3D xfB = EvalSweepTransform(sweepB, sampleTs[si]);
-        const Transform3D relXf = RelativeTransform(xfB, xfA);
+        VectorSingle posA(0.0f);
+        VectorSingle rotA(0.0f, 0.0f, 0.0f, 1.0f);
+        EvalSweepTransformValues(VectorSingle(sweepA.c0), VectorSingle(sweepA.c1), VectorSingle(sweepA.q0), VectorSingle(sweepA.q1), VectorSingle(sweepA.localCenter), sampleTs[si], posA, rotA);
+        VectorSingle posB(0.0f);
+        VectorSingle rotB(0.0f, 0.0f, 0.0f, 1.0f);
+        EvalSweepTransformValues(VectorSingle(sweepB.c0), VectorSingle(sweepB.c1), VectorSingle(sweepB.q0), VectorSingle(sweepB.q1), VectorSingle(sweepB.localCenter), sampleTs[si], posB, rotB);
+        VectorSingle relPos(0.0f);
+        VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
+        RelativeTransformValues(posB, rotB, posA, rotA, relPos, relRot);
         for(u32 mask = 0u; mask < 8u; ++mask){
             f32 cx = pMin.x;
             f32 cy = pMin.y;
@@ -828,7 +851,7 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
             if((mask & 1u) != 0u) cx = pMax.x;
             if((mask & 2u) != 0u) cy = pMax.y;
             if((mask & 4u) != 0u) cz = pMax.z;
-            const VectorSingle lp = TransformPoint(relXf, VectorSingle(cx, cy, cz, 0.0f));
+            const VectorSingle lp = TransformPointValues(relPos, relRot, VectorSingle(cx, cy, cz, 0.0f));
             queryMin = Min(queryMin, lp);
             queryMax = Max(queryMax, lp);
         }
@@ -921,11 +944,13 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
 
 LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     in ShapeProxyView queryProxy,
-    in Transform3D startXf,
+    in VectorSingle startPos,
+    in VectorSingle startRot,
     in VectorSingle translation,
     in VectorSingle endRotation,
     in HeightfieldShape hf,
-    in Transform3D xfHf,
+    in VectorSingle posHf,
+    in VectorSingle rotHf,
     in f32 maxFraction,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
@@ -937,24 +962,27 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
         return best;
 
     Sweep3D sweepA;
-    sweepA.c0 = startXf.position;
-    sweepA.c1 = f32x4(VectorSingle(startXf.position) + VectorSingle(translation, 0.0f), 0.0f);
-    sweepA.q0 = startXf.rotation;
+    sweepA.c0 = f32x4(startPos, 0.0f);
+    sweepA.c1 = f32x4(startPos + VectorSingle(translation, 0.0f), 0.0f);
+    sweepA.q0 = f32x4(startRot);
     VectorSingle q1 = SafeNormalizeQuat(endRotation);
-    if(Vector4Dot(VectorSingle(sweepA.q0), q1).x < 0.0f)
+    if(Vector4Dot(startRot, q1).x < 0.0f)
         q1 = -q1;
     sweepA.q1 = f32x4(q1.x, q1.y, q1.z, q1.w);
 
     Sweep3D sweepB;
-    sweepB.c0 = xfHf.position;
-    sweepB.c1 = xfHf.position;
-    sweepB.q0 = xfHf.rotation;
-    sweepB.q1 = xfHf.rotation;
+    sweepB.c0 = f32x4(posHf, 0.0f);
+    sweepB.c1 = sweepB.c0;
+    sweepB.q0 = f32x4(rotHf);
+    sweepB.q1 = sweepB.q0;
 
-    const Transform3D localStartXf = RelativeTransform(xfHf, startXf);
-    const Transform3D endXf(VectorSingle(sweepA.c1), VectorSingle(sweepA.q1));
-    const Transform3D localEndXf = RelativeTransform(xfHf, endXf);
-    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
+    VectorSingle localStartPos(0.0f);
+    VectorSingle localStartRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posHf, rotHf, startPos, startRot, localStartPos, localStartRot);
+    VectorSingle localEndPos(0.0f);
+    VectorSingle localEndRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posHf, rotHf, VectorSingle(sweepA.c1), q1, localEndPos, localEndRot);
+    const f32 angA = ComputeSweepAngularAngle(startRot, q1);
     const f32 radA = ComputeProxyViewBoundingRadius(queryProxy, VectorSingle(0.0f));
     const f32 angSpeedBound = angA * radA;
     VectorSingle pMin(0.0f);
@@ -971,8 +999,8 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
         if((mask & 2u) != 0u) cy = pMax.y;
         if((mask & 4u) != 0u) cz = pMax.z;
         const VectorSingle pt(cx, cy, cz, 0.0f);
-        const VectorSingle ps = TransformPoint(localStartXf, pt);
-        const VectorSingle pe = TransformPoint(localEndXf, pt);
+        const VectorSingle ps = TransformPointValues(localStartPos, localStartRot, pt);
+        const VectorSingle pe = TransformPointValues(localEndPos, localEndRot, pt);
         queryMin = Min(queryMin, Min(ps, pe));
         queryMax = Max(queryMax, Max(ps, pe));
     }
@@ -1048,8 +1076,8 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
                 if(toi.hit() && (!best.hit() || toi.fraction() < curMax)){
                     curMax = toi.fraction();
                     outCellIndex = cellIdx;
-                    const VectorSingle localHit = InverseTransformPoint(xfHf, toi.point());
-                    outBarycentrics = ComputeTriangleBarycentrics(localHit, Vec3FromU(triPts[0u]), Vec3FromU(triPts[1u]), Vec3FromU(triPts[2u]));
+                    const VectorSingle localHit = InverseTransformPointValues(posHf, rotHf, toi.point());
+                    outBarycentrics = ComputeTriangleBarycentrics(localHit, VectorSingle(triPts[0u], 0.0f), VectorSingle(triPts[1u], 0.0f), VectorSingle(triPts[2u], 0.0f));
                     const VectorSingle n = toi.normal();
                     best.pointFraction = f32x4(toi.point(), curMax);
                     best.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
@@ -1064,21 +1092,28 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
 
 Manifold CollideConvexProxyAndHeightfield(
     in ShapeProxyView proxyA,
-    in Transform3D xfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
     in HeightfieldShape hfB,
-    in Transform3D xfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
     in f32 maxDistance
 ){
     Manifold m;
     if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
         return m;
 
-    const Transform3D localXfA = RelativeTransform(xfB, xfA);
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
     VectorSingle lMin(0.0f);
     VectorSingle lMax(0.0f);
     ComputeProxyViewLocalBounds(proxyA, lMin, lMax);
     const f32 totalR = proxyA.radius + hfB.thickness;
-    const Aabb3D queryBox = TransformAabb(localXfA, Aabb3D(lMin, lMax), totalR + maxDistance);
+    VectorSingle qMin(0.0f);
+    VectorSingle qMax(0.0f);
+    TransformLocalAabbValuesToWorld(lMin, lMax, totalR + maxDistance, localPosA, localRotA, qMin, qMax);
+    const Aabb3D queryBox(qMin, qMax);
 
     u32 minCx = 0u;
     u32 maxCx = 0u;
@@ -1094,17 +1129,17 @@ Manifold CollideConvexProxyAndHeightfield(
     VectorSingle sphereCenterB(0.0f);
     Array<f32x3u, 2u> capPtsInB;
     if(isSphereA){
-        sphereCenterB = TransformPoint(localXfA, Vec3FromU(proxyA.points[0u]));
+        sphereCenterB = TransformPointValues(localPosA, localRotA, VectorSingle(proxyA.points[0u], 0.0f));
     }
     else if(isCapsuleA){
-        capPtsInB[0u] = PackVec3U(TransformPoint(localXfA, Vec3FromU(proxyA.points[0u])));
-        capPtsInB[1u] = PackVec3U(TransformPoint(localXfA, Vec3FromU(proxyA.points[1u])));
+        capPtsInB[0u] = f32x3u(TransformPointValues(localPosA, localRotA, VectorSingle(proxyA.points[0u], 0.0f)));
+        capPtsInB[1u] = f32x3u(TransformPointValues(localPosA, localRotA, VectorSingle(proxyA.points[1u], 0.0f)));
     }
     const ShapeProxyView capViewInB = MakeSpanProxyView(Span<f32x3u>(capPtsInB), proxyA.radius);
 
-    const VectorSingle shapeCenterB = TransformPoint(localXfA, ComputeProxyViewCenter(proxyA));
+    const VectorSingle shapeCenterB = TransformPointValues(localPosA, localRotA, ComputeProxyViewCenter(proxyA));
     const f32 cullR = ComputeProxyViewBoundingRadius(proxyA, ComputeProxyViewCenter(proxyA)) + hfB.thickness;
-    const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal = -worldUp;
     f32 deepestSep = s_MaxF32;
@@ -1162,8 +1197,9 @@ Manifold CollideConvexProxyAndHeightfield(
                 const VectorSingle tv0 = VectorSingle(verts[ti * 3u]);
                 const VectorSingle tv1 = VectorSingle(verts[ti * 3u + 1u]);
                 const VectorSingle tv2 = VectorSingle(verts[ti * 3u + 2u]);
-                const Aabb3D triBox(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)));
-                if(!AabbOverlaps(triBox, queryBox))
+                const VectorSingle triMin = Min(tv0, Min(tv1, tv2));
+                const VectorSingle triMax = Max(tv0, Max(tv1, tv2));
+                if(!AabbOverlapsValues(triMin, triMax, qMin, qMax))
                     continue;
                 const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(tv1 - tv0, 0.0f), VectorSingle(tv2 - tv0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 if(Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -cullR - s_LinearSlop)
@@ -1185,19 +1221,19 @@ Manifold CollideConvexProxyAndHeightfield(
                     if(Vector3Dot(localOut, triN).x <= 0.0f)
                         continue;
                     const f32 sep = dist - totalR;
-                    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(localOut, VectorSingle(xfB.rotation)), worldUp);
+                    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(localOut, rotB), worldUp);
                     const VectorSingle nAtoB = -worldOut;
-                    const VectorSingle wCenter = TransformPoint(xfB, sphereCenterB);
+                    const VectorSingle wCenter = TransformPointValues(posB, rotB, sphereCenterB);
                     const VectorSingle wA = wCenter + nAtoB * proxyA.radius;
-                    const VectorSingle wB = TransformPoint(xfB, qLocal) + worldOut * hfB.thickness;
+                    const VectorSingle wB = TransformPointValues(posB, rotB, qLocal) + worldOut * hfB.thickness;
                     if(sep < deepestSep){
                         deepestSep = sep;
                         chosenNormal = nAtoB;
                     }
                     PushMeshCandidateWithTris(
                         (wA + wB) * 0.5f,
-                        wA - VectorSingle(xfA.position),
-                        wB - VectorSingle(xfB.position),
+                        wA - posA,
+                        wB - posB,
                         nAtoB,
                         sep,
                         MakeFeatureId(7u, 0u, 7u, cast<u8>(cellIdx & 0xffu)),
@@ -1209,9 +1245,9 @@ Manifold CollideConvexProxyAndHeightfield(
                 }
 
                 Array<f32x3u, 3u> triPts;
-                triPts[0u] = PackVec3U(tv0);
-                triPts[1u] = PackVec3U(tv1);
-                triPts[2u] = PackVec3U(tv2);
+                triPts[0u] = f32x3u(tv0);
+                triPts[1u] = f32x3u(tv1);
+                triPts[2u] = f32x3u(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
                 if(isCapsuleA){
                     SimplexCache cache;
@@ -1219,12 +1255,13 @@ Manifold CollideConvexProxyAndHeightfield(
                     const DistanceOutput capGjk = ShapeDistanceLocalWithSimplexViews(capViewInB, triView, false, cache, gjkSimplex);
                     if(capGjk.distance() > totalR + maxDistance)
                         continue;
-                    Transform3D identXf;
-                    const Manifold localTriM = CollideConvexProxyViewsFromGjk(capViewInB, identXf, triView, identXf, maxDistance, capGjk, gjkSimplex);
+                    const VectorSingle zeroPos(0.0f);
+                    const VectorSingle identRot = QuaternionIdentity();
+                    const Manifold localTriM = CollideConvexProxyViewsFromGjk(capViewInB, zeroPos, identRot, triView, zeroPos, identRot, maxDistance, capGjk, gjkSimplex);
                     if(localTriM.pointCount() == 0u)
                         continue;
-                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(localTriM.normal(), VectorSingle(xfB.rotation)), worldUp);
-                    const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), worldUp);
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(localTriM.normal(), rotB), worldUp);
+                    const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), worldUp);
                     if(Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
                         continue;
                     for(u32 pi = 0u; pi < localTriM.pointCount(); ++pi){
@@ -1233,12 +1270,12 @@ Manifold CollideConvexProxyAndHeightfield(
                             deepestSep = sep;
                             chosenNormal = nAtoB;
                         }
-                        const VectorSingle wA = TransformPoint(xfB, localTriM.points[pi].anchorA());
-                        const VectorSingle wB = TransformPoint(xfB, localTriM.points[pi].anchorB());
+                        const VectorSingle wA = TransformPointValues(posB, rotB, localTriM.points[pi].anchorA());
+                        const VectorSingle wB = TransformPointValues(posB, rotB, localTriM.points[pi].anchorB());
                         PushMeshCandidateWithTris(
                             (wA + wB) * 0.5f,
-                            wA - VectorSingle(xfA.position),
-                            wB - VectorSingle(xfB.position),
+                            wA - posA,
+                            wB - posB,
                             nAtoB,
                             sep,
                             MakeFeatureId(7u, cast<u8>(pi), 7u, cast<u8>(cellIdx & 0xffu)),
@@ -1249,11 +1286,11 @@ Manifold CollideConvexProxyAndHeightfield(
                     }
                     continue;
                 }
-                const Manifold triM = CollideConvexProxyViews(proxyA, xfA, triView, xfB, maxDistance);
+                const Manifold triM = CollideConvexProxyViews(proxyA, posA, rotA, triView, posB, rotB, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
                 const VectorSingle nAtoB = triM.normal();
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), worldUp);
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), worldUp);
                 if(Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
                     continue;
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){

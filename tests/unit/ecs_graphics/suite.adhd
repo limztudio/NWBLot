@@ -217,10 +217,11 @@ b8 RegisterCustomCsgShape(mut CsgShadowSnapshotContext context, in Name name){
     desc.boundsCallback = lambda[](in MatrixSingle shapeToWorld, in Span<u8> parameters) -> Expected<CsgShapeBounds>{
         if(!parameters.empty())
             return MakeUnexpected(Failure());
-        const auto bounds = AabbTransform(shapeToWorld, VectorSingle(-1.0f), VectorSingle(1.0f));
-        if(!bounds.has_value())
+        VectorSingle minBounds(0.0f);
+        VectorSingle maxBounds(0.0f);
+        if(!AabbTransform(shapeToWorld, VectorSingle(-1.0f), VectorSingle(1.0f), minBounds, maxBounds))
             return MakeUnexpected(Failure());
-        return CsgShapeBounds(bounds.value().minBounds, bounds.value().maxBounds, true);
+        return CsgShapeBounds(minBounds, maxBounds, true);
     };
     return context.registry.registerShapeType(desc).has_value();
 }

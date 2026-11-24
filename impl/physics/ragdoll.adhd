@@ -135,8 +135,8 @@ class RagdollInstance{
             jd.projectionAngularTolerance = 0.05f;
             const VectorSingle anchorW = VectorSingle(bDef.jointAnchorWorld);
             const VectorSingle axisW = SafeNormalizeVec3(VectorSingle(bDef.jointAxisWorld), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            jd.localAnchorA = f32x4(InverseTransformPoint(xfA, anchorW), 0.0f);
-            jd.localAnchorB = f32x4(InverseTransformPoint(xfB, anchorW), 0.0f);
+            jd.localAnchorA = f32x4(InverseTransformPointValues(VectorSingle(xfA.position), VectorSingle(xfA.rotation), anchorW), 0.0f);
+            jd.localAnchorB = f32x4(InverseTransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), anchorW), 0.0f);
             jd.localAxisA = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
             jd.localAxisB = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
             const VectorSingle qRel = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(VectorSingle(xfA.rotation)), VectorSingle(xfB.rotation)));

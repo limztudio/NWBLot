@@ -58,14 +58,6 @@ b8 NearlyEqual3(in VectorSingle value, in f32 x, in f32 y, in f32 z){
     return NearlyEqual3(value, x, y, z, s_DefaultNearlyEqualEpsilon);
 }
 
-b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z, in f32 epsilon){
-    return NearlyEqual3(VectorSingle(value.x, value.y, value.z, 0.0f), x, y, z, epsilon);
-}
-
-b8 NearlyEqual3(in f32x4u value, in f32 x, in f32 y, in f32 z){
-    return NearlyEqual3(value, x, y, z, s_DefaultNearlyEqualEpsilon);
-}
-
 b8 NearlyEqual4(in VectorSingle value, in f32 x, in f32 y, in f32 z, in f32 w, in f32 epsilon){
     const VectorSingle diff = Abs(value - VectorSingle(x, y, z, w));
     return diff.x <= epsilon && diff.y <= epsilon && diff.z <= epsilon && diff.w <= epsilon;

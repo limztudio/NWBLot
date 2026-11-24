@@ -90,18 +90,18 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
         return MakeUnexpected(Failure());
     if(!IsBoundedUiPadding(track.padding) || !IsBoundedUiPadding(fill.padding))
         return MakeUnexpected(Failure());
-    const Expected<VectorSingle> trackMin = TryLoadUiSkinMinimumSize(track, cast<f64>(density));
-    const Expected<VectorSingle> fillMin = TryLoadUiSkinMinimumSize(fill, cast<f64>(density));
-    if(!trackMin.has_value() || !fillMin.has_value())
+    VectorSingle trackMin(0.0f);
+    VectorSingle fillMin(0.0f);
+    if(!TryLoadUiSkinMinimumSize(track, cast<f64>(density), trackMin) || !TryLoadUiSkinMinimumSize(fill, cast<f64>(density), fillMin))
         return MakeUnexpected(Failure());
     ProgressMetrics candidate;
     candidate.padding = MaxUiPadding(style.padding, track.padding);
-    candidate.fillMinimum = Point(fillMin.value().x, fillMin.value().y);
+    candidate.fillMinimum = Point(fillMin.x, fillMin.y);
     const VectorDouble leading(cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top), cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top));
     const VectorDouble trailing(cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom), cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom));
-    const VectorDouble fillSize(cast<f64>(fillMin.value().x), cast<f64>(fillMin.value().y), cast<f64>(fillMin.value().x), cast<f64>(fillMin.value().y));
+    const VectorDouble fillSize(cast<f64>(fillMin.x), cast<f64>(fillMin.y), cast<f64>(fillMin.x), cast<f64>(fillMin.y));
     const VectorDouble inner = (leading + trailing) + fillSize;
-    const VectorDouble size = Max(VectorDouble(cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y), cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y)), inner);
+    const VectorDouble size = Max(VectorDouble(cast<f64>(trackMin.x), cast<f64>(trackMin.y), cast<f64>(trackMin.x), cast<f64>(trackMin.y)), inner);
     const f64 width = size.x;
     const f64 height = UiSimdMaxF64(cast<f64>(options.height), size.y);
     if(!IsFinite(VectorDouble(width, height, 0.0, 0.0)) || width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)

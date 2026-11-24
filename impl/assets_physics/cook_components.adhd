@@ -179,34 +179,36 @@ b8 ReadPhysicsNameValue(
     return true;
 }
 
-Expected<VectorSingle> DecodePhysicsFloat3Value(
+b8 DecodePhysicsFloat3Value(
     in Path file,
     in MetascriptValue listVal,
     in StringView prefix,
-    in StringView field
+    in StringView field,
+    mut VectorSingle outValue
 ){
     if(!listVal.isList()){
         error("{} '{}': field '{}' must be a 3-element numeric list", prefix, PathToString(file), field);
-        return MakeUnexpected(Failure());
+        return false;
     }
     const Span<MetascriptValue> items = listVal.listView();
     if(items.size() != s_SceneFloat3ComponentCount){
         error("{} '{}': field '{}' must be a 3-element numeric list", prefix, PathToString(file), field);
-        return MakeUnexpected(Failure());
+        return false;
     }
     const Expected<f32> x = ReadMetadataFiniteF32Value(file, items[0u], prefix, field);
     if(!x.has_value())
-        return MakeUnexpected(Failure());
+        return false;
     const Expected<f32> y = ReadMetadataFiniteF32Value(file, items[1u], prefix, field);
     if(!y.has_value())
-        return MakeUnexpected(Failure());
+        return false;
     const Expected<f32> z = ReadMetadataFiniteF32Value(file, items[2u], prefix, field);
     if(!z.has_value())
-        return MakeUnexpected(Failure());
-    return VectorSingle(x.value(), y.value(), z.value(), 0.0f);
+        return false;
+    outValue = VectorSingle(x.value(), y.value(), z.value(), 0.0f);
+    return true;
 }
 
-Expected<VectorSingle> ReadPhysicsRotationVectorValue(
+b8 ReadPhysicsRotationVectorValue(
     in Path file,
     in MetascriptValue fieldVal,
     in StringView prefix,
@@ -216,23 +218,21 @@ Expected<VectorSingle> ReadPhysicsRotationVectorValue(
     in StringView eulerDegField,
     in b8 isQuaternion,
     in b8 inDegrees,
-    mut u32 rotFieldCount
+    mut u32 rotFieldCount,
+    mut VectorSingle outQuat
 ){
     ++rotFieldCount;
     if(rotFieldCount > 1u){
         error("{} '{}': only one of '{}', '{}', or '{}' may be set", prefix, PathToString(file), quatField, eulerField, eulerDegField);
-        return MakeUnexpected(Failure());
+        return false;
     }
-    if(isQuaternion){
-        const Expected<VectorSingle> q = ParseSceneQuaternionValue(file, fieldVal, prefix, quatField);
-        if(!q.has_value())
-            return MakeUnexpected(Failure());
-        return q.value();
-    }
-    const Expected<VectorSingle> euler = DecodePhysicsFloat3Value(file, fieldVal, prefix, field);
-    if(!euler.has_value())
-        return MakeUnexpected(Failure());
-    return VectorSingle(BuildTransformEulerQuaternion(euler.value(), inDegrees));
+    if(isQuaternion)
+        return ParseSceneQuaternionValue(file, fieldVal, prefix, quatField, outQuat);
+    VectorSingle euler(0.0f);
+    if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, field, euler))
+        return false;
+    outQuat = BuildTransformEulerQuaternion(euler, inDegrees);
+    return true;
 }
 
 b8 ReadPhysicsFloat3ArrayValue(
@@ -250,10 +250,10 @@ b8 ReadPhysicsFloat3ArrayValue(
     outPoints.clear();
     outPoints.reserve(items.size());
     for(usize i = 0u; i < items.size(); ++i){
-        const Expected<VectorSingle> pt = DecodePhysicsFloat3Value(file, items[i], prefix, field);
-        if(!pt.has_value())
+        VectorSingle pt(0.0f);
+        if(!DecodePhysicsFloat3Value(file, items[i], prefix, field, pt))
             return false;
-        outPoints.push_back(f32x4(pt.value(), 0.0f));
+        outPoints.push_back(f32x4(pt, 0.0f));
     }
     return true;
 }
@@ -423,24 +423,24 @@ b8 ParseSurfaceMaterialMap(
         if(key == "rolling_resistance") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.rollingResistance);
         if(key == "tangent_speed") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.tangentSpeed);
         if(key == "surface_velocity"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            mat.setSurfaceVelocity(v.value());
+            mat.setSurfaceVelocity(v);
             return true;
         }
         if(key == "anisotropic_friction"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            mat.anisotropicFriction = f32x4(v.value(), 1.0f);
+            mat.anisotropicFriction = f32x4(v, 1.0f);
             return true;
         }
         if(key == "friction_direction"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
-            mat.frictionDirection = f32x4(v.value(), 0.0f);
+            mat.frictionDirection = f32x4(v, 0.0f);
             return true;
         }
         if(key == "friction_combine_mode"){
@@ -516,14 +516,14 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
                 return true;
             }
             if(key == "linear_velocity" || key == "angular_velocity" || key == "custom_center_of_mass" || key == "custom_inertia_diag" || key == "custom_inertia_off_diag"){
-                const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key);
-                if(!v.has_value())
+                VectorSingle v(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, v))
                     return false;
-                if(key == "linear_velocity") entry.component.linearVelocity = f32x4(v.value(), 0.0f);
-                else if(key == "angular_velocity") entry.component.angularVelocity = f32x4(v.value(), 0.0f);
-                else if(key == "custom_center_of_mass") entry.component.customCenterOfMass = f32x4(v.value(), 0.0f);
-                else if(key == "custom_inertia_diag") entry.component.customInertiaDiag = f32x4(v.value(), 0.0f);
-                else entry.component.customInertiaOffDiag = f32x4(v.value(), 0.0f);
+                if(key == "linear_velocity") entry.component.linearVelocity = f32x4(v, 0.0f);
+                else if(key == "angular_velocity") entry.component.angularVelocity = f32x4(v, 0.0f);
+                else if(key == "custom_center_of_mass") entry.component.customCenterOfMass = f32x4(v, 0.0f);
+                else if(key == "custom_inertia_diag") entry.component.customInertiaDiag = f32x4(v, 0.0f);
+                else entry.component.customInertiaOffDiag = f32x4(v, 0.0f);
                 return true;
             }
             if(key == "linear_damping") return ReadPhysicsF32Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.linearDamping);
@@ -796,28 +796,29 @@ b8 ApplyColliderShapeField(
         return true;
     }
     if(key == "center"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.center = f32x4(v.value(), 0.0f);
+        outEntry.center = f32x4(v, 0.0f);
         return true;
     }
     if(key == "center2"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.center2 = f32x4(v.value(), 0.0f);
+        outEntry.center2 = f32x4(v, 0.0f);
         return true;
     }
     if(key == "half_extents"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.halfExtents = f32x4(v.value(), 0.0f);
+        outEntry.halfExtents = f32x4(v, 0.0f);
         return true;
     }
     if(key == "local_rotation" || key == "local_rotation_euler" || key == "local_rotation_euler_degrees"){
-        const Expected<VectorSingle> q = ReadPhysicsRotationVectorValue(
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        if(!ReadPhysicsRotationVectorValue(
             file,
             fieldVal,
             s_ColliderComponentDiagnosticPrefix,
@@ -827,11 +828,11 @@ b8 ApplyColliderShapeField(
             "local_rotation_euler_degrees",
             key == "local_rotation",
             key == "local_rotation_euler_degrees",
-            inOutRotFieldCount
-        );
-        if(!q.has_value())
+            inOutRotFieldCount,
+            q
+        ))
             return false;
-        outEntry.localRotation = f32x4(q.value());
+        outEntry.localRotation = f32x4(q);
         return true;
     }
     if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.radius);
@@ -843,24 +844,24 @@ b8 ApplyColliderShapeField(
     if(key == "rolling_resistance") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.rollingResistance);
     if(key == "tangent_speed") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.tangentSpeed);
     if(key == "anisotropic_friction"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.anisotropicFriction = f32x4(v.value(), 1.0f);
+        outEntry.anisotropicFriction = f32x4(v, 1.0f);
         return true;
     }
     if(key == "surface_velocity"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.surfaceVelocity = f32x4(v.value(), 1.0f);
+        outEntry.surfaceVelocity = f32x4(v, 1.0f);
         return true;
     }
     if(key == "friction_direction"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.frictionDirection = f32x4(v.value(), 0.0f);
+        outEntry.frictionDirection = f32x4(v, 0.0f);
         return true;
     }
     if(key == "friction_combine_mode"){
@@ -893,10 +894,10 @@ b8 ApplyColliderShapeField(
     if(key == "heightfield_rows") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldRows);
     if(key == "heightfield_cols") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldCols);
     if(key == "heightfield_scale"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
-        outEntry.heightfieldScale = f32x4(v.value(), 0.0f);
+        outEntry.heightfieldScale = f32x4(v, 0.0f);
         return true;
     }
     if(key == "heightfield_thickness") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldThickness);
@@ -1168,20 +1169,21 @@ b8 ApplyJointEntryField(
         return true;
     }
     if(key == "local_anchor_a" || key == "local_anchor_b" || key == "local_axis_a" || key == "local_axis_b" || key == "linear_offset" || key == "ground_anchor_a" || key == "ground_anchor_b"){
-        const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key);
-        if(!v.has_value())
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, v))
             return false;
-        if(key == "local_anchor_a") outEntry.localAnchorA = f32x4(v.value(), 0.0f);
-        else if(key == "local_anchor_b") outEntry.localAnchorB = f32x4(v.value(), 0.0f);
-        else if(key == "local_axis_a") outEntry.localAxisA = f32x4(v.value(), 0.0f);
-        else if(key == "local_axis_b") outEntry.localAxisB = f32x4(v.value(), 0.0f);
-        else if(key == "ground_anchor_a") outEntry.groundAnchorA = f32x4(v.value(), 0.0f);
-        else if(key == "ground_anchor_b") outEntry.groundAnchorB = f32x4(v.value(), 0.0f);
-        else outEntry.linearOffset = f32x4(v.value(), 0.0f);
+        if(key == "local_anchor_a") outEntry.localAnchorA = f32x4(v, 0.0f);
+        else if(key == "local_anchor_b") outEntry.localAnchorB = f32x4(v, 0.0f);
+        else if(key == "local_axis_a") outEntry.localAxisA = f32x4(v, 0.0f);
+        else if(key == "local_axis_b") outEntry.localAxisB = f32x4(v, 0.0f);
+        else if(key == "ground_anchor_a") outEntry.groundAnchorA = f32x4(v, 0.0f);
+        else if(key == "ground_anchor_b") outEntry.groundAnchorB = f32x4(v, 0.0f);
+        else outEntry.linearOffset = f32x4(v, 0.0f);
         return true;
     }
     if(key == "reference_rotation" || key == "reference_rotation_euler" || key == "reference_rotation_euler_degrees"){
-        const Expected<VectorSingle> q = ReadPhysicsRotationVectorValue(
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        if(!ReadPhysicsRotationVectorValue(
             file,
             fieldVal,
             s_JointComponentDiagnosticPrefix,
@@ -1191,11 +1193,11 @@ b8 ApplyJointEntryField(
             "reference_rotation_euler_degrees",
             key == "reference_rotation",
             key == "reference_rotation_euler_degrees",
-            inOutRotFieldCount
-        );
-        if(!q.has_value())
+            inOutRotFieldCount,
+            q
+        ))
             return false;
-        outEntry.referenceRotation = f32x4(q.value());
+        outEntry.referenceRotation = f32x4(q);
         return true;
     }
     if(key == "use_reference_rotation") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.useReferenceRotation);
@@ -1391,10 +1393,10 @@ Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentC
                 return true;
             }
             if(key == "gravity"){
-                const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key);
-                if(!v.has_value())
+                VectorSingle v(0.0f);
+                if(!DecodePhysicsFloat3Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, v))
                     return false;
-                entry.component.gravity = f32x4(v.value(), 0.0f);
+                entry.component.gravity = f32x4(v, 0.0f);
                 return true;
             }
             if(key == "restitution_threshold") return ReadPhysicsF32Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.restitutionThreshold);

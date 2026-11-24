@@ -14,35 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ResolveDeferredLightingDependencyCount(
-    in b8 laggedBindlessSlotsGraphOwned,
-    in b8 useLaggedLightingHistory,
-    in b8 hasTransparentRenderers,
-    in usize transparentLaggedSelectorCount,
-    in usize opaqueLaggedSelectorCount,
-    in usize transparentLaggedCount,
-    in usize liveDependencyCount
-){
-    if(laggedBindlessSlotsGraphOwned){
-        if(hasTransparentRenderers)
-            return transparentLaggedSelectorCount;
-        return opaqueLaggedSelectorCount;
-    }
-    if(useLaggedLightingHistory){
-        if(hasTransparentRenderers)
-            return transparentLaggedCount;
-        return 1u;
-    }
-    return liveDependencyCount;
-}
-
-usize ResolveDeferredPresentVersionUseCount(in b8 hasOutputLayerColor){
-    if(hasOutputLayerColor)
-        return 1u;
-    return 0u;
-}
-
-
 b8 ValidDeferredOutputLayerTextureShape(
     in b8 isSampledImageClass,
     in u32 width,

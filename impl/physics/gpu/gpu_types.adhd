@@ -8,61 +8,328 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_GpuWorkgroupSize = 64u;
-const u32 s_GpuInvalidIndex = 0xffffffffu;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_WORKGROUP_SIZE")]
+extern const u32 s_GpuWorkgroupSize;
 
-const u32 s_GpuShapeFlagIsBox = 0x00000001u;
-const u32 s_GpuShapeFlagSensor = 0x00000002u;
-const u32 s_GpuShapeFlagDynamicBody = 0x00010000u;
-const u32 s_GpuShapeFlagKinematicBody = 0x00020000u;
-const u32 s_GpuShapeFlagAwakeBody = 0x00040000u;
-const u32 s_GpuShapeFlagFastOrBullet = 0x00080000u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_INVALID_INDEX")]
+extern const u32 s_GpuInvalidIndex;
 
-const u32 s_GpuBroadphaseModeUpdateAabbs = 0u;
-const u32 s_GpuBroadphaseModeEmitPairs = 1u;
-const u32 s_GpuBroadphaseModeGridClear = 2u;
-const u32 s_GpuBroadphaseModeGridInsert = 3u;
-const u32 s_GpuBroadphaseModeGridEmitPairs = 4u;
-const u32 s_GpuBroadphaseModeFinalizeIndirect = 5u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_IS_BOX")]
+extern const u32 s_GpuShapeFlagIsBox;
 
-const u32 s_GpuNarrowphaseModeContacts = 0u;
-const u32 s_GpuNarrowphaseModeBulletToi = 1u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_SENSOR")]
+extern const u32 s_GpuShapeFlagSensor;
 
-const u32 s_GpuGridBucketStride = s_GpuGridBucketCapacity + 1u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_DYNAMIC_BODY")]
+extern const u32 s_GpuShapeFlagDynamicBody;
 
-const u32 s_GpuJointFlagEnableLimit = 0x00000001u;
-const u32 s_GpuJointFlagEnableMotor = 0x00000002u;
-const u32 s_GpuJointFlagEnableSpring = 0x00000004u;
-const u32 s_GpuJointFlagBreakable = 0x00000008u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_KINEMATIC_BODY")]
+extern const u32 s_GpuShapeFlagKinematicBody;
 
-const u32 s_GpuSolverModeWarmStart = 0u;
-const u32 s_GpuSolverModeSolveBias = 1u;
-const u32 s_GpuSolverModeRelax = 2u;
-const u32 s_GpuSolverModeRestitution = 3u;
-const u32 s_GpuSolverModeExportImpulses = 4u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY")]
+extern const u32 s_GpuShapeFlagAwakeBody;
 
-const u32 s_GpuSolverFlagWarmStart = 0x00000001u;
-const u32 s_GpuSolverFlagSerialLoop = 0x00000002u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_FAST_OR_BULLET")]
+extern const u32 s_GpuShapeFlagFastOrBullet;
 
-const u32 s_GpuPushConstantsBytes = 80u;
-const u32 s_GpuBodyStateBytes = 64u;
-const u32 s_GpuBodySimBytes = 144u;
-const u32 s_GpuBodyOutBytes = 64u;
-const u32 s_GpuShapeProxyBytes = 112u;
-const u32 s_GpuBroadphasePairBytes = 16u;
-const u32 s_GpuNarrowphaseManifoldBytes = 160u;
-const u32 s_GpuContactPointBytes = 48u;
-const u32 s_GpuContactConstraintBytes = 384u;
-const u32 s_GpuContactImpulseOutBytes = 64u;
-const u32 s_GpuJointConstraintBytes = 320u;
-const u32 s_GpuJointImpulseOutBytes = 48u;
-const u32 s_GpuIslandSliceBytes = 64u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT")]
+extern const u32 s_GpuShapeFlagHasNonCollideJoint;
 
-const u32 s_GpuIslandFlagHasRestitution = 0x00000001u;
-const u32 s_GpuIslandMaxBodies = 64u;
-const u32 s_GpuIslandMaxContacts = 255u;
-const u32 s_GpuIslandMaxJoints = 48u;
-const u32 s_GpuIslandWorkgroupSize = 64u;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_ENLARGE_AABB")]
+extern const u32 s_GpuShapeFlagEnlargeAabb;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS")]
+extern const u32 s_GpuBroadphaseModeUpdateAabbs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_EMIT_PAIRS")]
+extern const u32 s_GpuBroadphaseModeEmitPairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_CLEAR")]
+extern const u32 s_GpuBroadphaseModeGridClear;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_INSERT")]
+extern const u32 s_GpuBroadphaseModeGridInsert;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_PAIRS")]
+extern const u32 s_GpuBroadphaseModeGridEmitPairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_INDIRECT")]
+extern const u32 s_GpuBroadphaseModeFinalizeIndirect;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_LARGE_PAIRS")]
+extern const u32 s_GpuBroadphaseModeGridEmitLargePairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_CONTACTS")]
+extern const u32 s_GpuNarrowphaseModeContacts;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_BULLET_TOI")]
+extern const u32 s_GpuNarrowphaseModeBulletToi;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE")]
+extern const u32 s_GpuGridBucketStride;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_ENABLE_LIMIT")]
+extern const u32 s_GpuJointFlagEnableLimit;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_ENABLE_MOTOR")]
+extern const u32 s_GpuJointFlagEnableMotor;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_ENABLE_SPRING")]
+extern const u32 s_GpuJointFlagEnableSpring;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_BREAKABLE")]
+extern const u32 s_GpuJointFlagBreakable;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_WARM_START")]
+extern const u32 s_GpuSolverModeWarmStart;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS")]
+extern const u32 s_GpuSolverModeSolveBias;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_RELAX")]
+extern const u32 s_GpuSolverModeRelax;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_RESTITUTION")]
+extern const u32 s_GpuSolverModeRestitution;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES")]
+extern const u32 s_GpuSolverModeExportImpulses;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_WARM_START")]
+extern const u32 s_GpuSolverFlagWarmStart;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP")]
+extern const u32 s_GpuSolverFlagSerialLoop;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FIRST_SUBSTEP")]
+extern const u32 s_GpuSolverFlagFirstSubstep;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_HAS_HIT_EVENTS")]
+extern const u32 s_GpuSolverFlagHasHitEvents;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_PUSH_CONSTANTS_BYTES")]
+extern const u32 s_GpuPushConstantsBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_BODY_STATE_BYTES")]
+extern const u32 s_GpuBodyStateBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_BODY_POSE_BYTES")]
+extern const u32 s_GpuBodyPoseBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_BODY_SIM_BYTES")]
+extern const u32 s_GpuBodySimBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_BODY_OUT_BYTES")]
+extern const u32 s_GpuBodyOutBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SHAPE_PROXY_BYTES")]
+extern const u32 s_GpuShapeProxyBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_BROADPHASE_PAIR_BYTES")]
+extern const u32 s_GpuBroadphasePairBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_NARROWPHASE_MANIFOLD_BYTES")]
+extern const u32 s_GpuNarrowphaseManifoldBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_CONTACT_POINT_BYTES")]
+extern const u32 s_GpuContactPointBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_CONTACT_CONSTRAINT_BYTES")]
+extern const u32 s_GpuContactConstraintBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_CONTACT_IMPULSE_OUT_BYTES")]
+extern const u32 s_GpuContactImpulseOutBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_JOINT_CONSTRAINT_BYTES")]
+extern const u32 s_GpuJointConstraintBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_JOINT_IMPULSE_OUT_BYTES")]
+extern const u32 s_GpuJointImpulseOutBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_ISLAND_SLICE_BYTES")]
+extern const u32 s_GpuIslandSliceBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_FLAG_HAS_RESTITUTION")]
+extern const u32 s_GpuIslandFlagHasRestitution;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_FLAG_HAS_ROLLING")]
+extern const u32 s_GpuIslandFlagHasRolling;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SPHERE")]
+extern const u32 s_ShaderPhysicsShapeTypeSphere;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_CAPSULE")]
+extern const u32 s_ShaderPhysicsShapeTypeCapsule;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_HULL")]
+extern const u32 s_ShaderPhysicsShapeTypeHull;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_MESH")]
+extern const u32 s_ShaderPhysicsShapeTypeMesh;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_DISTANCE")]
+extern const u32 s_ShaderPhysicsJointTypeDistance;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_SPHERICAL")]
+extern const u32 s_ShaderPhysicsJointTypeSpherical;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_REVOLUTE")]
+extern const u32 s_ShaderPhysicsJointTypeRevolute;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_PRISMATIC")]
+extern const u32 s_ShaderPhysicsJointTypePrismatic;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_FIXED")]
+extern const u32 s_ShaderPhysicsJointTypeFixed;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_MOTOR")]
+extern const u32 s_ShaderPhysicsJointTypeMotor;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_WHEEL")]
+extern const u32 s_ShaderPhysicsJointTypeWheel;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_X")]
+extern const u32 s_ShaderPhysicsBodyFlagLockLinearX;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Y")]
+extern const u32 s_ShaderPhysicsBodyFlagLockLinearY;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Z")]
+extern const u32 s_ShaderPhysicsBodyFlagLockLinearZ;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_X")]
+extern const u32 s_ShaderPhysicsBodyFlagLockAngularX;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Y")]
+extern const u32 s_ShaderPhysicsBodyFlagLockAngularY;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Z")]
+extern const u32 s_ShaderPhysicsBodyFlagLockAngularZ;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_IS_SPEED_CAPPED")]
+extern const u32 s_ShaderPhysicsBodyFlagIsSpeedCapped;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION")]
+extern const u32 s_ShaderPhysicsBodyFlagAllowFastRotation;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_DYNAMIC")]
+extern const u32 s_ShaderPhysicsBodyFlagDynamic;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_GYROSCOPIC")]
+extern const u32 s_ShaderPhysicsBodyFlagGyroscopic;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL")]
+extern const u32 s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_DENSE_COLOR_MASK")]
+extern const u32 s_GpuIslandDenseColorMask;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_OVERFLOW_COUNT_SHIFT")]
+extern const u32 s_GpuIslandOverflowCountShift;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_OVERFLOW_COUNT_MASK")]
+extern const u32 s_GpuIslandOverflowCountMask;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MESH_FLAG_CLOSED")]
+extern const u32 s_GpuMeshFlagClosed;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES")]
+extern const u32 s_GpuMeshFlagCullBackfaces;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NONCOLLIDE_HASH_EMPTY")]
+extern const u32 s_GpuNonCollideHashEmpty;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NONCOLLIDE_MAX_PROBE")]
+extern const u32 s_GpuNonCollideMaxProbe;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_INDEX_MASK")]
+extern const u32 s_GpuContactAuxIndexMask;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_HAS_ROLLING")]
+extern const u32 s_GpuContactAuxHasRolling;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_HAS_FRICTION_EXT")]
+extern const u32 s_GpuContactAuxHasFrictionExt;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4")]
+extern const u32 s_GpuContactAuxStrideFloat4;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON")]
+extern const u32 s_GpuLbvhModeComputeMorton;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_SORT")]
+extern const u32 s_GpuLbvhModeBitonicSort;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BUILD_TREE")]
+extern const u32 s_GpuLbvhModeBuildTree;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_REFIT_AABBS")]
+extern const u32 s_GpuLbvhModeRefitAabbs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_QUERY_PAIRS")]
+extern const u32 s_GpuLbvhModeQueryPairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_SORT_LOCAL")]
+extern const u32 s_GpuLbvhModeBitonicSortLocal;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_BITONIC_MERGE_LOCAL")]
+extern const u32 s_GpuLbvhModeBitonicMergeLocal;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE")]
+extern const u32 s_GpuLbvhLocalSortSize;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_LBVH_NODE_BYTES")]
+extern const u32 s_GpuLbvhNodeBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_LBVH_MAX_SHAPES")]
+extern const u32 s_GpuLbvhMaxShapes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_COMMIT_STEP")]
+extern const u32 s_GpuResidentModeCommitStep;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_INTEGRATE_SUBSTEP")]
+extern const u32 s_GpuResidentModeIntegrateSubstep;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST")]
+extern const u32 s_GpuQueryTypeRaycastClosest;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_AABB_OVERLAP")]
+extern const u32 s_GpuQueryTypeAabbOverlap;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_SPHERE_OVERLAP")]
+extern const u32 s_GpuQueryTypeSphereOverlap;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_INCLUDE_SENSORS")]
+extern const u32 s_GpuQueryFlagIncludeSensors;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_USE_GROUP_INDEX")]
+extern const u32 s_GpuQueryFlagUseGroupIndex;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES")]
+extern const u32 s_GpuQueryFlagCullBackfaces;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SPATIAL_QUERY_BYTES")]
+extern const u32 s_GpuSpatialQueryBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SPATIAL_QUERY_RESULT_BYTES")]
+extern const u32 s_GpuSpatialQueryResultBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_MODE_STRUCTURED_TRS")]
+extern const u32 s_GpuExportModeStructuredTrs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER")]
+extern const u32 s_GpuExportModePatchInstanceBuffer;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_SOURCE_BODY_POSE")]
+extern const u32 s_GpuExportSourceBodyPose;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_SOURCE_BODY_OUT")]
+extern const u32 s_GpuExportSourceBodyOut;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_RENDER_BINDING_BYTES")]
+extern const u32 s_GpuRenderBindingBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_RENDER_TRANSFORM_BYTES")]
+extern const u32 s_GpuRenderTransformBytes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +359,13 @@ class GpuPhysicsBodyState{
 }
 
 [layout(16)]
+class GpuPhysicsBodyPose{
+    public f32x4 originPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 sweepDispFlags(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[layout(16)]
 class GpuPhysicsBodySim{
     public f32x4 positionInvMass(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
@@ -108,9 +382,7 @@ class GpuPhysicsBodySim{
 class GpuPhysicsShapeProxy{
     public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x4 aabbMinPad(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMaxPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotationOrMeta(0.0f, 0.0f, 0.0f, 1.0f);
     public u32x4 bodyIndexTypeShape(s_GpuInvalidIndex, 0u, s_GpuInvalidIndex, 0u);
     public u32x4 filterData(0u, 0u, 0u, 0u);
 }
@@ -132,7 +404,6 @@ class GpuPhysicsNarrowphaseManifold{
 class GpuPhysicsContactPoint{
     public f32x4 rABaseSep(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rBRelVel(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 impulsesMass(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 [layout(16)]
@@ -175,11 +446,10 @@ class GpuPhysicsContactConstraint{
     public f32x4 centerBTwistImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 softnessTangent00(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 tangentMassFriction(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invMassTangentVel(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIA0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIA1RollX(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIB0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIB1RollYZ(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 tangentVelRollMaxLever(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rollingImpulsePad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normalImpulses(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normalMasses(0.0f, 0.0f, 0.0f, 0.0f);
     public Array<GpuPhysicsContactPoint, s_MaxManifoldPoints> points;
 }
 
@@ -199,12 +469,44 @@ class GpuPhysicsJointConstraint{
     public f32x4 linearSoftnessMotorSpeed(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularSoftnessSwingLimit(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 suspensionSoftness(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIA0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIA1B0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invIB1(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 linearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 limitImpulses(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[layout(16)]
+class GpuPhysicsLbvhNode{
+    public f32x4 minLeft(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxRight(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32x4 parentMeta(s_GpuInvalidIndex, 0u, 0u, 0u);
+}
+
+[layout(16)]
+class GpuPhysicsSpatialQuery{
+    public f32x4 originMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 dirMax(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32x4 params(0u, s_GpuInvalidIndex, 0u, 0u);
+}
+
+[layout(16)]
+class GpuPhysicsSpatialQueryResult{
+    public f32x4 hitPointFraction(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 hitNormalDist(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32x4 hitIds(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+}
+
+[layout(16)]
+class GpuPhysicsRenderTransformBinding{
+    public u32x4 bodyDestFlags(s_GpuInvalidIndex, 0u, 0u, 0u);
+    public f32x4 scalePad(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+[layout(16)]
+class GpuPhysicsRenderTransformOut{
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 translationFlags(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scaleEntityId(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 linearVelSleep(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 
@@ -213,6 +515,7 @@ class GpuPhysicsJointConstraint{
 
 static_assert(size_of<GpuPhysicsPushConstants>() == s_GpuPushConstantsBytes, "GpuPhysicsPushConstants layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodyState>() == s_GpuBodyStateBytes, "GpuPhysicsBodyState layout drifted from shader");
+static_assert(size_of<GpuPhysicsBodyPose>() == s_GpuBodyPoseBytes, "GpuPhysicsBodyPose layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodySim>() == s_GpuBodySimBytes, "GpuPhysicsBodySim layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodyOut>() == s_GpuBodyOutBytes, "GpuPhysicsBodyOut layout drifted from shader");
 static_assert(size_of<GpuPhysicsShapeProxy>() == s_GpuShapeProxyBytes, "GpuPhysicsShapeProxy layout drifted from shader");
@@ -224,6 +527,11 @@ static_assert(size_of<GpuPhysicsContactImpulseOut>() == s_GpuContactImpulseOutBy
 static_assert(size_of<GpuPhysicsJointConstraint>() == s_GpuJointConstraintBytes, "GpuPhysicsJointConstraint layout drifted from shader");
 static_assert(size_of<GpuPhysicsJointImpulseOut>() == s_GpuJointImpulseOutBytes, "GpuPhysicsJointImpulseOut layout drifted from shader");
 static_assert(size_of<GpuPhysicsIslandSlice>() == s_GpuIslandSliceBytes, "GpuPhysicsIslandSlice layout drifted from shader");
+static_assert(size_of<GpuPhysicsLbvhNode>() == s_GpuLbvhNodeBytes, "GpuPhysicsLbvhNode layout drifted from shader");
+static_assert(size_of<GpuPhysicsSpatialQuery>() == s_GpuSpatialQueryBytes, "GpuPhysicsSpatialQuery layout drifted from shader");
+static_assert(size_of<GpuPhysicsSpatialQueryResult>() == s_GpuSpatialQueryResultBytes, "GpuPhysicsSpatialQueryResult layout drifted from shader");
+static_assert(size_of<GpuPhysicsRenderTransformBinding>() == s_GpuRenderBindingBytes, "GpuPhysicsRenderTransformBinding layout drifted from shader");
+static_assert(size_of<GpuPhysicsRenderTransformOut>() == s_GpuRenderTransformBytes, "GpuPhysicsRenderTransformOut layout drifted from shader");
 
 static_assert(offset_of<GpuPhysicsPushConstants>(itemCount) == 0u, "PushConstants.itemCount offset mismatch");
 static_assert(offset_of<GpuPhysicsPushConstants>(deltaTime) == 16u, "PushConstants.deltaTime offset mismatch");
@@ -233,6 +541,9 @@ static_assert(offset_of<GpuPhysicsPushConstants>(slots1) == 64u, "PushConstants.
 static_assert(offset_of<GpuPhysicsBodyState>(linearVelocityPad) == 0u, "BodyState.linearVelocityPad offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyState>(deltaPositionFlags) == 32u, "BodyState.deltaPositionFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyState>(deltaRotation) == 48u, "BodyState.deltaRotation offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyPose>(originPad) == 0u, "BodyPose.originPad offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyPose>(rotation) == 16u, "BodyPose.rotation offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyPose>(sweepDispFlags) == 32u, "BodyPose.sweepDispFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(positionInvMass) == 0u, "BodySim.positionInvMass offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(localCenterMinExtent) == 64u, "BodySim.localCenterMinExtent offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(invInertiaWorld0) == 80u, "BodySim.invInertiaWorld0 offset mismatch");
@@ -242,20 +553,22 @@ static_assert(offset_of<GpuPhysicsBodyOut>(rotation) == 16u, "BodyOut.rotation o
 static_assert(offset_of<GpuPhysicsBodyOut>(linearVelocityFlags) == 32u, "BodyOut.linearVelocityFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyOut>(angularVelocityPad) == 48u, "BodyOut.angularVelocityPad offset mismatch");
 static_assert(offset_of<GpuPhysicsShapeProxy>(localCenterRadius) == 0u, "ShapeProxy.localCenterRadius offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(aabbMinPad) == 48u, "ShapeProxy.aabbMinPad offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(bodyIndexTypeShape) == 80u, "ShapeProxy.bodyIndexTypeShape offset mismatch");
-static_assert(offset_of<GpuPhysicsShapeProxy>(filterData) == 96u, "ShapeProxy.filterData offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(localRotationOrMeta) == 32u, "ShapeProxy.localRotationOrMeta offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(bodyIndexTypeShape) == 48u, "ShapeProxy.bodyIndexTypeShape offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(filterData) == 64u, "ShapeProxy.filterData offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo) == 0u, "Manifold.pairInfo offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(normalPad) == 16u, "Manifold.normalPad offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature) == 32u, "Manifold.anchorAFeature offset mismatch");
 static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorBSeparation) == 96u, "Manifold.anchorBSeparation offset mismatch");
 static_assert(offset_of<GpuPhysicsContactPoint>(rABaseSep) == 0u, "ContactPoint.rABaseSep offset mismatch");
 static_assert(offset_of<GpuPhysicsContactPoint>(rBRelVel) == 16u, "ContactPoint.rBRelVel offset mismatch");
-static_assert(offset_of<GpuPhysicsContactPoint>(impulsesMass) == 32u, "ContactPoint.impulsesMass offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags) == 0u, "ContactConstraint.indicesCountFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsContactConstraint>(softnessTangent00) == 80u, "ContactConstraint.softnessTangent00 offset mismatch");
-static_assert(offset_of<GpuPhysicsContactConstraint>(invIA0) == 128u, "ContactConstraint.invIA0 offset mismatch");
-static_assert(offset_of<GpuPhysicsContactConstraint>(points) == 192u, "ContactConstraint.points offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(tangentVelRollMaxLever) == 112u, "ContactConstraint.tangentVelRollMaxLever offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(rollingImpulsePad) == 128u, "ContactConstraint.rollingImpulsePad offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(normalImpulses) == 144u, "ContactConstraint.normalImpulses offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(normalMasses) == 160u, "ContactConstraint.normalMasses offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(points) == 176u, "ContactConstraint.points offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(frictionTwistRollX) == 0u, "ContactImpulseOut.frictionTwistRollX offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(rollYZMaxApproach) == 16u, "ContactImpulseOut.rollYZMaxApproach offset mismatch");
 static_assert(offset_of<GpuPhysicsContactImpulseOut>(normalImpulses) == 32u, "ContactImpulseOut.normalImpulses offset mismatch");
@@ -264,8 +577,8 @@ static_assert(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags) == 0u, "Joi
 static_assert(offset_of<GpuPhysicsJointConstraint>(qA0) == 32u, "JointConstraint.qA0 offset mismatch");
 static_assert(offset_of<GpuPhysicsJointConstraint>(linearOffsetMaxTorque) == 160u, "JointConstraint.linearOffsetMaxTorque offset mismatch");
 static_assert(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness) == 208u, "JointConstraint.suspensionSoftness offset mismatch");
-static_assert(offset_of<GpuPhysicsJointConstraint>(linearImpulse) == 272u, "JointConstraint.linearImpulse offset mismatch");
-static_assert(offset_of<GpuPhysicsJointConstraint>(limitImpulses) == 304u, "JointConstraint.limitImpulses offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(linearImpulse) == 224u, "JointConstraint.linearImpulse offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(limitImpulses) == 256u, "JointConstraint.limitImpulses offset mismatch");
 static_assert(offset_of<GpuPhysicsJointImpulseOut>(linearImpulseMax) == 0u, "JointImpulseOut.linearImpulseMax offset mismatch");
 static_assert(offset_of<GpuPhysicsJointImpulseOut>(angularImpulseMax) == 16u, "JointImpulseOut.angularImpulseMax offset mismatch");
 static_assert(offset_of<GpuPhysicsJointImpulseOut>(limitImpulses) == 32u, "JointImpulseOut.limitImpulses offset mismatch");
@@ -273,9 +586,25 @@ static_assert(offset_of<GpuPhysicsIslandSlice>(bodyContact) == 0u, "IslandSlice.
 static_assert(offset_of<GpuPhysicsIslandSlice>(jointFlags) == 16u, "IslandSlice.jointFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts0) == 32u, "IslandSlice.contactColorCounts0 offset mismatch");
 static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts1) == 48u, "IslandSlice.contactColorCounts1 offset mismatch");
+static_assert(offset_of<GpuPhysicsLbvhNode>(minLeft) == 0u, "LbvhNode.minLeft offset mismatch");
+static_assert(offset_of<GpuPhysicsLbvhNode>(maxRight) == 16u, "LbvhNode.maxRight offset mismatch");
+static_assert(offset_of<GpuPhysicsLbvhNode>(parentMeta) == 32u, "LbvhNode.parentMeta offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQuery>(originMin) == 0u, "SpatialQuery.originMin offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQuery>(dirMax) == 16u, "SpatialQuery.dirMax offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQuery>(params) == 32u, "SpatialQuery.params offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitPointFraction) == 0u, "SpatialQueryResult.hitPointFraction offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitNormalDist) == 16u, "SpatialQueryResult.hitNormalDist offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitIds) == 32u, "SpatialQueryResult.hitIds offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformBinding>(bodyDestFlags) == 0u, "RenderTransformBinding.bodyDestFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformBinding>(scalePad) == 16u, "RenderTransformBinding.scalePad offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformOut>(rotation) == 0u, "RenderTransformOut.rotation offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformOut>(translationFlags) == 16u, "RenderTransformOut.translationFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformOut>(scaleEntityId) == 32u, "RenderTransformOut.scaleEntityId offset mismatch");
+static_assert(offset_of<GpuPhysicsRenderTransformOut>(linearVelSleep) == 48u, "RenderTransformOut.linearVelSleep offset mismatch");
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsBodyPose>(), "GpuPhysicsBodyPose must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodySim>(), "GpuPhysicsBodySim must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyOut>(), "GpuPhysicsBodyOut must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsShapeProxy>(), "GpuPhysicsShapeProxy must stay trivially copyable");
@@ -287,6 +616,36 @@ static_assert(is_trivially_copyable<GpuPhysicsContactImpulseOut>(), "GpuPhysicsC
 static_assert(is_trivially_copyable<GpuPhysicsJointConstraint>(), "GpuPhysicsJointConstraint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsJointImpulseOut>(), "GpuPhysicsJointImpulseOut must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsIslandSlice>(), "GpuPhysicsIslandSlice must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsLbvhNode>(), "GpuPhysicsLbvhNode must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsSpatialQuery>(), "GpuPhysicsSpatialQuery must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsSpatialQueryResult>(), "GpuPhysicsSpatialQueryResult must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsRenderTransformBinding>(), "GpuPhysicsRenderTransformBinding must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsRenderTransformOut>(), "GpuPhysicsRenderTransformOut must stay trivially copyable");
+
+static_assert(cast<u32>(ShapeType::Sphere) == s_ShaderPhysicsShapeTypeSphere, "ShapeType::Sphere mismatch");
+static_assert(cast<u32>(ShapeType::Capsule) == s_ShaderPhysicsShapeTypeCapsule, "ShapeType::Capsule mismatch");
+static_assert(cast<u32>(ShapeType::Hull) == s_ShaderPhysicsShapeTypeHull, "ShapeType::Hull mismatch");
+static_assert(cast<u32>(ShapeType::Mesh) == s_ShaderPhysicsShapeTypeMesh, "ShapeType::Mesh mismatch");
+static_assert(cast<u32>(JointType::Distance) == s_ShaderPhysicsJointTypeDistance, "JointType::Distance mismatch");
+static_assert(cast<u32>(JointType::Spherical) == s_ShaderPhysicsJointTypeSpherical, "JointType::Spherical mismatch");
+static_assert(cast<u32>(JointType::Revolute) == s_ShaderPhysicsJointTypeRevolute, "JointType::Revolute mismatch");
+static_assert(cast<u32>(JointType::Prismatic) == s_ShaderPhysicsJointTypePrismatic, "JointType::Prismatic mismatch");
+static_assert(cast<u32>(JointType::Fixed) == s_ShaderPhysicsJointTypeFixed, "JointType::Fixed mismatch");
+static_assert(cast<u32>(JointType::Motor) == s_ShaderPhysicsJointTypeMotor, "JointType::Motor mismatch");
+static_assert(cast<u32>(JointType::Wheel) == s_ShaderPhysicsJointTypeWheel, "JointType::Wheel mismatch");
+static_assert(cast<u32>(BodyFlags::LockLinearX) == s_ShaderPhysicsBodyFlagLockLinearX, "BodyFlags::LockLinearX mismatch");
+static_assert(cast<u32>(BodyFlags::LockLinearY) == s_ShaderPhysicsBodyFlagLockLinearY, "BodyFlags::LockLinearY mismatch");
+static_assert(cast<u32>(BodyFlags::LockLinearZ) == s_ShaderPhysicsBodyFlagLockLinearZ, "BodyFlags::LockLinearZ mismatch");
+static_assert(cast<u32>(BodyFlags::LockAngularX) == s_ShaderPhysicsBodyFlagLockAngularX, "BodyFlags::LockAngularX mismatch");
+static_assert(cast<u32>(BodyFlags::LockAngularY) == s_ShaderPhysicsBodyFlagLockAngularY, "BodyFlags::LockAngularY mismatch");
+static_assert(cast<u32>(BodyFlags::LockAngularZ) == s_ShaderPhysicsBodyFlagLockAngularZ, "BodyFlags::LockAngularZ mismatch");
+static_assert(cast<u32>(BodyFlags::IsSpeedCapped) == s_ShaderPhysicsBodyFlagIsSpeedCapped, "BodyFlags::IsSpeedCapped mismatch");
+static_assert(cast<u32>(BodyFlags::AllowFastRotation) == s_ShaderPhysicsBodyFlagAllowFastRotation, "BodyFlags::AllowFastRotation mismatch");
+static_assert(cast<u32>(BodyFlags::Dynamic) == s_ShaderPhysicsBodyFlagDynamic, "BodyFlags::Dynamic mismatch");
+static_assert(cast<u32>(BodyFlags::EnableGyroscopicTorque) == s_ShaderPhysicsBodyFlagGyroscopic, "BodyFlags::EnableGyroscopicTorque mismatch");
+static_assert(cast<u32>(BodyFlags::HasCustomMaxAngularVelocity) == s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel, "BodyFlags::HasCustomMaxAngularVelocity mismatch");
+static_assert(s_GpuShapeFlagEnlargeAabb != 0u && s_GpuShapeFlagEnlargeAabb != s_GpuShapeFlagFastOrBullet && (s_GpuShapeFlagEnlargeAabb & s_GpuShapeFlagHasNonCollideJoint) == 0u, "ShapeFlag EnlargeAabb distinct bit");
+static_assert(s_GpuSolverFlagHasHitEvents != 0u && (s_GpuSolverFlagHasHitEvents & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep)) == 0u, "SolverFlag HasHitEvents distinct bit");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

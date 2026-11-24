@@ -24,7 +24,6 @@ class FontAtlasBinaryDecodedHeader{
     public u32 tableCount = 0u;
 }
 
-
 class FontAtlasBinaryGroupHeader{
     public u32 width = 0u;
     public u32 height = 0u;
@@ -36,7 +35,6 @@ class FontAtlasBinaryTableHeader{
     public u32 tag = 0u;
     public u32 byteCount = 0u;
 }
-
 
 b8 IsValidFontAtlasBinaryPreamble(in u32 magic, in u32 version, in u32 encoding, in u32 reserved){
     return magic == s_FontAtlasBinaryMagic
@@ -461,25 +459,6 @@ b8 ValidateFontAtlasGroupPixelChunkWithDigestOption(
     }
     inOutPixelBytes += byteCount;
     return true;
-}
-
-b8 ValidateFontAtlasGroupPixelChunk(
-    in u32 width,
-    in u32 height,
-    in u32 channelCount,
-    in Span<u8> pixels,
-    in Span<u8> expectedSha256Bytes,
-    mut u64 inOutPixelBytes
-){
-    return ValidateFontAtlasGroupPixelChunkWithDigestOption(
-        width,
-        height,
-        channelCount,
-        pixels,
-        expectedSha256Bytes,
-        true,
-        inOutPixelBytes
-    );
 }
 
 

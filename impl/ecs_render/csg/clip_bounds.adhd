@@ -198,21 +198,6 @@ b8 TryInvertCsgReceiverLocalToWorld(in b8 hasTransform, in MatrixSingle localToW
     return true;
 }
 
-b8 TryBuildCsgReceiverWorldToLocal(
-    in b8 hasTransform,
-    in VectorSingle position,
-    in VectorSingle rotation,
-    in VectorSingle scale,
-    mut MatrixSingle outMatrix
-){
-    if(!hasTransform){
-        outMatrix = MatrixIdentity();
-        return true;
-    }
-    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
-    return TryInvertCsgReceiverLocalToWorld(true, localToWorld, outMatrix);
-}
-
 void LoadCsgReceiverWorldBoundsValuesFromMatrix(
     in CsgReceiverCpuBounds receiverBounds,
     in b8 hasTransform,

@@ -9,18 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_UnknownMaterialBindInterfacePath = "<unknown>";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-StringView ResolveMaterialBindInterfacePathOrUnknown(in b8 hasBindEntry, in StringView virtualPath){
-    if(hasBindEntry)
-        return virtualPath;
-    return s_UnknownMaterialBindInterfacePath;
-}
-
 b8 IsBeforeMaterialBindStructName(in StringView lhsName, in StringView rhsName){
     return lhsName < rhsName;
 }
@@ -31,14 +19,6 @@ b8 ValidateInsertedMaterialBindTypedLayoutCacheEntry(in b8 inserted, in Name mat
 
     error("Material bind typed layout: duplicate cache entry for interface '{}'", materialInterface.resolvedText());
     return false;
-}
-
-Expected<usize> FindMaterialBindInstanceIndex(in Span<MaterialBindInstance> instances, in StringView instanceName){
-    for(usize i = 0u; i < instances.size(); ++i){
-        if(instances[i].name == instanceName)
-            return i;
-    }
-    return MakeUnexpected(Failure());
 }
 
 

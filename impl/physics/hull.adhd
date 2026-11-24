@@ -148,8 +148,15 @@ b8 TryMergeCoplanarHullFaces(
             }
         }
 
-        if(edgeStart.size() < 3u || edgeStart.size() > 32u)
-            return false;
+        if(edgeStart.size() < 3u || edgeStart.size() > s_MaxHullFaceVertices){
+            for(usize t = 0u; t < faceCount; ++t){
+                if(compId[t] != cid)
+                    continue;
+                outMergedFaces.push_back(faces[liveFaces[t]]);
+                totalHalfEdges += faces[liveFaces[t]].vertices.size();
+            }
+            continue;
+        }
 
         FixedVector<u32, 32u> loop;
         u32 curStart = edgeStart[0u];
@@ -158,9 +165,12 @@ b8 TryMergeCoplanarHullFaces(
         usedEdge[0u] = 1u;
         loop.push_back(curStart);
 
+        b8 loopOk = true;
         for(usize step = 1u; step < edgeStart.size(); ++step){
-            if(curNext == curStart)
-                return false;
+            if(curNext == curStart){
+                loopOk = false;
+                break;
+            }
             loop.push_back(curNext);
             b8 foundNext = false;
             for(usize e = 0u; e < edgeStart.size(); ++e){
@@ -173,28 +183,46 @@ b8 TryMergeCoplanarHullFaces(
                     break;
                 }
             }
-            if(!foundNext)
-                return false;
+            if(!foundNext){
+                loopOk = false;
+                break;
+            }
         }
-        if(curNext != curStart)
-            return false;
+        if(loopOk && curNext != curStart)
+            loopOk = false;
 
         VectorSingle newellN(0.0f);
-        for(usize vi = 0u; vi < loop.size(); ++vi){
-            const VectorSingle a = VectorSingle(uniquePts[loop[vi]]);
-            const VectorSingle b = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
-            const VectorSingle aYzx(a.y, a.z, a.x, 0.0f);
-            const VectorSingle bYzx(b.y, b.z, b.x, 0.0f);
-            const VectorSingle aZxy(a.z, a.x, a.y, 0.0f);
-            const VectorSingle bZxy(b.z, b.x, b.y, 0.0f);
-            newellN = newellN + VectorSingle((aYzx - bYzx) * (aZxy + bZxy), 0.0f);
+        if(loopOk){
+            for(usize vi = 0u; vi < loop.size(); ++vi){
+                const VectorSingle a = VectorSingle(uniquePts[loop[vi]]);
+                const VectorSingle b = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
+                const VectorSingle aYzx(a.y, a.z, a.x, 0.0f);
+                const VectorSingle bYzx(b.y, b.z, b.x, 0.0f);
+                const VectorSingle aZxy(a.z, a.x, a.y, 0.0f);
+                const VectorSingle bZxy(b.z, b.x, b.y, 0.0f);
+                newellN = newellN + VectorSingle((aYzx - bYzx) * (aZxy + bZxy), 0.0f);
+            }
         }
         const f32 nLenSq = Vector3LengthSq(newellN).x;
-        if(!IsFinite(VectorSingle(nLenSq)) || nLenSq <= 1.0e-12f)
-            return false;
-        VectorSingle planeN = newellN * Rsqrt(VectorSingle(nLenSq));
-        if(Vector3Dot(planeN, VectorSingle(VectorSingle(uniquePts[loop[0u]]) - interior, 0.0f)).x < 0.0f)
-            return false;
+        if(!loopOk || !IsFinite(VectorSingle(nLenSq)) || nLenSq <= 1.0e-12f){
+            for(usize t = 0u; t < faceCount; ++t){
+                if(compId[t] != cid)
+                    continue;
+                outMergedFaces.push_back(faces[liveFaces[t]]);
+                totalHalfEdges += faces[liveFaces[t]].vertices.size();
+            }
+            continue;
+        }
+        const VectorSingle planeN = newellN * Rsqrt(VectorSingle(nLenSq));
+        if(Vector3Dot(planeN, VectorSingle(VectorSingle(uniquePts[loop[0u]]) - interior, 0.0f)).x < 0.0f){
+            for(usize t = 0u; t < faceCount; ++t){
+                if(compId[t] != cid)
+                    continue;
+                outMergedFaces.push_back(faces[liveFaces[t]]);
+                totalHalfEdges += faces[liveFaces[t]].vertices.size();
+            }
+            continue;
+        }
 
         f32 maxOff = -s_MaxF32;
         for(usize vi = 0u; vi < loop.size(); ++vi){
@@ -202,13 +230,25 @@ b8 TryMergeCoplanarHullFaces(
             if(d > maxOff)
                 maxOff = d;
         }
+        b8 convexOk = true;
         for(usize vi = 0u; vi < loop.size(); ++vi){
             const VectorSingle vPrev = VectorSingle(uniquePts[loop[(vi + loop.size() - 1u) % loop.size()]]);
             const VectorSingle vCur = VectorSingle(uniquePts[loop[vi]]);
             const VectorSingle vNext = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
             const VectorSingle turn = Cross(VectorSingle(vCur - vPrev, 0.0f), VectorSingle(vNext - vCur, 0.0f));
-            if(Vector3Dot(turn, planeN).x < -1.0e-5f)
-                return false;
+            if(Vector3Dot(turn, planeN).x < -1.0e-5f){
+                convexOk = false;
+                break;
+            }
+        }
+        if(!convexOk){
+            for(usize t = 0u; t < faceCount; ++t){
+                if(compId[t] != cid)
+                    continue;
+                outMergedFaces.push_back(faces[liveFaces[t]]);
+                totalHalfEdges += faces[liveFaces[t]].vertices.size();
+            }
+            continue;
         }
 
         QuickhullFace merged;
@@ -219,7 +259,7 @@ b8 TryMergeCoplanarHullFaces(
         totalHalfEdges += loop.size();
     }
 
-    if(totalHalfEdges > 255u || (totalHalfEdges / 2u) > s_MaxHullEdges)
+    if(outMergedFaces.size() >= faceCount || outMergedFaces.size() > s_MaxHullFaces || totalHalfEdges > 255u || (totalHalfEdges / 2u) > s_MaxHullEdges)
         return false;
 
     for(usize f0 = 0u; f0 < outMergedFaces.size(); ++f0){
@@ -249,28 +289,89 @@ b8 TryMergeCoplanarHullFaces(
     return true;
 }
 
-Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
-    if(!IsFinite(VectorSingle(radius)) || radius < 0.0f || inputPoints.size() < 4u)
-        return MakeUnexpected(Failure());
-
-    Vector<f32x4> uniquePts;
-    uniquePts.reserve(inputPoints.size());
-    for(usize i = 0u; i < inputPoints.size(); ++i){
-        const VectorSingle p = VectorSingle(inputPoints[i]);
-        if(!IsValidPositionVec3(p))
-            return MakeUnexpected(Failure());
-        b8 dup = false;
-        for(usize j = 0u; j < uniquePts.size(); ++j){
-            if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
-                dup = true;
-                break;
-            }
-        }
-        if(!dup)
-            uniquePts.push_back(f32x4(p, 0.0f));
+Vector<f32x4> DecimateHullPoints(in Span<f32x4> pts, in usize maxPoints){
+    Vector<f32x4> selected;
+    if(pts.size() <= maxPoints){
+        selected.reserve(pts.size());
+        for(usize i = 0u; i < pts.size(); ++i)
+            selected.push_back(pts[i]);
+        return selected;
     }
 
-    if(uniquePts.size() < 4u)
+    selected.reserve(maxPoints);
+    Vector<u8> used(pts.size(), 0u);
+    Array<usize, 6u> extIdx;
+    for(usize axis = 0u; axis < 3u; ++axis){
+        usize lo = 0u;
+        usize hi = 0u;
+        f32 minV = VectorGetByIndex(VectorSingle(pts[0u]), cast<isize>(axis));
+        f32 maxV = minV;
+        for(usize i = 1u; i < pts.size(); ++i){
+            const f32 v = VectorGetByIndex(VectorSingle(pts[i]), cast<isize>(axis));
+            if(v < minV){
+                minV = v;
+                lo = i;
+            }
+            if(v > maxV){
+                maxV = v;
+                hi = i;
+            }
+        }
+        extIdx[axis * 2u] = lo;
+        extIdx[axis * 2u + 1u] = hi;
+    }
+    for(usize k = 0u; k < 6u; ++k){
+        const usize idx = extIdx[k];
+        if(used[idx] == 0u && selected.size() < maxPoints){
+            used[idx] = 1u;
+            selected.push_back(pts[idx]);
+        }
+    }
+
+    Vector<f32> minDistSq(pts.size(), s_MaxF32);
+    for(usize i = 0u; i < pts.size(); ++i){
+        if(used[i] != 0u){
+            minDistSq[i] = 0.0f;
+            continue;
+        }
+        const VectorSingle p = VectorSingle(pts[i]);
+        f32 best = s_MaxF32;
+        for(usize s = 0u; s < selected.size(); ++s){
+            const f32 dSq = Vector3LengthSq(VectorSingle(p - VectorSingle(selected[s]), 0.0f)).x;
+            if(dSq < best)
+                best = dSq;
+        }
+        minDistSq[i] = best;
+    }
+
+    while(selected.size() < maxPoints){
+        usize bestIdx = s_NullIndex;
+        f32 farthest = 1.0e-8f;
+        for(usize i = 0u; i < pts.size(); ++i){
+            if(used[i] == 0u && minDistSq[i] > farthest){
+                farthest = minDistSq[i];
+                bestIdx = i;
+            }
+        }
+        if(bestIdx == s_NullIndex)
+            break;
+        used[bestIdx] = 1u;
+        const VectorSingle added = VectorSingle(pts[bestIdx]);
+        selected.push_back(pts[bestIdx]);
+        for(usize i = 0u; i < pts.size(); ++i){
+            if(used[i] != 0u)
+                continue;
+            const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(pts[i]) - added, 0.0f)).x;
+            if(dSq < minDistSq[i])
+                minDistSq[i] = dSq;
+        }
+    }
+
+    return selected;
+}
+
+Expected<HullShape> BuildConvexHullExact(in Span<f32x4> uniquePts, in f32 radius){
+    if(uniquePts.size() < 4u || uniquePts.size() > s_MaxHullVertices)
         return MakeUnexpected(Failure());
 
     usize minIdx = 0u;
@@ -562,6 +663,155 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     result.centroidRadius = f32x4(centroid, radius);
     result.halfExtentsFlags = f32x3_u32(halfExt, 0u);
     return result;
+}
+
+isize QuantizeDedupAxis(in f32 v){
+    const f32 s = v * 1000.0f;
+    isize q = cast<isize>(s);
+    if(s < cast<f32>(q))
+        --q;
+    return q;
+}
+
+b8 DeduplicateConvexPoints(in Span<f32x4> inputPoints, mut Vector<f32x4> uniquePts){
+    uniquePts.clear();
+    uniquePts.reserve(inputPoints.size());
+    if(inputPoints.size() <= 32u){
+        for(usize i = 0u; i < inputPoints.size(); ++i){
+            const VectorSingle p = VectorSingle(inputPoints[i]);
+            if(!IsValidPositionVec3(p))
+                return false;
+            b8 dup = false;
+            for(usize j = 0u; j < uniquePts.size(); ++j){
+                if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
+                    dup = true;
+                    break;
+                }
+            }
+            if(!dup)
+                uniquePts.push_back(f32x4(p, 0.0f));
+        }
+        return true;
+    }
+
+    HashMap<u64, u32> cellHeads;
+    cellHeads.reserve(inputPoints.size());
+    Vector<u32> bucketNext;
+    bucketNext.reserve(inputPoints.size());
+
+    for(usize i = 0u; i < inputPoints.size(); ++i){
+        const VectorSingle p = VectorSingle(inputPoints[i]);
+        if(!IsValidPositionVec3(p))
+            return false;
+        if(!Vector3LessOrEqual(Abs(p), VectorSingle(1.0e8f))){
+            b8 dupHuge = false;
+            for(usize j = 0u; j < uniquePts.size(); ++j){
+                if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
+                    dupHuge = true;
+                    break;
+                }
+            }
+            if(!dupHuge){
+                uniquePts.push_back(f32x4(p, 0.0f));
+                bucketNext.push_back(s_NullIndex);
+            }
+            continue;
+        }
+
+        const isize x0 = QuantizeDedupAxis(p.x - 1.01e-4f);
+        const isize x1 = QuantizeDedupAxis(p.x + 1.01e-4f);
+        const isize y0 = QuantizeDedupAxis(p.y - 1.01e-4f);
+        const isize y1 = QuantizeDedupAxis(p.y + 1.01e-4f);
+        const isize z0 = QuantizeDedupAxis(p.z - 1.01e-4f);
+        const isize z1 = QuantizeDedupAxis(p.z + 1.01e-4f);
+
+        b8 dup = false;
+        for(isize cz = z0; cz <= z1 && !dup; ++cz){
+            for(isize cy = y0; cy <= y1 && !dup; ++cy){
+                for(isize cx = x0; cx <= x1 && !dup; ++cx){
+                    const u64 key =
+                        (cast<u64>(cast<u32>(cx)) * 73856093u)
+                        ^ (cast<u64>(cast<u32>(cy)) * 19349663u)
+                        ^ (cast<u64>(cast<u32>(cz)) * 83492791u)
+                    ;
+                    const auto it = cellHeads.find(key);
+                    if(it == cellHeads.end())
+                        continue;
+                    u32 uIdx = it.value();
+                    while(uIdx != s_NullIndex){
+                        if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[uIdx]), 0.0f)).x <= 1.0e-8f){
+                            dup = true;
+                            break;
+                        }
+                        uIdx = bucketNext[uIdx];
+                    }
+                }
+            }
+        }
+        if(!dup){
+            const u32 newIdx = cast<u32>(uniquePts.size());
+            uniquePts.push_back(f32x4(p, 0.0f));
+            const isize qx = QuantizeDedupAxis(p.x);
+            const isize qy = QuantizeDedupAxis(p.y);
+            const isize qz = QuantizeDedupAxis(p.z);
+            const u64 homeKey =
+                (cast<u64>(cast<u32>(qx)) * 73856093u)
+                ^ (cast<u64>(cast<u32>(qy)) * 19349663u)
+                ^ (cast<u64>(cast<u32>(qz)) * 83492791u)
+            ;
+            const auto homeIt = cellHeads.find(homeKey);
+            if(homeIt == cellHeads.end()){
+                bucketNext.push_back(s_NullIndex);
+                cellHeads.emplace(homeKey, newIdx);
+            }
+            else{
+                bucketNext.push_back(homeIt.value());
+                homeIt.value() = newIdx;
+            }
+        }
+    }
+    return true;
+}
+
+Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
+    if(!IsFinite(VectorSingle(radius)) || radius < 0.0f || inputPoints.size() < 4u)
+        return MakeUnexpected(Failure());
+
+    Vector<f32x4> uniquePts;
+    if(!DeduplicateConvexPoints(inputPoints, uniquePts))
+        return MakeUnexpected(Failure());
+
+    if(uniquePts.size() < 4u)
+        return MakeUnexpected(Failure());
+
+    if(uniquePts.size() <= s_MaxHullVertices){
+        const Expected<HullShape> exact = BuildConvexHullExact(Span<f32x4>(uniquePts), radius);
+        if(exact.has_value())
+            return exact.value();
+    }
+
+    Array<usize, 8u> decimateTargets;
+    decimateTargets[0u] = s_MaxHullVertices;
+    decimateTargets[1u] = 48u;
+    decimateTargets[2u] = 36u;
+    decimateTargets[3u] = 28u;
+    decimateTargets[4u] = 20u;
+    decimateTargets[5u] = 14u;
+    decimateTargets[6u] = 10u;
+    decimateTargets[7u] = 8u;
+    for(usize ti = 0u; ti < 8u; ++ti){
+        const usize cap = decimateTargets[ti];
+        if(cap > uniquePts.size() && ti > 0u)
+            continue;
+        const Vector<f32x4> reducedPts = DecimateHullPoints(Span<f32x4>(uniquePts), Min(cap, uniquePts.size()));
+        if(reducedPts.size() < 4u)
+            continue;
+        const Expected<HullShape> decimated = BuildConvexHullExact(Span<f32x4>(reducedPts), radius);
+        if(decimated.has_value())
+            return decimated.value();
+    }
+
+    return MakeUnexpected(Failure());
 }
 
 

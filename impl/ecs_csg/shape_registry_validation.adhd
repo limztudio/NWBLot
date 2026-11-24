@@ -100,23 +100,6 @@ Expected<CsgBuiltInShapeKind> TryResolveBuiltInCsgShapeKind(in Name shapeType){
     return MakeUnexpected(Failure());
 }
 
-f32 EvaluateBuiltInCsgShapeSignedDistance(in CsgBuiltInShapeKind kind, in VectorSingle shapePosition, in CsgShapeInlineParameters parameters){
-    if(kind == CsgBuiltInShapeKind::Plane){
-        CsgPlaneShape shape;
-        return shape.evaluateSignedDistance(shapePosition, parameters);
-    }
-    if(kind == CsgBuiltInShapeKind::Box){
-        CsgBoxShape shape;
-        return shape.evaluateSignedDistance(shapePosition, parameters);
-    }
-    if(kind == CsgBuiltInShapeKind::Sphere){
-        CsgSphereShape shape;
-        return shape.evaluateSignedDistance(shapePosition, parameters);
-    }
-    CsgCapsuleShape shape;
-    return shape.evaluateSignedDistance(shapePosition, parameters);
-}
-
 Expected<Span<u8>> TryResolveCsgShapeParameterBytes(
     in u32 expectedByteSize,
     in Span<u8> defaultParameterBytes,

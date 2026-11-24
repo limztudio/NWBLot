@@ -20,8 +20,13 @@ type TransformComponentCookEntry = TypedComponentCookEntry<TransformComponent>;
 type CameraComponentCookEntry = TypedComponentCookEntry<CameraComponent>;
 type LightComponentCookEntry = TypedComponentCookEntry<LightComponent>;
 
+class ActiveCameraComponentCookEntry{
+    public Name virtualPath = s_NameNone;
+}
+
 class EntityCookEntry{
     public Name virtualPath = s_NameNone;
+    public Name name = s_NameNone;
     public ComponentRefVector components;
 }
 
@@ -90,7 +95,7 @@ b8 ValidateSceneAssetNicknameUnique(in b8 inserted, in StringView nicknameView, 
 b8 SerializeEntityAsset(in EntityAsset entity, mut Vector<u8> outBinary){
     if(!entity.validatePayload())
         return false;
-    return SceneAssetBinaryCodec().serializeEntity(Span<ComponentRef>(entity.components()), outBinary);
+    return SceneAssetBinaryCodec().serializeEntity(Span<ComponentRef>(entity.components()), entity.name().hash(), outBinary);
 }
 
 [asset_writer]
@@ -112,8 +117,9 @@ b8 SerializeSceneAsset(in SceneAsset scene, mut Vector<u8> outBinary){
     );
 }
 
-Expected<EntityAsset> BuildEntityAssetFromComponents(in Name virtualPath, in Vector<ComponentRef> components){
+Expected<EntityAsset> BuildEntityAssetFromComponents(in Name virtualPath, in Name entityName, in Vector<ComponentRef> components){
     EntityAsset asset(virtualPath);
+    asset.setName(entityName);
     asset.setComponents(components);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
@@ -163,7 +169,7 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Nam
             return MakeUnexpected(Failure());
         entry.component = component.value();
     }
-    if(!BuildComponentAssetFromEntry<TransformComponentAsset, TransformComponentCookEntry>(entry).has_value())
+    if(!ValidateTransformComponentAssetPayload(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -178,7 +184,7 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(in Name path
             return MakeUnexpected(Failure());
         entry.component = component.value();
     }
-    if(!BuildComponentAssetFromEntry<CameraComponentAsset, CameraComponentCookEntry>(entry).has_value())
+    if(!ValidateCameraComponentAssetPayload(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -193,8 +199,21 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(in Name path, 
             return MakeUnexpected(Failure());
         entry.component = component.value();
     }
-    if(!BuildComponentAssetFromEntry<LightComponentAsset, LightComponentCookEntry>(entry).has_value())
+    if(!ValidateLightComponentAssetPayload(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<ActiveCameraComponentCookEntry> ParseActiveCameraComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    ActiveCameraComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_ActiveCameraDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_ActiveCameraDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        if(!ValidateMetadataAssetFields(file, value, s_ActiveCameraDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+            return false;
+        }))
+            return MakeUnexpected(Failure());
+    }
     return entry;
 }
 
@@ -247,6 +266,22 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(in Name path, in Path file, in
         return MakeUnexpected(Failure());
     if(!ValidateMetadataAssetFields(file, value, s_EntityDiagnosticPrefix, IsAllowedEntityAssetField))
         return MakeUnexpected(Failure());
+    const Expected<MetadataStringField> nameField = ReadMetadataStringField(file, value, s_EntityDiagnosticPrefix, s_EntityNameField, false);
+    if(!nameField.has_value())
+        return MakeUnexpected(Failure());
+    if(nameField.value().present){
+        const StringView trimmedName = TrimView(nameField.value().text);
+        if(trimmedName.empty() || trimmedName != nameField.value().text){
+            error("{} '{}': field '{}' must not be empty or padded", s_EntityDiagnosticPrefix, PathToString(file), s_EntityNameField);
+            return MakeUnexpected(Failure());
+        }
+        const Expected<Name> parsedName = ParseName(trimmedName);
+        if(!parsedName.has_value() || parsedName.value() == s_NameNone){
+            error("{} '{}': field '{}' is invalid", s_EntityDiagnosticPrefix, PathToString(file), s_EntityNameField);
+            return MakeUnexpected(Failure());
+        }
+        entry.name = parsedName.value();
+    }
     const Optional<in MetascriptValue> components = value.borrowField(s_EntityComponentsField);
     if(!ValidateRequiredSceneMetadataField(components.has_value(), s_EntityDiagnosticPrefix, PathToString(file), s_EntityComponentsField))
         return MakeUnexpected(Failure());
@@ -254,7 +289,10 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(in Name path, in Path file, in
     if(!refs.has_value())
         return MakeUnexpected(Failure());
     entry.components = refs.value();
-    if(!BuildEntityAssetFromComponents(path, entry.components).has_value())
+    if(
+        !ValidateEntityAssetComponentCount(entry.components.size())
+        || !ValidateUniqueAssetRefs(Span<ComponentRef>(entry.components), "EntityAsset::validatePayload", "component")
+    )
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -272,7 +310,7 @@ Expected<ProjectCookEntry> ParseProjectCookMetadata(in Name path, in Path file, 
     if(!ref.has_value())
         return MakeUnexpected(Failure());
     entry.startScene = ref.value();
-    if(!BuildProjectAssetFromStartScene(path, entry.startScene).has_value())
+    if(!ValidateProjectAssetPayload(entry.startScene.valid()))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -305,7 +343,12 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(in Name path, in Path file, in M
             return MakeUnexpected(Failure());
         entry.assets = map.value();
     }
-    if(!BuildSceneAssetFromContents(path, entry.subsystems, entry.assets, entry.entities).has_value())
+    if(
+        !ValidateSceneAssetSubsystemCount(entry.subsystems.size())
+        || !ValidateUniqueAssetRefs(Span<SubsystemRef>(entry.subsystems), "SceneAsset::validatePayload", "subsystem")
+        || !ValidateUniqueAssetRefs(Span<EntityRef>(entry.entities), "SceneAsset::validatePayload", "entity")
+        || !ValidateSceneAssetMap(entry.assets)
+    )
         return MakeUnexpected(Failure());
     return entry;
 }

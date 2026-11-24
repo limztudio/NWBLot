@@ -9,7 +9,6 @@
 
 
 type ComponentAssetCodec = FamilyAssetCodec<IComponent, ComponentAssetPolicy>;
-type ComponentTypeAutoRegistrar = AssetFamilyTypes<IComponent>;
 type TypedComponentAssetCodec<T> = FamilyMemberAssetCodec<IComponent, T, ComponentAssetPolicy>;
 type TypedComponentAutoRegistrar<T> = TypedAssetRegistration<IComponent, T, TypedComponentAssetCodec<T>>;
 
@@ -34,17 +33,25 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public void packEnvelope(
+    public b8 packEnvelope(
         in NameHash componentTypeHash,
         in Span<u8> payload,
         mut Vector<u8> outBinary
     )const{
-        const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
         outBinary.clear();
+        if(payload.size() > usize.max - s_ComponentHeaderBinaryBytes)
+            return false;
+        const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
         outBinary.reserve(s_ComponentHeaderBinaryBytes + payload.size());
         AppendPOD(outBinary, header);
-        for(in u8 b : payload)
-            outBinary.push_back(b);
+        if(!payload.empty()){
+            const auto appendRes = AppendBinaryVectorPayload(outBinary, payload);
+            if(!appendRes.has_value()){
+                outBinary.clear();
+                return false;
+            }
+        }
+        return true;
     }
 
     public Expected<Span<u8>> unpackEnvelope(
@@ -61,12 +68,18 @@ class ComponentAssetBinaryCodec{
         return outComponent.validatePayload();
     }
 
-    public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendTransform(in TransformComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_TransformComponentPayloadBinaryBytes))
+            return false;
         const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_TransformComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_TransformComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendTransform(component, outPayload);
     }
 
     public Expected<TransformComponent> deserializeTransform(in Span<u8> payload)const{
@@ -79,12 +92,18 @@ class ComponentAssetBinaryCodec{
         return UnpackTransformComponentPayloadBinary(binaryPayload.value());
     }
 
-    public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendCamera(in CameraComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_CameraComponentPayloadBinaryBytes))
+            return false;
         const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_CameraComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_CameraComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendCamera(component, outPayload);
     }
 
     public Expected<CameraComponent> deserializeCamera(in Span<u8> payload)const{
@@ -97,12 +116,18 @@ class ComponentAssetBinaryCodec{
         return UnpackCameraComponentPayloadBinary(binaryPayload.value());
     }
 
-    public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendLight(in LightComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_LightComponentPayloadBinaryBytes))
+            return false;
         const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
-        outPayload.clear();
-        outPayload.reserve(s_LightComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_LightComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendLight(component, outPayload);
     }
 
     public Expected<LightComponent> deserializeLight(in Span<u8> payload)const{
@@ -174,10 +199,9 @@ b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     if(!component.validatePayload())
         return false;
     Vector<u8> payload;
-    if(!component.serializeComponentPayload(payload))
+    if(!component.appendValidatedComponentPayload(payload))
         return false;
-    ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
-    return true;
+    return ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
 }
 
 Expected<NameHash> ComponentAssetPolicy::readType(in Span<u8> binary)const{

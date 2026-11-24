@@ -572,6 +572,171 @@ void VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission(){
     EXPECT_TRUE(TryComputeCameraTanHalfVerticalFov(fov).has_value());
 }
 
+void VerifySceneSubsystemAssets_ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+
+    HeapStorage arena(Name("tests/scene/active_cam_named_entities"));
+    HeapStorage globalArena(Name("tests/scene/active_cam_named_entities_global"));
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
+
+    ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<EntityAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<SceneAsset>>(registry));
+
+    ActiveCameraComponentAsset activeCamAsset(Name("project/entities/hero_cam/active_camera"));
+    Vector<u8> emptyPayload;
+    ASSERT_TRUE(activeCamAsset.serializeComponentPayload(emptyPayload));
+    EXPECT_TRUE(emptyPayload.empty());
+    ASSERT_TRUE(activeCamAsset.loadComponentPayload(emptyPayload));
+    Array<u8, 1u> nonEmptyPayload;
+    nonEmptyPayload[0u] = 1u;
+    EXPECT_FALSE(activeCamAsset.loadComponentPayload(Span<u8>(nonEmptyPayload.data(), 1u)));
+    EXPECT_TRUE(SawCapturedError(logger, "unexpected non-empty payload"));
+
+    ComponentHeaderBinary acHeader;
+    acHeader.componentTypeHash = ActiveCameraComponentAsset::AssetTypeName().hash();
+    acHeader.payloadByteCount = 0u;
+    Vector<u8> acBinary;
+    AppendPOD(acBinary, acHeader);
+    source.setBinary(Name("project/entities/hero_cam/active_camera"), acBinary);
+
+    TransformComponentPayloadBinary xfPayload;
+    source.setBinary(Name("project/entities/hero_cam/transform"), MakeComponentBinary(TransformComponentAsset::AssetTypeName(), xfPayload));
+
+    Vector<ComponentRef> heroComps;
+    heroComps.push_back(ComponentRef(Name("project/entities/hero_cam/transform")));
+    heroComps.push_back(ComponentRef(Name("project/entities/hero_cam/active_camera")));
+    Vector<u8> namedEntityBin;
+    EntityHeaderBinary entityHdr;
+    entityHdr.componentCount = cast<u64>(heroComps.size());
+    entityHdr.entityNameHash = Name("hero_cam").hash();
+    AppendPOD(namedEntityBin, entityHdr);
+    for(in ComponentRef compRef : heroComps)
+        AppendPOD(namedEntityBin, compRef.name().hash());
+    EntityAsset decodedEntity(Name("project/entities/hero_cam"));
+    ASSERT_TRUE(decodedEntity.loadBinary(namedEntityBin));
+    EXPECT_EQ(decodedEntity.name(), Name("hero_cam"));
+    source.setBinary(Name("project/entities/hero_cam"), namedEntityBin);
+
+    TestValueSlot<RendererSubsystem> rendererSubsystemSlot;
+    mut RendererSubsystem rendererSubsystem = rendererSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsRenderer);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem));
+
+    Vector<SubsystemRef> sceneSubsystems;
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    HashMap<Name, SceneAssetRef> sceneAssets;
+    Vector<EntityRef> sceneEntities;
+    sceneEntities.push_back(EntityRef(Name("project/entities/hero_cam")));
+    source.setBinary(Name("project/scenes/named_cam_scene"), BuildTestSceneBinary(sceneSubsystems, sceneAssets, sceneEntities));
+
+    TestValueSlot<ActiveSceneSubsystems> activeSlot;
+    mut ActiveSceneSubsystems active = activeSlot.constructIn(globalArena);
+    ASSERT_TRUE(active.loadScene(SceneRef(Name("project/scenes/named_cam_scene")), assets));
+
+    EcsTestWorld tw;
+    InstantiatedSceneEntities instantiated;
+    ASSERT_TRUE(active.instantiateEntities(tw.world, instantiated));
+    const EntityID heroId = instantiated.findByName(Name("hero_cam"));
+    ASSERT_TRUE(heroId.valid());
+    EXPECT_FALSE(instantiated.findByName(Name("missing_ent")).valid());
+    EXPECT_FALSE(instantiated.findByName(s_NameNone).valid());
+    EXPECT_TRUE(tw.world.entity(heroId).hasComponent<ActiveCameraComponent>());
+    EXPECT_EQ(tw.world.entity(heroId).getComponent<ActiveCameraComponent>().camera, heroId);
+
+    instantiated.clear();
+    EXPECT_FALSE(instantiated.findByName(Name("hero_cam")).valid());
+    EXPECT_TRUE(instantiated.entities.empty());
+}
+
+void VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+
+    HeapStorage arena(Name("tests/scene/unload_destroy_rollback"));
+    HeapStorage globalArena(Name("tests/scene/unload_destroy_rollback_global"));
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
+
+    ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<EntityAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<SceneAsset>>(registry));
+
+    TestValueSlot<RendererSubsystem> rendererSubsystemSlot;
+    mut RendererSubsystem rendererSubsystem = rendererSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsRenderer);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem));
+
+    TransformComponentPayloadBinary xfPayload;
+    source.setBinary(Name("project/entities/dupe/transform"), MakeComponentBinary(TransformComponentAsset::AssetTypeName(), xfPayload));
+
+    Vector<ComponentRef> comps;
+    comps.push_back(ComponentRef(Name("project/entities/dupe/transform")));
+    Vector<u8> entityBin;
+    EntityHeaderBinary hdr;
+    hdr.componentCount = cast<u64>(comps.size());
+    hdr.entityNameHash = Name("dup_actor").hash();
+    AppendPOD(entityBin, hdr);
+    AppendPOD(entityBin, comps[0u].name().hash());
+    source.setBinary(Name("project/entities/dup_a"), entityBin);
+    source.setBinary(Name("project/entities/dup_b"), entityBin);
+
+    Vector<SubsystemRef> sceneSubsystems;
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    HashMap<Name, SceneAssetRef> sceneAssets;
+
+    Vector<EntityRef> okEntities;
+    okEntities.push_back(EntityRef(Name("project/entities/dup_a")));
+    source.setBinary(Name("project/scenes/ok_scene"), BuildTestSceneBinary(sceneSubsystems, sceneAssets, okEntities));
+
+    Vector<EntityRef> dupEntities;
+    dupEntities.push_back(EntityRef(Name("project/entities/dup_a")));
+    dupEntities.push_back(EntityRef(Name("project/entities/dup_b")));
+    source.setBinary(Name("project/scenes/dup_scene"), BuildTestSceneBinary(sceneSubsystems, sceneAssets, dupEntities));
+
+    TestValueSlot<ActiveSceneSubsystems> activeSlot;
+    mut ActiveSceneSubsystems active = activeSlot.constructIn(globalArena);
+    ASSERT_TRUE(active.loadScene(SceneRef(Name("project/scenes/ok_scene")), assets));
+    EXPECT_TRUE(active.valid());
+
+    EXPECT_FALSE(active.loadScene(SceneRef(Name("project/scenes/dup_scene")), assets));
+    EXPECT_TRUE(SawCapturedError(logger, "duplicate entity name"));
+    EXPECT_EQ(active.scene().name(), Name("project/scenes/ok_scene"));
+
+    EcsTestWorld tw;
+    InstantiatedSceneEntities firstInst;
+    ASSERT_TRUE(active.instantiateEntities(tw.world, firstInst));
+    ASSERT_EQ(firstInst.entities.size(), 1u);
+    EXPECT_TRUE(tw.world.alive(firstInst.entities[0u]));
+
+    in InstantiatedSceneEntities constRef = firstInst;
+    active.destroyEntities(tw.world, constRef);
+    EXPECT_FALSE(tw.world.alive(firstInst.entities[0u]));
+    EXPECT_EQ(firstInst.entities.size(), 1u);
+
+    InstantiatedSceneEntities secondInst;
+    ASSERT_TRUE(active.instantiateEntities(tw.world, secondInst));
+    const EntityID secondEnt = secondInst.entities[0u];
+    ASSERT_TRUE(tw.world.alive(secondEnt));
+    active.destroyEntities(tw.world, secondInst);
+    EXPECT_FALSE(tw.world.alive(secondEnt));
+    EXPECT_TRUE(secondInst.entities.empty());
+
+    active.unloadScene();
+    EXPECT_FALSE(active.valid());
+    EXPECT_FALSE(active.scene().valid());
+    EXPECT_EQ(active.subsystemCount(), 0u);
+    EXPECT_FALSE(active.instantiateEntities(tw.world));
+}
+
 NWB_ADHD_GTEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover, VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover)
 
 NWB_ADHD_GTEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding, VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding)
@@ -597,6 +762,10 @@ NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneS
 NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure, VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure)
 
 NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission)
+
+NWB_ADHD_GTEST(SceneSubsystemAssets, ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases, VerifySceneSubsystemAssets_ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases)
+
+NWB_ADHD_GTEST(SceneSubsystemAssets, UnloadDestroyRollbackAndDuplicateEntityName, VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

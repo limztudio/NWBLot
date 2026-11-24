@@ -10,9 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_UiSkinAssetKindLabel = "UI skin";
-const StringView s_UiSkinLoadBinaryContext = "UiSkin::loadBinary";
-
 type RegionVector = Vector<UiSkinRegion>;
 
 
@@ -85,9 +82,6 @@ class UiSkin{
         return this.m_regions[regionPosition.value()];
     }
 
-    private void rebuildRegionIndex(){
-        RebuildUiSkinRegionIndex(this.m_regions, this.m_regionIndex);
-    }
 }
 
 b8 ValidateUiSkinToolkitContract(in UiSkin skin){

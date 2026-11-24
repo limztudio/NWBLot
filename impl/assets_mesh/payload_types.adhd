@@ -29,8 +29,6 @@ const u32 s_MeshletPackedByteBits = 8u;
 const u32 s_MeshletPackedByte2Shift = s_MeshletPackedByteBits * 2u;
 const u32 s_MeshletPackedByte3Shift = s_MeshletPackedByteBits * 3u;
 const u32 s_MeshletPackedByteMask = 0xffu;
-const usize s_StaticMeshletPositionChannelCount = 1u;
-const usize s_SkinnedMeshletPositionChannelCount = 2u;
 const u32 s_MeshletConeAxisFallback = 0x8080u;
 const f32 s_MeshletOctEncodeBias = 0.5f;
 const f32 s_MeshletOctDecodeScale = 2.0f;
@@ -70,6 +68,9 @@ class MeshBinaryHeader{
     public u64 meshletLocalVertexRefCount = 0u;
     public u64 meshletPrimitiveIndexCount = 0u;
 }
+
+static_assert(size_of<MeshBinaryHeader>() == size_of<u32>() + size_of<u64>() * 11u, "MeshBinaryHeader layout drifted");
+static_assert(align_of<MeshBinaryHeader>() == 1u, "MeshBinaryHeader must stay packed");
 
 class MeshletDesc{
     public u32 localVertexOffset = 0u;

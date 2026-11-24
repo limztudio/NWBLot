@@ -209,26 +209,6 @@ void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut Vec
     }
 }
 
-b8 OrderCsgDeformBoundaryLoopInto(in Span<CsgDeformCutLoopEdge> edges, mut Vector<u32> outLoop){
-    outLoop.clear();
-    if(edges.empty())
-        return true;
-    CsgDeformBoundaryAdjacency adj;
-    if(!BuildCsgDeformBoundaryAdjacency(edges, adj))
-        return false;
-    u32 start = u32.max;
-    for(auto it = adj.vertexHeads.begin(); it != adj.vertexHeads.end(); ++it){
-        if(it.value().degree != 2u)
-            return false;
-        if(it.key() < start)
-            start = it.key();
-    }
-    const usize firstEdge = PickFirstCsgDeformLoopEdge(edges, adj, start, usize.max);
-    Vector<u8> edgeWalked;
-    edgeWalked.resize(edges.size(), 0u);
-    return WalkCsgDeformSimpleCycle(edges, adj, start, firstEdge, edges.size(), edgeWalked, outLoop);
-}
-
 Expected<u32> FillCsgDeformCutCaps(
     mut Vector<CsgDeformCutLoopEdge> scratchEdges,
     mut Vector<CsgDeformVertex> inOutVertices,

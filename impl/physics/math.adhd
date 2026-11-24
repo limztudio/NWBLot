@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/bit.h>"), cpp_name("::CountTrailingZeros")]
+extern i32 CountTrailingZerosU32(in u32 value);
+
+f32 SqrtFast(in f32 v){
+    return VectorSqrt(VectorSingle(v)).x;
+}
+
 SymMat3 ZeroSymMat3(){
     return SymMat3();
 }
@@ -23,7 +30,6 @@ MatrixSingle Matrix3FromSymMat3(in SymMat3 m){
         VectorSingle(m.m02, m.m12, m.m22, 0.0f)
     );
 }
-
 
 f32 SimdMin(in f32 a, in f32 b){
     const VectorSingle va(a);
@@ -60,18 +66,18 @@ b8 IsValidPositionVec3(in VectorSingle v){
 
 VectorSingle SafeNormalizeVec3(in VectorSingle v, in VectorSingle fallback){
     const VectorSingle zeroW = VectorSingle(v, 0.0f);
-    const f32 lenSq = Vector3LengthSq(zeroW).x;
-    if(IsFinite(VectorSingle(lenSq)) && lenSq > s_NormalizeEpsilonSq)
-        return VectorSingle(zeroW * Rsqrt(VectorSingle(lenSq)), 0.0f);
+    const VectorSingle lenSq = Vector3LengthSq(zeroW);
+    if(IsFinite(lenSq) && lenSq.x > s_NormalizeEpsilonSq)
+        return VectorSingle(zeroW * Rsqrt(lenSq), 0.0f);
     return VectorSingle(fallback, 0.0f);
 }
 
 VectorSingle SafeNormalizeQuat(in VectorSingle q){
     if(!IsFiniteQuat(q))
         return QuaternionIdentity();
-    const f32 lenSq = Vector4LengthSq(q).x;
-    if(IsFinite(VectorSingle(lenSq)) && lenSq > s_NormalizeEpsilonSq)
-        return q * Rsqrt(VectorSingle(lenSq));
+    const VectorSingle lenSq = Vector4LengthSq(q);
+    if(IsFinite(lenSq) && lenSq.x > s_NormalizeEpsilonSq)
+        return q * Rsqrt(lenSq);
     return QuaternionIdentity();
 }
 
@@ -96,7 +102,37 @@ void RelativeTransformValues(
     outRelPos = Vector3InverseRotate(VectorSingle(frameBPos - frameAPos, 0.0f), frameARot);
 }
 
+void ComposeTransformValues(
+    in VectorSingle parentPos,
+    in VectorSingle parentRot,
+    in VectorSingle localPos,
+    in VectorSingle localRot,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    outPos = TransformPointValues(parentPos, parentRot, localPos);
+    outRot = SafeNormalizeQuat(QuaternionMultiply(parentRot, localRot));
+}
+
+Transform3D ComposeTransform(in Transform3D parentXf, in Transform3D localXf){
+    VectorSingle pos(0.0f);
+    VectorSingle rot(0.0f, 0.0f, 0.0f, 1.0f);
+    ComposeTransformValues(VectorSingle(parentXf.position), VectorSingle(parentXf.rotation), VectorSingle(localXf.position), VectorSingle(localXf.rotation), pos, rot);
+    return Transform3D(pos, rot);
+}
+
+b8 IsIdentityTransform(in Transform3D xf){
+    const VectorSingle posAbs = Abs(VectorSingle(xf.position, 0.0f));
+    const VectorSingle rot = VectorSingle(xf.rotation);
+    const VectorSingle rotAbs = Abs(VectorSingle(rot.x, rot.y, rot.z, Abs(rot).w - 1.0f));
+    return Vector3LessOrEqual(posAbs, VectorSingle(1.0e-6f))
+        && Vector3LessOrEqual(rotAbs, VectorSingle(1.0e-6f))
+        && rotAbs.w <= 1.0e-5f;
+}
+
 VectorSingle IntegrateDeltaQuaternion(in VectorSingle q, in VectorSingle omega, in f32 h){
+    if(omega.x == 0.0f && omega.y == 0.0f && omega.z == 0.0f)
+        return q;
     const VectorSingle dq = VectorSingle(omega * (0.5f * h), 0.0f);
     const VectorSingle prod = QuaternionMultiply(dq, q);
     return SafeNormalizeQuat(q + prod);
@@ -128,11 +164,11 @@ VectorSingle Matrix3SolveLinear(in MatrixSingle m, in VectorSingle b){
     const VectorSingle r2 = m[2u];
 
     const VectorSingle c0 = Cross(r1, r2);
-    const f32 det = Vector3Dot(r0, c0).x;
-    if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-30f)
+    const VectorSingle detVec = Vector3Dot(r0, c0);
+    if(!IsFinite(detVec) || Abs(detVec).x <= 1.0e-30f)
         return VectorSingle(0.0f);
 
-    const f32 invDet = 1.0f / det;
+    const f32 invDet = 1.0f / detVec.x;
     if(!IsFinite(VectorSingle(invDet)))
         return VectorSingle(0.0f);
 
@@ -215,23 +251,81 @@ MatrixSingle Matrix3InvertSymmetric(in MatrixSingle a){
     const f32 c11 = a22 * a33 - a23 * a23;
     const f32 c12 = a13 * a23 - a12 * a33;
     const f32 c13 = a12 * a23 - a13 * a22;
-    const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
-
-    if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-30f)
-        return MatrixSingle(0.0f);
-
-    const f32 invDet = 1.0f / det;
-    if(!IsFinite(VectorSingle(invDet)))
-        return MatrixSingle(0.0f);
     const f32 c22 = a11 * a33 - a13 * a13;
     const f32 c23 = a12 * a13 - a11 * a23;
     const f32 c33 = a11 * a22 - a12 * a12;
+    const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
+    const f32 tr = a11 + a22 + a33;
+    const f32 s2 = c11 + c22 + c33;
 
-    return MatrixSingle(
-        VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
-        VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
-        VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
-    );
+    if(!IsFinite(VectorSingle(det, tr, s2, 0.0f)))
+        return MatrixSingle(0.0f);
+
+    const VectorSingle magTerms = Abs(VectorSingle(det, tr * s2, tr * tr * tr, 0.0f));
+    const f32 detTol = SimdMax(1.0e-30f, 1.0e-6f * magTerms.y + 1.0e-12f * magTerms.z);
+    if(magTerms.x > detTol){
+        const f32 invDet = 1.0f / det;
+        if(!IsFinite(VectorSingle(invDet)))
+            return MatrixSingle(0.0f);
+        return MatrixSingle(
+            VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
+            VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
+            VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
+        );
+    }
+
+    if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+        const VectorSingle absDiag = Abs(VectorSingle(c11, c22, c33, 0.0f));
+        f32 nx = c11;
+        f32 ny = c12;
+        f32 nz = c13;
+        f32 bestDiag = absDiag.x;
+        if(absDiag.y > bestDiag){
+            bestDiag = absDiag.y;
+            nx = c12;
+            ny = c22;
+            nz = c23;
+        }
+        if(absDiag.z > bestDiag){
+            nx = c13;
+            ny = c23;
+            nz = c33;
+        }
+        const f32 nLenSq = nx * nx + ny * ny + nz * nz;
+        if(nLenSq > 1.0e-30f){
+            const f32 invNLen = Rsqrt(VectorSingle(nLenSq)).x;
+            nx *= invNLen;
+            ny *= invNLen;
+            nz *= invNLen;
+            const f32 invS2 = 1.0f / s2;
+            if(IsFinite(VectorSingle(invS2))){
+                const f32 r00 = (tr * (1.0f - nx * nx) - a11) * invS2;
+                const f32 r01 = (tr * (-nx * ny) - a12) * invS2;
+                const f32 r02 = (tr * (-nx * nz) - a13) * invS2;
+                const f32 r11 = (tr * (1.0f - ny * ny) - a22) * invS2;
+                const f32 r12 = (tr * (-ny * nz) - a23) * invS2;
+                const f32 r22 = (tr * (1.0f - nz * nz) - a33) * invS2;
+                return MatrixSingle(
+                    VectorSingle(r00, r01, r02, 0.0f),
+                    VectorSingle(r01, r11, r12, 0.0f),
+                    VectorSingle(r02, r12, r22, 0.0f)
+                );
+            }
+        }
+    }
+
+    if(tr > 1.0e-15f){
+        const f32 invTrSq = 1.0f / (tr * tr);
+        if(IsFinite(VectorSingle(invTrSq))){
+            return MatrixSingle(
+                VectorSingle(a11 * invTrSq, a12 * invTrSq, a13 * invTrSq, 0.0f),
+                VectorSingle(a12 * invTrSq, a22 * invTrSq, a23 * invTrSq, 0.0f),
+                VectorSingle(a13 * invTrSq, a23 * invTrSq, a33 * invTrSq, 0.0f)
+            );
+        }
+    }
+
+    return MatrixSingle(0.0f);
 }
 
 MatrixSingle RotateSymMatrix3(in VectorSingle q, in MatrixSingle localMat){
@@ -243,7 +337,7 @@ MatrixSingle RotateSymMatrix3(in VectorSingle q, in MatrixSingle localMat){
         && localMat[1u].y == localMat[2u].z
     )
         return localMat;
-    if(q.x * q.x + q.y * q.y + q.z * q.z <= 1.0e-12f)
+    if(Vector3LengthSq(VectorSingle(q, 0.0f)).x <= 1.0e-12f)
         return localMat;
     return Matrix3RotateSymmetric(q, localMat);
 }
@@ -311,26 +405,62 @@ Softness MakeSoftness(in f32 hertz, in f32 zeta, in f32 h){
     return s;
 }
 
-void ComputeTangentBasis(in VectorSingle normal, mut VectorSingle outT1, mut VectorSingle outT2){
-    const VectorSingle n = SafeNormalizeVec3(normal, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+void ComputeTangentBasisFromUnitNormal(in VectorSingle n, mut VectorSingle outT1, mut VectorSingle outT2){
     VectorSingle up = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     if(Abs(n).y > 0.9f)
         up = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
     outT1 = SafeNormalizeVec3(Cross(up, n), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-    outT2 = SafeNormalizeVec3(Cross(n, outT1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    outT2 = VectorSingle(Cross(n, outT1), 0.0f);
+}
+
+void ComputeTangentBasis(in VectorSingle normal, mut VectorSingle outT1, mut VectorSingle outT2){
+    const VectorSingle n = SafeNormalizeVec3(normal, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    ComputeTangentBasisFromUnitNormal(n, outT1, outT2);
 }
 
 b8 AabbOverlapsValues(in VectorSingle minA, in VectorSingle maxA, in VectorSingle minB, in VectorSingle maxB){
-    return minA.x <= maxB.x && minA.y <= maxB.y && minA.z <= maxB.z && minB.x <= maxA.x && minB.y <= maxA.y && minB.z <= maxA.z;
+    return Vector3LessOrEqual(minA, maxB) && Vector3LessOrEqual(minB, maxA);
+}
+
+b8 AabbOverlapsExpandedValues(in VectorSingle minA, in VectorSingle maxA, in VectorSingle minB, in VectorSingle maxB, in f32 pad){
+    const VectorSingle p(pad, pad, pad, 0.0f);
+    return Vector3LessOrEqual(minA, maxB + p) && Vector3LessOrEqual(minB, maxA + p);
+}
+
+void TransformLocalAabbValuesToWorld(
+    in VectorSingle lMin,
+    in VectorSingle lMax,
+    in f32 radius,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    const VectorSingle localCenter = (lMin + lMax) * 0.5f;
+    const VectorSingle localExtent = (lMax - lMin) * 0.5f;
+    VectorSingle worldCenter = VectorSingle(xfPos, 0.0f);
+    if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
+        worldCenter = TransformPointValues(xfPos, xfRot, localCenter);
+    const VectorSingle q2 = xfRot + xfRot;
+    const VectorSingle qx = q2 * xfRot.x;
+    const VectorSingle qy = q2 * xfRot.y;
+    const VectorSingle qz = q2 * xfRot.z;
+    const VectorSingle qw = q2 * xfRot.w;
+    const VectorSingle ax(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
+    const VectorSingle ay(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
+    const VectorSingle az(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
+    const VectorSingle worldExtent = Abs(ax) * localExtent.x + Abs(ay) * localExtent.y + Abs(az) * localExtent.z + VectorSingle(radius, radius, radius, 0.0f);
+    outMin = VectorSingle(worldCenter - worldExtent, 0.0f);
+    outMax = VectorSingle(worldCenter + worldExtent, 0.0f);
 }
 
 b8 AabbContainsValues(in VectorSingle oMin, in VectorSingle oMax, in VectorSingle iMin, in VectorSingle iMax){
-    return oMin.x <= iMin.x && oMin.y <= iMin.y && oMin.z <= iMin.z && oMax.x >= iMax.x && oMax.y >= iMax.y && oMax.z >= iMax.z;
+    return Vector3LessOrEqual(oMin, iMin) && Vector3LessOrEqual(iMax, oMax);
 }
 
 f32 AabbPerimeterValues(in VectorSingle bMin, in VectorSingle bMax){
     const VectorSingle d = bMax - bMin;
-    return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
+    return 2.0f * Vector3Dot(d, VectorSingle(d.y, d.z, d.x, 0.0f)).x;
 }
 
 f32 ComputeAabbMarginValues(in VectorSingle bMin, in VectorSingle bMax){
@@ -340,11 +470,12 @@ f32 ComputeAabbMarginValues(in VectorSingle bMin, in VectorSingle bMax){
 }
 
 void ComputeRayCastSlabValues(in VectorSingle translation, mut VectorSingle outInvDir, mut u32 outParallelMask){
+    const VectorSingle absTrans = Abs(translation);
     Array<f32, 3u> invAxes;
     u32 mask = 0u;
     for(usize axis = 0u; axis < 3u; ++axis){
         const f32 d = VectorGetByIndex(translation, cast<isize>(axis));
-        if(Abs(VectorSingle(d)).x <= 1.0e-12f){
+        if(VectorGetByIndex(absTrans, cast<isize>(axis)) <= 1.0e-12f){
             mask |= (1u << cast<u32>(axis));
             invAxes[axis] = 0.0f;
         }
@@ -371,7 +502,7 @@ b8 AabbRayCastValues(
         const VectorSingle tNear = Min(t1, t2);
         const VectorSingle tFar = Max(t1, t2);
         const f32 tMin = SimdMax(0.0f, Vector3MaxComponent(tNear).x);
-        const f32 tMax = SimdMin(maxFraction, Min(tFar.xxxx, Min(tFar.yyyy, tFar.zzzz)).x);
+        const f32 tMax = SimdMin(maxFraction, -Vector3MaxComponent(-tFar).x);
         if(tMin > tMax)
             return false;
         outMinFraction = tMin;
@@ -406,6 +537,7 @@ b8 AabbRayCastValues(
         }
     }
 
+    outMinFraction = tMin;
     return true;
 }
 
@@ -434,15 +566,23 @@ void PushRayCastChildrenOrdered(
         secondChild = childA;
         secondT = tA;
     }
-    if(firstHit && stackCount < 256u){
-        stackNodes[stackCount] = firstChild;
-        stackTMins[stackCount] = firstT;
-        ++stackCount;
-    }
-    if(secondHit && stackCount < 256u){
-        stackNodes[stackCount] = secondChild;
-        stackTMins[stackCount] = secondT;
-        ++stackCount;
+    if(stackCount < 256u){
+        if(firstHit && secondHit && stackCount == 255u){
+            stackNodes[stackCount] = secondChild;
+            stackTMins[stackCount] = secondT;
+            ++stackCount;
+            return;
+        }
+        if(firstHit){
+            stackNodes[stackCount] = firstChild;
+            stackTMins[stackCount] = firstT;
+            ++stackCount;
+        }
+        if(secondHit && stackCount < 256u){
+            stackNodes[stackCount] = secondChild;
+            stackTMins[stackCount] = secondT;
+            ++stackCount;
+        }
     }
 }
 

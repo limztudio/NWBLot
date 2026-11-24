@@ -2,42 +2,103 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_LinearSlop = 0.005f;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LINEAR_SLOP")]
+extern const f32 s_LinearSlop;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_PARALLEL_EDGE_TOL")]
+extern const f32 s_ParallelEdgeTol;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESTITUTION_THRESHOLD")]
+extern const f32 s_RestitutionThreshold;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_CONTACT_BIAS_SPEED")]
+extern const f32 s_MaxContactBiasSpeed;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_ROTATION")]
+extern const f32 s_MaxRotation;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NORMALIZE_EPSILON_SQ")]
+extern const f32 s_NormalizeEpsilonSq;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GRAPH_COLOR_COUNT")]
+extern const u32 s_ShaderPhysicsGraphColorCount;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_OVERFLOW_COLOR_INDEX")]
+extern const u32 s_ShaderPhysicsOverflowColorIndex;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_MANIFOLD_POINTS")]
+extern const u32 s_ShaderPhysicsMaxManifoldPoints;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_HULL_VERTICES")]
+extern const u32 s_ShaderPhysicsMaxHullVertices;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_HULL_FACES")]
+extern const u32 s_ShaderPhysicsMaxHullFaces;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAX_HULL_EDGES")]
+extern const u32 s_ShaderPhysicsMaxHullEdges;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_TOI_MAX_ITERATIONS")]
+extern const u32 s_ShaderPhysicsTimeOfImpactMaxIterations;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_TABLE_SIZE")]
+extern const u32 s_GpuGridTableSize;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_INVALID_INDEX")]
+extern const u32 s_NullIndex;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_BODIES")]
+extern const u32 s_GpuContactIslandMaxBodies;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_CONTACTS")]
+extern const u32 s_GpuContactIslandMaxContacts;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_BODIES")]
+extern const u32 s_GpuJointIslandMaxBodies;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_ISLAND_MAX_CONTACTS")]
+extern const u32 s_GpuJointIslandMaxContacts;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_JOINTS")]
+extern const u32 s_GpuJointIslandMaxJoints;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_BODIES")]
+extern const u32 s_GpuLargeContactIslandMaxBodies;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_CONTACTS")]
+extern const u32 s_GpuLargeContactIslandMaxContacts;
+
 const f32 s_MinCapsuleLength = 0.005f;
 const f32 s_SpeculativeDistance = 0.02f;
 const f32 s_MaxSweptSpeculativeDistance = 1.0f;
 const f32 s_MaxBulletSweepDistance = 32.0f;
-const f32 s_MaxContactBiasSpeed = 4.0f;
-const f32 s_MaxRotation = 0.25f * s_Pi;
 const f32 s_MaxAabbMargin = 0.05f;
 const f32 s_AabbMarginFraction = 0.125f;
 const f32 s_TimeToSleep = 0.5f;
 const f32 s_DefaultSleepThreshold = 0.05f;
 const f32 s_HugeCoordinate = 1.0e5f;
 const f32 s_MinFrictionWeight = 1.0e-10f;
-const f32 s_ParallelEdgeTol = 0.005f;
-const f32 s_RestitutionThreshold = 1.0f;
 const f32 s_MaxContactHertz = 30.0f;
 const f32 s_DefaultContactDampingRatio = 10.0f;
 const f32 s_DefaultMaxLinearVelocity = 400.0f;
 const f32 s_DefaultHitEventThreshold = 1.0f;
-const f32 s_NormalizeEpsilonSq = 1.0e-12f;
 
-const usize s_GraphColorCount = 24u;
+const usize s_GraphColorCount = cast<usize>(s_ShaderPhysicsGraphColorCount);
 const usize s_DynamicColorCount = 20u;
-const usize s_OverflowColorIndex = 23u;
-const usize s_MaxManifoldPoints = 4u;
+const usize s_OverflowColorIndex = cast<usize>(s_ShaderPhysicsOverflowColorIndex);
+const usize s_MaxManifoldPoints = cast<usize>(s_ShaderPhysicsMaxManifoldPoints);
 const usize s_MaxClipPoints = 64u;
-const usize s_MaxHullVertices = 128u;
-const usize s_MaxHullFaces = 128u;
-const usize s_MaxHullEdges = 128u;
+const usize s_MaxHullVertices = cast<usize>(s_ShaderPhysicsMaxHullVertices);
+const usize s_MaxHullFaceVertices = 16u;
+const usize s_MaxHullFaces = cast<usize>(s_ShaderPhysicsMaxHullFaces);
+const usize s_MaxHullEdges = cast<usize>(s_ShaderPhysicsMaxHullEdges);
+const f32 s_PlaneHalfExtentDefault = 1.0e4f;
 const usize s_GjkMaxIterations = 20u;
 const usize s_ShapeCastMaxIterations = 20u;
-const usize s_TimeOfImpactMaxIterations = 24u;
-const u32 s_GpuGridTableSize = 4096u;
-const u32 s_GpuGridBucketCapacity = 32u;
+const usize s_TimeOfImpactMaxIterations = cast<usize>(s_ShaderPhysicsTimeOfImpactMaxIterations);
+const u32 s_MaxBulletToiIterations = 4u;
+const f32 s_BulletToiRemainingEpsilon = 1.0e-4f;
 
-const u32 s_NullIndex = u32.max;
 const u32 s_StaticSetIndex = 0u;
 const u32 s_DisabledSetIndex = 1u;
 const u32 s_AwakeSetIndex = 2u;
@@ -47,11 +108,6 @@ const u32 s_TreeKinematic = 1u;
 const u32 s_TreeDynamic = 2u;
 const u32 s_DefaultGpuBodyThreshold = 32u;
 const f32 s_DefaultGpuWorkloadFraction = 0.7f;
-const u32 s_GpuContactIslandMaxBodies = 64u;
-const u32 s_GpuContactIslandMaxContacts = 255u;
-const u32 s_GpuJointIslandMaxBodies = 64u;
-const u32 s_GpuJointIslandMaxContacts = 255u;
-const u32 s_GpuJointIslandMaxJoints = 48u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

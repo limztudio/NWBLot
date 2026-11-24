@@ -64,6 +64,10 @@ b8 ModelComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)cons
     return GraphicsComponentBinaryCodec().serializeAssetRef(this.component.model.name(), outPayload);
 }
 
+b8 ModelComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendAssetRef(this.component.model.name(), outBinary);
+}
+
 b8 MeshComponentAsset::loadBinary(in Span<u8> binary){
     MeshComponentAsset candidate(this.virtualPath());
     if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
@@ -86,6 +90,10 @@ b8 MeshComponentAsset::validatePayload()const{
 
 b8 MeshComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
     return GraphicsComponentBinaryCodec().serializeAssetRef(this.component.mesh.name(), outPayload);
+}
+
+b8 MeshComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendAssetRef(this.component.mesh.name(), outBinary);
 }
 
 b8 RendererComponentAsset::loadBinary(in Span<u8> binary){
@@ -112,6 +120,10 @@ b8 RendererComponentAsset::validatePayload()const{
 
 b8 RendererComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
     return GraphicsComponentBinaryCodec().serializeRenderer(this.component, outPayload);
+}
+
+b8 RendererComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendRenderer(this.component, outBinary);
 }
 
 

@@ -191,9 +191,7 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         }
         return true;
     }
-    public b8 recordGraphOwnedSkinningDeformation(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public b8 recordGraphOwnedSkinningDeformationBatch(in Span<MeshSkinningGraphDispatchPlan> plans, in GpuTaskRecordContext context, mut CommandList commandList);
-    public b8 recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public b8 recordGraphOwnedSkinningPostDispatchBatch(in Span<MeshSkinningGraphDispatchPlan> plans, in GpuTaskRecordContext context, mut CommandList commandList);
     public void confirmGraphOwnedSkinningDispatch(in MeshSkinningGraphDispatchPlan plan);
     private void collectLiveSkinningStateBuffers();

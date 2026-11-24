@@ -39,8 +39,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
-
 enum<u8> TestbedPhysicsSceneMode{
     Default = 0u,
     Stress = 1u,
@@ -88,6 +86,49 @@ class TestbedPhysicsHudStats{
     public u32 gpuSolvedIslandCount = 0u;
     public u8 backendUsed = 0u;
     public f64 stepMs = 0.0;
+}
+
+class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
+    private in PhysicsDebugScreenProjector m_projector;
+    private mut Vector<PaintLineSegment> m_outLines;
+    private u32 m_maxLines;
+
+    public TestbedProjectedDebugLineSink(
+        in borrow PhysicsDebugScreenProjector projector,
+        in u32 maxLines,
+        mut Vector<PaintLineSegment> outLines
+    ){
+        this.m_projector = projector;
+        this.m_maxLines = maxLines;
+        this.m_outLines = outLines;
+    }
+
+    public void clear()override{
+        this.m_outLines.clear();
+    }
+
+    public void reserve(in usize capacity)override{
+        this.m_outLines.reserve(capacity);
+    }
+
+    public b8 full()const override{
+        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
+    }
+
+    public b8 emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
+        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
+            return false;
+        VectorSingle seg(0.0f);
+        if(this.m_projector.projectSegment(p0, p1, seg)){
+            PaintLineSegment batchLine;
+            batchLine.start = Point(seg.x, seg.y);
+            batchLine.end = Point(seg.z, seg.w);
+            batchLine.color = Color(color.x, color.y, color.z, color.w);
+            this.m_outLines.push_back(batchLine);
+            return true;
+        }
+        return false;
+    }
 }
 
 
@@ -230,8 +271,10 @@ void BindActiveSceneSubsystemsToWorld(mut NotNullUniquePtr<World> worldHandle, i
     const ActiveSceneSubsystemsRef subsystems = ActiveSceneSubsystemsRef(sceneSubsystems);
 
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
-    if(physicsSystem.has_value())
+    if(physicsSystem.has_value()){
         physicsSystem.value().setActiveSceneSubsystems(subsystems);
+        physicsSystem.value().validateResources();
+    }
 
     const Optional<mut RendererSystem> rendererSystem = world.borrowSystem<RendererSystem>();
     if(rendererSystem.has_value())
@@ -418,6 +461,52 @@ void DestroyPhysicsSceneEntities(mut NotNullUniquePtr<World> worldHandle, mut En
     configEntity = EntityID();
 }
 
+void SetStartupGroundPlaneActive(
+    mut NotNullUniquePtr<World> worldHandle,
+    in InstantiatedSceneEntities startupEntities,
+    in b8 active
+){
+    mut World world = worldHandle.deref();
+    for(usize i = 0u; i < startupEntities.entities.size(); ++i){
+        const EntityID e = startupEntities.entities[i];
+        if(!e.valid() || !world.alive(e))
+            continue;
+        if(!world.hasComponent<RigidBodyComponent>(e) || !world.hasComponent<ColliderComponent>(e))
+            continue;
+        mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(e);
+        if(active){
+            if(world.hasComponent<TransformComponent>(e))
+                world.getComponent<TransformComponent>(e).position.y = 0.0f;
+            rb.isEnabled = true;
+            rb.dirty = true;
+        }
+        else{
+            if(world.hasComponent<TransformComponent>(e))
+                world.getComponent<TransformComponent>(e).position.y = -1000.0f;
+            rb.isEnabled = false;
+            rb.dirty = true;
+        }
+    }
+}
+
+void SetPhysicsPaused(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in b8 paused){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
+    cfg.paused = paused;
+    cfg.dirty = true;
+}
+
+void SetPhysicsInterpolateTransforms(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in b8 enabled){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
+    cfg.interpolateTransforms = enabled;
+    cfg.dirty = true;
+}
+
 void ApplyPhysicsBackendChoice(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in TestbedPhysicsBackendChoice choice){
     mut World world = worldHandle.deref();
     if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
@@ -464,20 +553,6 @@ void CreateDefaultPhysicsScene(
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
     const Name whiteMatName = Name("project/materials/mat_white_opaque");
-
-    outEntities.push_back(
-        SpawnPhysicsStaticBox(
-            world,
-            VectorSingle(0.0f, -0.25f, 0.0f, 0.0f),
-            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
-            VectorSingle(3.0f, 0.25f, 3.0f, 0.0f),
-            0.7f,
-            0.1f,
-            false,
-            boxModelName,
-            whiteMatName
-        )
-    );
 
     for(u32 i = 0u; i < 4u; ++i){
         outEntities.push_back(
@@ -644,8 +719,11 @@ void CreateStressPhysicsScene(
             jc.bodyEntityA = prevId;
             jc.bodyEntityB = linkId;
             jc.type = JointType::Spherical;
-            jc.localAnchorA = f32x4(0.0f, -0.18f, 0.0f, 0.0f);
-            jc.localAnchorB = f32x4(0.0f, 0.18f, 0.0f, 0.0f);
+            f32 localAnchorAY = -0.18f / 0.22f;
+            if(linkIdx == 0u)
+                localAnchorAY = -0.18f / 0.24f;
+            jc.localAnchorA = f32x4(0.0f, localAnchorAY, 0.0f, 0.0f);
+            jc.localAnchorB = f32x4(0.0f, 0.18f / 0.22f, 0.0f, 0.0f);
             jc.collideConnected = false;
             jc.dirty = true;
             outEntities.push_back(jointEntity.id());
@@ -681,12 +759,25 @@ void SyncWorldModelRuntimes(mut NotNullUniquePtr<World> worldHandle){
 }
 
 b8 TickProjectWorld(mut NotNullUniquePtr<World> worldHandle, in f32 safeDelta){
-    const Expected<void, CpuTaskAdmissionErrorCode> updated = worldHandle.deref().tick(safeDelta);
+    const Expected<void, CpuTaskAdmissionError> updated = worldHandle.deref().tick(safeDelta);
     if(!updated.has_value()){
         error("Project: world update rejected CPU work: {}", cast<u32>(updated.error()));
         return false;
     }
     return true;
+}
+
+void QueryUiCaptureState(mut NotNullUniquePtr<World> worldHandle, mut b8 outPointerCaptured, mut b8 outKeyboardCaptured){
+    const Optional<mut UiLayerSystem> uiLayerSystem = worldHandle.deref().borrowSystem<UiLayerSystem>();
+    if(uiLayerSystem.has_value()){
+        in UiLayerSystem ui = uiLayerSystem.value();
+        outPointerCaptured = ui.wantsPointer();
+        outKeyboardCaptured = ui.wantsKeyboard();
+    }
+    else{
+        outPointerCaptured = false;
+        outKeyboardCaptured = false;
+    }
 }
 
 b8 WantsUiKeyboard(mut NotNullUniquePtr<World> worldHandle){
@@ -740,8 +831,12 @@ void ApplyFlyCameraInputToMainCamera(
     ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds);
 }
 
-b8 InstantiateSceneSubsystemsEntities(in ActiveSceneSubsystems sceneSubsystems, mut NotNullUniquePtr<World> worldHandle){
-    return sceneSubsystems.instantiateEntities(worldHandle.deref());
+b8 InstantiateSceneSubsystemsEntities(
+    in ActiveSceneSubsystems sceneSubsystems,
+    mut NotNullUniquePtr<World> worldHandle,
+    mut InstantiatedSceneEntities outInstantiated
+){
+    return sceneSubsystems.instantiateEntities(worldHandle.deref(), outInstantiated);
 }
 
 AssetRef<Texture> ResolveUiGallerySkinTextureRef(in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
@@ -761,49 +856,43 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     return LoadImageSource(pool, context.assetManager, textureRef);
 }
 
-void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPaintContext context){
+PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
+    in PhysicsDebugDrawOptions options,
+    mut NotNullUniquePtr<World> worldHandle,
+    mut UiPaintContext context,
+    mut PhysicsDebugDrawScratch debugScratch,
+    mut Vector<PaintLineSegment> screenLines
+){
     mut World world = worldHandle.deref();
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
     if(!physicsSystem.has_value())
-        return;
+        return PhysicsDebugDrawStats();
 
     const DisplayMetrics metrics = context.paint.displayMetrics();
     if(metrics.logicalWidth <= 0.0f || metrics.logicalHeight <= 0.0f)
-        return;
+        return PhysicsDebugDrawStats();
 
     const VectorSingle hVec(metrics.logicalHeight);
     const VectorSingle oneVec(1.0f);
     const SceneCameraView cameraView = ResolveSceneCameraView(world, metrics.logicalWidth / VectorSelect(oneVec, hVec, VectorGreater(hVec, oneVec)).x);
     if(!cameraView.valid())
-        return;
-
-    Vector<PhysicsDebugLine> debugLines;
-    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), PhysicsDebugDrawOptions(), debugLines);
-    if(debugLines.empty())
-        return;
+        return PhysicsDebugDrawStats();
 
     in TransformComponent camXf = cameraView.components.value().transform;
     in CameraProjection camProj = cameraView.projection;
     const PhysicsDebugScreenProjector projector(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight);
     if(!projector.valid())
-        return;
+        return PhysicsDebugDrawStats();
 
-    const VectorSingle camPos = projector.camPos();
-    const VectorSingle camRight = projector.right();
-    const VectorSingle camUp = projector.up();
-    const VectorSingle camForward = projector.forward();
-    const f32 projX = projector.projX();
-    const f32 projY = projector.projY();
-    const f32 zMin = projector.zMin();
-    const f32 halfWidth = projector.halfWidth();
-    const f32 halfHeight = projector.halfHeight();
-    for(usize li = 0u; li < debugLines.size(); ++li){
-        in PhysicsDebugLine line = debugLines[li];
-        VectorSingle seg(0.0f);
-        if(ProjectPhysicsWorldSegmentValues(camPos, camRight, camUp, camForward, projX, projY, zMin, halfWidth, halfHeight, VectorSingle(line.start), VectorSingle(line.end), seg)){
-            context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
-        }
+    TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
+    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
+    if(!screenLines.empty()){
+        f32 lineThickness = 1.5f;
+        if(IsFinite(VectorSingle(options.lineThickness)) && options.lineThickness > 0.0f)
+            lineThickness = options.lineThickness;
+        context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
     }
+    return stats;
 }
 
 

@@ -1,0 +1,447 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/cook_components.adhd>
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_PhysicsMaterialDiagnosticPrefix = "PhysicsMaterial meta";
+const StringView s_CollisionLayerMatrixDiagnosticPrefix = "CollisionLayerMatrix meta";
+const StringView s_ConvexHullDiagnosticPrefix = "ConvexHull meta";
+const StringView s_CollisionMeshDiagnosticPrefix = "CollisionMesh meta";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PhysicsMaterialCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SurfaceMaterial material;
+}
+
+class CollisionLayerMatrixCookEntry{
+    public Name virtualPath = s_NameNone;
+    public CollisionLayerMatrix matrix;
+}
+
+class ConvexHullCookEntry{
+    public Name virtualPath = s_NameNone;
+    public HullShape hull;
+}
+
+class CollisionMeshCookEntry{
+    public Name virtualPath = s_NameNone;
+    public MeshShape mesh;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[asset_writer]
+b8 SerializePhysicsMaterialAsset(in PhysicsMaterialAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializePhysicsMaterialUnchecked(asset.material, outBinary);
+}
+
+[asset_writer]
+b8 SerializeCollisionLayerMatrixAsset(in CollisionLayerMatrixAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrixUnchecked(asset.matrix, outBinary);
+}
+
+[asset_writer]
+b8 SerializeConvexHullAsset(in ConvexHullAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hull, outBinary);
+}
+
+[asset_writer]
+b8 SerializeCollisionMeshAsset(in CollisionMeshAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.mesh, outBinary);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<PhysicsMaterialCookEntry> ParsePhysicsMaterialCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsMaterialCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_PhysicsMaterialDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsMaterialDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(value.isMap()){
+        if(!ParseSurfaceMaterialMap(file, value, s_PhysicsMaterialDiagnosticPrefix, entry.material))
+            return MakeUnexpected(Failure());
+    }
+
+    if(!PhysicsAssetBinaryCodec().validatePhysicsMaterial(entry.material, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 ResolveCollisionLayerSpecifier(
+    in Path file,
+    in MetascriptValue val,
+    in CollisionLayerMatrix matrix,
+    in StringView field,
+    mut u32 outIndex
+){
+    if(val.isInteger()){
+        const i64 idx = val.asInteger();
+        if(idx < 0 || idx >= cast<i64>(s_MaxCollisionLayers)){
+            error("{} '{}': field '{}' layer index {} is out of range", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), field, idx);
+            return false;
+        }
+        outIndex = cast<u32>(idx);
+        return true;
+    }
+    const Expected<StringView> nameRes = ReadPhysicsStringValue(file, val, s_CollisionLayerMatrixDiagnosticPrefix, field);
+    if(!nameRes.has_value())
+        return false;
+    const Expected<Name> parsed = ParseName(nameRes.value());
+    if(!parsed.has_value() || parsed.value() == s_NameNone){
+        error("{} '{}': invalid layer name in '{}'", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), field);
+        return false;
+    }
+    const u32 idx = matrix.findLayerIndex(parsed.value());
+    if(idx >= s_MaxCollisionLayers){
+        error("{} '{}': unknown layer '{}' in '{}'", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), nameRes.value(), field);
+        return false;
+    }
+    outIndex = idx;
+    return true;
+}
+
+Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    CollisionLayerMatrixCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_CollisionLayerMatrixDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionLayerMatrixDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(value.isMap()){
+        const Optional<in MetascriptValue> defaultCollideOpt = value.borrowField("default_collide");
+        if(defaultCollideOpt.has_value()){
+            b8 defaultCollide = true;
+            if(!ReadPhysicsBoolValue(file, defaultCollideOpt.value(), s_CollisionLayerMatrixDiagnosticPrefix, "default_collide", defaultCollide))
+                return MakeUnexpected(Failure());
+            u32 fillMask = u32.max;
+            if(!defaultCollide)
+                fillMask = 0u;
+            for(u32 i = 0u; i < s_MaxCollisionLayers; ++i)
+                entry.matrix.layerMasks[i] = fillMask;
+        }
+
+        const Optional<in MetascriptValue> layersOpt = value.borrowField("layers");
+        if(layersOpt.has_value()){
+            in MetascriptValue layersVal = layersOpt.value();
+            if(!layersVal.isList()){
+                error("{} '{}': field 'layers' must be a list of up to 32 layer names", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file));
+                return MakeUnexpected(Failure());
+            }
+            const Span<MetascriptValue> items = layersVal.listView();
+            if(items.size() > cast<usize>(s_MaxCollisionLayers)){
+                error("{} '{}': field 'layers' supports at most 32 layers", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file));
+                return MakeUnexpected(Failure());
+            }
+            for(usize i = 0u; i < items.size(); ++i){
+                if(items[i].isString() && items[i].asString().empty()){
+                    entry.matrix.layerNames[i] = s_NameNone;
+                    continue;
+                }
+                Name layerName = s_NameNone;
+                if(!ReadPhysicsNameValue(file, items[i], s_CollisionLayerMatrixDiagnosticPrefix, "layers", layerName))
+                    return MakeUnexpected(Failure());
+                entry.matrix.layerNames[i] = layerName;
+            }
+        }
+
+        if(!value.forEachMapEntry(lambda[in file, mut entry](in StringView key, in MetascriptValue fieldVal) -> b8{
+            if(key == "layers" || key == "default_collide")
+                return true;
+            if(key == "disable_pairs" || key == "enable_pairs"){
+                const b8 collideVal = (key == "enable_pairs");
+                if(!fieldVal.isList()){
+                    error("{} '{}': field '{}' must be a list of [layerA, layerB] pairs", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), key);
+                    return false;
+                }
+                const Span<MetascriptValue> pairs = fieldVal.listView();
+                for(usize pi = 0u; pi < pairs.size(); ++pi){
+                    if(!pairs[pi].isList() || pairs[pi].listView().size() != 2u){
+                        error("{} '{}': field '{}'[{}] must be a 2-element list", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), key, pi);
+                        return false;
+                    }
+                    const Span<MetascriptValue> pairItems = pairs[pi].listView();
+                    u32 idxA = u32.max;
+                    u32 idxB = u32.max;
+                    if(!ResolveCollisionLayerSpecifier(file, pairItems[0u], entry.matrix, key, idxA)
+                        || !ResolveCollisionLayerSpecifier(file, pairItems[1u], entry.matrix, key, idxB))
+                        return false;
+                    entry.matrix.setLayersCollide(idxA, idxB, collideVal);
+                }
+                return true;
+            }
+            error("{} '{}': unsupported asset field '{}'", s_CollisionLayerMatrixDiagnosticPrefix, PathToString(file), key);
+            return false;
+        }))
+            return MakeUnexpected(Failure());
+    }
+
+    if(!PhysicsAssetBinaryCodec().validateCollisionLayerMatrix(entry.matrix, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    ConvexHullCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_ConvexHullDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ConvexHullDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    b8 isBox = false;
+    b8 hasHalfExtents = false;
+    VectorSingle halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    VectorSingle boxRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    u32 rotFieldCount = 0u;
+    f32 skinRadius = 0.0f;
+    Vector<f32x4> points;
+
+    if(!value.forEachMapEntry(lambda[in file, mut isBox, mut hasHalfExtents, mut halfExtents, mut boxRotation, mut rotFieldCount, mut skinRadius, mut points](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "is_box") return ReadPhysicsBoolValue(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, isBox);
+        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, skinRadius);
+        if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, points);
+        if(key == "half_extents"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, v))
+                return false;
+            halfExtents = v;
+            hasHalfExtents = true;
+            return true;
+        }
+        if(key == "box_rotation" || key == "box_rotation_euler" || key == "box_rotation_euler_degrees"){
+            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+            if(!ReadPhysicsRotationVectorValue(
+                file,
+                fieldVal,
+                s_ConvexHullDiagnosticPrefix,
+                key,
+                "box_rotation",
+                "box_rotation_euler",
+                "box_rotation_euler_degrees",
+                key == "box_rotation",
+                key == "box_rotation_euler_degrees",
+                rotFieldCount,
+                q
+            ))
+                return false;
+            boxRotation = q;
+            return true;
+        }
+        error("{} '{}': unsupported asset field '{}'", s_ConvexHullDiagnosticPrefix, PathToString(file), key);
+        return false;
+    }))
+        return MakeUnexpected(Failure());
+
+    if(!IsFinite(VectorSingle(skinRadius)) || skinRadius < 0.0f){
+        error("{} '{}': invalid 'skin_radius'", s_ConvexHullDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+
+    if(isBox){
+        if(!hasHalfExtents || halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f){
+            error("{} '{}': box hull requires positive 'half_extents'", s_ConvexHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        const Expected<HullShape> built = MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, skinRadius);
+        if(!built.has_value()){
+            error("{} '{}': failed to construct box convex hull", s_ConvexHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        HullShape boxHull = built.value();
+        const b8 hasRot = !Vector3LessOrEqual(Abs(boxRotation), VectorSingle(1.0e-5f));
+        if(hasRot){
+            boxHull.boxRotation = f32x4(boxRotation);
+            for(usize vi = 0u; vi < boxHull.vertices.size(); ++vi)
+                boxHull.vertices[vi] = f32x3u(Vector3Rotate(VectorSingle(boxHull.vertices[vi], 0.0f), boxRotation));
+            for(usize fi = 0u; fi < boxHull.facePlanes.size(); ++fi){
+                const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(boxHull.facePlanes[fi].normalOffset), boxRotation), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                boxHull.facePlanes[fi] = Plane3D(rotN, boxHull.facePlanes[fi].normalOffset.w);
+            }
+        }
+        entry.hull = boxHull;
+    }
+    else{
+        Expected<HullShape> built = BuildConvexHull(Span<f32x4>(points.data(), points.size()), skinRadius);
+        if(!built.has_value()){
+            error("{} '{}': degenerate or invalid convex hull points", s_ConvexHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        entry.hull = built.value();
+    }
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateConvexHull(entry.hull, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    CollisionMeshCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_CollisionMeshDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionMeshDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    Vector<f32x4> vertices;
+    Vector<u32> indices;
+    f32 skinRadius = 0.0f;
+    MeshSidedness sidedness = MeshSidedness::DoubleSided;
+    Vector<SurfaceMaterial> materials;
+    Vector<u16> triMaterialIndices;
+    Vector<u32> triUserData;
+
+    if(!value.forEachMapEntry(lambda[in file, mut vertices, mut indices, mut skinRadius, mut sidedness, mut materials, mut triMaterialIndices, mut triUserData](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, vertices);
+        if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, indices);
+        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, skinRadius);
+        if(key == "sidedness"){
+            const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key);
+            if(!text.has_value())
+                return false;
+            if(text.value() == "double_sided") sidedness = MeshSidedness::DoubleSided;
+            else if(text.value() == "single_sided") sidedness = MeshSidedness::SingleSided;
+            else{
+                error("{} '{}': field 'sidedness' must be 'double_sided' or 'single_sided'", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            return true;
+        }
+        if(key == "materials"){
+            if(!fieldVal.isList()){
+                error("{} '{}': field 'materials' must be a list of material maps", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            const Span<MetascriptValue> items = fieldVal.listView();
+            materials.clear();
+            materials.resize(items.size());
+            for(usize i = 0u; i < items.size(); ++i){
+                if(!items[i].isMap()){
+                    error("{} '{}': 'materials[{}]' must be a map", s_CollisionMeshDiagnosticPrefix, PathToString(file), i);
+                    return false;
+                }
+                if(!ParseSurfaceMaterialMap(file, items[i], s_CollisionMeshDiagnosticPrefix, materials[i]))
+                    return false;
+            }
+            return true;
+        }
+        if(key == "triangle_material_indices")
+            return ReadPhysicsU16ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triMaterialIndices);
+        if(key == "triangle_user_data")
+            return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triUserData);
+        error("{} '{}': unsupported asset field '{}'", s_CollisionMeshDiagnosticPrefix, PathToString(file), key);
+        return false;
+    }))
+        return MakeUnexpected(Failure());
+
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
+        error("{} '{}': collision mesh requires non-empty vertices and triangle-multiple indices", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    for(usize i = 0u; i < indices.size(); ++i){
+        if(cast<usize>(indices[i]) >= vertices.size()){
+            error("{} '{}': index {} out of vertex bounds", s_CollisionMeshDiagnosticPrefix, PathToString(file), indices[i]);
+            return MakeUnexpected(Failure());
+        }
+    }
+
+    Expected<MeshShape> built = MakeMeshShapeWithMaterials(
+        Span<f32x4>(vertices.data(), vertices.size()),
+        Span<u32>(indices.data(), indices.size()),
+        skinRadius,
+        sidedness,
+        Span<SurfaceMaterial>(materials.data(), materials.size()),
+        Span<u16>(triMaterialIndices.data(), triMaterialIndices.size()),
+        Span<u32>(triUserData.data(), triUserData.size())
+    );
+    if(!built.has_value()){
+        error("{} '{}': failed to cook collision mesh BVH", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    entry.mesh = built.value();
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCollisionMesh(entry.mesh, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<PhysicsMaterialCookEntry> ParsePhysicsMaterialCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<PhysicsMaterialCookEntry>(root, virtualRoot, file, document, s_PhysicsMaterialDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<PhysicsMaterialCookEntry>{
+        return ParsePhysicsMaterialCookMetadata(path, file, value);
+    });
+}
+
+Expected<PhysicsMaterialAsset> BuildPhysicsMaterialAsset(in PhysicsMaterialCookEntry entry){
+    PhysicsMaterialAsset asset(entry.virtualPath);
+    asset.setMaterial(entry.material);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<CollisionLayerMatrixCookEntry>(root, virtualRoot, file, document, s_CollisionLayerMatrixDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CollisionLayerMatrixCookEntry>{
+        return ParseCollisionLayerMatrixCookMetadata(path, file, value);
+    });
+}
+
+Expected<CollisionLayerMatrixAsset> BuildCollisionLayerMatrixAsset(in CollisionLayerMatrixCookEntry entry){
+    CollisionLayerMatrixAsset asset(entry.virtualPath);
+    asset.matrix = entry.matrix;
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<ConvexHullCookEntry>(root, virtualRoot, file, document, s_ConvexHullDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<ConvexHullCookEntry>{
+        return ParseConvexHullCookMetadata(path, file, value);
+    });
+}
+
+Expected<ConvexHullAsset> BuildConvexHullAsset(in ConvexHullCookEntry entry){
+    ConvexHullAsset asset(entry.virtualPath);
+    asset.setHull(entry.hull);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<CollisionMeshCookEntry>(root, virtualRoot, file, document, s_CollisionMeshDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CollisionMeshCookEntry>{
+        return ParseCollisionMeshCookMetadata(path, file, value);
+    });
+}
+
+Expected<CollisionMeshAsset> BuildCollisionMeshAsset(in CollisionMeshCookEntry entry){
+    CollisionMeshAsset asset(entry.virtualPath);
+    asset.setMesh(entry.mesh);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

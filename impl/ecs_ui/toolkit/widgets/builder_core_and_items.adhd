@@ -147,7 +147,6 @@ void Builder::reset(){
     this.m_itemSelectableStyles.clear();
     this.m_widgetStyleDirty = true;
     this.m_selectableStyleDirty = true;
-    ++this.m_editViewFrameCounter;
     if(this.m_editBoxCacheEntries.size() >= 256u){
         this.m_editBoxCacheIndex.clear();
         this.m_editBoxCacheEntries.clear();
@@ -314,12 +313,6 @@ Optional<in UiSkinRegion> Builder::region(in Name preferred, in Name fallback)co
             return Optional<in UiSkinRegion>(this.m_skin.value().regions()[fallbackIdx.value()]);
     }
     return Optional<in UiSkinRegion>();
-}
-
-Insets Builder::resolveRegionsPadding(in Insets initial, in Span<Name> names, in Name fallback)const{
-    if(!this.m_skin.has_value())
-        return initial;
-    return ControlStyleMetrics().skinRegionsMaxPadding(this.m_skin.value(), initial, names, fallback);
 }
 
 b8 Builder::loadButtonMetrics(mut Point size, mut Insets padding){

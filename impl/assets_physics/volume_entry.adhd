@@ -3,6 +3,8 @@
 
 
 #include <impl/assets_physics/cook_components.adhd>
+#include <impl/assets_physics/cook_physics_assets.adhd>
+#include <impl/assets_physics/cook_subsystem_components.adhd>
 #include <impl/assets_physics/physics_subsystem.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_subsystem/cook.adhd>
@@ -17,13 +19,145 @@ register_asset PhysicsSubsystem using SubsystemCookRegistration<PhysicsSubsystem
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class PhysicsDepCheckEntry{
+    public Name virtualPath = s_NameNone;
+}
+
+class PhysicsColliderDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<Mesh> meshAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public AssetRef<ConvexHullAsset> convexHullAsset;
+    public AssetRef<CollisionMeshAsset> collisionMeshAsset;
+    public Vector<AssetRef<Mesh>> extraMeshAssets;
+    public Vector<AssetRef<PhysicsMaterialAsset>> extraMaterialAssets;
+    public Vector<AssetRef<ConvexHullAsset>> extraConvexHullAssets;
+    public Vector<AssetRef<CollisionMeshAsset>> extraCollisionMeshAssets;
+}
+
+class PhysicsWorldConfigDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<CollisionLayerMatrixAsset> collisionLayerMatrixAsset;
+}
+
+Expected<PhysicsDepCheckEntry> ParseOptionalPhysicsDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsDepCheckEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_ColliderComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ColliderComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsDepCheckEntry> ParseRequiredPhysicsDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsDepCheckEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_CollisionMeshDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionMeshDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 ReadOptionalColliderDepRef<T>(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView key,
+    mut AssetRef<T> outRef
+){
+    const Optional<in MetascriptValue> fieldOpt = mapVal.borrowField(key);
+    if(!fieldOpt.has_value())
+        return true;
+    const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldOpt.value(), s_ColliderComponentDiagnosticPrefix, key);
+    if(!refText.has_value())
+        return false;
+    const Expected<AssetRef<T>> parsed = ParseReservedAssetRefText<T>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
+    if(!parsed.has_value())
+        return false;
+    outRef = parsed.value();
+    return true;
+}
+
+Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsColliderDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_ColliderComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ColliderComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(
+        !ReadOptionalColliderDepRef<Mesh>(file, value, "mesh_asset", entry.meshAsset)
+        || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, value, "material_asset", entry.materialAsset)
+        || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, value, "convex_hull_asset", entry.convexHullAsset)
+        || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, value, "collision_mesh_asset", entry.collisionMeshAsset)
+    )
+        return MakeUnexpected(Failure());
+    const Optional<in MetascriptValue> extraOpt = value.borrowField("extra_shapes");
+    if(extraOpt.has_value()){
+        if(!extraOpt.value().isList()){
+            error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        const Span<MetascriptValue> items = extraOpt.value().listView();
+        entry.extraMeshAssets.reserve(items.size());
+        entry.extraMaterialAssets.reserve(items.size());
+        entry.extraConvexHullAssets.reserve(items.size());
+        entry.extraCollisionMeshAssets.reserve(items.size());
+        for(usize i = 0u; i < items.size(); ++i){
+            in MetascriptValue item = items[i];
+            if(!item.isMap()){
+                error("{} '{}': 'extra_shapes[{}]' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file), i);
+                return MakeUnexpected(Failure());
+            }
+            AssetRef<Mesh> extraMesh;
+            AssetRef<PhysicsMaterialAsset> extraMat;
+            AssetRef<ConvexHullAsset> extraHull;
+            AssetRef<CollisionMeshAsset> extraCollisionMesh;
+            if(
+                !ReadOptionalColliderDepRef<Mesh>(file, item, "mesh_asset", extraMesh)
+                || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, item, "material_asset", extraMat)
+                || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, item, "convex_hull_asset", extraHull)
+                || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, item, "collision_mesh_asset", extraCollisionMesh)
+            )
+                return MakeUnexpected(Failure());
+            entry.extraMeshAssets.push_back(extraMesh);
+            entry.extraMaterialAssets.push_back(extraMat);
+            entry.extraConvexHullAssets.push_back(extraHull);
+            entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
+        }
+    }
+    return entry;
+}
+
+Expected<PhysicsWorldConfigDepEntry> ParsePhysicsWorldConfigDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsWorldConfigDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsWorldConfigComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    const Optional<in MetascriptValue> fieldOpt = value.borrowField("collision_layer_matrix_asset");
+    if(fieldOpt.has_value()){
+        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldOpt.value(), s_PhysicsWorldConfigComponentDiagnosticPrefix, "collision_layer_matrix_asset");
+        if(!refText.has_value())
+            return MakeUnexpected(Failure());
+        const Expected<AssetRef<CollisionLayerMatrixAsset>> parsed = ParseReservedAssetRefText<CollisionLayerMatrixAsset>(
+            file,
+            s_PhysicsWorldConfigComponentDiagnosticPrefix,
+            "collision_layer_matrix_asset",
+            refText.value()
+        );
+        if(!parsed.has_value())
+            return MakeUnexpected(Failure());
+        entry.collisionLayerMatrixAsset = parsed.value();
+    }
+    return entry;
+}
+
 [cook_entry("component", s_RigidBodyComponentDiagnosticPrefix, ParseRigidBodyComponentCookMetadata, document_and_value, log_failure, RigidBodyComponentCodec)]
 Expected<RigidBodyComponentAsset> CookRigidBodyComponentVolumeEntry(in RigidBodyComponentCookEntry entry){
     return BuildComponentAssetFromEntry<RigidBodyComponentAsset, RigidBodyComponentCookEntry>(entry);
 }
 
 b8 ExtractRigidBodyComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ReadCookDependencyEntry<RigidBodyComponentCookEntry>(context, s_RigidBodyComponentDiagnosticPrefix, ParseRigidBodyComponentCookMetadata).has_value();
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_RigidBodyComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
 }
 
 [cook_entry("component", s_ColliderComponentDiagnosticPrefix, ParseColliderComponentCookMetadata, document_and_value, log_failure, ColliderComponentCodec)]
@@ -31,16 +165,33 @@ Expected<ColliderComponentAsset> CookColliderComponentVolumeEntry(in ColliderCom
     return BuildComponentAssetFromEntry<ColliderComponentAsset, ColliderComponentCookEntry>(entry);
 }
 
+b8 CollectColliderAssetDependencies(
+    in AssetRef<Mesh> meshAsset,
+    in AssetRef<PhysicsMaterialAsset> materialAsset,
+    in AssetRef<ConvexHullAsset> convexHullAsset,
+    in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+    mut ICookDependencyCollector collector
+){
+    if(meshAsset.valid() && !collector.addAssetDependency(meshAsset.name(), Mesh::AssetTypeName()))
+        return false;
+    if(materialAsset.valid() && !collector.addAssetDependency(materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    if(convexHullAsset.valid() && !collector.addAssetDependency(convexHullAsset.name(), ConvexHullAsset::AssetTypeName()))
+        return false;
+    if(collisionMeshAsset.valid() && !collector.addAssetDependency(collisionMeshAsset.name(), CollisionMeshAsset::AssetTypeName()))
+        return false;
+    return true;
+}
+
 b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    const Expected<ColliderComponentCookEntry> entry = ReadCookDependencyEntry<ColliderComponentCookEntry>(context, s_ColliderComponentDiagnosticPrefix, ParseColliderComponentCookMetadata);
-    if(!entry.has_value())
+    const Expected<PhysicsColliderDepEntry> entryRes = ReadCookDependencyEntry<PhysicsColliderDepEntry>(context, s_ColliderComponentDiagnosticPrefix, ParseColliderDepEntry);
+    if(!entryRes.has_value())
         return false;
-    in ColliderComponent comp = entry.value().component;
-    if(comp.meshAsset.valid() && !collector.addAssetDependency(comp.meshAsset.name(), Mesh::AssetTypeName()))
+    in PhysicsColliderDepEntry dep = entryRes.value();
+    if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.collisionMeshAsset, collector))
         return false;
-    for(usize i = 0u; i < comp.extraShapes.size(); ++i){
-        in AssetRef<Mesh> extraMesh = comp.extraShapes[i].meshAsset;
-        if(extraMesh.valid() && !collector.addAssetDependency(extraMesh.name(), Mesh::AssetTypeName()))
+    for(usize i = 0u; i < dep.extraMeshAssets.size(); ++i){
+        if(!CollectColliderAssetDependencies(dep.extraMeshAssets[i], dep.extraMaterialAssets[i], dep.extraConvexHullAssets[i], dep.extraCollisionMeshAssets[i], collector))
             return false;
     }
     return true;
@@ -52,7 +203,7 @@ Expected<JointComponentAsset> CookJointComponentVolumeEntry(in JointComponentCoo
 }
 
 b8 ExtractJointComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ReadCookDependencyEntry<JointComponentCookEntry>(context, s_JointComponentDiagnosticPrefix, ParseJointComponentCookMetadata).has_value();
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_JointComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
 }
 
 [cook_entry("component", s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata, document_and_value, log_failure, PhysicsWorldConfigComponentCodec)]
@@ -61,7 +212,17 @@ Expected<PhysicsWorldConfigComponentAsset> CookPhysicsWorldConfigComponentVolume
 }
 
 b8 ExtractPhysicsWorldConfigComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ReadCookDependencyEntry<PhysicsWorldConfigComponentCookEntry>(context, s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata).has_value();
+    const Expected<PhysicsWorldConfigDepEntry> entryRes = ReadCookDependencyEntry<PhysicsWorldConfigDepEntry>(
+        context,
+        s_PhysicsWorldConfigComponentDiagnosticPrefix,
+        ParsePhysicsWorldConfigDepEntry
+    );
+    if(!entryRes.has_value())
+        return false;
+    in AssetRef<CollisionLayerMatrixAsset> matrixAsset = entryRes.value().collisionLayerMatrixAsset;
+    if(matrixAsset.valid() && !collector.addAssetDependency(matrixAsset.name(), CollisionLayerMatrixAsset::AssetTypeName()))
+        return false;
+    return true;
 }
 
 [cook_entry("component", s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata, document_and_value, log_failure, PhysicsParentComponentCodec)]
@@ -70,7 +231,123 @@ Expected<PhysicsParentComponentAsset> CookPhysicsParentComponentVolumeEntry(in P
 }
 
 b8 ExtractPhysicsParentComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ReadCookDependencyEntry<PhysicsParentComponentCookEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata).has_value();
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_CharacterControllerComponentDiagnosticPrefix, ParseCharacterControllerComponentCookMetadata, document_and_value, log_failure, CharacterControllerComponentCodec)]
+Expected<CharacterControllerComponentAsset> CookCharacterControllerComponentVolumeEntry(in CharacterControllerComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<CharacterControllerComponentAsset, CharacterControllerComponentCookEntry>(entry);
+}
+
+b8 ExtractCharacterControllerComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_CharacterControllerComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_VehicleComponentDiagnosticPrefix, ParseVehicleComponentCookMetadata, document_and_value, log_failure, VehicleComponentCodec)]
+Expected<VehicleComponentAsset> CookVehicleComponentVolumeEntry(in VehicleComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<VehicleComponentAsset, VehicleComponentCookEntry>(entry);
+}
+
+b8 ExtractVehicleComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_VehicleComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_RagdollComponentDiagnosticPrefix, ParseRagdollComponentCookMetadata, document_and_value, log_failure, RagdollComponentCodec)]
+Expected<RagdollComponentAsset> CookRagdollComponentVolumeEntry(in RagdollComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<RagdollComponentAsset, RagdollComponentCookEntry>(entry);
+}
+
+b8 ExtractRagdollComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_RagdollComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_FluidVolumeComponentDiagnosticPrefix, ParseFluidVolumeComponentCookMetadata, document_and_value, log_failure, FluidVolumeComponentCodec)]
+Expected<FluidVolumeComponentAsset> CookFluidVolumeComponentVolumeEntry(in FluidVolumeComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<FluidVolumeComponentAsset, FluidVolumeComponentCookEntry>(entry);
+}
+
+b8 ExtractFluidVolumeComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_FluidVolumeComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_ForceFieldComponentDiagnosticPrefix, ParseForceFieldComponentCookMetadata, document_and_value, log_failure, ForceFieldComponentCodec)]
+Expected<ForceFieldComponentAsset> CookForceFieldComponentVolumeEntry(in ForceFieldComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ForceFieldComponentAsset, ForceFieldComponentCookEntry>(entry);
+}
+
+b8 ExtractForceFieldComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_ForceFieldComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_ArticulationComponentDiagnosticPrefix, ParseArticulationComponentCookMetadata, document_and_value, log_failure, ArticulationComponentCodec)]
+Expected<ArticulationComponentAsset> CookArticulationComponentVolumeEntry(in ArticulationComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ArticulationComponentAsset, ArticulationComponentCookEntry>(entry);
+}
+
+b8 ExtractArticulationComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_ArticulationComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_SoftBodyComponentDiagnosticPrefix, ParseSoftBodyComponentCookMetadata, document_and_value, log_failure, SoftBodyComponentCodec)]
+Expected<SoftBodyComponentAsset> CookSoftBodyComponentVolumeEntry(in SoftBodyComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<SoftBodyComponentAsset, SoftBodyComponentCookEntry>(entry);
+}
+
+b8 ExtractSoftBodyComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_SoftBodyComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("component", s_GpuRenderTransformExportComponentDiagnosticPrefix, ParseGpuRenderTransformExportComponentCookMetadata, document_and_value, log_failure, GpuRenderTransformExportComponentCodec)]
+Expected<GpuRenderTransformExportComponentAsset> CookGpuRenderTransformExportComponentVolumeEntry(in GpuRenderTransformExportComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<GpuRenderTransformExportComponentAsset, GpuRenderTransformExportComponentCookEntry>(entry);
+}
+
+b8 ExtractGpuRenderTransformExportComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_GpuRenderTransformExportComponentDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("physics_material", s_PhysicsMaterialDiagnosticPrefix, ParsePhysicsMaterialCookMetadata, document_and_value, log_failure)]
+Expected<PhysicsMaterialAsset> CookPhysicsMaterialVolumeEntry(in PhysicsMaterialCookEntry entry){
+    PhysicsMaterialAsset asset(entry.virtualPath);
+    asset.setMaterial(entry.material);
+    return asset;
+}
+
+b8 ExtractPhysicsMaterialDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_PhysicsMaterialDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("collision_layer_matrix", s_CollisionLayerMatrixDiagnosticPrefix, ParseCollisionLayerMatrixCookMetadata, document_and_value, log_failure)]
+Expected<CollisionLayerMatrixAsset> CookCollisionLayerMatrixVolumeEntry(in CollisionLayerMatrixCookEntry entry){
+    CollisionLayerMatrixAsset asset(entry.virtualPath);
+    asset.matrix = entry.matrix;
+    return asset;
+}
+
+b8 ExtractCollisionLayerMatrixDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_CollisionLayerMatrixDiagnosticPrefix, ParseOptionalPhysicsDepEntry).has_value();
+}
+
+[cook_entry("convex_hull", s_ConvexHullDiagnosticPrefix, ParseConvexHullCookMetadata, document_and_value, log_failure)]
+Expected<ConvexHullAsset> CookConvexHullVolumeEntry(in ConvexHullCookEntry entry){
+    ConvexHullAsset asset(entry.virtualPath);
+    asset.setHull(entry.hull);
+    return asset;
+}
+
+b8 ExtractConvexHullDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_ConvexHullDiagnosticPrefix, ParseRequiredPhysicsDepEntry).has_value();
+}
+
+[cook_entry("collision_mesh", s_CollisionMeshDiagnosticPrefix, ParseCollisionMeshCookMetadata, document_and_value, log_failure)]
+Expected<CollisionMeshAsset> CookCollisionMeshVolumeEntry(in CollisionMeshCookEntry entry){
+    CollisionMeshAsset asset(entry.virtualPath);
+    asset.setMesh(entry.mesh);
+    return asset;
+}
+
+b8 ExtractCollisionMeshDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_CollisionMeshDiagnosticPrefix, ParseRequiredPhysicsDepEntry).has_value();
 }
 
 [cook_registrar]
@@ -79,7 +356,19 @@ b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry)
         && registry.registerType(ColliderComponentAsset::AssetTypeName(), ExtractColliderComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(JointComponentAsset::AssetTypeName(), ExtractJointComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName())
-        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName());
+        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(CharacterControllerComponentAsset::AssetTypeName(), ExtractCharacterControllerComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(VehicleComponentAsset::AssetTypeName(), ExtractVehicleComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(RagdollComponentAsset::AssetTypeName(), ExtractRagdollComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(FluidVolumeComponentAsset::AssetTypeName(), ExtractFluidVolumeComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ForceFieldComponentAsset::AssetTypeName(), ExtractForceFieldComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ArticulationComponentAsset::AssetTypeName(), ExtractArticulationComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(SoftBodyComponentAsset::AssetTypeName(), ExtractSoftBodyComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(GpuRenderTransformExportComponentAsset::AssetTypeName(), ExtractGpuRenderTransformExportComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(PhysicsMaterialAsset::AssetTypeName(), ExtractPhysicsMaterialDependencies)
+        && registry.registerType(CollisionLayerMatrixAsset::AssetTypeName(), ExtractCollisionLayerMatrixDependencies)
+        && registry.registerType(ConvexHullAsset::AssetTypeName(), ExtractConvexHullDependencies)
+        && registry.registerType(CollisionMeshAsset::AssetTypeName(), ExtractCollisionMeshDependencies);
 }
 
 

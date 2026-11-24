@@ -16,34 +16,114 @@ type UiSearchComboSource = UiFilteredListSource<UiFilteredListState<UiSearchComb
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclareSelectedKeyLabel(mut Builder ui, in u64 selectedKey){
-    const String text = StringFormat("{}{}", s_SelectedTextPrefix, selectedKey);
-    return ui.label(s_SelectedKey, StringView(text));
+class UiSelectedKeyLabelCache{
+    public CompactString text;
+    public u64 key = 0u;
+    public b8 valid = false;
 }
 
-b8 DeclareCommittedNumericLabel(mut Builder ui, in i64 integerValue, in f64 floatValue){
-    const String text = StringFormat("Committed: {} / {}", integerValue, floatValue);
-    return ui.label("committed", StringView(text));
+class UiCommittedNumericLabelCache{
+    public String text;
+    public i64 integerValue = 0;
+    public u64 floatBits = 0u;
+    public b8 valid = false;
 }
 
-b8 DeclarePopupToolsStatusLabel(mut Builder ui, in u64 commandKey, in u32 anchorClicks){
-    const String text = StringFormat("Command: {} / Clicks: {}", commandKey, anchorClicks);
-    return ui.label(s_SelectedKey, StringView(text));
+class UiPopupToolsStatusLabelCache{
+    public CompactString text;
+    public u64 commandKey = 0u;
+    public u32 anchorClicks = 0u;
+    public b8 valid = false;
 }
 
-b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent){
-    const String text = StringFormat("Completed: {:.0f}%", percent);
-    return ui.label("value", StringView(text));
+class UiProgressPercentLabelCache{
+    public String text;
+    public u64 percentBits = 0u;
+    public b8 valid = false;
 }
 
-b8 DeclareGallerySectionLabel(mut Builder ui, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
-    const String text = StringFormat("UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
-    return ui.label("section", StringView(text));
+class UiGallerySectionLabelCache{
+    public CompactString text;
+    public CompactString sectionName;
+    public u32 sectionNumber = 0u;
+    public u32 sectionCount = 0u;
+    public b8 valid = false;
 }
 
-b8 DeclareCounterLabel(mut Builder ui, in u32 count){
-    const String text = StringFormat("Count: {}", count);
-    return ui.label("count", StringView(text));
+class UiCounterLabelCache{
+    public CompactString text;
+    public u32 count = 0u;
+    public b8 valid = false;
+}
+
+b8 DeclareSelectedKeyLabel(mut Builder ui, in u64 selectedKey, mut UiSelectedKeyLabelCache cache){
+    if(!cache.valid || cache.key != selectedKey){
+        b8 ok = cache.text.assign(s_SelectedTextPrefix);
+        AppendUnsignedU64Text(cache.text, selectedKey);
+        cache.key = selectedKey;
+        cache.valid = ok;
+    }
+    return ui.label(s_SelectedKey, cache.text.view());
+}
+
+b8 DeclareCommittedNumericLabel(mut Builder ui, in i64 integerValue, in f64 floatValue, mut UiCommittedNumericLabelCache cache){
+    const u64 floatBits = bit_cast<u64>(floatValue);
+    if(!cache.valid || cache.integerValue != integerValue || cache.floatBits != floatBits){
+        cache.text = StringFormat("Committed: {} / {}", integerValue, floatValue);
+        cache.integerValue = integerValue;
+        cache.floatBits = floatBits;
+        cache.valid = true;
+    }
+    return ui.label("committed", StringView(cache.text));
+}
+
+b8 DeclarePopupToolsStatusLabel(mut Builder ui, in u64 commandKey, in u32 anchorClicks, mut UiPopupToolsStatusLabelCache cache){
+    if(!cache.valid || cache.commandKey != commandKey || cache.anchorClicks != anchorClicks){
+        b8 ok = cache.text.assign("Command: ");
+        AppendUnsignedU64Text(cache.text, commandKey);
+        ok = cache.text.append(" / Clicks: ") && ok;
+        AppendUnsignedU64Text(cache.text, cast<u64>(anchorClicks));
+        cache.commandKey = commandKey;
+        cache.anchorClicks = anchorClicks;
+        cache.valid = ok;
+    }
+    return ui.label(s_SelectedKey, cache.text.view());
+}
+
+b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent, mut UiProgressPercentLabelCache cache){
+    const u64 percentBits = bit_cast<u64>(percent);
+    if(!cache.valid || cache.percentBits != percentBits){
+        cache.text = StringFormat("Completed: {:.0f}%", percent);
+        cache.percentBits = percentBits;
+        cache.valid = true;
+    }
+    return ui.label("value", StringView(cache.text));
+}
+
+b8 DeclareGallerySectionLabel(mut Builder ui, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName, mut UiGallerySectionLabelCache cache){
+    if(!cache.valid || cache.sectionNumber != sectionNumber || cache.sectionCount != sectionCount || cache.sectionName.view() != sectionName){
+        b8 ok = cache.text.assign("UI samples ");
+        AppendUnsignedU64Text(cache.text, cast<u64>(sectionNumber));
+        ok = cache.text.append("/") && ok;
+        AppendUnsignedU64Text(cache.text, cast<u64>(sectionCount));
+        ok = cache.text.append(": ") && ok;
+        ok = cache.text.append(sectionName) && ok;
+        ok = cache.sectionName.assign(sectionName) && ok;
+        cache.sectionNumber = sectionNumber;
+        cache.sectionCount = sectionCount;
+        cache.valid = ok;
+    }
+    return ui.label("section", cache.text.view());
+}
+
+b8 DeclareCounterLabel(mut Builder ui, in u32 count, mut UiCounterLabelCache cache){
+    if(!cache.valid || cache.count != count){
+        b8 ok = cache.text.assign("Count: ");
+        AppendUnsignedU64Text(cache.text, cast<u64>(count));
+        cache.count = count;
+        cache.valid = ok;
+    }
+    return ui.label("count", cache.text.view());
 }
 
 

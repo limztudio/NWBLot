@@ -13,11 +13,9 @@ type GpuRasterResourceUses = FixedVector<GpuTaskResourceUse, s_GpuRasterResource
 type GpuSampledGraphResources = FixedVector<GpuGraphResourceId, s_PaintMaxImages>;
 
 class GpuSampledTextureImportDesc{
-    public Name readyPrefix;
     public StringView readyMarkerLabel;
     public StringView completionLabel;
     public QueueSubmissionToken readinessToken;
-    public Name texturePrefix;
     public StringView textureMarkerLabel;
     public TextureHandle texture;
     public usize index;
@@ -31,20 +29,16 @@ class GpuSampledTextureImportDesc{
     }
 
     public GpuSampledTextureImportDesc(
-        in Name readyPrefix,
         in StringView readyMarkerLabel,
         in StringView completionLabel,
         in QueueSubmissionToken readinessToken,
-        in Name texturePrefix,
         in StringView textureMarkerLabel,
         in TextureHandle texture,
         in usize index
     ){
-        this.readyPrefix = readyPrefix;
         this.readyMarkerLabel = readyMarkerLabel;
         this.completionLabel = completionLabel;
         this.readinessToken = readinessToken;
-        this.texturePrefix = texturePrefix;
         this.textureMarkerLabel = textureMarkerLabel;
         this.texture = texture;
         this.index = index;
@@ -265,20 +259,6 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
     use.access = GpuTaskResourceAccess::Read;
     uses.push_back(use);
     return textureResult.value();
-}
-
-Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTexture(
-    in GpuSampledTextureImportDesc desc,
-    mut GpuTaskGraph graph,
-    mut GpuRasterResourceUses uses
-){
-    CompactString suffix = CompactString("");
-    AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
-    const Expected<Name> readyIdentity = DeriveName(desc.readyPrefix, suffix.view());
-    const Expected<Name> textureIdentity = DeriveName(desc.texturePrefix, suffix.view());
-    if(!readyIdentity.has_value() || !textureIdentity.has_value())
-        return MakeUnexpected(GpuSampledTextureImportError::Identity);
-    return ImportGpuSampledTextureWithNames(desc, readyIdentity.value(), textureIdentity.value(), graph, uses);
 }
 
 

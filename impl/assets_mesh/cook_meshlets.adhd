@@ -116,16 +116,6 @@ MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in
     return counts;
 }
 
-Expected<MeshletVertexCounts> TryMeshletCanFitTriangle(in MeshletDesc meshlet, in Span<u32> localVertexRefs, in MeshletTriangleData triangle){
-    if(MeshletPrimitiveCount(meshlet) + 1u > s_MeshMaxMeshletTriangles)
-        return MakeUnexpected(Failure());
-
-    const MeshletVertexCounts counts = CountMeshletMissingVertices(localVertexRefs, triangle);
-    if(localVertexRefs.size() + cast<usize>(counts.missing) > cast<usize>(s_MeshMaxMeshletVertices))
-        return MakeUnexpected(Failure());
-    return counts;
-}
-
 MeshletVertexCounts CountMeshletMissingVerticesStamped(
     in Span<u32> vertexMeshletStamps,
     in u32 currentMeshletStamp,

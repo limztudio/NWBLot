@@ -9,10 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Sha256Digest ComputePreparedFontBytesDigest(in Span<u8> bytes){
-    return ComputeSha256(bytes);
-}
-
 void LogPreparedFontReadFailure(in Path path, in StringView reason){
     error("Prepared font '{}': {}", path, reason);
 }

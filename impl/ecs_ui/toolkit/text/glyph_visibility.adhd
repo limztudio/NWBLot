@@ -16,15 +16,6 @@ Optional<in BakedFontAtlas> BorrowSelectedAtlas(in borrow PlacedGlyph glyph, in 
     return Optional<in BakedFontAtlas>(glyph.face.deref().bakedAtlas().deref());
 }
 
-SharedBakedFontAtlas SelectAtlas(in PlacedGlyph glyph, in f32 physicalSize){
-    if(!glyph.face.valid() || !glyph.face.deref().valid())
-        return SharedBakedFontAtlas();
-    in SharedBakedFontAtlas atlas = glyph.face.deref().bakedAtlas();
-    if(!atlas.valid() || !atlas.deref().valid() || !CanUseBakedFontAtlasAtPhysicalSize(atlas.deref().bakePpem(), physicalSize) || !atlas.deref().hasGlyph(glyph.glyphId))
-        return SharedBakedFontAtlas();
-    return atlas;
-}
-
 b8 LoadAtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft, mut VectorDouble outRectangle){
     if(!atlas.valid() || !atlas.hasGlyph(glyph.glyphId))
         return false;

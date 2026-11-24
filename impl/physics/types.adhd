@@ -22,6 +22,19 @@ enum<u8> ShapeType{
     Capsule = 1u,
     Hull = 2u,
     Mesh = 3u,
+    Cylinder = 4u,
+    Cone = 5u,
+    TaperedCapsule = 6u,
+    Heightfield = 7u,
+    Plane = 8u,
+    Segment = 9u,
+    kCount
+}
+
+[reflect]
+enum<u8> MeshSidedness{
+    DoubleSided = 0u,
+    SingleSided = 1u,
     kCount
 }
 
@@ -34,6 +47,20 @@ enum<u8> JointType{
     Fixed = 4u,
     Motor = 5u,
     Wheel = 6u,
+    SixDof = 7u,
+    Gear = 8u,
+    Pulley = 9u,
+    RackAndPinion = 10u,
+    Path = 11u,
+    Rope = 12u,
+    kCount
+}
+
+[reflect]
+enum<u8> JointMotion{
+    Free = 0u,
+    Limited = 1u,
+    Locked = 2u,
     kCount
 }
 
@@ -54,6 +81,16 @@ enum<u8> ExecutionBackendUsed{
     kCount
 }
 
+[reflect]
+enum<u8> MaterialCombineMode{
+    Average = 0u,
+    Min = 1u,
+    Multiply = 2u,
+    Max = 3u,
+    GeometricMean = 4u,
+    kCount
+}
+
 flag<u32> BodyFlags{
     None = 0u,
     LockLinearX = 0x00000001u,
@@ -69,8 +106,11 @@ flag<u32> BodyFlags{
     AllowFastRotation = 0x00000400u,
     Dynamic = 0x00001000u,
     EnableSleep = 0x00002000u,
+    HasEnlargedShapeAabb = 0x00004000u,
     DirtyMass = 0x00008000u,
     EnableGyroscopicTorque = 0x00010000u,
+    HasCustomMaxAngularVelocity = 0x00020000u,
+    JustWoke = 0x00040000u,
 }
 
 const u32 s_BodyFixedRotationFlags =
@@ -117,6 +157,48 @@ class JointId{
     }
 
     public b8 operator==(in JointId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class HullGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in HullGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class MeshGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in MeshGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class HeightfieldGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in HeightfieldGeometryId rhs)const{
         return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
     }
 }
@@ -221,7 +303,33 @@ class Filter{
 }
 
 class SurfaceMaterial{
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
     public f32 friction = 0.6f;
+    public f32 staticFriction = -1.0f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+    public MaterialCombineMode frictionCombineMode = MaterialCombineMode::GeometricMean;
+    public MaterialCombineMode restitutionCombineMode = MaterialCombineMode::Max;
+
+    public void setSurfaceVelocity(in VectorSingle v){
+        this.surfaceVelocity = f32x4(v, 1.0f);
+    }
+
+    public void setAnisotropicFriction(in VectorSingle scales, in VectorSingle direction){
+        this.anisotropicFriction = f32x4(scales, 1.0f);
+        this.frictionDirection = f32x4(direction, 0.0f);
+    }
+}
+
+class MaterialCombineResult{
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32 friction = 0.6f;
+    public f32 staticFriction = 0.6f;
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
@@ -251,9 +359,14 @@ class WorldDef{
     public f32 contactHertz = s_MaxContactHertz;
     public f32 contactDampingRatio = s_DefaultContactDampingRatio;
     public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
+    public f32 timeToSleep = s_TimeToSleep;
     public b8 enableSleep = true;
     public b8 enableContinuous = true;
     public b8 enableContactSoftening = false;
+    public b8 enableGpuCollision = true;
+    public b8 forceGpuCollision = false;
+    public b8 gpuResidentMode = false;
+    public b8 useGpuLbvhBroadphase = false;
 }
 
 class BodyDef{
@@ -266,6 +379,7 @@ class BodyDef{
     public f32 angularDamping = 0.01f;
     public f32 gravityScale = 1.0f;
     public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public f32 maxAngularVelocity = 0.0f;
     public u32 motionLocks = 0u;
     public b8 enableSleep = true;
     public b8 isAwake = true;
@@ -277,6 +391,7 @@ class BodyDef{
 }
 
 class ShapeDef{
+    public Transform3D localTransform;
     public SurfaceMaterial material;
     public Filter filter;
     public f32 density = 1.0f;
@@ -288,6 +403,26 @@ class ShapeDef{
     public b8 invokeContactCreation = false;
     public b8 updateBodyMass = true;
     public u64 userData = 0u;
+}
+
+class ChainDef{
+    public Vector<f32x4> points;
+    public ShapeDef shapeDef;
+    public f32 radius = 0.0f;
+    public b8 isLoop = false;
+}
+
+class SixDofAxisConfig{
+    public JointMotion motion = JointMotion::Locked;
+    public f32 lowerLimit = 0.0f;
+    public f32 upperLimit = 0.0f;
+    public f32 motorTargetVelocity = 0.0f;
+    public f32 motorTargetPosition = 0.0f;
+    public f32 maxMotorForce = 0.0f;
+    public f32 springHertz = 0.0f;
+    public f32 springDampingRatio = 1.0f;
+    public b8 enableMotor = false;
+    public b8 enableSpring = false;
 }
 
 class JointDef{
@@ -321,6 +456,30 @@ class JointDef{
     public f32 breakForce = 0.0f;
     public f32 breakTorque = 0.0f;
     public b8 collideConnected = false;
+    public b8 enabled = true;
+    public b8 enableProjection = false;
+    public f32 projectionLinearTolerance = 0.1f;
+    public f32 projectionAngularTolerance = 0.1f;
+    public f32 invMassScaleA = 1.0f;
+    public f32 invMassScaleB = 1.0f;
+    public f32 invInertiaScaleA = 1.0f;
+    public f32 invInertiaScaleB = 1.0f;
+    public f32 limitRestitution = 0.0f;
+    public f32 limitHertz = 0.0f;
+    public f32 limitDampingRatio = 1.0f;
+    public f32 swingLimitY = 0.0f;
+    public f32 springTarget = 0.0f;
+    public f32 steeringAngle = 0.0f;
+    public f32 suspensionRestLength = 0.0f;
+    public f32 ratio = 1.0f;
+    public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 lengthA = 0.0f;
+    public f32 lengthB = 0.0f;
+    public Array<SixDofAxisConfig, 6u> sixDofAxes;
+    public Vector<f32x4> pathPoints;
+    public b8 pathClosed = false;
+    public b8 pathLockRotation = false;
     public u64 userData = 0u;
 }
 
@@ -328,15 +487,46 @@ class PreSolveContext{
     public ShapeId shapeIdA;
     public ShapeId shapeIdB;
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public Array<f32x4, s_MaxManifoldPoints> points;
     public f32 friction = 0.6f;
+    public f32 staticFriction = -1.0f;
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
+    public u32 pointCount = 0u;
+    public u8 pointEnableMask = 0x0fu;
     public b8 enabled = true;
+
+    public f32 pointSeparation(in u32 idx)const{
+        if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints))
+            return this.points[idx].w;
+        return 0.0f;
+    }
+
+    public b8 isPointEnabled(in u32 idx)const{
+        if(idx >= cast<u32>(s_MaxManifoldPoints))
+            return false;
+        return (cast<u32>(this.pointEnableMask) & (1u << idx)) != 0u;
+    }
+
+    public void setPointEnabled(in u32 idx, in b8 allow){
+        if(idx >= cast<u32>(s_MaxManifoldPoints))
+            return;
+        const u32 bit = 1u << idx;
+        if(allow)
+            this.pointEnableMask = cast<u8>(cast<u32>(this.pointEnableMask) | bit);
+        else
+            this.pointEnableMask = cast<u8>(cast<u32>(this.pointEnableMask) & (0xffu ^ bit));
+    }
 }
 
 type CustomFilterCallback = Func<64u, b8(in ShapeId, in ShapeId)>;
 type PreSolveCallback = Func<64u, b8(mut PreSolveContext)>;
+type MaterialCombineCallback = Func<64u, b8(in ShapeId, in ShapeId, in SurfaceMaterial, in SurfaceMaterial, mut MaterialCombineResult)>;
+type ShapeQueryFilterCallback = Func<64u, b8(in ShapeId)>;
 
 class ExplosionDef{
     public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
@@ -352,30 +542,69 @@ class RayCastInput{
     public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
     public Filter filter;
+    public BodyId ignoreBodyId;
+    public ShapeId ignoreShapeId;
     public b8 hitSensors = false;
+    public b8 cullBackFaces = false;
+    public b8 useCustomFilter = true;
 }
 
 class RayCastHit{
     public ShapeId shapeId;
     public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x2u barycentrics;
     public f32 fraction = 1.0f;
+    public u32 triangleIndex = s_NullIndex;
     public b8 hit = false;
+
+    public RayCastHit(){
+        this.barycentrics = f32x2u(0.0f, 0.0f);
+    }
 }
 
 class ShapeCastInput{
     public Transform3D originTransform;
     public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 endRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32 radius = 0.0f;
     public Filter filter;
+    public BodyId ignoreBodyId;
+    public ShapeId ignoreShapeId;
     public b8 hitSensors = false;
+    public b8 hasRotation = false;
+    public b8 useCustomFilter = true;
 }
 
 class ShapeCastHit{
     public ShapeId shapeId;
     public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x2u barycentrics;
     public f32 fraction = 1.0f;
+    public u32 triangleIndex = s_NullIndex;
+    public b8 hit = false;
+
+    public ShapeCastHit(){
+        this.barycentrics = f32x2u(0.0f, 0.0f);
+    }
+}
+
+class ShapeOverlapHit{
+    public ShapeId shapeId;
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 pointA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 pointB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 penetrationDepth = 0.0f;
+    public u32 triangleIndex = s_NullIndex;
+}
+
+class ClosestPointHit{
+    public ShapeId shapeId;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 distance = s_MaxF32;
+    public u32 triangleIndex = s_NullIndex;
     public b8 hit = false;
 }
 
@@ -390,14 +619,25 @@ class BodyMoveEvent{
     }
 
     public b8 fellAsleep()const{
-        return this.positionFlags.w != 0u;
+        return (this.positionFlags.w & 1u) != 0u;
     }
 
     public void setFellAsleep(in b8 v){
         if(v)
-            this.positionFlags.w = 1u;
+            this.positionFlags.w |= 1u;
         else
-            this.positionFlags.w = 0u;
+            this.positionFlags.w &= ~1u;
+    }
+
+    public b8 wokeUp()const{
+        return (this.positionFlags.w & 2u) != 0u;
+    }
+
+    public void setWokeUp(in b8 v){
+        if(v)
+            this.positionFlags.w |= 2u;
+        else
+            this.positionFlags.w &= ~2u;
     }
 }
 
@@ -411,11 +651,20 @@ class ContactEndTouchEvent{
     public ShapeId shapeIdB;
 }
 
+class ContactPersistEvent{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+}
+
 class ContactHitEvent{
     public ShapeId shapeIdA;
     public ShapeId shapeIdB;
     public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalApproachSpeed(0.0f, 1.0f, 0.0f, 0.0f);
+
+    public VectorSingle position()const{
+        return VectorSingle(VectorSingle(this.point), 0.0f);
+    }
 
     public VectorSingle normal()const{
         return VectorSingle(VectorSingle(this.normalApproachSpeed), 0.0f);
@@ -423,6 +672,10 @@ class ContactHitEvent{
 
     public f32 approachSpeed()const{
         return this.normalApproachSpeed.w;
+    }
+
+    public f32 normalImpulse()const{
+        return this.point.w;
     }
 }
 
@@ -434,6 +687,17 @@ class SensorBeginTouchEvent{
 class SensorEndTouchEvent{
     public ShapeId sensorShapeId;
     public ShapeId visitorShapeId;
+}
+
+class SensorStayEvent{
+    public ShapeId sensorShapeId;
+    public ShapeId visitorShapeId;
+}
+
+class BodyWakeEvent{
+    public BodyId bodyId;
+    public u64 userData = 0u;
+    public b8 awake = false;
 }
 
 class JointBreakEvent{
@@ -448,9 +712,13 @@ class JointBreakEvent{
 class ContactPairInfo{
     public ShapeId shapeIdA;
     public ShapeId shapeIdB;
+    public BodyId otherBodyId;
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public Array<f32x4, s_MaxManifoldPoints> points;
+    public f32x4 normalImpulses(0.0f, 0.0f, 0.0f, 0.0f);
     public u32 pointCount = 0u;
     public b8 touching = false;
+    public b8 isSensor = false;
 }
 
 class WorldStepStats{
@@ -468,6 +736,14 @@ class WorldStepStats{
     public u32 cpuSolvedIslandCount = 0u;
     public u32 gpuSolvedIslandCount = 0u;
     public ExecutionBackendUsed backendUsed = ExecutionBackendUsed::None;
+    public f32 broadphaseMs = 0.0f;
+    public f32 narrowphaseMs = 0.0f;
+    public f32 islandSplitMs = 0.0f;
+    public f32 solveMs = 0.0f;
+    public f32 ccdMs = 0.0f;
+    public f32 gpuUploadMs = 0.0f;
+    public f32 gpuDispatchMs = 0.0f;
+    public f32 gpuReadbackMs = 0.0f;
 }
 
 

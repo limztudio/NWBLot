@@ -27,7 +27,6 @@ const Name s_ButtonNormal = "button.normal";
 const Name s_ComboArrow = "combo.arrow";
 const f32 s_SelectorHeight = 88.0f;
 const f32 s_ContentGap = 12.0f;
-const Name s_SelectorArena = "testbed/ui/gallery_selector";
 const f32 s_NavigationButtonWidth = 100.0f;
 const f32 s_ControlsPanelHeight = 180.0f;
 const u64 s_FilteredInstanceGeneration = 2u;

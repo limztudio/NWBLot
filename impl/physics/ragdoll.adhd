@@ -1,0 +1,299 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/world.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RagdollBoneDef{
+    public u32 parentIndex = s_NullIndex;
+    public BodyDef bodyDef;
+    public CapsuleShape capsule;
+    public f32x4 boxHalfExtents(0.1f, 0.2f, 0.1f, 0.0f);
+    public b8 useBox = false;
+    public ShapeDef shapeDef;
+    public f32x4 jointAnchorWorld(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointAxisWorld(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 swingLimitY = 0.7f;
+    public f32 swingLimitZ = 0.7f;
+    public f32 twistMin = -0.5f;
+    public f32 twistMax = 0.5f;
+    public f32 motorMaxTorque = 0.0f;
+    public f32 motorHertz = 8.0f;
+    public f32 motorDamping = 1.0f;
+    public b8 useSixDof = false;
+    public Array<SixDofAxisConfig, 6u> sixDofAxes;
+}
+
+f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
+    const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
+    if(inRes.has_value()){
+        in Mat3 inMat = inRes.value();
+        return SimdMax(0.05f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
+    }
+    return 0.5f;
+}
+
+class RagdollInstance{
+    public Vector<BodyId> boneBodies;
+    public Vector<JointId> joints;
+    public Vector<u32> parentIndices;
+    public Vector<f32> maxMotorTorques;
+    public Vector<f32> motorHertzes;
+    public Vector<f32> motorDampings;
+    private Vector<f32> m_boneMaxInertias;
+
+    public void reset(){
+        this.boneBodies.clear();
+        this.joints.clear();
+        this.parentIndices.clear();
+        this.maxMotorTorques.clear();
+        this.motorHertzes.clear();
+        this.motorDampings.clear();
+        this.m_boneMaxInertias.clear();
+    }
+
+    public void refreshBoneInertias(in PhysicsWorld world){
+        const usize n = this.boneBodies.size();
+        this.m_boneMaxInertias.resize(n, 0.5f);
+        for(usize i = 0u; i < n; ++i){
+            const BodyId bodyId = this.boneBodies[i];
+            if(world.isValidBody(bodyId))
+                this.m_boneMaxInertias[i] = ExtractBoneMaxInertia(world, bodyId);
+            else
+                this.m_boneMaxInertias[i] = 0.5f;
+        }
+    }
+
+    public b8 create(mut PhysicsWorld world, in Span<RagdollBoneDef> bones){
+        this.destroy(world);
+        if(bones.empty())
+            return false;
+
+        this.boneBodies.reserve(bones.size());
+        this.parentIndices.reserve(bones.size());
+        this.maxMotorTorques.reserve(bones.size());
+        this.motorHertzes.reserve(bones.size());
+        this.motorDampings.reserve(bones.size());
+        this.m_boneMaxInertias.reserve(bones.size());
+
+        for(usize i = 0u; i < bones.size(); ++i){
+            in RagdollBoneDef bDef = bones[i];
+            const Expected<BodyId> bodyRes = world.createBody(bDef.bodyDef);
+            if(!bodyRes.has_value()){
+                this.destroy(world);
+                return false;
+            }
+            const BodyId bodyId = bodyRes.value();
+            b8 shapeOk = false;
+            if(bDef.useBox){
+                const VectorSingle extVec = Max(VectorSingle(bDef.boxHalfExtents.x, bDef.boxHalfExtents.y, bDef.boxHalfExtents.z, 0.0f), VectorSingle(0.01f));
+                const Expected<HullShape> boxHull = MakeBoxHull(extVec.x, extVec.y, extVec.z, 0.0f);
+                if(boxHull.has_value())
+                    shapeOk = world.createHullShape(bodyId, bDef.shapeDef, boxHull.value()).has_value();
+            }
+            else
+                shapeOk = world.createCapsuleShape(bodyId, bDef.shapeDef, bDef.capsule).has_value();
+            if(!shapeOk){
+                world.destroyBody(bodyId);
+                this.destroy(world);
+                return false;
+            }
+            this.boneBodies.push_back(bodyId);
+            this.parentIndices.push_back(bDef.parentIndex);
+            const VectorSingle motorVec = Max(VectorSingle(bDef.motorMaxTorque, bDef.motorHertz, bDef.motorDamping, 0.0f), VectorSingle(0.0f));
+            this.maxMotorTorques.push_back(motorVec.x);
+            this.motorHertzes.push_back(motorVec.y);
+            this.motorDampings.push_back(motorVec.z);
+            this.m_boneMaxInertias.push_back(ExtractBoneMaxInertia(world, bodyId));
+        }
+
+        for(usize i = 0u; i < bones.size(); ++i){
+            in RagdollBoneDef bDef = bones[i];
+            if(bDef.parentIndex == s_NullIndex || bDef.parentIndex >= cast<u32>(bones.size()) || bDef.parentIndex == cast<u32>(i))
+                continue;
+            const BodyId bodyA = this.boneBodies[bDef.parentIndex];
+            const BodyId bodyB = this.boneBodies[i];
+            const Expected<Transform3D> xfARes = world.tryGetBodyTransform(bodyA);
+            const Expected<Transform3D> xfBRes = world.tryGetBodyTransform(bodyB);
+            if(!xfARes.has_value() || !xfBRes.has_value()){
+                this.destroy(world);
+                return false;
+            }
+            in Transform3D xfA = xfARes.value();
+            in Transform3D xfB = xfBRes.value();
+
+            JointDef jd;
+            jd.bodyIdA = bodyA;
+            jd.bodyIdB = bodyB;
+            jd.collideConnected = false;
+            jd.enableProjection = true;
+            jd.projectionLinearTolerance = 0.02f;
+            jd.projectionAngularTolerance = 0.05f;
+            const VectorSingle anchorW = VectorSingle(bDef.jointAnchorWorld);
+            const VectorSingle axisW = SafeNormalizeVec3(VectorSingle(bDef.jointAxisWorld), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            jd.localAnchorA = f32x4(InverseTransformPointValues(VectorSingle(xfA.position), VectorSingle(xfA.rotation), anchorW), 0.0f);
+            jd.localAnchorB = f32x4(InverseTransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), anchorW), 0.0f);
+            jd.localAxisA = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+            jd.localAxisB = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+            const VectorSingle qRel = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(VectorSingle(xfA.rotation)), VectorSingle(xfB.rotation)));
+            jd.referenceRotation = f32x4(qRel);
+            jd.useReferenceRotation = true;
+
+            if(bDef.useSixDof){
+                jd.type = JointType::SixDof;
+                for(usize k = 0u; k < 6u; ++k)
+                    jd.sixDofAxes[k] = bDef.sixDofAxes[k];
+            }
+            else{
+                jd.type = JointType::Spherical;
+                jd.enableLimit = (bDef.swingLimitY > 0.0f || bDef.swingLimitZ > 0.0f || bDef.twistMax > bDef.twistMin);
+                const VectorSingle swingLim = Max(VectorSingle(bDef.swingLimitY, bDef.swingLimitZ, 0.0f, 0.0f), VectorSingle(0.0f));
+                jd.swingLimit = swingLim.x;
+                jd.swingLimitY = swingLim.y;
+                jd.lowerLimit = bDef.twistMin;
+                jd.upperLimit = bDef.twistMax;
+            }
+
+            const Expected<JointId> jRes = world.createJoint(jd);
+            if(!jRes.has_value()){
+                this.destroy(world);
+                return false;
+            }
+            this.joints.push_back(jRes.value());
+        }
+
+        return true;
+    }
+
+    public void destroy(mut PhysicsWorld world){
+        for(usize i = 0u; i < this.joints.size(); ++i){
+            if(world.isValidJoint(this.joints[i]))
+                world.destroyJoint(this.joints[i]);
+        }
+        for(usize i = 0u; i < this.boneBodies.size(); ++i){
+            if(world.isValidBody(this.boneBodies[i]))
+                world.destroyBody(this.boneBodies[i]);
+        }
+        this.joints.clear();
+        this.boneBodies.clear();
+        this.parentIndices.clear();
+        this.maxMotorTorques.clear();
+        this.motorHertzes.clear();
+        this.motorDampings.clear();
+        this.m_boneMaxInertias.clear();
+    }
+
+    public b8 isValid(in PhysicsWorld world)const{
+        if(this.boneBodies.empty())
+            return false;
+        for(usize i = 0u; i < this.boneBodies.size(); ++i){
+            if(!world.isValidBody(this.boneBodies[i]))
+                return false;
+        }
+        return true;
+    }
+
+    public void setKinematic(mut PhysicsWorld world, in b8 kinematic){
+        BodyType tgtType = BodyType::Dynamic;
+        if(kinematic)
+            tgtType = BodyType::Kinematic;
+        for(usize i = 0u; i < this.boneBodies.size(); ++i){
+            if(world.isValidBody(this.boneBodies[i]))
+                world.setBodyType(this.boneBodies[i], tgtType);
+        }
+    }
+
+    public void setPose(mut PhysicsWorld world, in Span<Transform3D> worldTransforms, in b8 resetVelocities){
+        const usize count = Min(this.boneBodies.size(), worldTransforms.size());
+        const VectorSingle zero(0.0f);
+        for(usize i = 0u; i < count; ++i){
+            const BodyId bodyId = this.boneBodies[i];
+            if(!world.isValidBody(bodyId))
+                continue;
+            in Transform3D xf = worldTransforms[i];
+            world.setBodyTransform(bodyId, VectorSingle(xf.position), VectorSingle(xf.rotation));
+            if(resetVelocities){
+                world.setLinearVelocity(bodyId, zero);
+                world.setAngularVelocity(bodyId, zero);
+            }
+        }
+    }
+
+    public void readPose(in PhysicsWorld world, mut Vector<Transform3D> outTransforms)const{
+        outTransforms.clear();
+        outTransforms.reserve(this.boneBodies.size());
+        for(usize i = 0u; i < this.boneBodies.size(); ++i){
+            const Expected<Transform3D> xf = world.tryGetBodyTransform(this.boneBodies[i]);
+            if(xf.has_value())
+                outTransforms.push_back(xf.value());
+            else
+                outTransforms.push_back(Transform3D());
+        }
+    }
+
+    public void driveToPose(mut PhysicsWorld world, in Span<Transform3D> targetWorldTransforms, in f32 strengthMultiplier, in f32 dt){
+        if(dt <= 0.0f)
+            return;
+        if(this.m_boneMaxInertias.size() != this.boneBodies.size())
+            this.refreshBoneInertias(world);
+        const usize count = Min(this.boneBodies.size(), targetWorldTransforms.size());
+        const f32 gainScale = SimdMax(0.0f, strengthMultiplier);
+        for(usize i = 0u; i < count; ++i){
+            const BodyId bodyId = this.boneBodies[i];
+            if(!world.isValidBody(bodyId))
+                continue;
+            const f32 maxTorque = this.maxMotorTorques[i] * gainScale;
+            const f32 hertz = this.motorHertzes[i];
+            if(maxTorque <= 0.0f || hertz <= 0.0f)
+                continue;
+
+            const Expected<Transform3D> xfRes = world.tryGetBodyTransform(bodyId);
+            const Expected<f32x4> avRes = world.tryGetAngularVelocity(bodyId);
+            if(!xfRes.has_value() || !avRes.has_value())
+                continue;
+
+            const VectorSingle curQ = SafeNormalizeQuat(VectorSingle(xfRes.value().rotation));
+            const VectorSingle tgtQ = SafeNormalizeQuat(VectorSingle(targetWorldTransforms[i].rotation));
+            VectorSingle qErr = QuaternionMultiply(tgtQ, QuaternionConjugate(curQ));
+            if(qErr.w < 0.0f)
+                qErr = -qErr;
+            const VectorSingle qv(qErr.x, qErr.y, qErr.z, 0.0f);
+            const f32 qvLen = Vector3Length(qv).x;
+            VectorSingle rotErr = qv * 2.0f;
+            if(qvLen > 1.0e-6f)
+                rotErr = qv * ((2.0f * ATan2(VectorSingle(qvLen), VectorSingle(qErr.w)).x) / qvLen);
+
+            const f32 omegaN = 2.0f * s_Pi * hertz;
+            const f32 kp = omegaN * omegaN;
+            const f32 kd = 2.0f * this.motorDampings[i] * omegaN;
+            const f32 effInertia = this.m_boneMaxInertias[i];
+
+            VectorSingle torque = (rotErr * kp - VectorSingle(avRes.value()) * kd) * effInertia;
+            const f32 tMagSq = Vector3LengthSq(VectorSingle(torque, 0.0f)).x;
+            if(tMagSq > maxTorque * maxTorque && tMagSq > 1.0e-10f)
+                torque = torque * (maxTorque * Rsqrt(VectorSingle(tMagSq)).x);
+            world.applyTorque(bodyId, torque, true);
+        }
+    }
+
+    public void wake(mut PhysicsWorld world){
+        for(usize i = 0u; i < this.boneBodies.size(); ++i){
+            if(world.isValidBody(this.boneBodies[i]))
+                world.wakeBody(this.boneBodies[i]);
+        }
+    }
+
+    public void applyImpulseToBone(mut PhysicsWorld world, in usize boneIndex, in VectorSingle impulse, in VectorSingle worldPoint, in b8 wake){
+        if(boneIndex >= this.boneBodies.size())
+            return;
+        world.applyLinearImpulseAtPoint(this.boneBodies[boneIndex], impulse, worldPoint, wake);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -166,26 +166,6 @@ Expected<f32, CsgDeformViabilityReason> TryValidateCsgDeformPreviewInputs(
     return VectorSelect(minEps, eps, VectorGreater(eps, minEps)).x;
 }
 
-u32 FindInitialCsgDeformBoundaryLoopVertex(in Span<CsgDeformCutLoopEdge> edges){
-    u32 start = edges[0u].first;
-    for(in CsgDeformCutLoopEdge edge : edges){
-        if(edge.first < start)
-            start = edge.first;
-        if(edge.second < start)
-            start = edge.second;
-    }
-    return start;
-}
-
-Expected<usize> TryFindIncidentCsgDeformLoopEdge(in Span<CsgDeformCutLoopEdge> edges, in u32 cursor){
-    for(usize i = 0u; i < edges.size(); ++i){
-        const CsgDeformCutLoopEdge edge = edges[i];
-        if(edge.first == cursor || edge.second == cursor)
-            return i;
-    }
-    return MakeUnexpected(Failure());
-}
-
 u32 OtherCsgDeformLoopEdgeVertex(in CsgDeformCutLoopEdge edge, in u32 cursor){
     if(edge.first == cursor)
         return edge.second;

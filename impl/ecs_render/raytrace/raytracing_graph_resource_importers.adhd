@@ -40,9 +40,6 @@ class TraceGeometryImportPolicy{
         return parentStateCount + s_SortBuildStateCapacity;
     }
 
-    public b8 isConstantBufferSceneSlot(in usize importedBufferIndex)const{
-        return importedBufferIndex == 0u;
-    }
 }
 
 

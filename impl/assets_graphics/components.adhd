@@ -23,6 +23,7 @@ class ModelComponentAsset : IComponent{
         entity.addComponent<ModelComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("mesh_component")]
@@ -36,6 +37,7 @@ class MeshComponentAsset : IComponent{
         entity.addComponent<MeshComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("renderer_component")]
@@ -49,6 +51,7 @@ class RendererComponentAsset : IComponent{
         entity.addComponent<RendererComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [serialize]

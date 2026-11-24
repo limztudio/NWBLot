@@ -9,19 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_ComponentAssetKindLabel = "component";
-
-const Name s_EntityLoadBinaryArena = "impl/assets_scene/entity_load_binary";
-const Name s_EntitySerializeArena = "impl/assets_scene/entity_serialize";
-const Name s_SceneLoadBinaryArena = "impl/assets_scene/scene_load_binary";
-const Name s_SceneSerializeArena = "impl/assets_scene/scene_serialize";
-const Name s_ActiveSceneLoadArena = "impl/assets_scene/active_scene_load";
-
 const StringView s_DefaultProjectVirtualPathText = "project/project";
 const Name s_DefaultProjectVirtualPath = "project/project";
 
 const StringView s_TransformDiagnosticPrefix = "Transform component meta";
 const StringView s_CameraDiagnosticPrefix = "Camera component meta";
+const StringView s_ActiveCameraDiagnosticPrefix = "ActiveCamera component meta";
 const StringView s_LightDiagnosticPrefix = "Light component meta";
 const StringView s_EntityDiagnosticPrefix = "Entity meta";
 const StringView s_ProjectDiagnosticPrefix = "Project meta";
@@ -32,6 +25,7 @@ const StringView s_SceneSubsystemsField = "subsystems";
 const StringView s_SceneEntitiesField = "entities";
 const StringView s_SceneAssetsField = "assets";
 const StringView s_EntityComponentsField = "components";
+const StringView s_EntityNameField = "name";
 
 const StringView s_TransformPositionField = "position";
 const StringView s_TransformRotationField = "rotation";
@@ -70,7 +64,7 @@ const u32 s_ComponentMagic = 0x434D5031u;
 const u32 s_ComponentVersion = 1u;
 
 const u32 s_EntityMagic = 0x454E5431u;
-const u32 s_EntityVersion = 1u;
+const u32 s_EntityVersion = 2u;
 
 const u32 s_SceneMagic = 0x53434E31u;
 const u32 s_SceneVersion = 1u;
@@ -127,6 +121,7 @@ class TransformComponentAsset : IComponent{
         entity.addComponent<TransformComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("camera_component")]
@@ -140,6 +135,7 @@ class CameraComponentAsset : IComponent{
         entity.addComponent<CameraComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("light_component")]
@@ -153,6 +149,19 @@ class LightComponentAsset : IComponent{
         entity.addComponent<LightComponent>() = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("active_camera_component")]
+class ActiveCameraComponentAsset : IComponent{
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<ActiveCameraComponent>().camera = entity.id();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 

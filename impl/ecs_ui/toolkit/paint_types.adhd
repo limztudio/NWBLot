@@ -159,26 +159,6 @@ Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHe
     return uv;
 }
 
-VectorSingle ResolveQuadTextureCoords(in Rect rectangle, in Rect visible, in Rect uv){
-    const VectorSingle visibleEnd = VectorSingle(visible.x, visible.y, visible.x, visible.y) + VectorSingle(visible.width, visible.height, visible.width, visible.height);
-    const VectorSingle coordinates(visible.x, visible.y, visibleEnd.x, visibleEnd.y);
-    const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
-    const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
-    const VectorSingle textureOrigin(uv.x, uv.y, uv.x, uv.y);
-    return fraction * textureScale + textureOrigin;
-}
-
-Color PremultiplyPaintColor(in Color color){
-    const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
-    Color out;
-    out.r = rgb.x;
-    out.g = rgb.y;
-    out.b = rgb.z;
-    out.a = color.a;
-    return out;
-}
-
 void ResolveNineSliceCoordinates(
     in UiSkinRect pixels,
     in UiSkinSliceInsets borders,
@@ -242,6 +222,81 @@ b8 CanAdmitPaintImageBindingCounts(
     const usize existingCount = existingGlyphCount + existingSdfCount + existingTextureCount;
     return existingCount <= s_PaintMaxImages
         && addedGlyphs + addedSdf + addedTextures <= s_PaintMaxImages - existingCount;
+}
+
+PaintTransform2D PaintTransformIdentity(){
+    return PaintTransform2D();
+}
+
+PaintTransform2D MakePaintTranslate(in f32 dx, in f32 dy){
+    PaintTransform2D xf;
+    xf.tx = dx;
+    xf.ty = dy;
+    return xf;
+}
+
+PaintTransform2D MakePaintScale(in f32 sx, in f32 sy){
+    PaintTransform2D xf;
+    xf.m00 = sx;
+    xf.m11 = sy;
+    return xf;
+}
+
+PaintTransform2D MakePaintRotate(in f32 radians){
+    VectorSingle sVec(0.0f);
+    VectorSingle cVec(0.0f);
+    VectorSinCos(sVec, cVec, VectorSingle(radians));
+    const f32 c = cVec.x;
+    const f32 s = sVec.x;
+    PaintTransform2D xf;
+    xf.m00 = c;
+    xf.m01 = -s;
+    xf.m10 = s;
+    xf.m11 = c;
+    return xf;
+}
+
+PaintTransform2D MultiplyPaintTransform(in PaintTransform2D a, in PaintTransform2D b){
+    PaintTransform2D out;
+    out.m00 = a.m00 * b.m00 + a.m01 * b.m10;
+    out.m01 = a.m00 * b.m01 + a.m01 * b.m11;
+    out.tx = a.m00 * b.tx + a.m01 * b.ty + a.tx;
+    out.m10 = a.m10 * b.m00 + a.m11 * b.m10;
+    out.m11 = a.m10 * b.m01 + a.m11 * b.m11;
+    out.ty = a.m10 * b.tx + a.m11 * b.ty + a.ty;
+    return out;
+}
+
+Point ApplyPaintTransform(in PaintTransform2D xf, in Point p){
+    return Point(xf.m00 * p.x + xf.m01 * p.y + xf.tx, xf.m10 * p.x + xf.m11 * p.y + xf.ty);
+}
+
+b8 IsIdentityPaintTransform(in PaintTransform2D xf){
+    const VectorSingle delta0 = Abs(VectorSingle(xf.m00, xf.m01, xf.tx, xf.m10) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle delta1 = Abs(VectorSingle(xf.m11, xf.ty, 0.0f, 0.0f) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle tol(1.0e-6f);
+    return Vector4LessOrEqual(delta0, tol) && Vector4LessOrEqual(delta1, tol);
+}
+
+f32 ResolvePaintTransformScale(in PaintTransform2D xf){
+    const VectorSingle lenSq(xf.m00 * xf.m00 + xf.m10 * xf.m10, xf.m01 * xf.m01 + xf.m11 * xf.m11, 0.0f, 0.0f);
+    const VectorSingle scales = Sqrt(lenSq);
+    return 0.5f * (scales.x + scales.y);
+}
+
+b8 TryResolveUniformPaintTransformScale(in PaintTransform2D xf, mut f32 outScale){
+    const f32 c0Sq = xf.m00 * xf.m00 + xf.m10 * xf.m10;
+    const f32 c1Sq = xf.m01 * xf.m01 + xf.m11 * xf.m11;
+    const f32 cDot = xf.m00 * xf.m01 + xf.m10 * xf.m11;
+    const VectorSingle sqVec(c0Sq, c1Sq, cDot, 0.0f);
+    const f32 maxSq = VectorSelect(VectorSingle(c1Sq), VectorSingle(c0Sq), VectorGreater(VectorSingle(c0Sq), VectorSingle(c1Sq))).x;
+    const f32 tol = 2.0e-5f * maxSq;
+    const VectorSingle absDiff = Abs(VectorSingle(c0Sq - c1Sq, cDot, 0.0f, 0.0f));
+    if(!IsFinite(sqVec.xyz) || !(maxSq > 0.0f) || absDiff.x > tol || absDiff.y > tol)
+        return false;
+    const VectorSingle resolvedVec = Sqrt(VectorSingle(c0Sq));
+    outScale = resolvedVec.x;
+    return IsFinite(resolvedVec) && outScale > 0.0f;
 }
 
 

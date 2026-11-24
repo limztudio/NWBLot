@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_TextureUploadScratchArena = "impl/assets_texture/upload";
-
 const StringView s_TextureDiagnosticPrefix = "Texture meta";
 const StringView s_TextureFormatField = "format";
 const StringView s_TextureDimensionField = "dimension";

@@ -9,3 +9,7 @@ asset.solver_integrate_positions_cs = "engine/physics/solver_integrate_positions
 asset.solver_finalize_bodies_cs = "engine/physics/solver_finalize_bodies_cs";
 asset.solver_islands_cs = "engine/physics/solver_islands_cs";
 asset.solver_joint_islands_cs = "engine/physics/solver_joint_islands_cs";
+asset.lbvh_broadphase_cs = "engine/physics/lbvh_broadphase_cs";
+asset.gpu_resident_step_cs = "engine/physics/gpu_resident_step_cs";
+asset.spatial_query_cs = "engine/physics/spatial_query_cs";
+asset.export_render_transforms_cs = "engine/physics/export_render_transforms_cs";

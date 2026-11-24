@@ -11,7 +11,6 @@
 const usize s_SingleAssetRefComponentPayloadBinaryBytes = 64u;
 const usize s_RendererComponentPayloadBinaryBytes = 144u;
 
-
 class GraphicsComponentBinaryCodec{
     private RendererComponentPayloadBinary packRenderer(in RendererComponent component)const{
         RendererComponentPayloadBinary binaryPayload;
@@ -82,12 +81,6 @@ class GraphicsComponentBinaryCodec{
         return binaryPayload;
     }
 
-    public AssetRef<TAsset> unpackAssetRef<TAsset>(in SingleAssetRefComponentPayloadBinary binaryPayload)const{
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(binaryPayload.assetHash);
-        return ref;
-    }
-
     public b8 validateAssetRef(in b8 validAssetRef, in Name virtualPath, in StringView context, in StringView kindLabel)const{
         if(validAssetRef)
             return true;
@@ -96,12 +89,18 @@ class GraphicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeAssetRef(in Name assetName, mut Vector<u8> outPayload)const{
+    public b8 appendAssetRef(in Name assetName, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_SingleAssetRefComponentPayloadBinaryBytes))
+            return false;
         const SingleAssetRefComponentPayloadBinary binaryPayload = this.packAssetRef(assetName);
-        outPayload.clear();
-        outPayload.reserve(s_SingleAssetRefComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_SingleAssetRefComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeAssetRef(in Name assetName, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendAssetRef(assetName, outPayload);
     }
 
     public Expected<Name> deserializeAssetRef(in Span<u8> payload, in StringView context)const{
@@ -114,12 +113,18 @@ class GraphicsComponentBinaryCodec{
         return Name(binaryPayload.value().assetHash);
     }
 
-    public b8 serializeRenderer(in RendererComponent component, mut Vector<u8> outPayload)const{
+    public b8 appendRenderer(in RendererComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_RendererComponentPayloadBinaryBytes))
+            return false;
         const RendererComponentPayloadBinary binaryPayload = this.packRenderer(component);
-        outPayload.clear();
-        outPayload.reserve(s_RendererComponentPayloadBinaryBytes);
-        AppendPOD(outPayload, binaryPayload);
+        outBinary.reserve(outBinary.size() + s_RendererComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
         return true;
+    }
+
+    public b8 serializeRenderer(in RendererComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendRenderer(component, outPayload);
     }
 
     public Expected<RendererComponent> deserializeRenderer(in Span<u8> payload)const{

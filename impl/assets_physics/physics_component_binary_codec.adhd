@@ -3,42 +3,59 @@
 
 
 #include <impl/assets_physics/components.adhd>
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_PhysicsComponentBinaryVersion = 2u;
-const u8 s_RigidBodyFlagEnableSleep = 0x01u;
-const u8 s_RigidBodyFlagIsAwake = 0x02u;
-const u8 s_RigidBodyFlagIsBullet = 0x04u;
-const u8 s_RigidBodyFlagIsEnabled = 0x08u;
-const u8 s_RigidBodyFlagAllowFastRotation = 0x10u;
-const u8 s_RigidBodyFlagEnableGyroscopic = 0x20u;
-const u8 s_RigidBodyFlagDriveKinematic = 0x40u;
-const u8 s_RigidBodyFlagUseCustomMass = 0x80u;
+const u16 s_RigidBodyFlagEnableSleep = 0x0001u;
+const u16 s_RigidBodyFlagIsAwake = 0x0002u;
+const u16 s_RigidBodyFlagIsBullet = 0x0004u;
+const u16 s_RigidBodyFlagIsEnabled = 0x0008u;
+const u16 s_RigidBodyFlagAllowFastRotation = 0x0010u;
+const u16 s_RigidBodyFlagEnableGyroscopic = 0x0020u;
+const u16 s_RigidBodyFlagDriveKinematic = 0x0040u;
+const u16 s_RigidBodyFlagUseCustomMass = 0x0080u;
+const u16 s_RigidBodyFlagHasCustomMaxAngVel = 0x0100u;
 
-const u8 s_ColliderFlagIsBox = 0x01u;
-const u8 s_ColliderFlagIsSensor = 0x02u;
-const u8 s_ColliderFlagContactEvents = 0x04u;
-const u8 s_ColliderFlagHitEvents = 0x08u;
-const u8 s_ColliderFlagSensorEvents = 0x10u;
-const u8 s_ColliderFlagPreSolveEvents = 0x20u;
-const u8 s_ColliderFlagInvokeCreation = 0x40u;
+const u16 s_ColliderFlagIsBox = 0x0001u;
+const u16 s_ColliderFlagIsSensor = 0x0002u;
+const u16 s_ColliderFlagContactEvents = 0x0004u;
+const u16 s_ColliderFlagHitEvents = 0x0008u;
+const u16 s_ColliderFlagSensorEvents = 0x0010u;
+const u16 s_ColliderFlagPreSolveEvents = 0x0020u;
+const u16 s_ColliderFlagInvokeCreation = 0x0040u;
+const u16 s_ColliderFlagCullBackfaces = 0x0080u;
+const u16 s_ColliderFlagAutoConvexDecompose = 0x0100u;
+const u16 s_ColliderFlagIsChain = 0x0200u;
+const u16 s_ColliderFlagChainClosed = 0x0400u;
 
-const u8 s_JointFlagUseRefRotation = 0x01u;
-const u8 s_JointFlagEnableLimit = 0x02u;
-const u8 s_JointFlagEnableMotor = 0x04u;
-const u8 s_JointFlagEnableSpring = 0x08u;
-const u8 s_JointFlagCollideConnected = 0x10u;
+const u16 s_JointFlagUseRefRotation = 0x0001u;
+const u16 s_JointFlagEnableLimit = 0x0002u;
+const u16 s_JointFlagEnableMotor = 0x0004u;
+const u16 s_JointFlagEnableSpring = 0x0008u;
+const u16 s_JointFlagCollideConnected = 0x0010u;
+const u16 s_JointFlagEnabled = 0x0020u;
+const u16 s_JointFlagEnableProjection = 0x0040u;
+const u16 s_JointFlagPathClosed = 0x0080u;
+const u16 s_JointFlagPathLockRotation = 0x0100u;
+const u8 s_SixDofAxisFlagEnableMotor = 0x01u;
+const u8 s_SixDofAxisFlagEnableSpring = 0x02u;
 
 const u8 s_PhysicsParentFlagInheritScale = 0x01u;
+const u8 s_PhysicsParentFlagAttachColliderToParent = 0x02u;
 
-const u8 s_WorldCfgFlagEnableSleep = 0x01u;
-const u8 s_WorldCfgFlagEnableContinuous = 0x02u;
-const u8 s_WorldCfgFlagContactSoftening = 0x04u;
-const u8 s_WorldCfgFlagWarmStarting = 0x08u;
-const u8 s_WorldCfgFlagPaused = 0x10u;
+const u16 s_WorldCfgFlagEnableSleep = 0x0001u;
+const u16 s_WorldCfgFlagEnableContinuous = 0x0002u;
+const u16 s_WorldCfgFlagContactSoftening = 0x0004u;
+const u16 s_WorldCfgFlagWarmStarting = 0x0008u;
+const u16 s_WorldCfgFlagPaused = 0x0010u;
+const u16 s_WorldCfgFlagEnableGpuCollision = 0x0020u;
+const u16 s_WorldCfgFlagForceGpuCollision = 0x0040u;
+const u16 s_WorldCfgFlagGpuResidentMode = 0x0080u;
+const u16 s_WorldCfgFlagUseGpuLbvhBroadphase = 0x0100u;
+const u16 s_WorldCfgFlagInterpolateTransforms = 0x0200u;
 
 
 class PhysicsComponentBinaryCodec{
@@ -51,16 +68,185 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(c.linearDamping, c.angularDamping, c.gravityScale, c.sleepThreshold)))
             return false;
+        if(!IsFinite(VectorSingle(c.maxAngularVelocity)) || c.maxAngularVelocity < 0.0f)
+            return false;
         if(c.linearDamping < 0.0f || c.angularDamping < 0.0f || c.sleepThreshold < 0.0f)
             return false;
+        if(!IsFinite(VectorSingle(c.customMass))
+            || !IsFinite(VectorSingle(c.customCenterOfMass))
+            || !IsFinite(VectorSingle(c.customInertiaDiag))
+            || !IsFinite(VectorSingle(c.customInertiaOffDiag)))
+            return false;
         if(c.useCustomMass){
-            if(!IsFinite(VectorSingle(c.customMass)) || c.customMass <= 0.0f)
-                return false;
-            if(!IsFinite(VectorSingle(c.customCenterOfMass))
-                || !IsFinite(VectorSingle(c.customInertiaDiag))
-                || !IsFinite(VectorSingle(c.customInertiaOffDiag)))
+            if(c.customMass <= 0.0f)
                 return false;
             if(c.customInertiaDiag.x < 0.0f || c.customInertiaDiag.y < 0.0f || c.customInertiaDiag.z < 0.0f)
+                return false;
+        }
+        return true;
+    }
+
+    private b8 validColliderEntryHeaderFields(
+        in ShapeType shapeType,
+        in VectorSingle center,
+        in VectorSingle center2,
+        in VectorSingle halfExtents,
+        in VectorSingle localRotation,
+        in f32 radius,
+        in f32 skinRadius,
+        in f32 density,
+        in f32 friction,
+        in f32 restitution,
+        in f32 rollingResistance,
+        in f32 tangentSpeed,
+        in b8 isBox,
+        in b8 isChain,
+        in f32 chainRadius,
+        in usize chainPointCount,
+        in usize hullPointCount,
+        in usize meshVertexCount,
+        in usize meshIndexCount,
+        in b8 meshAssetValid,
+        in b8 convexHullAssetValid,
+        in b8 collisionMeshAssetValid,
+        in f32 staticFriction,
+        in VectorSingle anisotropicFriction,
+        in VectorSingle surfaceVelocity,
+        in VectorSingle frictionDirection,
+        in MaterialCombineMode frictionCombineMode,
+        in MaterialCombineMode restitutionCombineMode,
+        in u32 vhacdMaxHulls,
+        in f32 cylinderHalfHeight,
+        in f32 topRadius,
+        in VectorSingle planeNormalOffset,
+        in usize heightfieldCount,
+        in u32 heightfieldRows,
+        in u32 heightfieldCols,
+        in VectorSingle heightfieldScale,
+        in f32 heightfieldThickness,
+        in usize heightfieldMaterialCount,
+        in usize heightfieldCellMaterialCount
+    )const{
+        if(cast<u8>(shapeType) >= cast<u8>(ShapeType::kCount))
+            return false;
+        if(!IsValidPositionVec3(center) || !IsFinite(center2) || !IsFinite(halfExtents) || !IsFinite(localRotation))
+            return false;
+        if(LengthSq(localRotation) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsFinite(VectorSingle(radius, skinRadius, density, friction)))
+            return false;
+        if(!IsFinite(VectorSingle(restitution, rollingResistance, tangentSpeed, staticFriction)))
+            return false;
+        if(!IsFinite(anisotropicFriction) || !IsFinite(surfaceVelocity) || !IsFinite(frictionDirection) || !IsFinite(planeNormalOffset) || !IsFinite(heightfieldScale))
+            return false;
+        if(!IsFinite(VectorSingle(cylinderHalfHeight, topRadius, heightfieldThickness, chainRadius)))
+            return false;
+        if(cast<u8>(frictionCombineMode) >= cast<u8>(MaterialCombineMode::kCount) || cast<u8>(restitutionCombineMode) >= cast<u8>(MaterialCombineMode::kCount))
+            return false;
+        if(anisotropicFriction.x < 0.0f || anisotropicFriction.y < 0.0f || anisotropicFriction.z < 0.0f)
+            return false;
+        if(staticFriction < 0.0f && staticFriction != -1.0f)
+            return false;
+        if(vhacdMaxHulls < 1u)
+            return false;
+        if(cylinderHalfHeight <= 0.0f || topRadius < 0.0f || heightfieldThickness < 0.0f || chainRadius < 0.0f)
+            return false;
+        if(LengthSq(VectorSingle(planeNormalOffset.x, planeNormalOffset.y, planeNormalOffset.z, 0.0f)) <= s_NormalizeEpsilonSq || Abs(planeNormalOffset).w > s_HugeCoordinate)
+            return false;
+        if(shapeType == ShapeType::Plane){
+            if(halfExtents.x < 0.0f || halfExtents.z < 0.0f || (halfExtents.x > 0.0f) != (halfExtents.z > 0.0f))
+                return false;
+        }
+        if(heightfieldScale.x <= 0.0f || heightfieldScale.z <= 0.0f)
+            return false;
+        if(radius < 0.0f || skinRadius < 0.0f || density < 0.0f || friction < 0.0f || restitution < 0.0f || rollingResistance < 0.0f)
+            return false;
+        if((shapeType == ShapeType::Sphere || shapeType == ShapeType::Capsule || shapeType == ShapeType::Cylinder || shapeType == ShapeType::Cone || shapeType == ShapeType::TaperedCapsule) && radius <= 0.0f)
+            return false;
+        if(shapeType == ShapeType::Capsule || shapeType == ShapeType::TaperedCapsule || (shapeType == ShapeType::Segment && !isChain)){
+            if(!IsValidPositionVec3(center2))
+                return false;
+            const VectorSingle lenSq = Vector3LengthSq(center2 - center);
+            if(!IsFinite(lenSq) || lenSq.x < s_MinCapsuleLength * s_MinCapsuleLength)
+                return false;
+        }
+        if(isChain){
+            if(shapeType != ShapeType::Segment || chainPointCount < 2u)
+                return false;
+        }
+        if(shapeType == ShapeType::TaperedCapsule && topRadius <= 0.0f)
+            return false;
+        if(shapeType == ShapeType::Hull && !convexHullAssetValid){
+            if(isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
+                return false;
+            if(!isBox && hullPointCount < 4u)
+                return false;
+        }
+        else if(shapeType == ShapeType::Mesh){
+            if(!meshAssetValid && !collisionMeshAssetValid && (meshVertexCount == 0u || meshIndexCount == 0u))
+                return false;
+            if((meshIndexCount % 3u) != 0u)
+                return false;
+        }
+        if(shapeType == ShapeType::Heightfield || heightfieldCount > 0u || heightfieldRows != 0u || heightfieldCols != 0u){
+            if(heightfieldRows < 2u || heightfieldCols < 2u)
+                return false;
+            if(cast<u64>(heightfieldRows) * cast<u64>(heightfieldCols) != cast<u64>(heightfieldCount))
+                return false;
+        }
+        if(heightfieldCellMaterialCount > 0u && heightfieldMaterialCount == 0u)
+            return false;
+        return true;
+    }
+
+    private b8 validColliderEntryArrayFields(
+        in ShapeType shapeType,
+        in b8 isBox,
+        in b8 convexHullAssetValid,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices,
+        in Vector<f32> heightfieldHeights,
+        in Vector<SurfaceMaterial> heightfieldMaterials,
+        in Vector<u16> heightfieldCellMaterialIndices,
+        in Vector<f32x4> chainPoints
+    )const{
+        if(shapeType == ShapeType::Hull && !isBox && !convexHullAssetValid){
+            for(usize i = 0u; i < hullPoints.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(hullPoints[i])))
+                    return false;
+            }
+        }
+        else if(shapeType == ShapeType::Mesh){
+            for(usize i = 0u; i < meshVertices.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(meshVertices[i])))
+                    return false;
+            }
+            if(!meshVertices.empty()){
+                const usize vCount = meshVertices.size();
+                for(usize i = 0u; i < meshIndices.size(); ++i){
+                    if(cast<usize>(meshIndices[i]) >= vCount)
+                        return false;
+                }
+            }
+        }
+        for(usize i = 0u; i < heightfieldHeights.size(); ++i){
+            const f32 h = heightfieldHeights[i];
+            if(!IsFinite(VectorSingle(h)) && h == h)
+                return false;
+        }
+        PhysicsAssetBinaryCodec assetCodec;
+        for(usize i = 0u; i < heightfieldMaterials.size(); ++i){
+            if(!assetCodec.validSurfaceMaterial(heightfieldMaterials[i]))
+                return false;
+        }
+        const usize matCount = heightfieldMaterials.size();
+        for(usize i = 0u; i < heightfieldCellMaterialIndices.size(); ++i){
+            if(cast<usize>(heightfieldCellMaterialIndices[i]) >= matCount)
+                return false;
+        }
+        for(usize i = 0u; i < chainPoints.size(); ++i){
+            if(!IsValidPositionVec3(VectorSingle(chainPoints[i])))
                 return false;
         }
         return true;
@@ -80,62 +266,85 @@ class PhysicsComponentBinaryCodec{
         in f32 rollingResistance,
         in f32 tangentSpeed,
         in b8 isBox,
+        in b8 isChain,
+        in f32 chainRadius,
+        in Vector<f32x4> chainPoints,
         in Vector<f32x4> hullPoints,
         in Vector<f32x4> meshVertices,
         in Vector<u32> meshIndices,
-        in AssetRef<Mesh> meshAsset
+        in AssetRef<Mesh> meshAsset,
+        in AssetRef<ConvexHullAsset> convexHullAsset,
+        in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+        in f32 staticFriction,
+        in VectorSingle anisotropicFriction,
+        in VectorSingle surfaceVelocity,
+        in VectorSingle frictionDirection,
+        in MaterialCombineMode frictionCombineMode,
+        in MaterialCombineMode restitutionCombineMode,
+        in u32 vhacdMaxHulls,
+        in f32 cylinderHalfHeight,
+        in f32 topRadius,
+        in VectorSingle planeNormalOffset,
+        in Vector<f32> heightfieldHeights,
+        in u32 heightfieldRows,
+        in u32 heightfieldCols,
+        in VectorSingle heightfieldScale,
+        in f32 heightfieldThickness,
+        in Vector<SurfaceMaterial> heightfieldMaterials,
+        in Vector<u16> heightfieldCellMaterialIndices
     )const{
-        if(cast<u8>(shapeType) > cast<u8>(ShapeType::Mesh))
-            return false;
-        if(!IsValidPositionVec3(center) || !IsFinite(center2) || !IsFinite(halfExtents) || !IsFinite(localRotation))
-            return false;
-        if(LengthSq(localRotation) <= s_NormalizeEpsilonSq)
-            return false;
-        if(!IsFinite(VectorSingle(radius, skinRadius, density, friction)))
-            return false;
-        if(!IsFinite(VectorSingle(restitution, rollingResistance, tangentSpeed, 0.0f)))
-            return false;
-        if((shapeType == ShapeType::Sphere || shapeType == ShapeType::Capsule) && radius <= 0.0f)
-            return false;
-        if(radius < 0.0f || skinRadius < 0.0f || density < 0.0f || friction < 0.0f || restitution < 0.0f || rollingResistance < 0.0f)
-            return false;
-        if(shapeType == ShapeType::Capsule){
-            if(!IsValidPositionVec3(center2))
-                return false;
-            const VectorSingle lenSq = Vector3LengthSq(center2 - center);
-            if(!IsFinite(lenSq) || lenSq.x < s_MinCapsuleLength * s_MinCapsuleLength)
-                return false;
-        }
-        if(shapeType == ShapeType::Hull){
-            if(isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
-                return false;
-            if(!isBox){
-                if(hullPoints.size() < 4u)
-                    return false;
-                for(usize i = 0u; i < hullPoints.size(); ++i){
-                    if(!IsValidPositionVec3(VectorSingle(hullPoints[i])))
-                        return false;
-                }
-            }
-        }
-        else if(shapeType == ShapeType::Mesh){
-            if(!meshAsset.valid() && (meshVertices.empty() || meshIndices.empty()))
-                return false;
-            if((meshIndices.size() % 3u) != 0u)
-                return false;
-            for(usize i = 0u; i < meshVertices.size(); ++i){
-                if(!IsValidPositionVec3(VectorSingle(meshVertices[i])))
-                    return false;
-            }
-            if(!meshVertices.empty()){
-                const usize vCount = meshVertices.size();
-                for(usize i = 0u; i < meshIndices.size(); ++i){
-                    if(cast<usize>(meshIndices[i]) >= vCount)
-                        return false;
-                }
-            }
-        }
-        return true;
+        return this.validColliderEntryHeaderFields(
+            shapeType,
+            center,
+            center2,
+            halfExtents,
+            localRotation,
+            radius,
+            skinRadius,
+            density,
+            friction,
+            restitution,
+            rollingResistance,
+            tangentSpeed,
+            isBox,
+            isChain,
+            chainRadius,
+            chainPoints.size(),
+            hullPoints.size(),
+            meshVertices.size(),
+            meshIndices.size(),
+            meshAsset.valid(),
+            convexHullAsset.valid(),
+            collisionMeshAsset.valid(),
+            staticFriction,
+            anisotropicFriction,
+            surfaceVelocity,
+            frictionDirection,
+            frictionCombineMode,
+            restitutionCombineMode,
+            vhacdMaxHulls,
+            cylinderHalfHeight,
+            topRadius,
+            planeNormalOffset,
+            heightfieldHeights.size(),
+            heightfieldRows,
+            heightfieldCols,
+            heightfieldScale,
+            heightfieldThickness,
+            heightfieldMaterials.size(),
+            heightfieldCellMaterialIndices.size()
+        ) && this.validColliderEntryArrayFields(
+            shapeType,
+            isBox,
+            convexHullAsset.valid(),
+            hullPoints,
+            meshVertices,
+            meshIndices,
+            heightfieldHeights,
+            heightfieldMaterials,
+            heightfieldCellMaterialIndices,
+            chainPoints
+        );
     }
 
     private b8 validColliderEntryData(in ColliderShapeEntry e)const{
@@ -153,38 +362,278 @@ class PhysicsComponentBinaryCodec{
             e.rollingResistance,
             e.tangentSpeed,
             e.isBox,
+            e.isChain,
+            e.chainRadius,
+            e.chainPoints,
             e.hullPoints,
             e.meshVertices,
             e.meshIndices,
-            e.meshAsset
+            e.meshAsset,
+            e.convexHullAsset,
+            e.collisionMeshAsset,
+            e.staticFriction,
+            VectorSingle(e.anisotropicFriction),
+            VectorSingle(e.surfaceVelocity),
+            VectorSingle(e.frictionDirection),
+            e.frictionCombineMode,
+            e.restitutionCombineMode,
+            e.vhacdMaxHulls,
+            e.cylinderHalfHeight,
+            e.topRadius,
+            VectorSingle(e.planeNormalOffset),
+            e.heightfieldHeights,
+            e.heightfieldRows,
+            e.heightfieldCols,
+            VectorSingle(e.heightfieldScale),
+            e.heightfieldThickness,
+            e.heightfieldMaterials,
+            e.heightfieldCellMaterialIndices
         );
     }
 
-    private usize colliderEntrySerializedBytes(in usize hullCount, in usize vertCount, in usize idxCount)const{
+    private usize colliderEntrySerializedBytes(
+        in usize hullCount,
+        in usize vertCount,
+        in usize idxCount,
+        in usize heightfieldCount,
+        in usize hfMatCount,
+        in usize hfCellMatCount,
+        in usize chainPointCount
+    )const{
         return size_of<ColliderShapeEntryHeaderBinary>()
             + hullCount * size_of<PhysicsVec4Binary>()
             + vertCount * size_of<PhysicsVec4Binary>()
-            + idxCount * size_of<PhysicsU32Binary>();
+            + idxCount * size_of<PhysicsU32Binary>()
+            + heightfieldCount * size_of<f32>()
+            + hfMatCount * size_of<PhysicsSurfaceMaterialBinary>()
+            + hfCellMatCount * size_of<CollisionMeshU16Binary>()
+            + chainPointCount * size_of<PhysicsVec4Binary>();
+    }
+
+    private b8 validJointEntryFields(
+        in JointType type,
+        in VectorSingle localAnchorA,
+        in VectorSingle localAnchorB,
+        in VectorSingle localAxisA,
+        in VectorSingle localAxisB,
+        in VectorSingle referenceRotation,
+        in f32 length,
+        in f32 minLength,
+        in f32 maxLength,
+        in f32 lowerLimit,
+        in f32 upperLimit,
+        in f32 motorSpeed,
+        in f32 maxMotorForce,
+        in f32 hertz,
+        in f32 dampingRatio,
+        in VectorSingle linearOffset,
+        in f32 correctionFactor,
+        in f32 maxTorque,
+        in f32 swingLimit,
+        in f32 suspensionHertz,
+        in f32 suspensionDampingRatio,
+        in f32 breakForce,
+        in f32 breakTorque,
+        in f32 projectionLinearTolerance,
+        in f32 projectionAngularTolerance,
+        in f32 invMassScaleA,
+        in f32 invMassScaleB,
+        in f32 invInertiaScaleA,
+        in f32 invInertiaScaleB,
+        in f32 limitRestitution,
+        in f32 limitHertz,
+        in f32 limitDampingRatio,
+        in f32 swingLimitY,
+        in f32 springTarget,
+        in f32 steeringAngle,
+        in f32 suspensionRestLength,
+        in f32 ratio,
+        in VectorSingle groundAnchorA,
+        in VectorSingle groundAnchorB,
+        in f32 lengthA,
+        in f32 lengthB,
+        in Span<SixDofAxisConfig> sixDofAxes,
+        in Span<f32x4> pathPoints
+    )const{
+        if(cast<u8>(type) >= cast<u8>(JointType::kCount) || sixDofAxes.size() != 6u)
+            return false;
+        if(!IsFinite(localAnchorA) || !IsFinite(localAnchorB) || !IsFinite(localAxisA) || !IsFinite(localAxisB))
+            return false;
+        if(!IsFinite(referenceRotation) || LengthSq(referenceRotation) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsFinite(linearOffset) || !IsFinite(groundAnchorA) || !IsFinite(groundAnchorB))
+            return false;
+        if(!IsFinite(VectorSingle(length, minLength, maxLength, lowerLimit)))
+            return false;
+        if(!IsFinite(VectorSingle(upperLimit, motorSpeed, maxMotorForce, hertz)))
+            return false;
+        if(!IsFinite(VectorSingle(dampingRatio, correctionFactor, maxTorque, swingLimit)))
+            return false;
+        if(!IsFinite(VectorSingle(suspensionHertz, suspensionDampingRatio, breakForce, breakTorque)))
+            return false;
+        if(!IsFinite(VectorSingle(projectionLinearTolerance, projectionAngularTolerance, invMassScaleA, invMassScaleB)))
+            return false;
+        if(!IsFinite(VectorSingle(invInertiaScaleA, invInertiaScaleB, limitRestitution, limitHertz)))
+            return false;
+        if(!IsFinite(VectorSingle(limitDampingRatio, swingLimitY, springTarget, steeringAngle)))
+            return false;
+        if(!IsFinite(VectorSingle(suspensionRestLength, ratio, lengthA, lengthB)))
+            return false;
+        if(!(lowerLimit <= upperLimit
+            && length >= 0.0f
+            && minLength >= 0.0f
+            && maxLength >= minLength
+            && maxMotorForce >= 0.0f
+            && hertz >= 0.0f
+            && dampingRatio >= 0.0f
+            && correctionFactor >= 0.0f
+            && correctionFactor <= 1.0f
+            && maxTorque >= 0.0f
+            && swingLimit >= 0.0f
+            && swingLimitY >= 0.0f
+            && suspensionHertz >= 0.0f
+            && suspensionDampingRatio >= 0.0f
+            && suspensionRestLength >= 0.0f
+            && breakForce >= 0.0f
+            && breakTorque >= 0.0f
+            && projectionLinearTolerance >= 0.0f
+            && projectionAngularTolerance >= 0.0f
+            && invMassScaleA >= 0.0f
+            && invMassScaleB >= 0.0f
+            && invInertiaScaleA >= 0.0f
+            && invInertiaScaleB >= 0.0f
+            && limitRestitution >= 0.0f
+            && limitRestitution <= 1.0f
+            && limitHertz >= 0.0f
+            && limitDampingRatio >= 0.0f
+            && lengthA >= 0.0f
+            && lengthB >= 0.0f
+        ))
+            return false;
+        if((type == JointType::Gear || type == JointType::RackAndPinion) && Abs(VectorSingle(ratio)).x <= 1.0e-7f)
+            return false;
+        if(type == JointType::Pulley && ratio <= 0.0f)
+            return false;
+        for(usize k = 0u; k < 6u; ++k){
+            in SixDofAxisConfig cfg = sixDofAxes[k];
+            if(cast<u8>(cfg.motion) >= cast<u8>(JointMotion::kCount))
+                return false;
+            if(!IsFinite(VectorSingle(cfg.lowerLimit, cfg.upperLimit, cfg.motorTargetVelocity, cfg.motorTargetPosition)))
+                return false;
+            if(!IsFinite(VectorSingle(cfg.maxMotorForce, cfg.springHertz, cfg.springDampingRatio, 0.0f)))
+                return false;
+            if(cfg.upperLimit < cfg.lowerLimit || cfg.maxMotorForce < 0.0f || cfg.springHertz < 0.0f || cfg.springDampingRatio < 0.0f)
+                return false;
+        }
+        for(usize pi = 0u; pi < pathPoints.size(); ++pi){
+            if(!IsValidPositionVec3(VectorSingle(pathPoints[pi])))
+                return false;
+        }
+        if(type == JointType::Path && pathPoints.size() < 2u)
+            return false;
+        return true;
+    }
+
+    private b8 validJointEntry(in JointEntry j)const{
+        return this.validJointEntryFields(
+            j.type,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            VectorSingle(j.linearOffset),
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.lengthA,
+            j.lengthB,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
+        );
     }
 
     private b8 validJointData(in JointComponent j)const{
-        if(cast<u8>(j.type) > cast<u8>(JointType::Wheel))
+        if(!this.validJointEntryFields(
+            j.type,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            VectorSingle(j.linearOffset),
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.lengthA,
+            j.lengthB,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())
+        ))
             return false;
-        if(!IsFinite(VectorSingle(j.localAnchorA)) || !IsFinite(VectorSingle(j.localAnchorB)) || !IsFinite(VectorSingle(j.localAxisA)) || !IsFinite(VectorSingle(j.localAxisB)))
-            return false;
-        if(!IsFinite(VectorSingle(j.referenceRotation)) || LengthSq(VectorSingle(j.referenceRotation)) <= s_NormalizeEpsilonSq)
-            return false;
-        if(!IsFinite(VectorSingle(j.linearOffset)))
-            return false;
-        if(!IsFinite(VectorSingle(j.length, j.minLength, j.maxLength, j.lowerLimit)))
-            return false;
-        if(!IsFinite(VectorSingle(j.upperLimit, j.motorSpeed, j.maxMotorForce, j.hertz)))
-            return false;
-        if(!IsFinite(VectorSingle(j.dampingRatio, j.correctionFactor, j.maxTorque, j.swingLimit)))
-            return false;
-        if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
-            return false;
-        return (!j.enableLimit || j.lowerLimit <= j.upperLimit) && j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
+        for(usize i = 0u; i < j.extraJoints.size(); ++i){
+            if(!this.validJointEntry(j.extraJoints[i]))
+                return false;
+        }
+        return true;
     }
 
     private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
@@ -194,9 +643,9 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(w.restitutionThreshold, w.hitEventThreshold, w.contactHertz, w.contactDampingRatio)))
             return false;
-        if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, 0.0f)))
+        if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, w.timeToSleep)))
             return false;
-        return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
+        return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.timeToSleep >= 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
     }
 
     private b8 validPhysicsParentData(in PhysicsParentComponent p)const{
@@ -210,13 +659,14 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeRigidBody(in RigidBodyComponent c, mut Vector<u8> outPayload)const{
-        if(!this.validRigidBodyData(c))
+    public b8 appendRigidBodyValidated(in RigidBodyComponent c, mut Vector<u8> outBinary)const{
+        static_assert(size_of<RigidBodyComponentPayloadBinary>() == 192u && offset_of<RigidBodyComponentPayloadBinary>(reserved1) == 184u);
+        const usize reqBytes = size_of<RigidBodyComponentPayloadBinary>();
+        if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         RigidBodyComponentPayloadBinary bin;
-        bin.version = s_PhysicsComponentBinaryVersion;
         bin.bodyType = cast<u8>(c.type);
-        u8 flags = 0u;
+        u16 flags = 0u;
         if(c.enableSleep) flags |= s_RigidBodyFlagEnableSleep;
         if(c.isAwake) flags |= s_RigidBodyFlagIsAwake;
         if(c.isBullet) flags |= s_RigidBodyFlagIsBullet;
@@ -225,6 +675,7 @@ class PhysicsComponentBinaryCodec{
         if(c.enableGyroscopicTorque) flags |= s_RigidBodyFlagEnableGyroscopic;
         if(c.driveKinematicFromTransform) flags |= s_RigidBodyFlagDriveKinematic;
         if(c.useCustomMass) flags |= s_RigidBodyFlagUseCustomMass;
+        if(c.hasCustomMaxAngularVelocity) flags |= s_RigidBodyFlagHasCustomMaxAngVel;
         bin.flags = flags;
         bin.motionLocks = c.motionLocks;
         bin.linearVelocity = c.linearVelocity;
@@ -233,16 +684,23 @@ class PhysicsComponentBinaryCodec{
         bin.angularDamping = c.angularDamping;
         bin.gravityScale = c.gravityScale;
         bin.sleepThreshold = c.sleepThreshold;
+        bin.maxAngularVelocity = c.maxAngularVelocity;
         bin.userData = c.userData;
         bin.entityTagHash = c.entityTag.hash();
         bin.customMass = c.customMass;
         bin.customCenterOfMass = c.customCenterOfMass;
         bin.customInertiaDiag = c.customInertiaDiag;
         bin.customInertiaOffDiag = c.customInertiaOffDiag;
-        outPayload.clear();
-        outPayload.reserve(size_of<RigidBodyComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeRigidBody(in RigidBodyComponent c, mut Vector<u8> outPayload)const{
+        if(!this.validRigidBodyData(c))
+            return false;
+        outPayload.clear();
+        return this.appendRigidBodyValidated(c, outPayload);
     }
 
     public Expected<RigidBodyComponent> deserializeRigidBody(in Span<u8> payload)const{
@@ -253,8 +711,8 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in RigidBodyComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || bin.reserved4 != 0u){
-            error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xfe00u) != 0u){
+            error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         RigidBodyComponent c;
@@ -267,6 +725,7 @@ class PhysicsComponentBinaryCodec{
         c.enableGyroscopicTorque = (bin.flags & s_RigidBodyFlagEnableGyroscopic) != 0u;
         c.driveKinematicFromTransform = (bin.flags & s_RigidBodyFlagDriveKinematic) != 0u;
         c.useCustomMass = (bin.flags & s_RigidBodyFlagUseCustomMass) != 0u;
+        c.hasCustomMaxAngularVelocity = (bin.flags & s_RigidBodyFlagHasCustomMaxAngVel) != 0u;
         c.motionLocks = bin.motionLocks;
         c.linearVelocity = bin.linearVelocity;
         c.angularVelocity = bin.angularVelocity;
@@ -274,6 +733,7 @@ class PhysicsComponentBinaryCodec{
         c.angularDamping = bin.angularDamping;
         c.gravityScale = bin.gravityScale;
         c.sleepThreshold = bin.sleepThreshold;
+        c.maxAngularVelocity = bin.maxAngularVelocity;
         c.userData = bin.userData;
         if(bin.entityTagHash == s_NameNone.hash())
             c.entityTag = s_NameNone;
@@ -291,7 +751,7 @@ class PhysicsComponentBinaryCodec{
         return c;
     }
 
-    private b8 serializeColliderEntryFields(
+    private b8 appendColliderEntryFieldsUnchecked(
         in ShapeType shapeType,
         in VectorSingle center,
         in VectorSingle center2,
@@ -319,29 +779,73 @@ class PhysicsComponentBinaryCodec{
         in Vector<f32x4> meshVertices,
         in Vector<u32> meshIndices,
         in AssetRef<Mesh> meshAsset,
+        in AssetRef<PhysicsMaterialAsset> materialAsset,
+        in AssetRef<ConvexHullAsset> convexHullAsset,
+        in AssetRef<CollisionMeshAsset> collisionMeshAsset,
+        in f32 staticFriction,
+        in VectorSingle anisotropicFriction,
+        in VectorSingle surfaceVelocity,
+        in VectorSingle frictionDirection,
+        in MaterialCombineMode frictionCombineMode,
+        in MaterialCombineMode restitutionCombineMode,
+        in b8 cullBackfaces,
+        in b8 autoConvexDecompose,
+        in u32 vhacdMaxHulls,
+        in f32 cylinderHalfHeight,
+        in f32 topRadius,
+        in VectorSingle planeNormalOffset,
+        in Vector<f32> heightfieldHeights,
+        in u32 heightfieldRows,
+        in u32 heightfieldCols,
+        in VectorSingle heightfieldScale,
+        in f32 heightfieldThickness,
+        in Vector<SurfaceMaterial> heightfieldMaterials,
+        in Vector<u16> heightfieldCellMaterialIndices,
+        in b8 isChain,
+        in Vector<f32x4> chainPoints,
+        in b8 chainClosed,
+        in f32 chainRadius,
         mut Vector<u8> outPayload
     )const{
-        if(!this.validColliderEntryFields(shapeType, center, center2, halfExtents, localRotation, radius, skinRadius, density, friction, restitution, rollingResistance, tangentSpeed, isBox, hullPoints, meshVertices, meshIndices, meshAsset))
+        if(
+            hullPoints.size() > cast<usize>(u32.max)
+            || meshVertices.size() > cast<usize>(u32.max)
+            || meshIndices.size() > cast<usize>(u32.max)
+            || heightfieldHeights.size() > cast<usize>(u32.max)
+            || heightfieldMaterials.size() > cast<usize>(u32.max)
+            || heightfieldCellMaterialIndices.size() > cast<usize>(u32.max)
+            || chainPoints.size() > cast<usize>(u32.max)
+        )
             return false;
+        static_assert(
+            size_of<ColliderShapeEntryHeaderBinary>() == 528u
+            && offset_of<ColliderShapeEntryHeaderBinary>(reserved3) == 520u
+            && size_of<ColliderComponentPayloadHeaderBinary>() == 72u
+            && offset_of<ColliderComponentPayloadHeaderBinary>(reserved0) == 68u
+        );
+        static_assert(
+            size_of<PhysicsVec4Binary>() == size_of<f32x4>()
+            && size_of<PhysicsU32Binary>() == size_of<u32>()
+            && size_of<CollisionMeshU16Binary>() == size_of<u16>()
+        );
         ColliderShapeEntryHeaderBinary hdr;
-        hdr.version = s_PhysicsComponentBinaryVersion;
-        hdr.shapeType = cast<u8>(shapeType);
-        u8 flags = 0u;
-        if(isBox) flags |= s_ColliderFlagIsBox;
-        if(isSensor) flags |= s_ColliderFlagIsSensor;
-        if(enableContactEvents) flags |= s_ColliderFlagContactEvents;
-        if(enableHitEvents) flags |= s_ColliderFlagHitEvents;
-        if(enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
-        if(enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
-        if(invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
-        hdr.flags = flags;
-        hdr.groupIndex = groupIndex;
-        hdr.categoryBits = categoryBits;
-        hdr.maskBits = maskBits;
         hdr.center = f32x4(center);
         hdr.center2 = f32x4(center2);
         hdr.halfExtents = f32x4(halfExtents);
         hdr.localRotation = f32x4(localRotation);
+        hdr.anisotropicFriction = f32x4(anisotropicFriction);
+        hdr.surfaceVelocity = f32x4(surfaceVelocity);
+        hdr.frictionDirection = f32x4(frictionDirection);
+        hdr.planeNormalOffset = f32x4(planeNormalOffset);
+        hdr.heightfieldScale = f32x4(heightfieldScale, 0.0f);
+        hdr.meshAssetHash = meshAsset.name().hash();
+        hdr.materialAssetHash = materialAsset.name().hash();
+        hdr.convexHullAssetHash = convexHullAsset.name().hash();
+        hdr.collisionMeshAssetHash = collisionMeshAsset.name().hash();
+        hdr.userData = userData;
+        hdr.groupIndex = groupIndex;
+        hdr.categoryBits = categoryBits;
+        hdr.maskBits = maskBits;
         hdr.radius = radius;
         hdr.skinRadius = skinRadius;
         hdr.density = density;
@@ -349,23 +853,57 @@ class PhysicsComponentBinaryCodec{
         hdr.restitution = restitution;
         hdr.rollingResistance = rollingResistance;
         hdr.tangentSpeed = tangentSpeed;
-        hdr.meshAssetHash = meshAsset.name().hash();
+        hdr.staticFriction = staticFriction;
+        hdr.vhacdMaxHulls = vhacdMaxHulls;
+        hdr.cylinderHalfHeight = cylinderHalfHeight;
+        hdr.topRadius = topRadius;
+        hdr.heightfieldRows = heightfieldRows;
+        hdr.heightfieldCols = heightfieldCols;
+        hdr.heightfieldThickness = heightfieldThickness;
+        hdr.chainRadius = chainRadius;
         hdr.hullPointCount = cast<u32>(hullPoints.size());
         hdr.meshVertexCount = cast<u32>(meshVertices.size());
         hdr.meshIndexCount = cast<u32>(meshIndices.size());
-        hdr.userData = userData;
+        hdr.heightfieldCount = cast<u32>(heightfieldHeights.size());
+        hdr.heightfieldMaterialCount = cast<u32>(heightfieldMaterials.size());
+        hdr.heightfieldCellMaterialCount = cast<u32>(heightfieldCellMaterialIndices.size());
+        hdr.chainPointCount = cast<u32>(chainPoints.size());
+        u16 flags = 0u;
+        if(isBox) flags |= s_ColliderFlagIsBox;
+        if(isSensor) flags |= s_ColliderFlagIsSensor;
+        if(enableContactEvents) flags |= s_ColliderFlagContactEvents;
+        if(enableHitEvents) flags |= s_ColliderFlagHitEvents;
+        if(enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
+        if(enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
+        if(invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
+        if(cullBackfaces) flags |= s_ColliderFlagCullBackfaces;
+        if(autoConvexDecompose) flags |= s_ColliderFlagAutoConvexDecompose;
+        if(isChain) flags |= s_ColliderFlagIsChain;
+        if(chainClosed) flags |= s_ColliderFlagChainClosed;
+        hdr.flags = flags;
+        hdr.shapeType = cast<u8>(shapeType);
+        hdr.frictionCombineMode = cast<u8>(frictionCombineMode);
+        hdr.restitutionCombineMode = cast<u8>(restitutionCombineMode);
         AppendPOD(outPayload, hdr);
 
-        static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
-        return
-            AppendBinaryVectorPayload(outPayload, hullPoints).has_value()
-            && AppendBinaryVectorPayload(outPayload, meshVertices).has_value()
-            && AppendBinaryVectorPayload(outPayload, meshIndices).has_value()
-        ;
+        if(
+            !AppendBinaryVectorPayload(outPayload, hullPoints).has_value()
+            || !AppendBinaryVectorPayload(outPayload, meshVertices).has_value()
+            || !AppendBinaryVectorPayload(outPayload, meshIndices).has_value()
+            || !AppendBinaryVectorPayload(outPayload, heightfieldHeights).has_value()
+        )
+            return false;
+
+        PhysicsAssetBinaryCodec assetCodec;
+        for(usize mi = 0u; mi < heightfieldMaterials.size(); ++mi)
+            AppendPOD(outPayload, assetCodec.packSurfaceMaterialFields(heightfieldMaterials[mi]));
+        if(!AppendBinaryVectorPayload(outPayload, heightfieldCellMaterialIndices).has_value())
+            return false;
+        return AppendBinaryVectorPayload(outPayload, chainPoints).has_value();
     }
 
-    private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
-        return this.serializeColliderEntryFields(
+    private b8 appendColliderEntryUnchecked(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
+        return this.appendColliderEntryFieldsUnchecked(
             e.shapeType,
             VectorSingle(e.center),
             VectorSingle(e.center2),
@@ -393,6 +931,32 @@ class PhysicsComponentBinaryCodec{
             e.meshVertices,
             e.meshIndices,
             e.meshAsset,
+            e.materialAsset,
+            e.convexHullAsset,
+            e.collisionMeshAsset,
+            e.staticFriction,
+            VectorSingle(e.anisotropicFriction),
+            VectorSingle(e.surfaceVelocity),
+            VectorSingle(e.frictionDirection),
+            e.frictionCombineMode,
+            e.restitutionCombineMode,
+            e.cullBackfaces,
+            e.autoConvexDecompose,
+            e.vhacdMaxHulls,
+            e.cylinderHalfHeight,
+            e.topRadius,
+            VectorSingle(e.planeNormalOffset),
+            e.heightfieldHeights,
+            e.heightfieldRows,
+            e.heightfieldCols,
+            VectorSingle(e.heightfieldScale),
+            e.heightfieldThickness,
+            e.heightfieldMaterials,
+            e.heightfieldCellMaterialIndices,
+            e.isChain,
+            e.chainPoints,
+            e.chainClosed,
+            e.chainRadius,
             outPayload
         );
     }
@@ -426,17 +990,54 @@ class PhysicsComponentBinaryCodec{
         mut Vector<f32x4> outHullPoints,
         mut Vector<f32x4> outMeshVertices,
         mut Vector<u32> outMeshIndices,
-        mut AssetRef<Mesh> outMeshAsset
+        mut AssetRef<Mesh> outMeshAsset,
+        mut AssetRef<PhysicsMaterialAsset> outMaterialAsset,
+        mut AssetRef<ConvexHullAsset> outConvexHullAsset,
+        mut AssetRef<CollisionMeshAsset> outCollisionMeshAsset,
+        mut f32 outStaticFriction,
+        mut VectorSingle outAnisotropicFriction,
+        mut VectorSingle outSurfaceVelocity,
+        mut VectorSingle outFrictionDirection,
+        mut MaterialCombineMode outFrictionCombineMode,
+        mut MaterialCombineMode outRestitutionCombineMode,
+        mut b8 outCullBackfaces,
+        mut b8 outAutoConvexDecompose,
+        mut u32 outVhacdMaxHulls,
+        mut f32 outCylinderHalfHeight,
+        mut f32 outTopRadius,
+        mut VectorSingle outPlaneNormalOffset,
+        mut Vector<f32> outHeightfieldHeights,
+        mut u32 outHeightfieldRows,
+        mut u32 outHeightfieldCols,
+        mut VectorSingle outHeightfieldScale,
+        mut f32 outHeightfieldThickness,
+        mut Vector<SurfaceMaterial> outHeightfieldMaterials,
+        mut Vector<u16> outHeightfieldCellMaterialIndices,
+        mut b8 outIsChain,
+        mut Vector<f32x4> outChainPoints,
+        mut b8 outChainClosed,
+        mut f32 outChainRadius
     )const{
         const Expected<ColliderShapeEntryHeaderBinary> hdrRes = ReadPOD<ColliderShapeEntryHeaderBinary>(payload, inOutCursor);
         if(!hdrRes.has_value())
             return false;
         in ColliderShapeEntryHeaderBinary hdr = hdrRes.value();
-        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || hdr.reserved4 != 0u || hdr.reserved5 != 0u || (hdr.flags & 0x80u) != 0u)
+        if(
+            hdr.reserved0 != 0u
+            || hdr.reserved1 != 0u
+            || hdr.reserved2 != 0u
+            || hdr.reserved3 != 0u
+            || (hdr.flags & 0xf800u) != 0u
+            || hdr.frictionCombineMode >= cast<u8>(MaterialCombineMode::kCount)
+            || hdr.restitutionCombineMode >= cast<u8>(MaterialCombineMode::kCount)
+        )
             return false;
 
         const u64 remaining = cast<u64>(payload.size() - inOutCursor);
-        const u64 vecBytes = (cast<u64>(hdr.hullPointCount) + cast<u64>(hdr.meshVertexCount)) * cast<u64>(size_of<PhysicsVec4Binary>()) + cast<u64>(hdr.meshIndexCount) * cast<u64>(size_of<PhysicsU32Binary>());
+        const u64 vecBytes = (cast<u64>(hdr.hullPointCount) + cast<u64>(hdr.meshVertexCount) + cast<u64>(hdr.chainPointCount)) * cast<u64>(size_of<PhysicsVec4Binary>())
+            + (cast<u64>(hdr.meshIndexCount) + cast<u64>(hdr.heightfieldCount)) * cast<u64>(size_of<PhysicsU32Binary>())
+            + cast<u64>(hdr.heightfieldMaterialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
+            + cast<u64>(hdr.heightfieldCellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>());
         if(vecBytes > remaining)
             return false;
 
@@ -448,6 +1049,10 @@ class PhysicsComponentBinaryCodec{
         outEnableSensorEvents = (hdr.flags & s_ColliderFlagSensorEvents) != 0u;
         outEnablePreSolveEvents = (hdr.flags & s_ColliderFlagPreSolveEvents) != 0u;
         outInvokeContactCreation = (hdr.flags & s_ColliderFlagInvokeCreation) != 0u;
+        outCullBackfaces = (hdr.flags & s_ColliderFlagCullBackfaces) != 0u;
+        outAutoConvexDecompose = (hdr.flags & s_ColliderFlagAutoConvexDecompose) != 0u;
+        outIsChain = (hdr.flags & s_ColliderFlagIsChain) != 0u;
+        outChainClosed = (hdr.flags & s_ColliderFlagChainClosed) != 0u;
         outGroupIndex = hdr.groupIndex;
         outCategoryBits = hdr.categoryBits;
         outMaskBits = hdr.maskBits;
@@ -455,6 +1060,11 @@ class PhysicsComponentBinaryCodec{
         outCenter2 = VectorSingle(hdr.center2);
         outHalfExtents = VectorSingle(hdr.halfExtents);
         outLocalRotation = VectorSingle(hdr.localRotation);
+        outAnisotropicFriction = VectorSingle(hdr.anisotropicFriction);
+        outSurfaceVelocity = VectorSingle(hdr.surfaceVelocity);
+        outFrictionDirection = VectorSingle(hdr.frictionDirection);
+        outPlaneNormalOffset = VectorSingle(hdr.planeNormalOffset);
+        outHeightfieldScale = VectorSingle(VectorSingle(hdr.heightfieldScale), 0.0f);
         outRadius = hdr.radius;
         outSkinRadius = hdr.skinRadius;
         outDensity = hdr.density;
@@ -462,18 +1072,121 @@ class PhysicsComponentBinaryCodec{
         outRestitution = hdr.restitution;
         outRollingResistance = hdr.rollingResistance;
         outTangentSpeed = hdr.tangentSpeed;
+        outStaticFriction = hdr.staticFriction;
+        outVhacdMaxHulls = hdr.vhacdMaxHulls;
+        outCylinderHalfHeight = hdr.cylinderHalfHeight;
+        outTopRadius = hdr.topRadius;
+        outHeightfieldRows = hdr.heightfieldRows;
+        outHeightfieldCols = hdr.heightfieldCols;
+        outHeightfieldThickness = hdr.heightfieldThickness;
+        outChainRadius = hdr.chainRadius;
+        outFrictionCombineMode = cast<MaterialCombineMode>(hdr.frictionCombineMode);
+        outRestitutionCombineMode = cast<MaterialCombineMode>(hdr.restitutionCombineMode);
         outUserData = hdr.userData;
-        outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
+        if(hdr.meshAssetHash == s_NameNone.hash())
+            outMeshAsset.virtualPath = s_NameNone;
+        else
+            outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
+        if(hdr.materialAssetHash == s_NameNone.hash())
+            outMaterialAsset.virtualPath = s_NameNone;
+        else
+            outMaterialAsset.virtualPath = Name(hdr.materialAssetHash);
+        if(hdr.convexHullAssetHash == s_NameNone.hash())
+            outConvexHullAsset.virtualPath = s_NameNone;
+        else
+            outConvexHullAsset.virtualPath = Name(hdr.convexHullAssetHash);
+        if(hdr.collisionMeshAssetHash == s_NameNone.hash())
+            outCollisionMeshAsset.virtualPath = s_NameNone;
+        else
+            outCollisionMeshAsset.virtualPath = Name(hdr.collisionMeshAssetHash);
 
-        static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
+        if(!this.validColliderEntryHeaderFields(
+            outShapeType,
+            outCenter,
+            outCenter2,
+            outHalfExtents,
+            outLocalRotation,
+            outRadius,
+            outSkinRadius,
+            outDensity,
+            outFriction,
+            outRestitution,
+            outRollingResistance,
+            outTangentSpeed,
+            outIsBox,
+            outIsChain,
+            outChainRadius,
+            cast<usize>(hdr.chainPointCount),
+            cast<usize>(hdr.hullPointCount),
+            cast<usize>(hdr.meshVertexCount),
+            cast<usize>(hdr.meshIndexCount),
+            outMeshAsset.valid(),
+            outConvexHullAsset.valid(),
+            outCollisionMeshAsset.valid(),
+            outStaticFriction,
+            outAnisotropicFriction,
+            outSurfaceVelocity,
+            outFrictionDirection,
+            outFrictionCombineMode,
+            outRestitutionCombineMode,
+            outVhacdMaxHulls,
+            outCylinderHalfHeight,
+            outTopRadius,
+            outPlaneNormalOffset,
+            cast<usize>(hdr.heightfieldCount),
+            outHeightfieldRows,
+            outHeightfieldCols,
+            outHeightfieldScale,
+            outHeightfieldThickness,
+            cast<usize>(hdr.heightfieldMaterialCount),
+            cast<usize>(hdr.heightfieldCellMaterialCount)
+        ))
+            return false;
+
+        static_assert(
+            size_of<PhysicsVec4Binary>() == size_of<f32x4>()
+            && size_of<PhysicsU32Binary>() == size_of<u32>()
+            && size_of<f32>() == size_of<u32>()
+            && size_of<CollisionMeshU16Binary>() == size_of<u16>()
+        );
         if(
             !ReadBinaryVectorPayload(payload, hdr.hullPointCount, inOutCursor, outHullPoints).has_value()
             || !ReadBinaryVectorPayload(payload, hdr.meshVertexCount, inOutCursor, outMeshVertices).has_value()
             || !ReadBinaryVectorPayload(payload, hdr.meshIndexCount, inOutCursor, outMeshIndices).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.heightfieldCount, inOutCursor, outHeightfieldHeights).has_value()
         )
             return false;
 
-        return this.validColliderEntryFields(outShapeType, outCenter, outCenter2, outHalfExtents, outLocalRotation, outRadius, outSkinRadius, outDensity, outFriction, outRestitution, outRollingResistance, outTangentSpeed, outIsBox, outHullPoints, outMeshVertices, outMeshIndices, outMeshAsset);
+        PhysicsAssetBinaryCodec assetCodec;
+        outHeightfieldMaterials.resize(hdr.heightfieldMaterialCount);
+        for(u32 mi = 0u; mi < hdr.heightfieldMaterialCount; ++mi){
+            const Expected<PhysicsSurfaceMaterialBinary> matBinRes = ReadPOD<PhysicsSurfaceMaterialBinary>(payload, inOutCursor);
+            if(!matBinRes.has_value())
+                return false;
+            const Expected<SurfaceMaterial> unpackedMat = assetCodec.unpackSurfaceMaterialFields(matBinRes.value());
+            if(!unpackedMat.has_value())
+                return false;
+            outHeightfieldMaterials[mi] = unpackedMat.value();
+        }
+
+        if(
+            !ReadBinaryVectorPayload(payload, hdr.heightfieldCellMaterialCount, inOutCursor, outHeightfieldCellMaterialIndices).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.chainPointCount, inOutCursor, outChainPoints).has_value()
+        )
+            return false;
+
+        return this.validColliderEntryArrayFields(
+            outShapeType,
+            outIsBox,
+            outConvexHullAsset.valid(),
+            outHullPoints,
+            outMeshVertices,
+            outMeshIndices,
+            outHeightfieldHeights,
+            outHeightfieldMaterials,
+            outHeightfieldCellMaterialIndices,
+            outChainPoints
+        );
     }
 
     private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
@@ -481,6 +1194,11 @@ class PhysicsComponentBinaryCodec{
         VectorSingle center2Vec(0.0f);
         VectorSingle halfExtentsVec(0.0f);
         VectorSingle localRotVec(0.0f);
+        VectorSingle anisoVec(1.0f, 1.0f, 1.0f, 0.0f);
+        VectorSingle surfVec(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle fricDirVec(1.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle planeVec(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle hfScaleVec(1.0f, 1.0f, 1.0f, 0.0f);
         if(!this.deserializeColliderEntryFields(
             payload,
             inOutCursor,
@@ -510,18 +1228,89 @@ class PhysicsComponentBinaryCodec{
             outEntry.hullPoints,
             outEntry.meshVertices,
             outEntry.meshIndices,
-            outEntry.meshAsset
+            outEntry.meshAsset,
+            outEntry.materialAsset,
+            outEntry.convexHullAsset,
+            outEntry.collisionMeshAsset,
+            outEntry.staticFriction,
+            anisoVec,
+            surfVec,
+            fricDirVec,
+            outEntry.frictionCombineMode,
+            outEntry.restitutionCombineMode,
+            outEntry.cullBackfaces,
+            outEntry.autoConvexDecompose,
+            outEntry.vhacdMaxHulls,
+            outEntry.cylinderHalfHeight,
+            outEntry.topRadius,
+            planeVec,
+            outEntry.heightfieldHeights,
+            outEntry.heightfieldRows,
+            outEntry.heightfieldCols,
+            hfScaleVec,
+            outEntry.heightfieldThickness,
+            outEntry.heightfieldMaterials,
+            outEntry.heightfieldCellMaterialIndices,
+            outEntry.isChain,
+            outEntry.chainPoints,
+            outEntry.chainClosed,
+            outEntry.chainRadius
         ))
             return false;
         outEntry.center = f32x4(centerVec);
         outEntry.center2 = f32x4(center2Vec);
         outEntry.halfExtents = f32x4(halfExtentsVec);
         outEntry.localRotation = f32x4(localRotVec);
+        outEntry.anisotropicFriction = f32x4(anisoVec);
+        outEntry.surfaceVelocity = f32x4(surfVec);
+        outEntry.frictionDirection = f32x4(fricDirVec);
+        outEntry.planeNormalOffset = f32x4(planeVec);
+        outEntry.heightfieldScale = f32x4(hfScaleVec, 0.0f);
         return true;
     }
 
     public b8 validateCollider(in ColliderComponent c, in Name virtualPath)const{
-        if(!this.validColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.isBox, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset)){
+        if(!this.validColliderEntryFields(
+            c.shapeType,
+            VectorSingle(c.center),
+            VectorSingle(c.center2),
+            VectorSingle(c.halfExtents),
+            VectorSingle(c.localRotation),
+            c.radius,
+            c.skinRadius,
+            c.density,
+            c.friction,
+            c.restitution,
+            c.rollingResistance,
+            c.tangentSpeed,
+            c.isBox,
+            c.isChain,
+            c.chainRadius,
+            c.chainPoints,
+            c.hullPoints,
+            c.meshVertices,
+            c.meshIndices,
+            c.meshAsset,
+            c.convexHullAsset,
+            c.collisionMeshAsset,
+            c.staticFriction,
+            VectorSingle(c.anisotropicFriction),
+            VectorSingle(c.surfaceVelocity),
+            VectorSingle(c.frictionDirection),
+            c.frictionCombineMode,
+            c.restitutionCombineMode,
+            c.vhacdMaxHulls,
+            c.cylinderHalfHeight,
+            c.topRadius,
+            VectorSingle(c.planeNormalOffset),
+            c.heightfieldHeights,
+            c.heightfieldRows,
+            c.heightfieldCols,
+            VectorSingle(c.heightfieldScale),
+            c.heightfieldThickness,
+            c.heightfieldMaterials,
+            c.heightfieldCellMaterialIndices
+        )){
             error("ColliderComponentAsset::validatePayload failed: invalid primary collider entry for '{}'", virtualPath.resolvedText());
             return false;
         }
@@ -534,23 +1323,158 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
+    public b8 appendColliderValidated(in ColliderComponent c, mut Vector<u8> outBinary)const{
+        if(c.extraShapes.size() > cast<usize>(u32.max))
+            return false;
         ColliderComponentPayloadHeaderBinary rootHdr;
-        rootHdr.version = s_PhysicsComponentBinaryVersion;
         rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
         rootHdr.entityTagHash = c.entityTag.hash();
         usize totalBytes = size_of<ColliderComponentPayloadHeaderBinary>()
-            + this.colliderEntrySerializedBytes(c.hullPoints.size(), c.meshVertices.size(), c.meshIndices.size());
-        for(usize i = 0u; i < c.extraShapes.size(); ++i)
-            totalBytes += this.colliderEntrySerializedBytes(c.extraShapes[i].hullPoints.size(), c.extraShapes[i].meshVertices.size(), c.extraShapes[i].meshIndices.size());
-        outPayload.clear();
-        outPayload.reserve(totalBytes);
-        AppendPOD(outPayload, rootHdr);
-        if(!this.serializeColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outPayload))
+            + this.colliderEntrySerializedBytes(
+                c.hullPoints.size(),
+                c.meshVertices.size(),
+                c.meshIndices.size(),
+                c.heightfieldHeights.size(),
+                c.heightfieldMaterials.size(),
+                c.heightfieldCellMaterialIndices.size(),
+                c.chainPoints.size()
+            );
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            in ColliderShapeEntry e = c.extraShapes[i];
+            const usize entryBytes = this.colliderEntrySerializedBytes(
+                e.hullPoints.size(),
+                e.meshVertices.size(),
+                e.meshIndices.size(),
+                e.heightfieldHeights.size(),
+                e.heightfieldMaterials.size(),
+                e.heightfieldCellMaterialIndices.size(),
+                e.chainPoints.size()
+            );
+            if(entryBytes > usize.max - totalBytes)
+                return false;
+            totalBytes += entryBytes;
+        }
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        AppendPOD(outBinary, rootHdr);
+        if(!this.appendColliderEntryFieldsUnchecked(
+            c.shapeType,
+            VectorSingle(c.center),
+            VectorSingle(c.center2),
+            VectorSingle(c.halfExtents),
+            VectorSingle(c.localRotation),
+            c.radius,
+            c.skinRadius,
+            c.density,
+            c.friction,
+            c.restitution,
+            c.rollingResistance,
+            c.tangentSpeed,
+            c.groupIndex,
+            c.categoryBits,
+            c.maskBits,
+            c.userData,
+            c.isBox,
+            c.isSensor,
+            c.enableContactEvents,
+            c.enableHitEvents,
+            c.enableSensorEvents,
+            c.enablePreSolveEvents,
+            c.invokeContactCreation,
+            c.hullPoints,
+            c.meshVertices,
+            c.meshIndices,
+            c.meshAsset,
+            c.materialAsset,
+            c.convexHullAsset,
+            c.collisionMeshAsset,
+            c.staticFriction,
+            VectorSingle(c.anisotropicFriction),
+            VectorSingle(c.surfaceVelocity),
+            VectorSingle(c.frictionDirection),
+            c.frictionCombineMode,
+            c.restitutionCombineMode,
+            c.cullBackfaces,
+            c.autoConvexDecompose,
+            c.vhacdMaxHulls,
+            c.cylinderHalfHeight,
+            c.topRadius,
+            VectorSingle(c.planeNormalOffset),
+            c.heightfieldHeights,
+            c.heightfieldRows,
+            c.heightfieldCols,
+            VectorSingle(c.heightfieldScale),
+            c.heightfieldThickness,
+            c.heightfieldMaterials,
+            c.heightfieldCellMaterialIndices,
+            c.isChain,
+            c.chainPoints,
+            c.chainClosed,
+            c.chainRadius,
+            outBinary
+        ))
             return false;
         for(usize i = 0u; i < c.extraShapes.size(); ++i){
-            if(!this.serializeColliderEntry(c.extraShapes[i], outPayload))
+            if(!this.appendColliderEntryUnchecked(c.extraShapes[i], outBinary))
                 return false;
+        }
+        return true;
+    }
+
+    public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        if(c.extraShapes.size() > cast<usize>(u32.max))
+            return false;
+        if(!this.validColliderEntryFields(
+            c.shapeType,
+            VectorSingle(c.center),
+            VectorSingle(c.center2),
+            VectorSingle(c.halfExtents),
+            VectorSingle(c.localRotation),
+            c.radius,
+            c.skinRadius,
+            c.density,
+            c.friction,
+            c.restitution,
+            c.rollingResistance,
+            c.tangentSpeed,
+            c.isBox,
+            c.isChain,
+            c.chainRadius,
+            c.chainPoints,
+            c.hullPoints,
+            c.meshVertices,
+            c.meshIndices,
+            c.meshAsset,
+            c.convexHullAsset,
+            c.collisionMeshAsset,
+            c.staticFriction,
+            VectorSingle(c.anisotropicFriction),
+            VectorSingle(c.surfaceVelocity),
+            VectorSingle(c.frictionDirection),
+            c.frictionCombineMode,
+            c.restitutionCombineMode,
+            c.vhacdMaxHulls,
+            c.cylinderHalfHeight,
+            c.topRadius,
+            VectorSingle(c.planeNormalOffset),
+            c.heightfieldHeights,
+            c.heightfieldRows,
+            c.heightfieldCols,
+            VectorSingle(c.heightfieldScale),
+            c.heightfieldThickness,
+            c.heightfieldMaterials,
+            c.heightfieldCellMaterialIndices
+        ))
+            return false;
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            if(!this.validColliderEntryData(c.extraShapes[i]))
+                return false;
+        }
+        if(!this.appendColliderValidated(c, outPayload)){
+            outPayload.clear();
+            return false;
         }
         return true;
     }
@@ -563,8 +1487,8 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in ColliderComponentPayloadHeaderBinary rootHdr = rootRes.value();
-        if(rootHdr.version != s_PhysicsComponentBinaryVersion || rootHdr.reserved0 != 0u){
-            error("ColliderComponentAsset::loadComponentPayload failed: invalid version");
+        if(rootHdr.reserved0 != 0u){
+            error("ColliderComponentAsset::loadComponentPayload failed: non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 minExtraBytes = cast<u64>(rootHdr.extraShapeCount) * cast<u64>(size_of<ColliderShapeEntryHeaderBinary>());
@@ -578,7 +1502,68 @@ class PhysicsComponentBinaryCodec{
         VectorSingle cCenter2(0.0f);
         VectorSingle cHalfExtents(0.0f);
         VectorSingle cLocalRot(0.0f);
-        if(!this.deserializeColliderEntryFields(payload, cursor, c.shapeType, cCenter, cCenter2, cHalfExtents, cLocalRot, c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset)){
+        VectorSingle cAniso(1.0f, 1.0f, 1.0f, 0.0f);
+        VectorSingle cSurf(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle cFricDir(1.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle cPlane(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle cHfScale(1.0f, 1.0f, 1.0f, 0.0f);
+        if(!this.deserializeColliderEntryFields(
+            payload,
+            cursor,
+            c.shapeType,
+            cCenter,
+            cCenter2,
+            cHalfExtents,
+            cLocalRot,
+            c.radius,
+            c.skinRadius,
+            c.density,
+            c.friction,
+            c.restitution,
+            c.rollingResistance,
+            c.tangentSpeed,
+            c.groupIndex,
+            c.categoryBits,
+            c.maskBits,
+            c.userData,
+            c.isBox,
+            c.isSensor,
+            c.enableContactEvents,
+            c.enableHitEvents,
+            c.enableSensorEvents,
+            c.enablePreSolveEvents,
+            c.invokeContactCreation,
+            c.hullPoints,
+            c.meshVertices,
+            c.meshIndices,
+            c.meshAsset,
+            c.materialAsset,
+            c.convexHullAsset,
+            c.collisionMeshAsset,
+            c.staticFriction,
+            cAniso,
+            cSurf,
+            cFricDir,
+            c.frictionCombineMode,
+            c.restitutionCombineMode,
+            c.cullBackfaces,
+            c.autoConvexDecompose,
+            c.vhacdMaxHulls,
+            c.cylinderHalfHeight,
+            c.topRadius,
+            cPlane,
+            c.heightfieldHeights,
+            c.heightfieldRows,
+            c.heightfieldCols,
+            cHfScale,
+            c.heightfieldThickness,
+            c.heightfieldMaterials,
+            c.heightfieldCellMaterialIndices,
+            c.isChain,
+            c.chainPoints,
+            c.chainClosed,
+            c.chainRadius
+        )){
             error("ColliderComponentAsset::loadComponentPayload failed: invalid primary shape");
             return MakeUnexpected(Failure());
         }
@@ -586,6 +1571,11 @@ class PhysicsComponentBinaryCodec{
         c.center2 = f32x4(cCenter2);
         c.halfExtents = f32x4(cHalfExtents);
         c.localRotation = f32x4(cLocalRot);
+        c.anisotropicFriction = f32x4(cAniso);
+        c.surfaceVelocity = f32x4(cSurf);
+        c.frictionDirection = f32x4(cFricDir);
+        c.planeNormalOffset = f32x4(cPlane);
+        c.heightfieldScale = f32x4(cHfScale, 0.0f);
 
         if(rootHdr.entityTagHash == s_NameNone.hash())
             c.entityTag = s_NameNone;
@@ -606,6 +1596,507 @@ class PhysicsComponentBinaryCodec{
         return c;
     }
 
+    private usize jointEntrySerializedBytes(in usize pathPointCount)const{
+        return size_of<JointComponentPayloadBinary>() + pathPointCount * size_of<PhysicsVec4Binary>();
+    }
+
+    private b8 appendJointEntryFieldsValidated(
+        in JointType type,
+        in b8 useReferenceRotation,
+        in b8 enableLimit,
+        in b8 enableMotor,
+        in b8 enableSpring,
+        in b8 collideConnected,
+        in b8 enabled,
+        in b8 enableProjection,
+        in b8 pathClosed,
+        in b8 pathLockRotation,
+        in VectorSingle localAnchorA,
+        in VectorSingle localAnchorB,
+        in VectorSingle localAxisA,
+        in VectorSingle localAxisB,
+        in VectorSingle referenceRotation,
+        in VectorSingle linearOffset,
+        in VectorSingle groundAnchorA,
+        in VectorSingle groundAnchorB,
+        in f32 length,
+        in f32 minLength,
+        in f32 maxLength,
+        in f32 lowerLimit,
+        in f32 upperLimit,
+        in f32 motorSpeed,
+        in f32 maxMotorForce,
+        in f32 hertz,
+        in f32 dampingRatio,
+        in f32 correctionFactor,
+        in f32 maxTorque,
+        in f32 swingLimit,
+        in f32 suspensionHertz,
+        in f32 suspensionDampingRatio,
+        in f32 breakForce,
+        in f32 breakTorque,
+        in f32 projectionLinearTolerance,
+        in f32 projectionAngularTolerance,
+        in f32 invMassScaleA,
+        in f32 invMassScaleB,
+        in f32 invInertiaScaleA,
+        in f32 invInertiaScaleB,
+        in f32 limitRestitution,
+        in f32 limitHertz,
+        in f32 limitDampingRatio,
+        in f32 swingLimitY,
+        in f32 springTarget,
+        in f32 steeringAngle,
+        in f32 suspensionRestLength,
+        in f32 ratio,
+        in f32 lengthA,
+        in f32 lengthB,
+        in Name bodyEntityNameA,
+        in Name bodyEntityNameB,
+        in u64 userData,
+        in Span<SixDofAxisConfig> sixDofAxes,
+        in Span<f32x4> pathPoints,
+        in u32 extraJointCount,
+        mut Vector<u8> outBinary
+    )const{
+        static_assert(size_of<JointComponentPayloadBinary>() == 592u && offset_of<JointComponentPayloadBinary>(reserved1) == 588u);
+        if(pathPoints.size() > cast<usize>(u32.max) || sixDofAxes.size() != 6u)
+            return false;
+        JointComponentPayloadBinary bin;
+        bin.jointType = cast<u8>(type);
+        u16 flags = 0u;
+        if(useReferenceRotation) flags |= s_JointFlagUseRefRotation;
+        if(enableLimit) flags |= s_JointFlagEnableLimit;
+        if(enableMotor) flags |= s_JointFlagEnableMotor;
+        if(enableSpring) flags |= s_JointFlagEnableSpring;
+        if(collideConnected) flags |= s_JointFlagCollideConnected;
+        if(enabled) flags |= s_JointFlagEnabled;
+        if(enableProjection) flags |= s_JointFlagEnableProjection;
+        if(pathClosed) flags |= s_JointFlagPathClosed;
+        if(pathLockRotation) flags |= s_JointFlagPathLockRotation;
+        bin.flags = flags;
+        bin.localAnchorA = f32x4(localAnchorA);
+        bin.localAnchorB = f32x4(localAnchorB);
+        bin.localAxisA = f32x4(localAxisA);
+        bin.localAxisB = f32x4(localAxisB);
+        bin.referenceRotation = f32x4(referenceRotation);
+        bin.linearOffset = f32x4(linearOffset);
+        bin.groundAnchorA = f32x4(groundAnchorA);
+        bin.groundAnchorB = f32x4(groundAnchorB);
+        bin.bodyEntityNameAHash = bodyEntityNameA.hash();
+        bin.bodyEntityNameBHash = bodyEntityNameB.hash();
+        bin.userData = userData;
+        bin.length = length;
+        bin.minLength = minLength;
+        bin.maxLength = maxLength;
+        bin.lowerLimit = lowerLimit;
+        bin.upperLimit = upperLimit;
+        bin.motorSpeed = motorSpeed;
+        bin.maxMotorForce = maxMotorForce;
+        bin.hertz = hertz;
+        bin.dampingRatio = dampingRatio;
+        bin.correctionFactor = correctionFactor;
+        bin.maxTorque = maxTorque;
+        bin.swingLimit = swingLimit;
+        bin.suspensionHertz = suspensionHertz;
+        bin.suspensionDampingRatio = suspensionDampingRatio;
+        bin.breakForce = breakForce;
+        bin.breakTorque = breakTorque;
+        bin.projectionLinearTolerance = projectionLinearTolerance;
+        bin.projectionAngularTolerance = projectionAngularTolerance;
+        bin.invMassScaleA = invMassScaleA;
+        bin.invMassScaleB = invMassScaleB;
+        bin.invInertiaScaleA = invInertiaScaleA;
+        bin.invInertiaScaleB = invInertiaScaleB;
+        bin.limitRestitution = limitRestitution;
+        bin.limitHertz = limitHertz;
+        bin.limitDampingRatio = limitDampingRatio;
+        bin.swingLimitY = swingLimitY;
+        bin.springTarget = springTarget;
+        bin.steeringAngle = steeringAngle;
+        bin.suspensionRestLength = suspensionRestLength;
+        bin.ratio = ratio;
+        bin.lengthA = lengthA;
+        bin.lengthB = lengthB;
+        bin.pathPointCount = cast<u32>(pathPoints.size());
+        bin.extraJointCount = extraJointCount;
+        for(usize k = 0u; k < 6u; ++k){
+            in SixDofAxisConfig cfg = sixDofAxes[k];
+            bin.sixDofMotions[k] = cast<u8>(cfg.motion);
+            u8 axisFlags = 0u;
+            if(cfg.enableMotor) axisFlags |= s_SixDofAxisFlagEnableMotor;
+            if(cfg.enableSpring) axisFlags |= s_SixDofAxisFlagEnableSpring;
+            bin.sixDofFlags[k] = axisFlags;
+            const usize pBase = k * 7u;
+            bin.sixDofParams[pBase + 0u] = cfg.lowerLimit;
+            bin.sixDofParams[pBase + 1u] = cfg.upperLimit;
+            bin.sixDofParams[pBase + 2u] = cfg.motorTargetVelocity;
+            bin.sixDofParams[pBase + 3u] = cfg.motorTargetPosition;
+            bin.sixDofParams[pBase + 4u] = cfg.maxMotorForce;
+            bin.sixDofParams[pBase + 5u] = cfg.springHertz;
+            bin.sixDofParams[pBase + 6u] = cfg.springDampingRatio;
+        }
+        AppendPOD(outBinary, bin);
+        return AppendBinaryVectorPayload(outBinary, pathPoints).has_value();
+    }
+
+    private b8 appendJointEntryValidated(in JointEntry j, in u32 extraJointCount, mut Vector<u8> outBinary)const{
+        return this.appendJointEntryFieldsValidated(
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            VectorSingle(j.linearOffset),
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            Span<SixDofAxisConfig>(j.sixDofAxes.data(), j.sixDofAxes.size()),
+            Span<f32x4>(j.pathPoints.data(), j.pathPoints.size()),
+            extraJointCount,
+            outBinary
+        );
+    }
+
+    private b8 deserializeJointEntryFields(
+        in Span<u8> payload,
+        mut usize inOutCursor,
+        in b8 allowExtraJoints,
+        mut JointType outType,
+        mut b8 outUseReferenceRotation,
+        mut b8 outEnableLimit,
+        mut b8 outEnableMotor,
+        mut b8 outEnableSpring,
+        mut b8 outCollideConnected,
+        mut b8 outEnabled,
+        mut b8 outEnableProjection,
+        mut b8 outPathClosed,
+        mut b8 outPathLockRotation,
+        mut VectorSingle outLocalAnchorA,
+        mut VectorSingle outLocalAnchorB,
+        mut VectorSingle outLocalAxisA,
+        mut VectorSingle outLocalAxisB,
+        mut VectorSingle outReferenceRotation,
+        mut VectorSingle outLinearOffset,
+        mut VectorSingle outGroundAnchorA,
+        mut VectorSingle outGroundAnchorB,
+        mut f32 outLength,
+        mut f32 outMinLength,
+        mut f32 outMaxLength,
+        mut f32 outLowerLimit,
+        mut f32 outUpperLimit,
+        mut f32 outMotorSpeed,
+        mut f32 outMaxMotorForce,
+        mut f32 outHertz,
+        mut f32 outDampingRatio,
+        mut f32 outCorrectionFactor,
+        mut f32 outMaxTorque,
+        mut f32 outSwingLimit,
+        mut f32 outSuspensionHertz,
+        mut f32 outSuspensionDampingRatio,
+        mut f32 outBreakForce,
+        mut f32 outBreakTorque,
+        mut f32 outProjectionLinearTolerance,
+        mut f32 outProjectionAngularTolerance,
+        mut f32 outInvMassScaleA,
+        mut f32 outInvMassScaleB,
+        mut f32 outInvInertiaScaleA,
+        mut f32 outInvInertiaScaleB,
+        mut f32 outLimitRestitution,
+        mut f32 outLimitHertz,
+        mut f32 outLimitDampingRatio,
+        mut f32 outSwingLimitY,
+        mut f32 outSpringTarget,
+        mut f32 outSteeringAngle,
+        mut f32 outSuspensionRestLength,
+        mut f32 outRatio,
+        mut f32 outLengthA,
+        mut f32 outLengthB,
+        mut Name outBodyEntityNameA,
+        mut Name outBodyEntityNameB,
+        mut u64 outUserData,
+        mut Array<SixDofAxisConfig, 6u> outSixDofAxes,
+        mut Vector<f32x4> outPathPoints,
+        mut u32 outExtraJointCount
+    )const{
+        outExtraJointCount = 0u;
+        const Expected<JointComponentPayloadBinary> res = ReadPOD<JointComponentPayloadBinary>(payload, inOutCursor);
+        if(!res.has_value())
+            return false;
+        in JointComponentPayloadBinary bin = res.value();
+        if(
+            bin.reserved0 != 0u
+            || bin.reserved1 != 0u
+            || (bin.flags & 0xfe00u) != 0u
+            || (!allowExtraJoints && bin.extraJointCount != 0u)
+            || bin.sixDofMotions[6u] != 0u
+            || bin.sixDofMotions[7u] != 0u
+            || bin.sixDofFlags[6u] != 0u
+            || bin.sixDofFlags[7u] != 0u
+        )
+            return false;
+        const u64 pathBytes = cast<u64>(bin.pathPointCount) * cast<u64>(size_of<PhysicsVec4Binary>());
+        if(pathBytes > cast<u64>(payload.size() - inOutCursor))
+            return false;
+
+        outType = cast<JointType>(bin.jointType);
+        outUseReferenceRotation = (bin.flags & s_JointFlagUseRefRotation) != 0u;
+        outEnableLimit = (bin.flags & s_JointFlagEnableLimit) != 0u;
+        outEnableMotor = (bin.flags & s_JointFlagEnableMotor) != 0u;
+        outEnableSpring = (bin.flags & s_JointFlagEnableSpring) != 0u;
+        outCollideConnected = (bin.flags & s_JointFlagCollideConnected) != 0u;
+        outEnabled = (bin.flags & s_JointFlagEnabled) != 0u;
+        outEnableProjection = (bin.flags & s_JointFlagEnableProjection) != 0u;
+        outPathClosed = (bin.flags & s_JointFlagPathClosed) != 0u;
+        outPathLockRotation = (bin.flags & s_JointFlagPathLockRotation) != 0u;
+        outLocalAnchorA = VectorSingle(bin.localAnchorA);
+        outLocalAnchorB = VectorSingle(bin.localAnchorB);
+        outLocalAxisA = VectorSingle(bin.localAxisA);
+        outLocalAxisB = VectorSingle(bin.localAxisB);
+        outReferenceRotation = VectorSingle(bin.referenceRotation);
+        outLinearOffset = VectorSingle(bin.linearOffset);
+        outGroundAnchorA = VectorSingle(bin.groundAnchorA);
+        outGroundAnchorB = VectorSingle(bin.groundAnchorB);
+        outLength = bin.length;
+        outMinLength = bin.minLength;
+        outMaxLength = bin.maxLength;
+        outLowerLimit = bin.lowerLimit;
+        outUpperLimit = bin.upperLimit;
+        outMotorSpeed = bin.motorSpeed;
+        outMaxMotorForce = bin.maxMotorForce;
+        outHertz = bin.hertz;
+        outDampingRatio = bin.dampingRatio;
+        outCorrectionFactor = bin.correctionFactor;
+        outMaxTorque = bin.maxTorque;
+        outSwingLimit = bin.swingLimit;
+        outSuspensionHertz = bin.suspensionHertz;
+        outSuspensionDampingRatio = bin.suspensionDampingRatio;
+        outBreakForce = bin.breakForce;
+        outBreakTorque = bin.breakTorque;
+        outProjectionLinearTolerance = bin.projectionLinearTolerance;
+        outProjectionAngularTolerance = bin.projectionAngularTolerance;
+        outInvMassScaleA = bin.invMassScaleA;
+        outInvMassScaleB = bin.invMassScaleB;
+        outInvInertiaScaleA = bin.invInertiaScaleA;
+        outInvInertiaScaleB = bin.invInertiaScaleB;
+        outLimitRestitution = bin.limitRestitution;
+        outLimitHertz = bin.limitHertz;
+        outLimitDampingRatio = bin.limitDampingRatio;
+        outSwingLimitY = bin.swingLimitY;
+        outSpringTarget = bin.springTarget;
+        outSteeringAngle = bin.steeringAngle;
+        outSuspensionRestLength = bin.suspensionRestLength;
+        outRatio = bin.ratio;
+        outLengthA = bin.lengthA;
+        outLengthB = bin.lengthB;
+        if(bin.bodyEntityNameAHash == s_NameNone.hash())
+            outBodyEntityNameA = s_NameNone;
+        else
+            outBodyEntityNameA = Name(bin.bodyEntityNameAHash);
+        if(bin.bodyEntityNameBHash == s_NameNone.hash())
+            outBodyEntityNameB = s_NameNone;
+        else
+            outBodyEntityNameB = Name(bin.bodyEntityNameBHash);
+        outUserData = bin.userData;
+        outExtraJointCount = bin.extraJointCount;
+
+        for(usize k = 0u; k < 6u; ++k){
+            if(bin.sixDofMotions[k] >= cast<u8>(JointMotion::kCount) || (bin.sixDofFlags[k] & 0xfcu) != 0u)
+                return false;
+            outSixDofAxes[k].motion = cast<JointMotion>(bin.sixDofMotions[k]);
+            outSixDofAxes[k].enableMotor = (bin.sixDofFlags[k] & s_SixDofAxisFlagEnableMotor) != 0u;
+            outSixDofAxes[k].enableSpring = (bin.sixDofFlags[k] & s_SixDofAxisFlagEnableSpring) != 0u;
+            const usize pBase = k * 7u;
+            outSixDofAxes[k].lowerLimit = bin.sixDofParams[pBase + 0u];
+            outSixDofAxes[k].upperLimit = bin.sixDofParams[pBase + 1u];
+            outSixDofAxes[k].motorTargetVelocity = bin.sixDofParams[pBase + 2u];
+            outSixDofAxes[k].motorTargetPosition = bin.sixDofParams[pBase + 3u];
+            outSixDofAxes[k].maxMotorForce = bin.sixDofParams[pBase + 4u];
+            outSixDofAxes[k].springHertz = bin.sixDofParams[pBase + 5u];
+            outSixDofAxes[k].springDampingRatio = bin.sixDofParams[pBase + 6u];
+        }
+        if(!ReadBinaryVectorPayload(payload, bin.pathPointCount, inOutCursor, outPathPoints).has_value())
+            return false;
+        return this.validJointEntryFields(
+            outType,
+            outLocalAnchorA,
+            outLocalAnchorB,
+            outLocalAxisA,
+            outLocalAxisB,
+            outReferenceRotation,
+            outLength,
+            outMinLength,
+            outMaxLength,
+            outLowerLimit,
+            outUpperLimit,
+            outMotorSpeed,
+            outMaxMotorForce,
+            outHertz,
+            outDampingRatio,
+            outLinearOffset,
+            outCorrectionFactor,
+            outMaxTorque,
+            outSwingLimit,
+            outSuspensionHertz,
+            outSuspensionDampingRatio,
+            outBreakForce,
+            outBreakTorque,
+            outProjectionLinearTolerance,
+            outProjectionAngularTolerance,
+            outInvMassScaleA,
+            outInvMassScaleB,
+            outInvInertiaScaleA,
+            outInvInertiaScaleB,
+            outLimitRestitution,
+            outLimitHertz,
+            outLimitDampingRatio,
+            outSwingLimitY,
+            outSpringTarget,
+            outSteeringAngle,
+            outSuspensionRestLength,
+            outRatio,
+            outGroundAnchorA,
+            outGroundAnchorB,
+            outLengthA,
+            outLengthB,
+            Span<SixDofAxisConfig>(outSixDofAxes.data(), outSixDofAxes.size()),
+            Span<f32x4>(outPathPoints.data(), outPathPoints.size())
+        );
+    }
+
+    private b8 deserializeJointEntry(
+        in Span<u8> payload,
+        mut usize inOutCursor,
+        in b8 allowExtraJoints,
+        mut JointEntry outEntry,
+        mut u32 outExtraJointCount
+    )const{
+        outEntry = JointEntry();
+        VectorSingle localAnchorA(0.0f);
+        VectorSingle localAnchorB(0.0f);
+        VectorSingle localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle linearOffset(0.0f);
+        VectorSingle groundAnchorA(0.0f);
+        VectorSingle groundAnchorB(0.0f);
+        if(!this.deserializeJointEntryFields(
+            payload,
+            inOutCursor,
+            allowExtraJoints,
+            outEntry.type,
+            outEntry.useReferenceRotation,
+            outEntry.enableLimit,
+            outEntry.enableMotor,
+            outEntry.enableSpring,
+            outEntry.collideConnected,
+            outEntry.enabled,
+            outEntry.enableProjection,
+            outEntry.pathClosed,
+            outEntry.pathLockRotation,
+            localAnchorA,
+            localAnchorB,
+            localAxisA,
+            localAxisB,
+            referenceRotation,
+            linearOffset,
+            groundAnchorA,
+            groundAnchorB,
+            outEntry.length,
+            outEntry.minLength,
+            outEntry.maxLength,
+            outEntry.lowerLimit,
+            outEntry.upperLimit,
+            outEntry.motorSpeed,
+            outEntry.maxMotorForce,
+            outEntry.hertz,
+            outEntry.dampingRatio,
+            outEntry.correctionFactor,
+            outEntry.maxTorque,
+            outEntry.swingLimit,
+            outEntry.suspensionHertz,
+            outEntry.suspensionDampingRatio,
+            outEntry.breakForce,
+            outEntry.breakTorque,
+            outEntry.projectionLinearTolerance,
+            outEntry.projectionAngularTolerance,
+            outEntry.invMassScaleA,
+            outEntry.invMassScaleB,
+            outEntry.invInertiaScaleA,
+            outEntry.invInertiaScaleB,
+            outEntry.limitRestitution,
+            outEntry.limitHertz,
+            outEntry.limitDampingRatio,
+            outEntry.swingLimitY,
+            outEntry.springTarget,
+            outEntry.steeringAngle,
+            outEntry.suspensionRestLength,
+            outEntry.ratio,
+            outEntry.lengthA,
+            outEntry.lengthB,
+            outEntry.bodyEntityNameA,
+            outEntry.bodyEntityNameB,
+            outEntry.userData,
+            outEntry.sixDofAxes,
+            outEntry.pathPoints,
+            outExtraJointCount
+        ))
+            return false;
+        outEntry.localAnchorA = f32x4(localAnchorA);
+        outEntry.localAnchorB = f32x4(localAnchorB);
+        outEntry.localAxisA = f32x4(localAxisA);
+        outEntry.localAxisB = f32x4(localAxisB);
+        outEntry.referenceRotation = f32x4(referenceRotation);
+        outEntry.linearOffset = f32x4(linearOffset);
+        outEntry.groundAnchorA = f32x4(groundAnchorA);
+        outEntry.groundAnchorB = f32x4(groundAnchorB);
+        return true;
+    }
+
     public b8 validateJoint(in JointComponent j, in Name virtualPath)const{
         if(this.validJointData(j))
             return true;
@@ -613,105 +2104,202 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
+    public b8 appendJointValidated(in JointComponent j, mut Vector<u8> outBinary)const{
+        if(j.extraJoints.size() > cast<usize>(u32.max))
+            return false;
+        const Span<SixDofAxisConfig> primarySixDof(j.sixDofAxes.data(), j.sixDofAxes.size());
+        const Span<f32x4> primaryPathPoints(j.pathPoints.data(), j.pathPoints.size());
+        usize totalBytes = this.jointEntrySerializedBytes(primaryPathPoints.size());
+        for(usize i = 0u; i < j.extraJoints.size(); ++i){
+            const usize eb = this.jointEntrySerializedBytes(j.extraJoints[i].pathPoints.size());
+            if(eb > usize.max - totalBytes)
+                return false;
+            totalBytes += eb;
+        }
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        if(!this.appendJointEntryFieldsValidated(
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            VectorSingle(j.localAnchorA),
+            VectorSingle(j.localAnchorB),
+            VectorSingle(j.localAxisA),
+            VectorSingle(j.localAxisB),
+            VectorSingle(j.referenceRotation),
+            VectorSingle(j.linearOffset),
+            VectorSingle(j.groundAnchorA),
+            VectorSingle(j.groundAnchorB),
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            primarySixDof,
+            primaryPathPoints,
+            cast<u32>(j.extraJoints.size()),
+            outBinary
+        ))
+            return false;
+        for(usize i = 0u; i < j.extraJoints.size(); ++i){
+            if(!this.appendJointEntryValidated(j.extraJoints[i], 0u, outBinary))
+                return false;
+        }
+        return true;
+    }
+
     public b8 serializeJoint(in JointComponent j, mut Vector<u8> outPayload)const{
         if(!this.validJointData(j))
             return false;
-        JointComponentPayloadBinary bin;
-        bin.version = s_PhysicsComponentBinaryVersion;
-        bin.jointType = cast<u8>(j.type);
-        u8 flags = 0u;
-        if(j.useReferenceRotation) flags |= s_JointFlagUseRefRotation;
-        if(j.enableLimit) flags |= s_JointFlagEnableLimit;
-        if(j.enableMotor) flags |= s_JointFlagEnableMotor;
-        if(j.enableSpring) flags |= s_JointFlagEnableSpring;
-        if(j.collideConnected) flags |= s_JointFlagCollideConnected;
-        bin.flags = flags;
-        bin.localAnchorA = j.localAnchorA;
-        bin.localAnchorB = j.localAnchorB;
-        bin.localAxisA = j.localAxisA;
-        bin.localAxisB = j.localAxisB;
-        bin.referenceRotation = j.referenceRotation;
-        bin.linearOffset = j.linearOffset;
-        bin.length = j.length;
-        bin.minLength = j.minLength;
-        bin.maxLength = j.maxLength;
-        bin.lowerLimit = j.lowerLimit;
-        bin.upperLimit = j.upperLimit;
-        bin.motorSpeed = j.motorSpeed;
-        bin.maxMotorForce = j.maxMotorForce;
-        bin.hertz = j.hertz;
-        bin.dampingRatio = j.dampingRatio;
-        bin.correctionFactor = j.correctionFactor;
-        bin.maxTorque = j.maxTorque;
-        bin.swingLimit = j.swingLimit;
-        bin.suspensionHertz = j.suspensionHertz;
-        bin.suspensionDampingRatio = j.suspensionDampingRatio;
-        bin.breakForce = j.breakForce;
-        bin.breakTorque = j.breakTorque;
-        bin.bodyEntityNameAHash = j.bodyEntityNameA.hash();
-        bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
-        bin.userData = j.userData;
         outPayload.clear();
-        outPayload.reserve(size_of<JointComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        if(!this.appendJointValidated(j, outPayload)){
+            outPayload.clear();
+            return false;
+        }
         return true;
     }
 
     public Expected<JointComponent> deserializeJoint(in Span<u8> payload)const{
         usize cursor = 0u;
-        const Expected<JointComponentPayloadBinary> res = ReadPOD<JointComponentPayloadBinary>(payload, cursor);
-        if(!res.has_value() || cursor != payload.size()){
-            error("JointComponentAsset::loadComponentPayload failed: invalid payload size");
-            return MakeUnexpected(Failure());
-        }
-        in JointComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
-            error("JointComponentAsset::loadComponentPayload failed: unsupported version or flags");
-            return MakeUnexpected(Failure());
-        }
         JointComponent j;
-        j.type = cast<JointType>(bin.jointType);
-        j.useReferenceRotation = (bin.flags & s_JointFlagUseRefRotation) != 0u;
-        j.enableLimit = (bin.flags & s_JointFlagEnableLimit) != 0u;
-        j.enableMotor = (bin.flags & s_JointFlagEnableMotor) != 0u;
-        j.enableSpring = (bin.flags & s_JointFlagEnableSpring) != 0u;
-        j.collideConnected = (bin.flags & s_JointFlagCollideConnected) != 0u;
-        j.localAnchorA = bin.localAnchorA;
-        j.localAnchorB = bin.localAnchorB;
-        j.localAxisA = bin.localAxisA;
-        j.localAxisB = bin.localAxisB;
-        j.referenceRotation = bin.referenceRotation;
-        j.linearOffset = bin.linearOffset;
-        j.length = bin.length;
-        j.minLength = bin.minLength;
-        j.maxLength = bin.maxLength;
-        j.lowerLimit = bin.lowerLimit;
-        j.upperLimit = bin.upperLimit;
-        j.motorSpeed = bin.motorSpeed;
-        j.maxMotorForce = bin.maxMotorForce;
-        j.hertz = bin.hertz;
-        j.dampingRatio = bin.dampingRatio;
-        j.correctionFactor = bin.correctionFactor;
-        j.maxTorque = bin.maxTorque;
-        j.swingLimit = bin.swingLimit;
-        j.suspensionHertz = bin.suspensionHertz;
-        j.suspensionDampingRatio = bin.suspensionDampingRatio;
-        j.breakForce = bin.breakForce;
-        j.breakTorque = bin.breakTorque;
-        if(bin.bodyEntityNameAHash == s_NameNone.hash())
-            j.bodyEntityNameA = s_NameNone;
-        else
-            j.bodyEntityNameA = Name(bin.bodyEntityNameAHash);
-        if(bin.bodyEntityNameBHash == s_NameNone.hash())
-            j.bodyEntityNameB = s_NameNone;
-        else
-            j.bodyEntityNameB = Name(bin.bodyEntityNameBHash);
-        j.userData = bin.userData;
-        j.dirty = true;
-        if(!this.validJointData(j)){
-            error("JointComponentAsset::loadComponentPayload failed: invalid joint parameters");
+        u32 extraCount = 0u;
+        VectorSingle localAnchorA(0.0f);
+        VectorSingle localAnchorB(0.0f);
+        VectorSingle localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle linearOffset(0.0f);
+        VectorSingle groundAnchorA(0.0f);
+        VectorSingle groundAnchorB(0.0f);
+        if(!this.deserializeJointEntryFields(
+            payload,
+            cursor,
+            true,
+            j.type,
+            j.useReferenceRotation,
+            j.enableLimit,
+            j.enableMotor,
+            j.enableSpring,
+            j.collideConnected,
+            j.enabled,
+            j.enableProjection,
+            j.pathClosed,
+            j.pathLockRotation,
+            localAnchorA,
+            localAnchorB,
+            localAxisA,
+            localAxisB,
+            referenceRotation,
+            linearOffset,
+            groundAnchorA,
+            groundAnchorB,
+            j.length,
+            j.minLength,
+            j.maxLength,
+            j.lowerLimit,
+            j.upperLimit,
+            j.motorSpeed,
+            j.maxMotorForce,
+            j.hertz,
+            j.dampingRatio,
+            j.correctionFactor,
+            j.maxTorque,
+            j.swingLimit,
+            j.suspensionHertz,
+            j.suspensionDampingRatio,
+            j.breakForce,
+            j.breakTorque,
+            j.projectionLinearTolerance,
+            j.projectionAngularTolerance,
+            j.invMassScaleA,
+            j.invMassScaleB,
+            j.invInertiaScaleA,
+            j.invInertiaScaleB,
+            j.limitRestitution,
+            j.limitHertz,
+            j.limitDampingRatio,
+            j.swingLimitY,
+            j.springTarget,
+            j.steeringAngle,
+            j.suspensionRestLength,
+            j.ratio,
+            j.lengthA,
+            j.lengthB,
+            j.bodyEntityNameA,
+            j.bodyEntityNameB,
+            j.userData,
+            j.sixDofAxes,
+            j.pathPoints,
+            extraCount
+        )){
+            error("JointComponentAsset::loadComponentPayload failed: invalid payload header or parameters");
             return MakeUnexpected(Failure());
         }
+        j.localAnchorA = f32x4(localAnchorA);
+        j.localAnchorB = f32x4(localAnchorB);
+        j.localAxisA = f32x4(localAxisA);
+        j.localAxisB = f32x4(localAxisB);
+        j.referenceRotation = f32x4(referenceRotation);
+        j.linearOffset = f32x4(linearOffset);
+        j.groundAnchorA = f32x4(groundAnchorA);
+        j.groundAnchorB = f32x4(groundAnchorB);
+        const u64 minExtraBytes = cast<u64>(extraCount) * cast<u64>(size_of<JointComponentPayloadBinary>());
+        if(minExtraBytes > cast<u64>(payload.size() - cursor)){
+            error("JointComponentAsset::loadComponentPayload failed: truncated extra joints");
+            return MakeUnexpected(Failure());
+        }
+
+        j.extraJoints.resize(extraCount);
+        for(u32 i = 0u; i < extraCount; ++i){
+            u32 dummyExtra = 0u;
+            if(!this.deserializeJointEntry(payload, cursor, false, j.extraJoints[i], dummyExtra)){
+                error("JointComponentAsset::loadComponentPayload failed: invalid extra joint");
+                return MakeUnexpected(Failure());
+            }
+        }
+        if(cursor != payload.size()){
+            error("JointComponentAsset::loadComponentPayload failed: trailing bytes in payload");
+            return MakeUnexpected(Failure());
+        }
+        j.dirty = true;
         return j;
     }
 
@@ -722,23 +2310,17 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
-    public b8 serializeWorldConfig(in PhysicsWorldConfigComponent w, mut Vector<u8> outPayload)const{
-        if(!this.validWorldConfigData(w))
+    public b8 appendWorldConfigValidated(in PhysicsWorldConfigComponent w, mut Vector<u8> outBinary)const{
+        static_assert(size_of<PhysicsWorldConfigComponentPayloadBinary>() == 128u && offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0) == 127u);
+        const usize reqBytes = size_of<PhysicsWorldConfigComponentPayloadBinary>();
+        if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         PhysicsWorldConfigComponentPayloadBinary bin;
-        bin.version = s_PhysicsComponentBinaryVersion;
-        bin.backendMode = cast<u8>(w.backendMode);
-        u8 flags = 0u;
-        if(w.enableSleep) flags |= s_WorldCfgFlagEnableSleep;
-        if(w.enableContinuous) flags |= s_WorldCfgFlagEnableContinuous;
-        if(w.enableContactSoftening) flags |= s_WorldCfgFlagContactSoftening;
-        if(w.enableWarmStarting) flags |= s_WorldCfgFlagWarmStarting;
-        if(w.paused) flags |= s_WorldCfgFlagPaused;
-        bin.flags = flags;
+        bin.gravity = w.gravity;
+        bin.collisionLayerMatrixAssetHash = w.collisionLayerMatrixAsset.name().hash();
         bin.subStepCount = w.subStepCount;
         bin.maxSubStepsPerFrame = w.maxSubStepsPerFrame;
         bin.gpuDispatchThreshold = w.gpuDispatchThreshold;
-        bin.gravity = w.gravity;
         bin.restitutionThreshold = w.restitutionThreshold;
         bin.hitEventThreshold = w.hitEventThreshold;
         bin.contactHertz = w.contactHertz;
@@ -746,10 +2328,30 @@ class PhysicsComponentBinaryCodec{
         bin.maxLinearVelocity = w.maxLinearVelocity;
         bin.fixedDeltaTime = w.fixedDeltaTime;
         bin.gpuWorkloadFraction = w.gpuWorkloadFraction;
-        outPayload.clear();
-        outPayload.reserve(size_of<PhysicsWorldConfigComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
+        bin.timeToSleep = w.timeToSleep;
+        u16 flags = 0u;
+        if(w.enableSleep) flags |= s_WorldCfgFlagEnableSleep;
+        if(w.enableContinuous) flags |= s_WorldCfgFlagEnableContinuous;
+        if(w.enableContactSoftening) flags |= s_WorldCfgFlagContactSoftening;
+        if(w.enableWarmStarting) flags |= s_WorldCfgFlagWarmStarting;
+        if(w.paused) flags |= s_WorldCfgFlagPaused;
+        if(w.enableGpuCollision) flags |= s_WorldCfgFlagEnableGpuCollision;
+        if(w.forceGpuCollision) flags |= s_WorldCfgFlagForceGpuCollision;
+        if(w.gpuResidentMode) flags |= s_WorldCfgFlagGpuResidentMode;
+        if(w.useGpuLbvhBroadphase) flags |= s_WorldCfgFlagUseGpuLbvhBroadphase;
+        if(w.interpolateTransforms) flags |= s_WorldCfgFlagInterpolateTransforms;
+        bin.flags = flags;
+        bin.backendMode = cast<u8>(w.backendMode);
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, bin);
         return true;
+    }
+
+    public b8 serializeWorldConfig(in PhysicsWorldConfigComponent w, mut Vector<u8> outPayload)const{
+        if(!this.validWorldConfigData(w))
+            return false;
+        outPayload.clear();
+        return this.appendWorldConfigValidated(w, outPayload);
     }
 
     public Expected<PhysicsWorldConfigComponent> deserializeWorldConfig(in Span<u8> payload)const{
@@ -760,21 +2362,19 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in PhysicsWorldConfigComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.flags & 0xe0u) != 0u){
-            error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || (bin.flags & 0xfc00u) != 0u){
+            error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         PhysicsWorldConfigComponent w;
-        w.backendMode = cast<PhysicsBackendMode>(bin.backendMode);
-        w.enableSleep = (bin.flags & s_WorldCfgFlagEnableSleep) != 0u;
-        w.enableContinuous = (bin.flags & s_WorldCfgFlagEnableContinuous) != 0u;
-        w.enableContactSoftening = (bin.flags & s_WorldCfgFlagContactSoftening) != 0u;
-        w.enableWarmStarting = (bin.flags & s_WorldCfgFlagWarmStarting) != 0u;
-        w.paused = (bin.flags & s_WorldCfgFlagPaused) != 0u;
+        w.gravity = bin.gravity;
+        if(bin.collisionLayerMatrixAssetHash == s_NameNone.hash())
+            w.collisionLayerMatrixAsset.virtualPath = s_NameNone;
+        else
+            w.collisionLayerMatrixAsset.virtualPath = Name(bin.collisionLayerMatrixAssetHash);
         w.subStepCount = bin.subStepCount;
         w.maxSubStepsPerFrame = bin.maxSubStepsPerFrame;
         w.gpuDispatchThreshold = bin.gpuDispatchThreshold;
-        w.gravity = bin.gravity;
         w.restitutionThreshold = bin.restitutionThreshold;
         w.hitEventThreshold = bin.hitEventThreshold;
         w.contactHertz = bin.contactHertz;
@@ -782,6 +2382,18 @@ class PhysicsComponentBinaryCodec{
         w.maxLinearVelocity = bin.maxLinearVelocity;
         w.fixedDeltaTime = bin.fixedDeltaTime;
         w.gpuWorkloadFraction = bin.gpuWorkloadFraction;
+        w.timeToSleep = bin.timeToSleep;
+        w.backendMode = cast<PhysicsBackendMode>(bin.backendMode);
+        w.enableSleep = (bin.flags & s_WorldCfgFlagEnableSleep) != 0u;
+        w.enableContinuous = (bin.flags & s_WorldCfgFlagEnableContinuous) != 0u;
+        w.enableContactSoftening = (bin.flags & s_WorldCfgFlagContactSoftening) != 0u;
+        w.enableWarmStarting = (bin.flags & s_WorldCfgFlagWarmStarting) != 0u;
+        w.paused = (bin.flags & s_WorldCfgFlagPaused) != 0u;
+        w.enableGpuCollision = (bin.flags & s_WorldCfgFlagEnableGpuCollision) != 0u;
+        w.forceGpuCollision = (bin.flags & s_WorldCfgFlagForceGpuCollision) != 0u;
+        w.gpuResidentMode = (bin.flags & s_WorldCfgFlagGpuResidentMode) != 0u;
+        w.useGpuLbvhBroadphase = (bin.flags & s_WorldCfgFlagUseGpuLbvhBroadphase) != 0u;
+        w.interpolateTransforms = (bin.flags & s_WorldCfgFlagInterpolateTransforms) != 0u;
         w.dirty = true;
         if(!this.validWorldConfigData(w)){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid world config values");
@@ -797,19 +2409,26 @@ class PhysicsComponentBinaryCodec{
         return false;
     }
 
+    public b8 appendPhysicsParentValidated(in PhysicsParentComponent p, mut Vector<u8> outBinary)const{
+        static_assert(size_of<PhysicsParentComponentPayloadBinary>() == 72u && offset_of<PhysicsParentComponentPayloadBinary>(reserved2) == 68u);
+        if(!CanAppendBytes(outBinary, size_of<PhysicsParentComponentPayloadBinary>()))
+            return false;
+        PhysicsParentComponentPayloadBinary bin;
+        u8 flags = 0u;
+        if(p.inheritScale) flags |= s_PhysicsParentFlagInheritScale;
+        if(p.attachColliderToParentBody) flags |= s_PhysicsParentFlagAttachColliderToParent;
+        bin.flags = flags;
+        bin.parentEntityNameHash = p.parentEntityName.hash();
+        outBinary.reserve(outBinary.size() + size_of<PhysicsParentComponentPayloadBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
     public b8 serializePhysicsParent(in PhysicsParentComponent p, mut Vector<u8> outPayload)const{
         if(!this.validPhysicsParentData(p))
             return false;
-        PhysicsParentComponentPayloadBinary bin;
-        bin.version = s_PhysicsComponentBinaryVersion;
-        u8 flags = 0u;
-        if(p.inheritScale) flags |= s_PhysicsParentFlagInheritScale;
-        bin.flags = flags;
-        bin.parentEntityNameHash = p.parentEntityName.hash();
         outPayload.clear();
-        outPayload.reserve(size_of<PhysicsParentComponentPayloadBinary>());
-        AppendPOD(outPayload, bin);
-        return true;
+        return this.appendPhysicsParentValidated(p, outPayload);
     }
 
     public Expected<PhysicsParentComponent> deserializePhysicsParent(in Span<u8> payload)const{
@@ -820,12 +2439,13 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in PhysicsParentComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xfeu) != 0u){
-            error("PhysicsParentComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xfcu) != 0u){
+            error("PhysicsParentComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         PhysicsParentComponent p;
         p.inheritScale = (bin.flags & s_PhysicsParentFlagInheritScale) != 0u;
+        p.attachColliderToParentBody = (bin.flags & s_PhysicsParentFlagAttachColliderToParent) != 0u;
         if(bin.parentEntityNameHash == s_NameNone.hash())
             p.parentEntityName = s_NameNone;
         else

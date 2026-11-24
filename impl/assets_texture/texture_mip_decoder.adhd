@@ -18,19 +18,6 @@ class TextureDecodeWorkItem{
     public u32 blockRowEnd = 0u;
 }
 
-usize ComputeUastcBlockByteOffset(in u32 blockX, in u32 blockY, in u32 blockCountX){
-    const u64 blockIndex = cast<u64>(blockY) * cast<u64>(blockCountX) + cast<u64>(blockX);
-    return cast<usize>(blockIndex * s_TextureUastcBytesPerBlock);
-}
-
-usize ComputeDecodedUastcDestinationTexelIndex(
-    in u64 destinationX,
-    in u64 destinationY,
-    in u32 mipWidth
-){
-    return cast<usize>(destinationY * cast<u64>(mipWidth) + destinationX);
-}
-
 f32 NormalizeTextureAlphaUnorm8(in u8 alphaUnorm8){
     const VectorSingle normalized = VectorSingle(cast<f32>(alphaUnorm8)) / VectorSingle(cast<f32>(u8.max));
     return normalized.x;
@@ -84,12 +71,6 @@ void LogUastcTranscodeFailure(in StringView message){
 
 static_assert(s_TextureRgba16FloatBytesPerTexel == size_of<u16>() * s_TextureRgba16FloatComponentCount);
 static_assert(s_TextureRgba16FloatAlphaByteOffset == size_of<u16>() * (s_TextureRgba16FloatComponentCount - 1u));
-
-void StoreHdrAlpha(in usize offset, in u8 alpha, mut Span<u8> bytes){
-    const u16 half = BasisFloatToHalf(NormalizeTextureAlphaUnorm8(alpha));
-    bytes[offset] = cast<u8>(half);
-    bytes[offset + 1u] = cast<u8>(half >> 8u);
-}
 
 const u64 s_TextureParallelStripMinBlocks = 4096u;
 const u32 s_TextureParallelStripMinBlockRows = 8u;
@@ -433,20 +414,6 @@ Expected<TextureDecodedMipUpload> DecodeHdrTextureMip(
 }
 
 [cpp_unwind]
-Expected<TextureDecodedMipUpload> DecodeTextureMipWithParallel(
-    in b8 isHdr,
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 mipLevel,
-    in Format format,
-    in b8 allowStripParallel
-){
-    if(isHdr)
-        return DecodeHdrTextureMip(asset, mip, mipLevel, format, allowStripParallel);
-    return DecodeLdrTextureMip(asset, mip, mipLevel, format, allowStripParallel);
-}
-
-[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeLdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
@@ -455,7 +422,6 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(in Texture asset,
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeHdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
-
 
 b8 DecodeLdrTextureSliceRowRange(
     in Texture asset,

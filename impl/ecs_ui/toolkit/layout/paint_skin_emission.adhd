@@ -8,7 +8,55 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void EmitPaintNineSlice(
+void EmitPaintSkinQuadWithTransform(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in Rect rectangle,
+    in Rect uv,
+    in Color tint,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(!hasTransform){
+        EmitPaintQuadValidated(
+            recording, clip, rectangle, uv, tint, PaintMaterial::Skin, layer,
+            u32.max, u32.max, 0u, u32.max,
+            vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+        );
+        return;
+    }
+    if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
+        return;
+    if(axisAlignedPositive){
+        const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+        EmitPaintQuadValidated(
+            recording, clip, scaledRect, uv, tint, PaintMaterial::Skin, layer,
+            u32.max, u32.max, 0u, u32.max,
+            vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+        );
+        return;
+    }
+    const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+    const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+    const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+    const Point p10(p00.x + ex.x, p00.y + ex.y);
+    const Point p01(p00.x + ey.x, p00.y + ey.y);
+    const Point p11(p10.x + ey.x, p10.y + ey.y);
+    EmitPaintTransformedQuad(
+        recording, clip, p00, p10, p11, p01, uv, tint, PaintMaterial::Skin, layer,
+        u32.max, u32.max, 0u, u32.max,
+        vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void EmitPaintNineSliceCore(
     in b8 recording,
     in PaintClipEntry clip,
     in UiSkinRegion region,
@@ -17,6 +65,9 @@ void EmitPaintNineSlice(
     in u32 atlasWidth,
     in u32 atlasHeight,
     in f32 referenceDensity,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
     in u32 layer,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
@@ -26,11 +77,193 @@ void EmitPaintNineSlice(
 ){
     if(!HasUiRectArea(rectangle))
         return;
+    if(!recording){
+        ReportPaintQuadRecordingOff();
+        return;
+    }
+    if(!IsFinite(VectorSingle(tint.r, tint.g, tint.b, tint.a)) || tint.a < 0.0f || tint.a > 1.0f){
+        ReportPaintQuadInvalidColor();
+        return;
+    }
+    if(tint.a <= 0.0f || !(clip.rect.width > 0.0f) || !(clip.rect.height > 0.0f) || !IsFinite(VectorSingle(clip.right, clip.bottom, 0.0f, 0.0f).xy))
+        return;
+
     VectorSingle xVec(0.0f);
     VectorSingle yVec(0.0f);
     VectorSingle uVec(0.0f);
     VectorSingle vVec(0.0f);
     ResolveNineSliceCoordinates(region.rectangle, region.sliceInsets, rectangle, referenceDensity, xVec, yVec, uVec, vVec);
+
+    const VectorSingle uNormVec = uVec / VectorSingle(cast<f32>(atlasWidth));
+    const VectorSingle vNormVec = vVec / VectorSingle(cast<f32>(atlasHeight));
+    Array<f32, 4u> u;
+    u[0u] = uNormVec.x;
+    u[1u] = uNormVec.y;
+    u[2u] = uNormVec.z;
+    u[3u] = uNormVec.w;
+    Array<f32, 4u> v;
+    v[0u] = vNormVec.x;
+    v[1u] = vNormVec.y;
+    v[2u] = vNormVec.z;
+    v[3u] = vNormVec.w;
+
+    Color premultiplied = tint;
+    if(tint.a != 1.0f)
+        premultiplied = Color(tint.r * tint.a, tint.g * tint.a, tint.b * tint.a, tint.a);
+
+    if(!hasTransform || axisAlignedPositive){
+        if(hasTransform){
+            xVec = xVec * VectorSingle(xf.m00) + VectorSingle(xf.tx);
+            yVec = yVec * VectorSingle(xf.m11) + VectorSingle(xf.ty);
+        }
+        if(
+            !IsFinite(xVec)
+            || !IsFinite(yVec)
+            || xVec.w <= xVec.x
+            || yVec.w <= yVec.x
+            || xVec.w <= clip.rect.x
+            || yVec.w <= clip.rect.y
+            || xVec.x >= clip.right
+            || yVec.x >= clip.bottom
+        )
+            return;
+
+        Array<f32, 4u> x;
+        x[0u] = xVec.x;
+        x[1u] = xVec.y;
+        x[2u] = xVec.z;
+        x[3u] = xVec.w;
+        Array<f32, 4u> y;
+        y[0u] = yVec.x;
+        y[1u] = yVec.y;
+        y[2u] = yVec.z;
+        y[3u] = yVec.w;
+
+        Array<f32, 3u> cx0;
+        Array<f32, 3u> cx1;
+        Array<f32, 3u> uLeft;
+        Array<f32, 3u> uRight;
+        u32 activeColCount = 0u;
+        for(u32 col = 0u; col < s_PaintNineSliceAxisCells; ++col){
+            const usize c = cast<usize>(col);
+            const f32 rx0 = x[c];
+            const f32 rx1 = x[c + 1u];
+            const f32 rw = rx1 - rx0;
+            if(!(rw > 0.0f) || rx1 <= clip.rect.x || rx0 >= clip.right)
+                continue;
+            f32 clipX0 = rx0;
+            if(clip.rect.x > clipX0)
+                clipX0 = clip.rect.x;
+            f32 clipX1 = rx1;
+            if(clip.right < clipX1)
+                clipX1 = clip.right;
+            const f32 visW = clipX1 - clipX0;
+            const f32 visEndX = clipX0 + visW;
+            if(!(visW > 0.0f) || !IsFinite(VectorSingle(visW, visEndX, 0.0f, 0.0f).xy))
+                continue;
+            const f32 baseU0 = u[c];
+            const f32 baseU1 = u[c + 1u];
+            f32 l = baseU0;
+            f32 r = baseU1;
+            if(clipX0 != rx0 || visW != rw || visEndX != rx1){
+                const f32 du = baseU1 - baseU0;
+                l = ((clipX0 - rx0) / rw) * du + baseU0;
+                r = ((visEndX - rx0) / rw) * du + baseU0;
+            }
+            const usize outIdx = cast<usize>(activeColCount);
+            cx0[outIdx] = clipX0;
+            cx1[outIdx] = visEndX;
+            uLeft[outIdx] = l;
+            uRight[outIdx] = r;
+            ++activeColCount;
+        }
+        if(activeColCount == 0u)
+            return;
+
+        Array<f32, 3u> cy0;
+        Array<f32, 3u> cy1;
+        Array<f32, 3u> vTop;
+        Array<f32, 3u> vBottom;
+        u32 activeRowCount = 0u;
+        for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
+            const usize r = cast<usize>(row);
+            const f32 ry0 = y[r];
+            const f32 ry1 = y[r + 1u];
+            const f32 rh = ry1 - ry0;
+            if(!(rh > 0.0f) || ry1 <= clip.rect.y || ry0 >= clip.bottom)
+                continue;
+            f32 clipY0 = ry0;
+            if(clip.rect.y > clipY0)
+                clipY0 = clip.rect.y;
+            f32 clipY1 = ry1;
+            if(clip.bottom < clipY1)
+                clipY1 = clip.bottom;
+            const f32 visH = clipY1 - clipY0;
+            const f32 visEndY = clipY0 + visH;
+            if(!(visH > 0.0f) || !IsFinite(VectorSingle(visH, visEndY, 0.0f, 0.0f).xy))
+                continue;
+            const f32 baseV0 = v[r];
+            const f32 baseV1 = v[r + 1u];
+            f32 t = baseV0;
+            f32 b = baseV1;
+            if(clipY0 != ry0 || visH != rh || visEndY != ry1){
+                const f32 dv = baseV1 - baseV0;
+                t = ((clipY0 - ry0) / rh) * dv + baseV0;
+                b = ((visEndY - ry0) / rh) * dv + baseV0;
+            }
+            const usize outIdx = cast<usize>(activeRowCount);
+            cy0[outIdx] = clipY0;
+            cy1[outIdx] = visEndY;
+            vTop[outIdx] = t;
+            vBottom[outIdx] = b;
+            ++activeRowCount;
+        }
+        if(activeRowCount == 0u)
+            return;
+
+        const usize quadCount = cast<usize>(activeColCount * activeRowCount);
+        const usize addedVertices = quadCount * cast<usize>(s_PaintQuadVertexCount);
+        const usize addedIndices = quadCount * cast<usize>(s_PaintQuadIndexCount);
+        if(vertices.size() > cast<usize>(u32.max) - addedVertices || indices.size() > cast<usize>(u32.max) - addedIndices){
+            assert(false);
+            return;
+        }
+        vertices.reserve(vertices.size() + addedVertices);
+        indices.reserve(indices.size() + addedIndices);
+        const u32 firstIndex = cast<u32>(indices.size());
+        for(u32 ri = 0u; ri < activeRowCount; ++ri){
+            const usize rowIdx = cast<usize>(ri);
+            const f32 y0 = cy0[rowIdx];
+            const f32 y1 = cy1[rowIdx];
+            const f32 t = vTop[rowIdx];
+            const f32 b = vBottom[rowIdx];
+            for(u32 ci = 0u; ci < activeColCount; ++ci){
+                const usize colIdx = cast<usize>(ci);
+                const f32 x0 = cx0[colIdx];
+                const f32 x1 = cx1[colIdx];
+                const f32 l = uLeft[colIdx];
+                const f32 r = uRight[colIdx];
+                const u32 vertexBase = cast<u32>(vertices.size());
+                vertices.push_back(Vertex(Point(x0, y0), Point(l, t), premultiplied));
+                vertices.push_back(Vertex(Point(x1, y0), Point(r, t), premultiplied));
+                vertices.push_back(Vertex(Point(x1, y1), Point(r, b), premultiplied));
+                vertices.push_back(Vertex(Point(x0, y1), Point(l, b), premultiplied));
+                indices.push_back(vertexBase);
+                indices.push_back(vertexBase + 1u);
+                indices.push_back(vertexBase + 2u);
+                indices.push_back(vertexBase);
+                indices.push_back(vertexBase + 2u);
+                indices.push_back(vertexBase + 3u);
+            }
+        }
+        AppendPaintSolidCommand(
+            clip, firstIndex, cast<u32>(addedIndices), layer, PaintMaterial::Skin,
+            u32.max, u32.max, 0u, u32.max,
+            commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+        );
+        return;
+    }
+
     Array<f32, 4u> x;
     x[0u] = xVec.x;
     x[1u] = xVec.y;
@@ -41,48 +274,103 @@ void EmitPaintNineSlice(
     y[1u] = yVec.y;
     y[2u] = yVec.z;
     y[3u] = yVec.w;
-    Array<f32, 4u> u;
-    u[0u] = uVec.x;
-    u[1u] = uVec.y;
-    u[2u] = uVec.z;
-    u[3u] = uVec.w;
-    Array<f32, 4u> v;
-    v[0u] = vVec.x;
-    v[1u] = vVec.y;
-    v[2u] = vVec.z;
-    v[3u] = vVec.w;
-    const VectorSingle atlasExtent(cast<f32>(atlasWidth), cast<f32>(atlasHeight), cast<f32>(atlasWidth), cast<f32>(atlasHeight));
-    for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
-        for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
-            const usize colIdx = cast<usize>(column);
-            const usize rowIdx = cast<usize>(row);
-            const VectorSingle cellDeltas = VectorSingle(x[colIdx + 1u], y[rowIdx + 1u], u[colIdx + 1u], v[rowIdx + 1u]) - VectorSingle(x[colIdx], y[rowIdx], u[colIdx], v[rowIdx]);
-            const Rect target(x[colIdx], y[rowIdx], cellDeltas.x, cellDeltas.y);
-            const VectorSingle uvVec = VectorSingle(u[colIdx], v[rowIdx], cellDeltas.z, cellDeltas.w) / atlasExtent;
-            const Rect uv(uvVec.x, uvVec.y, uvVec.z, uvVec.w);
-            EmitPaintQuad(
-                recording,
-                clip,
-                target,
-                uv,
-                tint,
-                PaintMaterial::Skin,
-                layer,
-                u32.max,
-                u32.max,
-                0u,
-                u32.max,
-                vertices,
-                indices,
-                commands,
-                inOutCommandsOrdered,
-                inOutCommandsStrictlyDescending
-            );
+
+    const Point c00 = ApplyPaintTransform(xf, Point(x[0u], y[0u]));
+    const Point c10 = ApplyPaintTransform(xf, Point(x[3u], y[0u]));
+    const Point c11 = ApplyPaintTransform(xf, Point(x[3u], y[3u]));
+    const Point c01 = ApplyPaintTransform(xf, Point(x[0u], y[3u]));
+    const VectorSingle outerV0(c00.x, c00.y, c10.x, c10.y);
+    const VectorSingle outerV1(c11.x, c11.y, c01.x, c01.y);
+    if(!IsFinite(outerV0) || !IsFinite(outerV1))
+        return;
+    const VectorSingle outerPairMin = Min(outerV0, outerV1);
+    const VectorSingle outerPairMax = Max(outerV0, outerV1);
+    const f32 outerMinX = UiSimdMin(outerPairMin.x, outerPairMin.z);
+    const f32 outerMaxX = UiSimdMax(outerPairMax.x, outerPairMax.z);
+    const f32 outerMinY = UiSimdMin(outerPairMin.y, outerPairMin.w);
+    const f32 outerMaxY = UiSimdMax(outerPairMax.y, outerPairMax.w);
+    if(outerMaxX <= clip.rect.x || outerMaxY <= clip.rect.y || outerMinX >= clip.right || outerMinY >= clip.bottom)
+        return;
+
+    Array<Point, 16u> gridPts;
+    for(usize r = 0u; r < 4u; ++r){
+        for(usize c = 0u; c < 4u; ++c)
+            gridPts[r * 4u + c] = ApplyPaintTransform(xf, Point(x[c], y[r]));
+    }
+
+    Array<usize, 9u> emitRows;
+    Array<usize, 9u> emitCols;
+    usize emitCount = 0u;
+    for(usize r = 0u; r < 3u; ++r){
+        if(!(y[r + 1u] > y[r]) || !IsFinite(VectorSingle(y[r + 1u])))
+            continue;
+        for(usize c = 0u; c < 3u; ++c){
+            if(!(x[c + 1u] > x[c]) || !IsFinite(VectorSingle(x[c + 1u])))
+                continue;
+            in Point p00 = gridPts[r * 4u + c];
+            in Point p10 = gridPts[r * 4u + c + 1u];
+            in Point p11 = gridPts[(r + 1u) * 4u + c + 1u];
+            in Point p01 = gridPts[(r + 1u) * 4u + c];
+            const VectorSingle cellV0(p00.x, p00.y, p10.x, p10.y);
+            const VectorSingle cellV1(p11.x, p11.y, p01.x, p01.y);
+            if(!IsFinite(cellV0) || !IsFinite(cellV1))
+                continue;
+            const VectorSingle cellPairMin = Min(cellV0, cellV1);
+            const VectorSingle cellPairMax = Max(cellV0, cellV1);
+            const f32 minX = UiSimdMin(cellPairMin.x, cellPairMin.z);
+            const f32 maxX = UiSimdMax(cellPairMax.x, cellPairMax.z);
+            const f32 minY = UiSimdMin(cellPairMin.y, cellPairMin.w);
+            const f32 maxY = UiSimdMax(cellPairMax.y, cellPairMax.w);
+            if(maxX <= clip.rect.x || maxY <= clip.rect.y || minX >= clip.right || minY >= clip.bottom)
+                continue;
+            emitRows[emitCount] = r;
+            emitCols[emitCount] = c;
+            ++emitCount;
         }
     }
+    if(emitCount == 0u)
+        return;
+
+    const usize addedVertices = emitCount * cast<usize>(s_PaintQuadVertexCount);
+    const usize addedIndices = emitCount * cast<usize>(s_PaintQuadIndexCount);
+    if(vertices.size() > cast<usize>(u32.max) - addedVertices || indices.size() > cast<usize>(u32.max) - addedIndices){
+        assert(false);
+        return;
+    }
+    vertices.reserve(vertices.size() + addedVertices);
+    indices.reserve(indices.size() + addedIndices);
+    const u32 firstIndex = cast<u32>(indices.size());
+    for(usize qi = 0u; qi < emitCount; ++qi){
+        const usize r = emitRows[qi];
+        const usize c = emitCols[qi];
+        in Point p00 = gridPts[r * 4u + c];
+        in Point p10 = gridPts[r * 4u + c + 1u];
+        in Point p11 = gridPts[(r + 1u) * 4u + c + 1u];
+        in Point p01 = gridPts[(r + 1u) * 4u + c];
+        const f32 u0 = u[c];
+        const f32 u1 = u[c + 1u];
+        const f32 v0 = v[r];
+        const f32 v1 = v[r + 1u];
+        const u32 vertexBase = cast<u32>(vertices.size());
+        vertices.push_back(Vertex(p00, Point(u0, v0), premultiplied));
+        vertices.push_back(Vertex(p10, Point(u1, v0), premultiplied));
+        vertices.push_back(Vertex(p11, Point(u1, v1), premultiplied));
+        vertices.push_back(Vertex(p01, Point(u0, v1), premultiplied));
+        indices.push_back(vertexBase);
+        indices.push_back(vertexBase + 1u);
+        indices.push_back(vertexBase + 2u);
+        indices.push_back(vertexBase);
+        indices.push_back(vertexBase + 2u);
+        indices.push_back(vertexBase + 3u);
+    }
+    AppendPaintSolidCommand(
+        clip, firstIndex, cast<u32>(addedIndices), layer, PaintMaterial::Skin,
+        u32.max, u32.max, 0u, u32.max,
+        commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
 }
 
-void EmitPaintSkinRegion(
+void EmitPaintSkinRegionCore(
     in b8 recording,
     in PaintClipEntry clip,
     in UiSkinRegion region,
@@ -91,6 +379,9 @@ void EmitPaintSkinRegion(
     in u32 atlasWidth,
     in u32 atlasHeight,
     in f32 referenceDensity,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
     in u32 layer,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
@@ -99,7 +390,7 @@ void EmitPaintSkinRegion(
     mut b8 inOutCommandsStrictlyDescending
 ){
     if(region.drawMode == UiSkinDrawMode::NineSlice){
-        EmitPaintNineSlice(
+        EmitPaintNineSliceCore(
             recording,
             clip,
             region,
@@ -108,6 +399,9 @@ void EmitPaintSkinRegion(
             atlasWidth,
             atlasHeight,
             referenceDensity,
+            hasTransform,
+            xf,
+            axisAlignedPositive,
             layer,
             vertices,
             indices,
@@ -118,57 +412,15 @@ void EmitPaintSkinRegion(
     }
     else{
         const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
-        EmitPaintQuad(
+        EmitPaintSkinQuadWithTransform(
             recording,
             clip,
             rectangle,
             uv,
             tint,
-            PaintMaterial::Skin,
-            layer,
-            u32.max,
-            u32.max,
-            0u,
-            u32.max,
-            vertices,
-            indices,
-            commands,
-            inOutCommandsOrdered,
-            inOutCommandsStrictlyDescending
-        );
-    }
-}
-
-b8 DrawPaintSkinRegion(
-    in b8 recording,
-    in PaintClipEntry clip,
-    in Span<UiSkinRegion> regions,
-    in Name regionName,
-    in Rect rectangle,
-    in Color tint,
-    in u32 atlasWidth,
-    in u32 atlasHeight,
-    in f32 referenceDensity,
-    in u32 layer,
-    mut Vector<Vertex> vertices,
-    mut Vector<u32> indices,
-    mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered,
-    mut b8 inOutCommandsStrictlyDescending
-){
-    assert(recording);
-    for(in UiSkinRegion region : regions){
-        if(region.name != regionName)
-            continue;
-        EmitPaintSkinRegion(
-            recording,
-            clip,
-            region,
-            rectangle,
-            tint,
-            atlasWidth,
-            atlasHeight,
-            referenceDensity,
+            hasTransform,
+            xf,
+            axisAlignedPositive,
             layer,
             vertices,
             indices,
@@ -176,50 +428,7 @@ b8 DrawPaintSkinRegion(
             inOutCommandsOrdered,
             inOutCommandsStrictlyDescending
         );
-        return true;
     }
-    return false;
-}
-
-b8 DrawPaintSkinRegionIndexed(
-    in b8 recording,
-    in PaintClipEntry clip,
-    in Span<UiSkinRegion> regions,
-    in HashMap<Name, usize> regionLookup,
-    in Name regionName,
-    in Rect rectangle,
-    in Color tint,
-    in u32 atlasWidth,
-    in u32 atlasHeight,
-    in f32 referenceDensity,
-    in u32 layer,
-    mut Vector<Vertex> vertices,
-    mut Vector<u32> indices,
-    mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered,
-    mut b8 inOutCommandsStrictlyDescending
-){
-    assert(recording);
-    const auto found = regionLookup.find(regionName);
-    if(found == regionLookup.end())
-        return false;
-    EmitPaintSkinRegion(
-        recording,
-        clip,
-        regions[found.value()],
-        rectangle,
-        tint,
-        atlasWidth,
-        atlasHeight,
-        referenceDensity,
-        layer,
-        vertices,
-        indices,
-        commands,
-        inOutCommandsOrdered,
-        inOutCommandsStrictlyDescending
-    );
-    return true;
 }
 
 b8 IsPaintDrawCommandBefore(in DrawCommand lhs, in DrawCommand rhs){
@@ -286,30 +495,8 @@ void BeginPaintBuilderRecordingCached(
     outRecording = true;
 }
 
-void BeginPaintBuilderRecording(
-    in DisplayMetrics metrics,
-    in Span<UiSkinRegion> skinRegions,
-    mut Vector<Vertex> outVertices,
-    mut Vector<u32> outIndices,
-    mut Vector<DrawCommand> outCommands,
-    mut Vector<UiSkinRegion> outRegions,
-    mut Vector<PaintClipEntry> outClips,
-    mut usize outOverlayDepth,
-    mut u32 outLayer,
-    mut b8 outCommandsOrdered,
-    mut b8 outCommandsStrictlyDescending,
-    mut b8 outRecording
-){
-    BeginPaintBuilderRecordingCached(metrics, outVertices, outIndices, outCommands, outClips, outOverlayDepth, outLayer, outCommandsOrdered, outCommandsStrictlyDescending, outRecording);
-    outRegions.clear();
-    outRegions.reserve(skinRegions.size());
-    for(in UiSkinRegion region : skinRegions)
-        outRegions.push_back(region);
-}
-
-void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff){
+void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff, mut Vector<DrawCommand> scratch){
     const usize count = inOutCommands.size();
-    Vector<DrawCommand> scratch;
     scratch.resize(count);
     b8 inScratch = false;
     for(u32 shift = 0u; shift < 32u; shift += 8u){
@@ -360,6 +547,7 @@ void FinalizePaintBuilderRecording(
     in usize overlayDepth,
     mut Vector<DrawCommand> inOutCommands,
     mut Vector<PaintClipEntry> inOutClips,
+    mut Vector<DrawCommand> sortScratch,
     mut b8 inOutRecording
 ){
     [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
@@ -388,7 +576,7 @@ void FinalizePaintBuilderRecording(
                 if(count <= 32u || !firstIndexMonotonic)
                     SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
                 else
-                    RadixSortPaintCommands(inOutCommands, orDiff);
+                    RadixSortPaintCommands(inOutCommands, orDiff, sortScratch);
             }
         }
     }

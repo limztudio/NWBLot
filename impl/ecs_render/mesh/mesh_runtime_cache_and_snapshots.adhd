@@ -16,10 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ComputeSolidTriangleWordByteSize(in usize wordCount, in usize wordByteSize){
-    return wordCount * wordByteSize;
-}
-
 b8 RequiresShadowSoftwareBvhBuild(in b8 rtSupported){
     return !rtSupported;
 }

@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_UiLoadFontsArenaName = "impl/ecs_ui/load_fonts";
 const usize s_UiLayerPaintReserveQuads = 256u;
 const usize s_UiNativeKeySlotCount = 512u;
 const f32 s_MaxUiFrameDeltaFloatSeconds = 3.40282346638528859812e+38f;

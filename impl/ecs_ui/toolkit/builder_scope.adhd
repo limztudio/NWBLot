@@ -83,7 +83,6 @@ class CachedEditBoxView{
     public u64 textGeneration = 0u;
     public u64 atlasIdentity = 0u;
     public usize atlasGlyphCount = 0u;
-    public u64 lastUsedFrame = 0u;
     public u32 fontSizeBits = 0u;
     public u32 scriptTag = 0u;
     public u32 pixelScaleXBits = 0u;

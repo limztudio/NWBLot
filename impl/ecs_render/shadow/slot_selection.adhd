@@ -66,22 +66,6 @@ SceneLightGpuData BuildUnassignedSceneLightGpuData(
     return dst;
 }
 
-u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f32> shadowImportance){
-    const u32 lightCount = cast<u32>(lights.size());
-    f32 bestImportance = -1.0f;
-    u32 bestIndex = lightCount;
-    for(u32 i = 0u; i < lightCount && i < cast<u32>(shadowImportance.size()); ++i){
-        if(lights[i].params.z >= 0.0f)
-            continue;
-        const f32 importance = shadowImportance[i];
-        if(importance > bestImportance){
-            bestImportance = importance;
-            bestIndex = i;
-        }
-    }
-    return bestIndex;
-}
-
 void AssignShadowSlotLights(
     in Span<f32> shadowImportance,
     in u32 lightCount,
@@ -176,19 +160,6 @@ u64 ComputeShadowMaterialContextHashWithTypedHash(
         hash = UpdateFnv64U64(hash, materialTypedHash);
     }
     return hash;
-}
-
-u64 ComputeShadowMaterialContextHash(
-    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
-    in Span<InstanceGpuData> instanceData,
-    in Span<u8> materialTypedBytes
-){
-    return ComputeShadowMaterialContextHashWithTypedHash(
-        instanceMaterials,
-        instanceData,
-        materialTypedBytes.size(),
-        UpdateFnv64(s_Fnv64OffsetBasis, materialTypedBytes)
-    );
 }
 
 

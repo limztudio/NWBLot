@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_EntityHeaderBinaryBytes = 16u;
+const usize s_EntityHeaderBinaryBytes = 80u;
 const usize s_ProjectHeaderBinaryBytes = 72u;
 const usize s_SceneHeaderBinaryBytes = 32u;
 const usize s_NameHashBinaryBytes = 64u;
@@ -30,6 +30,7 @@ class EntityHeaderBinary{
     public u32 magic = s_EntityMagic;
     public u32 version = s_EntityVersion;
     public u64 componentCount = 0u;
+    public NameHash entityNameHash;
 }
 
 [serialize]
@@ -56,7 +57,10 @@ b8 LessSceneAssetEntryBinary(in SceneAssetEntryBinary lhs, in SceneAssetEntryBin
 }
 
 b8 IsAllowedEntityAssetField(in StringView fieldName){
-    return fieldName == s_EntityComponentsField;
+    return
+        fieldName == s_EntityComponentsField
+        || fieldName == s_EntityNameField
+    ;
 }
 
 b8 IsAllowedProjectAssetField(in StringView fieldName){
@@ -89,37 +93,6 @@ b8 ValidateSceneAssetBinaryEntry(in Name nickname, in b8 hasValidRef, in usize i
 
     error("SceneAsset::loadBinary failed: invalid asset entry at index {}", index);
     return false;
-}
-
-void AssignAssetRefsFromHashes<TAsset>(in Span<NameHash> hashes, mut Vector<AssetRef<TAsset>> outRefs){
-    outRefs.clear();
-    outRefs.reserve(hashes.size());
-    for(in NameHash hash : hashes){
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(hash);
-        outRefs.push_back(ref);
-    }
-}
-
-b8 UnpackSceneAssetEntriesBinary<TAsset>(
-    in Span<SceneAssetEntryBinary> assetEntries,
-    mut HashMap<Name, AssetRef<TAsset>> outAssets
-){
-    outAssets.clear();
-    outAssets.reserve(assetEntries.size());
-    for(usize i = 0u; i < assetEntries.size(); ++i){
-        const SceneAssetEntryBinary entry = assetEntries[i];
-        const Name nickname(entry.nicknameHash);
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(entry.assetHash);
-        if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
-            return false;
-        if(!outAssets.try_emplace(nickname, ref).second){
-            error("SceneAsset::loadBinary failed: duplicate asset nickname at index {}", i);
-            return false;
-        }
-    }
-    return true;
 }
 
 b8 ValidateProjectAssetPayload(in b8 hasStartScene){
@@ -156,7 +129,24 @@ b8 ValidateUniqueAssetRefs<TAsset>(
     in StringView contextPrefix,
     in StringView contextLabel
 ){
-    HashMap<NameHash, u8> seen;
+    if(references.size() <= 16u){
+        for(usize i = 0u; i < references.size(); ++i){
+            const AssetRef<TAsset> entry = references[i];
+            if(!entry.valid()){
+                error("{} failed: {} entry {} is empty", contextPrefix, contextLabel, i);
+                return false;
+            }
+            const NameHash hash = entry.name().hash();
+            for(usize j = 0u; j < i; ++j){
+                if(references[j].name().hash() == hash){
+                    error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    HashSet<NameHash> seen;
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
         const AssetRef<TAsset> entry = references[i];
@@ -164,12 +154,10 @@ b8 ValidateUniqueAssetRefs<TAsset>(
             error("{} failed: {} entry {} is empty", contextPrefix, contextLabel, i);
             return false;
         }
-        const NameHash hash = entry.name().hash();
-        if(seen.contains(hash)){
+        if(!seen.insert(entry.name().hash()).second){
             error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
             return false;
         }
-        seen[hash] = 1u;
     }
     return true;
 }
@@ -180,16 +168,6 @@ b8 ValidateSceneAssetMap<TAsset>(in HashMap<Name, AssetRef<TAsset>> assets){
             return false;
     }
     return true;
-}
-
-void CollectAssetRefHashes<TAsset>(
-    in Span<AssetRef<TAsset>> references,
-    mut Vector<NameHash> outHashes
-){
-    outHashes.clear();
-    outHashes.reserve(references.size());
-    for(in AssetRef<TAsset> item : references)
-        outHashes.push_back(item.name().hash());
 }
 
 

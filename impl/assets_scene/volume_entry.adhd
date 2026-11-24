@@ -11,6 +11,7 @@
 type TransformComponentCodec = TypedComponentAssetCodec<TransformComponentAsset>;
 type CameraComponentCodec = TypedComponentAssetCodec<CameraComponentAsset>;
 type LightComponentCodec = TypedComponentAssetCodec<LightComponentAsset>;
+type ActiveCameraComponentCodec = TypedComponentAssetCodec<ActiveCameraComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,14 +39,9 @@ Vector<Name> CollectSortedSceneAssetDependencyNames(in AssetMap assets){
         SortedSceneAssetDependencyEntry candidate;
         candidate.nickname = entry.first;
         candidate.assetName = entry.second.name();
-        usize insertIndex = sortedEntries.size();
-        while(insertIndex > 0u && LessSortedSceneAssetDependencyEntry(candidate, sortedEntries[insertIndex - 1u]))
-            --insertIndex;
         sortedEntries.push_back(candidate);
-        for(usize moveIndex = sortedEntries.size() - 1u; moveIndex > insertIndex; --moveIndex)
-            sortedEntries[moveIndex] = sortedEntries[moveIndex - 1u];
-        sortedEntries[insertIndex] = candidate;
     }
+    SortSequence<SortedSceneAssetDependencyEntry>(sortedEntries, LessSortedSceneAssetDependencyEntry);
 
     Vector<Name> sortedNames;
     sortedNames.reserve(sortedEntries.size());
@@ -92,9 +88,21 @@ b8 ExtractLightComponentDependencies(in CookDependencyItemContext context, mut I
     return ReadCookDependencyEntry<LightComponentCookEntry>(context, s_LightDiagnosticPrefix, ParseLightComponentCookMetadata).has_value();
 }
 
+[cook_entry("component", s_ActiveCameraDiagnosticPrefix, ParseActiveCameraComponentCookMetadata, document_and_value, log_failure, ActiveCameraComponentCodec)]
+Expected<ActiveCameraComponentAsset> CookActiveCameraComponentVolumeEntry(in ActiveCameraComponentCookEntry entry){
+    ActiveCameraComponentAsset asset(entry.virtualPath);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+b8 ExtractActiveCameraComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<ActiveCameraComponentCookEntry>(context, s_ActiveCameraDiagnosticPrefix, ParseActiveCameraComponentCookMetadata).has_value();
+}
+
 [cook_entry("entity", s_EntityDiagnosticPrefix, ParseEntityCookMetadata, document_and_value, log_failure)]
 Expected<EntityAsset> CookEntityVolumeEntry(in EntityCookEntry entry){
-    return BuildEntityAssetFromComponents(entry.virtualPath, entry.components);
+    return BuildEntityAssetFromComponents(entry.virtualPath, entry.name, entry.components);
 }
 
 [cook_entry("project", s_ProjectDiagnosticPrefix, ParseProjectCookMetadata, document_and_value, log_failure)]
@@ -149,6 +157,7 @@ b8 RegisterSceneCookDependencies(mut CookDependencyRegistry registry){
         && registry.registerType(TransformComponentAsset::AssetTypeName(), ExtractTransformComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(CameraComponentAsset::AssetTypeName(), ExtractCameraComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(LightComponentAsset::AssetTypeName(), ExtractLightComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ActiveCameraComponentAsset::AssetTypeName(), ExtractActiveCameraComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(EntityAsset::AssetTypeName(), ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), ExtractProjectDependencies)
         && registry.registerType(SceneAsset::AssetTypeName(), ExtractSceneDependencies);

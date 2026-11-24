@@ -8,8 +8,21 @@ model.asset = "project/meshes/ground_plane/model";
 renderer_component renderer;
 renderer.material = "project/materials/mat_white_opaque";
 
+rigid_body_component rigid_body;
+rigid_body.type = "static";
+
+collider_component collider;
+collider.shape_type = "hull";
+collider.is_box = 1;
+collider.center = [0.0, -0.25, 0.0];
+collider.half_extents = [3.0, 0.25, 3.0];
+collider.friction = 0.7;
+collider.restitution = 0.1;
+
 asset.components = [
     transform,
     model,
-    renderer
+    renderer,
+    rigid_body,
+    collider
 ];

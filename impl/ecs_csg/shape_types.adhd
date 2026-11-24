@@ -52,10 +52,6 @@ class CsgShapeLocalBounds{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidCsgShapeTypeId(in CsgShapeTypeId id){
-    return id != s_InvalidCsgShapeTypeId;
-}
-
 b8 ValidCsgShaderModuleIncludeText(in StringView includeText){
     if(includeText.empty())
         return false;

@@ -326,13 +326,6 @@ void CollectSkinningResourceStateBuffers(in MeshSkinningRuntimeInstance instance
     RetainSkinningBuffer(resources.bindlessResourceSlotsBuffer, buffers, index);
 }
 
-[cpp_unwind]
-void CollectSkinningStateBuffers(in MeshSkinningRuntimeInstance instance, in Optional<in MeshSkinningRuntimeResources> resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
-    CollectSkinningInstanceStateBuffers(instance, buffers, index);
-    if(resources.has_value())
-        CollectSkinningResourceStateBuffers(instance, resources.value(), buffers, index);
-}
-
 b8 ValidateFinalizedSkinningPlanStates(
     in b8 hasActiveSkin,
     in b8 copiedRestStreams,

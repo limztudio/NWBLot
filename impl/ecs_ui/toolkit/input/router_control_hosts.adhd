@@ -55,26 +55,6 @@ b8 IsValidRouterControlHostTarget(in Span<PopupRecord> popups, in HitTarget targ
     ;
 }
 
-Expected<usize> TryResolveRouterControlHostIndex(
-    in Span<HitTarget> targets,
-    in Span<TargetLookup> lookup,
-    in Span<PopupRecord> popups,
-    in HitTarget target
-){
-    if(target.owner.valid()){
-        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
-        if(!hostIndex.has_value())
-            return MakeUnexpected(Failure());
-        const HitTarget host = targets[hostIndex.value()];
-        if(!IsValidRouterControlHostTarget(popups, target, host))
-            return MakeUnexpected(Failure());
-        return hostIndex.value();
-    }
-    if(!IsValidRouterControlHostTarget(popups, target, target))
-        return MakeUnexpected(Failure());
-    return FindTargetIndexInTable(targets, lookup, target.id, target.declarationGeneration);
-}
-
 Expected<HitTarget> TryResolveRouterControlHost(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,

@@ -132,12 +132,6 @@ ExistingRuntimeMeshDisposition ClassifyExistingRuntimeMesh(
     return ExistingRuntimeMeshDisposition::ReuseClean;
 }
 
-b8 ReleaseSkinningSourceReference(mut u32 inOutReferenceCount){
-    if(inOutReferenceCount > 0u)
-        --inOutReferenceCount;
-    return inOutReferenceCount == 0u;
-}
-
 Expected<BufferHandle> FinalizeRuntimeBufferUpload(
     in Expected<BufferHandle, BufferSetupFailure> buffer,
     in u64 handleValue,

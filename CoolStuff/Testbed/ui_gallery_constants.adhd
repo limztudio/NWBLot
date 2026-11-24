@@ -208,14 +208,6 @@ Expected<u64> FindEnabledImmutableListSourceRow(in u64 start, in b8 reverse, in 
     return MakeUnexpected(Failure());
 }
 
-Expected<u64> TryFindFilteredListSourceIndex(in Span<u64> indices, in u64 count, in usize labelCount, in u64 keyValue){
-    for(u64 candidate = 0u; candidate < count && cast<usize>(candidate) < indices.size(); ++candidate){
-        if(ResolveImmutableListSourceKey(indices[cast<usize>(candidate)], labelCount) == keyValue)
-            return candidate;
-    }
-    return MakeUnexpected(Failure());
-}
-
 StringView ResolvePopupGalleryCaption(in u32 choice){
     if(choice == 0u)
         return "Popup menu";

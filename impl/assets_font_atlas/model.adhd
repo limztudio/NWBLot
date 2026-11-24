@@ -42,10 +42,6 @@ class FontAtlasPayload{
     public Vector<FontAtlasPositioningTable> positioningTables;
 }
 
-b8 HasFontAtlasPositioningTables(in usize tableCount){
-    return tableCount > 0u;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

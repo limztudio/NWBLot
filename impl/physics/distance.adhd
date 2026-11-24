@@ -8,9 +8,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> ProxyKind{
+    PointCloud = 0u,
+    Cylinder = 1u,
+    Cone = 2u,
+    TaperedCapsule = 3u,
+    kCount
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ShapeProxy{
     public FixedVector<f32x3u, s_MaxHullVertices> points;
+    public f32x4 param0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 param1(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 radius = 0.0f;
+    public ProxyKind kind = ProxyKind::PointCloud;
+}
+
+class ShapeProxyView{
+    public Span<f32x3u> points;
+    public f32x4 param0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 param1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 radius = 0.0f;
+    public ProxyKind kind = ProxyKind::PointCloud;
 }
 
 class SimplexCache{
@@ -142,6 +165,12 @@ class TimeOfImpactOutput{
     }
 }
 
+class EpaFace{
+    public f32x4 normalDist(0.0f, 1.0f, 0.0f, 0.0f);
+    public Array<u16, 3u> v;
+    public b8 alive = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -176,7 +205,193 @@ ShapeProxy MakePointProxy(in VectorSingle point, in f32 radius){
     return p;
 }
 
-u8 FindSupportVertexIndex(in ShapeProxy proxy, in VectorSingle dir){
+ShapeProxy MakeCylinderProxy(in CylinderShape cyl){
+    ShapeProxy p;
+    p.kind = ProxyKind::Cylinder;
+    p.param0 = f32x4(cyl.center(), cyl.radius());
+    p.param1 = f32x4(cyl.halfHeight(), 0.0f, 0.0f, 0.0f);
+    p.radius = cyl.convexRadius();
+    return p;
+}
+
+ShapeProxy MakeConeProxy(in ConeShape cone){
+    ShapeProxy p;
+    p.kind = ProxyKind::Cone;
+    p.param0 = f32x4(cone.center(), cone.radius());
+    p.param1 = f32x4(cone.halfHeight(), 0.0f, 0.0f, 0.0f);
+    p.radius = cone.convexRadius();
+    return p;
+}
+
+ShapeProxy MakeTaperedCapsuleProxy(in TaperedCapsuleShape tc){
+    ShapeProxy p;
+    const f32 r1 = tc.radius1();
+    const f32 r2 = tc.radius2();
+    const f32 minR = SimdMin(r1, r2);
+    p.kind = ProxyKind::TaperedCapsule;
+    p.param0 = f32x4(tc.center1(), r1 - minR);
+    p.param1 = f32x4(tc.center2(), r2 - minR);
+    p.radius = minR;
+    return p;
+}
+
+ShapeProxy MakeSegmentProxy(in SegmentShape seg){
+    ShapeProxy p;
+    const VectorSingle sp1 = seg.point1();
+    const VectorSingle sp2 = seg.point2();
+    p.points.push_back(f32x3u(sp1.x, sp1.y, sp1.z));
+    p.points.push_back(f32x3u(sp2.x, sp2.y, sp2.z));
+    p.radius = seg.radius();
+    return p;
+}
+
+ShapeProxyView MakeSpanProxyView(in Span<f32x3u> points, in f32 radius){
+    ShapeProxyView v;
+    v.points = points;
+    v.radius = radius;
+    v.kind = ProxyKind::PointCloud;
+    return v;
+}
+
+ShapeProxyView MakeShapeProxyView(in ShapeProxy p){
+    ShapeProxyView v;
+    v.points = Span<f32x3u>(p.points);
+    v.param0 = p.param0;
+    v.param1 = p.param1;
+    v.radius = p.radius;
+    v.kind = p.kind;
+    return v;
+}
+
+ShapeProxyView MakeHullProxyView(in HullShape hull){
+    ShapeProxyView v;
+    v.points = Span<f32x3u>(hull.vertices);
+    v.radius = hull.centroidRadius.w;
+    v.kind = ProxyKind::PointCloud;
+    return v;
+}
+
+b8 IsProxyViewEmpty(in ShapeProxyView p){
+    return p.kind == ProxyKind::PointCloud && p.points.empty();
+}
+
+VectorSingle ComputeProxyViewInitialPoint(in ShapeProxyView proxy){
+    if(proxy.kind == ProxyKind::PointCloud){
+        if(proxy.points.empty())
+            return VectorSingle(0.0f);
+        const f32x3u p0 = proxy.points[0u];
+        return VectorSingle(p0.x, p0.y, p0.z, 0.0f);
+    }
+    if(proxy.kind == ProxyKind::TaperedCapsule)
+        return (VectorSingle(proxy.param0, 0.0f) + VectorSingle(proxy.param1, 0.0f)) * 0.5f;
+    return VectorSingle(proxy.param0, 0.0f);
+}
+
+VectorSingle ComputeProxyViewCenter(in ShapeProxyView proxy){
+    if(proxy.kind == ProxyKind::PointCloud){
+        if(proxy.points.empty())
+            return VectorSingle(0.0f);
+        VectorSingle sum(0.0f);
+        for(usize i = 0u; i < proxy.points.size(); ++i){
+            const f32x3u p = proxy.points[i];
+            sum = sum + VectorSingle(p.x, p.y, p.z, 0.0f);
+        }
+        return sum / cast<f32>(proxy.points.size());
+    }
+    if(proxy.kind == ProxyKind::TaperedCapsule)
+        return (VectorSingle(proxy.param0, 0.0f) + VectorSingle(proxy.param1, 0.0f)) * 0.5f;
+    return VectorSingle(proxy.param0, 0.0f);
+}
+
+void ComputeProxyViewLocalBounds(in ShapeProxyView proxy, mut VectorSingle outMin, mut VectorSingle outMax){
+    if(proxy.kind == ProxyKind::PointCloud){
+        if(proxy.points.empty()){
+            outMin = VectorSingle(0.0f);
+            outMax = VectorSingle(0.0f);
+            return;
+        }
+        const f32x3u p0 = proxy.points[0u];
+        VectorSingle bMin(p0.x, p0.y, p0.z, 0.0f);
+        VectorSingle bMax = bMin;
+        for(usize i = 1u; i < proxy.points.size(); ++i){
+            const f32x3u pt = proxy.points[i];
+            const VectorSingle v(pt.x, pt.y, pt.z, 0.0f);
+            bMin = Min(bMin, v);
+            bMax = Max(bMax, v);
+        }
+        outMin = bMin;
+        outMax = bMax;
+        return;
+    }
+    if(proxy.kind == ProxyKind::TaperedCapsule){
+        const VectorSingle c1 = VectorSingle(proxy.param0, 0.0f);
+        const f32 dr1 = proxy.param0.w;
+        const VectorSingle c2 = VectorSingle(proxy.param1, 0.0f);
+        const f32 dr2 = proxy.param1.w;
+        const VectorSingle e1(dr1, dr1, dr1, 0.0f);
+        const VectorSingle e2(dr2, dr2, dr2, 0.0f);
+        outMin = Min(c1 - e1, c2 - e2);
+        outMax = Max(c1 + e1, c2 + e2);
+        return;
+    }
+    const VectorSingle c = VectorSingle(proxy.param0, 0.0f);
+    const f32 r = proxy.param0.w;
+    const f32 hh = proxy.param1.x;
+    const VectorSingle ext(r, hh, r, 0.0f);
+    outMin = c - ext;
+    outMax = c + ext;
+}
+
+VectorSingle ComputeProxyViewSupport(in ShapeProxyView proxy, in VectorSingle localDir, mut u8 outIdx){
+    if(proxy.kind == ProxyKind::PointCloud){
+        outIdx = FindSupportVertexIndexView(proxy, localDir);
+        const f32x3u pt = proxy.points[outIdx];
+        return VectorSingle(pt.x, pt.y, pt.z, 0.0f);
+    }
+    outIdx = 0xffu;
+    if(proxy.kind == ProxyKind::Cylinder){
+        const VectorSingle c = VectorSingle(proxy.param0, 0.0f);
+        const f32 r = proxy.param0.w;
+        const f32 hh = proxy.param1.x;
+        f32 ry = hh;
+        if(localDir.y < 0.0f)
+            ry = -hh;
+        const f32 radialSq = localDir.x * localDir.x + localDir.z * localDir.z;
+        if(radialSq > 1.0e-12f){
+            const f32 scale = r * Rsqrt(VectorSingle(radialSq)).x;
+            return c + VectorSingle(localDir.x * scale, ry, localDir.z * scale, 0.0f);
+        }
+        return c + VectorSingle(0.0f, ry, 0.0f, 0.0f);
+    }
+    if(proxy.kind == ProxyKind::Cone){
+        const VectorSingle c = VectorSingle(proxy.param0, 0.0f);
+        const f32 r = proxy.param0.w;
+        const f32 hh = proxy.param1.x;
+        const f32 radialSq = localDir.x * localDir.x + localDir.z * localDir.z;
+        const f32 radialLen = SqrtFast(radialSq);
+        const f32 apexDot = localDir.y * hh;
+        const f32 baseDot = -localDir.y * hh + r * radialLen;
+        if(apexDot >= baseDot)
+            return c + VectorSingle(0.0f, hh, 0.0f, 0.0f);
+        if(radialSq > 1.0e-12f){
+            const f32 scale = r / radialLen;
+            return c + VectorSingle(localDir.x * scale, -hh, localDir.z * scale, 0.0f);
+        }
+        return c + VectorSingle(0.0f, -hh, 0.0f, 0.0f);
+    }
+    const VectorSingle c1 = VectorSingle(proxy.param0, 0.0f);
+    const f32 dr1 = proxy.param0.w;
+    const VectorSingle c2 = VectorSingle(proxy.param1, 0.0f);
+    const f32 dr2 = proxy.param1.w;
+    const VectorSingle u = SafeNormalizeVec3(localDir, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle s1 = c1 + u * dr1;
+    const VectorSingle s2 = c2 + u * dr2;
+    if(Vector3Dot(s2, localDir).x > Vector3Dot(s1, localDir).x)
+        return s2;
+    return s1;
+}
+
+u8 FindSupportVertexIndexView(in ShapeProxyView proxy, in VectorSingle dir){
     if(proxy.points.empty())
         return 0u;
 
@@ -459,25 +674,28 @@ void SolveSimplex4(mut Simplex s){
     s = bestSimplex;
 }
 
-DistanceOutput ShapeDistanceProxies(
-    in ShapeProxy proxyA,
+DistanceOutput ShapeDistanceWithSimplexViews(
+    in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
-    in ShapeProxy proxyB,
+    in ShapeProxyView proxyB,
     in VectorSingle posB,
     in VectorSingle rotB,
     in b8 useRadii,
-    mut SimplexCache cache
+    mut SimplexCache cache,
+    mut Simplex outSimplex
 ){
     DistanceOutput out;
-    if(proxyA.points.empty() || proxyB.points.empty())
+    outSimplex.count = 0u;
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB))
         return out;
 
     const VectorSingle qA = rotA;
     const VectorSingle qB = rotB;
+    const b8 bothPointClouds = (proxyA.kind == ProxyKind::PointCloud && proxyB.kind == ProxyKind::PointCloud);
 
     Simplex s;
-    if(cache.count > 0u && cache.count <= 3u){
+    if(bothPointClouds && cache.count > 0u && cache.count <= 3u){
         s.count = cast<u32>(cache.count);
         for(usize i = 0u; i < cast<usize>(cache.count); ++i){
             u8 idxA = 0u;
@@ -497,10 +715,8 @@ DistanceOutput ShapeDistanceProxies(
     }
     else{
         s.count = 1u;
-        const f32x3u ptA = proxyA.points[0u];
-        const f32x3u ptB = proxyB.points[0u];
-        const VectorSingle wA = TransformPointValues(posA, rotA, VectorSingle(ptA.x, ptA.y, ptA.z, 0.0f));
-        const VectorSingle wB = TransformPointValues(posB, rotB, VectorSingle(ptB.x, ptB.y, ptB.z, 0.0f));
+        const VectorSingle wA = TransformPointValues(posA, rotA, ComputeProxyViewInitialPoint(proxyA));
+        const VectorSingle wB = TransformPointValues(posB, rotB, ComputeProxyViewInitialPoint(proxyB));
         s.v[0u].wAIndexA = f32x3_u32(wA.x, wA.y, wA.z, 0u);
         s.v[0u].wBIndexB = f32x3_u32(wB.x, wB.y, wB.z, 0u);
         s.v[0u].wU = f32x4(wB - wA, 1.0f);
@@ -537,23 +753,25 @@ DistanceOutput ShapeDistanceProxies(
         const VectorSingle localDirA = Vector3InverseRotate(-d, qA);
         const VectorSingle localDirB = Vector3InverseRotate(d, qB);
 
-        const u8 idxA = FindSupportVertexIndex(proxyA, localDirA);
-        const u8 idxB = FindSupportVertexIndex(proxyB, localDirB);
+        u8 idxA = 0xffu;
+        u8 idxB = 0xffu;
+        const VectorSingle localPtA = ComputeProxyViewSupport(proxyA, localDirA, idxA);
+        const VectorSingle localPtB = ComputeProxyViewSupport(proxyB, localDirB, idxB);
 
-        b8 duplicate = false;
-        for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
-            if(idxA == saveA[i] && idxB == saveB[i]){
-                duplicate = true;
-                break;
+        if(bothPointClouds){
+            b8 duplicate = false;
+            for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
+                if(idxA == saveA[i] && idxB == saveB[i]){
+                    duplicate = true;
+                    break;
+                }
             }
+            if(duplicate)
+                break;
         }
-        if(duplicate)
-            break;
 
-        const f32x3u ptA = proxyA.points[idxA];
-        const f32x3u ptB = proxyB.points[idxB];
-        const VectorSingle wA = TransformPointValues(posA, rotA, VectorSingle(ptA.x, ptA.y, ptA.z, 0.0f));
-        const VectorSingle wB = TransformPointValues(posB, rotB, VectorSingle(ptB.x, ptB.y, ptB.z, 0.0f));
+        const VectorSingle wA = TransformPointValues(posA, rotA, localPtA);
+        const VectorSingle wB = TransformPointValues(posB, rotB, localPtB);
         const VectorSingle w = VectorSingle(wB - wA, 0.0f);
 
         if(Vector3Dot(p - w, p).x <= 1.0e-6f * pLenSq)
@@ -602,21 +820,224 @@ DistanceOutput ShapeDistanceProxies(
     out.pointB = f32x4(pB, 0.0f);
     out.normalIterations = f32x3_u32(n.x, n.y, n.z, iterCount);
 
-    cache.count = cast<u16>(Min(s.count, 3u));
-    for(usize i = 0u; i < cast<usize>(cache.count); ++i){
-        cache.indexA[i] = s.v[i].indexA();
-        cache.indexB[i] = s.v[i].indexB();
+    if(bothPointClouds){
+        cache.count = cast<u16>(Min(s.count, 3u));
+        for(usize i = 0u; i < cast<usize>(cache.count); ++i){
+            cache.indexA[i] = s.v[i].indexA();
+            cache.indexB[i] = s.v[i].indexB();
+        }
+    }
+    else{
+        cache.count = 0u;
     }
 
+    outSimplex = s;
     return out;
 }
 
+DistanceOutput ShapeDistanceProxyViews(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in ShapeProxyView proxyB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in b8 useRadii,
+    mut SimplexCache cache
+){
+    Simplex unusedSimplex;
+    return ShapeDistanceWithSimplexViews(proxyA, posA, rotA, proxyB, posB, rotB, useRadii, cache, unusedSimplex);
+}
+
+DistanceOutput ShapeDistanceProxies(
+    in ShapeProxy proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in ShapeProxy proxyB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in b8 useRadii,
+    mut SimplexCache cache
+){
+    Simplex unusedSimplex;
+    return ShapeDistanceWithSimplexViews(
+        MakeShapeProxyView(proxyA),
+        posA,
+        rotA,
+        MakeShapeProxyView(proxyB),
+        posB,
+        rotB,
+        useRadii,
+        cache,
+        unusedSimplex
+    );
+}
+
+DistanceOutput ShapeDistanceLocalWithSimplexViews(
+    in ShapeProxyView proxyA,
+    in ShapeProxyView proxyB,
+    in b8 useRadii,
+    mut SimplexCache cache,
+    mut Simplex outSimplex
+){
+    DistanceOutput out;
+    outSimplex.count = 0u;
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB))
+        return out;
+
+    const b8 bothPointClouds = (proxyA.kind == ProxyKind::PointCloud && proxyB.kind == ProxyKind::PointCloud);
+
+    Simplex s;
+    if(bothPointClouds && cache.count > 0u && cache.count <= 3u){
+        s.count = cast<u32>(cache.count);
+        for(usize i = 0u; i < cast<usize>(cache.count); ++i){
+            u8 idxA = 0u;
+            if(cache.indexA[i] < proxyA.points.size())
+                idxA = cache.indexA[i];
+            u8 idxB = 0u;
+            if(cache.indexB[i] < proxyB.points.size())
+                idxB = cache.indexB[i];
+            const f32x3u ptA = proxyA.points[idxA];
+            const f32x3u ptB = proxyB.points[idxB];
+            const VectorSingle wA(ptA.x, ptA.y, ptA.z, 0.0f);
+            const VectorSingle wB(ptB.x, ptB.y, ptB.z, 0.0f);
+            s.v[i].wAIndexA = f32x3_u32(wA.x, wA.y, wA.z, cast<u32>(idxA));
+            s.v[i].wBIndexB = f32x3_u32(wB.x, wB.y, wB.z, cast<u32>(idxB));
+            s.v[i].wU = f32x4(wB - wA, 0.0f);
+        }
+    }
+    else{
+        s.count = 1u;
+        const VectorSingle wA = ComputeProxyViewInitialPoint(proxyA);
+        const VectorSingle wB = ComputeProxyViewInitialPoint(proxyB);
+        s.v[0u].wAIndexA = f32x3_u32(wA.x, wA.y, wA.z, 0u);
+        s.v[0u].wBIndexB = f32x3_u32(wB.x, wB.y, wB.z, 0u);
+        s.v[0u].wU = f32x4(wB - wA, 1.0f);
+    }
+
+    Array<u8, 3u> saveA;
+    Array<u8, 3u> saveB;
+    u32 saveCount = 0u;
+    u32 iterCount = 0u;
+
+    for(usize iter = 0u; iter < s_GjkMaxIterations; ++iter){
+        saveCount = s.count;
+        for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
+            saveA[i] = s.v[i].indexA();
+            saveB[i] = s.v[i].indexB();
+        }
+
+        if(s.count == 2u)
+            SolveSimplex2(s);
+        else if(s.count == 3u)
+            SolveSimplex3(s);
+        else if(s.count == 4u)
+            SolveSimplex4(s);
+
+        if(s.count == 4u)
+            break;
+
+        const VectorSingle p = ComputeSimplexClosestPoint(s);
+        const f32 pLenSq = Vector3LengthSq(p).x;
+        if(pLenSq <= 1.0e-12f)
+            break;
+
+        u8 idxA = 0xffu;
+        u8 idxB = 0xffu;
+        const VectorSingle wA = ComputeProxyViewSupport(proxyA, p, idxA);
+        const VectorSingle wB = ComputeProxyViewSupport(proxyB, -p, idxB);
+
+        if(bothPointClouds){
+            b8 duplicate = false;
+            for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
+                if(idxA == saveA[i] && idxB == saveB[i]){
+                    duplicate = true;
+                    break;
+                }
+            }
+            if(duplicate)
+                break;
+        }
+
+        const VectorSingle w = VectorSingle(wB - wA, 0.0f);
+
+        if(Vector3Dot(p - w, p).x <= 1.0e-6f * pLenSq)
+            break;
+
+        SimplexVertex newV;
+        newV.wAIndexA = f32x3_u32(wA.x, wA.y, wA.z, cast<u32>(idxA));
+        newV.wBIndexB = f32x3_u32(wB.x, wB.y, wB.z, cast<u32>(idxB));
+        newV.wU = f32x4(w, 0.0f);
+        s.v[s.count] = newV;
+        ++s.count;
+        iterCount = cast<u32>(iter + 1u);
+        if(iter + 1u == s_GjkMaxIterations && s.count == 4u)
+            SolveSimplex4(s);
+    }
+
+    VectorSingle pA = VectorSingle(0.0f);
+    VectorSingle pB = VectorSingle(0.0f);
+    GetSimplexWitnessPoints(s, pA, pB);
+
+    const VectorSingle delta = VectorSingle(pB - pA, 0.0f);
+    const f32 dist = Vector3Length(delta).x;
+    VectorSingle n(0.0f, 1.0f, 0.0f, 0.0f);
+    f32 outDist = dist;
+
+    if(dist > 1.0e-6f){
+        n = delta * (1.0f / dist);
+        if(useRadii){
+            const f32 rA = proxyA.radius;
+            const f32 rB = proxyB.radius;
+            if(dist > rA + rB){
+                pA = pA + n * rA;
+                pB = pB - n * rB;
+                outDist = dist - (rA + rB);
+            }
+            else{
+                const VectorSingle mid = (pA + n * rA + pB - n * rB) * 0.5f;
+                pA = mid;
+                pB = mid;
+                outDist = 0.0f;
+            }
+        }
+    }
+
+    out.pointADistance = f32x4(pA, outDist);
+    out.pointB = f32x4(pB, 0.0f);
+    out.normalIterations = f32x3_u32(n.x, n.y, n.z, iterCount);
+
+    if(bothPointClouds){
+        cache.count = cast<u16>(Min(s.count, 3u));
+        for(usize i = 0u; i < cast<usize>(cache.count); ++i){
+            cache.indexA[i] = s.v[i].indexA();
+            cache.indexB[i] = s.v[i].indexB();
+        }
+    }
+    else{
+        cache.count = 0u;
+    }
+
+    outSimplex = s;
+    return out;
+}
+
+DistanceOutput ShapeDistanceLocalProxyViews(
+    in ShapeProxyView proxyA,
+    in ShapeProxyView proxyB,
+    in b8 useRadii,
+    mut SimplexCache cache
+){
+    Simplex unusedSimplex;
+    return ShapeDistanceLocalWithSimplexViews(proxyA, proxyB, useRadii, cache, unusedSimplex);
+}
+
 DistanceOutput ShapeDistance(in DistanceInput input, mut SimplexCache cache){
-    return ShapeDistanceProxies(
-        input.proxyA,
+    return ShapeDistanceProxyViews(
+        MakeShapeProxyView(input.proxyA),
         VectorSingle(input.transformA.position),
         VectorSingle(input.transformA.rotation),
-        input.proxyB,
+        MakeShapeProxyView(input.proxyB),
         VectorSingle(input.transformB.position),
         VectorSingle(input.transformB.rotation),
         input.useRadii,
@@ -651,7 +1072,7 @@ LocalRayHit RayCastSphere(in SphereShape sphere, in VectorSingle xfPos, in Vecto
     if(discr < 0.0f)
         return hit;
 
-    const f32 t = (-b - Sqrt(VectorSingle(discr)).x) / a;
+    const f32 t = (-b - SqrtFast(discr)) / a;
     if(t < 0.0f || t > maxFraction)
         return hit;
 
@@ -709,7 +1130,7 @@ LocalRayHit RayCastCapsule(
     if(Abs(VectorSingle(qa)).x > 1.0e-12f){
         const f32 discr = qb * qb - qa * qc;
         if(discr >= 0.0f){
-            const f32 t = (-qb - Sqrt(VectorSingle(discr)).x) / qa;
+            const f32 t = (-qb - SqrtFast(discr)) / qa;
             if(t >= 0.0f && t <= maxFraction){
                 const f32 axisProj = md + t * nd;
                 if(axisProj >= 0.0f && axisProj <= abLenSq){
@@ -761,6 +1182,51 @@ LocalRayHit RayCastHull(
     const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), xfRot);
     const f32 hullRadius = hull.centroidRadius.w;
 
+    if(hullRadius > 0.0f){
+        Array<f32x3u, 1u> rayPtPts;
+        rayPtPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+        const ShapeProxyView rayPtView = MakeSpanProxyView(Span<f32x3u>(rayPtPts), 0.0f);
+        const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+        const ShapeProxyView hullView = MakeHullProxyView(hull);
+        const LocalRayHit castHit = ShapeCastProxyViews(rayPtView, origin, identRot, translation, hullView, xfPos, xfRot, VectorSingle(0.0f), maxFraction);
+        if(!castHit.hit())
+            return hit;
+
+        if(castHit.fraction() > 0.0f){
+            const VectorSingle fallbackN = SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle outN = SafeNormalizeVec3(-castHit.normal(), fallbackN);
+            hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * castHit.fraction(), castHit.fraction());
+            hit.normalHit = f32x3_u32(outN.x, outN.y, outN.z, 1u);
+            return hit;
+        }
+
+        SimplexCache cache;
+        const DistanceOutput dist0 = ShapeDistanceProxyViews(rayPtView, origin, identRot, hullView, xfPos, xfRot, false, cache);
+        if(dist0.distance() > 1.0e-5f){
+            const VectorSingle outN = SafeNormalizeVec3(-dist0.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            hit.pointFraction = f32x4(origin, 0.0f);
+            hit.normalHit = f32x3_u32(outN.x, outN.y, outN.z, 1u);
+            return hit;
+        }
+
+        f32 maxSignedDist = -s_MaxF32;
+        usize shallowestFace = 0u;
+        for(usize i = 0u; i < hull.facePlanes.size(); ++i){
+            const VectorSingle n = VectorSingle(hull.facePlanes[i].normalOffset, 0.0f);
+            const f32 offset = hull.facePlanes[i].normalOffset.w + hullRadius;
+            const f32 signedDist = Vector3Dot(n, localOrigin).x - offset;
+            if(signedDist > maxSignedDist){
+                maxSignedDist = signedDist;
+                shallowestFace = i;
+            }
+        }
+        const VectorSingle localN = VectorSingle(hull.facePlanes[shallowestFace].normalOffset, 0.0f);
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        hit.pointFraction = f32x4(origin, 0.0f);
+        hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+        return hit;
+    }
+
     f32 lower = 0.0f;
     f32 upper = maxFraction;
     usize entryFace = s_NullIndex;
@@ -769,7 +1235,7 @@ LocalRayHit RayCastHull(
 
     for(usize i = 0u; i < hull.facePlanes.size(); ++i){
         const VectorSingle n = VectorSingle(hull.facePlanes[i].normalOffset, 0.0f);
-        const f32 offset = hull.facePlanes[i].normalOffset.w + hullRadius;
+        const f32 offset = hull.facePlanes[i].normalOffset.w;
         const f32 numerator = offset - Vector3Dot(n, localOrigin).x;
         const f32 denominator = Vector3Dot(n, localDir).x;
 
@@ -816,36 +1282,43 @@ LocalRayHit RayCastHull(
     return hit;
 }
 
-LocalRayHit ShapeCastProxies(
-    in ShapeProxy proxyA,
+LocalRayHit ShapeCastProxyViews(
+    in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in VectorSingle translationA,
-    in ShapeProxy proxyB,
+    in ShapeProxyView proxyB,
     in VectorSingle posB,
     in VectorSingle rotB,
     in VectorSingle translationB,
     in f32 maxFraction
 ){
     LocalRayHit hit;
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB) || maxFraction < 0.0f)
+        return hit;
     const f32 totalRadius = proxyA.radius + proxyB.radius;
     const f32 tolerance = 0.25f * s_LinearSlop;
+    const VectorSingle qB = rotB;
     const VectorSingle relMove = VectorSingle(translationB - translationA, 0.0f);
+    const VectorSingle relMoveLocalB = Vector3InverseRotate(relMove, qB);
+    VectorSingle basePosInB(0.0f);
+    VectorSingle rotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, basePosInB, rotAtoB);
+    const VectorSingle zeroPos(0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
 
     SimplexCache cache;
-    const VectorSingle moveA(translationA, 0.0f);
-    const VectorSingle moveB(translationB, 0.0f);
-
     f32 fraction = 0.0f;
     for(usize iter = 0u; iter < s_ShapeCastMaxIterations; ++iter){
-        const VectorSingle curPosA = posA + moveA * fraction;
-        const VectorSingle curPosB = posB + moveB * fraction;
+        const VectorSingle curPosAInB = basePosInB - relMoveLocalB * fraction;
 
-        const DistanceOutput dist = ShapeDistanceProxies(proxyA, curPosA, rotA, proxyB, curPosB, rotB, false, cache);
-        const VectorSingle n = dist.normal();
+        const DistanceOutput dist = ShapeDistanceProxyViews(proxyA, curPosAInB, rotAtoB, proxyB, zeroPos, identRot, false, cache);
+        const VectorSingle localN = dist.normal();
         if(dist.distance() <= totalRadius + tolerance){
-            const VectorSingle pA = dist.pointA();
-            const VectorSingle pB = VectorSingle(dist.pointB);
+            const VectorSingle n = Vector3Rotate(localN, qB);
+            const VectorSingle transBOffset = VectorSingle(translationB, 0.0f) * fraction;
+            const VectorSingle pA = TransformPointValues(posB, rotB, dist.pointA()) + transBOffset;
+            const VectorSingle pB = TransformPointValues(posB, rotB, VectorSingle(dist.pointB)) + transBOffset;
             const VectorSingle surfA = pA + n * proxyA.radius;
             const VectorSingle surfB = pB - n * proxyB.radius;
             hit.pointFraction = f32x4((surfA + surfB) * 0.5f, fraction);
@@ -853,7 +1326,7 @@ LocalRayHit ShapeCastProxies(
             return hit;
         }
 
-        const f32 approach = -Vector3Dot(n, relMove).x;
+        const f32 approach = -Vector3Dot(localN, relMoveLocalB).x;
         if(approach <= 1.0e-8f)
             return hit;
 
@@ -866,7 +1339,38 @@ LocalRayHit ShapeCastProxies(
     return hit;
 }
 
-f32 ComputeProxyBoundingRadius(in ShapeProxy proxy, in VectorSingle localCenter){
+LocalRayHit ShapeCastProxies(
+    in ShapeProxy proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in VectorSingle translationA,
+    in ShapeProxy proxyB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle translationB,
+    in f32 maxFraction
+){
+    return ShapeCastProxyViews(MakeShapeProxyView(proxyA), posA, rotA, translationA, MakeShapeProxyView(proxyB), posB, rotB, translationB, maxFraction);
+}
+
+f32 ComputeProxyViewBoundingRadius(in ShapeProxyView proxy, in VectorSingle localCenter){
+    if(proxy.kind == ProxyKind::Cylinder || proxy.kind == ProxyKind::Cone){
+        const VectorSingle c = VectorSingle(proxy.param0, 0.0f);
+        const f32 r = proxy.param0.w;
+        const f32 hh = proxy.param1.x;
+        const VectorSingle delta = VectorSingle(c - localCenter, 0.0f);
+        const f32 radial = SqrtFast(r * r + hh * hh);
+        return Vector3Length(delta).x + radial + proxy.radius;
+    }
+    if(proxy.kind == ProxyKind::TaperedCapsule){
+        const VectorSingle c1 = VectorSingle(proxy.param0, 0.0f);
+        const f32 dr1 = proxy.param0.w;
+        const VectorSingle c2 = VectorSingle(proxy.param1, 0.0f);
+        const f32 dr2 = proxy.param1.w;
+        const f32 d1 = Vector3Length(VectorSingle(c1 - localCenter, 0.0f)).x + dr1;
+        const f32 d2 = Vector3Length(VectorSingle(c2 - localCenter, 0.0f)).x + dr2;
+        return SimdMax(d1, d2) + proxy.radius;
+    }
     f32 maxSq = 0.0f;
     for(usize i = 0u; i < proxy.points.size(); ++i){
         const f32x3u pt = proxy.points[i];
@@ -874,7 +1378,25 @@ f32 ComputeProxyBoundingRadius(in ShapeProxy proxy, in VectorSingle localCenter)
         if(dSq > maxSq)
             maxSq = dSq;
     }
-    return Sqrt(VectorSingle(maxSq)).x + proxy.radius;
+    return SqrtFast(maxSq) + proxy.radius;
+}
+
+f32 ComputeProxyBoundingRadius(in ShapeProxy proxy, in VectorSingle localCenter){
+    return ComputeProxyViewBoundingRadius(MakeShapeProxyView(proxy), localCenter);
+}
+
+Sweep3D ComposeSweepWithLocalTransform(in Sweep3D bodySweep, in VectorSingle localPos, in VectorSingle localRot){
+    Sweep3D out = bodySweep;
+    const VectorSingle qL = SafeNormalizeQuat(localRot);
+    const VectorSingle pL = VectorSingle(localPos, 0.0f);
+    VectorSingle q0 = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(bodySweep.q0), qL));
+    VectorSingle q1 = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(bodySweep.q1), qL));
+    if(Vector4Dot(q0, q1).x < 0.0f)
+        q1 = -q1;
+    out.q0 = f32x4(q0);
+    out.q1 = f32x4(q1);
+    out.localCenter = f32x4(Vector3InverseRotate(VectorSingle(bodySweep.localCenter) - pL, qL), 0.0f);
+    return out;
 }
 
 void EvalSweepTransformValues(
@@ -896,19 +1418,22 @@ void EvalSweepTransformValues(
 }
 
 f32 ComputeSweepAngularAngle(in VectorSingle q0, in VectorSingle q1){
-    const VectorSingle clampedDot = Clamp(Vector4Dot(q0, q1), VectorSingle(-1.0f), VectorSingle(1.0f));
-    return (ACos(Abs(clampedDot)) * 2.0f).x;
+    const f32 d = Abs(VectorSingle(SimdClamp(Vector4Dot(q0, q1).x, -1.0f, 1.0f))).x;
+    return 2.0f * ACos(VectorSingle(d)).x;
 }
 
-TimeOfImpactOutput ComputeTimeOfImpact(
-    in ShapeProxy proxyA,
+TimeOfImpactOutput ComputeTimeOfImpactViewsWithBounds(
+    in ShapeProxyView proxyA,
     in Sweep3D sweepA,
-    in ShapeProxy proxyB,
+    in ShapeProxyView proxyB,
     in Sweep3D sweepB,
-    in f32 tMax
+    in f32 tMax,
+    in f32 targetPadding,
+    in f32 tolerance,
+    in f32 angSpeedBound
 ){
     TimeOfImpactOutput out;
-    if(proxyA.points.empty() || proxyB.points.empty() || tMax <= 0.0f)
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB) || tMax <= 0.0f)
         return out;
 
     const VectorSingle cA0(sweepA.c0);
@@ -923,31 +1448,45 @@ TimeOfImpactOutput ComputeTimeOfImpact(
     const VectorSingle lcB(sweepB.localCenter);
 
     const f32 totalRadius = proxyA.radius + proxyB.radius;
-    const f32 targetDist = totalRadius + 0.25f * s_LinearSlop;
-    const f32 tolerance = 0.5f * s_LinearSlop;
+    const f32 targetDist = SimdMax(totalRadius + targetPadding, 0.0f);
     const VectorSingle linDisp = VectorSingle(cB1 - cB0, 0.0f) - VectorSingle(cA1 - cA0, 0.0f);
-    const f32 angSpeedBound =
-        ComputeSweepAngularAngle(qA0, qA1) * ComputeProxyBoundingRadius(proxyA, lcA)
-        + ComputeSweepAngularAngle(qB0, qB1) * ComputeProxyBoundingRadius(proxyB, lcB)
-    ;
+
+    const b8 staticA = (
+        sweepA.c0.x == sweepA.c1.x && sweepA.c0.y == sweepA.c1.y && sweepA.c0.z == sweepA.c1.z
+        && sweepA.q0.x == sweepA.q1.x && sweepA.q0.y == sweepA.q1.y && sweepA.q0.z == sweepA.q1.z && sweepA.q0.w == sweepA.q1.w
+    );
+    const b8 staticB = (
+        sweepB.c0.x == sweepB.c1.x && sweepB.c0.y == sweepB.c1.y && sweepB.c0.z == sweepB.c1.z
+        && sweepB.q0.x == sweepB.q1.x && sweepB.q0.y == sweepB.q1.y && sweepB.q0.z == sweepB.q1.z && sweepB.q0.w == sweepB.q1.w
+    );
+    VectorSingle fixedPosA(0.0f);
+    VectorSingle fixedRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    if(staticA)
+        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, 0.0f, fixedPosA, fixedRotA);
+    VectorSingle fixedPosB(0.0f);
+    VectorSingle fixedRotB(0.0f, 0.0f, 0.0f, 1.0f);
+    if(staticB)
+        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, 0.0f, fixedPosB, fixedRotB);
 
     SimplexCache cache;
 
     f32 t1 = 0.0f;
     for(usize iter = 0u; iter < s_TimeOfImpactMaxIterations; ++iter){
-        VectorSingle posAt(0.0f);
-        VectorSingle rotAt(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle posBt(0.0f);
-        VectorSingle rotBt(0.0f, 0.0f, 0.0f, 1.0f);
-        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t1, posAt, rotAt);
-        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t1, posBt, rotBt);
-        const DistanceOutput dist = ShapeDistanceProxies(proxyA, posAt, rotAt, proxyB, posBt, rotBt, false, cache);
+        VectorSingle posAt = fixedPosA;
+        VectorSingle rotAt = fixedRotA;
+        if(!staticA)
+            EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t1, posAt, rotAt);
+        VectorSingle posBt = fixedPosB;
+        VectorSingle rotBt = fixedRotB;
+        if(!staticB)
+            EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t1, posBt, rotBt);
+        const DistanceOutput dist = ShapeDistanceProxyViews(proxyA, posAt, rotAt, proxyB, posBt, rotBt, false, cache);
 
         if(dist.distance() <= targetDist + tolerance){
             u32 flags = 1u;
-            if(t1 == 0.0f && dist.distance() < totalRadius - tolerance)
+            if(t1 == 0.0f && (dist.distance() < totalRadius - tolerance || (totalRadius <= tolerance && dist.distance() <= tolerance)))
                 flags |= 2u;
-            const VectorSingle n = SafeNormalizeVec3(dist.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle n = dist.normal();
             const VectorSingle wA = dist.pointA() + n * proxyA.radius;
             const VectorSingle wB = VectorSingle(dist.pointB) - n * proxyB.radius;
             out.pointFraction = f32x4((wA + wB) * 0.5f, t1);
@@ -955,7 +1494,7 @@ TimeOfImpactOutput ComputeTimeOfImpact(
             return out;
         }
 
-        const VectorSingle n = SafeNormalizeVec3(dist.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle n = dist.normal();
         const f32 approach = -Vector3Dot(n, linDisp).x + angSpeedBound;
         if(approach <= 1.0e-6f)
             return out;
@@ -968,16 +1507,18 @@ TimeOfImpactOutput ComputeTimeOfImpact(
             t1 += step;
         }
         if(t1 > tMax){
-            VectorSingle endPosA(0.0f);
-            VectorSingle endRotA(0.0f, 0.0f, 0.0f, 1.0f);
-            VectorSingle endPosB(0.0f);
-            VectorSingle endRotB(0.0f, 0.0f, 0.0f, 1.0f);
-            EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, tMax, endPosA, endRotA);
-            EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, tMax, endPosB, endRotB);
-            const DistanceOutput endDist = ShapeDistanceProxies(proxyA, endPosA, endRotA, proxyB, endPosB, endRotB, false, cache);
+            VectorSingle endPosA = fixedPosA;
+            VectorSingle endRotA = fixedRotA;
+            if(!staticA)
+                EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, tMax, endPosA, endRotA);
+            VectorSingle endPosB = fixedPosB;
+            VectorSingle endRotB = fixedRotB;
+            if(!staticB)
+                EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, tMax, endPosB, endRotB);
+            const DistanceOutput endDist = ShapeDistanceProxyViews(proxyA, endPosA, endRotA, proxyB, endPosB, endRotB, false, cache);
             if(endDist.distance() <= targetDist + tolerance){
                 t1 = tMax;
-                const VectorSingle endN = SafeNormalizeVec3(endDist.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle endN = endDist.normal();
                 const VectorSingle wA = endDist.pointA() + endN * proxyA.radius;
                 const VectorSingle wB = VectorSingle(endDist.pointB) - endN * proxyB.radius;
                 out.pointFraction = f32x4((wA + wB) * 0.5f, tMax);
@@ -990,27 +1531,83 @@ TimeOfImpactOutput ComputeTimeOfImpact(
     return out;
 }
 
-ShapeProxy MakeTriangleProxy(in VectorSingle v0, in VectorSingle v1, in VectorSingle v2, in f32 radius){
-    ShapeProxy p;
-    p.points.push_back(f32x3u(v0.x, v0.y, v0.z));
-    p.points.push_back(f32x3u(v1.x, v1.y, v1.z));
-    p.points.push_back(f32x3u(v2.x, v2.y, v2.z));
-    p.radius = radius;
-    return p;
+TimeOfImpactOutput ComputeTimeOfImpactViewsWithPadding(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in ShapeProxyView proxyB,
+    in Sweep3D sweepB,
+    in f32 tMax,
+    in f32 targetPadding,
+    in f32 tolerance
+){
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB) || tMax <= 0.0f)
+        return TimeOfImpactOutput();
+
+    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
+    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
+    f32 angSpeedBound = 0.0f;
+    if(angA > 1.0e-7f)
+        angSpeedBound += angA * ComputeProxyViewBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
+    if(angB > 1.0e-7f)
+        angSpeedBound += angB * ComputeProxyViewBoundingRadius(proxyB, VectorSingle(sweepB.localCenter));
+    return ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, proxyB, sweepB, tMax, targetPadding, tolerance, angSpeedBound);
 }
 
-LocalRayHit RayCastTriangle(
+TimeOfImpactOutput ComputeTimeOfImpactViews(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in ShapeProxyView proxyB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    return ComputeTimeOfImpactViewsWithPadding(proxyA, sweepA, proxyB, sweepB, tMax, 0.25f * s_LinearSlop, 0.5f * s_LinearSlop);
+}
+
+TimeOfImpactOutput ComputeTimeOfImpact(
+    in ShapeProxy proxyA,
+    in Sweep3D sweepA,
+    in ShapeProxy proxyB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    return ComputeTimeOfImpactViews(MakeShapeProxyView(proxyA), sweepA, MakeShapeProxyView(proxyB), sweepB, tMax);
+}
+
+TimeOfImpactOutput ComputeSensorTimeOfImpactViews(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in ShapeProxyView proxyB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    const f32 totalRadius = proxyA.radius + proxyB.radius;
+    f32 tol = 1.0e-5f;
+    if(totalRadius >= 1.0e-4f)
+        tol = 1.0e-4f;
+    return ComputeTimeOfImpactViewsWithPadding(proxyA, sweepA, proxyB, sweepB, tMax, -1.0e-4f, tol);
+}
+
+LocalRayHit RayCastTriangleDetailed(
     in VectorSingle v0,
     in VectorSingle v1,
     in VectorSingle v2,
     in VectorSingle origin,
     in VectorSingle translation,
-    in f32 maxFraction
+    in f32 maxFraction,
+    in b8 cullBackFaces,
+    mut f32 outU,
+    mut f32 outV
 ){
     LocalRayHit hit;
+    outU = 0.0f;
+    outV = 0.0f;
     const VectorSingle e1 = VectorSingle(v1 - v0, 0.0f);
     const VectorSingle e2 = VectorSingle(v2 - v0, 0.0f);
     const VectorSingle d = VectorSingle(translation, 0.0f);
+    const VectorSingle faceCross = Cross(e1, e2);
+    if(cullBackFaces && Vector3Dot(faceCross, d).x > 0.0f)
+        return hit;
+
     const VectorSingle h = Cross(d, e2);
     const f32 det = Vector3Dot(e1, h).x;
     if(Abs(VectorSingle(det)).x <= 1.0e-12f)
@@ -1031,13 +1628,29 @@ LocalRayHit RayCastTriangle(
     if(t < 0.0f || t > maxFraction)
         return hit;
 
-    VectorSingle n = SafeNormalizeVec3(Cross(e1, e2), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle n = SafeNormalizeVec3(faceCross, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     if(Vector3Dot(n, d).x > 0.0f)
         n = -n;
 
+    const VectorSingle uv = Clamp(VectorSingle(u, v, 0.0f, 0.0f), VectorSingle(0.0f), VectorSingle(1.0f));
+    outU = uv.x;
+    outV = uv.y;
     hit.pointFraction = f32x4(origin + d * t, t);
     hit.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
     return hit;
+}
+
+LocalRayHit RayCastTriangle(
+    in VectorSingle v0,
+    in VectorSingle v1,
+    in VectorSingle v2,
+    in VectorSingle origin,
+    in VectorSingle translation,
+    in f32 maxFraction
+){
+    f32 u = 0.0f;
+    f32 v = 0.0f;
+    return RayCastTriangleDetailed(v0, v1, v2, origin, translation, maxFraction, false, u, v);
 }
 
 VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, in VectorSingle b, in VectorSingle c){
@@ -1086,20 +1699,48 @@ VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, i
     return a + ab * v + ac * w;
 }
 
-b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
-    if(!mesh.isClosed() || mesh.nodes.empty() || mesh.triangles.empty())
-        return false;
-    const Aabb3D meshBox = mesh.localAabb();
-    if(!AabbContainsValues(VectorSingle(meshBox.lowerBound), VectorSingle(meshBox.upperBound), localPoint, localPoint))
-        return false;
+void PushClosestPointMeshChildrenOrdered(
+    in MeshShape mesh,
+    in VectorSingle localPoint,
+    in f32 bestDistSq,
+    in u32 leftIdx,
+    in u32 rightIdx,
+    mut Array<u32, 256u> stack,
+    mut u32 stackCount
+){
+    in MeshBvhNode leftNode = mesh.nodes[leftIdx];
+    in MeshBvhNode rightNode = mesh.nodes[rightIdx];
+    const VectorSingle lClamped = Max(VectorSingle(leftNode.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(leftNode.aabbMaxRight, 0.0f)));
+    const VectorSingle rClamped = Max(VectorSingle(rightNode.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(rightNode.aabbMaxRight, 0.0f)));
+    const f32 lDistSq = Vector3LengthSq(VectorSingle(localPoint - lClamped, 0.0f)).x;
+    const f32 rDistSq = Vector3LengthSq(VectorSingle(localPoint - rClamped, 0.0f)).x;
+    if(lDistSq < rDistSq){
+        if(rDistSq <= bestDistSq && stackCount < 256u){
+            stack[stackCount] = rightIdx;
+            ++stackCount;
+        }
+        if(lDistSq <= bestDistSq && stackCount < 256u){
+            stack[stackCount] = leftIdx;
+            ++stackCount;
+        }
+    }
+    else{
+        if(lDistSq <= bestDistSq && stackCount < 256u){
+            stack[stackCount] = leftIdx;
+            ++stackCount;
+        }
+        if(rDistSq <= bestDistSq && stackCount < 256u){
+            stack[stackCount] = rightIdx;
+            ++stackCount;
+        }
+    }
+}
 
-    const VectorSingle boxExt = VectorSingle(meshBox.upperBound) - VectorSingle(meshBox.lowerBound);
-    const f32 rayLen = SimdMax(Vector3Length(boxExt).x * 2.0f, 10.0f);
-    const VectorSingle rayDir = SafeNormalizeVec3(VectorSingle(1.0f, 0.37139067f, 0.21821789f, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)) * rayLen;
+u32 CountClosedMeshRayParityHits(in MeshShape mesh, in VectorSingle localPoint, in VectorSingle rayDir){
+    u32 parityHits = 0u;
     VectorSingle rayInvDir(0.0f);
     u32 rayMask = 0u;
     ComputeRayCastSlabValues(rayDir, rayInvDir, rayMask);
-    u32 parityHits = 0u;
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
@@ -1139,7 +1780,27 @@ b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
             }
         }
     }
-    return (parityHits & 1u) != 0u;
+    return parityHits & 1u;
+}
+
+b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
+    if(!mesh.isClosed() || mesh.nodes.empty() || mesh.triangles.empty())
+        return false;
+    const Aabb3D meshBox = mesh.localAabb();
+    if(!AabbContainsValues(VectorSingle(meshBox.lowerBound), VectorSingle(meshBox.upperBound), localPoint, localPoint))
+        return false;
+
+    const VectorSingle boxExt = VectorSingle(meshBox.upperBound) - VectorSingle(meshBox.lowerBound);
+    const f32 rayLen = SimdMax(Vector3Length(boxExt).x * 2.0f, 10.0f);
+    const VectorSingle rayDir0 = VectorSingle(0.918417284f, 0.341091611f, 0.200415082f, 0.0f) * rayLen;
+    const u32 vote0 = CountClosedMeshRayParityHits(mesh, localPoint, rayDir0);
+    const VectorSingle rayDir1 = VectorSingle(-0.251931552f, 0.859332454f, 0.445059801f, 0.0f) * rayLen;
+    const u32 vote1 = CountClosedMeshRayParityHits(mesh, localPoint, rayDir1);
+    if(vote0 == vote1)
+        return vote0 != 0u;
+    const VectorSingle rayDir2 = VectorSingle(0.344689432f, -0.494205542f, 0.798091523f, 0.0f) * rayLen;
+    const u32 vote2 = CountClosedMeshRayParityHits(mesh, localPoint, rayDir2);
+    return (vote0 + vote1 + vote2) >= 2u;
 }
 
 b8 FindClosestPointOnClosedMesh(
@@ -1153,6 +1814,7 @@ b8 FindClosestPointOnClosedMesh(
         return false;
     f32 bestDistSq = s_MaxF32;
     b8 found = false;
+    VectorSingle bestRawNormal(0.0f, 1.0f, 0.0f, 0.0f);
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
@@ -1179,7 +1841,7 @@ b8 FindClosestPointOnClosedMesh(
                     found = true;
                     bestDistSq = dSq;
                     outClosestPt = cp;
-                    outOutwardNormal = SafeNormalizeVec3(VectorSingle(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    bestRawNormal = VectorSingle(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
                     outTriIdx = ti;
                 }
             }
@@ -1187,39 +1849,81 @@ b8 FindClosestPointOnClosedMesh(
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = leftIdx;
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = rightIdx;
-                ++fixedCount;
-            }
+            PushClosestPointMeshChildrenOrdered(mesh, localPoint, bestDistSq, leftIdx, rightIdx, fixedStack, fixedCount);
         }
     }
+    if(found)
+        outOutwardNormal = SafeNormalizeVec3(bestRawNormal, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     return found;
 }
 
-LocalRayHit RayCastMesh(
+f32x2u ComputeTriangleBarycentrics(in VectorSingle p, in VectorSingle a, in VectorSingle b, in VectorSingle c){
+    const VectorSingle cp = ClosestPointOnTriangleLocal(p, a, b, c);
+    const VectorSingle e1 = VectorSingle(b - a, 0.0f);
+    const VectorSingle e2 = VectorSingle(c - a, 0.0f);
+    const VectorSingle ep = VectorSingle(cp - a, 0.0f);
+    const f32 d00 = Vector3Dot(e1, e1).x;
+    const f32 d01 = Vector3Dot(e1, e2).x;
+    const f32 d11 = Vector3Dot(e2, e2).x;
+    const f32 d20 = Vector3Dot(ep, e1).x;
+    const f32 d21 = Vector3Dot(ep, e2).x;
+    const f32 denom = d00 * d11 - d01 * d01;
+    if(Abs(VectorSingle(denom)).x <= 1.0e-12f)
+        return f32x2u(0.0f, 0.0f);
+    const f32 invDenom = 1.0f / denom;
+    const VectorSingle baryUV = Clamp(
+        VectorSingle((d11 * d20 - d01 * d21) * invDenom, (d00 * d21 - d01 * d20) * invDenom, 0.0f, 0.0f),
+        VectorSingle(0.0f),
+        VectorSingle(1.0f)
+    );
+    return f32x2u(baryUV.x, baryUV.y);
+}
+
+LocalRayHit RayCastMeshDetailed(
     in MeshShape mesh,
     in VectorSingle xfPos,
     in VectorSingle xfRot,
     in VectorSingle origin,
     in VectorSingle translation,
-    in f32 maxFraction
+    in f32 maxFraction,
+    in b8 cullBackFaces,
+    mut u32 outTriangleIndex,
+    mut f32x2u outBarycentrics
 ){
     LocalRayHit best;
+    outTriangleIndex = s_NullIndex;
+    outBarycentrics = f32x2u(0.0f, 0.0f);
     if(mesh.nodes.empty() || mesh.triangles.empty())
         return best;
 
     const VectorSingle localOrigin = InverseTransformPointValues(xfPos, xfRot, origin);
     const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), xfRot);
-    const f32 meshRadius = mesh.localAabbMinRadius.w;
-    ShapeProxy rayPtProxy;
-    if(meshRadius > 0.0f){
-        rayPtProxy.points.push_back(f32x3u(0.0f, 0.0f, 0.0f));
-        rayPtProxy.radius = 0.0f;
+    const b8 effectiveCullBackFaces = (cullBackFaces || mesh.sidedness() == MeshSidedness::SingleSided);
+    if(mesh.isClosed() && IsPointInsideClosedMesh(mesh, localOrigin)){
+        VectorSingle closePt(0.0f);
+        VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+        u32 closeTri = 0u;
+        VectorSingle localHitN = SafeNormalizeVec3(-localDir, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        if(FindClosestPointOnClosedMesh(mesh, localOrigin, closePt, closeN, closeTri)){
+            localHitN = closeN;
+            outTriangleIndex = closeTri;
+            in MeshTriangle closeTriData = mesh.triangles[closeTri];
+            outBarycentrics = ComputeTriangleBarycentrics(
+                closePt,
+                VectorSingle(closeTriData.v0.x, closeTriData.v0.y, closeTriData.v0.z, 0.0f),
+                VectorSingle(closeTriData.v1.x, closeTriData.v1.y, closeTriData.v1.z, 0.0f),
+                VectorSingle(closeTriData.v2.x, closeTriData.v2.y, closeTriData.v2.z, 0.0f)
+            );
+        }
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localHitN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        best.pointFraction = f32x4(origin, 0.0f);
+        best.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+        return best;
     }
+    const f32 meshRadius = mesh.localAabbMinRadius.w;
+    Array<f32x3u, 1u> rayPtPts;
+    rayPtPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+    const ShapeProxyView rayPtView = MakeSpanProxyView(Span<f32x3u>(rayPtPts), 0.0f);
     const VectorSingle identPos(0.0f);
     const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -1255,24 +1959,41 @@ LocalRayHit RayCastMesh(
                 const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
                 LocalRayHit h;
                 VectorSingle localHitN(0.0f, 1.0f, 0.0f, 0.0f);
+                f32 hitU = 0.0f;
+                f32 hitV = 0.0f;
                 if(meshRadius > 0.0f){
                     f32 tTriBox = 0.0f;
                     if(AabbRayCastValues(Min(tv0, Min(tv1, tv2)) - meshPad, Max(tv0, Max(tv1, tv2)) + meshPad, localOrigin, localInvDir, localParallelMask, curMax, tTriBox)){
-                        const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshRadius);
-                        h = ShapeCastProxies(rayPtProxy, localOrigin, identRot, localDir, triProxy, identPos, identRot, VectorSingle(0.0f), curMax);
+                        Array<f32x3u, 3u> triPts;
+                        triPts[0u] = tri.v0;
+                        triPts[1u] = tri.v1;
+                        triPts[2u] = tri.v2;
+                        const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
+                        h = ShapeCastProxyViews(rayPtView, localOrigin, identRot, localDir, triView, identPos, identRot, VectorSingle(0.0f), curMax);
                         if(h.hit()){
                             localHitN = SafeNormalizeVec3(-h.normal(), SafeNormalizeVec3(-localDir, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
-                            if(Vector3Dot(localHitN, localDir).x > 0.0f)
-                                localHitN = -localHitN;
+                            const VectorSingle triNormal(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
+                            if(effectiveCullBackFaces && Vector3Dot(triNormal, localDir).x > 0.0f){
+                                h.normalHit.w = 0u;
+                            }
+                            else{
+                                if(Vector3Dot(localHitN, localDir).x > 0.0f)
+                                    localHitN = -localHitN;
+                                const f32x2u hitBary = ComputeTriangleBarycentrics(localOrigin + localDir * h.fraction(), tv0, tv1, tv2);
+                                hitU = hitBary.x;
+                                hitV = hitBary.y;
+                            }
                         }
                     }
                 }
                 else{
-                    h = RayCastTriangle(tv0, tv1, tv2, localOrigin, localDir, curMax);
+                    h = RayCastTriangleDetailed(tv0, tv1, tv2, localOrigin, localDir, curMax, effectiveCullBackFaces, hitU, hitV);
                     localHitN = h.normal();
                 }
                 if(h.hit() && ((!best.hit() && h.fraction() <= curMax) || h.fraction() < curMax)){
                     curMax = h.fraction();
+                    outTriangleIndex = ti;
+                    outBarycentrics = f32x2u(hitU, hitV);
                     best.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * h.fraction(), h.fraction());
                     const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localHitN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     best.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
@@ -1296,6 +2017,187 @@ LocalRayHit RayCastMesh(
     return best;
 }
 
+LocalRayHit RayCastMesh(in MeshShape mesh, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    u32 triIdx = s_NullIndex;
+    f32x2u bary(0.0f, 0.0f);
+    return RayCastMeshDetailed(mesh, xfPos, xfRot, origin, translation, maxFraction, false, triIdx, bary);
+}
+
+LocalRayHit ShapeCastMeshViewDetailed(
+    in ShapeProxyView queryProxy,
+    in VectorSingle queryPos,
+    in VectorSingle queryRot,
+    in VectorSingle translation,
+    in MeshShape mesh,
+    in VectorSingle meshPos,
+    in VectorSingle meshRot,
+    in f32 maxFraction,
+    mut u32 outTriangleIndex,
+    mut f32x2u outBarycentrics
+){
+    LocalRayHit best;
+    outTriangleIndex = s_NullIndex;
+    outBarycentrics = f32x2u(0.0f, 0.0f);
+    if(mesh.nodes.empty() || mesh.triangles.empty() || IsProxyViewEmpty(queryProxy))
+        return best;
+
+    VectorSingle localQueryPos(0.0f);
+    VectorSingle localQueryRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(meshPos, meshRot, queryPos, queryRot, localQueryPos, localQueryRot);
+    const VectorSingle localTrans = Vector3InverseRotate(VectorSingle(translation, 0.0f), meshRot);
+    const f32 meshRadius = mesh.localAabbMinRadius.w;
+
+    VectorSingle qLocalMin(0.0f);
+    VectorSingle qLocalMax(0.0f);
+    ComputeProxyViewLocalBounds(queryProxy, qLocalMin, qLocalMax);
+    VectorSingle minQ(0.0f);
+    VectorSingle maxQ(0.0f);
+    TransformLocalAabbValuesToWorld(qLocalMin, qLocalMax, queryProxy.radius + meshRadius, localQueryPos, localQueryRot, minQ, maxQ);
+    const VectorSingle localStartCenter = TransformPointValues(localQueryPos, localQueryRot, ComputeProxyViewCenter(queryProxy));
+    const VectorSingle qStartCenter = (minQ + maxQ) * 0.5f;
+    const VectorSingle qStartHalf = (maxQ - minQ) * 0.5f;
+    VectorSingle localSweepInvDir(0.0f);
+    u32 localSweepMask = 0u;
+    ComputeRayCastSlabValues(localTrans, localSweepInvDir, localSweepMask);
+
+    FixedVector<f32x3u, s_MaxHullVertices> preQueryPts;
+    ShapeProxyView castQueryProxy = queryProxy;
+    VectorSingle castQueryPos = localQueryPos;
+    VectorSingle castQueryRot = localQueryRot;
+    const VectorSingle identPos(0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(queryProxy.kind == ProxyKind::PointCloud && queryProxy.points.size() <= s_MaxHullVertices){
+        for(usize pi = 0u; pi < queryProxy.points.size(); ++pi){
+            const f32x3u qpi = queryProxy.points[pi];
+            const VectorSingle lp = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(qpi.x, qpi.y, qpi.z, 0.0f));
+            preQueryPts.push_back(f32x3u(lp.x, lp.y, lp.z));
+        }
+        castQueryProxy = MakeSpanProxyView(Span<f32x3u>(preQueryPts), queryProxy.radius);
+        castQueryPos = identPos;
+        castQueryRot = identRot;
+    }
+
+    f32 curMax = maxFraction;
+    Array<u32, 256u> fixedStack;
+    Array<f32, 256u> fixedStackTMin;
+    u32 fixedCount = 0u;
+    in MeshBvhNode rootNode = mesh.nodes[0u];
+    f32 rootT = 0.0f;
+    if(AabbRayCastValues(VectorSingle(rootNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(rootNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, rootT)){
+        fixedStack[0u] = 0u;
+        fixedStackTMin[0u] = rootT;
+        fixedCount = 1u;
+    }
+
+    while(fixedCount > 0u){
+        --fixedCount;
+        if(fixedStackTMin[fixedCount] > curMax)
+            continue;
+        const u32 nodeIdx = fixedStack[fixedCount];
+        in MeshBvhNode node = mesh.nodes[nodeIdx];
+
+        if((node.aabbMaxRight.w & 0x80000000u) != 0u){
+            const u32 firstTri = node.aabbMinLeft.w;
+            const u32 endTri = firstTri + (node.aabbMaxRight.w & 0x7fffffffu);
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = mesh.triangles[ti];
+                const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+                const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+                const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                f32 triT = 0.0f;
+                if(!AabbRayCastValues(Min(tv0, Min(tv1, tv2)) - qStartHalf, Max(tv0, Max(tv1, tv2)) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, triT))
+                    continue;
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
+                const LocalRayHit triHit = ShapeCastProxyViews(castQueryProxy, castQueryPos, castQueryRot, localTrans, triView, identPos, identRot, VectorSingle(0.0f), curMax);
+                if(triHit.hit()){
+                    const f32 frac = triHit.fraction();
+                    if((!best.hit() && frac <= curMax) || frac < curMax || (best.hit() && frac == curMax && ti < outTriangleIndex)){
+                        curMax = frac;
+                        best = triHit;
+                        outTriangleIndex = ti;
+                    }
+                }
+            }
+        }
+        else{
+            const u32 leftIdx = node.aabbMinLeft.w;
+            const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
+            in MeshBvhNode leftNode = mesh.nodes[leftIdx];
+            in MeshBvhNode rightNode = mesh.nodes[rightIdx];
+            f32 tLeft = 0.0f;
+            f32 tRight = 0.0f;
+            const b8 hitLeft = AabbRayCastValues(VectorSingle(leftNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(leftNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, tLeft);
+            const b8 hitRight = AabbRayCastValues(VectorSingle(rightNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(rightNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, tRight);
+            PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight);
+        }
+    }
+
+    VectorSingle localHit(0.0f);
+    if(best.hit()){
+        localHit = best.point();
+        const VectorSingle worldPt = TransformPointValues(meshPos, meshRot, localHit);
+        const VectorSingle worldN = Vector3Rotate(best.normal(), meshRot);
+        best.pointFraction = f32x4(worldPt, best.fraction());
+        best.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
+    }
+
+    if((!best.hit() || best.fraction() > 0.0f) && mesh.isClosed()){
+        if(IsPointInsideClosedMesh(mesh, localStartCenter)){
+            VectorSingle closePt(0.0f);
+            VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+            u32 closeTri = 0u;
+            if(FindClosestPointOnClosedMesh(mesh, localStartCenter, closePt, closeN, closeTri)){
+                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, meshRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                localHit = closePt;
+                best.pointFraction = f32x4(TransformPointValues(meshPos, meshRot, closePt), 0.0f);
+                best.normalHit = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 1u);
+                outTriangleIndex = closeTri;
+            }
+        }
+    }
+    if(best.hit() && outTriangleIndex < cast<u32>(mesh.triangles.size())){
+        in MeshTriangle hitTri = mesh.triangles[outTriangleIndex];
+        const VectorSingle tv0(hitTri.v0.x, hitTri.v0.y, hitTri.v0.z, 0.0f);
+        const VectorSingle e0 = VectorSingle(hitTri.v1.x, hitTri.v1.y, hitTri.v1.z, 0.0f) - tv0;
+        const VectorSingle e1 = VectorSingle(hitTri.v2.x, hitTri.v2.y, hitTri.v2.z, 0.0f) - tv0;
+        const VectorSingle v2 = localHit - tv0;
+        const f32 d00 = Vector3Dot(e0, e0).x;
+        const f32 d01 = Vector3Dot(e0, e1).x;
+        const f32 d11 = Vector3Dot(e1, e1).x;
+        const f32 d20 = Vector3Dot(v2, e0).x;
+        const f32 d21 = Vector3Dot(v2, e1).x;
+        const f32 denom = d00 * d11 - d01 * d01;
+        if(Abs(VectorSingle(denom)).x > 1.0e-12f){
+            const VectorSingle baryVW = Clamp(
+                VectorSingle((d11 * d20 - d01 * d21) / denom, (d00 * d21 - d01 * d20) / denom, 0.0f, 0.0f),
+                VectorSingle(0.0f),
+                VectorSingle(1.0f)
+            );
+            outBarycentrics = f32x2u(baryVW.x, baryVW.y);
+        }
+    }
+    return best;
+}
+
+LocalRayHit ShapeCastMeshView(
+    in ShapeProxyView queryProxy,
+    in VectorSingle queryPos,
+    in VectorSingle queryRot,
+    in VectorSingle translation,
+    in MeshShape mesh,
+    in VectorSingle meshPos,
+    in VectorSingle meshRot,
+    in f32 maxFraction
+){
+    u32 triIdx = s_NullIndex;
+    f32x2u bary(0.0f, 0.0f);
+    return ShapeCastMeshViewDetailed(queryProxy, queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction, triIdx, bary);
+}
+
 LocalRayHit ShapeCastMesh(
     in ShapeProxy queryProxy,
     in VectorSingle queryPos,
@@ -1306,114 +2208,28 @@ LocalRayHit ShapeCastMesh(
     in VectorSingle meshRot,
     in f32 maxFraction
 ){
-    LocalRayHit best;
-    if(mesh.nodes.empty() || mesh.triangles.empty() || queryProxy.points.empty())
-        return best;
-
-    VectorSingle localQueryPos(0.0f);
-    VectorSingle localQueryRot(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(meshPos, meshRot, queryPos, queryRot, localQueryPos, localQueryRot);
-    const VectorSingle localTrans = Vector3InverseRotate(VectorSingle(translation, 0.0f), meshRot);
-    const f32 meshRadius = mesh.localAabbMinRadius.w;
-
-    const f32x3u qp0 = queryProxy.points[0u];
-    VectorSingle minQ = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(qp0.x, qp0.y, qp0.z, 0.0f));
-    VectorSingle maxQ = minQ;
-    VectorSingle sumQ = minQ;
-    for(usize i = 1u; i < queryProxy.points.size(); ++i){
-        const f32x3u qpi = queryProxy.points[i];
-        const VectorSingle lp = TransformPointValues(localQueryPos, localQueryRot, VectorSingle(qpi.x, qpi.y, qpi.z, 0.0f));
-        minQ = Min(minQ, lp);
-        maxQ = Max(maxQ, lp);
-        sumQ = sumQ + lp;
-    }
-    const VectorSingle rVec(queryProxy.radius + meshRadius, queryProxy.radius + meshRadius, queryProxy.radius + meshRadius, 0.0f);
-    const VectorSingle sweepStep = localTrans * maxFraction;
-    const VectorSingle sweepLocalMin = Min(minQ, minQ + sweepStep) - rVec;
-    const VectorSingle sweepLocalMax = Max(maxQ, maxQ + sweepStep) + rVec;
-
-    f32 curMax = maxFraction;
-    Array<u32, 256u> fixedStack;
-    fixedStack[0u] = 0u;
-    u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
-        in MeshBvhNode node = mesh.nodes[nodeIdx];
-        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), sweepLocalMin, sweepLocalMax))
-            continue;
-
-        if((node.aabbMaxRight.w & 0x80000000u) != 0u){
-            const u32 firstTri = node.aabbMinLeft.w;
-            const u32 endTri = firstTri + (node.aabbMaxRight.w & 0x7fffffffu);
-            for(u32 ti = firstTri; ti < endTri; ++ti){
-                in MeshTriangle tri = mesh.triangles[ti];
-                const ShapeProxy triProxy = MakeTriangleProxy(
-                    VectorSingle(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f),
-                    VectorSingle(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f),
-                    VectorSingle(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f),
-                    meshRadius
-                );
-                const LocalRayHit triHit = ShapeCastProxies(queryProxy, queryPos, queryRot, translation, triProxy, meshPos, meshRot, VectorSingle(0.0f), curMax);
-                if(triHit.hit() && ((!best.hit() && triHit.fraction() <= curMax) || triHit.fraction() < curMax)){
-                    curMax = triHit.fraction();
-                    best = triHit;
-                }
-            }
-        }
-        else{
-            const u32 leftIdx = node.aabbMinLeft.w;
-            const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = leftIdx;
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = rightIdx;
-                ++fixedCount;
-            }
-        }
-    }
-    if(!best.hit() && mesh.isClosed()){
-        const VectorSingle localStartCenter = sumQ / cast<f32>(queryProxy.points.size());
-        if(IsPointInsideClosedMesh(mesh, localStartCenter)){
-            VectorSingle closePt(0.0f);
-            VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 closeTri = 0u;
-            if(FindClosestPointOnClosedMesh(mesh, localStartCenter, closePt, closeN, closeTri)){
-                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, meshRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle worldIn = -worldOut;
-                best.pointFraction = f32x4(TransformPointValues(meshPos, meshRot, closePt), 0.0f);
-                best.normalHit = f32x3_u32(worldIn.x, worldIn.y, worldIn.z, 1u);
-            }
-        }
-    }
-    return best;
+    return ShapeCastMeshView(MakeShapeProxyView(queryProxy), queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction);
 }
 
-TimeOfImpactOutput ComputeMeshTimeOfImpact(
-    in ShapeProxy proxyA,
+TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
+    in ShapeProxyView proxyA,
     in Sweep3D sweepA,
     in MeshShape meshB,
     in Sweep3D sweepB,
-    in f32 tMax
+    in f32 tMax,
+    in b8 forSensor
 ){
     TimeOfImpactOutput bestOut;
-    if(meshB.nodes.empty() || meshB.triangles.empty() || proxyA.points.empty() || tMax <= 0.0f)
+    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA) || tMax <= 0.0f)
         return bestOut;
 
-    VectorSingle pMin(s_MaxF32);
-    VectorSingle pMax(-s_MaxF32);
-    for(usize i = 0u; i < proxyA.points.size(); ++i){
-        const f32x3u pt = proxyA.points[i];
-        const VectorSingle pv(pt.x, pt.y, pt.z, 0.0f);
-        pMin = Min(pMin, pv);
-        pMax = Max(pMax, pv);
-    }
+    VectorSingle pMin(0.0f);
+    VectorSingle pMax(0.0f);
+    ComputeProxyViewLocalBounds(proxyA, pMin, pMax);
 
     const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
     const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
-    const f32 radA = ComputeProxyBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
+    const f32 radA = ComputeProxyViewBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
     const Aabb3D meshLocalBox = meshB.localAabb();
     VectorSingle meshExt(0.0f);
     for(u32 mask = 0u; mask < 8u; ++mask){
@@ -1473,6 +2289,43 @@ TimeOfImpactOutput ComputeMeshTimeOfImpact(
     const VectorSingle queryMaxPad = queryMax + padVec;
     const f32 meshRadius = meshB.radius();
 
+    if(meshB.isClosed()){
+        VectorSingle posBStart(0.0f);
+        VectorSingle rotBStart(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle posAStart(0.0f);
+        VectorSingle rotAStart(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle relStartPos(0.0f);
+        VectorSingle relStartRot(0.0f, 0.0f, 0.0f, 1.0f);
+        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, 0.0f, posBStart, rotBStart);
+        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, 0.0f, posAStart, rotAStart);
+        RelativeTransformValues(posBStart, rotBStart, posAStart, rotAStart, relStartPos, relStartRot);
+        const VectorSingle startCenterB = TransformPointValues(relStartPos, relStartRot, ComputeProxyViewCenter(proxyA));
+        if(IsPointInsideClosedMesh(meshB, startCenterB)){
+            VectorSingle closePt(0.0f);
+            VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+            u32 closeTri = 0u;
+            if(FindClosestPointOnClosedMesh(meshB, startCenterB, closePt, closeN, closeTri)){
+                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotBStart), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                bestOut.pointFraction = f32x4(TransformPointValues(posBStart, rotBStart, closePt), 0.0f);
+                bestOut.normalFlags = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 3u);
+                return bestOut;
+            }
+        }
+    }
+
+    f32 angSpeedBoundA = 0.0f;
+    if(angA > 1.0e-7f)
+        angSpeedBoundA = angA * radA;
+    f32 toiTargetPadding = 0.25f * s_LinearSlop;
+    f32 toiTol = 0.5f * s_LinearSlop;
+    if(forSensor){
+        const f32 totalR = proxyA.radius + meshRadius;
+        toiTargetPadding = -1.0e-4f;
+        toiTol = 1.0e-5f;
+        if(totalR >= 1.0e-4f)
+            toiTol = 1.0e-4f;
+    }
+
     f32 curMax = tMax;
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
@@ -1494,10 +2347,19 @@ TimeOfImpactOutput ComputeMeshTimeOfImpact(
                 const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
                 if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMinPad, queryMaxPad))
                     continue;
-                const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshRadius);
-                const TimeOfImpactOutput toi = ComputeTimeOfImpact(proxyA, sweepA, triProxy, sweepB, curMax);
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
+                f32 angBound = angSpeedBoundA;
+                if(angB > 1.0e-7f)
+                    angBound += angB * ComputeProxyViewBoundingRadius(triView, VectorSingle(sweepB.localCenter));
+                const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angBound);
                 if(toi.hit()){
-                    if(!toi.initialOverlap() && toi.fraction() < curMax){
+                    if(forSensor && toi.initialOverlap())
+                        return toi;
+                    if(!toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < curMax){
                         curMax = toi.fraction();
                         bestOut = toi;
                     }
@@ -1521,6 +2383,1169 @@ TimeOfImpactOutput ComputeMeshTimeOfImpact(
         }
     }
     return bestOut;
+}
+
+TimeOfImpactOutput ComputeMeshTimeOfImpactViews(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    return ComputeMeshTimeOfImpactViewsInternal(proxyA, sweepA, meshB, sweepB, tMax, false);
+}
+
+TimeOfImpactOutput ComputeMeshTimeOfImpact(
+    in ShapeProxy proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    return ComputeMeshTimeOfImpactViewsInternal(MakeShapeProxyView(proxyA), sweepA, meshB, sweepB, tMax, false);
+}
+
+TimeOfImpactOutput ComputeSensorMeshTimeOfImpactViews(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    return ComputeMeshTimeOfImpactViewsInternal(proxyA, sweepA, meshB, sweepB, tMax, true);
+}
+
+LocalRayHit ShapeCastProxyViewsRotated(
+    in ShapeProxyView queryProxy,
+    in VectorSingle startPos,
+    in VectorSingle startRot,
+    in VectorSingle translation,
+    in VectorSingle endRotation,
+    in ShapeProxyView targetProxy,
+    in VectorSingle targetPos,
+    in VectorSingle targetRot,
+    in f32 maxFraction
+){
+    LocalRayHit hit;
+    if(IsProxyViewEmpty(queryProxy) || IsProxyViewEmpty(targetProxy) || maxFraction < 0.0f)
+        return hit;
+
+    Sweep3D sweepA;
+    sweepA.c0 = f32x4(startPos, 0.0f);
+    sweepA.c1 = f32x4(startPos + VectorSingle(translation, 0.0f), 0.0f);
+    sweepA.q0 = f32x4(startRot);
+    VectorSingle q1 = SafeNormalizeQuat(endRotation);
+    if(Vector4Dot(startRot, q1).x < 0.0f)
+        q1 = -q1;
+    sweepA.q1 = f32x4(q1.x, q1.y, q1.z, q1.w);
+
+    Sweep3D sweepB;
+    sweepB.c0 = f32x4(targetPos, 0.0f);
+    sweepB.c1 = f32x4(targetPos, 0.0f);
+    sweepB.q0 = f32x4(targetRot);
+    sweepB.q1 = f32x4(targetRot);
+
+    const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(queryProxy, sweepA, targetProxy, sweepB, maxFraction);
+    if(!toi.hit())
+        return hit;
+
+    const VectorSingle n = toi.normal();
+    hit.pointFraction = f32x4(toi.point(), toi.fraction());
+    hit.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
+    return hit;
+}
+
+LocalRayHit ShapeCastMeshViewRotatedDetailed(
+    in ShapeProxyView queryProxy,
+    in VectorSingle startPos,
+    in VectorSingle startRot,
+    in VectorSingle translation,
+    in VectorSingle endRotation,
+    in MeshShape mesh,
+    in VectorSingle meshPos,
+    in VectorSingle meshRot,
+    in f32 maxFraction,
+    mut u32 outTriangleIndex,
+    mut f32x2u outBarycentrics
+){
+    LocalRayHit best;
+    outTriangleIndex = s_NullIndex;
+    outBarycentrics = f32x2u(0.0f, 0.0f);
+    if(mesh.nodes.empty() || mesh.triangles.empty() || IsProxyViewEmpty(queryProxy) || maxFraction < 0.0f)
+        return best;
+
+    Sweep3D sweepA;
+    const VectorSingle endPos = startPos + VectorSingle(translation, 0.0f);
+    sweepA.c0 = f32x4(startPos, 0.0f);
+    sweepA.c1 = f32x4(endPos, 0.0f);
+    sweepA.q0 = f32x4(startRot);
+    VectorSingle q1 = SafeNormalizeQuat(endRotation);
+    if(Vector4Dot(startRot, q1).x < 0.0f)
+        q1 = -q1;
+    sweepA.q1 = f32x4(q1.x, q1.y, q1.z, q1.w);
+
+    Sweep3D sweepB;
+    sweepB.c0 = f32x4(meshPos, 0.0f);
+    sweepB.c1 = f32x4(meshPos, 0.0f);
+    sweepB.q0 = f32x4(meshRot);
+    sweepB.q1 = f32x4(meshRot);
+
+    VectorSingle localStartPos(0.0f);
+    VectorSingle localStartRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(meshPos, meshRot, startPos, startRot, localStartPos, localStartRot);
+    VectorSingle localEndPos(0.0f);
+    VectorSingle localEndRot(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(meshPos, meshRot, endPos, q1, localEndPos, localEndRot);
+    if(mesh.isClosed()){
+        const VectorSingle startCenter = TransformPointValues(localStartPos, localStartRot, ComputeProxyViewCenter(queryProxy));
+        if(IsPointInsideClosedMesh(mesh, startCenter)){
+            VectorSingle closePt(0.0f);
+            VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+            u32 closeTri = 0u;
+            if(FindClosestPointOnClosedMesh(mesh, startCenter, closePt, closeN, closeTri)){
+                const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, meshRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                best.pointFraction = f32x4(TransformPointValues(meshPos, meshRot, closePt), 0.0f);
+                best.normalHit = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 1u);
+                outTriangleIndex = closeTri;
+                in MeshTriangle closeTriData = mesh.triangles[closeTri];
+                outBarycentrics = ComputeTriangleBarycentrics(
+                    closePt,
+                    VectorSingle(closeTriData.v0.x, closeTriData.v0.y, closeTriData.v0.z, 0.0f),
+                    VectorSingle(closeTriData.v1.x, closeTriData.v1.y, closeTriData.v1.z, 0.0f),
+                    VectorSingle(closeTriData.v2.x, closeTriData.v2.y, closeTriData.v2.z, 0.0f)
+                );
+                return best;
+            }
+        }
+    }
+
+    const f32 angA = ComputeSweepAngularAngle(startRot, q1);
+    const f32 radA = ComputeProxyViewBoundingRadius(queryProxy, VectorSingle(0.0f));
+    f32 angSpeedBound = 0.0f;
+    if(angA > 1.0e-7f)
+        angSpeedBound = angA * radA;
+    VectorSingle pMin(0.0f);
+    VectorSingle pMax(0.0f);
+    ComputeProxyViewLocalBounds(queryProxy, pMin, pMax);
+    const f32 margin = queryProxy.radius + mesh.radius() + angSpeedBound + s_SpeculativeDistance;
+    VectorSingle sMin(0.0f);
+    VectorSingle sMax(0.0f);
+    VectorSingle eMin(0.0f);
+    VectorSingle eMax(0.0f);
+    TransformLocalAabbValuesToWorld(pMin, pMax, margin, localStartPos, localStartRot, sMin, sMax);
+    TransformLocalAabbValuesToWorld(pMin, pMax, margin, localEndPos, localEndRot, eMin, eMax);
+    const VectorSingle queryMin = Min(sMin, eMin);
+    const VectorSingle queryMax = Max(sMax, eMax);
+
+    const f32 meshRadius = mesh.radius();
+    const f32 toiTargetPadding = 0.25f * s_LinearSlop;
+    const f32 toiTol = 0.5f * s_LinearSlop;
+    f32 curMax = maxFraction;
+    Array<u32, 256u> fixedStack;
+    fixedStack[0u] = 0u;
+    u32 fixedCount = 1u;
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
+        in MeshBvhNode node = mesh.nodes[nodeIdx];
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
+            continue;
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = mesh.triangles[ti];
+                const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+                const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+                const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMin, queryMax))
+                    continue;
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
+                const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(queryProxy, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angSpeedBound);
+                if(toi.hit() && (!best.hit() || toi.fraction() < curMax || (toi.fraction() == curMax && ti < outTriangleIndex))){
+                    curMax = toi.fraction();
+                    outTriangleIndex = ti;
+                    const VectorSingle localHit = InverseTransformPointValues(meshPos, meshRot, toi.point());
+                    outBarycentrics = ComputeTriangleBarycentrics(localHit, tv0, tv1, tv2);
+                    const VectorSingle n = toi.normal();
+                    best.pointFraction = f32x4(toi.point(), curMax);
+                    best.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
+                    if(toi.initialOverlap() || curMax <= 0.0f)
+                        return best;
+                }
+            }
+        }
+        else{
+            if(fixedCount < 256u){
+                fixedStack[fixedCount] = node.leftOrFirst();
+                ++fixedCount;
+            }
+            if(fixedCount < 256u){
+                fixedStack[fixedCount] = node.rightOrCount();
+                ++fixedCount;
+            }
+        }
+    }
+    return best;
+}
+
+VectorSingle ClosestPointOnHullLocal(in HullShape hull, in VectorSingle localPoint, mut VectorSingle outNormal){
+    outNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    if(hull.vertices.empty())
+        return localPoint;
+
+    const f32 r = hull.radius();
+    if(hull.isBox()){
+        const VectorSingle q = SafeNormalizeQuat(VectorSingle(hull.boxRotation));
+        const VectorSingle c = hull.centroid();
+        const VectorSingle ext = hull.halfExtents();
+        const VectorSingle localD = Vector3InverseRotate(VectorSingle(localPoint - c, 0.0f), q);
+        const VectorSingle clamped = Clamp(localD, -ext, ext);
+        const VectorSingle diff = VectorSingle(localD - clamped, 0.0f);
+        const f32 diffLenSq = Vector3LengthSq(diff).x;
+        if(diffLenSq > 1.0e-12f){
+            const f32 diffLen = SqrtFast(diffLenSq);
+            const VectorSingle dir = diff * (1.0f / diffLen);
+            outNormal = SafeNormalizeVec3(Vector3Rotate(dir, q), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            if(diffLen <= r)
+                return localPoint;
+            return c + Vector3Rotate(clamped + dir * r, q);
+        }
+        VectorSingle localN(1.0f, 0.0f, 0.0f, 0.0f);
+        if(localD.x < 0.0f)
+            localN = VectorSingle(-1.0f, 0.0f, 0.0f, 0.0f);
+        const VectorSingle axisDepth = ext - Abs(localD);
+        f32 minDepth = axisDepth.x;
+        const f32 dy = axisDepth.y;
+        if(dy < minDepth){
+            minDepth = dy;
+            if(localD.y >= 0.0f)
+                localN = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+            else
+                localN = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+        }
+        const f32 dz = axisDepth.z;
+        if(dz < minDepth){
+            if(localD.z >= 0.0f)
+                localN = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+            else
+                localN = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+        }
+        outNormal = SafeNormalizeVec3(Vector3Rotate(localN, q), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        return localPoint;
+    }
+
+    if(!hull.facePlanes.empty()){
+        f32 maxSigned = -s_MaxF32;
+        VectorSingle shallowN(0.0f, 1.0f, 0.0f, 0.0f);
+        for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+            in Plane3D plane = hull.facePlanes[fi];
+            const VectorSingle pn(plane.normalOffset.x, plane.normalOffset.y, plane.normalOffset.z, 0.0f);
+            const f32 d = Vector3Dot(pn, localPoint).x - plane.normalOffset.w;
+            if(d > maxSigned){
+                maxSigned = d;
+                shallowN = pn;
+            }
+        }
+        if(maxSigned <= 0.0f){
+            outNormal = SafeNormalizeVec3(shallowN, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            return localPoint;
+        }
+    }
+
+    f32 bestDistSq = s_MaxF32;
+    VectorSingle bestCp = localPoint;
+    VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
+    for(usize fi = 0u; fi < hull.faceTopologies.size(); ++fi){
+        in HullFaceTopology face = hull.faceTopologies[fi];
+        if(face.vertexCount < 3u)
+            continue;
+        const VectorSingle faceN = SafeNormalizeVec3(VectorSingle(hull.facePlanes[fi].normalOffset.x, hull.facePlanes[fi].normalOffset.y, hull.facePlanes[fi].normalOffset.z, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        u8 eIdx = face.edge;
+        const f32x3u hv0 = hull.vertices[hull.halfEdges[eIdx].tail];
+        const VectorSingle v0(hv0.x, hv0.y, hv0.z, 0.0f);
+        eIdx = hull.halfEdges[eIdx].next;
+        const f32x3u hvPrev = hull.vertices[hull.halfEdges[eIdx].tail];
+        VectorSingle vPrev(hvPrev.x, hvPrev.y, hvPrev.z, 0.0f);
+        for(u8 t = 2u; t < face.vertexCount; ++t){
+            eIdx = hull.halfEdges[eIdx].next;
+            const f32x3u hvCurr = hull.vertices[hull.halfEdges[eIdx].tail];
+            const VectorSingle vCurr(hvCurr.x, hvCurr.y, hvCurr.z, 0.0f);
+            const VectorSingle cp = ClosestPointOnTriangleLocal(localPoint, v0, vPrev, vCurr);
+            const f32 dSq = Vector3LengthSq(VectorSingle(localPoint - cp, 0.0f)).x;
+            if(dSq < bestDistSq){
+                bestDistSq = dSq;
+                bestCp = cp;
+                bestN = faceN;
+            }
+            vPrev = vCurr;
+        }
+    }
+
+    if(bestDistSq == s_MaxF32){
+        for(usize vi = 0u; vi < hull.vertices.size(); ++vi){
+            const f32x3u hv = hull.vertices[vi];
+            const VectorSingle vp(hv.x, hv.y, hv.z, 0.0f);
+            const f32 dSq = Vector3LengthSq(VectorSingle(localPoint - vp, 0.0f)).x;
+            if(dSq < bestDistSq){
+                bestDistSq = dSq;
+                bestCp = vp;
+            }
+        }
+    }
+
+    const VectorSingle delta = VectorSingle(localPoint - bestCp, 0.0f);
+    const VectorSingle dir = SafeNormalizeVec3(delta, bestN);
+    outNormal = dir;
+    if(r > 0.0f){
+        if(bestDistSq <= r * r)
+            return localPoint;
+        return bestCp + dir * r;
+    }
+    return bestCp;
+}
+
+b8 ClosestPointOnMeshAny(
+    in MeshShape mesh,
+    in VectorSingle localPoint,
+    mut VectorSingle outClosest,
+    mut VectorSingle outNormal,
+    mut u32 outTriangleIndex
+){
+    outClosest = localPoint;
+    outNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    outTriangleIndex = s_NullIndex;
+    if(mesh.nodes.empty() || mesh.triangles.empty())
+        return false;
+
+    f32 bestDistSq = s_MaxF32;
+    VectorSingle bestCp(0.0f);
+    VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
+    u32 bestTri = s_NullIndex;
+
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    while(stackCount > 0u){
+        --stackCount;
+        const u32 nodeIdx = stack[stackCount];
+        in MeshBvhNode node = mesh.nodes[nodeIdx];
+        const VectorSingle boxClamped = Max(VectorSingle(node.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(node.aabbMaxRight, 0.0f)));
+        if(Vector3LengthSq(VectorSingle(localPoint - boxClamped, 0.0f)).x > bestDistSq)
+            continue;
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = mesh.triangles[ti];
+                const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+                const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+                const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                const VectorSingle cp = ClosestPointOnTriangleLocal(localPoint, tv0, tv1, tv2);
+                const VectorSingle diff = VectorSingle(localPoint - cp, 0.0f);
+                const f32 dSq = Vector3LengthSq(diff).x;
+                if(dSq < bestDistSq){
+                    bestDistSq = dSq;
+                    bestCp = cp;
+                    bestTri = ti;
+                    bestN = SafeNormalizeVec3(diff, VectorSingle(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f));
+                }
+            }
+        }
+        else{
+            const u32 leftIdx = node.leftOrFirst();
+            const u32 rightIdx = node.rightOrCount();
+            PushClosestPointMeshChildrenOrdered(mesh, localPoint, bestDistSq, leftIdx, rightIdx, stack, stackCount);
+        }
+    }
+
+    if(bestTri == s_NullIndex)
+        return false;
+
+    const f32 meshRadius = mesh.radius();
+    outNormal = bestN;
+    outTriangleIndex = bestTri;
+    if(meshRadius > 0.0f){
+        if(bestDistSq <= meshRadius * meshRadius)
+            outClosest = localPoint;
+        else
+            outClosest = bestCp + bestN * meshRadius;
+    }
+    else{
+        outClosest = bestCp;
+    }
+    return true;
+}
+
+VectorSingle EpaSupportPairUnit(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle qA,
+    in ShapeProxyView proxyB,
+    in VectorSingle posB,
+    in VectorSingle qB,
+    in VectorSingle unitDir,
+    mut VectorSingle outWA,
+    mut VectorSingle outWB
+){
+    u8 idxA = 0xffu;
+    u8 idxB = 0xffu;
+    const VectorSingle lpA = ComputeProxyViewSupport(proxyA, Vector3InverseRotate(unitDir, qA), idxA);
+    const VectorSingle lpB = ComputeProxyViewSupport(proxyB, Vector3InverseRotate(-unitDir, qB), idxB);
+    outWA = TransformPointValues(posA, qA, lpA) + unitDir * proxyA.radius;
+    outWB = TransformPointValues(posB, qB, lpB) - unitDir * proxyB.radius;
+    return VectorSingle(outWA - outWB, 0.0f);
+}
+
+VectorSingle EpaSupportPair(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle qA,
+    in ShapeProxyView proxyB,
+    in VectorSingle posB,
+    in VectorSingle qB,
+    in VectorSingle dirWorld,
+    mut VectorSingle outWA,
+    mut VectorSingle outWB
+){
+    const VectorSingle dir = SafeNormalizeVec3(dirWorld, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    return EpaSupportPairUnit(proxyA, posA, qA, proxyB, posB, qB, dir, outWA, outWB);
+}
+
+b8 ComputeEpaFaceNormal(
+    in FixedVector<f32x4, 64u> verts,
+    in u16 i0,
+    in u16 i1,
+    in u16 i2,
+    in VectorSingle interior,
+    mut EpaFace outFace
+){
+    const VectorSingle a = VectorSingle(verts[i0]);
+    const VectorSingle b = VectorSingle(verts[i1]);
+    const VectorSingle c = VectorSingle(verts[i2]);
+    const VectorSingle cr = Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f));
+    const f32 lenSq = Vector3LengthSq(cr).x;
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq <= 1.0e-12f){
+        outFace.alive = false;
+        return false;
+    }
+    VectorSingle n = VectorSingle(cr * Rsqrt(VectorSingle(lenSq)), 0.0f);
+    u16 aIdx = i0;
+    u16 bIdx = i1;
+    u16 cIdx = i2;
+    if(Vector3Dot(n, VectorSingle(interior - a, 0.0f)).x > 0.0f){
+        n = -n;
+        bIdx = i2;
+        cIdx = i1;
+    }
+    const f32 dist = Vector3Dot(n, a).x;
+    outFace.v[0u] = aIdx;
+    outFace.v[1u] = bIdx;
+    outFace.v[2u] = cIdx;
+    outFace.normalDist = f32x4(n, dist);
+    outFace.alive = true;
+    return true;
+}
+
+b8 ComputeEpaPenetrationViewsFromSimplex(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in ShapeProxyView proxyB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in Simplex initSimplex,
+    mut VectorSingle outNormal,
+    mut f32 outDepth,
+    mut VectorSingle outPointA,
+    mut VectorSingle outPointB
+){
+    outNormal = SafeNormalizeVec3(VectorSingle(posB - posA, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    outDepth = 0.0f;
+    outPointA = posA;
+    outPointB = posB;
+    if(IsProxyViewEmpty(proxyA) || IsProxyViewEmpty(proxyB))
+        return false;
+
+    const VectorSingle qA = rotA;
+    const VectorSingle qB = rotB;
+
+    FixedVector<f32x4, 64u> verts;
+    FixedVector<f32x4, 64u> wAs;
+    FixedVector<f32x4, 64u> wBs;
+    FixedVector<EpaFace, 128u> faces;
+    FixedVector<u16, 128u> freeFaceSlots;
+    VectorSingle interior(0.0f);
+    b8 tetraReady = false;
+
+    if(proxyA.radius == 0.0f && proxyB.radius == 0.0f && initSimplex.count == 4u){
+        const VectorSingle sWA0 = initSimplex.v[0u].wA();
+        const VectorSingle sWB0 = initSimplex.v[0u].wB();
+        const VectorSingle sWA1 = initSimplex.v[1u].wA();
+        const VectorSingle sWB1 = initSimplex.v[1u].wB();
+        const VectorSingle sWA2 = initSimplex.v[2u].wA();
+        const VectorSingle sWB2 = initSimplex.v[2u].wB();
+        const VectorSingle sWA3 = initSimplex.v[3u].wA();
+        const VectorSingle sWB3 = initSimplex.v[3u].wB();
+        const VectorSingle sp0 = VectorSingle(sWA0 - sWB0, 0.0f);
+        const VectorSingle sp1 = VectorSingle(sWA1 - sWB1, 0.0f);
+        const VectorSingle sp2 = VectorSingle(sWA2 - sWB2, 0.0f);
+        const VectorSingle sp3 = VectorSingle(sWA3 - sWB3, 0.0f);
+        const VectorSingle volCross = Cross(VectorSingle(sp1 - sp0, 0.0f), VectorSingle(sp2 - sp0, 0.0f));
+        if(Abs(Vector3Dot(volCross, VectorSingle(sp3 - sp0, 0.0f))).x > 1.0e-10f){
+            verts.push_back(f32x4(sp0, 0.0f));
+            verts.push_back(f32x4(sp1, 0.0f));
+            verts.push_back(f32x4(sp2, 0.0f));
+            verts.push_back(f32x4(sp3, 0.0f));
+            wAs.push_back(f32x4(sWA0, 0.0f));
+            wAs.push_back(f32x4(sWA1, 0.0f));
+            wAs.push_back(f32x4(sWA2, 0.0f));
+            wAs.push_back(f32x4(sWA3, 0.0f));
+            wBs.push_back(f32x4(sWB0, 0.0f));
+            wBs.push_back(f32x4(sWB1, 0.0f));
+            wBs.push_back(f32x4(sWB2, 0.0f));
+            wBs.push_back(f32x4(sWB3, 0.0f));
+            interior = (sp0 + sp1 + sp2 + sp3) * 0.25f;
+            EpaFace f0;
+            EpaFace f1;
+            EpaFace f2;
+            EpaFace f3;
+            if(
+                ComputeEpaFaceNormal(verts, 0u, 1u, 2u, interior, f0)
+                && ComputeEpaFaceNormal(verts, 0u, 2u, 3u, interior, f1)
+                && ComputeEpaFaceNormal(verts, 0u, 3u, 1u, interior, f2)
+                && ComputeEpaFaceNormal(verts, 1u, 3u, 2u, interior, f3)
+            ){
+                faces.push_back(f0);
+                faces.push_back(f1);
+                faces.push_back(f2);
+                faces.push_back(f3);
+                tetraReady = true;
+            }
+            else{
+                verts.clear();
+                wAs.clear();
+                wBs.clear();
+                faces.clear();
+            }
+        }
+    }
+
+    if(!tetraReady){
+        const VectorSingle initDir0 = outNormal;
+        VectorSingle wA0(0.0f);
+        VectorSingle wB0(0.0f);
+        const VectorSingle p0 = EpaSupportPairUnit(proxyA, posA, qA, proxyB, posB, qB, initDir0, wA0, wB0);
+
+        VectorSingle dir1 = -p0;
+        if(Vector3LengthSq(dir1).x <= 1.0e-10f)
+            dir1 = -initDir0;
+        VectorSingle wA1(0.0f);
+        VectorSingle wB1(0.0f);
+        const VectorSingle p1 = EpaSupportPair(proxyA, posA, qA, proxyB, posB, qB, dir1, wA1, wB1);
+
+        const VectorSingle e01 = VectorSingle(p1 - p0, 0.0f);
+        if(Vector3LengthSq(e01).x <= 1.0e-12f)
+            return false;
+
+        VectorSingle dir2 = Cross(e01, Cross(e01, -p0));
+        if(Vector3LengthSq(dir2).x <= 1.0e-12f){
+            VectorSingle t1(0.0f);
+            VectorSingle t2(0.0f);
+            ComputeTangentBasisFromUnitNormal(SafeNormalizeVec3(e01, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)), t1, t2);
+            dir2 = t1;
+        }
+        VectorSingle wA2(0.0f);
+        VectorSingle wB2(0.0f);
+        VectorSingle p2 = EpaSupportPair(proxyA, posA, qA, proxyB, posB, qB, dir2, wA2, wB2);
+        if(Vector3LengthSq(Cross(e01, VectorSingle(p2 - p0, 0.0f))).x <= 1.0e-12f){
+            p2 = EpaSupportPair(proxyA, posA, qA, proxyB, posB, qB, -dir2, wA2, wB2);
+            if(Vector3LengthSq(Cross(e01, VectorSingle(p2 - p0, 0.0f))).x <= 1.0e-12f)
+                return false;
+        }
+
+        const VectorSingle triN = Cross(e01, VectorSingle(p2 - p0, 0.0f));
+        VectorSingle dir3 = triN;
+        if(Vector3Dot(triN, p0).x > 0.0f)
+            dir3 = -triN;
+        VectorSingle wA3(0.0f);
+        VectorSingle wB3(0.0f);
+        VectorSingle p3 = EpaSupportPair(proxyA, posA, qA, proxyB, posB, qB, dir3, wA3, wB3);
+        if(Abs(Vector3Dot(triN, VectorSingle(p3 - p0, 0.0f))).x <= 1.0e-10f){
+            p3 = EpaSupportPair(proxyA, posA, qA, proxyB, posB, qB, -dir3, wA3, wB3);
+            if(Abs(Vector3Dot(triN, VectorSingle(p3 - p0, 0.0f))).x <= 1.0e-10f)
+                return false;
+        }
+
+        verts.push_back(f32x4(p0, 0.0f));
+        verts.push_back(f32x4(p1, 0.0f));
+        verts.push_back(f32x4(p2, 0.0f));
+        verts.push_back(f32x4(p3, 0.0f));
+        wAs.push_back(f32x4(wA0, 0.0f));
+        wAs.push_back(f32x4(wA1, 0.0f));
+        wAs.push_back(f32x4(wA2, 0.0f));
+        wAs.push_back(f32x4(wA3, 0.0f));
+        wBs.push_back(f32x4(wB0, 0.0f));
+        wBs.push_back(f32x4(wB1, 0.0f));
+        wBs.push_back(f32x4(wB2, 0.0f));
+        wBs.push_back(f32x4(wB3, 0.0f));
+
+        interior = (p0 + p1 + p2 + p3) * 0.25f;
+        EpaFace f0;
+        EpaFace f1;
+        EpaFace f2;
+        EpaFace f3;
+        if(!ComputeEpaFaceNormal(verts, 0u, 1u, 2u, interior, f0)) return false;
+        if(!ComputeEpaFaceNormal(verts, 0u, 2u, 3u, interior, f1)) return false;
+        if(!ComputeEpaFaceNormal(verts, 0u, 3u, 1u, interior, f2)) return false;
+        if(!ComputeEpaFaceNormal(verts, 1u, 3u, 2u, interior, f3)) return false;
+        faces.push_back(f0);
+        faces.push_back(f1);
+        faces.push_back(f2);
+        faces.push_back(f3);
+    }
+
+    FixedVector<u16, 128u> openU;
+    FixedVector<u16, 128u> openV;
+    usize bestFaceIdx = 0u;
+    for(usize iter = 0u; iter < 32u; ++iter){
+        bestFaceIdx = s_NullIndex;
+        f32 bestDist = s_MaxF32;
+        for(usize fi = 0u; fi < faces.size(); ++fi){
+            if(!faces[fi].alive)
+                continue;
+            const f32 d = faces[fi].normalDist.w;
+            if(d < bestDist){
+                bestDist = d;
+                bestFaceIdx = fi;
+            }
+        }
+        if(bestFaceIdx == s_NullIndex)
+            break;
+
+        const VectorSingle fn = VectorSingle(faces[bestFaceIdx].normalDist, 0.0f);
+        const f32 fd = faces[bestFaceIdx].normalDist.w;
+
+        VectorSingle nWA(0.0f);
+        VectorSingle nWB(0.0f);
+        const VectorSingle np = EpaSupportPairUnit(proxyA, posA, qA, proxyB, posB, qB, fn, nWA, nWB);
+        const f32 sDist = Vector3Dot(fn, np).x;
+        if((sDist - fd) <= 1.0e-4f || verts.size() >= 64u)
+            break;
+
+        openU.clear();
+        openV.clear();
+        for(usize fi = 0u; fi < faces.size(); ++fi){
+            if(!faces[fi].alive)
+                continue;
+            const VectorSingle fni = VectorSingle(faces[fi].normalDist, 0.0f);
+            const f32 fdi = faces[fi].normalDist.w;
+            if(Vector3Dot(fni, np).x - fdi > 1.0e-5f){
+                faces[fi].alive = false;
+                freeFaceSlots.push_back(cast<u16>(fi));
+                for(usize ei = 0u; ei < 3u; ++ei){
+                    const u16 eu = faces[fi].v[ei];
+                    const u16 ev = faces[fi].v[(ei + 1u) % 3u];
+                    b8 canceled = false;
+                    for(usize k = 0u; k < openU.size(); ++k){
+                        if(openU[k] == ev && openV[k] == eu){
+                            const usize lastIdx = openU.size() - 1u;
+                            openU[k] = openU[lastIdx];
+                            openV[k] = openV[lastIdx];
+                            openU.pop_back();
+                            openV.pop_back();
+                            canceled = true;
+                            break;
+                        }
+                    }
+                    if(!canceled && openU.size() < 128u){
+                        openU.push_back(eu);
+                        openV.push_back(ev);
+                    }
+                }
+            }
+        }
+
+        if(openU.empty())
+            break;
+
+        const u16 newVertIdx = cast<u16>(verts.size());
+        verts.push_back(f32x4(np, 0.0f));
+        wAs.push_back(f32x4(nWA, 0.0f));
+        wBs.push_back(f32x4(nWB, 0.0f));
+
+        b8 overflow = false;
+        for(usize ei = 0u; ei < openU.size(); ++ei){
+            const u16 eu = openU[ei];
+            const u16 ev = openV[ei];
+            EpaFace nf;
+            if(ComputeEpaFaceNormal(verts, eu, ev, newVertIdx, interior, nf)){
+                if(!freeFaceSlots.empty()){
+                    const u16 slot = freeFaceSlots.back();
+                    freeFaceSlots.pop_back();
+                    faces[slot] = nf;
+                }
+                else if(faces.size() < 128u){
+                    faces.push_back(nf);
+                }
+                else{
+                    overflow = true;
+                    break;
+                }
+            }
+        }
+        if(overflow)
+            break;
+    }
+
+    bestFaceIdx = s_NullIndex;
+    f32 bestDist = s_MaxF32;
+    for(usize fi = 0u; fi < faces.size(); ++fi){
+        if(!faces[fi].alive)
+            continue;
+        if(faces[fi].normalDist.w < bestDist){
+            bestDist = faces[fi].normalDist.w;
+            bestFaceIdx = fi;
+        }
+    }
+    if(bestFaceIdx == s_NullIndex)
+        return false;
+
+    in EpaFace bestFace = faces[bestFaceIdx];
+    const VectorSingle bn = VectorSingle(bestFace.normalDist, 0.0f);
+    const f32 bDist = bestFace.normalDist.w;
+    if(!IsFinite(VectorSingle(bDist)) || bDist <= -1.0f)
+        return false;
+
+    const u16 i0 = bestFace.v[0u];
+    const u16 i1 = bestFace.v[1u];
+    const u16 i2 = bestFace.v[2u];
+    const VectorSingle a = VectorSingle(verts[i0]);
+    const VectorSingle b = VectorSingle(verts[i1]);
+    const VectorSingle c = VectorSingle(verts[i2]);
+    const VectorSingle pProj = bn * bDist;
+    const f32x2u bary = ComputeTriangleBarycentrics(pProj, a, b, c);
+    const f32 uCoord = bary.x;
+    const f32 vCoord = bary.y;
+    const f32 wCoord = SimdClamp(1.0f - uCoord - vCoord, 0.0f, 1.0f);
+
+    outNormal = bn;
+    outDepth = SimdMax(bDist, 0.0f);
+    outPointA = VectorSingle(wAs[i0]) * wCoord + VectorSingle(wAs[i1]) * uCoord + VectorSingle(wAs[i2]) * vCoord;
+    outPointB = VectorSingle(wBs[i0]) * wCoord + VectorSingle(wBs[i1]) * uCoord + VectorSingle(wBs[i2]) * vCoord;
+    return true;
+}
+
+VectorSingle ClosestPointOnCylinderLocal(in CylinderShape cyl, in VectorSingle localPoint, mut VectorSingle outNormal){
+    const VectorSingle c = cyl.center();
+    const VectorSingle d = VectorSingle(localPoint - c, 0.0f);
+    const f32 rCore = cyl.radius();
+    const f32 hhCore = cyl.halfHeight();
+    const f32 cr = cyl.convexRadius();
+    const f32 radialSq = d.x * d.x + d.z * d.z;
+    const f32 radial = SqrtFast(radialSq);
+
+    f32 cx = d.x;
+    f32 cz = d.z;
+    if(radial > rCore && radial > 1.0e-12f){
+        const f32 s = rCore / radial;
+        cx *= s;
+        cz *= s;
+    }
+    const f32 cy = SimdClamp(d.y, -hhCore, hhCore);
+    const VectorSingle clampedCore(cx, cy, cz, 0.0f);
+    const VectorSingle diff = VectorSingle(d - clampedCore, 0.0f);
+    const f32 diffLenSq = Vector3LengthSq(diff).x;
+
+    if(diffLenSq > 1.0e-12f){
+        const f32 diffLen = SqrtFast(diffLenSq);
+        const VectorSingle n = diff * (1.0f / diffLen);
+        outNormal = n;
+        if(cr > 0.0f){
+            if(diffLen <= cr)
+                return localPoint;
+            return c + clampedCore + n * cr;
+        }
+        return c + clampedCore;
+    }
+
+    const f32 toSide = rCore - radial;
+    const f32 toCap = hhCore - Abs(VectorSingle(d.y)).x;
+    if(toCap <= toSide){
+        if(d.y >= 0.0f)
+            outNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+        else
+            outNormal = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+    }
+    else if(radial > 1.0e-12f){
+        outNormal = VectorSingle(d.x / radial, 0.0f, d.z / radial, 0.0f);
+    }
+    else{
+        outNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    }
+    return localPoint;
+}
+
+VectorSingle ClosestPointOnConeLocal(in ConeShape cone, in VectorSingle localPoint, mut VectorSingle outNormal){
+    const VectorSingle c = cone.center();
+    const VectorSingle d = VectorSingle(localPoint - c, 0.0f);
+    const f32 r = cone.radius();
+    const f32 hh = cone.halfHeight();
+    const f32 height = 2.0f * hh;
+    const f32 radialSq = d.x * d.x + d.z * d.z;
+    const f32 radial = SqrtFast(radialSq);
+
+    const f32 tApex = SimdClamp((hh - d.y) / SimdMax(height, 1.0e-6f), 0.0f, 1.0f);
+    const f32 rAtY = r * tApex;
+    if(d.y >= -hh && d.y <= hh && radial <= rAtY){
+        VectorSingle sideN(0.0f, 1.0f, 0.0f, 0.0f);
+        if(radial > 1.0e-12f)
+            sideN = SafeNormalizeVec3(VectorSingle(d.x / radial, r / SimdMax(height, 1.0e-6f), d.z / radial, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const f32 baseDist = d.y - (-hh);
+        const f32 sideDist = (rAtY - radial) * height / SqrtFast(r * r + height * height);
+        if(baseDist <= sideDist)
+            outNormal = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+        else
+            outNormal = sideN;
+        return localPoint;
+    }
+
+    Array<f32x3u, 1u> ptPts;
+    ptPts[0u] = f32x3u(localPoint.x, localPoint.y, localPoint.z);
+    const ShapeProxyView ptView = MakeSpanProxyView(Span<f32x3u>(ptPts), 0.0f);
+    const ShapeProxy coneP = MakeConeProxy(cone);
+    SimplexCache cache;
+    const VectorSingle identPos(0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+    const DistanceOutput gjk = ShapeDistanceProxyViews(ptView, identPos, identRot, MakeShapeProxyView(coneP), identPos, identRot, true, cache);
+    if(gjk.distance() <= 1.0e-5f){
+        outNormal = SafeNormalizeVec3(-gjk.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        return localPoint;
+    }
+    outNormal = SafeNormalizeVec3(-gjk.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    return VectorSingle(gjk.pointB);
+}
+
+VectorSingle ClosestPointOnTaperedCapsuleLocal(in TaperedCapsuleShape tc, in VectorSingle localPoint, mut VectorSingle outNormal){
+    const VectorSingle p1 = tc.center1();
+    const VectorSingle p2 = tc.center2();
+    const f32 r1 = tc.radius1();
+    const f32 r2 = tc.radius2();
+    const ShapeProxy tcP = MakeTaperedCapsuleProxy(tc);
+    Array<f32x3u, 1u> ptPts;
+    ptPts[0u] = f32x3u(localPoint.x, localPoint.y, localPoint.z);
+    const ShapeProxyView ptView = MakeSpanProxyView(Span<f32x3u>(ptPts), 0.0f);
+    SimplexCache cache;
+    const VectorSingle identPos(0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+    const DistanceOutput gjk = ShapeDistanceProxyViews(ptView, identPos, identRot, MakeShapeProxyView(tcP), identPos, identRot, true, cache);
+    if(gjk.distance() <= 1.0e-5f){
+        const VectorSingle ab = VectorSingle(p2 - p1, 0.0f);
+        const f32 abSq = SimdMax(Vector3LengthSq(ab).x, 1.0e-12f);
+        const f32 u = SimdClamp(Vector3Dot(VectorSingle(localPoint - p1, 0.0f), ab).x / abSq, 0.0f, 1.0f);
+        const VectorSingle segPt = p1 + ab * u;
+        outNormal = SafeNormalizeVec3(localPoint - segPt, SafeNormalizeVec3(-ab, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+        if(Vector3LengthSq(VectorSingle(localPoint - segPt, 0.0f)).x <= 1.0e-10f){
+            if(r1 > r2)
+                outNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+        }
+        return localPoint;
+    }
+    outNormal = SafeNormalizeVec3(-gjk.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    return VectorSingle(gjk.pointB);
+}
+
+VectorSingle ClosestPointOnPlaneLocal(in PlaneShape plane, in VectorSingle localPoint, mut VectorSingle outNormal){
+    const VectorSingle n = plane.normal();
+    outNormal = n;
+    const f32 signedDist = Vector3Dot(n, localPoint).x - plane.offset();
+    if(plane.isFiniteExtent()){
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        ComputeTangentBasisFromUnitNormal(n, t1, t2);
+        const VectorSingle origin = n * plane.offset();
+        const VectorSingle rel = VectorSingle(localPoint - origin, 0.0f);
+        const VectorSingle relUV(Vector3Dot(rel, t1).x, Vector3Dot(rel, t2).x, 0.0f, 0.0f);
+        const VectorSingle extUV(plane.halfExtent.x, plane.halfExtent.z, 0.0f, 0.0f);
+        const VectorSingle clampedUV = Clamp(relUV, -extUV, extUV);
+        if(signedDist <= 0.0f && Vector3LessOrEqual(Abs(relUV), extUV))
+            return localPoint;
+        return origin + t1 * clampedUV.x + t2 * clampedUV.y + n * SimdMin(0.0f, signedDist);
+    }
+    if(signedDist <= 0.0f)
+        return localPoint;
+    return localPoint - n * signedDist;
+}
+
+VectorSingle ClosestPointOnSegmentLocal(in SegmentShape seg, in VectorSingle localPoint, mut VectorSingle outNormal){
+    const VectorSingle a = seg.point1();
+    const VectorSingle b = seg.point2();
+    const VectorSingle ab = VectorSingle(b - a, 0.0f);
+    const f32 abSq = Vector3LengthSq(ab).x;
+    f32 t = 0.0f;
+    if(abSq > 1.0e-12f)
+        t = SimdClamp(Vector3Dot(VectorSingle(localPoint - a, 0.0f), ab).x / abSq, 0.0f, 1.0f);
+    const VectorSingle segPt = a + ab * t;
+    const VectorSingle diff = VectorSingle(localPoint - segPt, 0.0f);
+    const f32 dSq = Vector3LengthSq(diff).x;
+    const f32 r = seg.radius();
+    outNormal = SafeNormalizeVec3(diff, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    if(r > 0.0f){
+        if(dSq <= r * r)
+            return localPoint;
+        return segPt + outNormal * r;
+    }
+    return segPt;
+}
+
+LocalRayHit RayCastCylinder(in CylinderShape cyl, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const VectorSingle localOrigin = InverseTransformPointValues(xfPos, xfRot, origin) - cyl.center();
+    const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), xfRot);
+    const f32 r = cyl.radius();
+    const f32 hh = cyl.halfHeight();
+    const f32 cr = cyl.convexRadius();
+
+    if(cr > 0.0f){
+        const ShapeProxy cylP = MakeCylinderProxy(cyl);
+        Array<f32x3u, 1u> ptPts;
+        ptPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+        const ShapeProxyView ptView = MakeSpanProxyView(Span<f32x3u>(ptPts), 0.0f);
+        const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+        const LocalRayHit castHit = ShapeCastProxyViews(ptView, origin, identRot, translation, MakeShapeProxyView(cylP), xfPos, xfRot, VectorSingle(0.0f), maxFraction);
+        if(!castHit.hit())
+            return hit;
+        if(castHit.fraction() > 0.0f){
+            const VectorSingle fallbackN = SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle outN = SafeNormalizeVec3(-castHit.normal(), fallbackN);
+            hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * castHit.fraction(), castHit.fraction());
+            hit.normalHit = f32x3_u32(outN.x, outN.y, outN.z, 1u);
+            return hit;
+        }
+        VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+        ClosestPointOnCylinderLocal(cyl, localOrigin + cyl.center(), localN);
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        hit.pointFraction = f32x4(origin, 0.0f);
+        hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+        return hit;
+    }
+
+    const f32 radial0Sq = localOrigin.x * localOrigin.x + localOrigin.z * localOrigin.z;
+    if(radial0Sq <= r * r && Abs(VectorSingle(localOrigin.y)).x <= hh){
+        VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+        ClosestPointOnCylinderLocal(cyl, localOrigin + cyl.center(), localN);
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        hit.pointFraction = f32x4(origin, 0.0f);
+        hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+        return hit;
+    }
+
+    f32 tMin = 0.0f;
+    f32 tMax = maxFraction;
+    VectorSingle enterN(0.0f, 1.0f, 0.0f, 0.0f);
+    b8 hasEnter = false;
+
+    const VectorSingle absRayY = Abs(VectorSingle(localDir.y, localOrigin.y, 0.0f, 0.0f));
+    if(absRayY.x <= 1.0e-12f){
+        if(absRayY.y > hh)
+            return hit;
+    }
+    else{
+        f32 ty0 = (-hh - localOrigin.y) / localDir.y;
+        f32 ty1 = (hh - localOrigin.y) / localDir.y;
+        VectorSingle ny0(0.0f, -1.0f, 0.0f, 0.0f);
+        if(ty0 > ty1){
+            const f32 tmp = ty0;
+            ty0 = ty1;
+            ty1 = tmp;
+            ny0 = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+        }
+        if(ty0 > tMin){
+            tMin = ty0;
+            enterN = ny0;
+            hasEnter = true;
+        }
+        if(ty1 < tMax)
+            tMax = ty1;
+        if(tMin > tMax)
+            return hit;
+    }
+
+    const f32 a = localDir.x * localDir.x + localDir.z * localDir.z;
+    const f32 b = localOrigin.x * localDir.x + localOrigin.z * localDir.z;
+    const f32 c = radial0Sq - r * r;
+    if(a <= 1.0e-12f){
+        if(c > 0.0f)
+            return hit;
+    }
+    else{
+        const f32 discr = b * b - a * c;
+        if(discr < 0.0f)
+            return hit;
+        const f32 sqrtD = SqrtFast(discr);
+        const f32 tr0 = (-b - sqrtD) / a;
+        const f32 tr1 = (-b + sqrtD) / a;
+        if(tr0 > tMin){
+            tMin = tr0;
+            const f32 hx = localOrigin.x + localDir.x * tr0;
+            const f32 hz = localOrigin.z + localDir.z * tr0;
+            enterN = SafeNormalizeVec3(VectorSingle(hx, 0.0f, hz, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            hasEnter = true;
+        }
+        if(tr1 < tMax)
+            tMax = tr1;
+        if(tMin > tMax)
+            return hit;
+    }
+
+    if(hasEnter && tMin >= 0.0f && tMin <= maxFraction){
+        const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(enterN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * tMin, tMin);
+        hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+    }
+    return hit;
+}
+
+LocalRayHit RayCastCone(in ConeShape cone, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const ShapeProxy coneP = MakeConeProxy(cone);
+    Array<f32x3u, 1u> ptPts;
+    ptPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+    const ShapeProxyView ptView = MakeSpanProxyView(Span<f32x3u>(ptPts), 0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+    const LocalRayHit castHit = ShapeCastProxyViews(ptView, origin, identRot, translation, MakeShapeProxyView(coneP), xfPos, xfRot, VectorSingle(0.0f), maxFraction);
+    if(!castHit.hit())
+        return hit;
+
+    if(castHit.fraction() > 0.0f){
+        const VectorSingle fallbackN = SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle outN = SafeNormalizeVec3(-castHit.normal(), fallbackN);
+        hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * castHit.fraction(), castHit.fraction());
+        hit.normalHit = f32x3_u32(outN.x, outN.y, outN.z, 1u);
+        return hit;
+    }
+
+    VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+    ClosestPointOnConeLocal(cone, InverseTransformPointValues(xfPos, xfRot, origin), localN);
+    const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    hit.pointFraction = f32x4(origin, 0.0f);
+    hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+    return hit;
+}
+
+LocalRayHit RayCastTaperedCapsule(in TaperedCapsuleShape tc, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const ShapeProxy tcP = MakeTaperedCapsuleProxy(tc);
+    Array<f32x3u, 1u> ptPts;
+    ptPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+    const ShapeProxyView ptView = MakeSpanProxyView(Span<f32x3u>(ptPts), 0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+    const LocalRayHit castHit = ShapeCastProxyViews(ptView, origin, identRot, translation, MakeShapeProxyView(tcP), xfPos, xfRot, VectorSingle(0.0f), maxFraction);
+    if(!castHit.hit())
+        return hit;
+
+    if(castHit.fraction() > 0.0f){
+        const VectorSingle fallbackN = SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle outN = SafeNormalizeVec3(-castHit.normal(), fallbackN);
+        hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * castHit.fraction(), castHit.fraction());
+        hit.normalHit = f32x3_u32(outN.x, outN.y, outN.z, 1u);
+        return hit;
+    }
+
+    VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+    ClosestPointOnTaperedCapsuleLocal(tc, InverseTransformPointValues(xfPos, xfRot, origin), localN);
+    const VectorSingle hitN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    hit.pointFraction = f32x4(origin, 0.0f);
+    hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+    return hit;
+}
+
+LocalRayHit RayCastPlane(in PlaneShape plane, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const VectorSingle localOrigin = InverseTransformPointValues(xfPos, xfRot, origin);
+    const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), xfRot);
+    const VectorSingle nLocal = plane.normal();
+    const f32 offset = plane.offset();
+    const f32 signed0 = Vector3Dot(nLocal, localOrigin).x - offset;
+    const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(nLocal, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+
+    if(signed0 <= 0.0f){
+        if(plane.isFiniteExtent()){
+            VectorSingle t1(0.0f);
+            VectorSingle t2(0.0f);
+            ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
+            const VectorSingle rel0 = VectorSingle(localOrigin - nLocal * offset, 0.0f);
+            const VectorSingle absRel0 = Abs(VectorSingle(Vector3Dot(rel0, t1).x, Vector3Dot(rel0, t2).x, 0.0f, 0.0f));
+            if(absRel0.x > plane.halfExtent.x || absRel0.y > plane.halfExtent.z)
+                return hit;
+        }
+        hit.pointFraction = f32x4(origin, 0.0f);
+        hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
+        return hit;
+    }
+
+    const f32 denom = Vector3Dot(nLocal, localDir).x;
+    if(denom >= -1.0e-8f)
+        return hit;
+    const f32 t = -signed0 / denom;
+    if(t < 0.0f || t > maxFraction)
+        return hit;
+
+    if(plane.isFiniteExtent()){
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
+        const VectorSingle localHit = localOrigin + localDir * t;
+        const VectorSingle rel = VectorSingle(localHit - nLocal * offset, 0.0f);
+        const VectorSingle absRel = Abs(VectorSingle(Vector3Dot(rel, t1).x, Vector3Dot(rel, t2).x, 0.0f, 0.0f));
+        if(absRel.x > plane.halfExtent.x || absRel.y > plane.halfExtent.z)
+            return hit;
+    }
+
+    hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * t, t);
+    hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
+    return hit;
+}
+
+LocalRayHit RayCastSegment(in SegmentShape seg, in VectorSingle xfPos, in VectorSingle xfRot, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    if(seg.radius() > 0.0f){
+        CapsuleShape cap;
+        cap.center1Radius = seg.point1Radius;
+        cap.center2 = seg.point2Meta;
+        return RayCastCapsule(cap, xfPos, xfRot, origin, translation, maxFraction);
+    }
+    LocalRayHit hit;
+    const VectorSingle a = TransformPointValues(xfPos, xfRot, seg.point1());
+    const VectorSingle b = TransformPointValues(xfPos, xfRot, seg.point2());
+    const VectorSingle u = VectorSingle(b - a, 0.0f);
+    const VectorSingle d = VectorSingle(translation, 0.0f);
+    const VectorSingle w0 = VectorSingle(origin - a, 0.0f);
+    const f32 aLenSq = Vector3Dot(d, d).x;
+    const f32 bDot = Vector3Dot(d, u).x;
+    const f32 cLenSq = Vector3Dot(u, u).x;
+    const f32 dDot = Vector3Dot(d, w0).x;
+    const f32 eDot = Vector3Dot(u, w0).x;
+    const f32 denom = aLenSq * cLenSq - bDot * bDot;
+    f32 sc = 0.0f;
+    f32 tc = 0.0f;
+    if(denom > 1.0e-12f){
+        sc = SimdClamp((bDot * eDot - cLenSq * dDot) / denom, 0.0f, maxFraction);
+        tc = SimdClamp((aLenSq * eDot - bDot * dDot) / denom, 0.0f, 1.0f);
+        sc = SimdClamp((bDot * tc - dDot) / SimdMax(aLenSq, 1.0e-12f), 0.0f, maxFraction);
+    }
+    const VectorSingle rayPt = origin + d * sc;
+    const VectorSingle segPt = a + u * tc;
+    const VectorSingle diff = VectorSingle(rayPt - segPt, 0.0f);
+    if(Vector3LengthSq(diff).x <= 1.0e-6f){
+        const VectorSingle hitN = SafeNormalizeVec3(diff, SafeNormalizeVec3(-d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+        hit.pointFraction = f32x4(rayPt, sc);
+        hit.normalHit = f32x3_u32(hitN.x, hitN.y, hitN.z, 1u);
+    }
+    return hit;
 }
 
 

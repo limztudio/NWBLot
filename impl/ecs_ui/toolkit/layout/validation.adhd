@@ -28,15 +28,6 @@ b8 HasUiRectArea(in Rect rectangle){
     return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
 }
 
-b8 HasValidHitTargetGeometry(in Rect rectangle, in Rect clip, in Rect gestureReference){
-    return
-        IsValidUiRect(rectangle)
-        && IsValidUiRect(clip)
-        && IsValidUiRect(gestureReference)
-        && ((gestureReference.width == 0.0f) == (gestureReference.height == 0.0f))
-    ;
-}
-
 b8 IsPreciseUiRect(in Rect rectangle){
     return HasValidUiRectDimensions(rectangle) && HasPreciseUiRectEndpoints(rectangle);
 }

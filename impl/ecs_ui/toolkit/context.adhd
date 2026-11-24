@@ -410,14 +410,6 @@ b8 CanDeclareNextContextWidget(in usize declarationCount){
     return declarationCount < s_WidgetMaxStates;
 }
 
-b8 ShouldInvalidateContextWidgetKind(in WidgetKind previousKind, in WidgetKind nextKind){
-    return previousKind != nextKind;
-}
-
-b8 ShouldRetireUnseenWidgetState(in WidgetState state, in u64 frameGeneration){
-    return state.lastSeenFrame != frameGeneration;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

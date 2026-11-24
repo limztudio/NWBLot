@@ -23,6 +23,7 @@ class RigidBodyComponentAsset : IComponent{
         dst.runtimeBodyId = BodyId();
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("collider_component")]
@@ -41,6 +42,7 @@ class ColliderComponentAsset : IComponent{
         dst.boundBodyId = BodyId();
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("joint_component")]
@@ -57,8 +59,18 @@ class JointComponentAsset : IComponent{
         dst.runtimeJointId = JointId();
         dst.boundBodyIdA = BodyId();
         dst.boundBodyIdB = BodyId();
+        dst.runtimeExtraJointIds.clear();
+        dst.boundExtraBodyIdAs.clear();
+        dst.boundExtraBodyIdBs.clear();
+        dst.bodyEntityA = s_InvalidEntityId;
+        dst.bodyEntityB = s_InvalidEntityId;
+        for(usize i = 0u; i < dst.extraJoints.size(); ++i){
+            dst.extraJoints[i].bodyEntityA = s_InvalidEntityId;
+            dst.extraJoints[i].bodyEntityB = s_InvalidEntityId;
+        }
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("physics_parent_component")]
@@ -74,6 +86,7 @@ class PhysicsParentComponentAsset : IComponent{
         dst.parent = s_InvalidEntityId;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [arena, asset("physics_world_config_component")]
@@ -89,6 +102,140 @@ class PhysicsWorldConfigComponentAsset : IComponent{
         dst.dirty = true;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("character_controller_component")]
+class CharacterControllerComponentAsset : IComponent{
+    public CharacterControllerComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut CharacterControllerComponent dst = entity.addComponent<CharacterControllerComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.syncFromTransform = false;
+        dst.def.ignoreBodyId = BodyId();
+        dst.def.ignoreShapeId = ShapeId();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("vehicle_component")]
+class VehicleComponentAsset : IComponent{
+    public VehicleComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut VehicleComponent dst = entity.addComponent<VehicleComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("ragdoll_component")]
+class RagdollComponentAsset : IComponent{
+    public RagdollComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut RagdollComponent dst = entity.addComponent<RagdollComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.instance.reset();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("fluid_volume_component")]
+class FluidVolumeComponentAsset : IComponent{
+    public FluidVolumeComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut FluidVolumeComponent dst = entity.addComponent<FluidVolumeComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("force_field_component")]
+class ForceFieldComponentAsset : IComponent{
+    public ForceFieldComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut ForceFieldComponent dst = entity.addComponent<ForceFieldComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("articulation_component")]
+class ArticulationComponentAsset : IComponent{
+    public ArticulationComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut ArticulationComponent dst = entity.addComponent<ArticulationComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.articulation.reset();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("soft_body_component")]
+class SoftBodyComponentAsset : IComponent{
+    public SoftBodyComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut SoftBodyComponent dst = entity.addComponent<SoftBodyComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("gpu_render_transform_export_component")]
+class GpuRenderTransformExportComponentAsset : IComponent{
+    public GpuRenderTransformExportComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut GpuRenderTransformExportComponent dst = entity.addComponent<GpuRenderTransformExportComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
 [serialize]
@@ -103,44 +250,45 @@ class PhysicsU32Binary{
 
 [serialize]
 class RigidBodyComponentPayloadBinary{
-    public u32 version = 2u;
-    public u8 bodyType = 2u;
-    public u8 flags = 0u;
-    public u16 reserved0 = 0u;
-    public u32 motionLocks = 0u;
-    public u32 reserved1 = 0u;
     public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 customCenterOfMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 customInertiaDiag(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 customInertiaOffDiag(0.0f, 0.0f, 0.0f, 0.0f);
+    public NameHash entityTagHash;
+    public u64 userData = 0u;
+    public u32 motionLocks = 0u;
     public f32 linearDamping = 0.0f;
     public f32 angularDamping = 0.01f;
     public f32 gravityScale = 1.0f;
     public f32 sleepThreshold = s_DefaultSleepThreshold;
-    public u64 userData = 0u;
-    public NameHash entityTagHash;
+    public f32 maxAngularVelocity = 0.0f;
     public f32 customMass = 1.0f;
-    public u32 reserved2 = 0u;
-    public u64 reserved3 = 0u;
-    public u64 reserved4 = 0u;
-    public f32x4 customCenterOfMass(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 customInertiaDiag(1.0f, 1.0f, 1.0f, 0.0f);
-    public f32x4 customInertiaOffDiag(0.0f, 0.0f, 0.0f, 0.0f);
+    public u16 flags = 0u;
+    public u8 bodyType = 2u;
+    public u8 reserved0 = 0u;
+    public u64 reserved1 = 0u;
 }
 
 [serialize]
 class ColliderShapeEntryHeaderBinary{
-    public u32 version = 2u;
-    public u8 shapeType = 2u;
-    public u8 flags = 0u;
-    public u16 reserved0 = 0u;
-    public i32 groupIndex = 0;
-    public u32 categoryBits = 1u;
-    public u32 maskBits = u32.max;
-    public u32 reserved1 = 0u;
-    public u64 reserved5 = 0u;
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
     public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
     public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 planeNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 heightfieldScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public NameHash meshAssetHash;
+    public NameHash materialAssetHash;
+    public NameHash convexHullAssetHash;
+    public NameHash collisionMeshAssetHash;
+    public u64 userData = 0u;
+    public i32 groupIndex = 0;
+    public u32 categoryBits = 1u;
+    public u32 maskBits = u32.max;
     public f32 radius = 0.5f;
     public f32 skinRadius = 0.0f;
     public f32 density = 1.0f;
@@ -148,37 +296,51 @@ class ColliderShapeEntryHeaderBinary{
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
-    public u32 reserved2 = 0u;
-    public NameHash meshAssetHash;
+    public f32 staticFriction = -1.0f;
+    public u32 vhacdMaxHulls = 16u;
+    public f32 cylinderHalfHeight = 0.5f;
+    public f32 topRadius = 0.25f;
+    public u32 heightfieldRows = 0u;
+    public u32 heightfieldCols = 0u;
+    public f32 heightfieldThickness = 0.0f;
+    public f32 chainRadius = 0.0f;
     public u32 hullPointCount = 0u;
     public u32 meshVertexCount = 0u;
     public u32 meshIndexCount = 0u;
-    public u32 reserved3 = 0u;
-    public u64 userData = 0u;
-    public u64 reserved4 = 0u;
+    public u32 heightfieldCount = 0u;
+    public u32 heightfieldMaterialCount = 0u;
+    public u32 heightfieldCellMaterialCount = 0u;
+    public u32 chainPointCount = 0u;
+    public u16 flags = 0u;
+    public u8 shapeType = 2u;
+    public u8 frictionCombineMode = cast<u8>(MaterialCombineMode::GeometricMean);
+    public u8 restitutionCombineMode = cast<u8>(MaterialCombineMode::Max);
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u64 reserved3 = 0u;
 }
 
 [serialize]
 class ColliderComponentPayloadHeaderBinary{
-    public u32 version = 2u;
-    public u32 extraShapeCount = 0u;
-    public u64 reserved0 = 0u;
     public NameHash entityTagHash;
+    public u32 extraShapeCount = 0u;
+    public u32 reserved0 = 0u;
 }
 
 [serialize]
 class JointComponentPayloadBinary{
-    public u32 version = 2u;
-    public u8 jointType = 0u;
-    public u8 flags = 0u;
-    public u16 reserved0 = 0u;
-    public u64 reserved1 = 0u;
     public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public NameHash bodyEntityNameAHash;
+    public NameHash bodyEntityNameBHash;
+    public u64 userData = 0u;
     public f32 length = 1.0f;
     public f32 minLength = 0.0f;
     public f32 maxLength = s_HugeCoordinate;
@@ -195,33 +357,49 @@ class JointComponentPayloadBinary{
     public f32 suspensionDampingRatio = 0.7f;
     public f32 breakForce = 0.0f;
     public f32 breakTorque = 0.0f;
-    public NameHash bodyEntityNameAHash;
-    public NameHash bodyEntityNameBHash;
-    public u64 userData = 0u;
-    public u64 reserved2 = 0u;
+    public f32 projectionLinearTolerance = 0.1f;
+    public f32 projectionAngularTolerance = 0.1f;
+    public f32 invMassScaleA = 1.0f;
+    public f32 invMassScaleB = 1.0f;
+    public f32 invInertiaScaleA = 1.0f;
+    public f32 invInertiaScaleB = 1.0f;
+    public f32 limitRestitution = 0.0f;
+    public f32 limitHertz = 0.0f;
+    public f32 limitDampingRatio = 1.0f;
+    public f32 swingLimitY = 0.0f;
+    public f32 springTarget = 0.0f;
+    public f32 steeringAngle = 0.0f;
+    public f32 suspensionRestLength = 0.0f;
+    public f32 ratio = 1.0f;
+    public f32 lengthA = 0.0f;
+    public f32 lengthB = 0.0f;
+    public u32 pathPointCount = 0u;
+    public u32 extraJointCount = 0u;
+    public Array<f32, 42u> sixDofParams;
+    public Array<u8, 8u> sixDofMotions;
+    public Array<u8, 8u> sixDofFlags;
+    public u16 flags = 0u;
+    public u8 jointType = 0u;
+    public u8 reserved0 = 0u;
+    public u32 reserved1 = 0u;
 }
 
 [serialize]
 class PhysicsParentComponentPayloadBinary{
-    public u32 version = 2u;
+    public NameHash parentEntityNameHash;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public NameHash parentEntityNameHash;
+    public u32 reserved2 = 0u;
 }
 
 [serialize]
 class PhysicsWorldConfigComponentPayloadBinary{
-    public u32 version = 2u;
-    public u8 backendMode = 0u;
-    public u8 flags = 0u;
-    public u16 reserved0 = 0u;
+    public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
+    public NameHash collisionLayerMatrixAssetHash;
     public u32 subStepCount = 4u;
     public u32 maxSubStepsPerFrame = 4u;
     public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
-    public u32 reserved1 = 0u;
-    public u64 reserved3 = 0u;
-    public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
     public f32 restitutionThreshold = s_RestitutionThreshold;
     public f32 hitEventThreshold = s_DefaultHitEventThreshold;
     public f32 contactHertz = s_MaxContactHertz;
@@ -229,7 +407,10 @@ class PhysicsWorldConfigComponentPayloadBinary{
     public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
     public f32 fixedDeltaTime = 1.0f / 60.0f;
     public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
-    public u32 reserved2 = 0u;
+    public f32 timeToSleep = s_TimeToSleep;
+    public u16 flags = 0u;
+    public u8 backendMode = 0u;
+    public u8 reserved0 = 0u;
 }
 
 

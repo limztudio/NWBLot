@@ -10,12 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_MaterialInstanceVectorComponentCount = 4u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialInstanceParameterNames{
     public Name parameterName;
     public Name blockName;
@@ -58,19 +52,6 @@ MaterialInstanceParameter BuildMaterialInstanceParameter(
     parameter.fieldType = fieldType;
     parameter.value = value;
     return parameter;
-}
-
-u32x4u PackMaterialInstanceBytes(in Span<u8> bytes){
-    assert(bytes.size() <= 16u);
-    if(bytes.empty())
-        return u32x4u(0u, 0u, 0u, 0u);
-
-    return u32x4u(
-        ReadPartialU32LittleEndian(bytes, 0u),
-        ReadPartialU32LittleEndian(bytes, 4u),
-        ReadPartialU32LittleEndian(bytes, 8u),
-        ReadPartialU32LittleEndian(bytes, 12u)
-    );
 }
 
 b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter){
@@ -181,16 +162,8 @@ b8 SetMaterialMutableParameter(
     return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
-u32x4u PackMaterialInstanceF32(in f32 value){
-    return u32x4u(BitCast<u32>(value), 0u, 0u, 0u);
-}
-
 u32x4u PackMaterialInstanceHalfBits(in u16 value){
     return u32x4u(cast<u32>(value), 0u, 0u, 0u);
-}
-
-u32x4u PackMaterialInstanceFloat4(in VectorSingle value){
-    return u32x4u(BitCast<u32>(value.x), BitCast<u32>(value.y), BitCast<u32>(value.z), BitCast<u32>(value.w));
 }
 
 u32x4u PackMaterialInstanceHalf4U(in f16x4u value){

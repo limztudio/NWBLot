@@ -124,26 +124,6 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntryValidated(
     return storedJointMatrix.value();
 }
 
-Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
-    in u64 handleValue,
-    in usize jointIndex,
-    in Span<SkeletonJointMatrix> sourceJoints,
-    in b8 hasInverseBindMatrices,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in b8 useDualQuaternionPayload
-){
-    return TryBuildSkinJointPaletteEntryValidated(
-        handleValue,
-        jointIndex,
-        sourceJoints,
-        false,
-        hasInverseBindMatrices,
-        inverseBindMatrices,
-        false,
-        useDualQuaternionPayload
-    );
-}
-
 b8 FillSkinJointPaletteSpanValidated(
     in u64 handleValue,
     in Span<SkeletonJointMatrix> sourceJoints,
@@ -176,24 +156,6 @@ b8 FillSkinJointPaletteSpanValidated(
     }
 
     return true;
-}
-
-b8 FillSkinJointPaletteSpan(
-    in u64 handleValue,
-    in Span<SkeletonJointMatrix> sourceJoints,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in u32 skinningMode,
-    mut Span<SkeletonJointMatrix> outJointPalette
-){
-    return FillSkinJointPaletteSpanValidated(
-        handleValue,
-        sourceJoints,
-        false,
-        inverseBindMatrices,
-        false,
-        skinningMode,
-        outJointPalette
-    );
 }
 
 [cpp_unwind]
@@ -245,29 +207,6 @@ b8 BuildSkinJointPaletteToGlobalVectorValidated(
     }
 
     return true;
-}
-
-[cpp_unwind]
-b8 BuildSkinJointPaletteToGlobalVector(
-    in u64 handleValue,
-    in u32 skeletonJointCount,
-    in usize skinCount,
-    in Span<SkeletonJointMatrix> sourceJoints,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in u32 skinningMode,
-    mut Vector<SkeletonJointMatrix> outJointPalette
-){
-    return BuildSkinJointPaletteToGlobalVectorValidated(
-        handleValue,
-        skeletonJointCount,
-        skinCount,
-        sourceJoints,
-        false,
-        inverseBindMatrices,
-        false,
-        skinningMode,
-        outJointPalette
-    );
 }
 
 b8 ValidateMeshSkinningInfluenceStream(

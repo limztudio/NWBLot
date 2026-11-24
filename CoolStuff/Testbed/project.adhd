@@ -16,6 +16,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         this.m_world = TakeNotNullUnique<World>(world);
         this.m_sceneSubsystems = ActiveSceneSubsystems();
         this.m_uiPreview = UiSkinPreview();
+        this.m_physicsDebugOptions.maxLines = 32768u;
     }
 
     public ~Project(){
@@ -57,20 +58,43 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             this.m_physicsSceneMode = this.m_pendingSceneMode;
             DestroyPhysicsSceneEntities(this.m_world, this.m_physicsConfigEntity, this.m_physicsEntities);
             if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress){
+                SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, false);
                 CreateStressPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
                 [essential] info("ProjectTestbed: switched physics scene to stress (240 dynamic bodies, 36 joints)");
             }
             else{
+                SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, true);
                 CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
                 [essential] info("ProjectTestbed: switched physics scene to default");
             }
+            if(this.m_physicsPaused)
+                SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, true);
+            SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
+            this.m_hasCachedHudStats = false;
             SyncWorldModelRuntimes(this.m_world);
             ResetTestbedCameraForPhysicsScene(this.m_world, this.m_physicsSceneMode);
         }
+        if(this.m_pendingPauseToggle){
+            this.m_pendingPauseToggle = false;
+            this.m_physicsPaused = !this.m_physicsPaused;
+            SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, this.m_physicsPaused);
+        }
 
         const f32 safeDelta = FlyCameraMotion().sanitizeDelta(delta);
+        this.m_hudStepTimer += safeDelta;
         this.updateMainCamera(safeDelta);
-        return TickProjectWorld(this.m_world, safeDelta);
+        b8 steppedPaused = false;
+        f32 tickDelta = safeDelta;
+        if(this.m_physicsPaused && this.m_physicsStepOnce){
+            this.m_physicsStepOnce = false;
+            SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, false);
+            tickDelta = 1.0f / 60.0f;
+            steppedPaused = true;
+        }
+        const b8 ticked = TickProjectWorld(this.m_world, tickDelta);
+        if(steppedPaused)
+            SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, true);
+        return ticked;
     }
 
     public void windowFocusUpdate(in b8 focused)override{
@@ -111,19 +135,30 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     }
 
     public void paintUiLayer(mut UiPaintContext context)override{
-        if(this.m_showPhysicsDebug)
-            PaintPhysicsDebugOverlay(this.m_world, context);
-        this.drawUiControls(context);
-        this.m_uiPreview.paint(context);
+        if(this.m_showPhysicsDebug){
+            const b8 prevTruncated = this.m_lastDebugDrawStats.truncated;
+            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_world, context, this.m_physicsDebugScratch, this.m_physicsScreenLines);
+            if(this.m_lastDebugDrawStats.truncated != prevTruncated)
+                this.m_uiWindow.initialized = false;
+        }
+        else{
+            if(this.m_lastDebugDrawStats.truncated)
+                this.m_uiWindow.initialized = false;
+            this.m_lastDebugDrawStats = PhysicsDebugDrawStats();
+        }
+        const UiSkinPreviewGalleryLayout galleryLayout = this.m_uiPreview.measureGalleryLayout(context);
+        this.drawUiControls(context, galleryLayout);
+        this.m_uiPreview.paintWithLayout(context, galleryLayout);
     }
 
     private b8 createDefaultScene(){
-        if(!InstantiateSceneSubsystemsEntities(this.m_sceneSubsystems, this.m_world)){
+        if(!InstantiateSceneSubsystemsEntities(this.m_sceneSubsystems, this.m_world, this.m_startupSceneEntities)){
             error("ProjectTestbed initialization failed: failed to instantiate scene entities");
             return false;
         }
 
         CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
+        SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
         AttachProjectUiPaintEntity(this.m_world, this);
         [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character, rigid-body tower + spheres on white ground plane");
         return true;
@@ -146,10 +181,11 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     }
 
     private void updateMainCamera(in f32 delta){
-        const b8 pointerCaptured = WantsUiPointer(this.m_world);
+        b8 pointerCaptured = false;
+        b8 keyboardCaptured = false;
+        QueryUiCaptureState(this.m_world, pointerCaptured, keyboardCaptured);
         const FlyCameraPointerDelta mouseDelta = this.m_cameraInput.takePointerDelta(pointerCaptured);
 
-        const b8 keyboardCaptured = WantsUiKeyboard(this.m_world);
         const VectorSingle moveAxes = FlyCameraMotion().buildMoveAxes(
             keyboardCaptured,
             this.m_cameraInput.keyPressed(Key::D),
@@ -157,6 +193,8 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             this.m_cameraInput.keyPressed(Key::W),
             this.m_cameraInput.keyPressed(Key::S)
         );
+        if(moveAxes.x == 0.0f && moveAxes.y == 0.0f && mouseDelta.x == 0.0f && mouseDelta.y == 0.0f)
+            return;
         const b8 boosted = !keyboardCaptured && (this.m_cameraInput.keyPressed(Key::LeftShift) || this.m_cameraInput.keyPressed(Key::RightShift));
 
         ApplyFlyCameraInputToMainCamera(this.m_world, moveAxes, boosted, VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f), delta);
@@ -169,70 +207,246 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         DestroyInitialProjectWorld(this.m_context, this.m_world);
     }
 
-    private void drawUiControls(mut UiPaintContext context){
+    private void drawUiControls(mut UiPaintContext context, in UiSkinPreviewGalleryLayout galleryLayout){
         WindowOptions options = WindowOptions();
-        options.initialBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
+        Rect overviewBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
+        if(this.m_uiWindow.bounds.width > 0.0f && this.m_uiWindow.bounds.height > 0.0f)
+            overviewBounds = this.m_uiWindow.bounds;
+        options.initialBounds = overviewBounds;
         options.contentHeightFirstUse = true;
-        const Expected<Rect> gallery = this.m_uiPreview.galleryBounds(context);
-        if(!gallery.has_value() || !CanShowTestbedOverviewWindow(gallery.value(), options.initialBounds))
+        if(!galleryLayout.valid || !CanShowTestbedOverviewWindow(galleryLayout.gallery, overviewBounds))
             return;
-        SeparatorOptions separator = SeparatorOptions();
-        separator.thickness = 1.0f;
-        TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
-        StringView backendName = "CPU";
-        if(stats.backendUsed == 2u)
-            backendName = "GPU";
-        else if(stats.backendUsed == 3u)
-            backendName = "CPU+GPU";
-        const String physicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, backendName);
-        const String splitLine = StringFormat(
-            "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
-            stats.cpuSolvedBodyCount,
-            stats.cpuSolvedIslandCount,
-            stats.gpuSolvedBodyCount,
-            stats.gpuSolvedIslandCount,
-            stats.stepMs
-        );
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
+            SeparatorOptions separator = SeparatorOptions();
+            separator.thickness = 1.0f;
+            TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
+            b8 hudLinesOk = true;
+            const b8 needPhysicsLine = !this.m_hasCachedHudStats
+                || stats.bodyCount != this.m_cachedHudStats.bodyCount
+                || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
+                || stats.contactCount != this.m_cachedHudStats.contactCount
+                || stats.jointCount != this.m_cachedHudStats.jointCount
+                || stats.islandCount != this.m_cachedHudStats.islandCount
+                || stats.backendUsed != this.m_cachedHudStats.backendUsed;
+            if(needPhysicsLine){
+                StringView backendName = "None";
+                if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
+                    backendName = "CPU";
+                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
+                    backendName = "GPU";
+                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
+                    backendName = "CPU+GPU";
+                hudLinesOk = this.m_cachedPhysicsLine.assign("Physics: ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.bodyCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" bodies (") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.awakeBodyCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" awake), ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.contactCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" contacts, ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.jointCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append("j/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.islandCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append("i (") && hudLinesOk;
+                hudLinesOk = this.m_cachedPhysicsLine.append(backendName) && hudLinesOk;
+                hudLinesOk = this.m_cachedPhysicsLine.append(")") && hudLinesOk;
+            }
+            f64 clampedStepMs = 0.0;
+            if(IsFinite(VectorDouble(stats.stepMs)) && stats.stepMs > 0.0){
+                const VectorDouble stepMsVec(stats.stepMs);
+                const VectorDouble maxStepMsVec(1.0e9);
+                clampedStepMs = VectorDoubleSelect(maxStepMsVec, stepMsVec, VectorDoubleLess(stepMsVec, maxStepMsVec)).x;
+            }
+            const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
+            const b8 countsChanged = !this.m_hasCachedHudStats
+                || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
+                || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
+                || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
+                || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount;
+            const b8 needSplitLine = countsChanged || (stepCentis != this.m_cachedStepCentis && this.m_hudStepTimer >= 0.1f);
+            if(needSplitLine){
+                this.m_hudStepTimer = 0.0f;
+                this.m_cachedStepCentis = stepCentis;
+                const u64 wholeMs = cast<u64>(stepCentis / 100);
+                const u64 fracMs = cast<u64>(stepCentis % 100);
+                hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
+                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedIslandCount));
+                hudLinesOk = this.m_cachedSplitLine.append("i | GPU ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedBodyCount));
+                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
+                hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
+                hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
+                if(fracMs < 10u)
+                    hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
+                hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
+            }
+            this.m_cachedHudStats = stats;
+            this.m_hasCachedHudStats = hudLinesOk;
             b8 declared =
                 context.ui.label("renderer", s_RendererLine)
                 && context.ui.separator("separator", separator)
                 && context.ui.label("character", s_CharacterLine)
                 && context.ui.separator("physics_sep", separator)
-                && context.ui.label("physics", StringView(physicsLine))
-                && context.ui.label("physics_split", StringView(splitLine))
+                && context.ui.label("physics", this.m_cachedPhysicsLine.view())
+                && context.ui.label("physics_split", this.m_cachedSplitLine.view())
             ;
             WidgetOptions btnOpts = WidgetOptions();
             btnOpts.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
             declared = context.ui.beginRow("physics_scene_row") && declared;
-            if(context.ui.button("scene_default", "Default", btnOpts)){
+            StringView defaultSceneLabel = "Default";
+            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Default)
+                defaultSceneLabel = "[Default]";
+            if(context.ui.button("scene_default", defaultSceneLabel, btnOpts)){
                 this.m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
                 this.m_pendingSceneSwitch = true;
             }
-            if(context.ui.button("scene_stress", "Stress (240)", btnOpts)){
+            StringView stressSceneLabel = "Stress (240)";
+            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress)
+                stressSceneLabel = "[Stress (240)]";
+            if(context.ui.button("scene_stress", stressSceneLabel, btnOpts)){
                 this.m_pendingSceneMode = TestbedPhysicsSceneMode::Stress;
                 this.m_pendingSceneSwitch = true;
             }
             StringView debugLabel = "Debug: Off";
             if(this.m_showPhysicsDebug)
                 debugLabel = "Debug: On";
-            if(context.ui.button("physics_debug_toggle", debugLabel, btnOpts))
+            if(context.ui.button("physics_debug_toggle", debugLabel, btnOpts)){
                 this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+                this.m_uiWindow.initialized = false;
+            }
             declared = context.ui.endContainer() && declared;
             declared = context.ui.beginRow("physics_backend_row") && declared;
-            if(context.ui.button("backend_hybrid", "Hybrid", btnOpts)){
+            StringView hybridLabel = "Hybrid";
+            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::Hybrid)
+                hybridLabel = "[Hybrid]";
+            if(context.ui.button("backend_hybrid", hybridLabel, btnOpts)){
                 this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
                 this.m_pendingBackendSwitch = true;
             }
-            if(context.ui.button("backend_cpu", "CPU", btnOpts)){
+            StringView cpuLabel = "CPU";
+            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::CpuOnly)
+                cpuLabel = "[CPU]";
+            if(context.ui.button("backend_cpu", cpuLabel, btnOpts)){
                 this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::CpuOnly;
                 this.m_pendingBackendSwitch = true;
             }
-            if(context.ui.button("backend_gpu", "GPU", btnOpts)){
+            StringView gpuLabel = "GPU";
+            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::GpuFull)
+                gpuLabel = "[GPU]";
+            if(context.ui.button("backend_gpu", gpuLabel, btnOpts)){
                 this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::GpuFull;
                 this.m_pendingBackendSwitch = true;
             }
             declared = context.ui.endContainer() && declared;
+            declared = context.ui.beginRow("physics_sim_row") && declared;
+            StringView pauseLabel = "Pause";
+            if(this.m_physicsPaused)
+                pauseLabel = "Resume";
+            if(context.ui.button("physics_pause_toggle", pauseLabel, btnOpts))
+                this.m_pendingPauseToggle = true;
+            if(context.ui.button("physics_step_once", "Step", btnOpts)){
+                if(!this.m_physicsPaused)
+                    this.m_pendingPauseToggle = true;
+                this.m_physicsStepOnce = true;
+            }
+            declared = context.ui.endContainer() && declared;
+            if(this.m_showPhysicsDebug){
+                if(this.m_lastDebugDrawStats.truncated)
+                    declared = context.ui.label("physics_debug_trunc", "Debug draw truncated at maxLines limit") && declared;
+                declared = context.ui.beginRow("physics_debug_filter_row") && declared;
+                StringView shapesLabel = "Shapes: On";
+                if(!this.m_physicsDebugOptions.drawShapes)
+                    shapesLabel = "Shapes: Off";
+                if(context.ui.button("physics_debug_shapes", shapesLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawShapes = !this.m_physicsDebugOptions.drawShapes;
+                StringView aabbLabel = "AABBs: Off";
+                if(this.m_physicsDebugOptions.drawAabbs)
+                    aabbLabel = "AABBs: On";
+                if(context.ui.button("physics_debug_aabbs", aabbLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawAabbs = !this.m_physicsDebugOptions.drawAabbs;
+                StringView bvhLabel = "Fat/BVH: Off";
+                if(this.m_physicsDebugOptions.drawFatAabbs || this.m_physicsDebugOptions.drawBroadPhaseTree || this.m_physicsDebugOptions.drawMeshBvh)
+                    bvhLabel = "Fat/BVH: On";
+                if(context.ui.button("physics_debug_bvh", bvhLabel, btnOpts)){
+                    const b8 nextBvh = !(this.m_physicsDebugOptions.drawFatAabbs || this.m_physicsDebugOptions.drawBroadPhaseTree || this.m_physicsDebugOptions.drawMeshBvh);
+                    this.m_physicsDebugOptions.drawFatAabbs = nextBvh;
+                    this.m_physicsDebugOptions.drawBroadPhaseTree = nextBvh;
+                    this.m_physicsDebugOptions.drawMeshBvh = nextBvh;
+                }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_debug_contact_row") && declared;
+                StringView contactLabel = "Contacts: On";
+                if(!this.m_physicsDebugOptions.drawContacts)
+                    contactLabel = "Contacts: Off";
+                if(context.ui.button("physics_debug_contacts", contactLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawContacts = !this.m_physicsDebugOptions.drawContacts;
+                StringView impLabel = "Spec/Imp: Off";
+                if(this.m_physicsDebugOptions.drawSpeculativeContacts || this.m_physicsDebugOptions.drawContactImpulses || this.m_physicsDebugOptions.drawContactDetails)
+                    impLabel = "Spec/Imp: On";
+                if(context.ui.button("physics_debug_contact_details", impLabel, btnOpts)){
+                    const b8 nextImp = !(this.m_physicsDebugOptions.drawSpeculativeContacts || this.m_physicsDebugOptions.drawContactImpulses || this.m_physicsDebugOptions.drawContactDetails);
+                    this.m_physicsDebugOptions.drawSpeculativeContacts = nextImp;
+                    this.m_physicsDebugOptions.drawContactImpulses = nextImp;
+                    this.m_physicsDebugOptions.drawContactDetails = nextImp;
+                }
+                StringView jointLabel = "Joints: On";
+                if(!this.m_physicsDebugOptions.drawJoints)
+                    jointLabel = "Joints: Off";
+                if(context.ui.button("physics_debug_joints", jointLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawJoints = !this.m_physicsDebugOptions.drawJoints;
+                StringView jForceLabel = "Forces: Off";
+                if(this.m_physicsDebugOptions.drawJointForces)
+                    jForceLabel = "Forces: On";
+                if(context.ui.button("physics_debug_joint_forces", jForceLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawJointForces = !this.m_physicsDebugOptions.drawJointForces;
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_debug_body_row") && declared;
+                StringView axesLabel = "Axes: Off";
+                if(this.m_physicsDebugOptions.drawBodyAxes || this.m_physicsDebugOptions.drawBodyOriginVsCom)
+                    axesLabel = "Axes: On";
+                if(context.ui.button("physics_debug_axes", axesLabel, btnOpts)){
+                    const b8 nextAxes = !(this.m_physicsDebugOptions.drawBodyAxes || this.m_physicsDebugOptions.drawBodyOriginVsCom);
+                    this.m_physicsDebugOptions.drawBodyAxes = nextAxes;
+                    this.m_physicsDebugOptions.drawBodyOriginVsCom = nextAxes;
+                }
+                StringView velLabel = "Vel: Off";
+                if(this.m_physicsDebugOptions.drawVelocities)
+                    velLabel = "Vel: On";
+                if(context.ui.button("physics_debug_vel", velLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawVelocities = !this.m_physicsDebugOptions.drawVelocities;
+                StringView islLabel = "Islands: Off";
+                if(this.m_physicsDebugOptions.drawIslands)
+                    islLabel = "Islands: On";
+                if(context.ui.button("physics_debug_islands", islLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawIslands = !this.m_physicsDebugOptions.drawIslands;
+                StringView disLabel = "Disabled: Off";
+                if(this.m_physicsDebugOptions.drawDisabledBodies)
+                    disLabel = "Disabled: On";
+                if(context.ui.button("physics_debug_disabled", disLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawDisabledBodies = !this.m_physicsDebugOptions.drawDisabledBodies;
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_debug_ext_row") && declared;
+                StringView subLabel = "Subsys: Off";
+                if(this.m_physicsDebugOptions.drawSubsystems)
+                    subLabel = "Subsys: On";
+                if(context.ui.button("physics_debug_subsys", subLabel, btnOpts))
+                    this.m_physicsDebugOptions.drawSubsystems = !this.m_physicsDebugOptions.drawSubsystems;
+                StringView interpLabel = "Interp: Off";
+                if(this.m_physicsDebugOptions.useInterpolatedTransforms)
+                    interpLabel = "Interp: On";
+                if(context.ui.button("physics_debug_interp", interpLabel, btnOpts)){
+                    this.m_physicsDebugOptions.useInterpolatedTransforms = !this.m_physicsDebugOptions.useInterpolatedTransforms;
+                    SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
+                }
+                declared = context.ui.endContainer() && declared;
+            }
             [essential] assert(declared);
         }
         const b8 ended = context.ui.endWindow();
@@ -255,7 +469,21 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private TestbedPhysicsBackendChoice m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
     private b8 m_pendingSceneSwitch = false;
     private b8 m_pendingBackendSwitch = false;
+    private b8 m_pendingPauseToggle = false;
+    private b8 m_physicsPaused = false;
+    private b8 m_physicsStepOnce = false;
+    private InstantiatedSceneEntities m_startupSceneEntities = InstantiatedSceneEntities();
     private b8 m_showPhysicsDebug = false;
+    private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
+    private PhysicsDebugDrawStats m_lastDebugDrawStats = PhysicsDebugDrawStats();
+    private PhysicsDebugDrawScratch m_physicsDebugScratch = PhysicsDebugDrawScratch();
+    private Vector<PaintLineSegment> m_physicsScreenLines;
+    private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
+    private CompactString m_cachedPhysicsLine;
+    private CompactString m_cachedSplitLine;
+    private i64 m_cachedStepCentis = -1;
+    private f32 m_hudStepTimer = 0.0f;
+    private b8 m_hasCachedHudStats = false;
 }
 
 

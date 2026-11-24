@@ -171,27 +171,6 @@ b8 ResolveSdfGlyphSupportBounds(in VectorDouble plane, in SdfGlyphSupportOffset 
     return true;
 }
 
-b8 TryLoadSdfGlyphSupport(
-    in VectorDouble plane,
-    in FontAtlasGlyph glyph,
-    in u32 pageWidth,
-    in u32 pageHeight,
-    in u32 channelCount,
-    in u32 spreadPixels,
-    in Span<u8> pixels,
-    in DisplayMetrics display,
-    mut VectorDouble outBounds
-){
-    if(plane.z <= 0.0 || plane.w <= 0.0){
-        outBounds = plane;
-        return true;
-    }
-    const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(plane.z, plane.w, glyph, pageWidth, pageHeight, channelCount, spreadPixels, pixels, display);
-    if(!offset.has_value())
-        return false;
-    return ResolveSdfGlyphSupportBounds(plane, offset.value(), outBounds);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

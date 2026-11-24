@@ -216,14 +216,6 @@ Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
     return ParseName(text.view());
 }
 
-Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView label){
-    return FindOrImportTexture(graph, texture, label);
-}
-
-Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureBuffer(mut GpuTaskGraph graph, in BufferHandle buffer, in StringView label){
-    return FindOrImportBuffer(graph, buffer, label);
-}
-
 [cpp_unwind]
 b8 AppendRefractionCaptureUpload(
     mut GpuTaskGraph graph,

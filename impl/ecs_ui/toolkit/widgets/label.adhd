@@ -13,12 +13,19 @@ class Label : NoCopy{
     private String m_text;
     private String m_language;
     private Expected<TextLayout, TextLayoutStatus> m_layout = MakeUnexpected(TextLayoutStatus::InvalidParameters);
+    private Rect m_measuredBounds = Rect();
     private u64 m_serviceIdentity = 0u;
     private u64 m_fontGeneration = 0u;
+    private u64 m_measuredAtlasIdentity = 0u;
+    private usize m_measuredAtlasGlyphCount = 0u;
     private f32 m_fontSize = s_TextDefaultFontSize;
     private u32 m_scriptTag = s_TextDefaultScriptTag;
+    private u32 m_measuredPixelScaleXBits = 0u;
+    private u32 m_measuredPixelScaleYBits = 0u;
     private TextDirection m_direction = TextDirection::LeftToRight;
     private b8 m_dirty = true;
+    private b8 m_hasMeasured = false;
+    private b8 m_measuredNeedsAtlasRecheck = false;
 
     public Label(){
         this.m_language.assign(s_TextDefaultLanguage);
@@ -43,8 +50,32 @@ class Label : NoCopy{
             this.m_serviceIdentity = text.identity();
             this.m_fontGeneration = text.generation();
             this.m_dirty = false;
+            this.m_hasMeasured = false;
         }
-        return text.measure(this.m_layout.value(), display);
+        const u32 scaleXBits = bit_cast<u32>(display.pixelScaleX);
+        const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
+        const u64 atlasIdentity = text.atlasIdentity();
+        const usize atlasGlyphCount = text.atlasGlyphCount();
+        if(
+            !this.m_hasMeasured
+            || this.m_measuredPixelScaleXBits != scaleXBits
+            || this.m_measuredPixelScaleYBits != scaleYBits
+            || this.m_measuredAtlasIdentity != atlasIdentity
+            || (this.m_measuredNeedsAtlasRecheck && this.m_measuredAtlasGlyphCount != atlasGlyphCount)
+        ){
+            b8 missingCoverage = false;
+            const Expected<Rect> bounds = text.measureTracked(this.m_layout.value(), display, missingCoverage);
+            if(!bounds.has_value())
+                return MakeUnexpected(Failure());
+            this.m_measuredBounds = bounds.value();
+            this.m_measuredPixelScaleXBits = scaleXBits;
+            this.m_measuredPixelScaleYBits = scaleYBits;
+            this.m_measuredAtlasIdentity = atlasIdentity;
+            this.m_measuredAtlasGlyphCount = atlasGlyphCount;
+            this.m_measuredNeedsAtlasRecheck = missingCoverage;
+            this.m_hasMeasured = true;
+        }
+        return this.m_measuredBounds;
     }
 
     public b8 paint(mut TextService text, mut PaintBuilder paint, in Rect bounds, in Color color){

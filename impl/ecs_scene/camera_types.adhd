@@ -140,10 +140,6 @@ CameraProjection StoreDefaultCameraProjection(in f32 fallbackAspectRatio){
     return MakeFallbackCameraProjection();
 }
 
-CameraProjection StoreDefaultCameraProjection(){
-    return StoreDefaultCameraProjection(s_CameraFallbackAspectRatio);
-}
-
 b8 IsValidCameraTransformVectors(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
     if(!IsFinite(position.xyz) || !IsFinite(rotation) || !IsFinite(scale.xyz))
         return false;

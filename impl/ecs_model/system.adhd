@@ -261,10 +261,6 @@ void ResetModelRuntimeState(mut ModelRuntimeComponent outRuntime){
     outRuntime.objectCount = 0u;
 }
 
-b8 MatchesModelObjectIdentity(in ModelObjectComponent object, in EntityID owner, in Name objectName){
-    return object.owner == owner && object.object == objectName;
-}
-
 MatrixSingle ComputeModelObjectWorldMatrix(in MatrixSingle parentMatrix, in MatrixSingle localMatrix){
     return Mul(parentMatrix, localMatrix);
 }

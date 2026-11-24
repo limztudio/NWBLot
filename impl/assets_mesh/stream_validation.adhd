@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_MeshValidatePayloadArena = "impl/assets_mesh/validate_payload";
-
 const f32 s_DirectionLengthTolerance = 0.01f;
 const f32 s_TangentHandednessTolerance = 0.001f;
 
@@ -74,20 +72,6 @@ b8 ValidateMeshletEncodedPositionRefsWithLayout(
     return true;
 }
 
-b8 ValidateMeshletEncodedPositionRefs(
-    in Span<u8> positionRefDeltas,
-    in MeshletDesc meshlet,
-    in u32 encodedPositionCount,
-    in usize positionCount
-){
-    for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-        const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false);
-        if(!ref.has_value() || !MeshletPositionRefInRange(ref.value(), positionCount, 0u, false))
-            return false;
-    }
-    return true;
-}
-
 b8 ValidateMeshletEncodedAttributeRefsWithLayout(
     in Span<u8> attributeRefDeltas,
     in MeshletDesc meshlet,
@@ -100,23 +84,6 @@ b8 ValidateMeshletEncodedAttributeRefsWithLayout(
 ){
     for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
         const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRefWithLayout(attributeRefDeltas, meshlet, layout, localAttributeIndex);
-        if(!ref.has_value() || !MeshletAttributeRefInRange(ref.value(), normalCount, tangentCount, uv0Count, colorCount))
-            return false;
-    }
-    return true;
-}
-
-b8 ValidateMeshletEncodedAttributeRefs(
-    in Span<u8> attributeRefDeltas,
-    in MeshletDesc meshlet,
-    in u32 attributeCount,
-    in usize normalCount,
-    in usize tangentCount,
-    in usize uv0Count,
-    in usize colorCount
-){
-    for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-        const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
         if(!ref.has_value() || !MeshletAttributeRefInRange(ref.value(), normalCount, tangentCount, uv0Count, colorCount))
             return false;
     }

@@ -50,7 +50,7 @@ the parent project's `third_party/`, `3rdparty/`, `external/`, or `imported/` sn
   - Example: TinyEXR was first lifted from Basis Universal `encoder/3rdparty`. It now tracks
     https://github.com/syoyo/tinyexr, not BinomialLLC/basis_universal.
   - Example: QOI tracks https://github.com/phoboslab/qoi. tinydds tracks https://github.com/DeanoC/tiny_dds.
-    RapidJSON tracks https://github.com/Tencent/rapidjson. zstd tracks https://github.com/facebook/zstd.
+    RapidJSON tracks https://github.com/Tencent/rapidjson. zstd tracks https://github.com/meta/zstd.
 - If the official copy and a nested snapshot differ, take the official copy. Re-apply only NWB-local patches
   the engine still needs (toolchain, ARM64, documented correctness). Record those patches in `notes:`.
 - If a nested file has no independent official repo — it is owned by the parent project — the parent project's
@@ -78,8 +78,8 @@ the parent project's `third_party/`, `3rdparty/`, `external/`, or `imported/` sn
 ### 3.1 Format example
 ```
 package: zstd
-version: 1.5.7
-updated_utc: 2026-06-23T16:02:45Z
-source: https://github.com/facebook/zstd/releases/tag/v1.5.7
-notes: Zstandard. Built STATIC from upstream single-file amalgamation. Only inc/ + src/zstd.c are used. Originally flattened out of rdf/imported; subsequent updates come from facebook/zstd.
+version: 1.6.0
+updated_utc: 2026-11-24T06:00:14Z
+source: https://github.com/meta/zstd/releases/tag/v1.6.0
+notes: Zstandard. Built STATIC from the upstream single-file amalgamation; see the package record for local changes.
 ```

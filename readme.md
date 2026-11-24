@@ -124,6 +124,12 @@ The Vulkan backend validates required device capabilities at startup. `VK_EXT_de
 
 The runtime texture loader selects formats according to device support, including BC and ASTC-capable GPUs. `tex_conv` writes raw linear UASTC blocks to `.tex` and the format, dimension, resolution, and alpha layout to its same-basename `.nwb` pair. Texture cooking derives the checked mip layout from that metadata and packages the raw blocks. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
 
+## Physics
+
+The 3D physics implementation lives in `impl/physics` (`nwb_physics`), with GPU dispatch in `impl/physics/gpu` (`nwb_physics_gpu`). `PhysicsWorld` owns simulation state, while `impl/ecs_physics` (`nwb_ecs_physics`) synchronizes rigid bodies, colliders, joints, transforms, and physics-parent relationships with the ECS. The system also publishes body, contact, sensor, and joint events. Its GPU-enabled constructor attaches the graphics runtime and asset manager; a world-only constructor is available for CPU use.
+
+Physics scene components and their cooking/runtime support live in `impl/assets_physics`. The world configuration supports `auto`, `cpu_only`, and `gpu_preferred` backend modes; automatic dispatch considers the configured body threshold. Testbed integrates `PhysicsSystem`, and physics tests live under `tests/unit/physics` in target `nwb_physics_tests`.
+
 ## Macro and namespace ownership
 
 Neutral `global/` utility, configuration, and diagnostic macros use `FOUNDATION_`, while engine-domain and shader feature macros use `NWB_`. Application-owned macro APIs use an application prefix, such as `TESTBED_`. External/compiler interoperability spellings and existing `g_*` shader resource aliases retain their current contracts. Utility types and functions retain their existing scopes.

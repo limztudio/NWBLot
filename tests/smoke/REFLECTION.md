@@ -53,9 +53,8 @@ therefore stores 7,372,536 bytes (about 7.03 MiB) with RG32, or about 14.06 MiB 
 RGBA32, excluding driver alignment and metadata. Building mip zero reads nine
 neighboring depth samples per pixel. The additional maximum-depth channel costs
 more storage and reduction bandwidth than a minimum-only hierarchy, while
-allowing empty intervals behind visible surfaces to be skipped. Using min/max depth intervals allows empty intervals behind visible surfaces
-to be skipped so backward-camera rays stay within the 96-step limit without
-relying on unbounded iteration.
+allowing empty intervals behind visible surfaces to be skipped so backward-camera
+rays stay within the 96-step limit without relying on unbounded iteration.
 
 The dedicated `nwb_reflection_smoke` target compiles `reflection_optical_scenes.adhd`,
 `reflection_suite_scenes.adhd`, and `reflection_probes_and_runtime.adhd` and links
@@ -212,7 +211,9 @@ Registered reflection capture CTests in `tests/smoke/reflection_smoke.cmake` are
 - `nwb_reflection_optical_capture_smoke` (`reflection_smoke.py --suite optical`)
 - `nwb_reflection_feedback_capture_smoke` (`reflection_smoke.py --suite feedback`)
 - `nwb_reflection_feedback_diagnostics_off_capture_smoke` (`reflection_smoke.py --suite feedback-diagnostics-off`)
-- `nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`, registered alongside caustic smokes)
+
+`nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`) is registered
+alongside the caustic smokes in `tests/smoke/CMakeLists.txt`.
 
 The interactive launcher scene is
 `reflection`, with `--reflection-case

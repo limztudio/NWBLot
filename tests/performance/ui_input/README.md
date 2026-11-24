@@ -2,7 +2,7 @@
 
 This opt-in workload measures public input routing, pressed-state queries, paint publication, and editor work. It is separate from correctness CTest suites and does not expose production test hooks.
 
-Enable `NWB_BUILD_UI_INPUT_BENCHMARK=ON` in a normal configured build, then build the `nwb_ui_input_benchmark` target in `opt`. Run the executable directly to inspect its JSON case records. Each case warms its state, calibrates a batch to at least 20 milliseconds, records 11 samples, and checks that its semantic checksum stays constant independently of the calibrated iteration count.
+Enable `NWB_BUILD_TESTS=ON` and `NWB_BUILD_UI_INPUT_BENCHMARK=ON`, then build the `nwb_ui_input_benchmark` target in `opt`. The full presets already enable tests; engine and project presets require the explicit test option. Run the executable directly to inspect its JSON case records. Each case warms its state, calibrates a batch to at least 20 milliseconds, records 11 samples, and checks that its semantic checksum stays constant independently of the calibrated iteration count.
 
 Capture a complete runnable baseline executable and its dependencies before rebuilding the candidate. Use the same toolchain, configuration, host, runtime libraries, and workload sources. Do not build, run other tests, or edit either input while collecting timings.
 

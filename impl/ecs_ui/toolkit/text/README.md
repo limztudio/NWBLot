@@ -140,6 +140,9 @@ atlas entries. The exact prepared bitmap rectangles then exclude hidden images b
 one combined coverage/SDF page admission and ordered quad emission. Empty clips and
 zero alpha prepare no glyphs or image bindings after normal parameter validation.
 
+The text service clears and reuses owner-arena preparation buffers and reserves
+prepared-glyph capacity for the layout glyph count before visibility filtering.
+
 Hidden document glyphs consume atlas entries only when their conservative bounds intersect
 the clip. A conservative candidate can still warm the coverage cache even when its final
 bitmap is outside the clip. Cache limits apply cumulatively to glyphs encountered by

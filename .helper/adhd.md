@@ -112,7 +112,7 @@ f32 ComputePaddedWidth(in ElementBox box){
    - Use `Optional<T>`, `Expected<T, E>`, or `AssetRef<T>` when absence or failure is possible.
 7. **No C++-Style `const` Type Qualifiers or Native C Scalar Names**:
    - Read-only parameters use `in T` (never `const T` or `const T&`).
-   - `const` is permitted only on file-level compile-time constants (`const u32 s_Limit = 16u;`), non-type template parameters (`<const usize N>`), and read-only method suffixes (`)const`).
+   - `const` marks file-level compile-time constants (`const u32 s_Limit = 16u;`), immutable local values (`const auto value = expression;`), non-type template parameters (`<const usize N>`), and read-only method suffixes (`)const`).
    - Use NWBLot scalar types (`b8`, `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `isize`, `usize`, `f32`, `f64`, `void`); `bool`, `int`, `float`, `double`, `char`, `short`, `long`, `unsigned`, and `signed` are prohibited.
 8. **No `Move`, Exceptions (`try`/`catch`/`throw`), `goto`, Ternary (`? :`), C-Style Casts, C-Style Arrays (`T[N]`), or Bitfields**:
    - The compiler may emit `Move(...)` at last use when its analysis permits it.

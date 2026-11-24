@@ -133,7 +133,7 @@
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.
-2. ECS worlds and graphics own `Core::CpuTaskScope` task lifetimes and borrow the scheduler. Vulkan recording, data preparation, and cooking use the same scheduler through dependencies and synchronous task batches; subsystems must not create private thread pools.
+2. ECS worlds own `Core::CpuTaskScope` task lifetimes and borrow the scheduler. Graphics borrows the same scheduler; Vulkan recording, data preparation, and cooking use it through dependencies and synchronous task batches. Subsystems must not create private thread pools.
 3. Engine, renderer, asset, and cooker work uses `CpuTaskScheduler`/`CpuTaskScope`. The retired per-subsystem pool/job implementations and scheduler facades have been removed; do not restore them as compatibility APIs.
 4. Declare CPU cost (`Heavy`, `Light`, `Any`), priority, and required main-thread execution through `CpuTaskOptions`. The scheduler owns processor placement and worker identity. Heavy/light cost is independent of task priority.
 5. Task completion includes the callback, its submitted descendants, and capture retirement. A CPU completion handle does not imply GPU completion; GPU resource readiness continues to use the GPU runtime's submission/completion contracts.

@@ -129,8 +129,9 @@ file remains the raw block stream. Runtime sampling always uses linear formats.
 ## Publication and result contracts
 
 Publication stages both files before moving existing regular outputs to sibling
-`.old` backups. It removes the backups after both replacements succeed and
-restores previous outputs on failure. Existing `.tmp` or `.old` work paths
+`.old` backups. After both replacements succeed it attempts to remove the backups;
+a cleanup error is reported as a warning and may leave a backup in place. On
+publication failure it attempts to restore previous outputs. Existing `.tmp` or `.old` work paths
 cause refusal. If the filesystem also refuses rollback, the converter reports
 the failure and retains previous `.old` files for recovery.
 The transaction handles one conversion's reported failures and exception unwind;

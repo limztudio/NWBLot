@@ -31,7 +31,7 @@ Configuration selects a supported C++23-or-newer frontend mode and compiles a re
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
 
-Linux builds require X11, zlib, libcurl, and oneTBB development packages. Wayland support is enabled when the Wayland client, scanner, protocols, and xkbcommon development files are available.
+Linux builds require X11, zlib, libcurl, and oneTBB development packages. The `NWB_ENABLE_WAYLAND` option defaults to on for Linux; Wayland support is enabled when that option is on and the Wayland client, scanner, protocols, and xkbcommon development files are available.
 
 See [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for installation details, tool discovery, every preset, output locations, and focused test commands.
 

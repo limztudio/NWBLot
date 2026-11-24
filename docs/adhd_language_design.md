@@ -65,7 +65,7 @@
     }
     ```
   - Enumerators are accessed via `Type::Entry` or `var::Entry`. Count sentries must be named `kCount` (using `Count` is a compile error).
-  - `flag<SizeType>` auto-shifts uninitialized entries after `0` (`1 << 0`, `1 << 1`, ...) and emits bitwise operators (`|`, `&`, `^`, `~`, `|=`, `&=`, `^=`) automatically. Both `enum` and `flag` lower to NWB's `namespace Name{ enum Enum : SizeType{ ... }; };` pattern (`::Enum` or `::Flag` inside `[reflect]` or `extern` bindings).
+  - `flag<SizeType>` auto-shifts uninitialized entries after `0` (`1 << 0`, `1 << 1`, ...) and emits bitwise operators (`|`, `&`, `^`, `~`, `|=`, `&=`, `^=`) automatically. An `enum` lowers to `namespace Name{ enum Enum : SizeType{ ... }; };`; a `flag` uses `enum Flag` in the same namespace shape.
 - **`type` (Type Alias)**:
   - Declares a type alias or generic type alias (lowers to C++ `using` / `template<...> using`):
     ```cpp
@@ -229,7 +229,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
   - Sequential: `Array<T, Capacity>`, `FixedVector<T, Capacity>`, `Vector<T>`, `ParallelVector<T>`, `ForwardList<T>`, `List<T>`, `Deque<T>`
   - Associative: `Set<T>`, `HashSet<T>`, `ParallelHashSet<T>`, `Map<K, V>`, `HashMap<K, V>`, `ParallelHashMap<K, V>`
   - Queues & utilities: `Queue<T>`, `ParallelQueue<T>`, `ParallelBlockQueue<T, BlockSize>`, `CompressedPair<A, B>`, `FixedIndexMap<K>`
-  - Owning containers lower to arena-backed `Container<..., ::ArenaBase>` (or `Container<..., ArenaCacheAlignedAllocator<...>>` for `Parallel*`), rebinding across arenas automatically on construction/assignment.
+  - Owning containers lower to arena-backed `Container<..., ::ArenaBase>`, rebinding across arenas automatically on construction/assignment. The `Parallel*` aliases select `ContainerDetail::ArenaCacheAlignedAllocator` internally.
 - **Views & Implicit Conversions**:
   - `Span<T>` is read-only (`Span<const T>`). `Vector<T>`, `Array<T, N>`, and `FixedVector<T, N>` convert implicitly to `Span<T>`.
   - `StringView` (`AStringView`) is a read-only UTF-8 view; `String` and `CompactString` convert implicitly to `StringView`.
@@ -247,7 +247,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 ## 6. Arena Memory Management Model
 
 1. **No Explicit `*Arena` Types**:
-   - Referencing `ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, or `TelemetryArena` anywhere in `.adhd` is a compile-time error.
+   - Using `ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, or `TelemetryArena` as an authored type or expression is a compile-time error. C++ binding attributes may name these types inside their C++ spelling strings.
 2. **Root Owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`)**:
    - Asset, subsystem, component, and system classes must pair their role attribute with `arena`.
    - Standalone `[arena]` and `[arena, component("...")]` classes own a `s_ClassArena` (`GlobalArena`).

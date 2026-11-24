@@ -23,7 +23,7 @@
 19. ECS renderer material assets expose only `mesh` and `ps` stages. Do not add a user-authored `cs` or `task` stage for this path; the cooker derives the internal compute-emulation stage from the mesh shader source automatically.
 20. In the ECS renderer mesh pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
 21. `Core::Filesystem::IFilesystem::writeFileDeferred()` copies payload bytes before returning; caller-local temporary buffers only need to stay alive for the duration of the call, so reuse/scratch-backed staging payload buffers are valid there.
-22. The public math API in `global/` lives at global scope, not under `NWB::Math`. `SIMDMatrix` stores row vectors in `v[0..3]`, translation lives in the fourth column (`v[0..2].w`), and `Vector*Transform` functions evaluate `result = M * v`; do not mix row-vector formulas into this layer without an explicit transpose/convention bridge.
+22. The public math API in `global/` lives at global scope, not under `NWB::Math`. `SIMDMatrix` stores row vectors in `v[0..3]`, translation lives in the W lanes of rows `v[0..2]`, and `Vector*Transform` functions evaluate `result = M * v`; do not mix row-vector formulas into this layer without an explicit transpose/convention bridge.
 23. The math subsystem lives under `global/`, with SIMD component headers under `global/simd/`; keep math in the `global/` utility domain instead of a separate top-level `math/` tree.
 24. `global/simplemath.h` owns scalar helper wrappers, and `global/simdmath.h` aggregates the SIMD headers under `global/simd/`, including types, conversion, vectors, matrices, collision, and frame operations. Vector and matrix aggregate headers include their operation-specific headers.
 25. The public math layer in `global/` must not depend on an external upstream math checkout at include time; use the checked-in `global/simd/` implementation directly.
@@ -184,7 +184,7 @@ The CSG shadow tail is conditional on a ready light-space snapshot with CSG enab
 ## Math Matrix Layout
 
 1. In `global/simd/matrix.h`, `SIMDMatrix::v[0..3]` stores rows.
-2. Translation lives in the fourth column (`v[0].w`, `v[1].w`, `v[2].w`); `MatrixTranslation*` and `MatrixLookTo*` already produce the storage layout consumed by `Vector*Transform`.
+2. Translation lives in the fourth column, the W lanes of `v[0]`, `v[1]`, and `v[2]`; `MatrixTranslation*` and `MatrixLookTo*` already produce the storage layout consumed by `Vector*Transform`.
 3. `Vector*Transform` functions evaluate `result = M * v`; if a helper needs row-vector semantics, make the conversion explicit instead of changing the public math convention.
 4. Stream transforms in `global/simd/vector.h` build transposed temporaries for backend efficiency only; those transposes are implementation details, not a different API convention.
 5. Compact affine matrix boundaries are convention-sensitive: `Float34` / `Float34U` are the current 3x4 storage snapshots. Do not add an extra transpose in `LoadFloat` / `StoreFloat` for those types, or translation/basis data will round-trip incorrectly.

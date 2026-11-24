@@ -1,5 +1,7 @@
 # Deferred optical appearance experiment (September 12, 2026)
 
+> **Historical record:** This report preserves the recorded experiment and its results at the time of qualification. Current reflection behavior and tests are described in [the reflection guide](REFLECTION.md).
+
 The deferred-appearance optimization was **rejected and removed**. It passed the scoped correctness checks, but the fixed 16-trial experiment did not establish a useful GPU-time reduction. The existing reflection implementation and defaults remain in place. This is separate from the historical [September 9 performance report](REFLECTION_PERFORMANCE.md); its samples are not pooled with that report.
 
 ## Candidate and retained changes

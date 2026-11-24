@@ -10,8 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_SubsystemPhysicsComponentBinaryVersion = 1u;
-
 const u8 s_CharCtrlFlagHitSensors = 0x01u;
 const u8 s_CharCtrlFlagStickToFloor = 0x02u;
 const u8 s_CharCtrlFlagPushDynamicBodies = 0x04u;
@@ -63,7 +61,6 @@ const u8 s_GpuExportFlagEnabled = 0x01u;
 [serialize]
 class CharacterControllerComponentBinary{
     public f32x4 up(0.0f, 1.0f, 0.0f, 0.0f);
-    public u32 version = 1u;
     public f32 radius = 0.35f;
     public f32 halfHeight = 0.55f;
     public f32 skinWidth = 0.02f;
@@ -81,11 +78,11 @@ class CharacterControllerComponentBinary{
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
 }
 
 [serialize]
 class VehicleComponentBinary{
-    public u32 version = 1u;
     public u32 wheelCount = 0u;
     public u32 gearCount = 5u;
     public i32 requestedGear = 1;
@@ -109,7 +106,6 @@ class VehicleComponentBinary{
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public u32 reserved2 = 0u;
 }
 
 [serialize]
@@ -143,14 +139,12 @@ class VehicleWheelBinary{
 
 [serialize]
 class RagdollComponentBinary{
-    public u32 version = 1u;
     public u32 boneCount = 0u;
     public u32 targetPoseCount = 0u;
     public f32 driveStrengthMultiplier = 1.0f;
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public u32 reserved2 = 0u;
 }
 
 [serialize]
@@ -209,7 +203,6 @@ class FluidVolumeComponentBinary{
     public f32x4 boundsLower(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 boundsUpper(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 flowVelocity(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 version = 1u;
     public u8 shape = 0u;
     public u8 flags = 0u;
     public u16 reserved0 = 0u;
@@ -223,6 +216,7 @@ class FluidVolumeComponentBinary{
     public i32 filterGroupIndex = 0;
     public u32 reserved1 = 0u;
     public u32 reserved2 = 0u;
+    public u32 reserved3 = 0u;
 }
 
 [serialize]
@@ -230,7 +224,6 @@ class ForceFieldComponentBinary{
     public f32x4 boundsLower(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 boundsUpper(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 originOrDirection(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 version = 1u;
     public u8 fieldType = 1u;
     public u8 flags = 0u;
     public u16 reserved0 = 0u;
@@ -244,11 +237,11 @@ class ForceFieldComponentBinary{
     public u32 filterMaskBits = u32.max;
     public i32 filterGroupIndex = 0;
     public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
 }
 
 [serialize]
 class ArticulationComponentBinary{
-    public u32 version = 1u;
     public u32 linkCount = 0u;
     public u32 proxyNameCount = 0u;
     public u8 flags = 0u;
@@ -283,7 +276,6 @@ class ArticulationLinkBinary{
 
 [serialize]
 class SoftBodyComponentBinary{
-    public u32 version = 1u;
     public u32 particleCount = 0u;
     public u32 distCount = 0u;
     public u32 bendCount = 0u;
@@ -358,12 +350,12 @@ class SoftBodyAttachmentBinary{
 [serialize]
 class GpuRenderTransformExportComponentBinary{
     public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
-    public u32 version = 1u;
     public u32 instanceIndex = 0u;
     public u32 flags = 0u;
     public u8 enabledFlag = 1u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
 }
 
 
@@ -380,7 +372,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(b.linearVelocity)) || !IsFinite(VectorSingle(b.angularVelocity)))
             return false;
-        if(!IsFinite(VectorSingle(b.linearDamping, b.angularDamping, b.gravityScale, b.sleepThreshold)) || !IsFinite(b.maxAngularVelocity))
+        if(!IsFinite(VectorSingle(b.linearDamping, b.angularDamping, b.gravityScale, b.sleepThreshold)) || !IsFinite(VectorSingle(b.maxAngularVelocity)))
             return false;
         return b.linearDamping >= 0.0f && b.angularDamping >= 0.0f && b.sleepThreshold >= 0.0f && b.maxAngularVelocity >= 0.0f;
     }
@@ -389,7 +381,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         in CharacterControllerDef d = c.def;
         if(!IsFinite(VectorSingle(d.radius, d.halfHeight, d.skinWidth, d.maxSlopeAngleRad)))
             return false;
-        if(!IsFinite(VectorSingle(d.stepUpHeight, d.stepDownHeight, d.maxStrength, d.mass)) || !IsFinite(d.predictiveContactDistance))
+        if(!IsFinite(VectorSingle(d.stepUpHeight, d.stepDownHeight, d.maxStrength, d.mass)) || !IsFinite(VectorSingle(d.predictiveContactDistance)))
             return false;
         if(!IsFinite(VectorSingle(d.up)) || LengthSq(VectorSingle(d.up.x, d.up.y, d.up.z, 0.0f)) <= s_NormalizeEpsilonSq)
             return false;
@@ -420,7 +412,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         in CharacterControllerDef d = c.def;
         CharacterControllerComponentBinary bin;
-        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
         bin.up = d.up;
         bin.radius = d.radius;
         bin.halfHeight = d.halfHeight;
@@ -463,8 +454,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in CharacterControllerComponentBinary bin = res.value();
-        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xe0u) != 0u){
-            error("CharacterControllerComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
+            error("CharacterControllerComponentAsset::loadComponentPayload failed: unsupported flags");
             return MakeUnexpected(Failure());
         }
         CharacterControllerComponent c;
@@ -507,10 +498,11 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         if(eng.maxTorque < 0.0f || eng.idleRpm < 0.0f || eng.maxRpm <= 0.0f || eng.differentialBias < 0.0f || eng.differentialBias > 1.0f || eng.trackWidth <= 0.0f || eng.wheelbase <= 0.0f)
             return false;
-        for(u32 gi = 0u; gi < 6u; ++gi){
-            if(!IsFinite(eng.forwardGearRatios[gi]))
-                return false;
-        }
+        if(
+            !IsFinite(VectorSingle(eng.forwardGearRatios[0u], eng.forwardGearRatios[1u], eng.forwardGearRatios[2u], eng.forwardGearRatios[3u]))
+            || !IsFinite(VectorSingle(eng.forwardGearRatios[4u], eng.forwardGearRatios[5u], 0.0f, 0.0f))
+        )
+            return false;
         if(!IsFinite(VectorSingle(v.input.throttle, v.input.brake, v.input.steer, v.input.handbrake)))
             return false;
         if(v.wheels.size() > cast<usize>(u32.max))
@@ -548,7 +540,7 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendVehicleValidated(in VehicleComponent v, mut Vector<u8> outBinary)const{
-        static_assert(size_of<VehicleComponentBinary>() == 112u && size_of<VehicleWheelBinary>() == 144u);
+        static_assert(size_of<VehicleComponentBinary>() == 104u && size_of<VehicleWheelBinary>() == 144u);
         if(v.wheels.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<VehicleComponentBinary>() + v.wheels.size() * size_of<VehicleWheelBinary>();
@@ -556,7 +548,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         in VehicleEngineDef eng = v.engine;
         VehicleComponentBinary bin;
-        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
         bin.wheelCount = cast<u32>(v.wheels.size());
         bin.gearCount = eng.gearCount;
         bin.requestedGear = v.input.requestedGear;
@@ -635,8 +626,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in VehicleComponentBinary bin = hdrRes.value();
-        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xf8u) != 0u){
-            error("VehicleComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xf8u) != 0u){
+            error("VehicleComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 wheelBytes = cast<u64>(bin.wheelCount) * cast<u64>(size_of<VehicleWheelBinary>());
@@ -715,7 +706,7 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 validRagdollData(in RagdollComponent r)const{
-        if(!IsFinite(r.driveStrengthMultiplier) || r.driveStrengthMultiplier < 0.0f)
+        if(!IsFinite(VectorSingle(r.driveStrengthMultiplier)) || r.driveStrengthMultiplier < 0.0f)
             return false;
         if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
             return false;
@@ -734,7 +725,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             else{
                 const VectorSingle c1 = b.capsule.center1();
                 const VectorSingle c2 = b.capsule.center2Vec();
-                if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(b.capsule.radius()) || b.capsule.radius() <= 0.0f)
+                if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(VectorSingle(b.capsule.radius())) || b.capsule.radius() <= 0.0f)
                     return false;
                 if(Vector3LengthSq(c2 - c1).x < s_MinCapsuleLength * s_MinCapsuleLength)
                     return false;
@@ -743,7 +734,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 || !IsFinite(VectorSingle(b.shapeDef.localTransform.rotation))
                 || LengthSq(VectorSingle(b.shapeDef.localTransform.rotation)) <= s_NormalizeEpsilonSq)
                 return false;
-            if(!IsFinite(b.shapeDef.density) || b.shapeDef.density < 0.0f || !assetCodec.validSurfaceMaterial(b.shapeDef.material))
+            if(!IsFinite(VectorSingle(b.shapeDef.density)) || b.shapeDef.density < 0.0f || !assetCodec.validSurfaceMaterial(b.shapeDef.material))
                 return false;
             if(!IsValidPositionVec3(VectorSingle(b.jointAnchorWorld))
                 || !IsFinite(VectorSingle(b.jointAxisWorld))
@@ -783,6 +774,12 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendRagdollValidated(in RagdollComponent r, mut Vector<u8> outBinary)const{
+        static_assert(
+            size_of<RagdollComponentBinary>() == 16u
+            && size_of<PhysicsTransformBinary>() == size_of<Transform3D>()
+            && offset_of<PhysicsTransformBinary>(position) == offset_of<Transform3D>(position)
+            && offset_of<PhysicsTransformBinary>(rotation) == offset_of<Transform3D>(rotation)
+        );
         if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<RagdollComponentBinary>()
@@ -791,7 +788,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         RagdollComponentBinary hdr;
-        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
         hdr.boneCount = cast<u32>(r.bones.size());
         hdr.targetPoseCount = cast<u32>(r.targetPose.size());
         hdr.driveStrengthMultiplier = r.driveStrengthMultiplier;
@@ -878,13 +874,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             }
             AppendPOD(outBinary, bb);
         }
-        for(usize pi = 0u; pi < r.targetPose.size(); ++pi){
-            PhysicsTransformBinary tb;
-            tb.position = r.targetPose[pi].position;
-            tb.rotation = r.targetPose[pi].rotation;
-            AppendPOD(outBinary, tb);
-        }
-        return true;
+        return AppendBinaryVectorPayload(outBinary, r.targetPose).has_value();
     }
 
     public b8 serializeRagdoll(in RagdollComponent r, mut Vector<u8> outPayload)const{
@@ -902,8 +892,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in RagdollComponentBinary hdr = hdrRes.value();
-        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || (hdr.flags & 0xf8u) != 0u){
-            error("RagdollComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xf8u) != 0u){
+            error("RagdollComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 expectedBytes = cast<u64>(hdr.boneCount) * cast<u64>(size_of<RagdollBoneBinary>())
@@ -996,13 +986,8 @@ class SubsystemPhysicsComponentBinaryCodec{
                 ax.springDampingRatio = bb.sixDofParams[pBase + 6u];
             }
         }
-        r.targetPose.resize(hdr.targetPoseCount);
-        for(u32 pi = 0u; pi < hdr.targetPoseCount; ++pi){
-            const Expected<PhysicsTransformBinary> tbRes = ReadPOD<PhysicsTransformBinary>(payload, cursor);
-            if(!tbRes.has_value())
-                return MakeUnexpected(Failure());
-            r.targetPose[pi] = Transform3D(VectorSingle(tbRes.value().position), VectorSingle(tbRes.value().rotation));
-        }
+        if(!ReadBinaryVectorPayload(payload, hdr.targetPoseCount, cursor, r.targetPose).has_value())
+            return MakeUnexpected(Failure());
         r.dirty = true;
         r.initialized = false;
         r.syncedKinematic = false;
@@ -1022,7 +1007,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             || !IsFinite(VectorSingle(v.bounds.upperBound))
             || !IsFinite(VectorSingle(v.flowVelocity)))
             return false;
-        if(!IsFinite(VectorSingle(v.density, v.linearDrag, v.angularDrag, v.quadraticDrag)) || !IsFinite(v.liftCoeff))
+        if(!IsFinite(VectorSingle(v.density, v.linearDrag, v.angularDrag, v.quadraticDrag)) || !IsFinite(VectorSingle(v.liftCoeff)))
             return false;
         if(v.density < 0.0f || v.linearDrag < 0.0f || v.angularDrag < 0.0f || v.quadraticDrag < 0.0f)
             return false;
@@ -1046,7 +1031,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         in FluidVolume v = f.volume;
         FluidVolumeComponentBinary bin;
-        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
         bin.surfaceNormalOffset = v.surfaceNormalOffset;
         bin.boundsLower = v.bounds.lowerBound;
         bin.boundsUpper = v.bounds.upperBound;
@@ -1084,8 +1068,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in FluidVolumeComponentBinary bin = res.value();
-        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xfcu) != 0u){
-            error("FluidVolumeComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.flags & 0xfcu) != 0u){
+            error("FluidVolumeComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         FluidVolumeComponent f;
@@ -1141,7 +1125,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return false;
         in ForceField field = ff.field;
         ForceFieldComponentBinary bin;
-        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
         bin.boundsLower = field.bounds.lowerBound;
         bin.boundsUpper = field.bounds.upperBound;
         bin.originOrDirection = field.originOrDirection;
@@ -1180,8 +1163,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in ForceFieldComponentBinary bin = res.value();
-        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xf8u) != 0u){
-            error("ForceFieldComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xf8u) != 0u){
+            error("ForceFieldComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         ForceFieldComponent ff;
@@ -1229,11 +1212,11 @@ class SubsystemPhysicsComponentBinaryCodec{
                 || !IsValidPositionVec3(VectorSingle(l.comLocal))
                 || !IsFinite(VectorSingle(l.inertiaDiag)))
                 return false;
-            if(l.inertiaDiag.x <= 0.0f || l.inertiaDiag.y <= 0.0f || l.inertiaDiag.z <= 0.0f || !IsFinite(l.mass) || l.mass <= 0.0f)
+            if(l.inertiaDiag.x <= 0.0f || l.inertiaDiag.y <= 0.0f || l.inertiaDiag.z <= 0.0f || !IsFinite(VectorSingle(l.mass)) || l.mass <= 0.0f)
                 return false;
             if(!IsFinite(VectorSingle(l.lowerLimit, l.upperLimit, l.driveTargetPos, l.driveTargetVel))
                 || !IsFinite(VectorSingle(l.driveStiffness, l.driveDamping, l.driveMaxForce, l.jointDamping))
-                || !IsFinite(l.jointFriction))
+                || !IsFinite(VectorSingle(l.jointFriction)))
                 return false;
             if(l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f || l.jointDamping < 0.0f || l.jointFriction < 0.0f)
                 return false;
@@ -1251,7 +1234,7 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendArticulationValidated(in ArticulationComponent a, mut Vector<u8> outBinary)const{
-        static_assert(size_of<ArticulationComponentBinary>() == 16u && size_of<ArticulationLinkBinary>() == 160u);
+        static_assert(size_of<ArticulationComponentBinary>() == 12u && size_of<ArticulationLinkBinary>() == 160u);
         if(a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
             return false;
         const usize reqBytes = size_of<ArticulationComponentBinary>()
@@ -1260,7 +1243,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         ArticulationComponentBinary hdr;
-        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
         hdr.linkCount = cast<u32>(a.links.size());
         hdr.proxyNameCount = cast<u32>(a.proxyEntityNames.size());
         u8 flags = 0u;
@@ -1318,8 +1300,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in ArticulationComponentBinary hdr = hdrRes.value();
-        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
-            error("ArticulationComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+            error("ArticulationComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 expectedBytes = cast<u64>(hdr.linkCount) * cast<u64>(size_of<ArticulationLinkBinary>())
@@ -1383,7 +1365,7 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validSoftBodyData(in SoftBodyComponent sb)const{
         in SoftBody s = sb.softBody;
-        if(!IsFinite(VectorSingle(s.particleRadius, s.damping, s.aerodynamicDrag, s.friction)) || !IsFinite(s.restitution))
+        if(!IsFinite(VectorSingle(s.particleRadius, s.damping, s.aerodynamicDrag, s.friction)) || !IsFinite(VectorSingle(s.restitution)))
             return false;
         if(s.particleRadius <= 0.0f || s.damping < 0.0f || s.aerodynamicDrag < 0.0f || s.friction < 0.0f || s.restitution < 0.0f)
             return false;
@@ -1403,7 +1385,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 || !IsValidPositionVec3(VectorSingle(p.prevPosition))
                 || !IsFinite(VectorSingle(p.velocity))
                 || !IsFinite(VectorSingle(p.externalForce))
-                || !IsFinite(p.invMass)
+                || !IsFinite(VectorSingle(p.invMass))
                 || p.invMass < 0.0f)
                 return false;
         }
@@ -1429,7 +1411,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         }
         for(usize ai = 0u; ai < s.attachments.size(); ++ai){
             in SoftBodyAttachment a = s.attachments[ai];
-            if(a.particleIndex >= pCount || !IsFinite(VectorSingle(a.localAnchor)) || !IsFinite(a.compliance) || a.compliance < 0.0f)
+            if(a.particleIndex >= pCount || !IsFinite(VectorSingle(a.localAnchor)) || !IsFinite(VectorSingle(a.compliance)) || a.compliance < 0.0f)
                 return false;
         }
         return true;
@@ -1443,6 +1425,13 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendSoftBodyValidated(in SoftBodyComponent sb, mut Vector<u8> outBinary)const{
+        static_assert(
+            size_of<SoftBodyComponentBinary>() == 68u
+            && size_of<SoftBodyTriangleBinary>() == size_of<SoftBodyTriangle>()
+            && offset_of<SoftBodyTriangleBinary>(p0) == offset_of<SoftBodyTriangle>(p0)
+            && offset_of<SoftBodyTriangleBinary>(p1) == offset_of<SoftBodyTriangle>(p1)
+            && offset_of<SoftBodyTriangleBinary>(p2) == offset_of<SoftBodyTriangle>(p2)
+        );
         in SoftBody s = sb.softBody;
         if(s.particles.size() > cast<usize>(u32.max)
             || s.distanceConstraints.size() > cast<usize>(u32.max)
@@ -1460,7 +1449,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
         SoftBodyComponentBinary hdr;
-        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
         hdr.particleCount = cast<u32>(s.particles.size());
         hdr.distCount = cast<u32>(s.distanceConstraints.size());
         hdr.bendCount = cast<u32>(s.bendingConstraints.size());
@@ -1528,14 +1516,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             vb.lambda = v.lambda;
             AppendPOD(outBinary, vb);
         }
-        for(usize ti = 0u; ti < s.surfaceTriangles.size(); ++ti){
-            in SoftBodyTriangle t = s.surfaceTriangles[ti];
-            SoftBodyTriangleBinary tb;
-            tb.p0 = t.p0;
-            tb.p1 = t.p1;
-            tb.p2 = t.p2;
-            AppendPOD(outBinary, tb);
-        }
+        if(!AppendBinaryVectorPayload(outBinary, s.surfaceTriangles).has_value())
+            return false;
         for(usize ai = 0u; ai < s.attachments.size(); ++ai){
             in SoftBodyAttachment a = s.attachments[ai];
             SoftBodyAttachmentBinary ab;
@@ -1562,8 +1544,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in SoftBodyComponentBinary hdr = hdrRes.value();
-        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
-            error("SoftBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+            error("SoftBodyComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         const u64 expectedBytes = cast<u64>(hdr.particleCount) * cast<u64>(size_of<SoftBodyParticleBinary>())
@@ -1644,16 +1626,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             v.compliance = vbRes.value().compliance;
             v.lambda = vbRes.value().lambda;
         }
-        s.surfaceTriangles.resize(hdr.triCount);
-        for(u32 ti = 0u; ti < hdr.triCount; ++ti){
-            const Expected<SoftBodyTriangleBinary> tbRes = ReadPOD<SoftBodyTriangleBinary>(payload, cursor);
-            if(!tbRes.has_value())
-                return MakeUnexpected(Failure());
-            mut SoftBodyTriangle t = s.surfaceTriangles[ti];
-            t.p0 = tbRes.value().p0;
-            t.p1 = tbRes.value().p1;
-            t.p2 = tbRes.value().p2;
-        }
+        if(!ReadBinaryVectorPayload(payload, hdr.triCount, cursor, s.surfaceTriangles).has_value())
+            return MakeUnexpected(Failure());
         s.attachments.resize(hdr.attachCount);
         for(u32 ai = 0u; ai < hdr.attachCount; ++ai){
             const Expected<SoftBodyAttachmentBinary> abRes = ReadPOD<SoftBodyAttachmentBinary>(payload, cursor);
@@ -1687,7 +1661,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!CanAppendBytes(outBinary, size_of<GpuRenderTransformExportComponentBinary>()))
             return false;
         GpuRenderTransformExportComponentBinary bin;
-        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
         bin.localScale = g.localScale;
         bin.instanceIndex = g.instanceIndex;
         bin.flags = g.flags;
@@ -1715,8 +1688,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in GpuRenderTransformExportComponentBinary bin = res.value();
-        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.enabledFlag & 0xfeu) != 0u){
-            error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: unsupported version or flags");
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.enabledFlag & 0xfeu) != 0u){
+            error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
         GpuRenderTransformExportComponent g;

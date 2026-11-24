@@ -9,10 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CandidatePair{
-    public u32 shapeIdA = s_NullIndex;
-    public u32 shapeIdB = s_NullIndex;
-}
 class BroadPhase{
     public Array<DynamicTree, s_TreeCount> trees;
     public Vector<u32> moveArray;
@@ -41,17 +37,6 @@ class BroadPhase{
         outProxyKey = EncodeBroadPhaseProxyKey(proxyId, treeIdx);
         if(treeIdx != s_TreeStatic || forceMove)
             this.bufferMove(outProxyKey);
-    }
-
-    public void createProxy(
-        in BodyType bodyType,
-        in Aabb3D aabb,
-        in u32 categoryBits,
-        in u32 shapeId,
-        in b8 forceMove,
-        mut u32 outProxyKey
-    ){
-        this.createProxyWithFlags(bodyType, aabb, categoryBits, 0u, shapeId, forceMove, outProxyKey);
     }
 
     public void setNodeFlags(in u32 proxyKey, in u8 nodeFlags){

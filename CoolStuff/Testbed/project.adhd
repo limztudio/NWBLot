@@ -137,7 +137,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     public void paintUiLayer(mut UiPaintContext context)override{
         if(this.m_showPhysicsDebug){
             const b8 prevTruncated = this.m_lastDebugDrawStats.truncated;
-            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_world, context, this.m_physicsScreenLines);
+            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_world, context, this.m_physicsDebugScratch, this.m_physicsScreenLines);
             if(this.m_lastDebugDrawStats.truncated != prevTruncated)
                 this.m_uiWindow.initialized = false;
         }
@@ -216,73 +216,76 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         options.contentHeightFirstUse = true;
         if(!galleryLayout.valid || !CanShowTestbedOverviewWindow(galleryLayout.gallery, overviewBounds))
             return;
-        SeparatorOptions separator = SeparatorOptions();
-        separator.thickness = 1.0f;
-        TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
-        b8 hudLinesOk = true;
-        const b8 needPhysicsLine = !this.m_hasCachedHudStats
-            || stats.bodyCount != this.m_cachedHudStats.bodyCount
-            || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
-            || stats.contactCount != this.m_cachedHudStats.contactCount
-            || stats.jointCount != this.m_cachedHudStats.jointCount
-            || stats.islandCount != this.m_cachedHudStats.islandCount
-            || stats.backendUsed != this.m_cachedHudStats.backendUsed;
-        if(needPhysicsLine){
-            StringView backendName = "None";
-            if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
-                backendName = "CPU";
-            else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
-                backendName = "GPU";
-            else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
-                backendName = "CPU+GPU";
-            hudLinesOk = this.m_cachedPhysicsLine.assign("Physics: ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.bodyCount));
-            hudLinesOk = this.m_cachedPhysicsLine.append(" bodies (") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.awakeBodyCount));
-            hudLinesOk = this.m_cachedPhysicsLine.append(" awake), ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.contactCount));
-            hudLinesOk = this.m_cachedPhysicsLine.append(" contacts, ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.jointCount));
-            hudLinesOk = this.m_cachedPhysicsLine.append("j/") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.islandCount));
-            hudLinesOk = this.m_cachedPhysicsLine.append("i (") && hudLinesOk;
-            hudLinesOk = this.m_cachedPhysicsLine.append(backendName) && hudLinesOk;
-            hudLinesOk = this.m_cachedPhysicsLine.append(")") && hudLinesOk;
-        }
-        f64 clampedStepMs = 0.0;
-        if(IsFinite(stats.stepMs) && stats.stepMs > 0.0)
-            clampedStepMs = Min(stats.stepMs, 1.0e9);
-        const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
-        const b8 countsChanged = !this.m_hasCachedHudStats
-            || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
-            || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
-            || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
-            || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount;
-        const b8 needSplitLine = countsChanged || (stepCentis != this.m_cachedStepCentis && this.m_hudStepTimer >= 0.1f);
-        if(needSplitLine){
-            this.m_hudStepTimer = 0.0f;
-            this.m_cachedStepCentis = stepCentis;
-            const u64 wholeMs = cast<u64>(stepCentis / 100);
-            const u64 fracMs = cast<u64>(stepCentis % 100);
-            hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
-            hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedIslandCount));
-            hudLinesOk = this.m_cachedSplitLine.append("i | GPU ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedBodyCount));
-            hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
-            hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
-            hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
-            if(fracMs < 10u)
-                hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
-            AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
-            hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
-        }
-        this.m_cachedHudStats = stats;
-        this.m_hasCachedHudStats = hudLinesOk;
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
+            SeparatorOptions separator = SeparatorOptions();
+            separator.thickness = 1.0f;
+            TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
+            b8 hudLinesOk = true;
+            const b8 needPhysicsLine = !this.m_hasCachedHudStats
+                || stats.bodyCount != this.m_cachedHudStats.bodyCount
+                || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
+                || stats.contactCount != this.m_cachedHudStats.contactCount
+                || stats.jointCount != this.m_cachedHudStats.jointCount
+                || stats.islandCount != this.m_cachedHudStats.islandCount
+                || stats.backendUsed != this.m_cachedHudStats.backendUsed;
+            if(needPhysicsLine){
+                StringView backendName = "None";
+                if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
+                    backendName = "CPU";
+                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
+                    backendName = "GPU";
+                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
+                    backendName = "CPU+GPU";
+                hudLinesOk = this.m_cachedPhysicsLine.assign("Physics: ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.bodyCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" bodies (") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.awakeBodyCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" awake), ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.contactCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append(" contacts, ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.jointCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append("j/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.islandCount));
+                hudLinesOk = this.m_cachedPhysicsLine.append("i (") && hudLinesOk;
+                hudLinesOk = this.m_cachedPhysicsLine.append(backendName) && hudLinesOk;
+                hudLinesOk = this.m_cachedPhysicsLine.append(")") && hudLinesOk;
+            }
+            f64 clampedStepMs = 0.0;
+            if(IsFinite(VectorDouble(stats.stepMs)) && stats.stepMs > 0.0){
+                const VectorDouble stepMsVec(stats.stepMs);
+                const VectorDouble maxStepMsVec(1.0e9);
+                clampedStepMs = VectorDoubleSelect(maxStepMsVec, stepMsVec, VectorDoubleLess(stepMsVec, maxStepMsVec)).x;
+            }
+            const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
+            const b8 countsChanged = !this.m_hasCachedHudStats
+                || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
+                || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
+                || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
+                || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount;
+            const b8 needSplitLine = countsChanged || (stepCentis != this.m_cachedStepCentis && this.m_hudStepTimer >= 0.1f);
+            if(needSplitLine){
+                this.m_hudStepTimer = 0.0f;
+                this.m_cachedStepCentis = stepCentis;
+                const u64 wholeMs = cast<u64>(stepCentis / 100);
+                const u64 fracMs = cast<u64>(stepCentis % 100);
+                hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
+                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedIslandCount));
+                hudLinesOk = this.m_cachedSplitLine.append("i | GPU ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedBodyCount));
+                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
+                hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
+                hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
+                if(fracMs < 10u)
+                    hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
+                AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
+                hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
+            }
+            this.m_cachedHudStats = stats;
+            this.m_hasCachedHudStats = hudLinesOk;
             b8 declared =
                 context.ui.label("renderer", s_RendererLine)
                 && context.ui.separator("separator", separator)
@@ -473,6 +476,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_showPhysicsDebug = false;
     private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
     private PhysicsDebugDrawStats m_lastDebugDrawStats = PhysicsDebugDrawStats();
+    private PhysicsDebugDrawScratch m_physicsDebugScratch = PhysicsDebugDrawScratch();
     private Vector<PaintLineSegment> m_physicsScreenLines;
     private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
     private CompactString m_cachedPhysicsLine;

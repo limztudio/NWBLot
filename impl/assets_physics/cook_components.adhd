@@ -55,7 +55,8 @@ b8 ReadPhysicsU32Value(
         return false;
     }
     const f64 num = fieldVal.toDouble();
-    if(!IsFinite(num) || num < 0.0 || num > 4294967295.0 || Floor(num) != num){
+    const VectorDouble numVec(num);
+    if(!IsFinite(numVec) || num < 0.0 || num > 4294967295.0 || VectorDoubleFloor(numVec).x != num){
         error("{} '{}': field '{}' must be a u32 integer", prefix, PathToString(file), field);
         return false;
     }
@@ -84,7 +85,8 @@ b8 ReadPhysicsU64Value(
         return false;
     }
     const f64 num = fieldVal.toDouble();
-    if(!IsFinite(num) || num < 0.0 || num > 9007199254740991.0 || Floor(num) != num){
+    const VectorDouble numVec(num);
+    if(!IsFinite(numVec) || num < 0.0 || num > 9007199254740991.0 || VectorDoubleFloor(numVec).x != num){
         error("{} '{}': field '{}' must be a u64 integer", prefix, PathToString(file), field);
         return false;
     }
@@ -286,7 +288,8 @@ b8 ReadPhysicsU32ArrayValue(
             return false;
         }
         const f64 num = item.toDouble();
-        if(!IsFinite(num) || num < 0.0 || num > 4294967295.0 || Floor(num) != num){
+        const VectorDouble numVec(num);
+        if(!IsFinite(numVec) || num < 0.0 || num > 4294967295.0 || VectorDoubleFloor(numVec).x != num){
             error("{} '{}': field '{}' entries must be u32 integers", prefix, PathToString(file), field);
             return false;
         }
@@ -302,17 +305,38 @@ b8 ReadPhysicsU16ArrayValue(
     in StringView field,
     mut Vector<u16> outIndices
 ){
-    Vector<u32> rawValues;
-    if(!ReadPhysicsU32ArrayValue(file, listVal, prefix, field, rawValues))
+    if(!listVal.isList()){
+        error("{} '{}': field '{}' must be a list of integers", prefix, PathToString(file), field);
         return false;
+    }
+    const Span<MetascriptValue> items = listVal.listView();
     outIndices.clear();
-    outIndices.reserve(rawValues.size());
-    for(usize i = 0u; i < rawValues.size(); ++i){
-        if(rawValues[i] > cast<u32>(u16.max)){
-            error("{} '{}': '{}[{}]' exceeds u16 range", prefix, PathToString(file), field, i);
+    outIndices.reserve(items.size());
+    for(usize i = 0u; i < items.size(); ++i){
+        in MetascriptValue item = items[i];
+        u32 value = 0u;
+        if(item.isInteger()){
+            const i64 integerValue = item.asInteger();
+            if(integerValue < 0 || integerValue > cast<i64>(u16.max)){
+                error("{} '{}': '{}[{}]' must be a u16 integer", prefix, PathToString(file), field, i);
+                return false;
+            }
+            value = cast<u32>(integerValue);
+        }
+        else if(item.isNumeric()){
+            const f64 num = item.toDouble();
+            const VectorDouble numVec(num);
+            if(!IsFinite(numVec) || num < 0.0 || num > 65535.0 || VectorDoubleFloor(numVec).x != num){
+                error("{} '{}': '{}[{}]' must be a u16 integer", prefix, PathToString(file), field, i);
+                return false;
+            }
+            value = cast<u32>(num);
+        }
+        else{
+            error("{} '{}': '{}[{}]' must be a non-negative integer", prefix, PathToString(file), field, i);
             return false;
         }
-        outIndices.push_back(cast<u16>(rawValues[i]));
+        outIndices.push_back(cast<u16>(value));
     }
     return true;
 }
@@ -670,7 +694,7 @@ b8 ValidateCookColliderGeometryFields(
     }
     if(shapeType == ShapeType::Segment){
         if(isChain){
-            if(chainPoints.size() < 2u || !IsFinite(chainRadius) || chainRadius < 0.0f){
+            if(chainPoints.size() < 2u || !IsFinite(VectorSingle(chainRadius)) || chainRadius < 0.0f){
                 error("{} '{}': invalid chain collider geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
@@ -689,7 +713,7 @@ b8 ValidateCookColliderGeometryFields(
         return true;
     }
     if(shapeType == ShapeType::Heightfield){
-        if(!IsFinite(heightfieldThickness) || heightfieldThickness < 0.0f){
+        if(!IsFinite(VectorSingle(heightfieldThickness)) || heightfieldThickness < 0.0f){
             error("{} '{}': invalid heightfield thickness", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
@@ -989,17 +1013,6 @@ void CopyShapeScalarFieldsToColliderComponent(in ColliderShapeEntry src, mut Col
     dst.chainRadius = src.chainRadius;
 }
 
-void CopyShapeEntryToColliderComponent(in ColliderShapeEntry src, mut ColliderComponent dst){
-    CopyShapeScalarFieldsToColliderComponent(src, dst);
-    dst.hullPoints = src.hullPoints;
-    dst.meshVertices = src.meshVertices;
-    dst.meshIndices = src.meshIndices;
-    dst.heightfieldHeights = src.heightfieldHeights;
-    dst.heightfieldMaterials = src.heightfieldMaterials;
-    dst.heightfieldCellMaterialIndices = src.heightfieldCellMaterialIndices;
-    dst.chainPoints = src.chainPoints;
-}
-
 b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, mut ColliderShapeEntry outEntry){
     u32 rotFieldCount = 0u;
     if(!mapVal.forEachMapEntry(lambda[in file, mut outEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
@@ -1021,6 +1034,20 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
         if(!value.forEachMapEntry(lambda[in file, mut entry, mut primaryEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
             if(key == "entity_tag")
                 return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, "entity_tag", entry.component.entityTag);
+            if(key == "hull_points")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.hullPoints);
+            if(key == "mesh_vertices")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshVertices);
+            if(key == "mesh_indices")
+                return ReadPhysicsU32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshIndices);
+            if(key == "heightfield_heights")
+                return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.heightfieldHeights);
+            if(key == "heightfield_materials")
+                return ParseSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, entry.component.heightfieldMaterials);
+            if(key == "heightfield_cell_material_indices")
+                return ReadPhysicsU16ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.heightfieldCellMaterialIndices);
+            if(key == "chain_points")
+                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.chainPoints);
             if(key == "extra_shapes"){
                 if(!fieldVal.isList()){
                     error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
@@ -1045,7 +1072,7 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
             return MakeUnexpected(Failure());
     }
 
-    CopyShapeEntryToColliderComponent(primaryEntry, entry.component);
+    CopyShapeScalarFieldsToColliderComponent(primaryEntry, entry.component);
     if(!ValidateCookColliderGeometryFields(
         file,
         entry.component.shapeType,
@@ -1295,11 +1322,6 @@ void CopyJointScalarFieldsToComponent(in JointEntry src, mut JointComponent dst)
     dst.sixDofAxes = src.sixDofAxes;
     dst.pathClosed = src.pathClosed;
     dst.pathLockRotation = src.pathLockRotation;
-}
-
-void CopyJointEntryToComponent(in JointEntry src, mut JointComponent dst){
-    CopyJointScalarFieldsToComponent(src, dst);
-    dst.pathPoints = src.pathPoints;
 }
 
 Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){

@@ -51,26 +51,24 @@ class ControlVisualPainter{
         }
         if(kind == WidgetKind::Button){
             const Name preferred = ResolveButtonPreferredName(style, enabled, pressed, hover);
-            const Optional<in UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, preferred, style.button);
-            painted = skinRegion.has_value() && paint.drawRegion(skinRegion.value().name, rectangle);
+            painted = paint.drawRegionWithFallback(preferred, style.button, rectangle);
             ResolveButtonTextPlacement(rectangle, padding, measured, textClip, origin);
         }
         else if(kind == WidgetKind::Checkbox){
             const Name preferred = ResolveCheckboxPreferredName(style, enabled, checked, hover);
-            const Optional<in UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, preferred, style.checkbox);
             Rect square;
             Rect mark;
             ResolveCheckboxPlacement(rectangle, checkboxExtent, style.gap, measured, square, mark, textClip, origin);
-            painted = skinRegion.has_value() && paint.drawRegion(skinRegion.value().name, square);
-            if(painted && checked && skin.hasRegion(style.checkboxMark)){
+            painted = paint.drawRegionWithFallback(preferred, style.checkbox, square);
+            if(painted && checked){
                 Color tint;
                 if(!enabled)
                     tint = Color(1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha);
-                painted = paint.drawRegion(style.checkboxMark, mark, tint);
+                paint.tryDrawRegion(style.checkboxMark, mark, tint);
             }
         }
-        if(painted && focused && enabled && interactive && skin.hasRegion(style.focus))
-            painted = paint.drawRegion(style.focus, rectangle);
+        if(painted && focused && enabled && interactive)
+            paint.tryDrawRegion(style.focus, rectangle);
         origin = ResolveLabelPaintOrigin(Rect(origin.x, origin.y, 0.0f, 0.0f), textBounds);
         paint.pushClip(textClip);
         if(painted){
@@ -102,29 +100,30 @@ class ControlVisualPainter{
         in b8 hovered
     ){
         const Name name = ResolveComboFieldRegionName(comboStyle, enabled, open, focused, hovered);
-        const Optional<in UiSkinRegion> field = TryResolveSelectableStateRegion(skin, name, comboStyle.fallback);
-        const Optional<in UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, comboStyle.arrow, comboStyle.arrowFallback);
-        if(!field.has_value() || !arrow.has_value())
+        const Optional<usize> fieldIdx = paint.resolveRegionIndex(name, comboStyle.fallback);
+        const Optional<usize> arrowIdx = paint.resolveRegionIndex(comboStyle.arrow, comboStyle.arrowFallback);
+        if(!fieldIdx.has_value() || !arrowIdx.has_value())
             return false;
         paint.pushClip(clip);
-        const b8 fieldPainted = paint.drawRegion(field.value().name, rectangle);
+        paint.drawRegionByIndex(fieldIdx.value(), rectangle);
         Rect icon;
         Rect textClip;
         ResolveComboFieldLayout(rectangle, padding, arrowExtent, comboStyle.arrowGap, icon, textClip);
         Color arrowTint;
         if(!enabled)
             arrowTint = Color(1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha);
-        const b8 arrowPainted = fieldPainted && paint.drawRegion(arrow.value().name, icon, arrowTint);
+        paint.drawRegionByIndex(arrowIdx.value(), icon, arrowTint);
         paint.pushClip(textClip);
         const Point origin = ResolveCenteredTextOrigin(textClip, 0.0f, textBounds);
         Color activeTextColor = widgetStyle.disabledText;
         if(enabled)
             activeTextColor = widgetStyle.text;
-        const b8 textPainted = arrowPainted && text.paint(paint, layout, origin, activeTextColor);
+        const b8 textPainted = text.paint(paint, layout, origin, activeTextColor);
         const b8 textPopped = paint.popClip();
-        const b8 focusPainted = textPainted && (!focused || !enabled || !skin.hasRegion(widgetStyle.focus) || paint.drawRegion(widgetStyle.focus, rectangle));
+        if(textPainted && focused && enabled)
+            paint.tryDrawRegion(widgetStyle.focus, rectangle);
         const b8 popped = paint.popClip();
-        return focusPainted && textPopped && popped;
+        return textPainted && textPopped && popped;
     }
 
     public b8 paintSliderVisual(
@@ -137,25 +136,24 @@ class ControlVisualPainter{
         in b8 hover,
         in b8 focused
     ){
-        const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, style.track, style.trackFallback);
+        const Optional<usize> trackIdx = paint.resolveRegionIndex(style.track, style.trackFallback);
         const Name preferredThumb = ResolveSliderThumbPreferredName(style, interactive, pressed, hover);
-        Optional<in UiSkinRegion> thumb = TryResolveSelectableStateRegion(skin, preferredThumb, style.normal);
-        if(!thumb.has_value() && style.thumbFallback != style.normal)
-            thumb = TryResolveSelectableStateRegion(skin, style.thumbFallback, style.thumbFallback);
-        if(!track.has_value() || !thumb.has_value())
+        Optional<usize> thumbIdx = paint.resolveRegionIndex(preferredThumb, style.normal);
+        if(!thumbIdx.has_value() && style.thumbFallback != style.normal)
+            thumbIdx = paint.resolveRegionIndex(style.thumbFallback, style.thumbFallback);
+        if(!trackIdx.has_value() || !thumbIdx.has_value())
             return false;
         const Color tint = ResolveSliderThumbTint(style, interactive, pressed, hover);
         paint.pushClip(placement.clip);
         Color trackTint = style.disabledTint;
         if(interactive)
             trackTint = Color();
-        b8 painted = paint.drawRegion(track.value().name, placement.track, trackTint);
-        if(painted)
-            painted = paint.drawRegion(thumb.value().name, placement.thumb, tint);
-        if(painted && interactive && focused && skin.hasRegion(style.focus))
-            painted = paint.drawRegion(style.focus, placement.bounds);
+        paint.drawRegionByIndex(trackIdx.value(), placement.track, trackTint);
+        paint.drawRegionByIndex(thumbIdx.value(), placement.thumb, tint);
+        if(interactive && focused)
+            paint.tryDrawRegion(style.focus, placement.bounds);
         const b8 popped = paint.popClip();
-        return painted && popped;
+        return popped;
     }
 
     public b8 paintRadioGroupChoiceRow(
@@ -178,20 +176,21 @@ class ControlVisualPainter{
         Name preferred;
         Name fallback;
         ResolveRadioGroupIndicatorNames(style, checked, enabled, pressed, hover, preferred, fallback);
-        Optional<in UiSkinRegion> indicator = TryResolveSelectableStateRegion(skin, preferred, fallback);
-        if(!indicator.has_value() && fallback != style.normal)
-            indicator = TryResolveSelectableStateRegion(skin, style.normal, style.fallback);
-        else if(!indicator.has_value() && style.fallback != fallback)
-            indicator = TryResolveSelectableStateRegion(skin, style.fallback, style.fallback);
-        if(!indicator.has_value())
+        Optional<usize> indicatorIdx = paint.resolveRegionIndex(preferred, fallback);
+        if(!indicatorIdx.has_value() && fallback != style.normal)
+            indicatorIdx = paint.resolveRegionIndex(style.normal, style.fallback);
+        else if(!indicatorIdx.has_value() && style.fallback != fallback)
+            indicatorIdx = paint.resolveRegionIndex(style.fallback, style.fallback);
+        if(!indicatorIdx.has_value())
             return false;
         const Color tint = ResolveRadioGroupChoiceTint(style, enabled, pressed, hover);
         paint.pushClip(row.clip);
-        b8 painted = paint.drawRegion(indicator.value().name, row.indicator, tint);
-        if(painted && checked)
+        paint.drawRegionByIndex(indicatorIdx.value(), row.indicator, tint);
+        b8 painted = true;
+        if(checked)
             painted = paint.drawRegion(markRegionName, row.mark, tint);
-        if(painted && focused && skin.hasRegion(style.focus))
-            painted = paint.drawRegion(style.focus, row.rectangle);
+        if(painted && focused)
+            paint.tryDrawRegion(style.focus, row.rectangle);
         const f32 horizontalOffset = UiSimdMin(row.rectangle.width, row.indicator.width + metrics.gap);
         const Point origin = ResolveCenteredTextOrigin(row.rectangle, horizontalOffset, textBounds);
         paint.pushClip(row.textClip);
@@ -230,8 +229,7 @@ class ControlVisualPainter{
                 Name preferredHover = style.buttonHover;
                 if(collapsePressed)
                     preferredHover = style.buttonPressed;
-                const Optional<in UiSkinRegion> hover = TryResolveSelectableStateRegion(skin, preferredHover, style.windowTitle);
-                painted = hover.has_value() && paint.drawRegion(hover.value().name, collapse);
+                painted = paint.drawRegionWithFallback(preferredHover, style.windowTitle, collapse);
             }
             if(painted){
                 Color collapseTint = style.text;
@@ -239,8 +237,8 @@ class ControlVisualPainter{
                     collapseTint = style.disabledText;
                 painted = paint.drawRegion(style.windowCollapse, collapse, collapseTint);
             }
-            if(painted && collapseFocused && skin.hasRegion(style.focus))
-                painted = paint.drawRegion(style.focus, collapse);
+            if(painted && collapseFocused)
+                paint.tryDrawRegion(style.focus, collapse);
         }
         const Rect content = ResolveWindowTitleContentBounds(header, metrics, collapsible, style.gap);
         const Point origin = ResolveCenteredTextOrigin(content, 0.0f, titleBounds);
@@ -260,11 +258,8 @@ class ControlVisualPainter{
         in Rect clip
     ){
         paint.pushClip(clip);
-        const Optional<in UiSkinRegion> resize = TryResolveSelectableStateRegion(skin, style.windowResize, style.windowResize);
         b8 painted = true;
-        if(resize.has_value())
-            painted = paint.drawRegion(resize.value().name, corner, style.text);
-        else{
+        if(!paint.tryDrawRegion(style.windowResize, corner, style.text)){
             Rect horizontal;
             Rect vertical;
             ResolveWindowResizeGripBars(corner, horizontal, vertical);
@@ -325,15 +320,15 @@ class ControlVisualPainter{
         Name preferredThumb = style.thumb;
         if(hover)
             preferredThumb = style.thumbHover;
-        const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, style.track, style.trackFallback);
-        const Optional<in UiSkinRegion> thumb = TryResolveSelectableStateRegion(skin, preferredThumb, style.thumbFallback);
-        if(!track.has_value() || !thumb.has_value())
+        const Optional<usize> trackIdx = paint.resolveRegionIndex(style.track, style.trackFallback);
+        const Optional<usize> thumbIdx = paint.resolveRegionIndex(preferredThumb, style.thumbFallback);
+        if(!trackIdx.has_value() || !thumbIdx.has_value())
             return false;
         paint.pushClip(clip);
-        const b8 trackPainted = paint.drawRegion(track.value().name, placement.track);
-        const b8 thumbPainted = trackPainted && paint.drawRegion(thumb.value().name, placement.thumb);
+        paint.drawRegionByIndex(trackIdx.value(), placement.track);
+        paint.drawRegionByIndex(thumbIdx.value(), placement.thumb);
         const b8 trackPopped = paint.popClip();
-        return thumbPainted && trackPopped;
+        return trackPopped;
     }
 
     public b8 paintTextAreaScrollbarAxisVisual(
@@ -348,22 +343,15 @@ class ControlVisualPainter{
         if(!bar.visible)
             return true;
         const Name thumbName = ResolveScrollbarThumbRegionName(scrollbarStyle, enabled, pressed, hovered);
-        const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, scrollbarStyle.track, scrollbarStyle.trackFallback);
-        const Optional<in UiSkinRegion> thumb = TryResolveSelectableStateRegion(skin, thumbName, scrollbarStyle.thumbFallback);
-        b8 painted = true;
-        if(track.has_value())
-            painted = paint.drawRegion(track.value().name, bar.track);
-        else
+        if(!paint.drawRegionWithFallback(scrollbarStyle.track, scrollbarStyle.trackFallback, bar.track))
             paint.fillRect(bar.track, scrollbarStyle.trackColor);
-        if(painted && thumb.has_value())
-            painted = paint.drawRegion(thumb.value().name, bar.thumb);
-        else if(painted){
+        if(!paint.drawRegionWithFallback(thumbName, scrollbarStyle.thumbFallback, bar.thumb)){
             Color thumbColor = scrollbarStyle.disabledColor;
             if(enabled)
                 thumbColor = scrollbarStyle.thumbColor;
             paint.fillRect(bar.thumb, thumbColor);
         }
-        return painted;
+        return true;
     }
 
     public b8 paintTextAreaScrollbarsVisual(
@@ -379,13 +367,10 @@ class ControlVisualPainter{
         in b8 verticalPressed
     ){
         paint.pushClip(clip);
-        b8 painted = this.paintTextAreaScrollbarAxisVisual(paint, skin, scrollbarStyle, placement.horizontal, enabled, horizontalHovered, horizontalPressed)
+        const b8 painted = this.paintTextAreaScrollbarAxisVisual(paint, skin, scrollbarStyle, placement.horizontal, enabled, horizontalHovered, horizontalPressed)
             && this.paintTextAreaScrollbarAxisVisual(paint, skin, scrollbarStyle, placement.vertical, enabled, verticalHovered, verticalPressed);
         if(painted && placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-            const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, scrollbarStyle.track, scrollbarStyle.trackFallback);
-            if(track.has_value())
-                painted = paint.drawRegion(track.value().name, placement.corner);
-            else
+            if(!paint.drawRegionWithFallback(scrollbarStyle.track, scrollbarStyle.trackFallback, placement.corner))
                 paint.fillRect(placement.corner, scrollbarStyle.trackColor);
         }
         const b8 popped = paint.popClip();

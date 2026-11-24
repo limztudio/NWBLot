@@ -36,7 +36,6 @@ class Builder : NoCopy{
     private Vector<SelectableStyle> m_itemSelectableStyles;
     private HashMap<u64, u32> m_editBoxCacheIndex;
     private Vector<CachedEditBoxView> m_editBoxCacheEntries;
-    private u64 m_editViewFrameCounter = 0u;
     private u64 m_lastSkinStyleVersion = 0u;
     private u64 m_metricsCacheSkinVersion = 0u;
     private Point m_cachedButtonMinSize;
@@ -380,8 +379,6 @@ class Builder : NoCopy{
     private b8 addItemNode(in LayoutNodeDesc description, mut BuilderItem item);
 
     private Optional<in UiSkinRegion> region(in Name preferred, in Name fallback)const;
-
-    private Insets resolveRegionsPadding(in Insets initial, in Span<Name> names, in Name fallback)const;
 
     private void invalidateStyleMetricsCache(){
         this.m_metricsCacheSkinVersion = 0u;

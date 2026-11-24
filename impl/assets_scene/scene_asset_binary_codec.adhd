@@ -82,10 +82,6 @@ class SceneAssetBinaryCodec{
         return true;
     }
 
-    public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary)const{
-        return this.serializeEntity(components, s_NameNone.hash(), outBinary);
-    }
-
     public b8 serializeProject(in NameHash startSceneHash, mut Vector<u8> outBinary)const{
         const ProjectHeaderBinary header = this.makeProjectHeader(startSceneHash);
         outBinary.clear();
@@ -196,14 +192,6 @@ class SceneAssetBinaryCodec{
         else
             outEntityName = Name(header.entityNameHash);
         return true;
-    }
-
-    public b8 deserializeEntity<TComponent>(
-        in Span<u8> binary,
-        mut Vector<AssetRef<TComponent>> outComponents
-    )const{
-        Name ignoredName = s_NameNone;
-        return this.deserializeEntity(binary, outComponents, ignoredName);
     }
 
     public b8 deserializeScene<TSubsystem, TEntity, TAsset>(

@@ -85,9 +85,7 @@ Expected<PhysicsMaterialCookEntry> ParsePhysicsMaterialCookMetadata(in Name virt
             return MakeUnexpected(Failure());
     }
 
-    PhysicsMaterialAsset asset(entry.virtualPath);
-    asset.setMaterial(entry.material);
-    if(!asset.validatePayload())
+    if(!PhysicsAssetBinaryCodec().validatePhysicsMaterial(entry.material, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -199,9 +197,7 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
             return MakeUnexpected(Failure());
     }
 
-    CollisionLayerMatrixAsset asset(entry.virtualPath);
-    asset.matrix = entry.matrix;
-    if(!asset.validatePayload())
+    if(!PhysicsAssetBinaryCodec().validateCollisionLayerMatrix(entry.matrix, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -255,7 +251,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
     }))
         return MakeUnexpected(Failure());
 
-    if(!IsFinite(skinRadius) || skinRadius < 0.0f){
+    if(!IsFinite(VectorSingle(skinRadius)) || skinRadius < 0.0f){
         error("{} '{}': invalid 'skin_radius'", s_ConvexHullDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
@@ -271,7 +267,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
             return MakeUnexpected(Failure());
         }
         HullShape boxHull = built.value();
-        const b8 hasRot = (Abs(boxRotation.x) > 1.0e-5f || Abs(boxRotation.y) > 1.0e-5f || Abs(boxRotation.z) > 1.0e-5f);
+        const b8 hasRot = !Vector3LessOrEqual(Abs(boxRotation), VectorSingle(1.0e-5f));
         if(hasRot){
             boxHull.boxRotation = f32x4(boxRotation);
             for(usize vi = 0u; vi < boxHull.vertices.size(); ++vi)
@@ -345,21 +341,8 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
             }
             return true;
         }
-        if(key == "triangle_material_indices"){
-            Vector<u32> rawMatIndices;
-            if(!ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, rawMatIndices))
-                return false;
-            triMaterialIndices.clear();
-            triMaterialIndices.reserve(rawMatIndices.size());
-            for(usize i = 0u; i < rawMatIndices.size(); ++i){
-                if(rawMatIndices[i] > cast<u32>(u16.max)){
-                    error("{} '{}': 'triangle_material_indices[{}]' exceeds u16 range", s_CollisionMeshDiagnosticPrefix, PathToString(file), i);
-                    return false;
-                }
-                triMaterialIndices.push_back(cast<u16>(rawMatIndices[i]));
-            }
-            return true;
-        }
+        if(key == "triangle_material_indices")
+            return ReadPhysicsU16ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triMaterialIndices);
         if(key == "triangle_user_data")
             return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triUserData);
         error("{} '{}': unsupported asset field '{}'", s_CollisionMeshDiagnosticPrefix, PathToString(file), key);

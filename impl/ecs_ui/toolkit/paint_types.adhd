@@ -243,8 +243,11 @@ PaintTransform2D MakePaintScale(in f32 sx, in f32 sy){
 }
 
 PaintTransform2D MakePaintRotate(in f32 radians){
-    const f32 c = Cos(radians);
-    const f32 s = Sin(radians);
+    VectorSingle sVec(0.0f);
+    VectorSingle cVec(0.0f);
+    VectorSinCos(sVec, cVec, VectorSingle(radians));
+    const f32 c = cVec.x;
+    const f32 s = sVec.x;
     PaintTransform2D xf;
     xf.m00 = c;
     xf.m01 = -s;
@@ -269,20 +272,30 @@ Point ApplyPaintTransform(in PaintTransform2D xf, in Point p){
 }
 
 b8 IsIdentityPaintTransform(in PaintTransform2D xf){
-    return
-        Abs(xf.m00 - 1.0f) <= 1.0e-6f
-        && Abs(xf.m01) <= 1.0e-6f
-        && Abs(xf.tx) <= 1.0e-6f
-        && Abs(xf.m10) <= 1.0e-6f
-        && Abs(xf.m11 - 1.0f) <= 1.0e-6f
-        && Abs(xf.ty) <= 1.0e-6f
-    ;
+    const VectorSingle delta0 = Abs(VectorSingle(xf.m00, xf.m01, xf.tx, xf.m10) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle delta1 = Abs(VectorSingle(xf.m11, xf.ty, 0.0f, 0.0f) - VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    return Vector4LessOrEqual(Max(delta0, delta1), VectorSingle(1.0e-6f));
 }
 
 f32 ResolvePaintTransformScale(in PaintTransform2D xf){
-    const f32 sx = Sqrt(xf.m00 * xf.m00 + xf.m10 * xf.m10);
-    const f32 sy = Sqrt(xf.m01 * xf.m01 + xf.m11 * xf.m11);
-    return 0.5f * (sx + sy);
+    const VectorSingle lenSq(xf.m00 * xf.m00 + xf.m10 * xf.m10, xf.m01 * xf.m01 + xf.m11 * xf.m11, 0.0f, 0.0f);
+    const VectorSingle scales = Sqrt(lenSq);
+    return 0.5f * (scales.x + scales.y);
+}
+
+b8 TryResolveUniformPaintTransformScale(in PaintTransform2D xf, mut f32 outScale){
+    const f32 c0Sq = xf.m00 * xf.m00 + xf.m10 * xf.m10;
+    const f32 c1Sq = xf.m01 * xf.m01 + xf.m11 * xf.m11;
+    const f32 cDot = xf.m00 * xf.m01 + xf.m10 * xf.m11;
+    const VectorSingle sqVec(c0Sq, c1Sq, cDot, 0.0f);
+    const f32 maxSq = VectorSelect(VectorSingle(c1Sq), VectorSingle(c0Sq), VectorGreater(VectorSingle(c0Sq), VectorSingle(c1Sq))).x;
+    const f32 tol = 2.0e-5f * maxSq;
+    const VectorSingle absDiff = Abs(VectorSingle(c0Sq - c1Sq, cDot, 0.0f, 0.0f));
+    if(!IsFinite(sqVec.xyz) || !(maxSq > 0.0f) || absDiff.x > tol || absDiff.y > tol)
+        return false;
+    const VectorSingle resolvedVec = Sqrt(VectorSingle(c0Sq));
+    outScale = resolvedVec.x;
+    return IsFinite(resolvedVec) && outScale > 0.0f;
 }
 
 

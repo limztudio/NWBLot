@@ -263,7 +263,7 @@ class TextService : NoCopy{
     }
 
     [cpp_unwind]
-    private Expected<Rect> measureTracked(in TextLayout layout, in DisplayMetrics display, mut b8 outMissingCoverageAtlasEntry){
+    public Expected<Rect> measureTracked(in TextLayout layout, in DisplayMetrics display, mut b8 outMissingCoverageAtlasEntry){
         outMissingCoverageAtlasEntry = false;
         if(layout.lines().empty())
             return MakeUnexpected(Failure());
@@ -486,19 +486,6 @@ usize ComputeTextLayoutCacheHash(in ShapeRequest request){
     seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
     seed = HashCombineValue(seed, request.scriptTag);
     return HashCombineValue(seed, cast<u8>(request.direction));
-}
-
-Expected<VectorDouble> LoadSdfSupport(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
-    const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
-    if(!plane.has_value())
-        return MakeUnexpected(Failure());
-    const VectorDouble rectangle = plane.value();
-    if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
-        return plane;
-    in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
-    in SdfAtlasPage page = atlas.page(glyph.group).deref();
-    in SdfAtlasPageBindingRecord<Font> binding = page.binding();
-    return TryLoadSdfGlyphSupport(rectangle, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
 }
 
 u32 InternPreparedPage<TPage>(mut Vector<Shared<TPage>> pages, in Shared<TPage> page){

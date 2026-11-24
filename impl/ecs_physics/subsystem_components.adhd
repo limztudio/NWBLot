@@ -95,7 +95,9 @@ class CharacterControllerComponent{
     public f32x4 prevRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 currPosition(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 currRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public u64 ownBodyCheckedTopologyVersion = 0u;
     public b8 hasPrevSnapshot = false;
+    public b8 ownBodyChecked = false;
 }
 
 [arena, component("vehicle")]
@@ -141,6 +143,8 @@ class ArticulationComponent{
     public Vector<Name> proxyEntityNames;
     public b8 isFixedBase = true;
     public Articulation articulation;
+    public u64 syncedProxyTopologyVersion = 0u;
+    public u64 syncedProxyNamedVersion = 0u;
     public b8 enabled = true;
     public b8 initialized = false;
     public b8 dirty = true;

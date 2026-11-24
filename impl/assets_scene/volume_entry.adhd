@@ -39,14 +39,9 @@ Vector<Name> CollectSortedSceneAssetDependencyNames(in AssetMap assets){
         SortedSceneAssetDependencyEntry candidate;
         candidate.nickname = entry.first;
         candidate.assetName = entry.second.name();
-        usize insertIndex = sortedEntries.size();
-        while(insertIndex > 0u && LessSortedSceneAssetDependencyEntry(candidate, sortedEntries[insertIndex - 1u]))
-            --insertIndex;
         sortedEntries.push_back(candidate);
-        for(usize moveIndex = sortedEntries.size() - 1u; moveIndex > insertIndex; --moveIndex)
-            sortedEntries[moveIndex] = sortedEntries[moveIndex - 1u];
-        sortedEntries[insertIndex] = candidate;
     }
+    SortSequence<SortedSceneAssetDependencyEntry>(sortedEntries, LessSortedSceneAssetDependencyEntry);
 
     Vector<Name> sortedNames;
     sortedNames.reserve(sortedEntries.size());

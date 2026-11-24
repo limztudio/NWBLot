@@ -62,7 +62,6 @@ const Name s_GpuGlyphPageTextureName = "ui.glyph_page";
 const Name s_GpuGlyphPageReadyPrefix = "ui.glyph_page_ready/";
 const Name s_GpuGlyphPagePrefix = "ui.glyph_page/";
 const Name s_GpuSdfPageTextureName = "ui.sdf_page";
-const Name s_GpuSdfUploadArenaName = "impl/ecs_ui/gpu/sdf_upload";
 const Name s_GpuSdfPageReadyPrefix = "ui.sdf_page_ready/";
 const Name s_GpuSdfPagePrefix = "ui.sdf_page/";
 const Name s_GpuTextureImageReadyPrefix = "ui.texture_image_ready/";

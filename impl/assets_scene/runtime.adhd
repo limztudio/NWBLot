@@ -276,10 +276,6 @@ EntityID InstantiateSceneLoadedEntityWithResult(in Name entityName, in Span<Uniq
     return entity.id();
 }
 
-b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
-    return InstantiateSceneLoadedEntityWithResult(entityName, components, world).valid();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -311,6 +307,7 @@ void ActiveSceneSubsystems::unloadScene(){
     this.m_contents.assets.clear();
     this.m_contents.subsystems.clear();
     this.m_contents.entities.clear();
+    this.m_contents.namedEntityCount = 0u;
 }
 
 b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetManager){
@@ -361,9 +358,12 @@ b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetMana
         if(!loadedEntity.has_value())
             return false;
         in EntityAsset entity = loadedEntity.value().deref();
-        if(entity.name() != s_NameNone && !seenEntityNames.insert(entity.name().hash()).second){
-            error("{}: duplicate entity name '{}' in scene '{}'", s_ActiveSceneSubsystemsDiagnosticOwner, entity.name().resolvedText(), scene.name().resolvedText());
-            return false;
+        if(entity.name() != s_NameNone){
+            if(!seenEntityNames.insert(entity.name().hash()).second){
+                error("{}: duplicate entity name '{}' in scene '{}'", s_ActiveSceneSubsystemsDiagnosticOwner, entity.name().resolvedText(), scene.name().resolvedText());
+                return false;
+            }
+            ++next.namedEntityCount;
         }
         next.entities.push_back(LoadedSceneEntity());
         mut LoadedSceneEntity nextEntity = next.entities.back();
@@ -432,7 +432,8 @@ b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedS
         return false;
     outInstantiated.entities.reserve(this.m_contents.entities.size());
     outInstantiated.names.reserve(this.m_contents.entities.size());
-    outInstantiated.namedEntities.reserve(this.m_contents.entities.size());
+    if(this.m_contents.namedEntityCount > 0u)
+        outInstantiated.namedEntities.reserve(this.m_contents.namedEntityCount);
     for(in LoadedSceneEntity entity : this.m_contents.entities){
         const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
         if(!createdId.valid()){
@@ -455,8 +456,23 @@ Expected<InstantiatedSceneEntities> ActiveSceneSubsystems::instantiateEntitiesWi
 }
 
 b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
-    InstantiatedSceneEntities discarded;
-    return this.instantiateEntities(world, discarded);
+    if(!ValidateSceneEntityInstantiationReady(this.valid()))
+        return false;
+    Vector<EntityID> created;
+    created.reserve(this.m_contents.entities.size());
+    for(in LoadedSceneEntity entity : this.m_contents.entities){
+        const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
+        if(!createdId.valid()){
+            for(isize i = cast<isize>(created.size()) - 1; i >= 0; --i){
+                const EntityID ent = created[cast<usize>(i)];
+                if(ent.valid() && world.alive(ent))
+                    world.destroyEntity(ent);
+            }
+            return false;
+        }
+        created.push_back(createdId);
+    }
+    return true;
 }
 
 

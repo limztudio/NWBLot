@@ -20,10 +20,6 @@ class ManifoldConstraintPoint{
         return VectorSingle(this.rABaseSep, 0.0f);
     }
 
-    public f32 baseSeparation()const{
-        return this.rABaseSep.w;
-    }
-
     public VectorSingle rB()const{
         return VectorSingle(this.rBRelVel, 0.0f);
     }
@@ -72,10 +68,6 @@ class ContactConstraint{
 
     public f32 friction()const{
         return this.normalFriction.w;
-    }
-
-    public VectorSingle tangent1()const{
-        return VectorSingle(this.tangent1Restitution, 0.0f);
     }
 
     public f32 restitution()const{
@@ -305,8 +297,11 @@ b8 PrepareContactConstraintSetup(
     if(indexA == s_NullIndex || indexB == s_NullIndex || invMassA == 0.0f || invMassB == 0.0f){
         outConstraint.softness = staticSoftness;
     }
+    else if(invMassA == invMassB){
+        outConstraint.softness = dynamicSoftness;
+    }
     else if(enableContactSoftening && contactHertz > 0.0f && h > 0.0f){
-        const f32 ratio = Min(invMassA, invMassB) / Max(invMassA, invMassB);
+        const f32 ratio = SimdMin(invMassA, invMassB) / SimdMax(invMassA, invMassB);
         const f32 softHertz = contactHertz * (0.5f + 0.5f * SqrtFast(ratio));
         outConstraint.softness = MakeSoftness(softHertz, contactDampingRatio, h);
     }
@@ -333,17 +328,18 @@ b8 PrepareContactConstraintSetup(
             outT1 = SafeNormalizeVec3(proj, outT1);
             outT2 = SafeNormalizeVec3(Cross(outN, outT1), outT2);
         }
-        const f32 ax = Max(contact.anisotropicFriction.x, 0.0f);
-        const f32 ay = Max(contact.anisotropicFriction.y, 0.0f);
-        const f32 az = Max(contact.anisotropicFriction.z, 0.0f);
-        if(Abs(az - 1.0f) <= 1.0e-6f && hasTangentProj){
+        const VectorSingle afVec = Max(VectorSingle(contact.anisotropicFriction.x, contact.anisotropicFriction.y, contact.anisotropicFriction.z, 0.0f), VectorSingle(0.0f));
+        const f32 ax = afVec.x;
+        const f32 ay = afVec.y;
+        const f32 az = afVec.z;
+        if(Abs(VectorSingle(az - 1.0f)).x <= 1.0e-6f && hasTangentProj){
             outConstraint.frictionScale1 = ax;
             outConstraint.frictionScale2 = ay;
         }
         else{
             const VectorSingle e0 = SafeNormalizeVec3(dir, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
             VectorSingle refUp(0.0f, 1.0f, 0.0f, 0.0f);
-            if(Abs(Vector3Dot(e0, refUp).x) > 0.99f)
+            if(Abs(Vector3Dot(e0, refUp)).x > 0.99f)
                 refUp = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
             const VectorSingle e2 = SafeNormalizeVec3(Cross(e0, refUp), outT2);
             const VectorSingle e1 = SafeNormalizeVec3(Cross(e2, e0), outT1);
@@ -396,10 +392,9 @@ void PrepareContactConstraintPoint(
     in b8 hasA,
     in b8 hasB,
     in b8 enableWarmStarting,
-    in VectorSingle vA,
     in VectorSingle wA,
-    in VectorSingle vB,
     in VectorSingle wB,
+    in f32 baseVRelN,
     in VectorSingle originToComA,
     in VectorSingle originToComB,
     in f32 baseLinearKN,
@@ -440,14 +435,12 @@ void PrepareContactConstraintPoint(
     outMcp.totalNormalImpulse = 0.0f;
     outMcp.restitutionImpulse = 0.0f;
 
-    VectorSingle velA(0.0f);
-    if(hasA)
-        velA = vA + Cross(wA, rA);
-    VectorSingle velB(0.0f);
+    f32 relVelN = baseVRelN;
     if(hasB)
-        velB = vB + Cross(wB, rB);
-    const VectorSingle dv = velB - velA;
-    outMcp.rBRelVel = f32x4(rB, Vector3Dot(dv, n).x);
+        relVelN += Vector3Dot(wB, outRnB).x;
+    if(hasA)
+        relVelN -= Vector3Dot(wA, outRnA).x;
+    outMcp.rBRelVel = f32x4(rB, relVelN);
 }
 
 void FinalizeContactConstraintFrame(
@@ -490,7 +483,7 @@ void FinalizeContactConstraintFrame(
         f32 maxLeverArmSq = 0.0f;
         for(u32 i = 0u; i < outConstraint.pointCount; ++i){
             const VectorSingle dA = VectorSingle(outConstraint.points[i].rABaseSep, 0.0f) - centerA;
-            maxLeverArmSq = Max(maxLeverArmSq, Vector3LengthSq(VectorSingle(dA, 0.0f)).x);
+            maxLeverArmSq = SimdMax(maxLeverArmSq, Vector3LengthSq(VectorSingle(dA, 0.0f)).x);
         }
         maxLeverArm = SqrtFast(maxLeverArmSq);
     }
@@ -531,7 +524,7 @@ void FinalizeContactConstraintFrame(
     const f32 k01 = lin01 + Vector3Dot(rt1A, outIrt2A).x + Vector3Dot(rt1B, outIrt2B).x;
     const f32 k11 = lin11 + Vector3Dot(rt2A, outIrt2A).x + Vector3Dot(rt2B, outIrt2B).x;
     const f32 det = k00 * k11 - k01 * k01;
-    if(IsFinite(det) && Abs(det) > 1.0e-18f){
+    if(IsFinite(VectorSingle(det)) && Abs(VectorSingle(det)).x > 1.0e-18f){
         const f32 invDet = 1.0f / det;
         outConstraint.tangentMass00 = k11 * invDet;
         outConstraint.tangentMass01 = -k01 * invDet;
@@ -633,6 +626,7 @@ void PrepareContactConstraintWithCache(
 
     const b8 hasA = (outConstraint.indexA != s_NullIndex);
     const b8 hasB = (outConstraint.indexB != s_NullIndex);
+    const f32 baseVRelN = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
     VectorSingle sumCenterA(0.0f);
     VectorSingle sumCenterB(0.0f);
     f32 totalWeight = 0.0f;
@@ -650,10 +644,9 @@ void PrepareContactConstraintWithCache(
             hasA,
             hasB,
             enableWarmStarting,
-            vA,
             wA,
-            vB,
             wB,
+            baseVRelN,
             originToComA,
             originToComB,
             baseLinearKN,
@@ -668,7 +661,7 @@ void PrepareContactConstraintWithCache(
         ptCache.rnB = f32x4(rnB, 0.0f);
         ptCache.invIA_rnA = f32x4(invIArnA, 0.0f);
         ptCache.invIB_rnB = f32x4(invIBrnB, 0.0f);
-        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+        const f32 weight = SimdMax(mcp.normalImpulse, s_MinFrictionWeight);
         sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
         sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
         totalWeight += weight;
@@ -783,6 +776,7 @@ void PrepareContactConstraint(
 
     const b8 hasA = (outConstraint.indexA != s_NullIndex);
     const b8 hasB = (outConstraint.indexB != s_NullIndex);
+    const f32 baseVRelN = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
     VectorSingle sumCenterA(0.0f);
     VectorSingle sumCenterB(0.0f);
     f32 totalWeight = 0.0f;
@@ -800,10 +794,9 @@ void PrepareContactConstraint(
             hasA,
             hasB,
             enableWarmStarting,
-            vA,
             wA,
-            vB,
             wB,
+            baseVRelN,
             originToComA,
             originToComB,
             baseLinearKN,
@@ -813,7 +806,7 @@ void PrepareContactConstraint(
             invIArnA,
             invIBrnB
         );
-        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+        const f32 weight = SimdMax(mcp.normalImpulse, s_MinFrictionWeight);
         sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
         sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
         totalWeight += weight;
@@ -1037,14 +1030,6 @@ void WarmStartContactConstraintCached(mut Vector<BodyState> states, in ContactCo
     }
 }
 
-void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstraint c){
-    if(c.pointCount == 0u)
-        return;
-    ContactConstraintStepCache cache;
-    BuildContactConstraintStepCache(c, cache);
-    WarmStartContactConstraintCached(states, c, cache);
-}
-
 void ResetContactConstraintSubStepImpulses(mut ContactConstraint c){
     c.frictionImpulse = f32x2u(0.0f, 0.0f);
     c.centerBTwistImpulse.w = 0.0f;
@@ -1135,6 +1120,12 @@ void SolveContactConstraintCachedWithKinematics(
     const b8 lockedB = (flagsB & 0x3Fu) != 0u;
     const b8 angLockedA = (flagsA & 0x38u) != 0u;
     const b8 angLockedB = (flagsB & 0x38u) != 0u;
+    const b8 linLocked = (((flagsA | flagsB) & 0x07u) != 0u);
+    f32 stepInvMassSum = 0.0f;
+    if(dynA)
+        stepInvMassSum += c.invMassA;
+    if(dynB)
+        stepInvMassSum += c.invMassB;
 
     f32 baseDeltaPosN = 0.0f;
     b8 hasRotDelta = false;
@@ -1153,6 +1144,7 @@ void SolveContactConstraintCachedWithKinematics(
 
     b8 anyApplied = false;
     f32 totalNormalImpulse = 0.0f;
+    f32 vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
 
     for(u32 i = 0u; i < c.pointCount; ++i){
         mut ManifoldConstraintPoint pt = c.points[i];
@@ -1180,17 +1172,22 @@ void SolveContactConstraintCachedWithKinematics(
             bias = currentSep * invH;
         }
         else if(useBias){
-            bias = Max(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
+            bias = SimdMax(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
             massScale = c.softness.massScale;
             impulseScale = c.softness.impulseScale;
         }
 
         const VectorSingle rnA = VectorSingle(ptCache.rnACachedSep, 0.0f);
         const VectorSingle rnB = VectorSingle(ptCache.rnB);
-        const f32 vn = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x + Vector3Dot(wB, rnB).x - Vector3Dot(wA, rnA).x;
+        f32 angRel = 0.0f;
+        if(hasB)
+            angRel += Vector3Dot(wB, rnB).x;
+        if(hasA)
+            angRel -= Vector3Dot(wA, rnA).x;
+        const f32 vn = vnLin + angRel;
         const f32 oldImpulse = pt.normalImpulse;
         const f32 impulse = -pt.normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
-        const f32 newImpulse = Max(oldImpulse + impulse, 0.0f);
+        const f32 newImpulse = SimdMax(oldImpulse + impulse, 0.0f);
         const f32 delta = newImpulse - oldImpulse;
         pt.normalImpulse = newImpulse;
         if(useBias)
@@ -1216,6 +1213,10 @@ void SolveContactConstraintCachedWithKinematics(
                     wB = ApplyAngularLocks(wB, flagsB);
                 }
             }
+            if(!linLocked)
+                vnLin += delta * stepInvMassSum;
+            else
+                vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
         }
     }
 
@@ -1253,8 +1254,9 @@ void SolveContactConstraintCachedWithKinematics(
             }
         }
         else{
-            const f32 sx = Max(c.frictionScale1, 0.0f);
-            const f32 sy = Max(c.frictionScale2, 0.0f);
+            const VectorSingle sVec = Max(VectorSingle(c.frictionScale1, c.frictionScale2, 0.0f, 0.0f), VectorSingle(0.0f));
+            const f32 sx = sVec.x;
+            const f32 sy = sVec.y;
             f32 nx = 0.0f;
             f32 ny = 0.0f;
             if(sx > 1.0e-6f)
@@ -1266,11 +1268,9 @@ void SolveContactConstraintCachedWithKinematics(
             else
                 newFy = 0.0f;
             const f32 normSq = nx * nx + ny * ny;
-            const f32 maxDyn = Max(friction, 0.0f) * totalNormalImpulse;
-            f32 statF = friction;
-            if(c.staticFriction > friction)
-                statF = c.staticFriction;
-            const f32 maxStat = Max(statF, 0.0f) * totalNormalImpulse;
+            const VectorSingle fricVec = Max(VectorSingle(friction, c.staticFriction, 0.0f, 0.0f), VectorSingle(0.0f));
+            const f32 maxDyn = fricVec.x * totalNormalImpulse;
+            const f32 maxStat = SimdMax(fricVec.x, fricVec.y) * totalNormalImpulse;
             if(maxStat <= 0.0f){
                 newFx = 0.0f;
                 newFy = 0.0f;
@@ -1314,7 +1314,7 @@ void SolveContactConstraintCachedWithKinematics(
         const f32 deltaT = -twistMass * dwN;
         const f32 maxT = friction * c.maxLeverArm * totalNormalImpulse;
         const f32 oldT = c.centerBTwistImpulse.w;
-        const f32 newT = Clamp(oldT + deltaT, -maxT, maxT);
+        const f32 newT = SimdClamp(oldT + deltaT, -maxT, maxT);
         const f32 appliedT = newT - oldT;
         c.centerBTwistImpulse.w = newT;
         if(appliedT != 0.0f){
@@ -1378,14 +1378,6 @@ void SolveContactConstraintCachedWithKinematics(
 
 void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConstraint c, mut ContactConstraintStepCache cache, in f32 invH, in b8 useBias, in b8 reuseCachedSep){
     SolveContactConstraintCachedWithKinematics(states, c, cache, invH, useBias, reuseCachedSep, Span<u32>(), Span<BodyState>(), 0u, 0u);
-}
-
-void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint c, in f32 invH, in b8 useBias){
-    if(c.pointCount == 0u)
-        return;
-    ContactConstraintStepCache cache;
-    BuildContactConstraintStepCache(c, cache);
-    SolveContactConstraintCached(states, c, cache, invH, useBias, false);
 }
 
 void ApplyRestitutionContactConstraintCached(
@@ -1484,27 +1476,6 @@ void ApplyRestitutionContactConstraintCached(
         states[c.indexB].linearVelocity = f32x4(vB, 0.0f);
         states[c.indexB].angularVelocity = f32x4(wB, 0.0f);
     }
-}
-
-void ApplyRestitutionContactConstraint(mut Vector<BodyState> states, mut ContactConstraint c, in f32 restitutionThreshold){
-    const f32 restitution = c.tangent1Restitution.w;
-    if(restitution <= 0.0f || c.pointCount == 0u)
-        return;
-
-    b8 anyCandidate = false;
-    for(u32 i = 0u; i < c.pointCount; ++i){
-        in ManifoldConstraintPoint pt = c.points[i];
-        if(pt.totalNormalImpulse > 0.0f && pt.rBRelVel.w <= -restitutionThreshold){
-            anyCandidate = true;
-            break;
-        }
-    }
-    if(!anyCandidate)
-        return;
-
-    ContactConstraintStepCache cache;
-    BuildContactConstraintStepCache(c, cache);
-    ApplyRestitutionContactConstraintCached(states, c, cache, restitutionThreshold);
 }
 
 void StoreContactConstraintImpulses(in ContactConstraint c, mut Contact contact){

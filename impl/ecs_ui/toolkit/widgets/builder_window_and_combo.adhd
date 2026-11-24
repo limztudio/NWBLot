@@ -152,24 +152,35 @@ b8 Builder::endWindow(){
     b8 arranged = true;
     if(!state.collapsed){
         in DisplayMetrics display = this.m_paint.displayMetrics();
-        const Rect viewport = ResolveWindowFirstUseViewport(this.m_scope.value().m_bounds, display);
-        arranged = this.m_scope.value().m_layout.arrange(viewport);
-        const Optional<LayoutBox> root = this.m_scope.value().m_layout.box(0u);
-        if(arranged && root.has_value()){
-            arranged = TryFinalizeWindowFirstUseArrangement(
-                this.m_scope.value().m_window.options,
-                this.m_scope.value().m_window.metrics,
-                root.value().rectangle,
-                this.m_scope.value().m_window.firstUse,
-                display,
-                state,
-                this.m_scope.value().m_bounds
-            );
+        const b8 needsContentProbe =
+            this.m_scope.value().m_window.firstUse
+            && (this.m_scope.value().m_window.options.contentWidthFirstUse || this.m_scope.value().m_window.options.contentHeightFirstUse);
+        if(needsContentProbe){
+            const Rect viewport = ResolveWindowFirstUseViewport(this.m_scope.value().m_bounds, display);
+            arranged = this.m_scope.value().m_layout.arrange(viewport);
+            const Optional<LayoutBox> root = this.m_scope.value().m_layout.box(0u);
+            if(arranged && root.has_value()){
+                arranged = TryFinalizeWindowFirstUseArrangement(
+                    this.m_scope.value().m_window.options,
+                    this.m_scope.value().m_window.metrics,
+                    root.value().rectangle,
+                    this.m_scope.value().m_window.firstUse,
+                    display,
+                    state,
+                    this.m_scope.value().m_bounds
+                );
+                if(arranged)
+                    arranged = this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds);
+            }
+            else
+                arranged = false;
+        }
+        else{
+            arranged = TryConstrainWindow(display, this.m_scope.value().m_window.metrics.titleHeight, state);
+            this.m_scope.value().m_bounds = ResolveWindowContentBounds(state, this.m_scope.value().m_window.metrics);
             if(arranged)
                 arranged = this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds);
         }
-        else
-            arranged = false;
     }
     const b8 painted = arranged && this.paintWindow();
     const b8 popped = this.m_context.popScope();

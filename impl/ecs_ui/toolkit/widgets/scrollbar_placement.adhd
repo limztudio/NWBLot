@@ -10,7 +10,6 @@
 
 const Color s_ScrollbarThumbColor = Color(0.35f, 0.40f, 0.48f, 1.0f);
 const Color s_ScrollbarDisabledColor = Color(0.25f, 0.28f, 0.32f, 1.0f);
-const u32 s_ScrollAxisCount = 2u;
 const u32 s_ScrollbarReservationPassLimit = 3u;
 const u32 s_TextAreaScrollHorizontalBefore = 1u;
 const u32 s_TextAreaScrollHorizontalAfter = 2u;

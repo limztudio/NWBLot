@@ -120,11 +120,10 @@ SpatialMat6 SpatialMat6FromOuter(in SpatialVec u, in SpatialVec v, in f32 scale)
     const VectorSingle va = VectorSingle(v.ang);
     const VectorSingle vl = VectorSingle(v.lin);
     SpatialMat6 m;
-    m.tl = Mat3(ua * va.x, ua * va.y, ua * va.z);
-    m.tl = TransposeMat3(m.tl);
-    m.tr = TransposeMat3(Mat3(ua * vl.x, ua * vl.y, ua * vl.z));
-    m.bl = TransposeMat3(Mat3(ul * va.x, ul * va.y, ul * va.z));
-    m.br = TransposeMat3(Mat3(ul * vl.x, ul * vl.y, ul * vl.z));
+    m.tl = Mat3(va * ua.x, va * ua.y, va * ua.z);
+    m.tr = Mat3(vl * ua.x, vl * ua.y, vl * ua.z);
+    m.bl = Mat3(va * ul.x, va * ul.y, va * ul.z);
+    m.br = Mat3(vl * ul.x, vl * ul.y, vl * ul.z);
     return m;
 }
 
@@ -169,6 +168,25 @@ SpatialVec SpatialTransformForceC2P(in Transform3D relP2C, in SpatialVec fChild)
     return SpatialVecMake(tP, fP);
 }
 
+Mat3 MulSkewLeft(in VectorSingle r, in Mat3 m){
+    const VectorSingle r0 = VectorSingle(m.row0);
+    const VectorSingle r1 = VectorSingle(m.row1);
+    const VectorSingle r2 = VectorSingle(m.row2);
+    return Mat3(
+        r2 * r.y - r1 * r.z,
+        r0 * r.z - r2 * r.x,
+        r1 * r.x - r0 * r.y
+    );
+}
+
+Mat3 MulSkewRight(in Mat3 m, in VectorSingle r){
+    return Mat3(
+        Cross(VectorSingle(m.row0), r),
+        Cross(VectorSingle(m.row1), r),
+        Cross(VectorSingle(m.row2), r)
+    );
+}
+
 SpatialMat6 SpatialTransformInertiaC2P(in Transform3D relP2C, in SpatialMat6 iaChild){
     const Mat3 rMat = Mat3FromQuaternion(VectorSingle(relP2C.rotation));
     const Mat3 rT = TransposeMat3(rMat);
@@ -176,13 +194,13 @@ SpatialMat6 SpatialTransformInertiaC2P(in Transform3D relP2C, in SpatialMat6 iaC
     const Mat3 cr = MulMat3(rMat, MulMat3(iaChild.tr, rT));
     const Mat3 br = MulMat3(rMat, MulMat3(iaChild.bl, rT));
     const Mat3 mr = MulMat3(rMat, MulMat3(iaChild.br, rT));
-    const Mat3 sMat = SkewSymmetricMat3(VectorSingle(relP2C.position));
+    const VectorSingle rPos = VectorSingle(relP2C.position);
 
     SpatialMat6 outM;
     outM.br = mr;
-    outM.tr = AddMat3(cr, MulMat3(sMat, mr));
-    outM.bl = SubMat3(br, MulMat3(mr, sMat));
-    outM.tl = AddMat3(SubMat3(jr, MulMat3(cr, sMat)), MulMat3(sMat, outM.bl));
+    outM.tr = AddMat3(cr, MulSkewLeft(rPos, mr));
+    outM.bl = SubMat3(br, MulSkewRight(mr, rPos));
+    outM.tl = AddMat3(SubMat3(jr, MulSkewRight(cr, rPos)), MulSkewLeft(rPos, outM.bl));
     return outM;
 }
 
@@ -221,7 +239,7 @@ SpatialVec SolveSpatial6x6(in SpatialMat6 mat, in SpatialVec rhs){
             const f32 lik = l[i * 6u + k];
             diag -= lik * lik * d[k];
         }
-        if(Abs(diag) < 1.0e-12f)
+        if(Abs(VectorSingle(diag)).x < 1.0e-12f)
             return SpatialVec();
         d[i] = diag;
         const f32 invD = 1.0f / diag;
@@ -355,13 +373,9 @@ class Articulation{
                 d.parentIndex = s_NullIndex;
             else if(d.parentIndex >= cast<u32>(i))
                 return false;
-            d.mass = Max(1.0e-3f, d.mass);
-            d.inertiaDiag = f32x4(
-                Max(1.0e-4f, d.inertiaDiag.x),
-                Max(1.0e-4f, d.inertiaDiag.y),
-                Max(1.0e-4f, d.inertiaDiag.z),
-                0.0f
-            );
+            d.mass = SimdMax(1.0e-3f, d.mass);
+            const VectorSingle clampedInertia = Max(VectorSingle(1.0e-4f), VectorSingle(d.inertiaDiag));
+            d.inertiaDiag = f32x4(clampedInertia.x, clampedInertia.y, clampedInertia.z, 0.0f);
             d.jointAxisLocal = f32x4(SafeNormalizeVec3(VectorSingle(d.jointAxisLocal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)), 0.0f);
             this.linkDefs.push_back(d);
             this.linkStates.push_back(ArticulationLinkState());
@@ -413,6 +427,8 @@ class Articulation{
 
     public void computeForwardKinematics(){
         const usize n = this.linkDefs.size();
+        if(this.m_relP2C.size() < n)
+            this.m_relP2C.resize(n);
         for(usize i = 0u; i < n; ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
             mut ArticulationLinkState s = this.linkStates[i];
@@ -420,9 +436,9 @@ class Articulation{
                 s.worldTransform = this.baseTransform;
             }
             else{
-                const Transform3D jBase = ComposeTransform(this.linkStates[d.parentIndex].worldTransform, d.parentToJoint);
-                const Transform3D jMoved = ComposeTransform(jBase, this.computeJointTransform(i));
-                s.worldTransform = ComposeTransform(jMoved, d.jointToChild);
+                const Transform3D jRel = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
+                this.m_relP2C[i] = jRel;
+                s.worldTransform = ComposeTransform(this.linkStates[d.parentIndex].worldTransform, jRel);
             }
         }
     }
@@ -457,7 +473,7 @@ class Articulation{
 
         this.computeForwardKinematics();
 
-        mut Vector<Transform3D> relP2C = this.m_relP2C;
+        in Vector<Transform3D> relP2C = this.m_relP2C;
         in Vector<SpatialVec> jointS = this.m_linkJointSubspace;
         mut Vector<SpatialVec> biasC = this.m_biasC;
         mut Vector<SpatialMat6> iaList = this.m_iaList;
@@ -481,7 +497,6 @@ class Articulation{
                 biasC[0u] = SpatialVec();
             }
             else{
-                relP2C[i] = RelativeTransform(this.linkStates[d.parentIndex].worldTransform, s.worldTransform);
                 const SpatialVec vJ = SpatialScale(jointS[i], s.qd);
                 const SpatialVec vPar = SpatialTransformMotionP2C(relP2C[i], this.linkStates[d.parentIndex].spatialVelocity);
                 s.spatialVelocity = SpatialAdd(vPar, vJ);
@@ -507,12 +522,12 @@ class Articulation{
             if(d.jointType != ArticulationJointType::Fixed){
                 if(d.enableDrive){
                     f32 dTau = d.driveStiffness * (d.driveTargetPos - s.q) + d.driveDamping * (d.driveTargetVel - s.qd);
-                    dTau = Clamp(dTau, -d.driveMaxForce, d.driveMaxForce);
+                    dTau = SimdClamp(dTau, -d.driveMaxForce, d.driveMaxForce);
                     actTau += dTau;
                 }
                 actTau -= d.jointDamping * s.qd;
                 if(d.jointFriction > 0.0f){
-                    f32 fricSign = Clamp(s.qd * 1.0e3f, -1.0f, 1.0f);
+                    f32 fricSign = SimdClamp(s.qd * 1.0e3f, -1.0f, 1.0f);
                     if(s.qd > 1.0e-3f)
                         fricSign = 1.0f;
                     else if(s.qd < -1.0e-3f)

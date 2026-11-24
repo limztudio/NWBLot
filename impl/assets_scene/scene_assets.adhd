@@ -170,16 +170,6 @@ b8 ValidateSceneAssetMap<TAsset>(in HashMap<Name, AssetRef<TAsset>> assets){
     return true;
 }
 
-void CollectAssetRefHashes<TAsset>(
-    in Span<AssetRef<TAsset>> references,
-    mut Vector<NameHash> outHashes
-){
-    outHashes.clear();
-    outHashes.reserve(references.size());
-    for(in AssetRef<TAsset> item : references)
-        outHashes.push_back(item.name().hash());
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

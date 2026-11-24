@@ -99,18 +99,13 @@ void WriteWorldPoseBackToEntityTransform(in EntityID entity, in Transform3D worl
         if(pp.parent.valid() && world.alive(pp.parent) && world.hasComponent<TransformComponent>(pp.parent)){
             const EcsWorldPose parentPose = ResolveEntityWorldPose(pp.parent, world);
             const Transform3D localXf = RelativeTransform(parentPose.transform, worldXf);
-            f32 lx = localXf.position.x;
-            f32 ly = localXf.position.y;
-            f32 lz = localXf.position.z;
+            VectorSingle localPos = VectorSingle(localXf.position, 0.0f);
             if(pp.inheritScale){
-                if(Abs(parentPose.scale.x) > 1.0e-5f)
-                    lx /= parentPose.scale.x;
-                if(Abs(parentPose.scale.y) > 1.0e-5f)
-                    ly /= parentPose.scale.y;
-                if(Abs(parentPose.scale.z) > 1.0e-5f)
-                    lz /= parentPose.scale.z;
+                const VectorSingle safeScale = VectorSingle(parentPose.scale, 1.0f);
+                const VectorSingle denom = VectorSelect(VectorSingle(1.0f), safeScale, VectorGreater(Abs(safeScale), VectorSingle(1.0e-5f)));
+                localPos = localPos / denom;
             }
-            xf.position = f32x4(lx, ly, lz, 0.0f);
+            xf.position = f32x4(localPos, 0.0f);
             xf.rotation = localXf.rotation;
             return;
         }
@@ -169,7 +164,7 @@ ForceField BuildWorldTransformedForceField(in ForceField src, in Transform3D xf,
     if(src.type == ForceFieldType::PointGravity){
         const VectorSingle scaledOrigin(src.originOrDirection.x * worldScale.x, src.originOrDirection.y * worldScale.y, src.originOrDirection.z * worldScale.z, 0.0f);
         dst.originOrDirection = f32x4(VectorSingle(xf.position) + Vector3Rotate(scaledOrigin, rot), 0.0f);
-        const f32 maxS = Max(Abs(worldScale.x), Max(Abs(worldScale.y), Abs(worldScale.z)));
+        const f32 maxS = Vector3MaxComponent(Abs(worldScale)).x;
         dst.radius = src.radius * maxS;
         dst.minDistance = src.minDistance * maxS;
     }
@@ -204,8 +199,16 @@ void ResolveArticulationProxyBodies(
     mut ArticulationComponent ac,
     in HashMap<Name, EntityID> namedEntities,
     in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
-    in PhysicsWorld physicsWorld
+    in PhysicsWorld physicsWorld,
+    in u64 namedEntitiesVersion
 ){
+    if(
+        ac.initialized
+        && !ac.dirty
+        && ac.syncedProxyTopologyVersion == physicsWorld.m_topologyVersion
+        && ac.syncedProxyNamedVersion == namedEntitiesVersion
+    )
+        return;
     for(usize i = 0u; i < ac.proxyEntityNames.size(); ++i){
         const Name targetName = ac.proxyEntityNames[i];
         if(targetName == s_NameNone)
@@ -224,6 +227,8 @@ void ResolveArticulationProxyBodies(
         if(ac.initialized && i < ac.articulation.linkDefs.size())
             ac.articulation.linkDefs[i].proxyBodyId = bId;
     }
+    ac.syncedProxyTopologyVersion = physicsWorld.m_topologyVersion;
+    ac.syncedProxyNamedVersion = namedEntitiesVersion;
 }
 
 void PruneRemovedEcsRagdolls(
@@ -277,33 +282,33 @@ void CollectEcsPhysicsEnvironment(
     const usize fluidCount = fluidView.candidateCount();
     if(fluidCount > 0u){
         envScratch.fluids.reserve(fluidCount);
-        for(in auto row : fluidView){
-            const EntityID ent = Get<0>(row);
-            const FluidVolumeComponent fvc = Get<1>(row);
-            if(!fvc.enabled || !fvc.volume.enabled)
-                continue;
-            EcsWorldPose pose;
-            if(ResolveEcsSubsystemWorldPose(ent, world, pose))
-                envScratch.fluids.push_back(BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)));
-            else
-                envScratch.fluids.push_back(fvc.volume);
-        }
+        fluidView.each(
+            lambda[mut world, mut envScratch](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+                if(!fvc.enabled || !fvc.volume.enabled)
+                    return;
+                EcsWorldPose pose;
+                if(ResolveEcsSubsystemWorldPose(ent, world, pose))
+                    envScratch.fluids.push_back(BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)));
+                else
+                    envScratch.fluids.push_back(fvc.volume);
+            }
+        );
     }
     const auto fieldView = world.view<ForceFieldComponent>();
     const usize fieldCount = fieldView.candidateCount();
     if(fieldCount > 0u){
         envScratch.forceFields.reserve(fieldCount);
-        for(in auto row : fieldView){
-            const EntityID ent = Get<0>(row);
-            const ForceFieldComponent ffc = Get<1>(row);
-            if(!ffc.enabled || !ffc.field.enabled)
-                continue;
-            EcsWorldPose pose;
-            if(ResolveEcsSubsystemWorldPose(ent, world, pose))
-                envScratch.forceFields.push_back(BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)));
-            else
-                envScratch.forceFields.push_back(ffc.field);
-        }
+        fieldView.each(
+            lambda[mut world, mut envScratch](in EntityID ent, in ForceFieldComponent ffc) -> void{
+                if(!ffc.enabled || !ffc.field.enabled)
+                    return;
+                EcsWorldPose pose;
+                if(ResolveEcsSubsystemWorldPose(ent, world, pose))
+                    envScratch.forceFields.push_back(BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)));
+                else
+                    envScratch.forceFields.push_back(ffc.field);
+            }
+        );
     }
 }
 
@@ -317,6 +322,7 @@ void StepEcsPhysicsSubsystemBridges(
     mut Vector<EcsSlotOwner> jointIndexToEntity,
     in f32 dt,
     in b8 useCollectedEnv,
+    in b8 writeBackCharacters,
     mut PhysicsEnvironment envScratch,
     mut HashMap<EntityID, EcsTrackedRagdoll> activeRagdolls,
     mut EcsPhysicsSyncScratch scratch,
@@ -326,17 +332,22 @@ void StepEcsPhysicsSubsystemBridges(
     if(charView.candidateCount() > 0u){
         in HashMap<EntityID, EcsEntityPhysicsRecord> charRecordsRef = entityRecords;
         charView.each(
-            lambda[in dt, in charRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+            lambda[in dt, in writeBackCharacters, in charRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut CharacterControllerComponent cc) -> void{
                 if(!cc.enabled)
                     return;
-                EcsWorldPose worldPose;
-                const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, worldPose);
+                const u64 curTopoVer = physicsWorld.m_topologyVersion;
                 if(!cc.def.ignoreBodyId.valid()){
-                    const BodyId ownBodyId = ResolveEntityOwnPhysicsBody(entity, world, charRecordsRef, physicsWorld);
-                    if(ownBodyId.valid())
-                        cc.def.ignoreBodyId = ownBodyId;
+                    if(!cc.ownBodyChecked || cc.ownBodyCheckedTopologyVersion != curTopoVer){
+                        const BodyId ownBodyId = ResolveEntityOwnPhysicsBody(entity, world, charRecordsRef, physicsWorld);
+                        if(ownBodyId.valid())
+                            cc.def.ignoreBodyId = ownBodyId;
+                        cc.ownBodyChecked = true;
+                        cc.ownBodyCheckedTopologyVersion = curTopoVer;
+                    }
                 }
                 if(!cc.initialized || cc.dirty){
+                    EcsWorldPose worldPose;
+                    const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, worldPose);
                     VectorSingle startPos(0.0f);
                     VectorSingle startRot(0.0f, 0.0f, 0.0f, 1.0f);
                     if(hasXf){
@@ -356,9 +367,12 @@ void StepEcsPhysicsSubsystemBridges(
                 else{
                     if(!cc.controller.def.ignoreBodyId.valid() && cc.def.ignoreBodyId.valid())
                         cc.controller.def.ignoreBodyId = cc.def.ignoreBodyId;
-                    if(cc.syncFromTransform && hasXf){
-                        cc.controller.position = worldPose.transform.position;
-                        cc.controller.rotation = f32x4(SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation)));
+                    if(cc.syncFromTransform){
+                        EcsWorldPose worldPose;
+                        if(ResolveEcsSubsystemWorldPose(entity, world, worldPose)){
+                            cc.controller.position = worldPose.transform.position;
+                            cc.controller.rotation = f32x4(SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation)));
+                        }
                         cc.prevPosition = cc.controller.position;
                         cc.prevRotation = cc.controller.rotation;
                         cc.currPosition = cc.controller.position;
@@ -375,7 +389,7 @@ void StepEcsPhysicsSubsystemBridges(
                 cc.controller.update(physicsWorld, dt);
                 cc.currPosition = cc.controller.position;
                 cc.currRotation = cc.controller.rotation;
-                if(hasXf){
+                if(writeBackCharacters && world.hasComponent<TransformComponent>(entity)){
                     const Transform3D worldXf(VectorSingle(cc.controller.position), SafeNormalizeQuat(VectorSingle(cc.controller.rotation)));
                     WriteWorldPoseBackToEntityTransform(entity, worldXf, world);
                 }
@@ -506,35 +520,37 @@ void StepEcsPhysicsSubsystemBridges(
         if(hasFluids || hasFields){
             b8 anyActiveEnv = false;
             if(hasFluids){
-                for(in auto row : fluidView){
-                    const FluidVolumeComponent fvc = Get<1>(row);
-                    if(!fvc.enabled || !fvc.volume.enabled)
-                        continue;
-                    anyActiveEnv = true;
-                    EcsWorldPose pose;
-                    if(ResolveEcsSubsystemWorldPose(Get<0>(row), world, pose))
-                        ApplyFluidVolumeWithScheduler(physicsWorld, BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), dt, scheduler);
-                    else
-                        ApplyFluidVolumeWithScheduler(physicsWorld, fvc.volume, dt, scheduler);
-                }
+                fluidView.each(
+                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut anyActiveEnv](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+                        if(!fvc.enabled || !fvc.volume.enabled)
+                            return;
+                        anyActiveEnv = true;
+                        EcsWorldPose pose;
+                        if(ResolveEcsSubsystemWorldPose(ent, world, pose))
+                            ApplyFluidVolumeWithScheduler(physicsWorld, BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), dt, scheduler);
+                        else
+                            ApplyFluidVolumeWithScheduler(physicsWorld, fvc.volume, dt, scheduler);
+                    }
+                );
             }
             if(hasFields){
                 f32 activeTimeSec = envScratch.elapsedTimeSec;
-                for(in auto row : fieldView){
-                    const ForceFieldComponent ffc = Get<1>(row);
-                    if(!ffc.enabled || !ffc.field.enabled)
-                        continue;
-                    if(!anyActiveEnv){
-                        envScratch.elapsedTimeSec += dt;
-                        activeTimeSec = envScratch.elapsedTimeSec;
-                        anyActiveEnv = true;
+                fieldView.each(
+                    lambda[in dt, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut activeTimeSec, mut anyActiveEnv](in EntityID ent, in ForceFieldComponent ffc) -> void{
+                        if(!ffc.enabled || !ffc.field.enabled)
+                            return;
+                        if(!anyActiveEnv){
+                            envScratch.elapsedTimeSec += dt;
+                            activeTimeSec = envScratch.elapsedTimeSec;
+                            anyActiveEnv = true;
+                        }
+                        EcsWorldPose pose;
+                        if(ResolveEcsSubsystemWorldPose(ent, world, pose))
+                            ApplyForceFieldWithScheduler(physicsWorld, BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)), activeTimeSec, dt, scheduler);
+                        else
+                            ApplyForceFieldWithScheduler(physicsWorld, ffc.field, activeTimeSec, dt, scheduler);
                     }
-                    EcsWorldPose pose;
-                    if(ResolveEcsSubsystemWorldPose(Get<0>(row), world, pose))
-                        ApplyForceFieldWithScheduler(physicsWorld, BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)), activeTimeSec, dt, scheduler);
-                    else
-                        ApplyForceFieldWithScheduler(physicsWorld, ffc.field, activeTimeSec, dt, scheduler);
-                }
+                );
                 if(!anyActiveEnv && hasFluids)
                     envScratch.elapsedTimeSec += dt;
             }
@@ -548,14 +564,15 @@ void StepEcsPhysicsSubsystemBridges(
     if(artView.candidateCount() > 0u){
         in HashMap<Name, EntityID> artNamedRef = namedEntities;
         in HashMap<EntityID, EcsEntityPhysicsRecord> artRecordsRef = entityRecords;
+        const u64 namedVersion = scratch.namedEntitiesVersion;
         artView.each(
-            lambda[in dt, in artNamedRef, in artRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut ArticulationComponent ac) -> void{
+            lambda[in dt, in namedVersion, in artNamedRef, in artRecordsRef, mut world, mut physicsWorld](in EntityID entity, mut ArticulationComponent ac) -> void{
                 if(!ac.enabled)
                     return;
-                EcsWorldPose rootPose;
-                const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, rootPose);
                 if(!ac.initialized || ac.dirty){
-                    ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld);
+                    EcsWorldPose rootPose;
+                    const b8 hasXf = ResolveEcsSubsystemWorldPose(entity, world, rootPose);
+                    ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion);
                     Transform3D rootXf;
                     if(hasXf)
                         rootXf = rootPose.transform;
@@ -569,15 +586,18 @@ void StepEcsPhysicsSubsystemBridges(
                 }
                 else{
                     if(!ac.proxyEntityNames.empty())
-                        ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld);
-                    if(ac.isFixedBase && hasXf && !EcsTransformsNearlyEqual(ac.articulation.baseTransform, rootPose.transform)){
-                        ac.articulation.baseTransform = rootPose.transform;
-                        ac.articulation.computeForwardKinematics();
+                        ResolveArticulationProxyBodies(ac, artNamedRef, artRecordsRef, physicsWorld, namedVersion);
+                    if(ac.isFixedBase){
+                        EcsWorldPose rootPose;
+                        if(ResolveEcsSubsystemWorldPose(entity, world, rootPose) && !EcsTransformsNearlyEqual(ac.articulation.baseTransform, rootPose.transform)){
+                            ac.articulation.baseTransform = rootPose.transform;
+                            ac.articulation.computeForwardKinematics();
+                        }
                     }
                 }
                 if(ac.initialized){
                     ac.articulation.step(physicsWorld, dt);
-                    if(!ac.isFixedBase && hasXf)
+                    if(!ac.isFixedBase && world.hasComponent<TransformComponent>(entity))
                         WriteWorldPoseBackToEntityTransform(entity, ac.articulation.baseTransform, world);
                 }
             }
@@ -614,7 +634,7 @@ void ApplyInterpolatedCharacterTransformsToEcs(mut World world, in f32 interpola
     const auto charView = world.view<CharacterControllerComponent>();
     if(charView.candidateCount() == 0u)
         return;
-    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
+    const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
     const VectorSingle tVec(alpha);
     charView.each(
         lambda[in tVec, mut world](in EntityID entity, in CharacterControllerComponent cc) -> void{
@@ -636,6 +656,10 @@ void ApplyInterpolatedCharacterTransformsToEcs(mut World world, in f32 interpola
 void CollectEcsGpuRenderTransformBindings(
     mut World world,
     in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
+    in Vector<EcsSlotOwner> bodyIndexToEntity,
+    in b8 hasAnyPhysicsParents,
+    in b8 bodyHandlesTrusted,
+    in HashMap<EntityID, EcsWorldPose> poseCache,
     in PhysicsWorld physicsWorld,
     mut Vector<GpuPhysicsRenderTransformBinding> outBindings
 ){
@@ -661,11 +685,17 @@ void CollectEcsGpuRenderTransformBindings(
                 continue;
             bodyId = recIt.value().bodyId;
         }
-        if(!bodyId.valid() || !physicsWorld.isValidBody(bodyId))
+        if(!bodyId.valid())
+            continue;
+        const b8 bodyOwnerMatches = bodyHandlesTrusted
+            && bodyId.index < cast<u32>(bodyIndexToEntity.size())
+            && bodyIndexToEntity[bodyId.index].entity == entity
+            && bodyIndexToEntity[bodyId.index].generation == bodyId.generation;
+        if(!bodyOwnerMatches && !physicsWorld.isValidBody(bodyId))
             continue;
         f32x4 entityScale(1.0f, 1.0f, 1.0f, 0.0f);
-        if(world.hasComponent<PhysicsParentComponent>(entity)){
-            entityScale = ResolveEntityWorldScale(entity, world);
+        if(hasAnyPhysicsParents && world.hasComponent<PhysicsParentComponent>(entity)){
+            entityScale = ResolveEntityWorldScaleFast(entity, world, poseCache);
         }
         else{
             const Optional<mut TransformComponent> xfOpt = world.borrowComponent<TransformComponent>(entity);

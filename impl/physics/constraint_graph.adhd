@@ -128,7 +128,7 @@ void WakeIslandWithGraph(
     if(oldSetIndex == s_AwakeSetIndex || oldSetIndex < 3u)
         return;
 
-    WakeIslandInSets(bodies, islands, sets, contacts, islandId);
+    WakeIslandInSets(bodies, islands, sets, islandId);
 
     if(oldSetIndex < sets.size() && sets[oldSetIndex].sims.empty() && sets[oldSetIndex].islands.empty())
         freeSolverSetIds.push_back(oldSetIndex);
@@ -166,7 +166,7 @@ void WakeBodyWithGraph(
         return;
     }
 
-    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyId);
+    WakeBodyWithIsland(bodies, islands, sets, bodyId);
     if(setIdx >= 3u && setIdx < sets.size() && sets[setIdx].sims.empty() && sets[setIdx].islands.empty())
         freeSolverSetIds.push_back(setIdx);
 }

@@ -81,23 +81,21 @@ b8 PaintSelectable(
         preferred = style.hover;
         fallback = style.hoverFallback;
     }
-    const Optional<in UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
-    if(!region.has_value())
+    const Optional<usize> regionIdx = paint.resolveRegionIndex(preferred, fallback);
+    if(!regionIdx.has_value())
         return false;
     paint.pushClip(clip);
     paint.pushClip(bounds);
-    b8 painted = paint.drawRegion(region.value().name, bounds);
-    if(painted && flags.enabled && flags.focused && skin.hasRegion(style.focus))
-        painted = paint.drawRegion(style.focus, bounds);
+    paint.drawRegionByIndex(regionIdx.value(), bounds);
+    if(flags.enabled && flags.focused)
+        paint.tryDrawRegion(style.focus, bounds);
     const Rect content = InsetUiRectBounds(bounds, padding);
     const Point origin = ResolveCenteredTextOrigin(content, 0.0f, textBounds);
     paint.pushClip(content);
-    if(painted){
-        Color activeColor = disabledTextColor;
-        if(flags.enabled)
-            activeColor = textColor;
-        painted = text.paint(paint, layout, origin, activeColor);
-    }
+    Color activeColor = disabledTextColor;
+    if(flags.enabled)
+        activeColor = textColor;
+    const b8 painted = text.paint(paint, layout, origin, activeColor);
     const b8 textPopped = paint.popClip();
     const b8 rowPopped = paint.popClip();
     const b8 clipPopped = paint.popClip();

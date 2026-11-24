@@ -29,6 +29,7 @@ class PhysicsSystem{
     private HashMap<EntityID, Name> m_syncedRigidBodyTags;
     private HashMap<EntityID, Name> m_syncedColliderTags;
     private EcsPhysicsSyncScratch m_syncScratch;
+    private EcsPhysicsAssetCache m_assetCache;
     private Vector<GpuPhysicsRenderTransformBinding> m_exportBindingsScratch;
     private Vector<BodyMoveEvent> m_frameBodyMoveEvents;
     private Vector<ContactBeginTouchEvent> m_frameContactBeginEvents;
@@ -56,6 +57,7 @@ class PhysicsSystem{
     private f64 m_lastStepMs = 0.0;
     private u64 m_lastStepTopologyVersion = 0u;
     private b8 m_useDirectWorldEvents = false;
+    private b8 m_ecsEventsPopulated = false;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
@@ -93,6 +95,7 @@ class PhysicsSystem{
 
     private void clearFrameEvents(){
         this.m_useDirectWorldEvents = false;
+        this.m_ecsEventsPopulated = false;
         this.m_frameBodyMoveEvents.clear();
         this.m_frameContactBeginEvents.clear();
         this.m_frameContactEndEvents.clear();
@@ -187,14 +190,60 @@ class PhysicsSystem{
         }
     }
 
+    private EntityID resolveEcsEventBodyEntity(in BodyId bodyId, in b8 topoTrusted)const{
+        if(!bodyId.valid())
+            return s_InvalidEntityId;
+        if(topoTrusted){
+            if(bodyId.index < cast<u32>(this.m_bodyIndexToEntity.size())){
+                in EcsSlotOwner owner = this.m_bodyIndexToEntity[bodyId.index];
+                if(owner.entity.valid() && owner.generation == bodyId.generation)
+                    return owner.entity;
+            }
+            if(!this.m_syncScratch.destroyedBodyOwners.empty()){
+                const auto found = this.m_syncScratch.destroyedBodyOwners.find(PackEcsSlotKey(bodyId.index, bodyId.generation));
+                if(found != this.m_syncScratch.destroyedBodyOwners.end())
+                    return found.value();
+            }
+            return s_InvalidEntityId;
+        }
+        return this.entityForBodyIncludingDestroyed(bodyId);
+    }
+
+    private EntityID resolveEcsEventShapeEntity(in ShapeId shapeId, in b8 topoTrusted)const{
+        if(!shapeId.valid())
+            return s_InvalidEntityId;
+        if(topoTrusted){
+            if(shapeId.index < cast<u32>(this.m_shapeIndexToEntity.size())){
+                in EcsSlotOwner owner = this.m_shapeIndexToEntity[shapeId.index];
+                if(owner.entity.valid() && owner.generation == shapeId.generation)
+                    return owner.entity;
+            }
+            if(!this.m_syncScratch.destroyedShapeOwners.empty()){
+                const auto found = this.m_syncScratch.destroyedShapeOwners.find(PackEcsSlotKey(shapeId.index, shapeId.generation));
+                if(found != this.m_syncScratch.destroyedShapeOwners.end())
+                    return found.value();
+            }
+            return s_InvalidEntityId;
+        }
+        return this.entityForShapeIncludingDestroyed(shapeId);
+    }
+
+    private void ensureEcsFrameEventsPopulated(){
+        if(this.m_ecsEventsPopulated)
+            return;
+        this.m_ecsEventsPopulated = true;
+        this.populateEcsFrameEvents();
+    }
+
     private void populateEcsFrameEvents(){
+        const b8 topoTrusted = (this.m_physicsWorld.m_topologyVersion == this.m_lastStepTopologyVersion);
         const Span<BodyMoveEvent> moves = this.bodyMoveEvents();
         if(!moves.empty()){
             this.m_ecsBodyMoveEvents.reserve(moves.size());
             for(usize i = 0u; i < moves.size(); ++i){
                 EcsBodyMoveEvent ev;
                 ev.event = moves[i];
-                ev.entity = this.entityForBodyIncludingDestroyed(moves[i].bodyId);
+                ev.entity = this.resolveEcsEventBodyEntity(moves[i].bodyId, topoTrusted);
                 this.m_ecsBodyMoveEvents.push_back(ev);
             }
         }
@@ -205,8 +254,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < cBegins.size(); ++i){
                 EcsContactBeginEvent ev;
                 ev.event = cBegins[i];
-                ev.entityA = this.entityForShapeIncludingDestroyed(cBegins[i].shapeIdA);
-                ev.entityB = this.entityForShapeIncludingDestroyed(cBegins[i].shapeIdB);
+                ev.entityA = this.resolveEcsEventShapeEntity(cBegins[i].shapeIdA, topoTrusted);
+                ev.entityB = this.resolveEcsEventShapeEntity(cBegins[i].shapeIdB, topoTrusted);
                 this.m_ecsContactBeginEvents.push_back(ev);
             }
         }
@@ -217,8 +266,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < cEnds.size(); ++i){
                 EcsContactEndEvent ev;
                 ev.event = cEnds[i];
-                ev.entityA = this.entityForShapeIncludingDestroyed(cEnds[i].shapeIdA);
-                ev.entityB = this.entityForShapeIncludingDestroyed(cEnds[i].shapeIdB);
+                ev.entityA = this.resolveEcsEventShapeEntity(cEnds[i].shapeIdA, topoTrusted);
+                ev.entityB = this.resolveEcsEventShapeEntity(cEnds[i].shapeIdB, topoTrusted);
                 this.m_ecsContactEndEvents.push_back(ev);
             }
         }
@@ -229,8 +278,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < cPersists.size(); ++i){
                 EcsContactPersistEvent ev;
                 ev.event = cPersists[i];
-                ev.entityA = this.entityForShapeIncludingDestroyed(cPersists[i].shapeIdA);
-                ev.entityB = this.entityForShapeIncludingDestroyed(cPersists[i].shapeIdB);
+                ev.entityA = this.resolveEcsEventShapeEntity(cPersists[i].shapeIdA, topoTrusted);
+                ev.entityB = this.resolveEcsEventShapeEntity(cPersists[i].shapeIdB, topoTrusted);
                 this.m_ecsContactPersistEvents.push_back(ev);
             }
         }
@@ -241,8 +290,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < cHits.size(); ++i){
                 EcsContactHitEvent ev;
                 ev.event = cHits[i];
-                ev.entityA = this.entityForShapeIncludingDestroyed(cHits[i].shapeIdA);
-                ev.entityB = this.entityForShapeIncludingDestroyed(cHits[i].shapeIdB);
+                ev.entityA = this.resolveEcsEventShapeEntity(cHits[i].shapeIdA, topoTrusted);
+                ev.entityB = this.resolveEcsEventShapeEntity(cHits[i].shapeIdB, topoTrusted);
                 this.m_ecsContactHitEvents.push_back(ev);
             }
         }
@@ -253,8 +302,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < sBegins.size(); ++i){
                 EcsSensorBeginEvent ev;
                 ev.event = sBegins[i];
-                ev.sensorEntity = this.entityForShapeIncludingDestroyed(sBegins[i].sensorShapeId);
-                ev.visitorEntity = this.entityForShapeIncludingDestroyed(sBegins[i].visitorShapeId);
+                ev.sensorEntity = this.resolveEcsEventShapeEntity(sBegins[i].sensorShapeId, topoTrusted);
+                ev.visitorEntity = this.resolveEcsEventShapeEntity(sBegins[i].visitorShapeId, topoTrusted);
                 this.m_ecsSensorBeginEvents.push_back(ev);
             }
         }
@@ -265,8 +314,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < sEnds.size(); ++i){
                 EcsSensorEndEvent ev;
                 ev.event = sEnds[i];
-                ev.sensorEntity = this.entityForShapeIncludingDestroyed(sEnds[i].sensorShapeId);
-                ev.visitorEntity = this.entityForShapeIncludingDestroyed(sEnds[i].visitorShapeId);
+                ev.sensorEntity = this.resolveEcsEventShapeEntity(sEnds[i].sensorShapeId, topoTrusted);
+                ev.visitorEntity = this.resolveEcsEventShapeEntity(sEnds[i].visitorShapeId, topoTrusted);
                 this.m_ecsSensorEndEvents.push_back(ev);
             }
         }
@@ -277,8 +326,8 @@ class PhysicsSystem{
             for(usize i = 0u; i < sStays.size(); ++i){
                 EcsSensorStayEvent ev;
                 ev.event = sStays[i];
-                ev.sensorEntity = this.entityForShapeIncludingDestroyed(sStays[i].sensorShapeId);
-                ev.visitorEntity = this.entityForShapeIncludingDestroyed(sStays[i].visitorShapeId);
+                ev.sensorEntity = this.resolveEcsEventShapeEntity(sStays[i].sensorShapeId, topoTrusted);
+                ev.visitorEntity = this.resolveEcsEventShapeEntity(sStays[i].visitorShapeId, topoTrusted);
                 this.m_ecsSensorStayEvents.push_back(ev);
             }
         }
@@ -289,7 +338,7 @@ class PhysicsSystem{
             for(usize i = 0u; i < bWakes.size(); ++i){
                 EcsBodyWakeEvent ev;
                 ev.event = bWakes[i];
-                ev.entity = this.entityForBodyIncludingDestroyed(bWakes[i].bodyId);
+                ev.entity = this.resolveEcsEventBodyEntity(bWakes[i].bodyId, topoTrusted);
                 this.m_ecsBodyWakeEvents.push_back(ev);
             }
         }
@@ -301,8 +350,8 @@ class PhysicsSystem{
                 EcsJointBreakEvent ev;
                 ev.event = jBreaks[i];
                 ev.entity = this.entityForJoint(jBreaks[i].jointId);
-                ev.entityA = this.entityForBodyIncludingDestroyed(jBreaks[i].bodyIdA);
-                ev.entityB = this.entityForBodyIncludingDestroyed(jBreaks[i].bodyIdB);
+                ev.entityA = this.resolveEcsEventBodyEntity(jBreaks[i].bodyIdA, topoTrusted);
+                ev.entityB = this.resolveEcsEventBodyEntity(jBreaks[i].bodyIdB, topoTrusted);
                 this.m_ecsJointBreakEvents.push_back(ev);
             }
         }
@@ -373,16 +422,16 @@ class PhysicsSystem{
         return this.m_frameJointBreakEvents;
     }
 
-    public Span<EcsBodyMoveEvent> ecsBodyMoveEvents()const{ return this.m_ecsBodyMoveEvents; }
-    public Span<EcsContactBeginEvent> ecsContactBeginEvents()const{ return this.m_ecsContactBeginEvents; }
-    public Span<EcsContactEndEvent> ecsContactEndEvents()const{ return this.m_ecsContactEndEvents; }
-    public Span<EcsContactPersistEvent> ecsContactPersistEvents()const{ return this.m_ecsContactPersistEvents; }
-    public Span<EcsContactHitEvent> ecsContactHitEvents()const{ return this.m_ecsContactHitEvents; }
-    public Span<EcsSensorBeginEvent> ecsSensorBeginEvents()const{ return this.m_ecsSensorBeginEvents; }
-    public Span<EcsSensorEndEvent> ecsSensorEndEvents()const{ return this.m_ecsSensorEndEvents; }
-    public Span<EcsSensorStayEvent> ecsSensorStayEvents()const{ return this.m_ecsSensorStayEvents; }
-    public Span<EcsBodyWakeEvent> ecsBodyWakeEvents()const{ return this.m_ecsBodyWakeEvents; }
-    public Span<EcsJointBreakEvent> ecsJointBreakEvents()const{ return this.m_ecsJointBreakEvents; }
+    public Span<EcsBodyMoveEvent> ecsBodyMoveEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsBodyMoveEvents; }
+    public Span<EcsContactBeginEvent> ecsContactBeginEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsContactBeginEvents; }
+    public Span<EcsContactEndEvent> ecsContactEndEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsContactEndEvents; }
+    public Span<EcsContactPersistEvent> ecsContactPersistEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsContactPersistEvents; }
+    public Span<EcsContactHitEvent> ecsContactHitEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsContactHitEvents; }
+    public Span<EcsSensorBeginEvent> ecsSensorBeginEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsSensorBeginEvents; }
+    public Span<EcsSensorEndEvent> ecsSensorEndEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsSensorEndEvents; }
+    public Span<EcsSensorStayEvent> ecsSensorStayEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsSensorStayEvents; }
+    public Span<EcsBodyWakeEvent> ecsBodyWakeEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsBodyWakeEvents; }
+    public Span<EcsJointBreakEvent> ecsJointBreakEvents(){ this.ensureEcsFrameEventsPopulated(); return this.m_ecsJointBreakEvents; }
 
     public void setAssetManager(mut AssetManager assetManager){
         this.m_assetManager = Optional<mut AssetManager>(assetManager);
@@ -391,6 +440,7 @@ class PhysicsSystem{
             ClearFailedColliderAssets(rec);
         }
         this.m_syncScratch.failedCollisionLayerMatrixName = s_NameNone;
+        ReleaseEcsPhysicsAssetCache(this.m_assetCache, this.m_physicsWorld, true);
     }
 
     public void setCustomFilterCallback(in CustomFilterCallback cb){
@@ -527,7 +577,7 @@ class PhysicsSystem{
         if(bodyId.index < cast<u32>(this.m_bodyTransformSnapshots.size()) && bodyId.index < cast<u32>(this.m_bodyTransformSnapshotMeta.size())){
             if(EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyId.index], bodyId.generation)){
                 in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyId.index];
-                const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
+                const f32 alpha = SimdClamp(this.m_interpolationAlpha, 0.0f, 1.0f);
                 VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
                 VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
                 if(Vector4Dot(q0, q1).x < 0.0f)
@@ -560,7 +610,7 @@ class PhysicsSystem{
             && EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyIdx], bodyGen)
         ){
             in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyIdx];
-            const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
+            const f32 alpha = SimdClamp(this.m_interpolationAlpha, 0.0f, 1.0f);
             VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
             VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
             if(Vector4Dot(q0, q1).x < 0.0f)
@@ -578,6 +628,7 @@ class PhysicsSystem{
             this.m_namedEntities.insert_or_assign(tag, entity);
             this.m_syncScratch.manualNamedEntities.insert_or_assign(tag, entity);
             this.m_syncScratch.manualNamedEntitiesDirty = true;
+            ++this.m_syncScratch.namedEntitiesVersion;
         }
     }
 
@@ -586,6 +637,7 @@ class PhysicsSystem{
             this.m_namedEntities.erase(tag);
             this.m_syncScratch.manualNamedEntities.erase(tag);
             this.m_syncScratch.manualNamedEntitiesDirty = true;
+            ++this.m_syncScratch.namedEntitiesVersion;
         }
     }
 
@@ -1521,6 +1573,7 @@ class PhysicsSystem{
         this.m_syncedRigidBodyTags.clear();
         this.m_syncedColliderTags.clear();
         this.m_syncScratch = EcsPhysicsSyncScratch();
+        ReleaseEcsPhysicsAssetCache(this.m_assetCache, this.m_physicsWorld, false);
         this.m_exportBindingsScratch.clear();
         this.clearFrameEvents();
         this.m_accumulator = 0.0f;
@@ -1531,7 +1584,9 @@ class PhysicsSystem{
     }
 
     public b8 exportRenderTransforms(mut Vector<GpuPhysicsRenderTransformOut> outTransforms){
-        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, this.m_exportBindingsScratch);
+        const b8 hasAnyPhysicsParents = this.m_world.view<PhysicsParentComponent>().candidateCount() > 0u;
+        const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
+        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_bodyIndexToEntity, hasAnyPhysicsParents, bodyHandlesTrusted, this.m_syncScratch.writeBackPoseCache, this.m_physicsWorld, this.m_exportBindingsScratch);
         return this.m_gpuDispatcher.exportRenderTransforms(
             this.m_physicsWorld,
             Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
@@ -1544,7 +1599,9 @@ class PhysicsSystem{
         in u32 targetUavSlot,
         in u32 instanceStrideFloat4
     ){
-        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_physicsWorld, this.m_exportBindingsScratch);
+        const b8 hasAnyPhysicsParents = this.m_world.view<PhysicsParentComponent>().candidateCount() > 0u;
+        const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
+        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_bodyIndexToEntity, hasAnyPhysicsParents, bodyHandlesTrusted, this.m_syncScratch.writeBackPoseCache, this.m_physicsWorld, this.m_exportBindingsScratch);
         return this.m_gpuDispatcher.exportRenderTransformsToBuffer(
             this.m_physicsWorld,
             Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
@@ -1595,6 +1652,7 @@ class PhysicsSystem{
         b8 hasDrivenKinematic = false;
         SyncEcsEntitiesToPhysicsWorld(
             this.m_assetManager,
+            this.m_assetCache,
             world,
             this.m_physicsWorld,
             this.m_entityRecords,
@@ -1621,7 +1679,7 @@ class PhysicsSystem{
             this.m_syncScratch.deadRagdolls
         );
 
-        if(paused || !IsFinite(delta) || delta <= 0.0f){
+        if(paused || !IsFinite(VectorSingle(delta)) || delta <= 0.0f){
             if(this.m_physicsWorld.m_topologyVersion != this.m_lastStepTopologyVersion){
                 this.m_lastStepStats = WorldStepStats();
                 this.m_lastStepMs = 0.0;
@@ -1640,11 +1698,10 @@ class PhysicsSystem{
             this.m_lastStepStats.islandCount = aliveIslands;
             this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
             this.m_physicsWorld.consumePendingWakeEvents(this.m_frameBodyWakeEvents);
-            this.populateEcsFrameEvents();
             return Expected<void, CpuTaskAdmissionError>();
         }
 
-        const f32 clampedDelta = Min(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
+        const f32 clampedDelta = SimdMin(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
         this.m_accumulator += clampedDelta;
 
         u32 plannedSteps = 0u;
@@ -1660,7 +1717,7 @@ class PhysicsSystem{
         const b8 useCollectedEnv = plannedSteps > 1u;
         if(useCollectedEnv){
             if(hasDrivenKinematic)
-                SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.kinematicTargets);
+                SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_syncScratch.kinematicTargets);
             CollectEcsPhysicsEnvironment(world, this.m_environmentScratch);
         }
 
@@ -1676,11 +1733,12 @@ class PhysicsSystem{
                 PreparePrevEcsBodyTransformSnapshots(this.m_physicsWorld, this.bodyMoveEvents(), this.m_syncScratch.dirtyPrevSnapshotBodyIndices, this.m_syncScratch.snapshotBodyStamps, this.m_syncScratch.snapshotStamp, this.m_bodyTransformSnapshots, this.m_bodyTransformSnapshotMeta);
             if(hasDrivenKinematic){
                 if(plannedSteps <= 1u)
-                    ApplyKinematicTargetsFromEcs(this.m_syncScratch.drivenKinematicEntries, fixedDt, hasAnyPhysicsParents, world, this.m_physicsWorld);
+                    ApplyKinematicTargetsFromEcs(this.m_syncScratch.drivenKinematicEntries, fixedDt, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_physicsWorld);
                 else
                     ApplyInterpolatedKinematicTargets(this.m_syncScratch.kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
             }
 
+            const b8 writeBackCharacters = ((stepsExecuted + 1u) == plannedSteps) && !interpolateTransforms;
             StepEcsPhysicsSubsystemBridges(
                 world,
                 this.m_physicsWorld,
@@ -1691,6 +1749,7 @@ class PhysicsSystem{
                 this.m_jointIndexToEntity,
                 fixedDt,
                 useCollectedEnv,
+                writeBackCharacters,
                 this.m_environmentScratch,
                 this.m_activeRagdolls,
                 this.m_syncScratch,
@@ -1710,7 +1769,7 @@ class PhysicsSystem{
             ++stepsExecuted;
         }
 
-        this.m_interpolationAlpha = Clamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
+        this.m_interpolationAlpha = SimdClamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
 
         if(stepsExecuted > 0u){
             if(stepsExecuted == 1u){
@@ -1766,7 +1825,6 @@ class PhysicsSystem{
             }
         }
 
-        this.populateEcsFrameEvents();
         return Expected<void, CpuTaskAdmissionError>();
     }
 }

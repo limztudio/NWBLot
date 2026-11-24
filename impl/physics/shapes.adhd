@@ -74,13 +74,6 @@ class HullShape{
         return this.halfExtentsFlags.w != 0u;
     }
 
-    public void setIsBox(in b8 v){
-        if(v)
-            this.halfExtentsFlags.w = 1u;
-        else
-            this.halfExtentsFlags.w = 0u;
-    }
-
     public usize faceCount()const{
         return this.faceTopologies.size();
     }
@@ -323,7 +316,7 @@ void AppendBoxFace(mut HullShape hull, in VectorSingle normal, in f32 offset, in
 }
 
 Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32 radius){
-    if(!IsFinite(halfX) || !IsFinite(halfY) || !IsFinite(halfZ) || !IsFinite(radius))
+    if(!IsFinite(VectorSingle(halfX, halfY, halfZ, radius)))
         return MakeUnexpected(Failure());
     if(halfX <= 0.0f || halfY <= 0.0f || halfZ <= 0.0f || radius < 0.0f)
         return MakeUnexpected(Failure());
@@ -386,12 +379,8 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     return hull;
 }
 
-Expected<HullShape> MakeCubeHull(in f32 halfExtent){
-    return MakeBoxHull(halfExtent, halfExtent, halfExtent, 0.0f);
-}
-
 Expected<SphereShape> MakeSphereShape(in VectorSingle center, in f32 radius){
-    if(!IsValidPositionVec3(center) || !IsFinite(radius) || radius <= 0.0f)
+    if(!IsValidPositionVec3(center) || !IsFinite(VectorSingle(radius)) || radius <= 0.0f)
         return MakeUnexpected(Failure());
     SphereShape s;
     s.centerRadius = f32x4(center, radius);
@@ -399,10 +388,10 @@ Expected<SphereShape> MakeSphereShape(in VectorSingle center, in f32 radius){
 }
 
 Expected<CapsuleShape> MakeCapsuleShape(in VectorSingle center1, in VectorSingle center2, in f32 radius){
-    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(radius) || radius <= 0.0f)
+    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(VectorSingle(radius)) || radius <= 0.0f)
         return MakeUnexpected(Failure());
     const f32 lenSq = Vector3LengthSq(VectorSingle(center2 - center1, 0.0f)).x;
-    if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
         return MakeUnexpected(Failure());
     CapsuleShape c;
     c.center1Radius = f32x4(center1, radius);
@@ -413,7 +402,7 @@ Expected<CapsuleShape> MakeCapsuleShape(in VectorSingle center1, in VectorSingle
 MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
     MassData outMass;
     const f32 r = sphere.radius();
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
     const f32 volume = (4.0f / 3.0f) * s_PI * r * r * r;
@@ -432,7 +421,7 @@ MassData ComputeSphereMass(in SphereShape sphere, in f32 density){
 MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     MassData outMass;
     const f32 r = capsule.radius();
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f)
         return outMass;
 
     const VectorSingle p1 = capsule.center1();
@@ -476,7 +465,7 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
 
 MassData ComputeHullMass(in HullShape hull, in f32 density){
     MassData outMass;
-    if(!IsFinite(density) || density <= 0.0f || hull.faceTopologies.empty() || hull.vertices.empty())
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || hull.faceTopologies.empty() || hull.vertices.empty())
         return outMass;
 
     if(hull.isBox()){
@@ -806,7 +795,7 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
     in Span<u16> triangleMaterialIndices,
     in Span<u32> triangleUserData
 ){
-    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(radius) || radius < 0.0f)
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(VectorSingle(radius)) || radius < 0.0f)
         return MakeUnexpected(Failure());
 
     const usize inputTriCount = indices.size() / 3u;
@@ -1052,27 +1041,7 @@ Aabb3D ComputeMeshAabb(in MeshShape mesh, in Transform3D xf){
     if(mesh.nodes.empty())
         return Aabb3D();
 
-    const Aabb3D rootBox = mesh.nodes[0u].aabb();
-    const VectorSingle lMin = VectorSingle(rootBox.lowerBound);
-    const VectorSingle lMax = VectorSingle(rootBox.upperBound);
-    VectorSingle wMin = TransformPoint(xf, lMin);
-    VectorSingle wMax = wMin;
-
-    for(u32 mask = 1u; mask < 8u; ++mask){
-        f32 cx = lMin.x;
-        f32 cy = lMin.y;
-        f32 cz = lMin.z;
-        if((mask & 1u) != 0u) cx = lMax.x;
-        if((mask & 2u) != 0u) cy = lMax.y;
-        if((mask & 4u) != 0u) cz = lMax.z;
-        const VectorSingle wp = TransformPoint(xf, VectorSingle(cx, cy, cz, 0.0f));
-        wMin = Min(wMin, wp);
-        wMax = Max(wMax, wp);
-    }
-
-    const f32 rad = mesh.radius();
-    const VectorSingle r(rad, rad, rad, 0.0f);
-    return Aabb3D(wMin - r, wMax + r);
+    return TransformAabb(xf, mesh.nodes[0u].aabb(), mesh.radius());
 }
 
 VectorSingle QuatFromUnitYToVec(in VectorSingle axis){
@@ -1084,7 +1053,7 @@ VectorSingle QuatFromUnitYToVec(in VectorSingle axis){
 }
 
 Expected<CylinderShape> MakeCylinderShape(in VectorSingle center, in f32 halfHeight, in f32 radius, in f32 convexRadius){
-    if(!IsValidPositionVec3(center) || !IsFinite(halfHeight) || !IsFinite(radius) || !IsFinite(convexRadius))
+    if(!IsValidPositionVec3(center) || !IsFinite(VectorSingle(halfHeight, radius, convexRadius, 0.0f)))
         return MakeUnexpected(Failure());
     if(halfHeight <= 0.0f || radius <= 0.0f || convexRadius < 0.0f)
         return MakeUnexpected(Failure());
@@ -1095,7 +1064,7 @@ Expected<CylinderShape> MakeCylinderShape(in VectorSingle center, in f32 halfHei
 }
 
 Expected<ConeShape> MakeConeShape(in VectorSingle center, in f32 halfHeight, in f32 radius, in f32 convexRadius){
-    if(!IsValidPositionVec3(center) || !IsFinite(halfHeight) || !IsFinite(radius) || !IsFinite(convexRadius))
+    if(!IsValidPositionVec3(center) || !IsFinite(VectorSingle(halfHeight, radius, convexRadius, 0.0f)))
         return MakeUnexpected(Failure());
     if(halfHeight <= 0.0f || radius <= 0.0f || convexRadius < 0.0f)
         return MakeUnexpected(Failure());
@@ -1106,12 +1075,12 @@ Expected<ConeShape> MakeConeShape(in VectorSingle center, in f32 halfHeight, in 
 }
 
 Expected<TaperedCapsuleShape> MakeTaperedCapsuleShape(in VectorSingle center1, in VectorSingle center2, in f32 radius1, in f32 radius2){
-    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(radius1) || !IsFinite(radius2))
+    if(!IsValidPositionVec3(center1) || !IsValidPositionVec3(center2) || !IsFinite(VectorSingle(radius1, radius2, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     if(radius1 <= 0.0f || radius2 <= 0.0f)
         return MakeUnexpected(Failure());
     const f32 lenSq = Vector3LengthSq(VectorSingle(center2 - center1, 0.0f)).x;
-    if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
         return MakeUnexpected(Failure());
     TaperedCapsuleShape tc;
     tc.center1Radius1 = f32x4(center1, radius1);
@@ -1120,12 +1089,12 @@ Expected<TaperedCapsuleShape> MakeTaperedCapsuleShape(in VectorSingle center1, i
 }
 
 Expected<PlaneShape> MakePlaneShape(in VectorSingle normal, in f32 offset, in VectorSingle halfExtent){
-    if(!IsFiniteVec3(normal) || !IsFinite(offset) || !IsFinite(halfExtent.x) || !IsFinite(halfExtent.z))
+    if(!IsFiniteVec3(normal) || !IsFinite(VectorSingle(offset, halfExtent.x, halfExtent.z, 0.0f)))
         return MakeUnexpected(Failure());
-    if(halfExtent.x < 0.0f || halfExtent.z < 0.0f || Abs(offset) > s_HugeCoordinate)
+    if(halfExtent.x < 0.0f || halfExtent.z < 0.0f || Abs(VectorSingle(offset)).x > s_HugeCoordinate)
         return MakeUnexpected(Failure());
     const f32 nLenSq = Vector3LengthSq(VectorSingle(normal, 0.0f)).x;
-    if(!IsFinite(nLenSq) || nLenSq <= s_NormalizeEpsilonSq)
+    if(!IsFinite(VectorSingle(nLenSq)) || nLenSq <= s_NormalizeEpsilonSq)
         return MakeUnexpected(Failure());
     const VectorSingle unitN = SafeNormalizeVec3(normal, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     PlaneShape pl;
@@ -1135,10 +1104,10 @@ Expected<PlaneShape> MakePlaneShape(in VectorSingle normal, in f32 offset, in Ve
 }
 
 Expected<SegmentShape> MakeSegmentShape(in VectorSingle point1, in VectorSingle point2, in f32 radius){
-    if(!IsValidPositionVec3(point1) || !IsValidPositionVec3(point2) || !IsFinite(radius) || radius < 0.0f)
+    if(!IsValidPositionVec3(point1) || !IsValidPositionVec3(point2) || !IsFinite(VectorSingle(radius)) || radius < 0.0f)
         return MakeUnexpected(Failure());
     const f32 lenSq = Vector3LengthSq(VectorSingle(point2 - point1, 0.0f)).x;
-    if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
         return MakeUnexpected(Failure());
     SegmentShape seg;
     seg.point1Radius = f32x4(point1, radius);
@@ -1150,7 +1119,7 @@ MassData ComputeCylinderMass(in CylinderShape cyl, in f32 density){
     MassData outMass;
     const f32 r = cyl.radius() + cyl.convexRadius();
     const f32 h = 2.0f * (cyl.halfHeight() + cyl.convexRadius());
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
         return outMass;
     const f32 rr = r * r;
     const f32 mass = density * s_PI * rr * h;
@@ -1170,7 +1139,7 @@ MassData ComputeConeMass(in ConeShape cone, in f32 density){
     const f32 r = cone.radius() + cone.convexRadius();
     const f32 hh = cone.halfHeight() + cone.convexRadius();
     const f32 h = 2.0f * hh;
-    if(!IsFinite(density) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r <= 0.0f || h <= 0.0f)
         return outMass;
     const f32 rr = r * r;
     const f32 mass = density * (s_PI / 3.0f) * rr * h;
@@ -1190,14 +1159,14 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
     MassData outMass;
     const f32 r1 = tc.radius1();
     const f32 r2 = tc.radius2();
-    if(!IsFinite(density) || density <= 0.0f || r1 <= 0.0f || r2 <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || r1 <= 0.0f || r2 <= 0.0f)
         return outMass;
 
     const VectorSingle p1 = tc.center1();
     const VectorSingle p2 = tc.center2();
     const VectorSingle d = VectorSingle(p2 - p1, 0.0f);
     const f32 len = Vector3Length(d).x;
-    if(len <= Abs(r1 - r2) + 1.0e-5f){
+    if(len <= Abs(VectorSingle(r1 - r2)).x + 1.0e-5f){
         SphereShape sp;
         if(r1 >= r2)
             sp.centerRadius = f32x4(p1, r1);
@@ -1208,8 +1177,8 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
 
     const VectorSingle u = d * (1.0f / len);
     const VectorSingle mid = (p1 + p2) * 0.5f;
-    const f32 sinA = Clamp((r1 - r2) / len, -0.99999f, 0.99999f);
-    const f32 cosA = SqrtFast(Max(0.0f, 1.0f - sinA * sinA));
+    const f32 sinA = SimdClamp((r1 - r2) / len, -0.99999f, 0.99999f);
+    const f32 cosA = SqrtFast(SimdMax(0.0f, 1.0f - sinA * sinA));
     const f32 c1y = -0.5f * len;
     const f32 c2y = 0.5f * len;
     const f32 y1 = c1y + r1 * sinA;
@@ -1239,7 +1208,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
         for(usize k = 0u; k < 3u; ++k){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c1y;
-            const f32 rSq = Max(0.0f, r1 * r1 - dy * dy);
+            const f32 rSq = SimdMax(0.0f, r1 * r1 - dy * dy);
             const f32 w = glWeights[k] * halfSpan * s_PI;
             totalVol += w * rSq;
             momentY += w * rSq * y;
@@ -1273,7 +1242,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
         for(usize k = 0u; k < 3u; ++k){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c2y;
-            const f32 rSq = Max(0.0f, r2 * r2 - dy * dy);
+            const f32 rSq = SimdMax(0.0f, r2 * r2 - dy * dy);
             const f32 w = glWeights[k] * halfSpan * s_PI;
             totalVol += w * rSq;
             momentY += w * rSq * y;
@@ -1288,7 +1257,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
     const f32 totalMass = density * totalVol;
     const f32 comY = momentY / totalVol;
     const f32 iAxis = density * iAxisVol;
-    const f32 iPerp = Max(1.0e-6f * iAxis, density * iPerpOriginVol - totalMass * comY * comY);
+    const f32 iPerp = SimdMax(1.0e-6f * iAxis, density * iPerpOriginVol - totalMass * comY * comY);
     const Mat3 localI(
         VectorSingle(iPerp, 0.0f, 0.0f, 0.0f),
         VectorSingle(0.0f, iAxis, 0.0f, 0.0f),
@@ -1302,7 +1271,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
 
 MassData ComputePlaneMass(in PlaneShape plane, in f32 density){
     MassData outMass;
-    if(!plane.isFiniteExtent() || !IsFinite(density) || density <= 0.0f)
+    if(!plane.isFiniteExtent() || !IsFinite(VectorSingle(density)) || density <= 0.0f)
         return outMass;
     const f32 hx = plane.halfExtent.x;
     const f32 hz = plane.halfExtent.z;
@@ -1338,7 +1307,7 @@ MassData ComputeSegmentMass(in SegmentShape seg, in f32 density){
         return ComputeCapsuleMass(cap, density);
     }
     MassData outMass;
-    if(!IsFinite(density) || density <= 0.0f)
+    if(!IsFinite(VectorSingle(density)) || density <= 0.0f)
         return outMass;
     const VectorSingle p1 = seg.point1();
     const VectorSingle p2 = seg.point2();
@@ -1366,10 +1335,10 @@ Aabb3D ComputeCylinderAabb(in CylinderShape cyl, in Transform3D xf){
     const f32 r = cyl.radius();
     const f32 hh = cyl.halfHeight();
     const f32 cr = cyl.convexRadius();
-    const f32 ex = hh * Abs(ax.x) + r * SqrtFast(Max(0.0f, 1.0f - ax.x * ax.x)) + cr;
-    const f32 ey = hh * Abs(ax.y) + r * SqrtFast(Max(0.0f, 1.0f - ax.y * ax.y)) + cr;
-    const f32 ez = hh * Abs(ax.z) + r * SqrtFast(Max(0.0f, 1.0f - ax.z * ax.z)) + cr;
-    const VectorSingle ext(ex, ey, ez, 0.0f);
+    const VectorSingle mask3(1.0f, 1.0f, 1.0f, 0.0f);
+    const VectorSingle axMasked = ax * mask3;
+    const VectorSingle radProj = VectorSqrt(Max(VectorSingle(0.0f), mask3 - axMasked * axMasked)) * r;
+    const VectorSingle ext = Abs(axMasked) * hh + radProj + VectorSingle(cr, cr, cr, 0.0f);
     return Aabb3D(wc - ext, wc + ext);
 }
 
@@ -1379,21 +1348,13 @@ Aabb3D ComputeConeAabb(in ConeShape cone, in Transform3D xf){
     const f32 r = cone.radius();
     const f32 hh = cone.halfHeight();
     const f32 cr = cone.convexRadius();
-    const f32 sx = r * SqrtFast(Max(0.0f, 1.0f - ax.x * ax.x));
-    const f32 sy = r * SqrtFast(Max(0.0f, 1.0f - ax.y * ax.y));
-    const f32 sz = r * SqrtFast(Max(0.0f, 1.0f - ax.z * ax.z));
-    const VectorSingle bMin(
-        wc.x + Min(hh * ax.x, -hh * ax.x - sx) - cr,
-        wc.y + Min(hh * ax.y, -hh * ax.y - sy) - cr,
-        wc.z + Min(hh * ax.z, -hh * ax.z - sz) - cr,
-        0.0f
-    );
-    const VectorSingle bMax(
-        wc.x + Max(hh * ax.x, -hh * ax.x + sx) + cr,
-        wc.y + Max(hh * ax.y, -hh * ax.y + sy) + cr,
-        wc.z + Max(hh * ax.z, -hh * ax.z + sz) + cr,
-        0.0f
-    );
+    const VectorSingle mask3(1.0f, 1.0f, 1.0f, 0.0f);
+    const VectorSingle axMasked = ax * mask3;
+    const VectorSingle radProj = VectorSqrt(Max(VectorSingle(0.0f), mask3 - axMasked * axMasked)) * r;
+    const VectorSingle tipOff = axMasked * hh;
+    const VectorSingle crVec(cr, cr, cr, 0.0f);
+    const VectorSingle bMin = wc + Min(tipOff, -tipOff - radProj) - crVec;
+    const VectorSingle bMax = wc + Max(tipOff, -tipOff + radProj) + crVec;
     return Aabb3D(bMin, bMax);
 }
 
@@ -1430,7 +1391,7 @@ Aabb3D ComputePlaneAabb(in PlaneShape plane, in Transform3D xf){
 Aabb3D ComputeSegmentAabb(in SegmentShape seg, in Transform3D xf){
     const VectorSingle p1 = TransformPoint(xf, seg.point1());
     const VectorSingle p2 = TransformPoint(xf, seg.point2());
-    const f32 rad = Max(seg.radius(), s_LinearSlop);
+    const f32 rad = SimdMax(seg.radius(), s_LinearSlop);
     const VectorSingle r(rad, rad, rad, 0.0f);
     return Aabb3D(Min(p1, p2) - r, Max(p1, p2) + r);
 }

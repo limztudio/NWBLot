@@ -88,10 +88,6 @@ class DynamicTree{
         return proxyId;
     }
 
-    public u32 createProxy(in Aabb3D aabb, in u32 categoryBits, in u32 userData){
-        return this.createProxyWithFlags(aabb, categoryBits, 0u, userData);
-    }
-
     public void setNodeFlags(in u32 proxyId, in u8 nodeFlags){
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
             return;
@@ -202,14 +198,6 @@ class DynamicTree{
         return this.m_root;
     }
 
-    public u32 rootNode()const{
-        return this.m_root;
-    }
-
-    public usize nodeCapacity()const{
-        return this.m_nodes.size();
-    }
-
     public b8 isValidNode(in u32 nodeId)const{
         return nodeId != s_NullIndex && cast<usize>(nodeId) < this.m_nodes.size() && this.m_nodes[nodeId].height >= 0;
     }
@@ -243,20 +231,6 @@ class DynamicTree{
 
     public u32 nodeCount()const{
         return this.m_nodeCount;
-    }
-
-    public void restoreState(
-        in Vector<TreeNode> inNodes,
-        in Vector<u32> inMoveIndices,
-        in u32 inRoot,
-        in u32 inFreeList,
-        in u32 inNodeCount
-    ){
-        this.m_nodes = inNodes;
-        this.m_moveIndices = inMoveIndices;
-        this.m_root = inRoot;
-        this.m_freeList = inFreeList;
-        this.m_nodeCount = inNodeCount;
     }
 
     public void beginRestore(in usize nodeCount, in usize moveIndexCount, in u32 inRoot, in u32 inFreeList, in u32 inNodeCount){
@@ -383,11 +357,20 @@ class DynamicTree{
             return;
         }
 
-        stackScratch.clear();
-        stackScratch.push_back(this.m_root);
-        while(!stackScratch.empty()){
-            const u32 nodeId = stackScratch.back();
-            stackScratch.pop_back();
+        Array<u32, 64u> localStack;
+        localStack[0u] = this.m_root;
+        u32 localCount = 1u;
+        b8 useHeap = false;
+        while(localCount > 0u || (useHeap && !stackScratch.empty())){
+            u32 nodeId = 0u;
+            if(useHeap){
+                nodeId = stackScratch.back();
+                stackScratch.pop_back();
+            }
+            else{
+                --localCount;
+                nodeId = localStack[localCount];
+            }
             in TreeNode node = this.m_nodes[nodeId];
             if(node.child1 != s_NullIndex){
                 in TreeNode c1 = this.m_nodes[node.child1];
@@ -400,7 +383,18 @@ class DynamicTree{
                         if(!callback(node.child1, c1.userData()))
                             return;
                     }
+                    else if(localCount < 64u && !useHeap){
+                        localStack[localCount] = node.child1;
+                        ++localCount;
+                    }
                     else{
+                        if(!useHeap){
+                            useHeap = true;
+                            stackScratch.clear();
+                            for(u32 si = 0u; si < localCount; ++si)
+                                stackScratch.push_back(localStack[si]);
+                            localCount = 0u;
+                        }
                         stackScratch.push_back(node.child1);
                     }
                 }
@@ -416,7 +410,18 @@ class DynamicTree{
                         if(!callback(node.child2, c2.userData()))
                             return;
                     }
+                    else if(localCount < 64u && !useHeap){
+                        localStack[localCount] = node.child2;
+                        ++localCount;
+                    }
                     else{
+                        if(!useHeap){
+                            useHeap = true;
+                            stackScratch.clear();
+                            for(u32 si = 0u; si < localCount; ++si)
+                                stackScratch.push_back(localStack[si]);
+                            localCount = 0u;
+                        }
                         stackScratch.push_back(node.child2);
                     }
                 }
@@ -452,11 +457,20 @@ class DynamicTree{
             return;
         }
 
-        stackScratch.clear();
-        stackScratch.push_back(this.m_root);
-        while(!stackScratch.empty()){
-            const u32 nodeId = stackScratch.back();
-            stackScratch.pop_back();
+        Array<u32, 64u> localStack;
+        localStack[0u] = this.m_root;
+        u32 localCount = 1u;
+        b8 useHeap = false;
+        while(localCount > 0u || (useHeap && !stackScratch.empty())){
+            u32 nodeId = 0u;
+            if(useHeap){
+                nodeId = stackScratch.back();
+                stackScratch.pop_back();
+            }
+            else{
+                --localCount;
+                nodeId = localStack[localCount];
+            }
             in TreeNode node = this.m_nodes[nodeId];
             if(node.child1 != s_NullIndex){
                 in TreeNode c1 = this.m_nodes[node.child1];
@@ -469,7 +483,18 @@ class DynamicTree{
                         if(!callback(node.child1, c1.userData(), c1.moved))
                             return;
                     }
+                    else if(localCount < 64u && !useHeap){
+                        localStack[localCount] = node.child1;
+                        ++localCount;
+                    }
                     else{
+                        if(!useHeap){
+                            useHeap = true;
+                            stackScratch.clear();
+                            for(u32 si = 0u; si < localCount; ++si)
+                                stackScratch.push_back(localStack[si]);
+                            localCount = 0u;
+                        }
                         stackScratch.push_back(node.child1);
                     }
                 }
@@ -485,7 +510,18 @@ class DynamicTree{
                         if(!callback(node.child2, c2.userData(), c2.moved))
                             return;
                     }
+                    else if(localCount < 64u && !useHeap){
+                        localStack[localCount] = node.child2;
+                        ++localCount;
+                    }
                     else{
+                        if(!useHeap){
+                            useHeap = true;
+                            stackScratch.clear();
+                            for(u32 si = 0u; si < localCount; ++si)
+                                stackScratch.push_back(localStack[si]);
+                            localCount = 0u;
+                        }
                         stackScratch.push_back(node.child2);
                     }
                 }
@@ -568,15 +604,6 @@ class DynamicTree{
         }
     }
 
-    public void rayCast<Callback>(
-        in VectorSingle origin,
-        in VectorSingle translation,
-        in u32 maskBits,
-        in Callback callback
-    )const{
-        this.rayCastFiltered(origin, translation, maskBits, 1.0f, 0u, callback);
-    }
-
     private u32 allocateNode(){
         if(this.m_freeList == s_NullIndex){
             const usize prevCap = this.m_nodes.size();
@@ -633,11 +660,14 @@ class DynamicTree{
         const Aabb3D leafAabb = this.m_nodes[leaf].aabb();
         u32 index = this.m_root;
         while(!this.m_nodes[index].isLeaf()){
-            const u32 c1 = this.m_nodes[index].child1;
-            const u32 c2 = this.m_nodes[index].child2;
-            const Aabb3D idxBox = this.m_nodes[index].aabb();
-            const Aabb3D c1Box = this.m_nodes[c1].aabb();
-            const Aabb3D c2Box = this.m_nodes[c2].aabb();
+            in TreeNode idxNode = this.m_nodes[index];
+            const u32 c1 = idxNode.child1;
+            const u32 c2 = idxNode.child2;
+            const Aabb3D idxBox = idxNode.aabb();
+            in TreeNode n1 = this.m_nodes[c1];
+            in TreeNode n2 = this.m_nodes[c2];
+            const Aabb3D c1Box = n1.aabb();
+            const Aabb3D c2Box = n2.aabb();
             const f32 area = AabbPerimeter(idxBox);
 
             const Aabb3D combined = AabbUnion(idxBox, leafAabb);
@@ -645,17 +675,13 @@ class DynamicTree{
             const f32 cost = 2.0f * combinedArea;
             const f32 inheritanceCost = 2.0f * (combinedArea - area);
 
-            f32 cost1 = 0.0f;
-            if(this.m_nodes[c1].isLeaf())
-                cost1 = AabbPerimeter(AabbUnion(leafAabb, c1Box)) + inheritanceCost;
-            else
-                cost1 = (AabbPerimeter(AabbUnion(leafAabb, c1Box)) - AabbPerimeter(c1Box)) + inheritanceCost;
+            f32 cost1 = AabbPerimeter(AabbUnion(leafAabb, c1Box)) + inheritanceCost;
+            if(!n1.isLeaf())
+                cost1 -= AabbPerimeter(c1Box);
 
-            f32 cost2 = 0.0f;
-            if(this.m_nodes[c2].isLeaf())
-                cost2 = AabbPerimeter(AabbUnion(leafAabb, c2Box)) + inheritanceCost;
-            else
-                cost2 = (AabbPerimeter(AabbUnion(leafAabb, c2Box)) - AabbPerimeter(c2Box)) + inheritanceCost;
+            f32 cost2 = AabbPerimeter(AabbUnion(leafAabb, c2Box)) + inheritanceCost;
+            if(!n2.isLeaf())
+                cost2 -= AabbPerimeter(c2Box);
 
             if(cost < cost1 && cost < cost2)
                 break;

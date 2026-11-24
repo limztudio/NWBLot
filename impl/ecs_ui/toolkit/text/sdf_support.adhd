@@ -165,24 +165,6 @@ Expected<VectorDouble> ResolveSdfGlyphSupportBounds(in VectorDouble plane, in Sd
     return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
 }
 
-Expected<VectorDouble> TryLoadSdfGlyphSupport(
-    in VectorDouble plane,
-    in FontAtlasGlyph glyph,
-    in u32 pageWidth,
-    in u32 pageHeight,
-    in u32 channelCount,
-    in u32 spreadPixels,
-    in Span<u8> pixels,
-    in DisplayMetrics display
-){
-    if(plane.z <= 0.0 || plane.w <= 0.0)
-        return plane;
-    const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(plane.z, plane.w, glyph, pageWidth, pageHeight, channelCount, spreadPixels, pixels, display);
-    if(!offset.has_value())
-        return MakeUnexpected(Failure());
-    return ResolveSdfGlyphSupportBounds(plane, offset.value());
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

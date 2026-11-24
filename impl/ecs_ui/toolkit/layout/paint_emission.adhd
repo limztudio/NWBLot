@@ -50,48 +50,32 @@ void ReservePaintSnapshot(
     clips.reserve(clipDepth + 1u);
 }
 
-PaintClipEntry ComputeIntersectedPaintClipEntry(in PaintClipEntry parent, in Rect clip, in b8 validateParent){
+PaintClipEntry ComputeIntersectedPaintClipEntry(in PaintClipEntry parent, in Rect clip){
     PaintClipEntry next;
     if(parent.rect.width < 0.0f || parent.rect.height < 0.0f || clip.width < 0.0f || clip.height < 0.0f)
         return next;
-    const f32 clipRight = clip.x + clip.width;
-    const f32 clipBottom = clip.y + clip.height;
-    if(!IsFinite(clip.x) || !IsFinite(clip.y) || !IsFinite(clipRight) || !IsFinite(clipBottom))
+    const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    if(!IsFinite(VectorSingle(clip.x, clip.y, clipEnd.x, clipEnd.y)))
         return next;
-    if(validateParent && (!IsFinite(parent.right) || !IsFinite(parent.bottom)))
-        return next;
-    f32 x0 = clip.x;
-    if(parent.rect.x > x0)
-        x0 = parent.rect.x;
-    f32 y0 = clip.y;
-    if(parent.rect.y > y0)
-        y0 = parent.rect.y;
-    f32 x1 = clipRight;
-    if(parent.right < x1)
-        x1 = parent.right;
-    f32 y1 = clipBottom;
-    if(parent.bottom < y1)
-        y1 = parent.bottom;
-    f32 w = x1 - x0;
-    f32 h = y1 - y0;
-    if(!(w > 0.0f))
-        w = 0.0f;
-    if(!(h > 0.0f))
-        h = 0.0f;
-    if(IsFinite(w) && IsFinite(h)){
+    const VectorSingle parentBounds(parent.rect.x, parent.rect.y, parent.right, parent.bottom);
+    const VectorSingle curBounds(clip.x, clip.y, clipEnd.x, clipEnd.y);
+    const VectorSingle maxOrigin = VectorSelect(curBounds, parentBounds, VectorGreater(parentBounds, curBounds));
+    const VectorSingle minEnd = VectorSelect(curBounds, parentBounds, VectorLess(parentBounds, curBounds));
+    const VectorSingle zeroVec(0.0f);
+    const VectorSingle rawSize(minEnd.z - maxOrigin.x, minEnd.w - maxOrigin.y, 0.0f, 0.0f);
+    const VectorSingle clampedSize = VectorSelect(zeroVec, rawSize, VectorGreater(rawSize, zeroVec));
+    const f32 x0 = maxOrigin.x;
+    const f32 y0 = maxOrigin.y;
+    const f32 w = clampedSize.x;
+    const f32 h = clampedSize.y;
+    if(IsFinite(VectorSingle(w, h, 0.0f, 0.0f).xy)){
         next.rect = Rect(x0, y0, w, h);
-        next.right = x0 + w;
-        next.bottom = y0 + h;
+        const VectorSingle outEnd = VectorSingle(x0, y0, 0.0f, 0.0f) + VectorSingle(w, h, 0.0f, 0.0f);
+        next.right = outEnd.x;
+        next.bottom = outEnd.y;
     }
     return next;
-}
-
-void PushPaintClip(in b8 recording, in Rect clip, mut Vector<PaintClipEntry> clips){
-    if(!recording){
-        ReportPaintClipRecordingOff();
-        return;
-    }
-    clips.push_back(ComputeIntersectedPaintClipEntry(clips.back(), clip, true));
 }
 
 void PushPaintClipValidatedParent(in b8 recording, in Rect clip, mut Vector<PaintClipEntry> clips){
@@ -99,7 +83,7 @@ void PushPaintClipValidatedParent(in b8 recording, in Rect clip, mut Vector<Pain
         ReportPaintClipRecordingOff();
         return;
     }
-    clips.push_back(ComputeIntersectedPaintClipEntry(clips.back(), clip, false));
+    clips.push_back(ComputeIntersectedPaintClipEntry(clips.back(), clip));
 }
 
 b8 PopPaintClip(
@@ -181,37 +165,33 @@ void EmitPaintQuadImpl(
         ReportPaintQuadRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintQuadInvalidColor();
         return;
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f))
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    if(!clipValidated && (!IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom)))
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    if(!clipValidated && !IsFinite(clipEnd.xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH) || color.a <= 0.0f)
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 visW = visSize.x;
+    const f32 visH = visSize.y;
+    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy) || color.a <= 0.0f)
         return;
-    const f32 visEndX = x0 + visW;
-    const f32 visEndY = y0 + visH;
-    if(!IsFinite(visEndX) || !IsFinite(visEndY))
+    const VectorSingle visEnd = clippedOrigin + visSize;
+    const f32 visEndX = visEnd.x;
+    const f32 visEndY = visEnd.y;
+    if(!IsFinite(visEnd.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
@@ -222,7 +202,7 @@ void EmitPaintQuadImpl(
     f32 right = 0.0f;
     f32 bottom = 0.0f;
     if(material != PaintMaterial::Solid && (uv.width != 0.0f || uv.height != 0.0f || uv.x != 0.0f || uv.y != 0.0f)){
-        if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectRight && visEndY == rectBottom){
+        if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectEnd.x && visEndY == rectEnd.y){
             left = uv.x;
             top = uv.y;
             right = uv.x + uv.width;
@@ -347,30 +327,25 @@ void EmitPaintOpaqueWhiteRectValidated(
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f))
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH))
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    if(!(visSize.x > 0.0f) || !(visSize.y > 0.0f) || !IsFinite(visSize.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
         return;
     }
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 x1 = clippedEnd.x;
+    const f32 y1 = clippedEnd.y;
     const Color opaqueWhite = Color();
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
@@ -425,39 +400,36 @@ void EmitPaintSolidQuadValidated(
         ReportPaintQuadRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintQuadInvalidColor();
         return;
     }
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || color.a <= 0.0f)
         return;
-    const f32 rectRight = rectangle.x + rectangle.width;
-    const f32 rectBottom = rectangle.y + rectangle.height;
-    if(!IsFinite(rectRight) || !IsFinite(rectBottom))
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
         return;
-    f32 x0 = rectangle.x;
-    if(clipEntry.rect.x > x0)
-        x0 = clipEntry.rect.x;
-    f32 y0 = rectangle.y;
-    if(clipEntry.rect.y > y0)
-        y0 = clipEntry.rect.y;
-    f32 x1 = rectRight;
-    if(clipEntry.right < x1)
-        x1 = clipEntry.right;
-    f32 y1 = rectBottom;
-    if(clipEntry.bottom < y1)
-        y1 = clipEntry.bottom;
-    const f32 visW = x1 - x0;
-    const f32 visH = y1 - y0;
-    if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visW) || !IsFinite(visH))
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
+    const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
+    const VectorSingle visSize = clippedEnd - clippedOrigin;
+    if(!(visSize.x > 0.0f) || !(visSize.y > 0.0f) || !IsFinite(visSize.xy))
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
         return;
     }
+    const f32 x0 = clippedOrigin.x;
+    const f32 y0 = clippedOrigin.y;
+    const f32 x1 = clippedEnd.x;
+    const f32 y1 = clippedEnd.y;
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
     vertices.push_back(Vertex(Point(x0, y0), Point(0.0f, 0.0f), premultiplied));
@@ -549,7 +521,7 @@ void AppendPaintSolidCommand(
 }
 
 b8 LiangBarskyStep(in f32 p, in f32 q, mut f32 t0, mut f32 t1){
-    if(Abs(p) <= 1.0e-12f)
+    if(Abs(VectorSingle(p)).x <= 1.0e-12f)
         return q >= 0.0f;
     const f32 r = q / p;
     if(p < 0.0f){
@@ -597,24 +569,6 @@ b8 ClipPaintLineSegmentToPaddedBounds(
     if(t0 > 0.0f)
         p0 = Point(orig0.x + t0 * dx, orig0.y + t0 * dy);
     return true;
-}
-
-b8 ClipPaintLineSegmentToClipEntry(in PaintClipEntry clipEntry, in f32 pad, mut Point p0, mut Point p1){
-    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom))
-        return false;
-    if(!IsFinite(pad) || pad < 0.0f)
-        return false;
-    if(!IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)))
-        return false;
-
-    return ClipPaintLineSegmentToPaddedBounds(
-        clipEntry.rect.x - pad,
-        clipEntry.right + pad,
-        clipEntry.rect.y - pad,
-        clipEntry.bottom + pad,
-        p0,
-        p1
-    );
 }
 
 b8 PushSolidQuadToBuffers(
@@ -674,10 +628,10 @@ b8 PushSolidTriToBuffers(
 }
 
 Point NormalizePaintVec2(in Point v, in Point fallback){
-    const f32 lenSq = v.x * v.x + v.y * v.y;
-    if(!IsFinite(lenSq) || lenSq <= 1.0e-12f)
+    const VectorSingle lenSqVec(v.x * v.x + v.y * v.y);
+    if(!IsFinite(lenSqVec) || lenSqVec.x <= 1.0e-12f)
         return fallback;
-    const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+    const f32 invLen = Rsqrt(lenSqVec).x;
     return Point(v.x * invLen, v.y * invLen);
 }
 
@@ -774,13 +728,16 @@ b8 EmitPaintStrokeSegmentPreNormalized(
         f32 aaPad = 0.0f;
         if(antiAlias)
             aaPad = 1.0f;
-        const f32 absNx = Abs(uy * halfW) + aaPad;
-        const f32 absNy = Abs(ux * halfW) + aaPad;
+        const VectorSingle absN = Abs(VectorSingle(uy, ux, 0.0f, 0.0f) * halfW) + VectorSingle(aaPad);
+        const VectorSingle p0V(p0.x, p0.y, 0.0f, 0.0f);
+        const VectorSingle p1V(p1.x, p1.y, 0.0f, 0.0f);
+        const VectorSingle endMax = Max(p0V, p1V) + absN;
+        const VectorSingle endMin = Min(p0V, p1V) - absN;
         if(
-            Max(p0.x, p1.x) + absNx <= clipEntry.rect.x
-            || Max(p0.y, p1.y) + absNy <= clipEntry.rect.y
-            || Min(p0.x, p1.x) - absNx >= clipEntry.right
-            || Min(p0.y, p1.y) - absNy >= clipEntry.bottom
+            endMax.x <= clipEntry.rect.x
+            || endMax.y <= clipEntry.rect.y
+            || endMin.x >= clipEntry.right
+            || endMin.y >= clipEntry.bottom
         )
             return true;
     }
@@ -798,9 +755,9 @@ b8 EmitPaintClippedStrokeSegment(
     mut Vector<u32> indices,
     mut u32 inOutEmittedIndices
 ){
-    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom))
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
         return true;
-    if(!IsFinite(VectorSingle(inStart.x, inStart.y, inEnd.x, inEnd.y)) || !IsFinite(thickness) || thickness <= 0.0f)
+    if(!IsFinite(VectorSingle(inStart.x, inStart.y, inEnd.x, inEnd.y)) || !IsFinite(VectorSingle(thickness)) || thickness <= 0.0f)
         return true;
 
     const f32 halfW = 0.5f * thickness;
@@ -812,21 +769,25 @@ b8 EmitPaintClippedStrokeSegment(
     const f32 maxX = clipEntry.right + pad;
     const f32 minY = clipEntry.rect.y - pad;
     const f32 maxY = clipEntry.bottom + pad;
+    const VectorSingle sVec(inStart.x, inStart.y, 0.0f, 0.0f);
+    const VectorSingle eVec(inEnd.x, inEnd.y, 0.0f, 0.0f);
+    const VectorSingle endMax = Max(sVec, eVec);
+    const VectorSingle endMin = Min(sVec, eVec);
     if(
-        Max(inStart.x, inEnd.x) < minX
-        || Min(inStart.x, inEnd.x) > maxX
-        || Max(inStart.y, inEnd.y) < minY
-        || Min(inStart.y, inEnd.y) > maxY
+        endMax.x < minX
+        || endMin.x > maxX
+        || endMax.y < minY
+        || endMin.y > maxY
     )
         return true;
 
     const f32 dx = inEnd.x - inStart.x;
     const f32 dy = inEnd.y - inStart.y;
-    const f32 lenSq = dx * dx + dy * dy;
-    if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
+    const VectorSingle lenSqVec(dx * dx + dy * dy);
+    if(!IsFinite(lenSqVec) || lenSqVec.x <= 1.0e-8f)
         return true;
 
-    const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+    const f32 invLen = Rsqrt(lenSqVec).x;
     return EmitPaintStrokeSegmentPreNormalized(
         clipEntry, minX, maxX, minY, maxY,
         inStart, inEnd, dx * invLen, dy * invLen, halfW, premultiplied, antiAlias,
@@ -835,9 +796,9 @@ b8 EmitPaintClippedStrokeSegment(
 }
 
 f32 WrapPaintDashPhase(in f32 value, in f32 cycle){
-    if(!IsFinite(value) || !(cycle > 1.0e-5f))
+    if(!IsFinite(VectorSingle(value)) || !(cycle > 1.0e-5f))
         return 0.0f;
-    f32 p = value - Floor(value / cycle) * cycle;
+    f32 p = value - Floor(VectorSingle(value / cycle)).x * cycle;
     if(p < 0.0f)
         p = 0.0f;
     if(p >= cycle - 1.0e-5f)
@@ -962,10 +923,10 @@ b8 EmitPaintArcWedgesNormalized(
         return true;
 
     const Point midSum(u0.x + u4.x, u0.y + u4.y);
-    const f32 midLenSq = midSum.x * midSum.x + midSum.y * midSum.y;
+    const VectorSingle midLenSqVec(midSum.x * midSum.x + midSum.y * midSum.y);
     Point u2 = u0;
-    if(IsFinite(midLenSq) && midLenSq > 1.0e-12f){
-        const f32 invMid = Rsqrt(VectorSingle(midLenSq)).x;
+    if(IsFinite(midLenSqVec) && midLenSqVec.x > 1.0e-12f){
+        const f32 invMid = Rsqrt(midLenSqVec).x;
         u2 = Point(midSum.x * invMid, midSum.y * invMid);
     }
     else{
@@ -973,11 +934,11 @@ b8 EmitPaintArcWedgesNormalized(
     }
 
     const Point chordSum(u0.x + u2.x, u0.y + u2.y);
-    const f32 halfLenSq = chordSum.x * chordSum.x + chordSum.y * chordSum.y;
+    const VectorSingle halfLenSqVec(chordSum.x * chordSum.x + chordSum.y * chordSum.y);
     Point u1 = u0;
     Point u3 = u4;
-    if(IsFinite(halfLenSq) && halfLenSq > 1.0e-12f){
-        const f32 invHalf = Rsqrt(VectorSingle(halfLenSq)).x;
+    if(IsFinite(halfLenSqVec) && halfLenSqVec.x > 1.0e-12f){
+        const f32 invHalf = Rsqrt(halfLenSqVec).x;
         u1 = Point(chordSum.x * invHalf, chordSum.y * invHalf);
         u3 = Point((u2.x + u4.x) * invHalf, (u2.y + u4.y) * invHalf);
     }
@@ -1021,12 +982,16 @@ b8 EmitPaintStrokeWithCapsPreNormalized(
     const f32 maxX = clipEntry.right + pad;
     const f32 minY = clipEntry.rect.y - pad;
     const f32 maxY = clipEntry.bottom + pad;
+    const VectorSingle sVec(segStart.x, segStart.y, 0.0f, 0.0f);
+    const VectorSingle eVec(segEnd.x, segEnd.y, 0.0f, 0.0f);
+    const VectorSingle segMax = Max(sVec, eVec);
+    const VectorSingle segMin = Min(sVec, eVec);
     if(
         !(
-            Max(segStart.x, segEnd.x) < minX
-            || Min(segStart.x, segEnd.x) > maxX
-            || Max(segStart.y, segEnd.y) < minY
-            || Min(segStart.y, segEnd.y) > maxY
+            segMax.x < minX
+            || segMin.x > maxX
+            || segMax.y < minY
+            || segMin.y > maxY
         )
     ){
         if(!EmitPaintStrokeSegmentPreNormalized(
@@ -1066,11 +1031,11 @@ b8 EmitPaintStrokeWithCaps(
 ){
     const f32 dx = end.x - start.x;
     const f32 dy = end.y - start.y;
-    const f32 lenSq = dx * dx + dy * dy;
-    if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
+    const VectorSingle lenSqVec(dx * dx + dy * dy);
+    if(!IsFinite(lenSqVec) || lenSqVec.x <= 1.0e-8f)
         return true;
 
-    const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+    const f32 invLen = Rsqrt(lenSqVec).x;
     return EmitPaintStrokeWithCapsPreNormalized(
         clipEntry, start, end, dx * invLen, dy * invLen, style, capStart, capEnd, premultiplied,
         vertices, indices, inOutEmittedIndices
@@ -1127,7 +1092,7 @@ b8 EmitPaintDashedSegmentPreNormalized(
     }
 
     const f32 visStart = t0 * segLen;
-    const f32 visEnd = Min(segLen, t1 * segLen);
+    const f32 visEnd = UiSimdMin(segLen, t1 * segLen);
     f32 s = 0.0f;
     f32 phase = origPhase;
     if(visStart > 0.0f){
@@ -1146,7 +1111,7 @@ b8 EmitPaintDashedSegmentPreNormalized(
     }
 
     if(s < visEnd - 1.0e-5f){
-        const usize estDashes = cast<usize>(Ceil(Max(0.0f, visEnd - s) / cycle)) + 1u;
+        const usize estDashes = cast<usize>(Ceil(VectorSingle(UiSimdMax(0.0f, visEnd - s) / cycle)).x) + 1u;
         usize vertsPerDash = 4u;
         usize idxPerDash = 6u;
         if(style.antiAlias){
@@ -1174,7 +1139,7 @@ b8 EmitPaintDashedSegmentPreNormalized(
 
     while(s < visEnd - 1.0e-5f){
         if(phase < dashLen){
-            const f32 step = Min(dashLen - phase, segLen - s);
+            const f32 step = UiSimdMin(dashLen - phase, segLen - s);
             if(step > 1.0e-5f){
                 const Point d0(start.x + ux * s, start.y + uy * s);
                 const Point d1(start.x + ux * (s + step), start.y + uy * (s + step));
@@ -1185,7 +1150,7 @@ b8 EmitPaintDashedSegmentPreNormalized(
             phase += step;
         }
         else{
-            const f32 gapStep = Min(cycle - phase, segLen - s);
+            const f32 gapStep = UiSimdMin(cycle - phase, segLen - s);
             s += gapStep;
             phase += gapStep;
         }
@@ -1209,8 +1174,9 @@ b8 EmitPaintDashedSegment(
 ){
     const f32 dx = end.x - start.x;
     const f32 dy = end.y - start.y;
-    const f32 segLen = Sqrt(dx * dx + dy * dy);
-    if(!IsFinite(segLen) || segLen <= 1.0e-5f)
+    const VectorSingle segLenVec = Sqrt(VectorSingle(dx * dx + dy * dy));
+    const f32 segLen = segLenVec.x;
+    if(!IsFinite(segLenVec) || segLen <= 1.0e-5f)
         return true;
 
     const f32 invLen = 1.0f / segLen;
@@ -1235,7 +1201,7 @@ b8 EmitPaintPolylineJoinPreNormalized(
 ){
     const f32 cross = ux0 * uy1 - uy0 * ux1;
     const f32 dot = ux0 * ux1 + uy0 * uy1;
-    if(Abs(cross) <= 1.0e-5f && dot >= 0.0f)
+    if(Abs(VectorSingle(cross)).x <= 1.0e-5f && dot >= 0.0f)
         return true;
 
     const f32 halfW = 0.5f * style.thickness;
@@ -1245,7 +1211,7 @@ b8 EmitPaintPolylineJoinPreNormalized(
     f32 joinPad = halfW;
     f32 miterLimit = 1.0f;
     if(style.join == PaintLineJoin::Miter){
-        miterLimit = Max(style.miterLimit, 1.0f);
+        miterLimit = UiSimdMax(style.miterLimit, 1.0f);
         joinPad = halfW * miterLimit;
     }
     joinPad += aaPad;
@@ -1369,16 +1335,18 @@ void EmitPaintLine(
         ReportPaintLineRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintLineInvalidColor();
         return;
     }
-    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom) || color.a <= 0.0f || !IsFinite(thickness) || thickness <= 0.0f)
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, thickness, 0.0f).xyz) || color.a <= 0.0f || thickness <= 0.0f)
         return;
 
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+    }
     const u32 firstIndex = cast<u32>(indices.size());
     u32 emittedIndices = 0u;
     if(!EmitPaintClippedStrokeSegment(clipEntry, start, end, thickness, premultiplied, false, vertices, indices, emittedIndices))
@@ -1391,25 +1359,10 @@ void EmitPaintLine(
     );
 }
 
-void EmitPaintLine(
-    in b8 recording,
-    in Rect clip,
-    in Point start,
-    in Point end,
-    in f32 thickness,
-    in Color color,
-    in u32 layer,
-    mut Vector<Vertex> vertices,
-    mut Vector<u32> indices,
-    mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered,
-    mut b8 inOutCommandsStrictlyDescending
-){
-    PaintClipEntry clipEntry;
-    clipEntry.rect = clip;
-    clipEntry.right = clip.x + clip.width;
-    clipEntry.bottom = clip.y + clip.height;
-    EmitPaintLine(recording, clipEntry, start, end, thickness, color, layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending);
+f32 ComputePaintTransformedPerpScale(in PaintTransform2D xf, in f32 lx, in f32 ly){
+    const f32 px = xf.m00 * (-ly) + xf.m01 * lx;
+    const f32 py = xf.m10 * (-ly) + xf.m11 * lx;
+    return Sqrt(VectorSingle(px * px + py * py)).x;
 }
 
 void ComputePaintTransformedSegmentScales(
@@ -1423,8 +1376,9 @@ void ComputePaintTransformedSegmentScales(
     const f32 ay = xf.m10 * lx + xf.m11 * ly;
     const f32 px = xf.m00 * (-ly) + xf.m01 * lx;
     const f32 py = xf.m10 * (-ly) + xf.m11 * lx;
-    outAlongScale = Sqrt(ax * ax + ay * ay);
-    outPerpScale = Sqrt(px * px + py * py);
+    const VectorSingle scales = Sqrt(VectorSingle(ax * ax + ay * ay, px * px + py * py, 0.0f, 0.0f));
+    outAlongScale = scales.x;
+    outPerpScale = scales.y;
 }
 
 void EmitPaintLineStyled(
@@ -1445,17 +1399,15 @@ void EmitPaintLineStyled(
         ReportPaintLineRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintLineInvalidColor();
         return;
     }
     if(
         !(clipEntry.rect.width > 0.0f)
         || !(clipEntry.rect.height > 0.0f)
-        || !IsFinite(clipEntry.right)
-        || !IsFinite(clipEntry.bottom)
+        || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, style.thickness, 0.0f).xyz)
         || color.a <= 0.0f
-        || !IsFinite(style.thickness)
         || style.thickness <= 0.0f
     )
         return;
@@ -1463,12 +1415,14 @@ void EmitPaintLineStyled(
         return;
 
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+    }
     const u32 firstIndex = cast<u32>(indices.size());
     u32 emittedIndices = 0u;
 
-    const b8 useDash = IsFinite(style.dashLength) && IsFinite(style.gapLength) && style.dashLength > 0.0f && style.gapLength > 0.0f;
+    const b8 useDash = IsFinite(VectorSingle(style.dashLength, style.gapLength, 0.0f, 0.0f).xy) && style.dashLength > 0.0f && style.gapLength > 0.0f;
     if(useDash){
         const f32 cycle = style.dashLength + style.gapLength;
         f32 phase = WrapPaintDashPhase(style.dashOffset, cycle);
@@ -1492,6 +1446,8 @@ void EmitPaintPolylineCore(
     in b8 closed,
     in b8 hasTransform,
     in PaintTransform2D xf,
+    in b8 uniformScale,
+    in f32 xfScale,
     in PaintLineStyle style,
     in Color color,
     in u32 layer,
@@ -1505,7 +1461,7 @@ void EmitPaintPolylineCore(
         ReportPaintLineRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintLineInvalidColor();
         return;
     }
@@ -1514,27 +1470,27 @@ void EmitPaintPolylineCore(
     if(
         !(clipEntry.rect.width > 0.0f)
         || !(clipEntry.rect.height > 0.0f)
-        || !IsFinite(clipEntry.right)
-        || !IsFinite(clipEntry.bottom)
+        || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, style.thickness, 0.0f).xyz)
         || color.a <= 0.0f
-        || !IsFinite(style.thickness)
         || style.thickness <= 0.0f
     )
         return;
 
     for(usize pi = 0u; pi < points.size(); ++pi){
-        if(!IsFinite(points[pi].x) || !IsFinite(points[pi].y))
+        if(!IsFinite(VectorSingle(points[pi].x, points[pi].y, 0.0f, 0.0f).xy))
             return;
         if(hasTransform){
             const Point tp = ApplyPaintTransform(xf, points[pi]);
-            if(!IsFinite(tp.x) || !IsFinite(tp.y))
+            if(!IsFinite(VectorSingle(tp.x, tp.y, 0.0f, 0.0f).xy))
                 return;
         }
     }
 
     Color premultiplied = color;
-    if(color.a != 1.0f)
-        premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+    if(color.a != 1.0f){
+        const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+    }
     const u32 firstIndex = cast<u32>(indices.size());
     u32 emittedIndices = 0u;
 
@@ -1543,27 +1499,64 @@ void EmitPaintPolylineCore(
     if(isLoop)
         segCount = points.size();
 
-    const b8 useDash = IsFinite(style.dashLength) && IsFinite(style.gapLength) && style.dashLength > 0.0f && style.gapLength > 0.0f;
+    Point firstTa = points[0u];
+    Point prevTa = points[0u];
+    if(hasTransform){
+        firstTa = ApplyPaintTransform(xf, points[0u]);
+        prevTa = firstTa;
+    }
+    const b8 isUniformTransformed = hasTransform && uniformScale;
+    const f32 uniformScaledThickness = style.thickness * xfScale;
+    const b8 uniformThicknessValid = uniformScaledThickness > 0.0f && IsFinite(VectorSingle(uniformScaledThickness));
+
+    const b8 useDash = IsFinite(VectorSingle(style.dashLength, style.gapLength, 0.0f, 0.0f).xy) && style.dashLength > 0.0f && style.gapLength > 0.0f;
     if(useDash){
         f32 phase = 0.0f;
         const f32 baseCycle = style.dashLength + style.gapLength;
-        if(IsFinite(style.dashOffset) && baseCycle > 1.0e-5f)
+        if(IsFinite(VectorSingle(style.dashOffset)) && baseCycle > 1.0e-5f)
             phase = WrapPaintDashPhase(style.dashOffset, baseCycle);
+        PaintLineStyle uniformStyle = style;
+        f32 uniformCycle = baseCycle;
+        const b8 hasUniformCycle = isUniformTransformed && xfScale > 1.0e-5f && baseCycle > 1.0e-5f;
+        if(isUniformTransformed){
+            uniformStyle.thickness = uniformScaledThickness;
+            if(hasUniformCycle){
+                uniformStyle.dashLength = style.dashLength * xfScale;
+                uniformStyle.gapLength = style.gapLength * xfScale;
+                uniformCycle = uniformStyle.dashLength + uniformStyle.gapLength;
+                phase = (phase / baseCycle) * uniformCycle;
+            }
+        }
         usize nextIdx = 1u;
         for(usize si = 0u; si < segCount; ++si){
             in Point la = points[si];
             in Point lb = points[nextIdx];
+            Point tb = lb;
+            if(hasTransform){
+                if(isLoop && nextIdx == 0u)
+                    tb = firstTa;
+                else
+                    tb = ApplyPaintTransform(xf, lb);
+            }
             const f32 ldx = lb.x - la.x;
             const f32 ldy = lb.y - la.y;
-            const f32 lLenSq = ldx * ldx + ldy * ldy;
-            if(IsFinite(lLenSq) && lLenSq > 1.0e-8f){
-                Point a = la;
-                Point b = lb;
-                PaintLineStyle segStyle = style;
-                if(hasTransform){
-                    a = ApplyPaintTransform(xf, la);
-                    b = ApplyPaintTransform(xf, lb);
-                    const f32 invLLen = Rsqrt(VectorSingle(lLenSq)).x;
+            const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+            if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
+                in Point a = prevTa;
+                in Point b = tb;
+                if(isUniformTransformed){
+                    if(uniformThicknessValid){
+                        if(!EmitPaintDashedSegment(clipEntry, a, b, uniformStyle, premultiplied, phase, vertices, indices, emittedIndices))
+                            break;
+                    }
+                    else if(hasUniformCycle){
+                        const f32 segLen = Sqrt(VectorSingle((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))).x;
+                        phase = WrapPaintDashPhase(phase + segLen, uniformCycle);
+                    }
+                }
+                else if(hasTransform){
+                    PaintLineStyle segStyle = style;
+                    const f32 invLLen = Rsqrt(lLenSqVec).x;
                     f32 perpScale = 1.0f;
                     f32 alongScale = 1.0f;
                     ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
@@ -1574,25 +1567,26 @@ void EmitPaintPolylineCore(
                         segStyle.gapLength = style.gapLength * alongScale;
                         const f32 segCycle = segStyle.dashLength + segStyle.gapLength;
                         f32 segPhase = phaseFrac * segCycle;
-                        if(segStyle.thickness > 0.0f && IsFinite(segStyle.thickness)){
+                        if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
                             if(!EmitPaintDashedSegment(clipEntry, a, b, segStyle, premultiplied, segPhase, vertices, indices, emittedIndices))
                                 break;
                         }
                         else{
-                            const f32 segLen = Sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+                            const f32 segLen = Sqrt(VectorSingle((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))).x;
                             segPhase = WrapPaintDashPhase(segPhase + segLen, segCycle);
                         }
                         phase = (segPhase / segCycle) * baseCycle;
                     }
-                    else if(segStyle.thickness > 0.0f && IsFinite(segStyle.thickness)){
+                    else if(segStyle.thickness > 0.0f && IsFinite(VectorSingle(segStyle.thickness))){
                         if(!EmitPaintDashedSegment(clipEntry, a, b, segStyle, premultiplied, phase, vertices, indices, emittedIndices))
                             break;
                     }
                 }
-                else if(!EmitPaintDashedSegment(clipEntry, a, b, segStyle, premultiplied, phase, vertices, indices, emittedIndices)){
+                else if(!EmitPaintDashedSegment(clipEntry, a, b, style, premultiplied, phase, vertices, indices, emittedIndices)){
                     break;
                 }
             }
+            prevTa = tb;
             ++nextIdx;
             if(nextIdx == points.size())
                 nextIdx = 0u;
@@ -1646,36 +1640,68 @@ void EmitPaintPolylineCore(
         usize firstValidSeg = segCount;
         usize lastValidSeg = 0u;
         if(!isLoop){
-            usize probeNext = 1u;
             for(usize pi = 0u; pi < segCount; ++pi){
                 in Point pa = points[pi];
-                in Point pb = points[probeNext];
+                in Point pb = points[pi + 1u];
                 const f32 ldx = pb.x - pa.x;
                 const f32 ldy = pb.y - pa.y;
-                const f32 lLenSq = ldx * ldx + ldy * ldy;
-                if(IsFinite(lLenSq) && lLenSq > 1.0e-8f){
+                const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+                if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
                     b8 segDrawable = true;
                     if(hasTransform){
                         const Point ta = ApplyPaintTransform(xf, pa);
                         const Point tb = ApplyPaintTransform(xf, pb);
                         const f32 tdx = tb.x - ta.x;
                         const f32 tdy = tb.y - ta.y;
-                        const f32 tLenSq = tdx * tdx + tdy * tdy;
-                        const f32 invLLen = Rsqrt(VectorSingle(lLenSq)).x;
-                        f32 perpScale = 1.0f;
-                        f32 alongScale = 1.0f;
-                        ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
-                        segDrawable = IsFinite(tLenSq) && tLenSq > 1.0e-8f && perpScale > 0.0f && IsFinite(style.thickness * perpScale);
+                        const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
+                        if(uniformScale){
+                            segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
+                        }
+                        else{
+                            const f32 invLLen = Rsqrt(lLenSqVec).x;
+                            const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                            segDrawable = IsFinite(VectorSingle(tLenSqVec.x, style.thickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
+                        }
                     }
                     if(segDrawable){
-                        if(firstValidSeg == segCount)
-                            firstValidSeg = pi;
-                        lastValidSeg = pi;
+                        firstValidSeg = pi;
+                        break;
                     }
                 }
-                ++probeNext;
-                if(probeNext == points.size())
-                    probeNext = 0u;
+            }
+            if(firstValidSeg < segCount){
+                lastValidSeg = firstValidSeg;
+                usize rev = segCount;
+                while(rev > firstValidSeg + 1u){
+                    --rev;
+                    in Point pa = points[rev];
+                    in Point pb = points[rev + 1u];
+                    const f32 ldx = pb.x - pa.x;
+                    const f32 ldy = pb.y - pa.y;
+                    const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+                    if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
+                        b8 segDrawable = true;
+                        if(hasTransform){
+                            const Point ta = ApplyPaintTransform(xf, pa);
+                            const Point tb = ApplyPaintTransform(xf, pb);
+                            const f32 tdx = tb.x - ta.x;
+                            const f32 tdy = tb.y - ta.y;
+                            const VectorSingle tLenSqVec(tdx * tdx + tdy * tdy);
+                            if(uniformScale){
+                                segDrawable = uniformThicknessValid && IsFinite(tLenSqVec) && tLenSqVec.x > 1.0e-8f;
+                            }
+                            else{
+                                const f32 invLLen = Rsqrt(lLenSqVec).x;
+                                const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+                                segDrawable = IsFinite(VectorSingle(tLenSqVec.x, style.thickness * perpScale, 0.0f, 0.0f).xy) && tLenSqVec.x > 1.0e-8f && perpScale > 0.0f;
+                            }
+                        }
+                        if(segDrawable){
+                            lastValidSeg = rev;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -1693,29 +1719,35 @@ void EmitPaintPolylineCore(
         for(usize si = 0u; si < segCount; ++si){
             in Point la = points[si];
             in Point lb = points[nextIdx];
+            Point tb = lb;
+            if(hasTransform){
+                if(isLoop && nextIdx == 0u)
+                    tb = firstTa;
+                else
+                    tb = ApplyPaintTransform(xf, lb);
+            }
             const f32 ldx = lb.x - la.x;
             const f32 ldy = lb.y - la.y;
-            const f32 lLenSq = ldx * ldx + ldy * ldy;
-            if(IsFinite(lLenSq) && lLenSq > 1.0e-8f){
-                Point a = la;
-                Point b = lb;
+            const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+            if(IsFinite(lLenSqVec) && lLenSqVec.x > 1.0e-8f){
+                in Point a = prevTa;
+                in Point b = tb;
                 PaintLineStyle segStyle = style;
-                if(hasTransform){
-                    a = ApplyPaintTransform(xf, la);
-                    b = ApplyPaintTransform(xf, lb);
-                    const f32 invLLen = Rsqrt(VectorSingle(lLenSq)).x;
-                    f32 perpScale = 1.0f;
-                    f32 alongScale = 1.0f;
-                    ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
+                if(isUniformTransformed){
+                    segStyle.thickness = uniformScaledThickness;
+                }
+                else if(hasTransform){
+                    const f32 invLLen = Rsqrt(lLenSqVec).x;
+                    const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
                     segStyle.thickness = style.thickness * perpScale;
                 }
                 const f32 dx = b.x - a.x;
                 const f32 dy = b.y - a.y;
-                const f32 lenSq = dx * dx + dy * dy;
-                if(IsFinite(lenSq) && lenSq > 1.0e-8f && segStyle.thickness > 0.0f && IsFinite(segStyle.thickness)){
+                const VectorSingle lenSqVec(dx * dx + dy * dy);
+                if(IsFinite(VectorSingle(lenSqVec.x, segStyle.thickness, 0.0f, 0.0f).xy) && lenSqVec.x > 1.0e-8f && segStyle.thickness > 0.0f){
                     const b8 capStart = !isLoop && si == firstValidSeg;
                     const b8 capEnd = !isLoop && si == lastValidSeg;
-                    const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+                    const f32 invLen = Rsqrt(lenSqVec).x;
                     const f32 ux = dx * invLen;
                     const f32 uy = dy * invLen;
                     if(!EmitPaintStrokeWithCapsPreNormalized(clipEntry, a, b, ux, uy, segStyle, capStart, capEnd, premultiplied, vertices, indices, emittedIndices)){
@@ -1746,6 +1778,7 @@ void EmitPaintPolylineCore(
                     prevValid = false;
                 }
             }
+            prevTa = tb;
             ++nextIdx;
             if(nextIdx == points.size())
                 nextIdx = 0u;
@@ -1779,7 +1812,7 @@ void EmitPaintPolyline(
     mut b8 inOutCommandsStrictlyDescending
 ){
     EmitPaintPolylineCore(
-        recording, clipEntry, points, closed, false, PaintTransformIdentity(), style, color, layer,
+        recording, clipEntry, points, closed, false, PaintTransformIdentity(), true, 1.0f, style, color, layer,
         vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
@@ -1790,6 +1823,8 @@ void EmitPaintPolylineTransformed(
     in Span<Point> points,
     in b8 closed,
     in PaintTransform2D xf,
+    in b8 uniformScale,
+    in f32 xfScale,
     in PaintLineStyle style,
     in Color color,
     in u32 layer,
@@ -1800,7 +1835,7 @@ void EmitPaintPolylineTransformed(
     mut b8 inOutCommandsStrictlyDescending
 ){
     EmitPaintPolylineCore(
-        recording, clipEntry, points, closed, true, xf, style, color, layer,
+        recording, clipEntry, points, closed, true, xf, uniformScale, xfScale, style, color, layer,
         vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
@@ -1826,12 +1861,19 @@ void EmitPaintLineBatchCore(
     }
     if(lines.empty())
         return;
-    const f32 scaledDefaultThickness = thickness * xfScale;
-    const b8 hasDefaultThickness = IsFinite(thickness) && thickness > 0.0f && IsFinite(scaledDefaultThickness);
-    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom)){
+    b8 uniformScale = true;
+    f32 resolvedXfScale = 1.0f;
+    if(hasTransform)
+        uniformScale = TryResolveUniformPaintTransformScale(xf, resolvedXfScale);
+    f32 scaleCheck = xfScale;
+    if(uniformScale)
+        scaleCheck = resolvedXfScale;
+    const f32 scaledDefaultThickness = thickness * scaleCheck;
+    const b8 hasDefaultThickness = IsFinite(VectorSingle(thickness, scaledDefaultThickness, 0.0f, 0.0f).xy) && thickness > 0.0f;
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy)){
         for(usize li = 0u; li < lines.size(); ++li){
             in Color color = lines[li].color;
-            if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f)
+            if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f)
                 ReportPaintLineInvalidColor();
         }
         return;
@@ -1844,6 +1886,12 @@ void EmitPaintLineBatchCore(
         vertices.reserve(vertices.size() + reserveLines * cast<usize>(s_PaintQuadVertexCount));
         indices.reserve(indices.size() + reserveLines * cast<usize>(s_PaintQuadIndexCount));
     }
+
+    const f32 defaultHalfW = 0.5f * scaledDefaultThickness;
+    const f32 defaultMinX = clipEntry.rect.x - defaultHalfW;
+    const f32 defaultMaxX = clipEntry.right + defaultHalfW;
+    const f32 defaultMinY = clipEntry.rect.y - defaultHalfW;
+    const f32 defaultMaxY = clipEntry.bottom + defaultHalfW;
 
     const u32 firstBatchIndex = cast<u32>(indices.size());
     u32 emittedIndices = 0u;
@@ -1858,53 +1906,89 @@ void EmitPaintLineBatchCore(
         if(color.a <= 0.0f)
             continue;
 
-        f32 rawThickness = 0.0f;
-        if(IsFinite(seg.thickness) && seg.thickness > 0.0f)
-            rawThickness = seg.thickness;
-        else if(hasDefaultThickness)
-            rawThickness = thickness;
-        else
+        const b8 useSegThickness = IsFinite(VectorSingle(seg.thickness)) && seg.thickness > 0.0f;
+        if(!useSegThickness && !hasDefaultThickness)
             continue;
 
         Point p0 = seg.start;
         Point p1 = seg.end;
-        f32 resolvedThickness = rawThickness;
-        if(hasTransform){
+        f32 halfW = defaultHalfW;
+        f32 minX = defaultMinX;
+        f32 maxX = defaultMaxX;
+        f32 minY = defaultMinY;
+        f32 maxY = defaultMaxY;
+
+        if(!hasTransform){
+            if(useSegThickness){
+                halfW = 0.5f * seg.thickness;
+                minX = clipEntry.rect.x - halfW;
+                maxX = clipEntry.right + halfW;
+                minY = clipEntry.rect.y - halfW;
+                maxY = clipEntry.bottom + halfW;
+            }
+        }
+        else if(uniformScale){
             const f32 ldx = seg.end.x - seg.start.x;
             const f32 ldy = seg.end.y - seg.start.y;
-            const f32 lLenSq = ldx * ldx + ldy * ldy;
-            if(!IsFinite(lLenSq) || lLenSq <= 1.0e-8f)
+            const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+            if(!IsFinite(lLenSqVec) || lLenSqVec.x <= 1.0e-8f)
                 continue;
-            const f32 invLLen = Rsqrt(VectorSingle(lLenSq)).x;
-            f32 perpScale = 1.0f;
-            f32 alongScale = 1.0f;
-            ComputePaintTransformedSegmentScales(xf, ldx * invLLen, ldy * invLLen, perpScale, alongScale);
-            resolvedThickness = rawThickness * perpScale;
             p0 = ApplyPaintTransform(xf, p0);
             p1 = ApplyPaintTransform(xf, p1);
+            if(useSegThickness){
+                const f32 resolvedThickness = seg.thickness * resolvedXfScale;
+                if(!IsFinite(VectorSingle(resolvedThickness)) || !(resolvedThickness > 0.0f))
+                    continue;
+                halfW = 0.5f * resolvedThickness;
+                minX = clipEntry.rect.x - halfW;
+                maxX = clipEntry.right + halfW;
+                minY = clipEntry.rect.y - halfW;
+                maxY = clipEntry.bottom + halfW;
+            }
         }
-        if(!IsFinite(resolvedThickness) || !(resolvedThickness > 0.0f))
-            continue;
+        else{
+            f32 rawThickness = thickness;
+            if(useSegThickness)
+                rawThickness = seg.thickness;
+            const f32 ldx = seg.end.x - seg.start.x;
+            const f32 ldy = seg.end.y - seg.start.y;
+            const VectorSingle lLenSqVec(ldx * ldx + ldy * ldy);
+            if(!IsFinite(lLenSqVec) || lLenSqVec.x <= 1.0e-8f)
+                continue;
+            const f32 invLLen = Rsqrt(lLenSqVec).x;
+            const f32 perpScale = ComputePaintTransformedPerpScale(xf, ldx * invLLen, ldy * invLLen);
+            const f32 resolvedThickness = rawThickness * perpScale;
+            if(!IsFinite(VectorSingle(resolvedThickness)) || !(resolvedThickness > 0.0f))
+                continue;
+            p0 = ApplyPaintTransform(xf, p0);
+            p1 = ApplyPaintTransform(xf, p1);
+            halfW = 0.5f * resolvedThickness;
+            minX = clipEntry.rect.x - halfW;
+            maxX = clipEntry.right + halfW;
+            minY = clipEntry.rect.y - halfW;
+            maxY = clipEntry.bottom + halfW;
+        }
+        const VectorSingle p0V(p0.x, p0.y, 0.0f, 0.0f);
+        const VectorSingle p1V(p1.x, p1.y, 0.0f, 0.0f);
         if(!IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)))
             continue;
-        const f32 halfW = 0.5f * resolvedThickness;
-        const f32 minX = clipEntry.rect.x - halfW;
-        const f32 maxX = clipEntry.right + halfW;
-        const f32 minY = clipEntry.rect.y - halfW;
-        const f32 maxY = clipEntry.bottom + halfW;
-        if(Max(p0.x, p1.x) < minX || Min(p0.x, p1.x) > maxX || Max(p0.y, p1.y) < minY || Min(p0.y, p1.y) > maxY)
+        const VectorSingle endMax = Max(p0V, p1V);
+        const VectorSingle endMin = Min(p0V, p1V);
+        if(endMax.x < minX || endMin.x > maxX || endMax.y < minY || endMin.y > maxY)
             continue;
 
         const f32 dx = p1.x - p0.x;
         const f32 dy = p1.y - p0.y;
-        const f32 lenSq = dx * dx + dy * dy;
-        if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
+        const VectorSingle lenSqVec(dx * dx + dy * dy);
+        if(!IsFinite(lenSqVec) || lenSqVec.x <= 1.0e-8f)
             continue;
 
-        const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+        const f32 invLen = Rsqrt(lenSqVec).x;
         Color premultiplied = color;
-        if(color.a != 1.0f)
-            premultiplied = Color(color.r * color.a, color.g * color.a, color.b * color.a, color.a);
+        if(color.a != 1.0f){
+            const VectorSingle premul = VectorSingle(color.r, color.g, color.b, 1.0f) * VectorSingle(color.a);
+            premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
+        }
         if(!EmitPaintStrokeSegmentPreNormalized(
             clipEntry, minX, maxX, minY, maxY,
             p0, p1, dx * invLen, dy * invLen, halfW, premultiplied, false,
@@ -1958,25 +2042,6 @@ void EmitPaintLineBatchTransformed(
     );
 }
 
-void EmitPaintLineBatch(
-    in b8 recording,
-    in Rect clip,
-    in Span<PaintLineSegment> lines,
-    in f32 thickness,
-    in u32 layer,
-    mut Vector<Vertex> vertices,
-    mut Vector<u32> indices,
-    mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered,
-    mut b8 inOutCommandsStrictlyDescending
-){
-    PaintClipEntry clipEntry;
-    clipEntry.rect = clip;
-    clipEntry.right = clip.x + clip.width;
-    clipEntry.bottom = clip.y + clip.height;
-    EmitPaintLineBatch(recording, clipEntry, lines, thickness, layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending);
-}
-
 void EmitPaintTransformedQuad(
     in b8 recording,
     in PaintClipEntry clipEntry,
@@ -2002,22 +2067,23 @@ void EmitPaintTransformedQuad(
         ReportPaintQuadRecordingOff();
         return;
     }
-    if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         ReportPaintQuadInvalidColor();
         return;
     }
-    if(color.a <= 0.0f || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(clipEntry.right) || !IsFinite(clipEntry.bottom))
+    if(color.a <= 0.0f || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
         return;
-    if(
-        !IsFinite(VectorSingle(p00.x, p00.y, p10.x, p10.y))
-        || !IsFinite(VectorSingle(p11.x, p11.y, p01.x, p01.y))
-    )
+    const VectorSingle qV0(p00.x, p00.y, p10.x, p10.y);
+    const VectorSingle qV1(p11.x, p11.y, p01.x, p01.y);
+    if(!IsFinite(qV0) || !IsFinite(qV1))
         return;
 
-    const f32 minX = Min(Min(p00.x, p10.x), Min(p11.x, p01.x));
-    const f32 maxX = Max(Max(p00.x, p10.x), Max(p11.x, p01.x));
-    const f32 minY = Min(Min(p00.y, p10.y), Min(p11.y, p01.y));
-    const f32 maxY = Max(Max(p00.y, p10.y), Max(p11.y, p01.y));
+    const VectorSingle qPairMin = Min(qV0, qV1);
+    const VectorSingle qPairMax = Max(qV0, qV1);
+    const f32 minX = UiSimdMin(qPairMin.x, qPairMin.z);
+    const f32 maxX = UiSimdMax(qPairMax.x, qPairMax.z);
+    const f32 minY = UiSimdMin(qPairMin.y, qPairMin.w);
+    const f32 maxY = UiSimdMax(qPairMax.y, qPairMax.w);
     if(maxX <= clipEntry.rect.x || maxY <= clipEntry.rect.y || minX >= clipEntry.right || minY >= clipEntry.bottom)
         return;
 

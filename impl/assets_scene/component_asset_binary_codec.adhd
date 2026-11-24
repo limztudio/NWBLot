@@ -9,7 +9,6 @@
 
 
 type ComponentAssetCodec = FamilyAssetCodec<IComponent, ComponentAssetPolicy>;
-type ComponentTypeAutoRegistrar = AssetFamilyTypes<IComponent>;
 type TypedComponentAssetCodec<T> = FamilyMemberAssetCodec<IComponent, T, ComponentAssetPolicy>;
 type TypedComponentAutoRegistrar<T> = TypedAssetRegistration<IComponent, T, TypedComponentAssetCodec<T>>;
 

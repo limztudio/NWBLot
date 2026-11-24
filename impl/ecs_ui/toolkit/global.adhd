@@ -14,10 +14,6 @@ namespace_wrapper NWB_IMPL_UI;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AdvanceRevision(mut u64 inOutRevision){
-    AdvanceNonWrappingRevision(inOutRevision);
-}
-
 f32 UiSimdMin(in f32 a, in f32 b){
     const VectorSingle va(a);
     const VectorSingle vb(b);

@@ -20,27 +20,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint outSlot = g_NwbPhysicsPushConstants.slots1.z;
     const float h = g_NwbPhysicsPushConstants.deltaTime;
 
-    if((flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u){
-        if(dispatchThreadID.x != 0u)
-            return;
-        if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES){
-            for(uint k = 0u; k < itemCount; ++k)
-                nwbPhysicsExportJointImpulses(itemOffset + k, jointSlot, outSlot);
-            return;
-        }
-        for(uint k = 0u; k < itemCount; ++k)
-            nwbPhysicsSolveSingleJoint(itemOffset + k, mode, bodySimSlot, bodyStateSlot, jointSlot, h, flags);
+    const bool isSerial = (flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u;
+    if(isSerial ? (dispatchThreadID.x != 0u) : (dispatchThreadID.x >= itemCount))
         return;
-    }
 
-    const uint localIdx = dispatchThreadID.x;
-    if(localIdx >= itemCount)
-        return;
-    if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES){
-        nwbPhysicsExportJointImpulses(itemOffset + localIdx, jointSlot, outSlot);
-        return;
+    const uint startIdx = isSerial ? 0u : dispatchThreadID.x;
+    const uint endIdx = isSerial ? itemCount : (dispatchThreadID.x + 1u);
+    for(uint k = startIdx; k < endIdx; ++k){
+        const uint idx = itemOffset + k;
+        if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES)
+            nwbPhysicsExportJointImpulses(idx, jointSlot, outSlot);
+        else if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START)
+            nwbPhysicsWarmStartSingleJoint(idx, bodySimSlot, bodyStateSlot, jointSlot, flags);
+        else
+            nwbPhysicsSolveSingleJoint(idx, mode == NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h);
     }
-    nwbPhysicsSolveSingleJoint(itemOffset + localIdx, mode, bodySimSlot, bodyStateSlot, jointSlot, h, flags);
 }
 
 

@@ -22,10 +22,6 @@ class HeightfieldShape{
         return this.scaleMinMaxY.x;
     }
 
-    public f32 heightScale()const{
-        return this.scaleMinMaxY.y;
-    }
-
     public f32 cellSizeZ()const{
         return this.scaleMinMaxY.z;
     }
@@ -46,10 +42,10 @@ class HeightfieldShape{
         return this.cols >= 2u
             && this.rows >= 2u
             && this.heights.size() == cast<usize>(this.cols) * cast<usize>(this.rows)
-            && IsFinite(this.scaleMinMaxY.x) && this.scaleMinMaxY.x > 0.0f
-            && IsFinite(this.scaleMinMaxY.y)
-            && IsFinite(this.scaleMinMaxY.z) && this.scaleMinMaxY.z > 0.0f
-            && IsFinite(this.thickness) && this.thickness >= 0.0f
+            && IsFinite(VectorSingle(this.scaleMinMaxY.x, this.scaleMinMaxY.y, this.scaleMinMaxY.z, this.thickness))
+            && this.scaleMinMaxY.x > 0.0f
+            && this.scaleMinMaxY.z > 0.0f
+            && this.thickness >= 0.0f
         ;
     }
 
@@ -57,7 +53,7 @@ class HeightfieldShape{
         if(col >= this.cols || row >= this.rows)
             return 0.0f;
         const f32 raw = this.heights[cast<usize>(row) * cast<usize>(this.cols) + cast<usize>(col)];
-        if(!IsFinite(raw))
+        if(!IsFinite(VectorSingle(raw)))
             return raw;
         return this.originMaxY.y + raw * this.scaleMinMaxY.y;
     }
@@ -68,10 +64,12 @@ class HeightfieldShape{
         const usize w = cast<usize>(this.cols);
         const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
         const usize r1 = r0 + w;
-        return !IsFinite(this.heights[r0])
-            || !IsFinite(this.heights[r0 + 1u])
-            || !IsFinite(this.heights[r1])
-            || !IsFinite(this.heights[r1 + 1u])
+        return !IsFinite(VectorSingle(
+            this.heights[r0],
+            this.heights[r0 + 1u],
+            this.heights[r1],
+            this.heights[r1 + 1u]
+        ))
         ;
     }
 
@@ -81,7 +79,7 @@ class HeightfieldShape{
         b8 anyFinite = false;
         for(usize i = 0u; i < this.heights.size(); ++i){
             const f32 raw = this.heights[i];
-            if(!IsFinite(raw))
+            if(!IsFinite(VectorSingle(raw)))
                 continue;
             const f32 y = this.originMaxY.y + raw * this.scaleMinMaxY.y;
             if(!anyFinite){
@@ -90,8 +88,8 @@ class HeightfieldShape{
                 anyFinite = true;
             }
             else{
-                loY = Min(loY, y);
-                hiY = Max(hiY, y);
+                loY = SimdMin(loY, y);
+                hiY = SimdMax(hiY, y);
             }
         }
         if(!anyFinite){
@@ -108,8 +106,8 @@ class HeightfieldShape{
         const usize idx = cast<usize>(row) * cast<usize>(this.cols) + cast<usize>(col);
         const f32 oldRaw = this.heights[idx];
         this.heights[idx] = rawHeight;
-        const b8 oldFinite = IsFinite(oldRaw);
-        const b8 newFinite = IsFinite(rawHeight);
+        const b8 oldFinite = IsFinite(VectorSingle(oldRaw));
+        const b8 newFinite = IsFinite(VectorSingle(rawHeight));
         if(!oldFinite || !newFinite){
             this.updateHeightRange();
             return;
@@ -118,7 +116,8 @@ class HeightfieldShape{
         const f32 newY = this.originMaxY.y + rawHeight * this.scaleMinMaxY.y;
         const f32 loY = this.scaleMinMaxY.w;
         const f32 hiY = this.originMaxY.w;
-        if((Abs(oldY - loY) <= 1.0e-5f && newY > loY) || (Abs(oldY - hiY) <= 1.0e-5f && newY < hiY)){
+        const VectorSingle diffBounds = Abs(VectorSingle(oldY - loY, oldY - hiY, 0.0f, 0.0f));
+        if((diffBounds.x <= 1.0e-5f && newY > loY) || (diffBounds.y <= 1.0e-5f && newY < hiY)){
             this.updateHeightRange();
             return;
         }
@@ -199,7 +198,7 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
 ){
     if(cols < 2u || rows < 2u || heights.size() != cast<usize>(cols) * cast<usize>(rows))
         return MakeUnexpected(Failure());
-    if(!IsFinite(scale.x) || scale.x <= 0.0f || !IsFinite(scale.y) || !IsFinite(scale.z) || scale.z <= 0.0f)
+    if(!IsFinite(VectorSingle(scale.x, scale.y, scale.z, 0.0f)) || scale.x <= 0.0f || scale.z <= 0.0f)
         return MakeUnexpected(Failure());
     if(!IsValidPositionVec3(origin))
         return MakeUnexpected(Failure());
@@ -212,7 +211,7 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
     hf.heights.reserve(heights.size());
     for(usize i = 0u; i < heights.size(); ++i){
         const f32 h = heights[i];
-        if(IsFinite(h) && Abs(origin.y + h * scale.y) > s_HugeCoordinate)
+        if(IsFinite(VectorSingle(h)) && Abs(VectorSingle(origin.y + h * scale.y)).x > s_HugeCoordinate)
             return MakeUnexpected(Failure());
         hf.heights.push_back(h);
     }
@@ -223,23 +222,7 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
 Aabb3D ComputeHeightfieldAabb(in HeightfieldShape hf, in Transform3D xf){
     if(!hf.isValid())
         return Aabb3D();
-    const Aabb3D localBox = hf.computeLocalAabb();
-    const VectorSingle lMin = VectorSingle(localBox.lowerBound);
-    const VectorSingle lMax = VectorSingle(localBox.upperBound);
-    VectorSingle wMin = TransformPoint(xf, lMin);
-    VectorSingle wMax = wMin;
-    for(u32 mask = 1u; mask < 8u; ++mask){
-        f32 cx = lMin.x;
-        f32 cy = lMin.y;
-        f32 cz = lMin.z;
-        if((mask & 1u) != 0u) cx = lMax.x;
-        if((mask & 2u) != 0u) cy = lMax.y;
-        if((mask & 4u) != 0u) cz = lMax.z;
-        const VectorSingle wp = TransformPoint(xf, VectorSingle(cx, cy, cz, 0.0f));
-        wMin = Min(wMin, wp);
-        wMax = Max(wMax, wp);
-    }
-    return Aabb3D(wMin, wMax);
+    return TransformAabb(xf, hf.computeLocalAabb(), 0.0f);
 }
 
 void TestHeightfieldCellRay(
@@ -324,8 +307,13 @@ LocalRayHit RayCastHeightfieldDetailed(
     const VectorSingle startPt = localOrigin + localDir * tEntry;
     f32 curMax = maxFraction;
 
-    const f32 gx = Clamp((startPt.x - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols) - 1.0e-4f);
-    const f32 gz = Clamp((startPt.z - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows) - 1.0e-4f);
+    const VectorSingle gxz = Clamp(
+        VectorSingle((startPt.x - hf.originMaxY.x) / sx, (startPt.z - hf.originMaxY.z) / sz, 0.0f, 0.0f),
+        VectorSingle(0.0f),
+        VectorSingle(cast<f32>(cellCols) - 1.0e-4f, cast<f32>(cellRows) - 1.0e-4f, 1.0f, 1.0f)
+    );
+    const f32 gx = gxz.x;
+    const f32 gz = gxz.y;
     isize cx = cast<isize>(gx);
     isize cz = cast<isize>(gz);
 
@@ -367,7 +355,7 @@ LocalRayHit RayCastHeightfieldDetailed(
             break;
 
         TestHeightfieldCellRay(hf, xf, cast<u32>(cx), cast<u32>(cz), localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
-        const f32 tCellExit = Min(tMaxX, tMaxZ);
+        const f32 tCellExit = SimdMin(tMaxX, tMaxZ);
         if(best.hit() && best.fraction() <= tCellExit + 1.0e-5f)
             return best;
 
@@ -449,8 +437,13 @@ b8 ClosestPointOnHeightfield(
     const u32 cellRows = hf.rows - 1u;
     const f32 sx = hf.cellSizeX();
     const f32 sz = hf.cellSizeZ();
-    const isize centerCx = cast<isize>(Clamp((localPoint.x - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols) - 1.0e-4f));
-    const isize centerCz = cast<isize>(Clamp((localPoint.z - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows) - 1.0e-4f));
+    const VectorSingle centerGxz = Clamp(
+        VectorSingle((localPoint.x - hf.originMaxY.x) / sx, (localPoint.z - hf.originMaxY.z) / sz, 0.0f, 0.0f),
+        VectorSingle(0.0f),
+        VectorSingle(cast<f32>(cellCols) - 1.0e-4f, cast<f32>(cellRows) - 1.0e-4f, 1.0f, 1.0f)
+    );
+    const isize centerCx = cast<isize>(centerGxz.x);
+    const isize centerCz = cast<isize>(centerGxz.y);
     const isize maxRing = cast<isize>(Max(cellCols, cellRows));
 
     f32 bestDistSq = s_MaxF32;
@@ -460,7 +453,7 @@ b8 ClosestPointOnHeightfield(
 
     for(isize ring = 0; ring <= maxRing; ++ring){
         if(ring > 0 && bestCell != s_NullIndex){
-            const f32 minRingDx = Max(0.0f, (cast<f32>(ring) - 1.0f) * Min(sx, sz));
+            const f32 minRingDx = SimdMax(0.0f, (cast<f32>(ring) - 1.0f) * SimdMin(sx, sz));
             if(minRingDx * minRingDx > bestDistSq)
                 break;
         }
@@ -570,21 +563,24 @@ void EvalHeightfieldShapeCastCell(
     const usize w = cast<usize>(hf.cols);
     const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
     const usize r1 = r0 + w;
-    const f32 raw00 = hf.heights[r0];
-    const f32 raw10 = hf.heights[r0 + 1u];
-    const f32 raw01 = hf.heights[r1];
-    const f32 raw11 = hf.heights[r1 + 1u];
-    if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
+    const VectorSingle rawHeights(
+        hf.heights[r0],
+        hf.heights[r0 + 1u],
+        hf.heights[r1],
+        hf.heights[r1 + 1u]
+    );
+    if(!IsFinite(rawHeights))
         return;
 
     const f32 oy = hf.originMaxY.y;
     const f32 sy = hf.scaleMinMaxY.y;
-    const f32 h00 = oy + raw00 * sy;
-    const f32 h10 = oy + raw10 * sy;
-    const f32 h01 = oy + raw01 * sy;
-    const f32 h11 = oy + raw11 * sy;
-    const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hf.thickness;
-    const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hf.thickness;
+    const VectorSingle hVec = VectorSingle(oy) + rawHeights * sy;
+    const f32 h00 = hVec.x;
+    const f32 h10 = hVec.y;
+    const f32 h01 = hVec.z;
+    const f32 h11 = hVec.w;
+    const f32 cellLoY = SimdMin(SimdMin(h00, h10), SimdMin(h01, h11)) - hf.thickness;
+    const f32 cellHiY = SimdMax(SimdMax(h00, h10), SimdMax(h01, h11)) + hf.thickness;
     if(cellHiY < minY || cellLoY > maxY)
         return;
 
@@ -681,7 +677,8 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
     const VectorSingle center0 = (minQ + maxQ) * 0.5f;
     const VectorSingle halfExt = (maxQ - minQ) * 0.5f + pad;
 
-    if(nCols * nRows <= 16u || (Abs(localTrans.x) <= 1.0e-6f && Abs(localTrans.z) <= 1.0e-6f)){
+    const VectorSingle absLocalTrans = Abs(localTrans);
+    if(nCols * nRows <= 16u || (absLocalTrans.x <= 1.0e-6f && absLocalTrans.z <= 1.0e-6f)){
         const f32 boxLoY = sweepBox.lowerBound.y;
         const f32 boxHiY = sweepBox.upperBound.y;
         for(u32 cz = minCz; cz <= maxCz; ++cz){
@@ -693,7 +690,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
 
     const u32 cellCols = hf.cols - 1u;
     const u32 cellRows = hf.rows - 1u;
-    if(Abs(localTrans.x) * sz >= Abs(localTrans.z) * sx){
+    if(absLocalTrans.x * sz >= absLocalTrans.z * sx){
         const b8 forwardX = (localTrans.x >= 0.0f);
         const f32 ox = hf.originMaxY.x;
         const f32 invDx = 1.0f / localTrans.x;
@@ -713,22 +710,25 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
                 t0 = (colX1 - (center0.x - halfExt.x)) * invDx;
                 t1 = (colX0 - (center0.x + halfExt.x)) * invDx;
             }
-            const f32 tEnter = Max(0.0f, t0);
+            const f32 tEnter = SimdMax(0.0f, t0);
             if(tEnter > curMax)
                 break;
-            const f32 tExit = Min(curMax, t1);
+            const f32 tExit = SimdMin(curMax, t1);
             if(tExit < tEnter)
                 continue;
-            const f32 zA = center0.z + localTrans.z * tEnter;
-            const f32 zB = center0.z + localTrans.z * tExit;
-            const f32 zLo = Min(zA, zB) - halfExt.z;
-            const f32 zHi = Max(zA, zB) + halfExt.z;
-            const u32 colCz0 = Max(minCz, cast<u32>(Clamp((zLo - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows - 1u))));
-            const u32 colCz1 = Min(maxCz, cast<u32>(Clamp((zHi - hf.originMaxY.z) / sz, 0.0f, cast<f32>(cellRows - 1u))));
-            const f32 yA = center0.y + localTrans.y * tEnter;
-            const f32 yB = center0.y + localTrans.y * tExit;
-            const f32 yLo = Min(yA, yB) - halfExt.y;
-            const f32 yHi = Max(yA, yB) + halfExt.y;
+            const VectorSingle cA = center0 + localTrans * tEnter;
+            const VectorSingle cB = center0 + localTrans * tExit;
+            const VectorSingle cLo = Min(cA, cB) - halfExt;
+            const VectorSingle cHi = Max(cA, cB) + halfExt;
+            const VectorSingle czRange = Clamp(
+                VectorSingle(cLo.z - hf.originMaxY.z, cHi.z - hf.originMaxY.z, 0.0f, 0.0f) / sz,
+                VectorSingle(0.0f),
+                VectorSingle(cast<f32>(cellRows - 1u))
+            );
+            const u32 colCz0 = Max(minCz, cast<u32>(czRange.x));
+            const u32 colCz1 = Min(maxCz, cast<u32>(czRange.y));
+            const f32 yLo = cLo.y;
+            const f32 yHi = cHi.y;
             for(u32 cz = colCz0; cz <= colCz1; ++cz)
                 EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
@@ -753,22 +753,25 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
                 t0 = (rowZ1 - (center0.z - halfExt.z)) * invDz;
                 t1 = (rowZ0 - (center0.z + halfExt.z)) * invDz;
             }
-            const f32 tEnter = Max(0.0f, t0);
+            const f32 tEnter = SimdMax(0.0f, t0);
             if(tEnter > curMax)
                 break;
-            const f32 tExit = Min(curMax, t1);
+            const f32 tExit = SimdMin(curMax, t1);
             if(tExit < tEnter)
                 continue;
-            const f32 xA = center0.x + localTrans.x * tEnter;
-            const f32 xB = center0.x + localTrans.x * tExit;
-            const f32 xLo = Min(xA, xB) - halfExt.x;
-            const f32 xHi = Max(xA, xB) + halfExt.x;
-            const u32 rowCx0 = Max(minCx, cast<u32>(Clamp((xLo - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols - 1u))));
-            const u32 rowCx1 = Min(maxCx, cast<u32>(Clamp((xHi - hf.originMaxY.x) / sx, 0.0f, cast<f32>(cellCols - 1u))));
-            const f32 yA = center0.y + localTrans.y * tEnter;
-            const f32 yB = center0.y + localTrans.y * tExit;
-            const f32 yLo = Min(yA, yB) - halfExt.y;
-            const f32 yHi = Max(yA, yB) + halfExt.y;
+            const VectorSingle cA = center0 + localTrans * tEnter;
+            const VectorSingle cB = center0 + localTrans * tExit;
+            const VectorSingle cLo = Min(cA, cB) - halfExt;
+            const VectorSingle cHi = Max(cA, cB) + halfExt;
+            const VectorSingle cxRange = Clamp(
+                VectorSingle(cLo.x - hf.originMaxY.x, cHi.x - hf.originMaxY.x, 0.0f, 0.0f) / sx,
+                VectorSingle(0.0f),
+                VectorSingle(cast<f32>(cellCols - 1u))
+            );
+            const u32 rowCx0 = Max(minCx, cast<u32>(cxRange.x));
+            const u32 rowCx1 = Min(maxCx, cast<u32>(cxRange.y));
+            const f32 yLo = cLo.y;
+            const f32 yHi = cHi.y;
             for(u32 cx = rowCx0; cx <= rowCx1; ++cx)
                 EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, xfQuery, translation, xfHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
@@ -861,18 +864,21 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsInternal(
         for(u32 cx = minCx; cx <= maxCx; ++cx){
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
-            const f32 raw00 = hfB.heights[r0];
-            const f32 raw10 = hfB.heights[r0 + 1u];
-            const f32 raw01 = hfB.heights[r1];
-            const f32 raw11 = hfB.heights[r1 + 1u];
-            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
+            const VectorSingle rawHeights(
+                hfB.heights[r0],
+                hfB.heights[r0 + 1u],
+                hfB.heights[r1],
+                hfB.heights[r1 + 1u]
+            );
+            if(!IsFinite(rawHeights))
                 continue;
-            const f32 h00 = oy + raw00 * sy;
-            const f32 h10 = oy + raw10 * sy;
-            const f32 h01 = oy + raw01 * sy;
-            const f32 h11 = oy + raw11 * sy;
-            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hfB.thickness;
-            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hfB.thickness;
+            const VectorSingle hVec = VectorSingle(oy) + rawHeights * sy;
+            const f32 h00 = hVec.x;
+            const f32 h10 = hVec.y;
+            const f32 h01 = hVec.z;
+            const f32 h11 = hVec.w;
+            const f32 cellLoY = SimdMin(SimdMin(h00, h10), SimdMin(h01, h11)) - hfB.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(h00, h10), SimdMax(h01, h11)) + hfB.thickness;
             if(cellHiY < qLoY || cellLoY > qHiY)
                 continue;
 
@@ -1000,18 +1006,21 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
         for(u32 cx = minCx; cx <= maxCx; ++cx){
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
-            const f32 raw00 = hf.heights[r0];
-            const f32 raw10 = hf.heights[r0 + 1u];
-            const f32 raw01 = hf.heights[r1];
-            const f32 raw11 = hf.heights[r1 + 1u];
-            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
+            const VectorSingle rawHeights(
+                hf.heights[r0],
+                hf.heights[r0 + 1u],
+                hf.heights[r1],
+                hf.heights[r1 + 1u]
+            );
+            if(!IsFinite(rawHeights))
                 continue;
-            const f32 h00 = oy + raw00 * sy;
-            const f32 h10 = oy + raw10 * sy;
-            const f32 h01 = oy + raw01 * sy;
-            const f32 h11 = oy + raw11 * sy;
-            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hf.thickness;
-            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hf.thickness;
+            const VectorSingle hVec = VectorSingle(oy) + rawHeights * sy;
+            const f32 h00 = hVec.x;
+            const f32 h10 = hVec.y;
+            const f32 h01 = hVec.z;
+            const f32 h11 = hVec.w;
+            const f32 cellLoY = SimdMin(SimdMin(h00, h10), SimdMin(h01, h11)) - hf.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(h00, h10), SimdMax(h01, h11)) + hf.thickness;
             if(cellHiY < qLoY || cellLoY > qHiY)
                 continue;
 
@@ -1068,21 +1077,8 @@ Manifold CollideConvexProxyAndHeightfield(
     VectorSingle lMin(0.0f);
     VectorSingle lMax(0.0f);
     ComputeProxyViewLocalBounds(proxyA, lMin, lMax);
-    VectorSingle boxMinB(s_MaxF32);
-    VectorSingle boxMaxB(-s_MaxF32);
-    for(u32 mask = 0u; mask < 8u; ++mask){
-        f32 cx = lMin.x;
-        f32 cy = lMin.y;
-        f32 cz = lMin.z;
-        if((mask & 1u) != 0u) cx = lMax.x;
-        if((mask & 2u) != 0u) cy = lMax.y;
-        if((mask & 4u) != 0u) cz = lMax.z;
-        const VectorSingle ptB = TransformPoint(localXfA, VectorSingle(cx, cy, cz, 0.0f));
-        boxMinB = Min(boxMinB, ptB);
-        boxMaxB = Max(boxMaxB, ptB);
-    }
     const f32 totalR = proxyA.radius + hfB.thickness;
-    const Aabb3D queryBox = FattenAabb(Aabb3D(boxMinB, boxMaxB), totalR + maxDistance);
+    const Aabb3D queryBox = TransformAabb(localXfA, Aabb3D(lMin, lMax), totalR + maxDistance);
 
     u32 minCx = 0u;
     u32 maxCx = 0u;
@@ -1130,18 +1126,21 @@ Manifold CollideConvexProxyAndHeightfield(
         for(u32 cx = minCx; cx <= maxCx; ++cx){
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
-            const f32 raw00 = hfB.heights[r0];
-            const f32 raw10 = hfB.heights[r0 + 1u];
-            const f32 raw01 = hfB.heights[r1];
-            const f32 raw11 = hfB.heights[r1 + 1u];
-            if(!IsFinite(raw00) || !IsFinite(raw10) || !IsFinite(raw01) || !IsFinite(raw11))
+            const VectorSingle rawHeights(
+                hfB.heights[r0],
+                hfB.heights[r0 + 1u],
+                hfB.heights[r1],
+                hfB.heights[r1 + 1u]
+            );
+            if(!IsFinite(rawHeights))
                 continue;
-            const f32 h00 = oy + raw00 * sy;
-            const f32 h10 = oy + raw10 * sy;
-            const f32 h01 = oy + raw01 * sy;
-            const f32 h11 = oy + raw11 * sy;
-            const f32 cellLoY = Min(Min(h00, h10), Min(h01, h11)) - hfB.thickness;
-            const f32 cellHiY = Max(Max(h00, h10), Max(h01, h11)) + hfB.thickness;
+            const VectorSingle hVec = VectorSingle(oy) + rawHeights * sy;
+            const f32 h00 = hVec.x;
+            const f32 h10 = hVec.y;
+            const f32 h01 = hVec.z;
+            const f32 h11 = hVec.w;
+            const f32 cellLoY = SimdMin(SimdMin(h00, h10), SimdMin(h01, h11)) - hfB.thickness;
+            const f32 cellHiY = SimdMax(SimdMax(h00, h10), SimdMax(h01, h11)) + hfB.thickness;
             if(cellHiY < qLoY || cellLoY > qHiY)
                 continue;
 
@@ -1216,9 +1215,39 @@ Manifold CollideConvexProxyAndHeightfield(
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
                 if(isCapsuleA){
                     SimplexCache cache;
-                    const DistanceOutput capGjk = ShapeDistanceLocalProxyViews(capViewInB, triView, false, cache);
+                    Simplex gjkSimplex;
+                    const DistanceOutput capGjk = ShapeDistanceLocalWithSimplexViews(capViewInB, triView, false, cache, gjkSimplex);
                     if(capGjk.distance() > totalR + maxDistance)
                         continue;
+                    Transform3D identXf;
+                    const Manifold localTriM = CollideConvexProxyViewsFromGjk(capViewInB, identXf, triView, identXf, maxDistance, capGjk, gjkSimplex);
+                    if(localTriM.pointCount() == 0u)
+                        continue;
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(localTriM.normal(), VectorSingle(xfB.rotation)), worldUp);
+                    const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), worldUp);
+                    if(Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
+                        continue;
+                    for(u32 pi = 0u; pi < localTriM.pointCount(); ++pi){
+                        const f32 sep = localTriM.points[pi].separation();
+                        if(sep < deepestSep){
+                            deepestSep = sep;
+                            chosenNormal = nAtoB;
+                        }
+                        const VectorSingle wA = TransformPoint(xfB, localTriM.points[pi].anchorA());
+                        const VectorSingle wB = TransformPoint(xfB, localTriM.points[pi].anchorB());
+                        PushMeshCandidateWithTris(
+                            (wA + wB) * 0.5f,
+                            wA - VectorSingle(xfA.position),
+                            wB - VectorSingle(xfB.position),
+                            nAtoB,
+                            sep,
+                            MakeFeatureId(7u, cast<u8>(pi), 7u, cast<u8>(cellIdx & 0xffu)),
+                            s_NullIndex,
+                            cellIdx,
+                            candidates
+                        );
+                    }
+                    continue;
                 }
                 const Manifold triM = CollideConvexProxyViews(proxyA, xfA, triView, xfB, maxDistance);
                 if(triM.pointCount() == 0u)

@@ -35,6 +35,9 @@ extern const u32 s_GpuShapeFlagFastOrBullet;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT")]
 extern const u32 s_GpuShapeFlagHasNonCollideJoint;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_ENLARGE_AABB")]
+extern const u32 s_GpuShapeFlagEnlargeAabb;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS")]
 extern const u32 s_GpuBroadphaseModeUpdateAabbs;
 
@@ -100,6 +103,8 @@ extern const u32 s_GpuSolverFlagSerialLoop;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FIRST_SUBSTEP")]
 extern const u32 s_GpuSolverFlagFirstSubstep;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_HAS_HIT_EVENTS")]
+extern const u32 s_GpuSolverFlagHasHitEvents;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_PUSH_CONSTANTS_BYTES")]
 extern const u32 s_GpuPushConstantsBytes;
@@ -148,27 +153,6 @@ extern const u32 s_GpuIslandFlagHasRestitution;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_FLAG_HAS_ROLLING")]
 extern const u32 s_GpuIslandFlagHasRolling;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_BODIES")]
-extern const u32 s_GpuIslandMaxBodies;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_CONTACTS")]
-extern const u32 s_GpuIslandMaxContacts;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_JOINTS")]
-extern const u32 s_GpuIslandMaxJoints;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_WORKGROUP_SIZE")]
-extern const u32 s_GpuIslandWorkgroupSize;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_BODIES")]
-extern const u32 s_GpuLargeIslandMaxBodies;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_MAX_CONTACTS")]
-extern const u32 s_GpuLargeIslandMaxContacts;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LARGE_ISLAND_WORKGROUP_SIZE")]
-extern const u32 s_GpuLargeIslandWorkgroupSize;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SPHERE")]
 extern const u32 s_ShaderPhysicsShapeTypeSphere;
@@ -660,6 +644,8 @@ static_assert(cast<u32>(BodyFlags::AllowFastRotation) == s_ShaderPhysicsBodyFlag
 static_assert(cast<u32>(BodyFlags::Dynamic) == s_ShaderPhysicsBodyFlagDynamic, "BodyFlags::Dynamic mismatch");
 static_assert(cast<u32>(BodyFlags::EnableGyroscopicTorque) == s_ShaderPhysicsBodyFlagGyroscopic, "BodyFlags::EnableGyroscopicTorque mismatch");
 static_assert(cast<u32>(BodyFlags::HasCustomMaxAngularVelocity) == s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel, "BodyFlags::HasCustomMaxAngularVelocity mismatch");
+static_assert(s_GpuShapeFlagEnlargeAabb != 0u && s_GpuShapeFlagEnlargeAabb != s_GpuShapeFlagFastOrBullet && (s_GpuShapeFlagEnlargeAabb & s_GpuShapeFlagHasNonCollideJoint) == 0u, "ShapeFlag EnlargeAabb distinct bit");
+static_assert(s_GpuSolverFlagHasHitEvents != 0u && (s_GpuSolverFlagHasHitEvents & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep)) == 0u, "SolverFlag HasHitEvents distinct bit");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -130,11 +130,6 @@ class ContextStateClaim{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ContextStateClaimHash(in ContextStateClaim claim){
-    const usize seed = HashValue(claim.instanceGeneration);
-    return HashCombineValue(seed, cast<u8>(claim.kind));
-}
-
 Expected<WidgetId> TryMakeRootId(in WidgetRoot root){
     if(root.generation == 0u)
         return MakeUnexpected(Failure());

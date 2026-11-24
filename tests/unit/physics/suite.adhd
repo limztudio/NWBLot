@@ -1567,7 +1567,7 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
         SplitDirtyAwakeIslands(w);
 
         SolverWorkPartition part;
-        BuildSolverWorkPartition(w, 0.7f, true, part);
+        BuildSolverWorkPartitionWithColorContacts(w, 0.7f, true, true, part);
 
         EXPECT_GT(part.cpuOwnedBodyCount, 0u);
         EXPECT_GT(part.gpuOwnedBodyCount, 0u);
@@ -1614,13 +1614,13 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
         EXPECT_EQ(part.gpuAwakeWriteBack[kinGpuSlot], cast<u8>(0u));
 
         SolverWorkPartition part100;
-        BuildSolverWorkPartition(w, 1.0f, true, part100);
+        BuildSolverWorkPartitionWithColorContacts(w, 1.0f, true, true, part100);
         EXPECT_EQ(part100.cpuComponentCount, 0u);
         EXPECT_EQ(part100.cpuOwnedBodyCount, 0u);
         EXPECT_EQ(part100.gpuOwnedBodyCount, w.awakeBodyCount());
 
         SolverWorkPartition part0;
-        BuildSolverWorkPartition(w, 0.0f, true, part0);
+        BuildSolverWorkPartitionWithColorContacts(w, 0.0f, true, true, part0);
         EXPECT_EQ(part0.gpuComponentCount, 0u);
         EXPECT_EQ(part0.gpuOwnedBodyCount, 0u);
         EXPECT_EQ(part0.cpuOwnedBodyCount, w.awakeBodyCount());
@@ -1659,7 +1659,7 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
             SplitDirtyAwakeIslands(worldSplit);
 
             SolverWorkPartition part;
-            BuildSolverWorkPartition(worldSplit, 0.5f, true, part);
+            BuildSolverWorkPartitionWithColorContacts(worldSplit, 0.5f, true, true, part);
             if(step == 0u){
                 EXPECT_GT(part.cpuOwnedBodyCount, 0u);
                 EXPECT_GT(part.gpuOwnedBodyCount, 0u);
@@ -1682,13 +1682,13 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
             Vector<JointConstraint> cpuJoints;
             for(usize ji = 0u; ji < part.cpuJointIds.size(); ++ji){
                 JointConstraint jc;
-                PrepareJointConstraint(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.cpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, jc);
+                PrepareJointConstraintWithExtra(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.cpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, worldSplit.m_jointExtraData, jc);
                 cpuJoints.push_back(jc);
             }
             Vector<JointConstraint> gpuJoints;
             for(usize ji = 0u; ji < part.gpuJointIds.size(); ++ji){
                 JointConstraint jc;
-                PrepareJointConstraint(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.gpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, jc);
+                PrepareJointConstraintWithExtra(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.gpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, worldSplit.m_jointExtraData, jc);
                 gpuJoints.push_back(jc);
             }
 
@@ -1710,8 +1710,8 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
                     StoreContactConstraintImpulsesAndHitEvents(worldSplit, gpuCons[c][idx]);
             }
 
-            SolveBulletContinuousCpu(worldSplit, dt);
-            FinalizeMovedBodiesBroadphaseAndEvents(worldSplit);
+            SolveBulletContinuousCpuWithScheduler(worldSplit, dt, scheduler);
+            FinalizeMovedBodiesBroadphaseAndEventsWithScheduler(worldSplit, dt, scheduler);
             EvaluateSleepingIslands(worldSplit);
         }
 
@@ -3112,17 +3112,14 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
 }
 
 void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
-    EXPECT_EQ(size_of<RigidBodyComponentPayloadBinary>(), 208u);
-    EXPECT_EQ(offset_of<RigidBodyComponentPayloadBinary>(reserved4), 152u);
-    EXPECT_EQ(offset_of<RigidBodyComponentPayloadBinary>(customCenterOfMass), 160u);
-    EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), 224u);
-    EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(reserved5), 24u);
-    EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(center), 32u);
-    EXPECT_EQ(size_of<JointComponentPayloadBinary>(), 320u);
-    EXPECT_EQ(offset_of<JointComponentPayloadBinary>(reserved2), 312u);
-    EXPECT_EQ(size_of<PhysicsWorldConfigComponentPayloadBinary>(), 80u);
-    EXPECT_EQ(offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved3), 24u);
-    EXPECT_EQ(offset_of<PhysicsWorldConfigComponentPayloadBinary>(gravity), 32u);
+    EXPECT_EQ(size_of<RigidBodyComponentPayloadBinary>(), 192u);
+    EXPECT_EQ(offset_of<RigidBodyComponentPayloadBinary>(reserved1), 184u);
+    EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), 528u);
+    EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(reserved3), 520u);
+    EXPECT_EQ(size_of<JointComponentPayloadBinary>(), 592u);
+    EXPECT_EQ(offset_of<JointComponentPayloadBinary>(reserved1), 588u);
+    EXPECT_EQ(size_of<PhysicsWorldConfigComponentPayloadBinary>(), 128u);
+    EXPECT_EQ(offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0), 127u);
 
     {
         CapturingLogger logger = CapturingLogger();
@@ -3138,7 +3135,7 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         for(usize i = 0u; i < rb0.size(); ++i)
             EXPECT_EQ(rb0[i], rb1[i]);
         Vector<u8> rbCorrupt = rb0;
-        const usize rbPadOffset = offset_of<RigidBodyComponentPayloadBinary>(reserved4);
+        const usize rbPadOffset = offset_of<RigidBodyComponentPayloadBinary>(reserved1);
         rbCorrupt[rbPadOffset] = 1u;
         RigidBodyComponentAsset rbBad(Name("physics/pad_rb"));
         EXPECT_FALSE(rbBad.loadComponentPayload(rbCorrupt));
@@ -3153,7 +3150,7 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         for(usize i = 0u; i < col0.size(); ++i)
             EXPECT_EQ(col0[i], col1[i]);
         Vector<u8> colCorrupt = col0;
-        const usize colPadOffset = size_of<ColliderComponentPayloadHeaderBinary>() + offset_of<ColliderShapeEntryHeaderBinary>(reserved5);
+        const usize colPadOffset = size_of<ColliderComponentPayloadHeaderBinary>() + offset_of<ColliderShapeEntryHeaderBinary>(reserved3);
         colCorrupt[colPadOffset] = 1u;
         ColliderComponentAsset colBad(Name("physics/pad_col"));
         EXPECT_FALSE(colBad.loadComponentPayload(colCorrupt));
@@ -3168,7 +3165,7 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         for(usize i = 0u; i < j0.size(); ++i)
             EXPECT_EQ(j0[i], j1[i]);
         Vector<u8> jCorrupt = j0;
-        const usize jPadOffset = offset_of<JointComponentPayloadBinary>(reserved2);
+        const usize jPadOffset = offset_of<JointComponentPayloadBinary>(reserved1);
         jCorrupt[jPadOffset] = 1u;
         JointComponentAsset jBad(Name("physics/pad_joint"));
         EXPECT_FALSE(jBad.loadComponentPayload(jCorrupt));
@@ -3183,7 +3180,7 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         for(usize i = 0u; i < cfg0.size(); ++i)
             EXPECT_EQ(cfg0[i], cfg1[i]);
         Vector<u8> cfgCorrupt = cfg0;
-        const usize cfgPadOffset = offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved3);
+        const usize cfgPadOffset = offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0);
         cfgCorrupt[cfgPadOffset] = 1u;
         PhysicsWorldConfigComponentAsset cfgBad(Name("physics/pad_cfg"));
         EXPECT_FALSE(cfgBad.loadComponentPayload(cfgCorrupt));
@@ -3333,7 +3330,7 @@ void VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries(){
     EXPECT_TRUE(lockWorld.applyAngularImpulse(lockedRotId, VectorSingle(0.5f, 0.6f, 2.0f, 0.0f), true));
     StepPhysicsWorld(lockWorld, 1.0f / 60.0f, 2u, scheduler);
     const f32x4 rotAngVel = lockWorld.tryGetAngularVelocity(lockedRotId).value();
-    EXPECT_TRUE(IsFinite(rotAngVel.x) && IsFinite(rotAngVel.y) && IsFinite(rotAngVel.z));
+    EXPECT_TRUE(IsFinite(VectorSingle(rotAngVel.x, rotAngVel.y, rotAngVel.z, 0.0f).xyz));
     EXPECT_NEAR(rotAngVel.z, 0.0f, 1.0e-5f);
 
     PhysicsWorld rollWorld;
@@ -3367,11 +3364,11 @@ void VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries(){
         StepPhysicsWorld(rollWorld, 1.0f / 60.0f, 2u, scheduler);
     const f32x4 lockLinV = rollWorld.tryGetLinearVelocity(lockLinId).value();
     const f32x4 lockAngV = rollWorld.tryGetAngularVelocity(lockLinId).value();
-    EXPECT_TRUE(IsFinite(lockAngV.x) && IsFinite(lockAngV.y) && IsFinite(lockAngV.z));
+    EXPECT_TRUE(IsFinite(VectorSingle(lockAngV.x, lockAngV.y, lockAngV.z, 0.0f).xyz));
     EXPECT_NEAR(lockLinV.x, 0.0f, 1.0e-5f);
     EXPECT_NEAR(lockLinV.y, 0.0f, 1.0e-5f);
     EXPECT_NEAR(lockLinV.z, 0.0f, 1.0e-5f);
-    EXPECT_LT(Abs(lockAngV.x), 2.5f);
+    EXPECT_LT(Abs(VectorSingle(lockAngV.x)).x, 2.5f);
 
     {
         PhysicsWorld qWorld;
@@ -3418,7 +3415,7 @@ void VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries(){
 
         DynamicTree zeroCatTree;
         const Aabb3D unitBox(VectorSingle(-0.5f, -0.5f, -0.5f, 0.0f), VectorSingle(0.5f, 0.5f, 0.5f, 0.0f));
-        const u32 proxy = zeroCatTree.createProxy(unitBox, 0u, 77u);
+        const u32 proxy = zeroCatTree.createProxyWithFlags(unitBox, 0u, 0u, 77u);
         EXPECT_NE(proxy, s_NullIndex);
         u32 hitProxyCount = 0u;
         zeroCatTree.queryAabb(
@@ -4239,8 +4236,8 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
     {
         const VectorSingle oldN = SafeNormalizeVec3(VectorSingle(0.4362f, 0.89985f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle newN = SafeNormalizeVec3(VectorSingle(0.4355f, 0.90019f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        ASSERT_LT(Abs(oldN.y), 0.9f);
-        ASSERT_GT(Abs(newN.y), 0.9f);
+        ASSERT_LT(Abs(oldN).y, 0.9f);
+        ASSERT_GT(Abs(newN).y, 0.9f);
         ASSERT_GT(Vector3Dot(oldN, newN).x, 0.99999f);
 
         Manifold oldM;
@@ -4422,7 +4419,7 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         EXPECT_GT(lines.size(), cast<usize>(0u));
 
         const VectorSingle smallRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.002f, 0.0f, 0.0f));
-        ASSERT_GT(Abs(smallRot.w), 0.99999f);
+        ASSERT_GT(Abs(smallRot).w, 0.99999f);
         Vector<PhysicsDebugLine> idBoxLines;
         Vector<PhysicsDebugLine> rotBoxLines;
         AppendPhysicsDebugBoxEdges(256u, Transform3D(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
@@ -4430,8 +4427,8 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         ASSERT_EQ(idBoxLines.size(), rotBoxLines.size());
         f32 maxDiff = 0.0f;
         for(usize li = 0u; li < idBoxLines.size(); ++li){
-            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].start) - VectorSingle(idBoxLines[li].start)).x);
-            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].end) - VectorSingle(idBoxLines[li].end)).x);
+            maxDiff = SimdMax(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].start) - VectorSingle(idBoxLines[li].start)).x);
+            maxDiff = SimdMax(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].end) - VectorSingle(idBoxLines[li].end)).x);
         }
         EXPECT_GT(maxDiff, 1.0e-4f);
     }
@@ -4564,7 +4561,8 @@ void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
         veh.init(chId, VehicleEngineDef(), Span<VehicleWheelDef>(wDefs.data(), 4u));
         const f32 ackLeft = veh.computeAckermanAngle(0u, 0.6f);
         const f32 ackRight = veh.computeAckermanAngle(1u, 0.6f);
-        EXPECT_GT(Abs(ackRight), Abs(ackLeft) + 1.0e-3f);
+        const VectorSingle absAck = Abs(VectorSingle(ackRight, ackLeft, 0.0f, 0.0f));
+        EXPECT_GT(absAck.x, absAck.y + 1.0e-3f);
 
         VehicleInput vIn;
         vIn.throttle = 1.0f;
@@ -4617,7 +4615,7 @@ void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
         Vector<Transform3D> poseOut;
         rag.readPose(world, poseOut);
         ASSERT_EQ(poseOut.size(), cast<usize>(2u));
-        EXPECT_GT(Abs(poseOut[1u].rotation.z), 0.03f);
+        EXPECT_GT(Abs(VectorSingle(poseOut[1u].rotation.z)).x, 0.03f);
         rag.destroy(world);
         EXPECT_FALSE(rag.isValid(world));
     }
@@ -5131,7 +5129,7 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
             VectorSingle(0.25f, 0.1f, 4.0f, 0.0f)
         );
         ASSERT_TRUE(nearClipped.has_value());
-        EXPECT_TRUE(IsFinite(nearClipped.value()));
+        EXPECT_TRUE(IsFinite(VectorSingle(nearClipped.value())));
         EXPECT_GE(nearClipped.value().x, -321.0f);
         EXPECT_LE(nearClipped.value().x, 1601.0f);
         EXPECT_GE(nearClipped.value().z, -321.0f);
@@ -5210,9 +5208,11 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         b8 sawJointLine = false;
         for(usize li = 0u; li < tightLines.size(); ++li){
             in f32x4 c = tightLines[li].color;
-            if(c.x > 0.98f && Abs(c.y - 0.22f) < 0.03f && Abs(c.z - 0.22f) < 0.03f)
+            const VectorSingle dc = Abs(VectorSingle(c) - VectorSingle(0.0f, 0.22f, 0.22f, 0.0f));
+            if(c.x > 0.98f && dc.y < 0.03f && dc.z < 0.03f)
                 sawContactLine = true;
-            if(c.x > 0.98f && Abs(c.y - 0.58f) < 0.03f && Abs(c.z - 0.12f) < 0.03f)
+            const VectorSingle dj = Abs(VectorSingle(c) - VectorSingle(0.0f, 0.58f, 0.12f, 0.0f));
+            if(c.x > 0.98f && dj.y < 0.03f && dj.z < 0.03f)
                 sawJointLine = true;
         }
         EXPECT_TRUE(sawContactLine);
@@ -5252,14 +5252,14 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
     {
         Vector<u8> payload;
         ASSERT_TRUE(codec.serializeRigidBody(RigidBodyComponent(), payload));
-        EXPECT_EQ(payload.size(), cast<usize>(208u));
-        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(224u));
+        EXPECT_EQ(payload.size(), cast<usize>(192u));
+        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(528u));
         ASSERT_TRUE(codec.serializeCollider(ColliderComponent(), payload));
         EXPECT_EQ(payload.size(), size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>());
         ASSERT_TRUE(codec.serializeJoint(JointComponent(), payload));
-        EXPECT_EQ(payload.size(), cast<usize>(320u));
+        EXPECT_EQ(payload.size(), cast<usize>(592u));
         ASSERT_TRUE(codec.serializeWorldConfig(PhysicsWorldConfigComponent(), payload));
-        EXPECT_EQ(payload.size(), cast<usize>(80u));
+        EXPECT_EQ(payload.size(), cast<usize>(128u));
 
         ColliderComponent chainCol;
         chainCol.shapeType = ShapeType::Segment;
@@ -5317,7 +5317,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         wcV4.timeToSleep = 1.75f;
         wcV4.collisionLayerMatrixAsset = AssetRef<CollisionLayerMatrixAsset>("tests/physics/layers");
         ASSERT_TRUE(codec.serializeWorldConfig(wcV4, payload));
-        EXPECT_GT(payload.size(), cast<usize>(80u));
+        EXPECT_EQ(payload.size(), cast<usize>(128u));
         const Expected<PhysicsWorldConfigComponent> decodedWc = codec.deserializeWorldConfig(payload);
         ASSERT_TRUE(decodedWc.has_value());
         EXPECT_FLOAT_EQ(decodedWc.value().timeToSleep, 1.75f);

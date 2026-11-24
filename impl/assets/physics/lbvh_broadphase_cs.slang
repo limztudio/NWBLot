@@ -132,9 +132,8 @@ void nwbPhysicsLbvhLocalBitonicStep(
     const uint j
 ){
     for(uint p = localTid; p < halfLocal; p += NWB_PHYSICS_WORKGROUP_SIZE){
-        const uint block = p / j;
-        const uint rem = p - block * j;
-        const uint i0 = block * (2u * j) + rem;
+        const uint mask = j - 1u;
+        const uint i0 = ((p & ~mask) << 1u) | (p & mask);
         const uint i1 = i0 + j;
         const bool ascending = (((blockBase + i0) & k) == 0u);
         const uint m0 = s_LbvhSortMorton[i0];
@@ -287,9 +286,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
 
         const uint j = itemOffset;
         const uint k = g_NwbPhysicsPushConstants.flags;
-        const uint block = tid / j;
-        const uint rem = tid - block * j;
-        const uint idx0 = block * (2u * j) + rem;
+        const uint mask = j - 1u;
+        const uint idx0 = ((tid & ~mask) << 1u) | (tid & mask);
         const uint idx1 = idx0 + j;
         const bool ascending = ((idx0 & k) == 0u);
 
@@ -382,11 +380,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             const NwbPhysicsGpuLbvhNode pNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent];
             const uint leftChild = asuint(pNode.minLeft.w);
             const uint rightChild = asuint(pNode.maxRight.w);
-            const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild];
-            const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild];
+            const float3 lMin = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild].minLeft.xyz;
+            const float3 lMax = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild].maxRight.xyz;
+            const float3 rMin = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild].minLeft.xyz;
+            const float3 rMax = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild].maxRight.xyz;
 
-            const float3 uMin = min(lNode.minLeft.xyz, rNode.minLeft.xyz);
-            const float3 uMax = max(lNode.maxRight.xyz, rNode.maxRight.xyz);
+            const float3 uMin = min(lMin, rMin);
+            const float3 uMax = max(lMax, rMax);
             g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].minLeft = float4(uMin, asfloat(leftChild));
             g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].maxRight = float4(uMax, asfloat(rightChild));
 

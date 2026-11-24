@@ -205,8 +205,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             maxOut = worldCenter + extent;
         }
 
-        minOut += min(sweepDisp, float3(0.0f, 0.0f, 0.0f));
-        maxOut += max(sweepDisp, float3(0.0f, 0.0f, 0.0f));
+        if((asuint(bodyPose.sweepDispFlags.w) & NWB_PHYSICS_SHAPE_FLAG_ENLARGE_AABB) != 0u){
+            minOut += min(sweepDisp, float3(0.0f, 0.0f, 0.0f));
+            maxOut += max(sweepDisp, float3(0.0f, 0.0f, 0.0f));
+        }
 
         g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 0u] = float4(minOut, 0.0f);
         g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 1u] = float4(maxOut, asfloat(bodySlotIdx));

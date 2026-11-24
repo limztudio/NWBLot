@@ -68,12 +68,6 @@ class CollisionLayerMatrix{
         return true;
     }
 
-    public u32 maskForLayer(in u32 layerIdx)const{
-        if(layerIdx >= s_MaxCollisionLayers)
-            return u32.max;
-        return this.layerMasks[layerIdx];
-    }
-
     public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
         Filter f;
         if(layerIdx < s_MaxCollisionLayers){

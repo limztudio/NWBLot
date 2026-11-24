@@ -12,23 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in EditBoxStyle style, in EditBoxPaintFlags flags){
-    if(skin.regions().empty())
-        return MakeUnexpected(Failure());
-    const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
-    const Expected<UiSkinRegion> preferredRegion = skin.tryFindRegion(preferred);
-    if(preferredRegion.has_value())
-        return preferredRegion.value();
-    if(style.normal != preferred){
-        const Expected<UiSkinRegion> normalRegion = skin.tryFindRegion(style.normal);
-        if(normalRegion.has_value())
-            return normalRegion.value();
-    }
-    if(style.fallback != preferred && style.fallback != style.normal)
-        return skin.tryFindRegion(style.fallback);
-    return MakeUnexpected(Failure());
-}
-
 b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedGlyph> glyphs){
     usize nextGlyph = 0u;
     for(in TextCluster cluster : clusters){
@@ -65,13 +48,11 @@ b8 PaintEditBoxViewVisual(
         return false;
     paint.pushClip(placement.frameClip);
     b8 painted = true;
-    const Expected<UiSkinRegion> background = TryResolveEditBoxBackgroundRegion(skin, style, flags);
-    if(background.has_value())
-        painted = paint.drawRegion(background.value().name, placement.bounds);
-    else
+    const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
+    if(!paint.drawRegionWithFallback(preferred, style.normal, placement.bounds) && !(style.fallback != preferred && style.fallback != style.normal && paint.tryDrawRegion(style.fallback, placement.bounds)))
         paint.fillRect(placement.bounds, style.background);
-    if(painted && flags.focused && flags.enabled && skin.hasRegion(style.focus))
-        painted = paint.drawRegion(style.focus, placement.bounds);
+    if(flags.focused && flags.enabled)
+        paint.tryDrawRegion(style.focus, placement.bounds);
     paint.pushClip(placement.clip);
     if(painted){
         Color selectionColor = style.inactiveSelection;

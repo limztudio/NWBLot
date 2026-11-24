@@ -157,40 +157,6 @@ Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<Targe
     return targetIndex;
 }
 
-b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
-    for(usize i = 0u; i < targets.size(); ++i){
-        in HitTarget target = targets[i];
-        if(!HasValidHitTargetControlProperties(target))
-            return false;
-        if(!target.owner.valid())
-            continue;
-        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
-        if(!hostIndex.has_value())
-            return false;
-        in HitTarget host = targets[hostIndex.value()];
-        if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
-            return false;
-    }
-    return true;
-}
-
-b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
-    for(usize i = 0u; i < targets.size(); ++i){
-        in HitTarget source = targets[i];
-        if(!HasValidHitTargetCommandOwnerProperties(source))
-            return false;
-        if(!source.commandOwner.valid())
-            continue;
-        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
-        if(!hostIndex.has_value())
-            return false;
-        in HitTarget host = targets[hostIndex.value()];
-        if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
-            return false;
-    }
-    return true;
-}
-
 b8 ValidStagedPopupTarget(in HitTarget target, in Span<PopupRecord> stagedPopups){
     if(!target.popup.widget.valid())
         return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;

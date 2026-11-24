@@ -379,11 +379,9 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
             return MakeUnexpected(Failure());
         const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
-                s_GpuGlyphPageReadyPrefix,
                 s_GpuGlyphPageReadyMarkerLabel,
                 "glyph page",
                 page.deref().m_readinessToken,
-                s_GpuGlyphPagePrefix,
                 s_GpuGlyphPageMarkerLabel,
                 page.deref().m_texture,
                 index
@@ -430,11 +428,9 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(
             return MakeUnexpected(Failure());
         const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
-                s_GpuSdfPageReadyPrefix,
                 s_GpuSdfPageReadyMarkerLabel,
                 "SDF page",
                 page.deref().m_readinessToken,
-                s_GpuSdfPagePrefix,
                 s_GpuSdfPageMarkerLabel,
                 page.deref().m_texture,
                 index
@@ -484,11 +480,9 @@ Expected<GpuSampledGraphResources> DeclareGpuTextureImages(
             return MakeUnexpected(Failure());
         const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
-                s_GpuTextureImageReadyPrefix,
                 s_GpuTextureImageReadyMarkerLabel,
                 "texture",
                 image.deref().m_texture.readinessToken,
-                s_GpuTextureImagePrefix,
                 s_GpuTextureImageMarkerLabel,
                 image.deref().m_texture.texture,
                 index

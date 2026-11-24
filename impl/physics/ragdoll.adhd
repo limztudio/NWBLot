@@ -32,7 +32,7 @@ f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
     const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
     if(inRes.has_value()){
         in Mat3 inMat = inRes.value();
-        return Max(0.05f, Max(inMat.row0.x, Max(inMat.row1.y, inMat.row2.z)));
+        return SimdMax(0.05f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
     }
     return 0.5f;
 }
@@ -90,7 +90,8 @@ class RagdollInstance{
             const BodyId bodyId = bodyRes.value();
             b8 shapeOk = false;
             if(bDef.useBox){
-                const Expected<HullShape> boxHull = MakeBoxHull(Max(0.01f, bDef.boxHalfExtents.x), Max(0.01f, bDef.boxHalfExtents.y), Max(0.01f, bDef.boxHalfExtents.z), 0.0f);
+                const VectorSingle extVec = Max(VectorSingle(bDef.boxHalfExtents.x, bDef.boxHalfExtents.y, bDef.boxHalfExtents.z, 0.0f), VectorSingle(0.01f));
+                const Expected<HullShape> boxHull = MakeBoxHull(extVec.x, extVec.y, extVec.z, 0.0f);
                 if(boxHull.has_value())
                     shapeOk = world.createHullShape(bodyId, bDef.shapeDef, boxHull.value()).has_value();
             }
@@ -103,9 +104,10 @@ class RagdollInstance{
             }
             this.boneBodies.push_back(bodyId);
             this.parentIndices.push_back(bDef.parentIndex);
-            this.maxMotorTorques.push_back(Max(0.0f, bDef.motorMaxTorque));
-            this.motorHertzes.push_back(Max(0.0f, bDef.motorHertz));
-            this.motorDampings.push_back(Max(0.0f, bDef.motorDamping));
+            const VectorSingle motorVec = Max(VectorSingle(bDef.motorMaxTorque, bDef.motorHertz, bDef.motorDamping, 0.0f), VectorSingle(0.0f));
+            this.maxMotorTorques.push_back(motorVec.x);
+            this.motorHertzes.push_back(motorVec.y);
+            this.motorDampings.push_back(motorVec.z);
             this.m_boneMaxInertias.push_back(ExtractBoneMaxInertia(world, bodyId));
         }
 
@@ -149,8 +151,9 @@ class RagdollInstance{
             else{
                 jd.type = JointType::Spherical;
                 jd.enableLimit = (bDef.swingLimitY > 0.0f || bDef.swingLimitZ > 0.0f || bDef.twistMax > bDef.twistMin);
-                jd.swingLimit = Max(0.0f, bDef.swingLimitY);
-                jd.swingLimitY = Max(0.0f, bDef.swingLimitZ);
+                const VectorSingle swingLim = Max(VectorSingle(bDef.swingLimitY, bDef.swingLimitZ, 0.0f, 0.0f), VectorSingle(0.0f));
+                jd.swingLimit = swingLim.x;
+                jd.swingLimitY = swingLim.y;
                 jd.lowerLimit = bDef.twistMin;
                 jd.upperLimit = bDef.twistMax;
             }
@@ -238,7 +241,7 @@ class RagdollInstance{
         if(this.m_boneMaxInertias.size() != this.boneBodies.size())
             this.refreshBoneInertias(world);
         const usize count = Min(this.boneBodies.size(), targetWorldTransforms.size());
-        const f32 gainScale = Max(0.0f, strengthMultiplier);
+        const f32 gainScale = SimdMax(0.0f, strengthMultiplier);
         for(usize i = 0u; i < count; ++i){
             const BodyId bodyId = this.boneBodies[i];
             if(!world.isValidBody(bodyId))
@@ -262,7 +265,7 @@ class RagdollInstance{
             const f32 qvLen = Vector3Length(qv).x;
             VectorSingle rotErr = qv * 2.0f;
             if(qvLen > 1.0e-6f)
-                rotErr = qv * ((2.0f * ATan2(qvLen, qErr.w)) / qvLen);
+                rotErr = qv * ((2.0f * ATan2(VectorSingle(qvLen), VectorSingle(qErr.w)).x) / qvLen);
 
             const f32 omegaN = 2.0f * s_PI * hertz;
             const f32 kp = omegaN * omegaN;
@@ -272,7 +275,7 @@ class RagdollInstance{
             VectorSingle torque = (rotErr * kp - VectorSingle(avRes.value()) * kd) * effInertia;
             const f32 tMagSq = Vector3LengthSq(VectorSingle(torque, 0.0f)).x;
             if(tMagSq > maxTorque * maxTorque && tMagSq > 1.0e-10f)
-                torque = torque * (maxTorque * Rsqrt(tMagSq));
+                torque = torque * (maxTorque * Rsqrt(VectorSingle(tMagSq)).x);
             world.applyTorque(bodyId, torque, true);
         }
     }

@@ -19,18 +19,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint constraintSlot = g_NwbPhysicsPushConstants.slots0.w;
     const float invH = g_NwbPhysicsPushConstants.invDeltaTime;
 
-    if((flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u){
-        if(dispatchThreadID.x != 0u)
-            return;
-        for(uint k = 0u; k < itemCount; ++k)
-            nwbPhysicsSolveSingleContact(itemOffset + k, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags);
+    const bool isSerial = (flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u;
+    if(isSerial ? (dispatchThreadID.x != 0u) : (dispatchThreadID.x >= itemCount))
         return;
-    }
 
-    const uint localIdx = dispatchThreadID.x;
-    if(localIdx >= itemCount)
-        return;
-    nwbPhysicsSolveSingleContact(itemOffset + localIdx, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags);
+    const uint startIdx = isSerial ? 0u : dispatchThreadID.x;
+    const uint endIdx = isSerial ? itemCount : (dispatchThreadID.x + 1u);
+    for(uint k = startIdx; k < endIdx; ++k)
+        nwbPhysicsSolveSingleContact(itemOffset + k, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags, true);
 }
 
 

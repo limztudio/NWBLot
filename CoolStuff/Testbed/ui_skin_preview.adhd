@@ -60,7 +60,7 @@ class UiListGallery{
         const ListResult result = context.ui.virtualList("rows", this.m_source, this.m_state, options);
         if(result.activated)
             [essential] info("Testbed: custom list selected key={}", this.m_state.selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey()) && result.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey(), this.m_selectedKeyCache) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -69,6 +69,7 @@ class UiListGallery{
 
     private UiListSource m_source = UiListSource();
     private ListState m_state = ListState();
+    private UiSelectedKeyLabelCache m_selectedKeyCache;
 }
 
 class UiComboGallery{
@@ -82,7 +83,7 @@ class UiComboGallery{
         const ComboResult result = context.ui.comboBox(s_ChoiceKey, this.m_source, this.m_state, options);
         if(result.committed)
             [essential] info("Testbed: custom combo selected key={}", this.m_state.selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey()) && result.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.selectedKey(), this.m_selectedKeyCache) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -91,6 +92,7 @@ class UiComboGallery{
 
     private UiListSource m_source = UiListSource();
     private ComboState m_state = ComboState();
+    private UiSelectedKeyLabelCache m_selectedKeyCache;
 }
 
 class UiEditGallery{
@@ -295,7 +297,7 @@ class UiNumericEditGallery{
         FloatEditOptions floating = FloatEditOptions();
         floating.bounds = FloatBounds(-s_NumericEditDecimalLimit, s_NumericEditDecimalLimit, NumericBoundsPolicy::Clamp);
         const NumericEditBoxResult second = context.ui.floatEdit("float", this.m_float, this.m_floatState, floating);
-        declared = DeclareCommittedNumericLabel(context.ui, this.m_integer.value(), this.m_float.value()) && first.edit.valid && second.edit.valid && declared;
+        declared = DeclareCommittedNumericLabel(context.ui, this.m_integer.value(), this.m_float.value(), this.m_committedCache) && first.edit.valid && second.edit.valid && declared;
         declared = context.ui.label(s_HintKey, "Enter: commit, Escape: restore") && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
@@ -307,6 +309,7 @@ class UiNumericEditGallery{
     private FloatEditModel m_float;
     private EditBoxState m_integerState = EditBoxState();
     private EditBoxState m_floatState = EditBoxState();
+    private UiCommittedNumericLabelCache m_committedCache;
 }
 
 class UiPopupGallery{
@@ -367,7 +370,7 @@ class UiPopupToolsGallery{
             this.m_command = result.key;
             [essential] info("Testbed: custom context command key={}", this.m_command);
         }
-        declared = DeclarePopupToolsStatusLabel(context.ui, this.m_command, this.m_anchorClicks) && result.valid && declared;
+        declared = DeclarePopupToolsStatusLabel(context.ui, this.m_command, this.m_anchorClicks, this.m_statusCache) && result.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -379,6 +382,7 @@ class UiPopupToolsGallery{
     private TooltipState m_tooltip = TooltipState();
     private u64 m_command = 0u;
     private u32 m_anchorClicks = 0u;
+    private UiPopupToolsStatusLabelCache m_statusCache;
 }
 
 class UiProgressGallery{
@@ -389,13 +393,14 @@ class UiProgressGallery{
         if(context.ui.button("advance", "Advance by 25%"))
             this.m_fraction = AdvanceProgressGalleryFraction(this.m_fraction);
         valid = context.ui.progress(s_AmountKey, this.m_fraction) && valid;
-        valid = DeclareProgressPercentLabel(context.ui, this.m_fraction * s_ProgressPercentScale) && valid;
+        valid = DeclareProgressPercentLabel(context.ui, this.m_fraction * s_ProgressPercentScale, this.m_percentCache) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
             error("Testbed: custom progress declaration failed");
     }
 
     private f64 m_fraction = s_DefaultProgressFraction;
+    private UiProgressPercentLabelCache m_percentCache;
 }
 
 class UiRadioGroupGallery{
@@ -427,7 +432,7 @@ class UiSearchComboGallery{
         const SearchComboResult result = context.ui.searchComboBox(s_ChoiceKey, this.m_source, this.m_state, options);
         if(result.combo.committed)
             [essential] info("Testbed: custom searchable combo selected key={}", this.m_state.combo().selectedKey());
-        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.combo().selectedKey()) && result.combo.valid && declared;
+        declared = DeclareSelectedKeyLabel(context.ui, this.m_state.combo().selectedKey(), this.m_selectedKeyCache) && result.combo.valid && declared;
         const b8 valid = context.ui.endPanel() && declared;
         RestoreBuilderFontSize(context.ui, previousFontSize);
         if(!valid)
@@ -436,6 +441,7 @@ class UiSearchComboGallery{
 
     private UiSearchComboSource m_source = UiSearchComboSource();
     private SearchComboState m_state = SearchComboState();
+    private UiSelectedKeyLabelCache m_selectedKeyCache;
 }
 
 class UiSliderGallery{
@@ -523,7 +529,7 @@ class UiWidgetGallery{
             ++this.m_selectedGallery;
         valid = context.ui.endContainer() && valid;
         const u32 selected = this.m_selectedGallery;
-        valid = DeclareGallerySectionLabel(context.ui, selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected))) && valid;
+        valid = DeclareGallerySectionLabel(context.ui, selected + 1u, cast<u32>(Section::kCount), SectionName(cast<Section>(selected)), this.m_sectionCache) && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid){
             error("Testbed: UI gallery selector declaration failed");
@@ -574,7 +580,7 @@ class UiWidgetGallery{
             this.m_count = 0u;
         this.m_popups.trigger(context.ui);
         valid = context.ui.endContainer() && valid;
-        valid = DeclareCounterLabel(context.ui, this.m_count) && valid;
+        valid = DeclareCounterLabel(context.ui, this.m_count, this.m_counterCache) && valid;
         valid = context.ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
         valid = context.ui.endPanel() && valid;
         if(!valid)
@@ -594,6 +600,8 @@ class UiWidgetGallery{
     private UiSliderGallery m_sliders = UiSliderGallery();
     private UiProgressGallery m_progress = UiProgressGallery();
     private UiImageGallery m_images = UiImageGallery();
+    private UiGallerySectionLabelCache m_sectionCache;
+    private UiCounterLabelCache m_counterCache;
     private u32 m_count = 0u;
     private u32 m_selectedGallery = 0u;
     private b8 m_enabled = true;
@@ -630,6 +638,27 @@ class UiSkinPreview{
     }
 
     public UiSkinPreviewGalleryLayout measureGalleryLayout(mut UiPaintContext context){
+        const u64 textIdentity = context.text.identity();
+        const u64 fontGeneration = context.text.generation();
+        const u64 atlasIdentity = context.text.atlasIdentity();
+        const usize atlasGlyphCount = context.text.atlasGlyphCount();
+        const u32 widthBits = bit_cast<u32>(context.display.logicalWidth);
+        const u32 heightBits = bit_cast<u32>(context.display.logicalHeight);
+        const u32 scaleXBits = bit_cast<u32>(context.display.pixelScaleX);
+        const u32 scaleYBits = bit_cast<u32>(context.display.pixelScaleY);
+        if(
+            this.m_cachedLayout.valid
+            && this.m_cachedLayoutTextIdentity == textIdentity
+            && this.m_cachedLayoutFontGeneration == fontGeneration
+            && this.m_cachedLayoutAtlasIdentity == atlasIdentity
+            && this.m_cachedLayoutAtlasGlyphCount == atlasGlyphCount
+            && this.m_cachedLayoutWidthBits == widthBits
+            && this.m_cachedLayoutHeightBits == heightBits
+            && this.m_cachedLayoutScaleXBits == scaleXBits
+            && this.m_cachedLayoutScaleYBits == scaleYBits
+        )
+            return this.m_cachedLayout;
+
         UiSkinPreviewGalleryLayout layout;
         const Expected<Rect> caption = this.m_caption.measure(context.text, context.display);
         const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
@@ -641,25 +670,38 @@ class UiSkinPreview{
         layout.preferredTop = ResolveSkinGalleryPreferredTop(layout.captionHeight);
         layout.gallery = ResolveWidgetGalleryLayoutBounds(context.display, layout.preferredTop);
         layout.valid = true;
-        return layout;
+        this.m_cachedLayout = layout;
+        this.m_cachedLayoutTextIdentity = textIdentity;
+        this.m_cachedLayoutFontGeneration = fontGeneration;
+        this.m_cachedLayoutAtlasIdentity = atlasIdentity;
+        this.m_cachedLayoutAtlasGlyphCount = atlasGlyphCount;
+        this.m_cachedLayoutWidthBits = widthBits;
+        this.m_cachedLayoutHeightBits = heightBits;
+        this.m_cachedLayoutScaleXBits = scaleXBits;
+        this.m_cachedLayoutScaleYBits = scaleYBits;
+        return this.m_cachedLayout;
     }
 
     public void paintWithLayout(mut UiPaintContext context, in UiSkinPreviewGalleryLayout layout){
+        if(!layout.valid){
+            error("Testbed: custom UI label measurement failed");
+            return;
+        }
         const f32 originX = ResolveSkinGalleryOriginX(context.display.logicalWidth);
         const f32 originY = s_GalleryMargin;
+        in Rect gallery = layout.gallery;
+        this.m_widgets.paint(context, gallery);
+        if(gallery.y < layout.preferredTop || originX < s_MinimumGalleryX)
+            return;
         const Expected<Rect> normal = this.m_normal.measure(context.text, context.display);
         const Expected<Rect> hover = this.m_hover.measure(context.text, context.display);
         const Expected<Rect> pressed = this.m_pressed.measure(context.text, context.display);
         const Expected<Rect> disabled = this.m_disabled.measure(context.text, context.display);
         const Expected<Rect> edit = this.m_edit.measure(context.text, context.display);
-        if(!layout.valid || !normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
+        if(!normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
             error("Testbed: custom UI label measurement failed");
             return;
         }
-        in Rect gallery = layout.gallery;
-        this.m_widgets.paint(context, gallery);
-        if(gallery.y < layout.preferredTop || originX < s_MinimumGalleryX)
-            return;
         if(!DrawSkinGallery(context.paint, originX, originY, layout.captionHeight)){
             error("Testbed: default UI skin is missing a gallery region");
             return;
@@ -697,6 +739,15 @@ class UiSkinPreview{
     private Label m_caption;
     private Label m_korean;
     private UiWidgetGallery m_widgets;
+    private UiSkinPreviewGalleryLayout m_cachedLayout;
+    private u64 m_cachedLayoutTextIdentity = 0u;
+    private u64 m_cachedLayoutFontGeneration = 0u;
+    private u64 m_cachedLayoutAtlasIdentity = 0u;
+    private usize m_cachedLayoutAtlasGlyphCount = 0u;
+    private u32 m_cachedLayoutWidthBits = 0u;
+    private u32 m_cachedLayoutHeightBits = 0u;
+    private u32 m_cachedLayoutScaleXBits = 0u;
+    private u32 m_cachedLayoutScaleYBits = 0u;
 }
 
 

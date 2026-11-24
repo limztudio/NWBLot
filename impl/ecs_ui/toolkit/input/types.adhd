@@ -498,17 +498,10 @@ class PointerBindingTable : NoCopy{
     private b8 m_indexActive = false;
 }
 
-class ContextOwnedTarget{
-    public HitTarget target;
-    public WidgetRoot root;
-}
-
 class ContextOwnedPopup{
     public PopupScope scope;
     public WidgetRoot root;
 }
-
-
 
 class PopupDismissRequest{
     public PopupToken expectedTop;

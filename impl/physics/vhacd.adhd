@@ -54,6 +54,22 @@ void ClipVhacdTriangleByAxis(
     mut Vector<VhacdTri> outNeg,
     mut Vector<VhacdTri> outPos
 ){
+    const isize ax = cast<isize>(axis);
+    const f32 c0 = VectorGetByIndex(VectorSingle(tri.v0), ax);
+    const f32 c1 = VectorGetByIndex(VectorSingle(tri.v1), ax);
+    const f32 c2 = VectorGetByIndex(VectorSingle(tri.v2), ax);
+    const VectorSingle cVec(c0, c1, c2, 0.0f);
+    const f32 minC = -Vector3MaxComponent(-cVec).x;
+    const f32 maxC = Vector3MaxComponent(cVec).x;
+    if(maxC < splitPos - 1.0e-5f){
+        outNeg.push_back(tri);
+        return;
+    }
+    if(minC > splitPos + 1.0e-5f){
+        outPos.push_back(tri);
+        return;
+    }
+
     Array<f32x4, 3u> pts;
     pts[0u] = tri.v0;
     pts[1u] = tri.v1;
@@ -64,19 +80,19 @@ void ClipVhacdTriangleByAxis(
 
     for(usize side = 0u; side < 2u; ++side){
         VectorSingle prev = VectorSingle(pts[2u]);
-        f32 prevVal = VectorGetByIndex(prev, cast<isize>(axis)) - splitPos;
+        f32 prevVal = VectorGetByIndex(prev, ax) - splitPos;
         if(side == 1u)
             prevVal = -prevVal;
 
         for(usize i = 0u; i < 3u; ++i){
             const VectorSingle cur = VectorSingle(pts[i]);
-            f32 curVal = VectorGetByIndex(cur, cast<isize>(axis)) - splitPos;
+            f32 curVal = VectorGetByIndex(cur, ax) - splitPos;
             if(side == 1u)
                 curVal = -curVal;
 
             if(curVal <= 1.0e-5f){
                 if(prevVal > 1.0e-5f){
-                    const f32 t = Clamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
+                    const f32 t = SimdClamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
                     const VectorSingle inter = Lerp(prev, cur, VectorSingle(t));
                     if(side == 0u)
                         polyNeg.push_back(f32x4(inter, 0.0f));
@@ -89,7 +105,7 @@ void ClipVhacdTriangleByAxis(
                     polyPos.push_back(f32x4(cur, 0.0f));
             }
             else if(prevVal <= 1.0e-5f){
-                const f32 t = Clamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
+                const f32 t = SimdClamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
                 const VectorSingle inter = Lerp(prev, cur, VectorSingle(t));
                 if(side == 0u)
                     polyNeg.push_back(f32x4(inter, 0.0f));
@@ -132,10 +148,14 @@ void ClipVhacdTriangleByAxis(
     }
 }
 
-void EvaluateVhacdPartition(
+void EvaluateVhacdPartitionWithScratch(
     in f32 rootDiag,
     in f32 hullRadius,
     in usize maxHullVerts,
+    in b8 hasPrecomputedAabb,
+    in Aabb3D precomputedAabb,
+    mut Vector<f32x4> rawVerts,
+    mut Vector<f32x4> samplePts,
     mut VhacdPartition part
 ){
     part.hasHull = false;
@@ -144,26 +164,37 @@ void EvaluateVhacdPartition(
     if(part.triangles.empty())
         return;
 
-    VectorSingle bMin(s_MaxF32);
-    VectorSingle bMax(-s_MaxF32);
-    Vector<f32x4> rawVerts;
+    rawVerts.clear();
     rawVerts.reserve(part.triangles.size() * 3u);
-    for(usize i = 0u; i < part.triangles.size(); ++i){
-        in VhacdTri t = part.triangles[i];
-        const VectorSingle p0 = VectorSingle(t.v0);
-        const VectorSingle p1 = VectorSingle(t.v1);
-        const VectorSingle p2 = VectorSingle(t.v2);
-        bMin = Min(bMin, Min(p0, Min(p1, p2)));
-        bMax = Max(bMax, Max(p0, Max(p1, p2)));
-        rawVerts.push_back(t.v0);
-        rawVerts.push_back(t.v1);
-        rawVerts.push_back(t.v2);
+    if(hasPrecomputedAabb){
+        part.aabb = precomputedAabb;
+        for(usize i = 0u; i < part.triangles.size(); ++i){
+            in VhacdTri t = part.triangles[i];
+            rawVerts.push_back(t.v0);
+            rawVerts.push_back(t.v1);
+            rawVerts.push_back(t.v2);
+        }
     }
-    part.aabb = Aabb3D(bMin, bMax);
+    else{
+        VectorSingle bMin(s_MaxF32);
+        VectorSingle bMax(-s_MaxF32);
+        for(usize i = 0u; i < part.triangles.size(); ++i){
+            in VhacdTri t = part.triangles[i];
+            const VectorSingle p0 = VectorSingle(t.v0);
+            const VectorSingle p1 = VectorSingle(t.v1);
+            const VectorSingle p2 = VectorSingle(t.v2);
+            bMin = Min(bMin, Min(p0, Min(p1, p2)));
+            bMax = Max(bMax, Max(p0, Max(p1, p2)));
+            rawVerts.push_back(t.v0);
+            rawVerts.push_back(t.v1);
+            rawVerts.push_back(t.v2);
+        }
+        part.aabb = Aabb3D(bMin, bMax);
+    }
     part.volume = ComputeAabbBoxVolume(part.aabb);
-    part.deepestPt = f32x4((bMin + bMax) * 0.5f, 0.0f);
+    part.deepestPt = f32x4((VectorSingle(part.aabb.lowerBound) + VectorSingle(part.aabb.upperBound)) * 0.5f, 0.0f);
 
-    Vector<f32x4> samplePts;
+    samplePts.clear();
     if(!DeduplicateConvexPoints(Span<f32x4>(rawVerts), samplePts))
         samplePts.swap(rawVerts);
     const Vector<f32x4> hullInputPts = DecimateHullPoints(Span<f32x4>(samplePts), Max(cast<usize>(4u), Min(maxHullVerts, s_MaxHullVertices)));
@@ -206,7 +237,18 @@ void EvaluateVhacdPartition(
             part.deepestPt = f32x4(pt, 0.0f);
         }
     }
-    part.concavity = maxInteriorDepth / Max(rootDiag, 1.0e-4f);
+    part.concavity = maxInteriorDepth / SimdMax(rootDiag, 1.0e-4f);
+}
+
+void EvaluateVhacdPartition(
+    in f32 rootDiag,
+    in f32 hullRadius,
+    in usize maxHullVerts,
+    mut VhacdPartition part
+){
+    Vector<f32x4> rawVerts;
+    Vector<f32x4> samplePts;
+    EvaluateVhacdPartitionWithScratch(rootDiag, hullRadius, maxHullVerts, false, Aabb3D(), rawVerts, samplePts, part);
 }
 
 Expected<VhacdResult> ComputeConvexDecomposition(
@@ -216,7 +258,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
 ){
     if(vertices.size() < 3u || indices.size() < 3u || (indices.size() % 3u) != 0u)
         return MakeUnexpected(Failure());
-    if(params.maxConvexHulls == 0u || !IsFinite(params.hullRadius) || params.hullRadius < 0.0f || !IsFinite(params.concavityThreshold))
+    if(params.maxConvexHulls == 0u || !IsFinite(VectorSingle(params.hullRadius, params.concavityThreshold, 0.0f, 0.0f).xy) || params.hullRadius < 0.0f)
         return MakeUnexpected(Failure());
 
     for(usize i = 0u; i < vertices.size(); ++i){
@@ -254,8 +296,8 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         rootMin = Min(rootMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
         rootMax = Max(rootMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
     }
-    const f32 rootDiag = Max(Vector3Length(VectorSingle(rootMax - rootMin, 0.0f)).x, 1.0e-4f);
-    const f32 rootVol = Max(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
+    const f32 rootDiag = SimdMax(Vector3Length(VectorSingle(rootMax - rootMin, 0.0f)).x, 1.0e-4f);
+    const f32 rootVol = SimdMax(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
     const usize maxVerts = Max(cast<usize>(4u), Min(cast<usize>(params.maxVerticesPerHull), s_MaxHullVertices));
 
     EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, root);
@@ -285,6 +327,8 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         VhacdPartition bestPos;
         VhacdPartition candNeg;
         VhacdPartition candPos;
+        Vector<f32x4> rawVertsScratch;
+        Vector<f32x4> samplePtsScratch;
         const f32 minAllowedVol = params.minVolumeRatio * rootVol;
 
         for(usize axis = 0u; axis < 3u; ++axis){
@@ -294,10 +338,10 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 continue;
             Array<f32, 2u> candSplits;
             candSplits[0u] = 0.5f * (lo + hi);
-            candSplits[1u] = Clamp(VectorGetByIndex(VectorSingle(target.deepestPt), cast<isize>(axis)), lo + 1.0e-4f, hi - 1.0e-4f);
+            candSplits[1u] = SimdClamp(VectorGetByIndex(VectorSingle(target.deepestPt), cast<isize>(axis)), lo + 1.0e-4f, hi - 1.0e-4f);
 
             for(usize si = 0u; si < 2u; ++si){
-                if(si == 1u && Abs(candSplits[1u] - candSplits[0u]) <= 1.0e-4f)
+                if(si == 1u && Abs(VectorSingle(candSplits[1u] - candSplits[0u])).x <= 1.0e-4f)
                     continue;
                 const f32 sp = candSplits[si];
                 candNeg.triangles.clear();
@@ -324,17 +368,19 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                     posMin = Min(posMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
                     posMax = Max(posMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
                 }
-                if(ComputeAabbBoxVolume(Aabb3D(negMin, negMax)) < minAllowedVol && ComputeAabbBoxVolume(Aabb3D(posMin, posMax)) < minAllowedVol)
+                const Aabb3D negBox(negMin, negMax);
+                const Aabb3D posBox(posMin, posMax);
+                if(ComputeAabbBoxVolume(negBox) < minAllowedVol && ComputeAabbBoxVolume(posBox) < minAllowedVol)
                     continue;
 
-                EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, candNeg);
-                EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, candPos);
+                EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, negBox, rawVertsScratch, samplePtsScratch, candNeg);
+                EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, posBox, rawVertsScratch, samplePtsScratch, candPos);
                 if(!candNeg.hasHull && !candPos.hasHull)
                     continue;
                 if(candNeg.volume < minAllowedVol && candPos.volume < minAllowedVol)
                     continue;
 
-                const f32 score = Max(candNeg.concavity, candPos.concavity);
+                const f32 score = SimdMax(candNeg.concavity, candPos.concavity);
                 if(!foundSplit || score < bestSplitScore){
                     foundSplit = true;
                     bestSplitScore = score;

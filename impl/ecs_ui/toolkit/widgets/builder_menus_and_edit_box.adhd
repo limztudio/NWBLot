@@ -559,7 +559,6 @@ b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut Edi
         this.m_editBoxCacheIndex.try_emplace(widgetKey, cacheIdx);
     }
     mut CachedEditBoxView cached = this.m_editBoxCacheEntries[cacheIdx];
-    cached.lastUsedFrame = this.m_editViewFrameCounter;
     const TextAreaModelStamp stamp = model.stamp();
     const u64 textId = this.m_text.identity();
     const u64 textGen = this.m_text.generation();

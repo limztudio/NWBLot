@@ -66,6 +66,24 @@ bool nwbPhysicsQueryRayAabb(
     return true;
 }
 
+bool nwbPhysicsQueryRayAabbFast(
+    const float3 origin,
+    const float3 invDir,
+    const float3 bMin,
+    const float3 bMax,
+    const float maxFrac,
+    out float outT
+){
+    const float3 t0 = (bMin - origin) * invDir;
+    const float3 t1 = (bMax - origin) * invDir;
+    const float3 tMinVec = min(t0, t1);
+    const float3 tMaxVec = max(t0, t1);
+    const float tNear = max(0.0f, max(tMinVec.x, max(tMinVec.y, tMinVec.z)));
+    const float tFar = min(maxFrac, min(tMaxVec.x, min(tMaxVec.y, tMaxVec.z)));
+    outT = tNear;
+    return tNear <= tFar;
+}
+
 bool nwbPhysicsQueryRaySphere(
     const float3 origin,
     const float3 dir,
@@ -797,10 +815,11 @@ void nwbPhysicsTestSpatialQueryShape(
     inout uint hitCount,
     inout bool hasHit
 ){
-    const uint4 meta = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].bodyIndexTypeShape;
+    const NwbPhysicsGpuShapeProxy spProxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx];
+    const uint4 meta = spProxy.bodyIndexTypeShape;
     if((meta.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u && (qFlags & NWB_PHYSICS_QUERY_FLAG_INCLUDE_SENSORS) == 0u)
         return;
-    const uint4 filter = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].filterData;
+    const uint4 filter = spProxy.filterData;
     if(!nwbPhysicsQueryPassesFilter(qCat, qMask, qFlags, filter))
         return;
 
@@ -821,7 +840,6 @@ void nwbPhysicsTestSpatialQueryShape(
     }
 
     const NwbPhysicsGpuBodyPose pose = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][meta.x];
-    const NwbPhysicsGpuShapeProxy spProxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx];
     if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
         float tHit = 0.0f;
         float3 nHit = float3(0.0f, 1.0f, 0.0f);
@@ -971,12 +989,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         uint bruteIdx = 0u;
         if(traverseLbvh){
             const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][0u];
-            bool rootHit = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, root.minLeft.xyz, root.maxRight.xyz);
+            bool rootHit = false;
             float rootT = 0.0f;
-            if(rootHit && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
-                float3 nNode = float3(0.0f, 1.0f, 0.0f);
-                rootHit = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, root.minLeft.xyz, root.maxRight.xyz, bestMetric, rootT, nNode);
-            }
+            if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST)
+                rootHit = nwbPhysicsQueryRayAabbFast(rayOrig, rayInvDir, root.minLeft.xyz, root.maxRight.xyz, bestMetric, rootT);
+            else
+                rootHit = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, root.minLeft.xyz, root.maxRight.xyz);
             if(rootHit){
                 stack[0] = 0u;
                 stackT[0] = rootT;
@@ -1002,19 +1020,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 else{
                     const uint lIdx = asuint(node.minLeft.w);
                     const uint rIdx = asuint(node.maxRight.w);
-                    const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx];
-                    const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx];
-                    bool hitL = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, lNode.minLeft.xyz, lNode.maxRight.xyz);
-                    bool hitR = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, rNode.minLeft.xyz, rNode.maxRight.xyz);
+                    const float3 lMin = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx].minLeft.xyz;
+                    const float3 lMax = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx].maxRight.xyz;
+                    const float3 rMin = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx].minLeft.xyz;
+                    const float3 rMax = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx].maxRight.xyz;
+                    bool hitL = false;
+                    bool hitR = false;
                     float tL = 0.0f;
                     float tR = 0.0f;
-                    if(hitL && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
-                        float3 nL = float3(0.0f, 1.0f, 0.0f);
-                        hitL = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, lNode.minLeft.xyz, lNode.maxRight.xyz, bestMetric, tL, nL);
+                    if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
+                        hitL = nwbPhysicsQueryRayAabbFast(rayOrig, rayInvDir, lMin, lMax, bestMetric, tL);
+                        hitR = nwbPhysicsQueryRayAabbFast(rayOrig, rayInvDir, rMin, rMax, bestMetric, tR);
                     }
-                    if(hitR && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
-                        float3 nR = float3(0.0f, 1.0f, 0.0f);
-                        hitR = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, rNode.minLeft.xyz, rNode.maxRight.xyz, bestMetric, tR, nR);
+                    else{
+                        hitL = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, lMin, lMax);
+                        hitR = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, rMin, rMax);
                     }
                     if(hitL && hitR){
                         if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST && tL < tR){
@@ -1039,13 +1059,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const uint shapeIdx = bruteIdx++;
                 const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 0u].xyz;
                 const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 1u].xyz;
-                if(!nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, aMin, aMax))
-                    continue;
                 if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
                     float tAabb = 0.0f;
-                    float3 nAabb = float3(0.0f, 1.0f, 0.0f);
-                    if(!nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, aMin, aMax, bestMetric, tAabb, nAabb))
+                    if(!nwbPhysicsQueryRayAabbFast(rayOrig, rayInvDir, aMin, aMax, bestMetric, tAabb))
                         continue;
+                }
+                else if(!nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, aMin, aMax)){
+                    continue;
                 }
                 testShapeIdx = shapeIdx;
                 testMin = aMin;

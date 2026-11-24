@@ -39,8 +39,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
-
 enum<u8> TestbedPhysicsSceneMode{
     Default = 0u,
     Stress = 1u,
@@ -762,7 +760,7 @@ void SyncWorldModelRuntimes(mut NotNullUniquePtr<World> worldHandle){
 }
 
 b8 TickProjectWorld(mut NotNullUniquePtr<World> worldHandle, in f32 safeDelta){
-    const Expected<void, CpuTaskAdmissionErrorCode> updated = worldHandle.deref().tick(safeDelta);
+    const Expected<void, CpuTaskAdmissionError> updated = worldHandle.deref().tick(safeDelta);
     if(!updated.has_value()){
         error("Project: world update rejected CPU work: {}", cast<u32>(updated.error()));
         return false;
@@ -863,6 +861,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     in PhysicsDebugDrawOptions options,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
+    mut PhysicsDebugDrawScratch debugScratch,
     mut Vector<PaintLineSegment> screenLines
 ){
     mut World world = worldHandle.deref();
@@ -887,10 +886,10 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         return PhysicsDebugDrawStats();
 
     TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
-    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink(world, physicsSystem.value(), options, projector, sink);
+    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
     if(!screenLines.empty()){
         f32 lineThickness = 1.5f;
-        if(IsFinite(options.lineThickness) && options.lineThickness > 0.0f)
+        if(IsFinite(VectorSingle(options.lineThickness)) && options.lineThickness > 0.0f)
             lineThickness = options.lineThickness;
         context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
     }

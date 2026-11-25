@@ -4,6 +4,7 @@
 
 #include <impl/ecs_ui/toolkit/gpu/image_cache.adhd>
 #include <impl/ecs_ui/toolkit/gpu/sampled_texture_resources.adhd>
+#include <impl/ecs_ui/toolkit/gpu/shader_abi.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,28 +35,35 @@ class GpuImageResources : NoCopy{
                 return MakeUnexpected(Failure());
             GpuVersion<GpuGlyphVersion> reused = existing;
             reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
-            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, Format::R8_UNORM, reused.deref().m_sampledImage))
+            if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, reused.deref().m_texture.deref().getDescription().format, reused.deref().m_sampledImage))
                 return MakeUnexpected(Failure());
             return reused;
         }
         mut Device device = this.m_graphics.getDevice();
-        if(!SupportsTextureFormat(Format::R8_UNORM, device))
+        in GlyphPageBinding binding = page.deref().binding();
+        Format pageFormat = Format::R8_UNORM;
+        if(binding.channelCount == 4u){
+            if(SupportsTextureFormat(Format::RGBA8_UNORM_SRGB, device))
+                pageFormat = Format::RGBA8_UNORM_SRGB;
+            else
+                pageFormat = Format::RGBA8_UNORM;
+        }
+        if(!SupportsTextureFormat(pageFormat, device))
             return MakeUnexpected(Failure());
         const Expected<GpuVersion<GpuGlyphVersion>> versionResult = this.m_versions.make<GpuGlyphVersion>(this.m_graphics, page);
         if(!versionResult.has_value())
             return MakeUnexpected(versionResult.error());
         GpuVersion<GpuGlyphVersion> version = versionResult.value();
-        in GlyphPageBinding binding = page.deref().binding();
         GpuSampledTextures textures;
         const Expected<GpuPageUploadResult> uploadedPage = textures.createAndUploadPage(
             this.m_graphics,
             GpuPageTextureUploadDesc(
                 s_GpuGlyphPageTextureName,
                 Span<u8>(page.deref().pixels()),
-                binding.width,
+                cast<usize>(binding.width) * cast<usize>(binding.channelCount),
                 binding.width,
                 binding.height,
-                Format::R8_UNORM
+                pageFormat
             )
         );
         if(!uploadedPage.has_value())
@@ -70,7 +78,7 @@ class GpuImageResources : NoCopy{
                 this.m_imageCache.evict();
             this.m_imageCache.glyphs().push_back(version);
         }
-        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, Format::R8_UNORM, version.deref().m_sampledImage))
+        if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, pageFormat, version.deref().m_sampledImage))
             return MakeUnexpected(Failure());
         return version;
     }
@@ -302,15 +310,104 @@ b8 ValidateGpuTextureImages(in DrawSnapshot snapshot){
     return ValidateDrawCommandImageBindings(snapshot.commands(), images.size());
 }
 
+b8 ValidGpuClipMaskChain(in u32 headOffset, in usize effectBytes, in Span<u32> words){
+    u32 cursor = headOffset;
+    for(usize step = 0u; step < s_PaintMaxAnalyticClipDepth; ++step){
+        if(cursor == u32.max)
+            return true;
+        if((cursor & 15u) != 0u)
+            return false;
+        const usize byteCursor = cast<usize>(cursor);
+        const usize recordBytes = cast<usize>(s_ShaderUiClipMaskRecordBytes);
+        if(byteCursor > effectBytes || recordBytes > effectBytes - byteCursor)
+            return false;
+        const usize wordIndex = cast<usize>(cursor >> 2u);
+        const u32 kind = words[wordIndex];
+        if(kind != cast<u32>(PaintClipShapeKind::RoundedRect) && kind != cast<u32>(PaintClipShapeKind::Ellipse))
+            return false;
+        cursor = words[wordIndex + 1u];
+    }
+    return cursor == u32.max;
+}
+
+b8 ValidGpuDrawCommandBindingsAndEffects(
+    in DrawCommand command,
+    in b8 allowLayerComposite,
+    in DrawSnapshot snapshot,
+    in usize effectBytes
+){
+    in Vector<SharedGlyphPage> glyphPages = snapshot.glyphPages();
+    in Vector<SharedSdfAtlasPage> sdfPages = snapshot.sdfPages();
+    in Vector<SharedImageSource> images = snapshot.textureImages();
+    in Vector<u32> words = snapshot.effectWords();
+    in Vector<PaintEffectLayer> layers = snapshot.effectLayers();
+    const usize glyphCount = glyphPages.size();
+    const usize sdfCount = sdfPages.size();
+    const usize imageCount = images.size();
+
+    if(command.blendMode > PaintBlendMode::Replace)
+        return false;
+    if(!ValidGpuClipMaskChain(command.clipMaskOffset, effectBytes, Span<u32>(words)))
+        return false;
+
+    if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin)
+        return command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u && command.textureImageIndex == 0xffffffffu && command.effectOffset == u32.max;
+    if(command.material == PaintMaterial::Glyph)
+        return cast<usize>(command.glyphPageIndex) < glyphCount && glyphPages[command.glyphPageIndex].deref().binding().channelCount == 1u && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u && command.textureImageIndex == 0xffffffffu && command.effectOffset == u32.max;
+    if(command.material == PaintMaterial::ColorGlyph)
+        return cast<usize>(command.glyphPageIndex) < glyphCount && glyphPages[command.glyphPageIndex].deref().binding().channelCount == 4u && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u && command.textureImageIndex == 0xffffffffu && command.effectOffset == u32.max;
+    if(command.material == PaintMaterial::SdfGlyph)
+        return command.glyphPageIndex == 0xffffffffu && cast<usize>(command.sdfPageIndex) < sdfCount && command.sdfChannel < sdfPages[command.sdfPageIndex].deref().binding().channelCount && command.textureImageIndex == 0xffffffffu && command.effectOffset == u32.max;
+    if(command.material == PaintMaterial::Image)
+        return cast<usize>(command.textureImageIndex) < imageCount && command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u && command.effectOffset == u32.max;
+
+    if(command.glyphPageIndex != 0xffffffffu || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u || command.textureImageIndex != 0xffffffffu)
+        return false;
+
+    if(command.material == PaintMaterial::Gradient){
+        if((command.effectOffset & 15u) != 0u)
+            return false;
+        const usize byteOff = cast<usize>(command.effectOffset);
+        const usize headerBytes = cast<usize>(s_ShaderUiGradientHeaderBytes);
+        if(byteOff > effectBytes || headerBytes > effectBytes - byteOff)
+            return false;
+        const u32 stopCount = words[cast<usize>(command.effectOffset >> 2u) + 2u];
+        if(stopCount == 0u || stopCount > s_ShaderUiMaxGradientStops)
+            return false;
+        const usize totalBytes = headerBytes + cast<usize>(stopCount) * cast<usize>(s_ShaderUiGradientStopBytes);
+        return totalBytes <= effectBytes - byteOff;
+    }
+    if(command.material == PaintMaterial::DropShadow){
+        if((command.effectOffset & 15u) != 0u)
+            return false;
+        const usize byteOff = cast<usize>(command.effectOffset);
+        const usize recordBytes = cast<usize>(s_ShaderUiDropShadowRecordBytes);
+        return byteOff <= effectBytes && recordBytes <= effectBytes - byteOff;
+    }
+    if(command.material == PaintMaterial::EffectLayerComposite){
+        if(!allowLayerComposite)
+            return false;
+        return cast<usize>(command.effectOffset) < layers.size();
+    }
+    return false;
+}
+
 b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
     in Vector<SharedGlyphPage> glyphPages = snapshot.glyphPages();
     in Vector<SharedSdfAtlasPage> sdfPages = snapshot.sdfPages();
     in Vector<SharedImageSource> images = snapshot.textureImages();
+    in Vector<u32> words = snapshot.effectWords();
+    in Vector<PaintEffectLayer> layers = snapshot.effectLayers();
+    in Vector<DrawCommand> effectCommands = snapshot.effectCommands();
     const usize glyphCount = glyphPages.size();
     const usize sdfCount = sdfPages.size();
     const usize imageCount = images.size();
     if(!ValidSnapshotImageCounts(glyphCount, sdfCount, imageCount))
         return false;
+    if((words.size() & 3u) != 0u || layers.size() > s_PaintMaxEffectLayers)
+        return false;
+    const usize effectBytes = words.size() * 4u;
+
     for(usize index = 0u; index < glyphCount; ++index){
         if(!glyphPages[index].valid() || !ValidGlyphPageBinding(glyphPages[index].deref().binding(), glyphPages[index].deref().pixels().size()))
             return false;
@@ -335,24 +432,31 @@ b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
                 return false;
         }
     }
+    for(in PaintEffectLayer layer : layers){
+        if(layer.commandBegin >= layer.commandEnd || cast<usize>(layer.commandEnd) > effectCommands.size())
+            return false;
+        if(layer.opacity < 0.0f || layer.opacity > 1.0f || layer.blurRadius < 0.0f || layer.blurRadius > s_PaintMaxBlurRadius || layer.blendMode > PaintBlendMode::Replace)
+            return false;
+        if(!ValidGpuClipMaskChain(layer.clipMaskOffset, effectBytes, Span<u32>(words)))
+            return false;
+        if(layer.blurRadius > 0.0f){
+            const usize blurBytes = cast<usize>(s_ShaderUiBlurRecordBytes);
+            if(layer.blurHorizontalOffset == u32.max || (layer.blurHorizontalOffset & 15u) != 0u || cast<usize>(layer.blurHorizontalOffset) > effectBytes || blurBytes > effectBytes - cast<usize>(layer.blurHorizontalOffset))
+                return false;
+            if(layer.blurVerticalOffset == u32.max || (layer.blurVerticalOffset & 15u) != 0u || cast<usize>(layer.blurVerticalOffset) > effectBytes || blurBytes > effectBytes - cast<usize>(layer.blurVerticalOffset))
+                return false;
+            if(cast<usize>(s_PaintQuadIndexCount) > snapshot.indices().size() || cast<usize>(layer.blurFirstIndex) > snapshot.indices().size() - cast<usize>(s_PaintQuadIndexCount))
+                return false;
+        }
+        else if(layer.blurHorizontalOffset != u32.max || layer.blurVerticalOffset != u32.max)
+            return false;
+    }
     for(in DrawCommand command : snapshot.commands()){
-        if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin){
-            if(command.glyphPageIndex != 0xffffffffu || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u || command.textureImageIndex != 0xffffffffu)
-                return false;
-        }
-        else if(command.material == PaintMaterial::Glyph){
-            if(cast<usize>(command.glyphPageIndex) >= glyphCount || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u || command.textureImageIndex != 0xffffffffu)
-                return false;
-        }
-        else if(command.material == PaintMaterial::SdfGlyph){
-            if(command.glyphPageIndex != 0xffffffffu || cast<usize>(command.sdfPageIndex) >= sdfCount || command.sdfChannel >= sdfPages[command.sdfPageIndex].deref().binding().channelCount || command.textureImageIndex != 0xffffffffu)
-                return false;
-        }
-        else if(command.material == PaintMaterial::Image){
-            if(cast<usize>(command.textureImageIndex) >= imageCount || command.glyphPageIndex != 0xffffffffu || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u)
-                return false;
-        }
-        else
+        if(!ValidGpuDrawCommandBindingsAndEffects(command, true, snapshot, effectBytes))
+            return false;
+    }
+    for(in DrawCommand command : effectCommands){
+        if(!ValidGpuDrawCommandBindingsAndEffects(command, false, snapshot, effectBytes))
             return false;
     }
     return true;

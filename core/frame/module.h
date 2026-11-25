@@ -10,7 +10,9 @@
 #include <core/task/gpu/scheduler.h>
 #include <core/common/frame_data.h>
 #include <core/input/module.h>
+#include <core/os/accessibility.h>
 #include <core/os/clipboard.h>
+#include <core/os/cursor.h>
 #include <core/os/text_input.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/session.h>
@@ -106,6 +108,14 @@ public:
 
     [[nodiscard]] inline ITextInputService* tryTextInput()noexcept{ return m_textInput.get(); }
 
+    [[nodiscard]] ICursorService& cursor()noexcept;
+
+    [[nodiscard]] inline ICursorService* tryCursor()noexcept{ return m_cursor.get(); }
+
+    [[nodiscard]] IAccessibilityService& accessibility()noexcept;
+
+    [[nodiscard]] inline IAccessibilityService* tryAccessibility()noexcept{ return m_accessibility.get(); }
+
     [[nodiscard]] inline const Perf::Session& perfSession()const noexcept{ return m_perfSession; }
 
     [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry()noexcept{ return m_frameGraphRegistry; }
@@ -122,6 +132,8 @@ public:
 private:
     [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> createPlatformClipboardService();
     [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> createPlatformTextInputService();
+    [[nodiscard]] Expected<GlobalUniquePtr<ICursorService>> createPlatformCursorService();
+    [[nodiscard]] Expected<GlobalUniquePtr<IAccessibilityService>> createPlatformAccessibilityService();
     void setupPlatform(void* inst)noexcept;
     void cleanupPlatform()noexcept;
     b8 updateFrame(f32 delta);
@@ -139,6 +151,8 @@ private:
     PlatformCleanup m_platformCleanup;
     GlobalUniquePtr<IClipboardService> m_clipboard;
     GlobalUniquePtr<ITextInputService> m_textInput;
+    GlobalUniquePtr<ICursorService> m_cursor;
+    GlobalUniquePtr<IAccessibilityService> m_accessibility;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;
@@ -160,4 +174,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

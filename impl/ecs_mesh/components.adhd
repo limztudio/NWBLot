@@ -17,6 +17,7 @@ class MeshComponent{
 class SkinnedMeshBindingComponent{
     public AssetRef<Skin> skin;
     public EntityID skeletonEntity = s_InvalidEntityId;
+    public Name skeletonEntityName = s_NameNone;
     [transient]
     public RuntimeMeshHandle runtimeMesh = s_InvalidRuntimeMeshHandle;
 }

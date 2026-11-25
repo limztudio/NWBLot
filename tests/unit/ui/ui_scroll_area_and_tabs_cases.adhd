@@ -1,0 +1,418 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type UiScrollAreaAndTabsTests = WidgetFixture;
+const u32 s_UiScrollTabsQuietNaNF32Bits = 0x7fc00000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiScrollAreaAndTabsTests_ScrollAreaClipsAndOffsetsChildrenBubblesWheelAndSupportsThumbDragAndTrackPage(mut UiScrollAreaAndTabsTests self){
+    ScrollAreaState state;
+    ScrollAreaOptions opts;
+    opts.width = LayoutSize(LayoutSizePolicy::Fixed, 160.0f);
+    opts.height = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+    opts.padding = Insets(2.0f, 2.0f, 2.0f, 2.0f);
+    opts.gap = 4.0f;
+    opts.wheelStep = 20.0f;
+    opts.horizontalScrollbar = ScrollbarPolicy::Always;
+    opts.verticalScrollbar = ScrollbarPolicy::Auto;
+    opts.showBackground = true;
+
+    WidgetOptions btnOpts;
+    btnOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+    btnOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 44.0f);
+
+    const WidgetId saId = self.id("sa", "panel");
+    const WidgetId btn1Id = RequireUiWidgetId(saId, "btn1");
+    const WidgetId btn2Id = RequireUiWidgetId(saId, "btn2");
+    const WidgetId btn3Id = RequireUiWidgetId(saId, "btn3");
+    const WidgetId vThumbId = RequireUiWidgetId(saId, s_WidgetPartScrollVerticalThumb);
+    const WidgetId vAfterId = RequireUiWidgetId(saId, s_WidgetPartScrollVerticalAfter);
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.button("btn1", "First", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn2", "Second", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn3", "Third", btnOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    const ScrollViewportPlacement frame1Bars = state.scrollbars();
+    EXPECT_TRUE(frame1Bars.vertical.visible);
+    EXPECT_TRUE(frame1Bars.horizontal.visible);
+    EXPECT_GT(frame1Bars.vertical.maximum, 0.0);
+    EXPECT_DOUBLE_EQ(frame1Bars.horizontal.maximum, 0.0);
+    ExpectUiRect(frame1Bars.horizontal.thumb, frame1Bars.horizontal.track);
+    const auto foundBtn1 = self.tryTarget(btn1Id);
+    const auto foundBtn2 = self.tryTarget(btn2Id);
+    const auto foundBtn3 = self.tryTarget(btn3Id);
+    ASSERT_TRUE(foundBtn1.has_value());
+    ASSERT_TRUE(foundBtn2.has_value());
+    ASSERT_TRUE(foundBtn3.has_value());
+    const f32 btn1InitialY = foundBtn1.value().rectangle.y;
+    EXPECT_FLOAT_EQ(foundBtn2.value().clip.y + foundBtn2.value().clip.height, frame1Bars.contentClip.y + frame1Bars.contentClip.height);
+    EXPECT_FLOAT_EQ(foundBtn3.value().clip.height, 0.0f);
+
+    InputEvent wheel;
+    wheel.type = InputEventType::PointerWheel;
+    wheel.position = Point(foundBtn1.value().rectangle.x + 10.0f, foundBtn1.value().rectangle.y + 10.0f);
+    wheel.scrollY = -1.0;
+    EXPECT_TRUE(self.send(wheel).pointerConsumed);
+
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.button("btn1", "First", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn2", "Second", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn3", "Third", btnOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(state.scroll().y, 20.0f);
+    const auto movedBtn1 = self.tryTarget(btn1Id);
+    ASSERT_TRUE(movedBtn1.has_value());
+    EXPECT_FLOAT_EQ(movedBtn1.value().rectangle.y, btn1InitialY - 20.0f);
+
+    const auto afterTarget = self.tryTarget(vAfterId);
+    ASSERT_TRUE(afterTarget.has_value());
+    self.click(Point(afterTarget.value().rectangle.x + 2.0f, afterTarget.value().rectangle.y + 2.0f));
+    ASSERT_TRUE(self.panel(3u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.button("btn1", "First", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn2", "Second", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn3", "Third", btnOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_NEAR(cast<f64>(state.scroll().y), state.scrollbars().vertical.maximum, 0.01);
+
+    const auto thumbTarget = self.tryTarget(vThumbId);
+    ASSERT_TRUE(thumbTarget.has_value());
+    self.drag(
+        Point(thumbTarget.value().rectangle.x + 2.0f, thumbTarget.value().rectangle.y + 2.0f),
+        Point(thumbTarget.value().rectangle.x + 2.0f, state.scrollbars().vertical.track.y)
+    );
+    ASSERT_TRUE(self.panel(4u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.button("btn1", "First", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn2", "Second", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn3", "Third", btnOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_FLOAT_EQ(state.scroll().y, 0.0f);
+
+    EXPECT_FALSE(state.scrollTo(Point(-1.0f, 0.0f)));
+    EXPECT_FALSE(state.scrollTo(Point(0.0f, bit_cast<f32>(s_UiScrollTabsQuietNaNF32Bits))));
+    EXPECT_TRUE(state.scrollTo(Point(0.0f, 15.0f)));
+    ASSERT_TRUE(self.panel(5u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.button("btn1", "First", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn2", "Second", btnOpts));
+    EXPECT_FALSE(self.m_builder.button("btn3", "Third", btnOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+    EXPECT_FLOAT_EQ(state.scroll().y, 15.0f);
+
+    ASSERT_TRUE(self.panel(6u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    EXPECT_FALSE(self.m_builder.endContainer());
+    EXPECT_TRUE(self.m_context.failed());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    ASSERT_TRUE(self.panel(7u, "panel", Rect(10.0f, 10.0f, 220.0f, 140.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", state, opts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    EXPECT_FALSE(self.m_builder.beginScrollArea("sa_alias", state, opts));
+    EXPECT_TRUE(self.m_context.failed());
+}
+
+void VerifyUiScrollAreaAndTabsTests_NestedScrollAreasRouteWheelInnerFirstBubbleWhenInnerFitsAndNeverLeakAcrossOverlappingWindows(mut UiScrollAreaAndTabsTests self){
+    ScrollAreaState outerState;
+    ScrollAreaState innerState;
+    ScrollAreaOptions outerOpts;
+    outerOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 180.0f);
+    outerOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 140.0f);
+    outerOpts.wheelStep = 24.0f;
+
+    ScrollAreaOptions innerOpts;
+    innerOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 140.0f);
+    innerOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+    innerOpts.wheelStep = 16.0f;
+
+    WidgetOptions wideBtn;
+    wideBtn.width = LayoutSize(LayoutSizePolicy::Fixed, 260.0f);
+    wideBtn.height = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+    WidgetOptions tallInnerBtn;
+    tallInnerBtn.width = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    tallInnerBtn.height = LayoutSize(LayoutSizePolicy::Fixed, 150.0f);
+
+    const WidgetId outerId = self.id("outer", "panel");
+    const WidgetId innerId = RequireUiWidgetId(outerId, "inner");
+    const WidgetId deepId = RequireUiWidgetId(innerId, "deep");
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 300.0f, 220.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("outer", outerState, outerOpts));
+    EXPECT_FALSE(self.m_builder.button("wide", "Wide", wideBtn));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("inner", innerState, innerOpts));
+    EXPECT_FALSE(self.m_builder.button("deep", "Deep", tallInnerBtn));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    const auto deepTarget = self.tryTarget(deepId);
+    ASSERT_TRUE(deepTarget.has_value());
+    const Point insideDeep(deepTarget.value().rectangle.x + 10.0f, deepTarget.value().rectangle.y + 10.0f);
+
+    InputEvent wheelY;
+    wheelY.type = InputEventType::PointerWheel;
+    wheelY.position = insideDeep;
+    wheelY.scrollY = -1.0;
+    EXPECT_TRUE(self.send(wheelY).pointerConsumed);
+
+    InputEvent wheelX;
+    wheelX.type = InputEventType::PointerWheel;
+    wheelX.position = insideDeep;
+    wheelX.scrollX = 1.0;
+    EXPECT_TRUE(self.send(wheelX).pointerConsumed);
+
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(10.0f, 10.0f, 300.0f, 220.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("outer", outerState, outerOpts));
+    EXPECT_FALSE(self.m_builder.button("wide", "Wide", wideBtn));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("inner", innerState, innerOpts));
+    EXPECT_FALSE(self.m_builder.button("deep", "Deep", tallInnerBtn));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(innerState.scroll().y, 16.0f);
+    EXPECT_FLOAT_EQ(outerState.scroll().y, 0.0f);
+    EXPECT_FLOAT_EQ(outerState.scroll().x, 24.0f);
+
+    WindowState winBack;
+    WindowState winFront;
+    WindowOptions optBack;
+    optBack.initialBounds = Rect(20.0f, 20.0f, 220.0f, 180.0f);
+    WindowOptions optFront;
+    optFront.initialBounds = Rect(80.0f, 50.0f, 200.0f, 160.0f);
+    ScrollAreaState winScroll;
+    ScrollAreaOptions winScrollOpts;
+    winScrollOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 180.0f);
+    winScrollOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+    winScrollOpts.wheelStep = 20.0f;
+
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", winBack, optBack));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("wsa", winScroll, winScrollOpts));
+    EXPECT_FALSE(self.m_builder.button("tbtn", "Tall", tallInnerBtn));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", winFront, optFront));
+    EXPECT_FALSE(self.m_builder.button("blocker", "Block"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+
+    InputEvent blockedWheel;
+    blockedWheel.type = InputEventType::PointerWheel;
+    blockedWheel.position = Point(120.0f, 110.0f);
+    blockedWheel.scrollY = -1.0;
+    EXPECT_TRUE(self.send(blockedWheel).pointerConsumed);
+
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", winBack, optBack));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("wsa", winScroll, winScrollOpts));
+    EXPECT_FALSE(self.m_builder.button("tbtn", "Tall", tallInnerBtn));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", winFront, optFront));
+    EXPECT_FALSE(self.m_builder.button("blocker", "Block"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_FLOAT_EQ(winScroll.scroll().y, 0.0f);
+}
+
+void VerifyUiScrollAreaAndTabsTests_CollapsibleHeaderTogglesByPointerAndKeyboardRespectsDisabledAndSupportsNestedContent(mut UiScrollAreaAndTabsTests self){
+    b8 expanded = false;
+    CollapsibleHeaderOptions disabledOpts;
+    disabledOpts.enabled = false;
+    b8 disabledExpanded = false;
+
+    const WidgetId hdrId = self.id("hdr", "panel");
+    const WidgetId disabledId = self.id("hdr_disabled", "panel");
+    const WidgetId secretId = self.id("secret", "panel");
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    EXPECT_FALSE(self.m_builder.collapsibleHeader("hdr", "Details", expanded));
+    EXPECT_FALSE(self.m_builder.collapsibleHeader("hdr_disabled", "Locked", disabledExpanded, disabledOpts));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot collapsedSnap = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_FALSE(collapsedSnap.vertices().empty());
+    EXPECT_FALSE(self.hasTarget(secretId));
+    const auto foundHdr = self.tryTarget(hdrId);
+    const auto foundDisabled = self.tryTarget(disabledId);
+    ASSERT_TRUE(foundHdr.has_value());
+    ASSERT_TRUE(foundDisabled.has_value());
+    EXPECT_TRUE(foundHdr.value().focusable);
+    EXPECT_FALSE(foundDisabled.value().focusable);
+
+    self.click(Point(foundDisabled.value().rectangle.x + 10.0f, foundDisabled.value().rectangle.y + 10.0f));
+    self.click(Point(foundHdr.value().rectangle.x + 10.0f, foundHdr.value().rectangle.y + 10.0f));
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    EXPECT_TRUE(self.m_builder.collapsibleHeader("hdr", "Details", expanded));
+    if(expanded)
+        EXPECT_FALSE(self.m_builder.button("secret", "Inside"));
+    EXPECT_FALSE(self.m_builder.collapsibleHeader("hdr_disabled", "Locked", disabledExpanded, disabledOpts));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_TRUE(expanded);
+    EXPECT_FALSE(disabledExpanded);
+    EXPECT_TRUE(self.hasTarget(secretId));
+    EXPECT_EQ(self.m_context.input().focus(), hdrId);
+
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
+    ASSERT_TRUE(self.panel(3u, "panel", Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    EXPECT_FALSE(self.m_builder.collapsibleHeader("hdr", "Details", expanded));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_FALSE(expanded);
+
+    self.press(Key::Enter);
+    ASSERT_TRUE(self.panel(4u, "panel", Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    EXPECT_TRUE(self.m_builder.collapsibleHeader("hdr", "Details", expanded));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_TRUE(expanded);
+}
+
+void VerifyUiScrollAreaAndTabsTests_TabBarNavigatesEnabledTabsByKeyboardAndPointerHandlesClosableTabsAndReconcilesRemovedSelection(mut UiScrollAreaAndTabsTests self){
+    TabBarState state;
+    TabBarOptions opts;
+    opts.width = LayoutSize(LayoutSizePolicy::Fixed, 320.0f);
+    Array<TabBarItem, 4u> tabs;
+    tabs[0u] = TabBarItem(10u, "Alpha", true, false);
+    tabs[1u] = TabBarItem(20u, "Beta", false, true);
+    tabs[2u] = TabBarItem(30u, "Gamma", true, true);
+    tabs[3u] = TabBarItem(40u, "Delta", true, false);
+
+    const WidgetId barId = self.id("tabs", "panel");
+    const WidgetId tabsGroupId = RequireUiWidgetId(barId, s_WidgetPartTabs);
+    const WidgetId closeGroupId = RequireUiWidgetId(barId, s_WidgetPartTabClose);
+    const Expected<WidgetId> gammaPart = TryMakeWidgetPartId(tabsGroupId, 30u);
+    const Expected<WidgetId> gammaClosePart = TryMakeWidgetPartId(closeGroupId, 30u);
+    ASSERT_TRUE(gammaPart.has_value());
+    ASSERT_TRUE(gammaClosePart.has_value());
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r1 = self.m_builder.tabBar("tabs", Span<TabBarItem>(tabs), state, opts);
+    EXPECT_TRUE(r1.valid);
+    EXPECT_TRUE(r1.selectionChanged);
+    EXPECT_EQ(r1.selectedKey, 10u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.hasTarget(gammaPart.value()));
+    EXPECT_TRUE(self.hasTarget(gammaClosePart.value()));
+
+    self.press(Key::Tab);
+    EXPECT_EQ(self.m_context.input().focus(), barId);
+    self.press(Key::Right);
+
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r2 = self.m_builder.tabBar("tabs", Span<TabBarItem>(tabs), state, opts);
+    EXPECT_TRUE(r2.valid);
+    EXPECT_TRUE(r2.selectionChanged);
+    EXPECT_EQ(r2.selectedKey, 30u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+
+    self.press(Key::End);
+    ASSERT_TRUE(self.panel(3u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r3 = self.m_builder.tabBar("tabs", Span<TabBarItem>(tabs), state, opts);
+    EXPECT_EQ(r3.selectedKey, 40u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+
+    const auto closeTarget = self.tryTarget(gammaClosePart.value());
+    ASSERT_TRUE(closeTarget.has_value());
+    self.click(Point(closeTarget.value().rectangle.x + 2.0f, closeTarget.value().rectangle.y + 2.0f));
+    ASSERT_TRUE(self.panel(4u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r4 = self.m_builder.tabBar("tabs", Span<TabBarItem>(tabs), state, opts);
+    EXPECT_TRUE(r4.valid);
+    EXPECT_TRUE(r4.closeRequested);
+    EXPECT_EQ(r4.closeRequestedKey, 30u);
+    EXPECT_EQ(r4.selectedKey, 40u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+
+    const auto tabTarget = self.tryTarget(gammaPart.value());
+    ASSERT_TRUE(tabTarget.has_value());
+    self.click(Point(tabTarget.value().rectangle.x + 4.0f, tabTarget.value().rectangle.y + 4.0f));
+    ASSERT_TRUE(self.panel(5u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r5 = self.m_builder.tabBar("tabs", Span<TabBarItem>(tabs), state, opts);
+    EXPECT_TRUE(r5.valid);
+    EXPECT_TRUE(r5.selectionChanged);
+    EXPECT_TRUE(r5.activated);
+    EXPECT_EQ(r5.selectedKey, 30u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+
+    Array<TabBarItem, 3u> remainingTabs;
+    remainingTabs[0u] = tabs[0u];
+    remainingTabs[1u] = tabs[1u];
+    remainingTabs[2u] = tabs[3u];
+    opts.equalWidths = true;
+    ASSERT_TRUE(self.panel(6u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    const TabBarResult r6 = self.m_builder.tabBar("tabs", Span<TabBarItem>(remainingTabs), state, opts);
+    EXPECT_TRUE(r6.valid);
+    EXPECT_TRUE(r6.selectionChanged);
+    EXPECT_EQ(r6.selectedKey, 10u);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(6u));
+    EXPECT_EQ(state.placement().count, 3u);
+    EXPECT_FLOAT_EQ(state.placement().tabs[0u].rectangle.width, state.placement().tabs[2u].rectangle.width);
+
+    Array<TabBarItem, 2u> invalidDup;
+    invalidDup[0u] = TabBarItem(5u, "A");
+    invalidDup[1u] = TabBarItem(5u, "B");
+    TabBarState invalidState;
+    ASSERT_TRUE(self.panel(7u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    EXPECT_FALSE(self.m_builder.tabBar("bad_tabs", Span<TabBarItem>(invalidDup), invalidState, opts).valid);
+    EXPECT_TRUE(self.m_context.failed());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    ASSERT_TRUE(self.panel(8u, "panel", Rect(10.0f, 10.0f, 360.0f, 200.0f)));
+    EXPECT_TRUE(self.m_builder.tabBar("tabs", Span<TabBarItem>(remainingTabs), state, opts).valid);
+    EXPECT_FALSE(self.m_builder.tabBar("tabs_alias", Span<TabBarItem>(remainingTabs), state, opts).valid);
+    EXPECT_TRUE(self.m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiScrollAreaAndTabsTests, ScrollAreaClipsAndOffsetsChildrenBubblesWheelAndSupportsThumbDragAndTrackPage, VerifyUiScrollAreaAndTabsTests_ScrollAreaClipsAndOffsetsChildrenBubblesWheelAndSupportsThumbDragAndTrackPage)
+NWB_ADHD_GTEST_F(UiScrollAreaAndTabsTests, NestedScrollAreasRouteWheelInnerFirstBubbleWhenInnerFitsAndNeverLeakAcrossOverlappingWindows, VerifyUiScrollAreaAndTabsTests_NestedScrollAreasRouteWheelInnerFirstBubbleWhenInnerFitsAndNeverLeakAcrossOverlappingWindows)
+NWB_ADHD_GTEST_F(UiScrollAreaAndTabsTests, CollapsibleHeaderTogglesByPointerAndKeyboardRespectsDisabledAndSupportsNestedContent, VerifyUiScrollAreaAndTabsTests_CollapsibleHeaderTogglesByPointerAndKeyboardRespectsDisabledAndSupportsNestedContent)
+NWB_ADHD_GTEST_F(UiScrollAreaAndTabsTests, TabBarNavigatesEnabledTabsByKeyboardAndPointerHandlesClosableTabsAndReconcilesRemovedSelection, VerifyUiScrollAreaAndTabsTests_TabBarNavigatesEnabledTabsByKeyboardAndPointerHandlesClosableTabsAndReconcilesRemovedSelection)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

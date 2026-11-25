@@ -1,0 +1,149 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DragDropDefaultThreshold = 4.0f;
+const f32 s_DragDropDefaultBorderThickness = 2.0f;
+const f32 s_DragDropDefaultCornerRadius = 4.0f;
+const f32 s_DragDropDefaultPreviewPaddingX = 8.0f;
+const f32 s_DragDropDefaultPreviewPaddingY = 4.0f;
+const f32 s_DragDropDefaultPreviewOffset = 12.0f;
+const Color s_DragDropDefaultHighlightBorderColor = Color(0.28f, 0.65f, 0.98f, 0.95f);
+const Color s_DragDropDefaultHighlightFillColor = Color(0.28f, 0.65f, 0.98f, 0.16f);
+const Color s_DragDropDefaultPreviewBgColor = Color(0.14f, 0.17f, 0.22f, 0.94f);
+const Color s_DragDropDefaultPreviewBorderColor = Color(0.38f, 0.45f, 0.56f, 0.95f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DragDropPayload{
+    public Name type = s_NameNone;
+    public u64 key = 0u;
+    public Vector<u8> bytes;
+    public String previewLabel;
+}
+
+class DragDropOptions{
+    public f32 dragThreshold = s_DragDropDefaultThreshold;
+    public b8 enabled = true;
+}
+
+class DragDropStyle{
+    public Color highlightBorderColor = s_DragDropDefaultHighlightBorderColor;
+    public Color highlightFillColor = s_DragDropDefaultHighlightFillColor;
+    public Color previewBgColor = s_DragDropDefaultPreviewBgColor;
+    public Color previewBorderColor = s_DragDropDefaultPreviewBorderColor;
+    public Color previewTextColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
+    public f32 highlightBorderThickness = s_DragDropDefaultBorderThickness;
+    public f32 previewCornerRadius = s_DragDropDefaultCornerRadius;
+    public Insets previewPadding = Insets(s_DragDropDefaultPreviewPaddingX, s_DragDropDefaultPreviewPaddingY, s_DragDropDefaultPreviewPaddingX, s_DragDropDefaultPreviewPaddingY);
+    public Point previewOffset = Point(s_DragDropDefaultPreviewOffset, s_DragDropDefaultPreviewOffset);
+}
+
+class DragDropResult{
+    public b8 valid = false;
+    public b8 dragging = false;
+    public b8 hovered = false;
+    public b8 dropped = false;
+    public DragDropPayload payload;
+}
+
+class DragDropState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public b8 m_active = false;
+    public b8 m_pendingDrop = false;
+    public b8 m_dropConsumed = false;
+    public u64 m_dropFrame = 0u;
+    public WidgetId m_sourceWidget;
+    public WidgetId m_hoveredTarget;
+    public Point m_pressOrigin;
+    public Point m_pointerPosition;
+    public Point m_dropPosition;
+    public DragDropPayload m_payload;
+    public Vector<WidgetId> m_targetIds;
+    public Vector<Rect> m_targetRects;
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public b8 isActive()const{ return this.m_active; }
+    public b8 isDraggingType(in Name type)const{
+        if(!this.m_active)
+            return false;
+        return type == s_NameNone || this.m_payload.type == type;
+    }
+    public in DragDropPayload payload()const{ return this.m_payload; }
+    public in WidgetId sourceWidget()const{ return this.m_sourceWidget; }
+
+    public void cancel(){
+        this.m_active = false;
+        this.m_pendingDrop = false;
+        this.m_dropConsumed = false;
+        this.m_sourceWidget = WidgetId();
+        this.m_hoveredTarget = WidgetId();
+        this.m_payload = DragDropPayload();
+        AdvanceNonWrappingRevision(this.m_revision);
+    }
+
+    public void setTargetRect(in WidgetId id, in Rect rect){
+        for(usize idx = 0u; idx < this.m_targetIds.size(); ++idx){
+            if(this.m_targetIds[idx] == id){
+                this.m_targetRects[idx] = rect;
+                return;
+            }
+        }
+        this.m_targetIds.push_back(id);
+        this.m_targetRects.push_back(rect);
+    }
+
+    public Optional<Rect> findTargetRect(in WidgetId id)const{
+        for(usize idx = 0u; idx < this.m_targetIds.size() && idx < this.m_targetRects.size(); ++idx){
+            if(this.m_targetIds[idx] == id)
+                return Optional<Rect>(this.m_targetRects[idx]);
+        }
+        return Optional<Rect>();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidDragDropOptions(in DragDropOptions options){
+    return IsFinite(VectorSingle(options.dragThreshold)) && options.dragThreshold >= 0.0f;
+}
+
+b8 IsValidDragDropStyle(in DragDropStyle style){
+    return IsValidPaintColor(style.highlightBorderColor)
+        && IsValidPaintColor(style.highlightFillColor)
+        && IsValidPaintColor(style.previewBgColor)
+        && IsValidPaintColor(style.previewBorderColor)
+        && IsValidPaintColor(style.previewTextColor)
+        && IsBoundedUiPadding(style.previewPadding)
+        && IsFinite(VectorSingle(style.highlightBorderThickness, style.previewCornerRadius, style.previewOffset.x, style.previewOffset.y))
+        && style.highlightBorderThickness > 0.0f
+        && style.previewCornerRadius >= 0.0f;
+}
+
+b8 DragDistanceExceedsThreshold(in Point origin, in Point current, in f32 threshold){
+    if(!IsFinite(VectorSingle(origin.x, origin.y, current.x, current.y)) || !IsFinite(VectorSingle(threshold)))
+        return false;
+    const VectorSingle delta = VectorSingle(current.x, current.y, 0.0f, 0.0f) - VectorSingle(origin.x, origin.y, 0.0f, 0.0f);
+    return (delta.x * delta.x + delta.y * delta.y) >= (threshold * threshold);
+}
+
+void ApplySkinPaletteToDragDropStyle(in UiSkinPalette palette, mut DragDropStyle style){
+    style.previewTextColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextTooltip);
+    style.previewBorderColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

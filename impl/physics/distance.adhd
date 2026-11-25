@@ -585,22 +585,10 @@ void SolveSimplex4(mut Simplex s){
     const f32 dABCD_B = sign * Vector3Dot(c, Cross(d, a)).x;
     const f32 dABCD_A = sign * Vector3Dot(b, Cross(d, c)).x;
 
-    const f32 testABC = Vector3Dot(VectorSingle(d - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
-    const f32 oriABC = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
-
-    const f32 testABD = Vector3Dot(VectorSingle(c - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-    const f32 oriABD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-
-    const f32 testACD = Vector3Dot(VectorSingle(b - a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-    const f32 oriACD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
-
-    const f32 testBCD = Vector3Dot(VectorSingle(a - b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
-    const f32 oriBCD = Vector3Dot(VectorSingle(-b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
-
-    b8 outABC = (oriABC * testABC) < 0.0f;
-    b8 outABD = (oriABD * testABD) < 0.0f;
-    b8 outACD = (oriACD * testACD) < 0.0f;
-    b8 outBCD = (oriBCD * testBCD) < 0.0f;
+    b8 outABC = (dABCD_D > 0.0f);
+    b8 outABD = (dABCD_C > 0.0f);
+    b8 outACD = (dABCD_B > 0.0f);
+    b8 outBCD = (dABCD_A > 0.0f);
 
     if(Abs(VectorSingle(signDet)).x <= 1.0e-10f){
         outABC = true;
@@ -1438,6 +1426,47 @@ f32 ComputeSweepAngularAngle(in VectorSingle q0, in VectorSingle q1){
     return 2.0f * ACos(VectorSingle(d)).x;
 }
 
+DistanceOutput EvalSweepDistanceAtTime(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in b8 staticA,
+    in VectorSingle fixedPosA,
+    in VectorSingle fixedRotA,
+    in ShapeProxyView proxyB,
+    in Sweep3D sweepB,
+    in b8 staticB,
+    in VectorSingle fixedPosB,
+    in VectorSingle fixedRotB,
+    in f32 t,
+    mut SimplexCache cache
+){
+    VectorSingle posAt = fixedPosA;
+    VectorSingle rotAt = fixedRotA;
+    if(!staticA)
+        EvalSweepTransformValues(VectorSingle(sweepA.c0), VectorSingle(sweepA.c1), VectorSingle(sweepA.q0), VectorSingle(sweepA.q1), VectorSingle(sweepA.localCenter), t, posAt, rotAt);
+    VectorSingle posBt = fixedPosB;
+    VectorSingle rotBt = fixedRotB;
+    if(!staticB)
+        EvalSweepTransformValues(VectorSingle(sweepB.c0), VectorSingle(sweepB.c1), VectorSingle(sweepB.q0), VectorSingle(sweepB.q1), VectorSingle(sweepB.localCenter), t, posBt, rotBt);
+    return ShapeDistanceProxyViews(proxyA, posAt, rotAt, proxyB, posBt, rotBt, false, cache);
+}
+
+TimeOfImpactOutput BuildTimeOfImpactHitFromDistance(
+    in DistanceOutput dist,
+    in f32 radiusA,
+    in f32 radiusB,
+    in f32 t,
+    in u32 flags
+){
+    TimeOfImpactOutput out;
+    const VectorSingle n = dist.normal();
+    const VectorSingle wA = dist.pointA() + n * radiusA;
+    const VectorSingle wB = VectorSingle(dist.pointB) - n * radiusB;
+    out.pointFraction = f32x4((wA + wB) * 0.5f, t);
+    out.normalFlags = f32x3_u32(n.x, n.y, n.z, flags);
+    return out;
+}
+
 TimeOfImpactOutput ComputeTimeOfImpactViewsWithBounds(
     in ShapeProxyView proxyA,
     in Sweep3D sweepA,
@@ -1487,27 +1516,16 @@ TimeOfImpactOutput ComputeTimeOfImpactViewsWithBounds(
     SimplexCache cache;
 
     f32 t1 = 0.0f;
+    f32 lastDist = s_MaxF32;
     for(usize iter = 0u; iter < s_TimeOfImpactMaxIterations; ++iter){
-        VectorSingle posAt = fixedPosA;
-        VectorSingle rotAt = fixedRotA;
-        if(!staticA)
-            EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t1, posAt, rotAt);
-        VectorSingle posBt = fixedPosB;
-        VectorSingle rotBt = fixedRotB;
-        if(!staticB)
-            EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t1, posBt, rotBt);
-        const DistanceOutput dist = ShapeDistanceProxyViews(proxyA, posAt, rotAt, proxyB, posBt, rotBt, false, cache);
+        const DistanceOutput dist = EvalSweepDistanceAtTime(proxyA, sweepA, staticA, fixedPosA, fixedRotA, proxyB, sweepB, staticB, fixedPosB, fixedRotB, t1, cache);
+        lastDist = dist.distance();
 
-        if(dist.distance() <= targetDist + tolerance){
+        if(lastDist <= targetDist + tolerance){
             u32 flags = 1u;
-            if(t1 == 0.0f && (dist.distance() < totalRadius - tolerance || (totalRadius <= tolerance && dist.distance() <= tolerance)))
+            if(t1 == 0.0f && (lastDist < totalRadius - tolerance || (totalRadius <= tolerance && lastDist <= tolerance)))
                 flags |= 2u;
-            const VectorSingle n = dist.normal();
-            const VectorSingle wA = dist.pointA() + n * proxyA.radius;
-            const VectorSingle wB = VectorSingle(dist.pointB) - n * proxyB.radius;
-            out.pointFraction = f32x4((wA + wB) * 0.5f, t1);
-            out.normalFlags = f32x3_u32(n.x, n.y, n.z, flags);
-            return out;
+            return BuildTimeOfImpactHitFromDistance(dist, proxyA.radius, proxyB.radius, t1, flags);
         }
 
         const VectorSingle n = dist.normal();
@@ -1515,7 +1533,7 @@ TimeOfImpactOutput ComputeTimeOfImpactViewsWithBounds(
         if(approach <= 1.0e-6f)
             return out;
 
-        const f32 step = (dist.distance() - targetDist) / approach;
+        const f32 step = (lastDist - targetDist) / approach;
         if(step <= 1.0e-6f){
             t1 = SimdMin(t1 + 0.01f * tMax, tMax);
         }
@@ -1523,24 +1541,33 @@ TimeOfImpactOutput ComputeTimeOfImpactViewsWithBounds(
             t1 += step;
         }
         if(t1 > tMax){
-            VectorSingle endPosA = fixedPosA;
-            VectorSingle endRotA = fixedRotA;
-            if(!staticA)
-                EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, tMax, endPosA, endRotA);
-            VectorSingle endPosB = fixedPosB;
-            VectorSingle endRotB = fixedRotB;
-            if(!staticB)
-                EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, tMax, endPosB, endRotB);
-            const DistanceOutput endDist = ShapeDistanceProxyViews(proxyA, endPosA, endRotA, proxyB, endPosB, endRotB, false, cache);
-            if(endDist.distance() <= targetDist + tolerance){
-                t1 = tMax;
-                const VectorSingle endN = endDist.normal();
-                const VectorSingle wA = endDist.pointA() + endN * proxyA.radius;
-                const VectorSingle wB = VectorSingle(endDist.pointB) - endN * proxyB.radius;
-                out.pointFraction = f32x4((wA + wB) * 0.5f, tMax);
-                out.normalFlags = f32x3_u32(endN.x, endN.y, endN.z, 1u);
-            }
+            const DistanceOutput endDist = EvalSweepDistanceAtTime(proxyA, sweepA, staticA, fixedPosA, fixedRotA, proxyB, sweepB, staticB, fixedPosB, fixedRotB, tMax, cache);
+            if(endDist.distance() <= targetDist + tolerance)
+                return BuildTimeOfImpactHitFromDistance(endDist, proxyA.radius, proxyB.radius, tMax, 1u);
             return out;
+        }
+    }
+
+    if(lastDist < targetDist + 0.05f && t1 < tMax){
+        const DistanceOutput endDist = EvalSweepDistanceAtTime(proxyA, sweepA, staticA, fixedPosA, fixedRotA, proxyB, sweepB, staticB, fixedPosB, fixedRotB, tMax, cache);
+        if(endDist.distance() <= targetDist + tolerance){
+            f32 lo = t1;
+            f32 hi = tMax;
+            DistanceOutput bestDist = endDist;
+            f32 bestT = tMax;
+            for(u32 bi = 0u; bi < 10u; ++bi){
+                const f32 mid = 0.5f * (lo + hi);
+                const DistanceOutput midDist = EvalSweepDistanceAtTime(proxyA, sweepA, staticA, fixedPosA, fixedRotA, proxyB, sweepB, staticB, fixedPosB, fixedRotB, mid, cache);
+                if(midDist.distance() <= targetDist + tolerance){
+                    bestDist = midDist;
+                    bestT = mid;
+                    hi = mid;
+                }
+                else{
+                    lo = mid;
+                }
+            }
+            return BuildTimeOfImpactHitFromDistance(bestDist, proxyA.radius, proxyB.radius, bestT, 1u);
         }
     }
 
@@ -1715,14 +1742,16 @@ VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, i
     return a + ab * v + ac * w;
 }
 
-void PushClosestPointMeshChildrenOrdered(
+void PushClosestPointMeshChildrenOrderedWithSpill(
     in MeshShape mesh,
     in VectorSingle localPoint,
     in f32 bestDistSq,
     in u32 leftIdx,
     in u32 rightIdx,
-    mut Array<u32, 256u> stack,
-    mut u32 stackCount
+    mut Array<u32, 256u> fixedStack,
+    mut u32 fixedCount,
+    mut Vector<u32> overflowStack,
+    mut b8 useOverflow
 ){
     in MeshBvhNode leftNode = mesh.nodes[leftIdx];
     in MeshBvhNode rightNode = mesh.nodes[rightIdx];
@@ -1731,24 +1760,16 @@ void PushClosestPointMeshChildrenOrdered(
     const f32 lDistSq = Vector3LengthSq(VectorSingle(localPoint - lClamped, 0.0f)).x;
     const f32 rDistSq = Vector3LengthSq(VectorSingle(localPoint - rClamped, 0.0f)).x;
     if(lDistSq < rDistSq){
-        if(rDistSq <= bestDistSq && stackCount < 256u){
-            stack[stackCount] = rightIdx;
-            ++stackCount;
-        }
-        if(lDistSq <= bestDistSq && stackCount < 256u){
-            stack[stackCount] = leftIdx;
-            ++stackCount;
-        }
+        if(rDistSq <= bestDistSq)
+            PushBvhNodeWithSpill(rightIdx, fixedStack, fixedCount, overflowStack, useOverflow);
+        if(lDistSq <= bestDistSq)
+            PushBvhNodeWithSpill(leftIdx, fixedStack, fixedCount, overflowStack, useOverflow);
     }
     else{
-        if(lDistSq <= bestDistSq && stackCount < 256u){
-            stack[stackCount] = leftIdx;
-            ++stackCount;
-        }
-        if(rDistSq <= bestDistSq && stackCount < 256u){
-            stack[stackCount] = rightIdx;
-            ++stackCount;
-        }
+        if(lDistSq <= bestDistSq)
+            PushBvhNodeWithSpill(leftIdx, fixedStack, fixedCount, overflowStack, useOverflow);
+        if(rDistSq <= bestDistSq)
+            PushBvhNodeWithSpill(rightIdx, fixedStack, fixedCount, overflowStack, useOverflow);
     }
 }
 
@@ -1760,9 +1781,18 @@ u32 CountClosedMeshRayParityHits(in MeshShape mesh, in VectorSingle localPoint, 
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+        }
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         f32 unusedT = 0.0f;
         if(!AabbRayCastValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localPoint, rayInvDir, rayMask, 1.0f, unusedT))
@@ -1784,16 +1814,8 @@ u32 CountClosedMeshRayParityHits(in MeshShape mesh, in VectorSingle localPoint, 
             }
         }
         else{
-            const u32 leftIdx = node.leftOrFirst();
-            const u32 rightIdx = node.rightOrCount();
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = leftIdx;
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = rightIdx;
-                ++fixedCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), fixedStack, fixedCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), fixedStack, fixedCount, overflowStack, useOverflow);
         }
     }
     return parityHits & 1u;
@@ -1834,9 +1856,18 @@ b8 FindClosestPointOnClosedMesh(
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+        }
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         const VectorSingle boxClamped = Max(VectorSingle(node.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(node.aabbMaxRight, 0.0f)));
         if(Vector3LengthSq(VectorSingle(localPoint - boxClamped, 0.0f)).x > bestDistSq)
@@ -1865,7 +1896,7 @@ b8 FindClosestPointOnClosedMesh(
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            PushClosestPointMeshChildrenOrdered(mesh, localPoint, bestDistSq, leftIdx, rightIdx, fixedStack, fixedCount);
+            PushClosestPointMeshChildrenOrderedWithSpill(mesh, localPoint, bestDistSq, leftIdx, rightIdx, fixedStack, fixedCount, overflowStack, useOverflow);
         }
     }
     if(found)
@@ -1958,10 +1989,24 @@ LocalRayHit RayCastMeshDetailed(
     fixedStack[0u] = 0u;
     fixedStackTMin[0u] = rootTBox;
     u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
-        if(fixedStackTMin[fixedCount] > curMax)
+    Vector<u32> overflowNodes;
+    Vector<f32> overflowTMins;
+    b8 useOverflow = false;
+    while(fixedCount > 0u || (useOverflow && !overflowNodes.empty())){
+        u32 nodeIdx = 0u;
+        f32 nodeTMin = 0.0f;
+        if(useOverflow){
+            nodeIdx = overflowNodes.back();
+            overflowNodes.pop_back();
+            nodeTMin = overflowTMins.back();
+            overflowTMins.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+            nodeTMin = fixedStackTMin[fixedCount];
+        }
+        if(nodeTMin > curMax)
             continue;
         in MeshBvhNode node = mesh.nodes[nodeIdx];
 
@@ -2027,7 +2072,7 @@ LocalRayHit RayCastMeshDetailed(
             f32 tRight = 0.0f;
             const b8 hitRight = AabbRayCastValues(VectorSingle(rightNode.aabbMinLeft, 0.0f) - meshPad, VectorSingle(rightNode.aabbMaxRight, 0.0f) + meshPad, localOrigin, localInvDir, localParallelMask, curMax, tRight);
 
-            PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight);
+            PushRayCastChildrenOrderedWithSpill(leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight, fixedStack, fixedStackTMin, fixedCount, overflowNodes, overflowTMins, useOverflow);
         }
     }
     return best;
@@ -2093,10 +2138,14 @@ LocalRayHit ShapeCastMeshViewDetailed(
         castQueryRot = identRot;
     }
 
+    const b8 singleSided = (mesh.sidedness() == MeshSidedness::SingleSided);
     f32 curMax = maxFraction;
     Array<u32, 256u> fixedStack;
     Array<f32, 256u> fixedStackTMin;
     u32 fixedCount = 0u;
+    Vector<u32> overflowNodes;
+    Vector<f32> overflowTMins;
+    b8 useOverflow = false;
     in MeshBvhNode rootNode = mesh.nodes[0u];
     f32 rootT = 0.0f;
     if(AabbRayCastValues(VectorSingle(rootNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(rootNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, rootT)){
@@ -2105,11 +2154,22 @@ LocalRayHit ShapeCastMeshViewDetailed(
         fixedCount = 1u;
     }
 
-    while(fixedCount > 0u){
-        --fixedCount;
-        if(fixedStackTMin[fixedCount] > curMax)
+    while(fixedCount > 0u || (useOverflow && !overflowNodes.empty())){
+        u32 nodeIdx = 0u;
+        f32 nodeTMin = 0.0f;
+        if(useOverflow){
+            nodeIdx = overflowNodes.back();
+            overflowNodes.pop_back();
+            nodeTMin = overflowTMins.back();
+            overflowTMins.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+            nodeTMin = fixedStackTMin[fixedCount];
+        }
+        if(nodeTMin > curMax)
             continue;
-        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
 
         if((node.aabbMaxRight.w & 0x80000000u) != 0u){
@@ -2120,6 +2180,9 @@ LocalRayHit ShapeCastMeshViewDetailed(
                 const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
                 const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
                 const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                const VectorSingle triN(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
+                if(singleSided && Vector3Dot(triN, localTrans).x > 0.0f && Vector3Dot(triN, VectorSingle(localStartCenter - tv0, 0.0f)).x < -s_LinearSlop)
+                    continue;
                 f32 triT = 0.0f;
                 if(!AabbRayCastValues(Min(tv0, Min(tv1, tv2)) - qStartHalf, Max(tv0, Max(tv1, tv2)) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, triT))
                     continue;
@@ -2130,6 +2193,8 @@ LocalRayHit ShapeCastMeshViewDetailed(
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
                 const LocalRayHit triHit = ShapeCastProxyViews(castQueryProxy, castQueryPos, castQueryRot, localTrans, triView, identPos, identRot, VectorSingle(0.0f), curMax);
                 if(triHit.hit()){
+                    if(singleSided && Vector3Dot(triHit.normal(), triN).x > 0.0f)
+                        continue;
                     const f32 frac = triHit.fraction();
                     if((!best.hit() && frac <= curMax) || frac < curMax || (best.hit() && frac == curMax && ti < outTriangleIndex)){
                         curMax = frac;
@@ -2148,7 +2213,7 @@ LocalRayHit ShapeCastMeshViewDetailed(
             f32 tRight = 0.0f;
             const b8 hitLeft = AabbRayCastValues(VectorSingle(leftNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(leftNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, tLeft);
             const b8 hitRight = AabbRayCastValues(VectorSingle(rightNode.aabbMinLeft, 0.0f) - qStartHalf, VectorSingle(rightNode.aabbMaxRight, 0.0f) + qStartHalf, qStartCenter, localSweepInvDir, localSweepMask, curMax, tRight);
-            PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight);
+            PushRayCastChildrenOrderedWithSpill(leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight, fixedStack, fixedStackTMin, fixedCount, overflowNodes, overflowTMins, useOverflow);
         }
     }
 
@@ -2227,13 +2292,22 @@ LocalRayHit ShapeCastMesh(
     return ShapeCastMeshView(MakeShapeProxyView(queryProxy), queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction);
 }
 
-TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
+TimeOfImpactOutput ComputeMeshTimeOfImpactViewsPrecomputed(
     in ShapeProxyView proxyA,
     in Sweep3D sweepA,
     in MeshShape meshB,
     in Sweep3D sweepB,
     in f32 tMax,
-    in b8 forSensor
+    in b8 forSensor,
+    in f32 angA,
+    in f32 angB,
+    in f32 meshRad,
+    in Array<f32x4, 3u> sampleRelPos,
+    in Array<f32x4, 3u> sampleRelRot,
+    in VectorSingle posBStart,
+    in VectorSingle rotBStart,
+    in VectorSingle relStartPos,
+    in VectorSingle relStartRot
 ){
     TimeOfImpactOutput bestOut;
     if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA) || tMax <= 0.0f)
@@ -2243,60 +2317,15 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
     VectorSingle pMax(0.0f);
     ComputeProxyViewLocalBounds(proxyA, pMin, pMax);
 
-    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
-    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
     const f32 radA = ComputeProxyViewBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
-    const Aabb3D meshLocalBox = meshB.localAabb();
-    VectorSingle meshExt(0.0f);
-    for(u32 mask = 0u; mask < 8u; ++mask){
-        f32 cx = meshLocalBox.lowerBound.x;
-        f32 cy = meshLocalBox.lowerBound.y;
-        f32 cz = meshLocalBox.lowerBound.z;
-        if((mask & 1u) != 0u) cx = meshLocalBox.upperBound.x;
-        if((mask & 2u) != 0u) cy = meshLocalBox.upperBound.y;
-        if((mask & 4u) != 0u) cz = meshLocalBox.upperBound.z;
-        meshExt = Max(meshExt, Abs(VectorSingle(cx, cy, cz, 0.0f) - VectorSingle(sweepB.localCenter)));
-    }
-    const f32 meshRad = Vector3Length(meshExt).x;
-
     VectorSingle queryMin(s_MaxF32);
     VectorSingle queryMax(-s_MaxF32);
-    Array<f32, 3u> sampleTs;
-    sampleTs[0u] = 0.0f;
-    sampleTs[1u] = 0.5f * tMax;
-    sampleTs[2u] = tMax;
-    const VectorSingle cA0 = VectorSingle(sweepA.c0);
-    const VectorSingle cA1 = VectorSingle(sweepA.c1);
-    const VectorSingle qA0 = VectorSingle(sweepA.q0);
-    const VectorSingle qA1 = VectorSingle(sweepA.q1);
-    const VectorSingle lcA = VectorSingle(sweepA.localCenter);
-    const VectorSingle cB0 = VectorSingle(sweepB.c0);
-    const VectorSingle cB1 = VectorSingle(sweepB.c1);
-    const VectorSingle qB0 = VectorSingle(sweepB.q0);
-    const VectorSingle qB1 = VectorSingle(sweepB.q1);
-    const VectorSingle lcB = VectorSingle(sweepB.localCenter);
-    VectorSingle posAt(0.0f);
-    VectorSingle rotAt(0.0f, 0.0f, 0.0f, 1.0f);
-    VectorSingle posBt(0.0f);
-    VectorSingle rotBt(0.0f, 0.0f, 0.0f, 1.0f);
-    VectorSingle relPos(0.0f);
-    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
     for(usize si = 0u; si < 3u; ++si){
-        const f32 t = sampleTs[si];
-        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t, posAt, rotAt);
-        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t, posBt, rotBt);
-        RelativeTransformValues(posBt, rotBt, posAt, rotAt, relPos, relRot);
-        for(u32 mask = 0u; mask < 8u; ++mask){
-            f32 cx = pMin.x;
-            f32 cy = pMin.y;
-            f32 cz = pMin.z;
-            if((mask & 1u) != 0u) cx = pMax.x;
-            if((mask & 2u) != 0u) cy = pMax.y;
-            if((mask & 4u) != 0u) cz = pMax.z;
-            const VectorSingle lp = TransformPointValues(relPos, relRot, VectorSingle(cx, cy, cz, 0.0f));
-            queryMin = Min(queryMin, lp);
-            queryMax = Max(queryMax, lp);
-        }
+        VectorSingle sampleMin(0.0f);
+        VectorSingle sampleMax(0.0f);
+        TransformLocalAabbValuesToWorld(pMin, pMax, 0.0f, VectorSingle(sampleRelPos[si]), VectorSingle(sampleRelRot[si]), sampleMin, sampleMax);
+        queryMin = Min(queryMin, sampleMin);
+        queryMax = Max(queryMax, sampleMax);
     }
 
     const f32 arcPad = angA * radA * 0.25f + angB * meshRad * 0.25f + proxyA.radius + meshB.radius() + s_LinearSlop;
@@ -2306,15 +2335,6 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
     const f32 meshRadius = meshB.radius();
 
     if(meshB.isClosed()){
-        VectorSingle posBStart(0.0f);
-        VectorSingle rotBStart(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle posAStart(0.0f);
-        VectorSingle rotAStart(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle relStartPos(0.0f);
-        VectorSingle relStartRot(0.0f, 0.0f, 0.0f, 1.0f);
-        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, 0.0f, posBStart, rotBStart);
-        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, 0.0f, posAStart, rotAStart);
-        RelativeTransformValues(posBStart, rotBStart, posAStart, rotAStart, relStartPos, relStartRot);
         const VectorSingle startCenterB = TransformPointValues(relStartPos, relStartRot, ComputeProxyViewCenter(proxyA));
         if(IsPointInsideClosedMesh(meshB, startCenterB)){
             VectorSingle closePt(0.0f);
@@ -2347,9 +2367,18 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+        }
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMinPad, queryMaxPad))
             continue;
@@ -2389,19 +2418,89 @@ TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
             }
         }
         else{
-            const u32 leftIdx = node.leftOrFirst();
-            const u32 rightIdx = node.rightOrCount();
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = leftIdx;
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = rightIdx;
-                ++fixedCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), fixedStack, fixedCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), fixedStack, fixedCount, overflowStack, useOverflow);
         }
     }
     return bestOut;
+}
+
+TimeOfImpactOutput ComputeMeshTimeOfImpactViewsInternal(
+    in ShapeProxyView proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax,
+    in b8 forSensor
+){
+    TimeOfImpactOutput emptyOut;
+    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA) || tMax <= 0.0f)
+        return emptyOut;
+
+    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
+    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
+    const Aabb3D meshLocalBox = meshB.localAabb();
+    const VectorSingle lcB = VectorSingle(sweepB.localCenter);
+    const VectorSingle meshExt = Max(
+        Abs(VectorSingle(meshLocalBox.lowerBound) - lcB),
+        Abs(VectorSingle(meshLocalBox.upperBound) - lcB)
+    );
+    const f32 meshRad = Vector3Length(meshExt).x;
+
+    Array<f32x4, 3u> sampleRelPos;
+    Array<f32x4, 3u> sampleRelRot;
+    VectorSingle posBStart(0.0f);
+    VectorSingle rotBStart(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle relStartPos(0.0f);
+    VectorSingle relStartRot(0.0f, 0.0f, 0.0f, 1.0f);
+
+    const VectorSingle cA0 = VectorSingle(sweepA.c0);
+    const VectorSingle cA1 = VectorSingle(sweepA.c1);
+    const VectorSingle qA0 = VectorSingle(sweepA.q0);
+    const VectorSingle qA1 = VectorSingle(sweepA.q1);
+    const VectorSingle lcA = VectorSingle(sweepA.localCenter);
+    const VectorSingle cB0 = VectorSingle(sweepB.c0);
+    const VectorSingle cB1 = VectorSingle(sweepB.c1);
+    const VectorSingle qB0 = VectorSingle(sweepB.q0);
+    const VectorSingle qB1 = VectorSingle(sweepB.q1);
+    VectorSingle posAt(0.0f);
+    VectorSingle rotAt(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle posBt(0.0f);
+    VectorSingle rotBt(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle relPos(0.0f);
+    VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
+    for(usize si = 0u; si < 3u; ++si){
+        const f32 t = 0.5f * cast<f32>(si) * tMax;
+        EvalSweepTransformValues(cA0, cA1, qA0, qA1, lcA, t, posAt, rotAt);
+        EvalSweepTransformValues(cB0, cB1, qB0, qB1, lcB, t, posBt, rotBt);
+        RelativeTransformValues(posBt, rotBt, posAt, rotAt, relPos, relRot);
+        sampleRelPos[si] = f32x4(relPos, 0.0f);
+        sampleRelRot[si] = f32x4(relRot);
+        if(si == 0u){
+            posBStart = posBt;
+            rotBStart = rotBt;
+            relStartPos = relPos;
+            relStartRot = relRot;
+        }
+    }
+
+    return ComputeMeshTimeOfImpactViewsPrecomputed(
+        proxyA,
+        sweepA,
+        meshB,
+        sweepB,
+        tMax,
+        forSensor,
+        angA,
+        angB,
+        meshRad,
+        sampleRelPos,
+        sampleRelRot,
+        posBStart,
+        rotBStart,
+        relStartPos,
+        relStartRot
+    );
 }
 
 TimeOfImpactOutput ComputeMeshTimeOfImpactViews(
@@ -2515,13 +2614,15 @@ LocalRayHit ShapeCastMeshViewRotatedDetailed(
     VectorSingle localEndPos(0.0f);
     VectorSingle localEndRot(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(meshPos, meshRot, endPos, q1, localEndPos, localEndRot);
+    const VectorSingle localStartCenter = TransformPointValues(localStartPos, localStartRot, ComputeProxyViewCenter(queryProxy));
+    const VectorSingle localSweepTrans = Vector3InverseRotate(VectorSingle(translation, 0.0f), meshRot);
+    const b8 singleSided = (mesh.sidedness() == MeshSidedness::SingleSided);
     if(mesh.isClosed()){
-        const VectorSingle startCenter = TransformPointValues(localStartPos, localStartRot, ComputeProxyViewCenter(queryProxy));
-        if(IsPointInsideClosedMesh(mesh, startCenter)){
+        if(IsPointInsideClosedMesh(mesh, localStartCenter)){
             VectorSingle closePt(0.0f);
             VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
             u32 closeTri = 0u;
-            if(FindClosestPointOnClosedMesh(mesh, startCenter, closePt, closeN, closeTri)){
+            if(FindClosestPointOnClosedMesh(mesh, localStartCenter, closePt, closeN, closeTri)){
                 const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, meshRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 best.pointFraction = f32x4(TransformPointValues(meshPos, meshRot, closePt), 0.0f);
                 best.normalHit = f32x3_u32(-worldOut.x, -worldOut.y, -worldOut.z, 1u);
@@ -2563,9 +2664,18 @@ LocalRayHit ShapeCastMeshViewRotatedDetailed(
     Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    while(fixedCount > 0u){
-        --fixedCount;
-        const u32 nodeIdx = fixedStack[fixedCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --fixedCount;
+            nodeIdx = fixedStack[fixedCount];
+        }
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -2577,6 +2687,9 @@ LocalRayHit ShapeCastMeshViewRotatedDetailed(
                 const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
                 const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
                 const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                const VectorSingle triNLocal(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
+                if(singleSided && Vector3Dot(triNLocal, localSweepTrans).x > 0.0f && Vector3Dot(triNLocal, VectorSingle(localStartCenter - tv0, 0.0f)).x < -s_LinearSlop)
+                    continue;
                 if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMin, queryMax))
                     continue;
                 Array<f32x3u, 3u> triPts;
@@ -2586,11 +2699,14 @@ LocalRayHit ShapeCastMeshViewRotatedDetailed(
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRadius);
                 const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(queryProxy, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angSpeedBound);
                 if(toi.hit() && (!best.hit() || toi.fraction() < curMax || (toi.fraction() == curMax && ti < outTriangleIndex))){
+                    const VectorSingle n = toi.normal();
+                    const VectorSingle triNWorld = SafeNormalizeVec3(Vector3Rotate(triNLocal, meshRot), triNLocal);
+                    if(singleSided && Vector3Dot(n, triNWorld).x > 0.0f)
+                        continue;
                     curMax = toi.fraction();
                     outTriangleIndex = ti;
                     const VectorSingle localHit = InverseTransformPointValues(meshPos, meshRot, toi.point());
                     outBarycentrics = ComputeTriangleBarycentrics(localHit, tv0, tv1, tv2);
-                    const VectorSingle n = toi.normal();
                     best.pointFraction = f32x4(toi.point(), curMax);
                     best.normalHit = f32x3_u32(n.x, n.y, n.z, 1u);
                     if(toi.initialOverlap() || curMax <= 0.0f)
@@ -2599,14 +2715,8 @@ LocalRayHit ShapeCastMeshViewRotatedDetailed(
             }
         }
         else{
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = node.leftOrFirst();
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = node.rightOrCount();
-                ++fixedCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), fixedStack, fixedCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), fixedStack, fixedCount, overflowStack, useOverflow);
         }
     }
     return best;
@@ -2749,9 +2859,18 @@ b8 ClosestPointOnMeshAny(
     Array<u32, 256u> stack;
     stack[0u] = 0u;
     u32 stackCount = 1u;
-    while(stackCount > 0u){
-        --stackCount;
-        const u32 nodeIdx = stack[stackCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         const VectorSingle boxClamped = Max(VectorSingle(node.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(node.aabbMaxRight, 0.0f)));
         if(Vector3LengthSq(VectorSingle(localPoint - boxClamped, 0.0f)).x > bestDistSq)
@@ -2778,7 +2897,7 @@ b8 ClosestPointOnMeshAny(
         else{
             const u32 leftIdx = node.leftOrFirst();
             const u32 rightIdx = node.rightOrCount();
-            PushClosestPointMeshChildrenOrdered(mesh, localPoint, bestDistSq, leftIdx, rightIdx, stack, stackCount);
+            PushClosestPointMeshChildrenOrderedWithSpill(mesh, localPoint, bestDistSq, leftIdx, rightIdx, stack, stackCount, overflowStack, useOverflow);
         }
     }
 
@@ -3291,9 +3410,13 @@ VectorSingle ClosestPointOnPlaneLocal(in PlaneShape plane, in VectorSingle local
         const VectorSingle relUV(Vector3Dot(rel, t1).x, Vector3Dot(rel, t2).x, 0.0f, 0.0f);
         const VectorSingle extUV(plane.halfExtent.x, plane.halfExtent.z, 0.0f, 0.0f);
         const VectorSingle clampedUV = Clamp(relUV, -extUV, extUV);
-        if(signedDist <= 0.0f && Vector3LessOrEqual(Abs(relUV), extUV))
+        const f32 plateMinN = -0.05f;
+        if(signedDist <= 0.0f && signedDist >= plateMinN && Vector3LessOrEqual(Abs(relUV), extUV))
             return localPoint;
-        return origin + t1 * clampedUV.x + t2 * clampedUV.y + n * SimdMin(0.0f, signedDist);
+        if(signedDist < plateMinN)
+            outNormal = -n;
+        const f32 clampedN = SimdMax(plateMinN, SimdMin(0.0f, signedDist));
+        return origin + t1 * clampedUV.x + t2 * clampedUV.y + n * clampedN;
     }
     if(signedDist <= 0.0f)
         return localPoint;
@@ -3492,16 +3615,74 @@ LocalRayHit RayCastPlane(in PlaneShape plane, in VectorSingle xfPos, in VectorSi
     const f32 signed0 = Vector3Dot(nLocal, localOrigin).x - offset;
     const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(nLocal, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
 
-    if(signed0 <= 0.0f){
-        if(plane.isFiniteExtent()){
-            VectorSingle t1(0.0f);
-            VectorSingle t2(0.0f);
-            ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
-            const VectorSingle rel0 = VectorSingle(localOrigin - nLocal * offset, 0.0f);
-            const VectorSingle absRel0 = Abs(VectorSingle(Vector3Dot(rel0, t1).x, Vector3Dot(rel0, t2).x, 0.0f, 0.0f));
-            if(absRel0.x > plane.halfExtent.x || absRel0.y > plane.halfExtent.z)
+    if(plane.isFiniteExtent()){
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
+        const f32 hx = plane.halfExtent.x;
+        const f32 hz = plane.halfExtent.z;
+        const f32 plateMinN = -0.05f;
+        const VectorSingle planeOrigin = nLocal * offset;
+        const VectorSingle rel0 = VectorSingle(localOrigin - planeOrigin, 0.0f);
+        const f32 u0 = Vector3Dot(rel0, t1).x;
+        const f32 v0 = Vector3Dot(rel0, t2).x;
+        if(Abs(VectorSingle(u0)).x <= hx && Abs(VectorSingle(v0)).x <= hz && signed0 >= plateMinN && signed0 <= 0.0f){
+            hit.pointFraction = f32x4(origin, 0.0f);
+            hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
+            return hit;
+        }
+        const f32 du = Vector3Dot(localDir, t1).x;
+        const f32 dv = Vector3Dot(localDir, t2).x;
+        const f32 dn = Vector3Dot(localDir, nLocal).x;
+        const VectorSingle sOrigin(u0, signed0, v0, 0.0f);
+        const VectorSingle sDir(du, dn, dv, 0.0f);
+        const VectorSingle sMin(-hx, plateMinN, -hz, 0.0f);
+        const VectorSingle sMax(hx, 0.0f, hz, 0.0f);
+        f32 tMin = 0.0f;
+        f32 tMax = maxFraction;
+        VectorSingle enterLocalN = nLocal;
+        for(u32 axis = 0u; axis < 3u; ++axis){
+            const f32 p = VectorGetByIndex(sOrigin, cast<isize>(axis));
+            const f32 d = VectorGetByIndex(sDir, cast<isize>(axis));
+            const f32 lo = VectorGetByIndex(sMin, cast<isize>(axis));
+            const f32 hi = VectorGetByIndex(sMax, cast<isize>(axis));
+            if(Abs(VectorSingle(d)).x <= 1.0e-8f){
+                if(p < lo || p > hi)
+                    return hit;
+                continue;
+            }
+            const f32 invD = 1.0f / d;
+            f32 tA = (lo - p) * invD;
+            f32 tB = (hi - p) * invD;
+            VectorSingle faceN(0.0f);
+            if(axis == 0u)
+                faceN = -t1;
+            else if(axis == 1u)
+                faceN = -nLocal;
+            else
+                faceN = -t2;
+            if(tA > tB){
+                const f32 tmp = tA;
+                tA = tB;
+                tB = tmp;
+                faceN = -faceN;
+            }
+            if(tA > tMin){
+                tMin = tA;
+                enterLocalN = faceN;
+            }
+            if(tB < tMax)
+                tMax = tB;
+            if(tMin > tMax)
                 return hit;
         }
+        const VectorSingle hitWorldN = SafeNormalizeVec3(Vector3Rotate(enterLocalN, xfRot), worldN);
+        hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * tMin, tMin);
+        hit.normalHit = f32x3_u32(hitWorldN.x, hitWorldN.y, hitWorldN.z, 1u);
+        return hit;
+    }
+
+    if(signed0 <= 0.0f){
         hit.pointFraction = f32x4(origin, 0.0f);
         hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
         return hit;
@@ -3513,17 +3694,6 @@ LocalRayHit RayCastPlane(in PlaneShape plane, in VectorSingle xfPos, in VectorSi
     const f32 t = -signed0 / denom;
     if(t < 0.0f || t > maxFraction)
         return hit;
-
-    if(plane.isFiniteExtent()){
-        VectorSingle t1(0.0f);
-        VectorSingle t2(0.0f);
-        ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
-        const VectorSingle localHit = localOrigin + localDir * t;
-        const VectorSingle rel = VectorSingle(localHit - nLocal * offset, 0.0f);
-        const VectorSingle absRel = Abs(VectorSingle(Vector3Dot(rel, t1).x, Vector3Dot(rel, t2).x, 0.0f, 0.0f));
-        if(absRel.x > plane.halfExtent.x || absRel.y > plane.halfExtent.z)
-            return hit;
-    }
 
     hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * t, t);
     hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);

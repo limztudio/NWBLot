@@ -1,0 +1,54 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorShape::Enum")]
+extern enum CursorShape : u8{
+    Default,
+    TextInput,
+    Hand,
+    Crosshair,
+    ResizeEW,
+    ResizeNS,
+    ResizeNWSE,
+    ResizeNESW,
+    Move,
+    NotAllowed,
+    Wait,
+    Progress,
+    Grab,
+    Grabbing,
+    Hidden,
+    kCount
+};
+
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorBackend::Enum")]
+extern enum CursorBackend : u8{
+    Unsupported,
+    Win32,
+    X11,
+    Wayland
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorCapabilities"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class CursorCapabilities{
+    b8 setShape;
+    b8 hide;
+    CursorBackend backend;
+};
+
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::ICursorService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class ICursorService{
+    CursorCapabilities capabilities()const;
+    b8 isOwnerThread()const;
+    b8 setCursor(in CursorShape shape);
+    CursorShape currentCursor()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

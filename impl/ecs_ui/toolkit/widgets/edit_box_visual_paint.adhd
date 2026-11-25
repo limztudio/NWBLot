@@ -27,6 +27,81 @@ b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedG
     return nextGlyph == glyphs.size();
 }
 
+b8 PaintEditBoxRangeSegments(
+    mut PaintBuilder paint,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in EditBoxRange range,
+    in EditBoxPlacement placement,
+    in TextDirection direction,
+    in Color fillColor
+){
+    u32 firstLine = 0u;
+    u32 endLine = cast<u32>(caretLines.size());
+    if(!textLines.empty() && textLines.size() == caretLines.size() && range.begin <= range.end && range.end <= utf8Text.size()){
+        firstLine = LineForEditCaretByte(textLines, range.begin);
+        endLine = Min(endLine, LineForEditCaretByte(textLines, range.end) + 1u);
+    }
+    for(u32 line = firstLine; line < endLine; ++line){
+        const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, range, line, placement.caret.width, direction);
+        if(!segmentResult.has_value())
+            return false;
+        Rect segment = segmentResult.value();
+        if(segment.width > 0.0f){
+            OffsetEditBoxSegmentOrigin(placement.textOrigin, segment);
+            paint.fillRect(segment, fillColor);
+        }
+    }
+    return true;
+}
+
+b8 PaintEditBoxPreeditUnderlineRange(
+    mut PaintBuilder paint,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in EditBoxRange range,
+    in EditBoxPlacement placement,
+    in TextDirection direction,
+    in Color underlineColor,
+    in f32 thickness,
+    in b8 dashed
+){
+    u32 firstPreeditLine = 0u;
+    u32 endPreeditLine = cast<u32>(caretLines.size());
+    if(!textLines.empty() && textLines.size() == caretLines.size() && range.begin <= range.end && range.end <= utf8Text.size()){
+        firstPreeditLine = LineForEditCaretByte(textLines, range.begin);
+        endPreeditLine = Min(endPreeditLine, LineForEditCaretByte(textLines, range.end) + 1u);
+    }
+    for(u32 line = firstPreeditLine; line < endPreeditLine; ++line){
+        const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, range, line, placement.caret.width, direction);
+        if(!segmentResult.has_value())
+            return false;
+        Rect segment = segmentResult.value();
+        if(segment.width > 0.0f){
+            PlaceEditPreeditUnderline(placement.textOrigin, thickness, segment);
+            if(dashed){
+                PaintLineStyle lineStyle;
+                lineStyle.thickness = segment.height;
+                lineStyle.cap = PaintLineCap::Butt;
+                lineStyle.dashLength = 3.0f * placement.caret.width;
+                lineStyle.gapLength = 2.0f * placement.caret.width;
+                const f32 midY = segment.y + segment.height * 0.5f;
+                paint.drawLine(Point(segment.x, midY), Point(segment.x + segment.width, midY), lineStyle, underlineColor);
+            }
+            else{
+                paint.fillRect(segment, underlineColor);
+            }
+        }
+    }
+    return true;
+}
+
 b8 PaintEditBoxViewVisual(
     mut TextService text,
     mut PaintBuilder paint,
@@ -39,10 +114,12 @@ b8 PaintEditBoxViewVisual(
     in Span<EditCaretLine> caretLines,
     in EditBoxRange selectionRange,
     in EditBoxRange preeditRange,
+    in Span<EditPreeditClause> preeditClauses,
     in b8 composing,
     in EditBoxPlacement placement,
     in EditBoxStyle style,
-    in EditBoxPaintFlags flags
+    in EditBoxPaintFlags flags,
+    in Optional<in TextLayout> placeholder
 ){
     if(!IsValidEditBoxPaintStyle(style))
         return false;
@@ -59,24 +136,20 @@ b8 PaintEditBoxViewVisual(
         if(flags.focused && flags.enabled)
             selectionColor = style.selection;
         if(selectionRange.begin == selectionRange.end)
-            painted = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, placement.caret.width).has_value();
-        else{
-            u32 firstLine = 0u;
-            u32 endLine = cast<u32>(caretLines.size());
-            if(!textLines.empty() && textLines.size() == caretLines.size() && selectionRange.begin <= selectionRange.end && selectionRange.end <= utf8Text.size()){
-                firstLine = LineForEditCaretByte(textLines, selectionRange.begin);
-                endLine = Min(endLine, LineForEditCaretByte(textLines, selectionRange.end) + 1u);
-            }
-            for(u32 line = firstLine; line < endLine; ++line){
-                const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, line, placement.caret.width);
-                if(!segmentResult.has_value()){
+            painted = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, placement.caret.width, layout.direction()).has_value();
+        else
+            painted = PaintEditBoxRangeSegments(paint, utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, placement, layout.direction(), selectionColor);
+        if(painted && composing && flags.focused && flags.enabled && !preeditClauses.empty()){
+            const Color highlightColor = Color(style.preeditTarget.r, style.preeditTarget.g, style.preeditTarget.b, style.preeditTarget.a * 0.25f);
+            for(in EditPreeditClause clause : preeditClauses){
+                if(clause.style != EditPreeditClauseStyle::Selected)
+                    continue;
+                EditBoxRange clauseRange;
+                clauseRange.begin = clause.beginByte;
+                clauseRange.end = clause.endByte;
+                if(!PaintEditBoxRangeSegments(paint, utf8Text, textLines, clusters, boundaries, caretLines, clauseRange, placement, layout.direction(), highlightColor)){
                     painted = false;
                     break;
-                }
-                Rect segment = segmentResult.value();
-                if(segment.width > 0.0f){
-                    OffsetEditBoxSegmentOrigin(placement.textOrigin, segment);
-                    paint.fillRect(segment, selectionColor);
                 }
             }
         }
@@ -84,24 +157,37 @@ b8 PaintEditBoxViewVisual(
         if(flags.enabled)
             activeTextColor = style.text;
         painted = painted && text.paint(paint, layout, placement.textOrigin, activeTextColor);
+        if(painted && utf8Text.empty() && !composing && placeholder.has_value()){
+            Color placeholderColor = style.disabledText;
+            if(flags.enabled)
+                placeholderColor = style.placeholderText;
+            painted = text.paint(paint, placeholder.value(), placement.textOrigin, placeholderColor);
+        }
     }
     if(painted && composing && flags.focused && flags.enabled){
-        u32 firstPreeditLine = 0u;
-        u32 endPreeditLine = cast<u32>(caretLines.size());
-        if(!textLines.empty() && textLines.size() == caretLines.size() && preeditRange.begin <= preeditRange.end && preeditRange.end <= utf8Text.size()){
-            firstPreeditLine = LineForEditCaretByte(textLines, preeditRange.begin);
-            endPreeditLine = Min(endPreeditLine, LineForEditCaretByte(textLines, preeditRange.end) + 1u);
+        if(preeditClauses.empty()){
+            painted = PaintEditBoxPreeditUnderlineRange(paint, utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, placement, layout.direction(), style.preedit, placement.caret.width, false);
         }
-        for(u32 line = firstPreeditLine; line < endPreeditLine; ++line){
-            const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, line, placement.caret.width);
-            if(!segmentResult.has_value()){
-                painted = false;
-                break;
-            }
-            Rect segment = segmentResult.value();
-            if(segment.width > 0.0f){
-                PlaceEditPreeditUnderline(placement.textOrigin, placement.caret.width, segment);
-                paint.fillRect(segment, style.preedit);
+        else{
+            for(in EditPreeditClause clause : preeditClauses){
+                EditBoxRange clauseRange;
+                clauseRange.begin = clause.beginByte;
+                clauseRange.end = clause.endByte;
+                Color clauseColor = style.preedit;
+                f32 clauseThickness = placement.caret.width;
+                b8 dashed = false;
+                if(clause.style == EditPreeditClauseStyle::Raw)
+                    dashed = true;
+                else if(clause.style == EditPreeditClauseStyle::Converted)
+                    clauseColor = style.preeditConverted;
+                else{
+                    clauseColor = style.preeditTarget;
+                    clauseThickness = placement.caret.width * 2.0f;
+                }
+                if(!PaintEditBoxPreeditUnderlineRange(paint, utf8Text, textLines, clusters, boundaries, caretLines, clauseRange, placement, layout.direction(), clauseColor, clauseThickness, dashed)){
+                    painted = false;
+                    break;
+                }
             }
         }
     }
@@ -118,7 +204,7 @@ TextLayoutStatus PrepareEditBoxShapeRequest(
     in EditTextMode textMode,
     mut ShapeRequest inOutRequest
 ){
-    if(revision == 0u || inOutRequest.direction != TextDirection::LeftToRight)
+    if(revision == 0u)
         return TextLayoutStatus::InvalidParameters;
     inOutRequest.text = displayText;
     return ValidateTextRequest(inOutRequest, textMode == EditTextMode::Multiline);

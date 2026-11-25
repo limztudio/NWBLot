@@ -11,6 +11,8 @@
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tab_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_area.adhd>
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/paint.adhd>
 #include <impl/ecs_ui/toolkit/text/service.adhd>
@@ -219,7 +221,10 @@ class ControlStyleMetrics{
         const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
         if(!trackMinimum.has_value() || !normalMinimum.has_value())
             return MakeUnexpected(Failure());
-        inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().y);
+        if(options.orientation == SliderOrientation::Vertical)
+            inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().x);
+        else
+            inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().y);
         const VectorSingle extent = Max(VectorSingle(inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y, inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y), VectorSingle(normalMinimum.value().x, normalMinimum.value().y, normalMinimum.value().x, normalMinimum.value().y));
         Point thumbExtent = Point(extent.x, extent.y);
         if(
@@ -233,10 +238,18 @@ class ControlStyleMetrics{
         if(!metrics.has_value())
             return MakeUnexpected(Failure());
         SliderMetrics resolvedMetrics = metrics.value();
-        const Expected<f32> contentWidth = TryResolveSliderTrackContentWidth(resolvedMetrics, trackMinimum.value().x);
-        if(!contentWidth.has_value())
-            return MakeUnexpected(Failure());
-        resolvedMetrics.contentSize.x = contentWidth.value();
+        if(options.orientation == SliderOrientation::Vertical){
+            const Expected<f32> contentHeight = TryResolveSliderTrackContentHeight(resolvedMetrics, trackMinimum.value().y);
+            if(!contentHeight.has_value())
+                return MakeUnexpected(Failure());
+            resolvedMetrics.contentSize.y = contentHeight.value();
+        }
+        else{
+            const Expected<f32> contentWidth = TryResolveSliderTrackContentWidth(resolvedMetrics, trackMinimum.value().x);
+            if(!contentWidth.has_value())
+                return MakeUnexpected(Failure());
+            resolvedMetrics.contentSize.x = contentWidth.value();
+        }
         return resolvedMetrics;
     }
 
@@ -295,16 +308,124 @@ class ControlStyleMetrics{
         UiSkinRegion collapse;
         if(collapseResult.has_value())
             collapse = collapseResult.value();
+        const Expected<UiSkinRegion> closeResult = skin.tryFindRegion(style.windowClose);
+        if(options.closable && !closeResult.has_value() && !skin.hasRegion(style.white))
+            return MakeUnexpected(Failure());
+        UiSkinRegion close;
+        if(closeResult.has_value())
+            close = closeResult.value();
         const Expected<UiSkinRegion> resizeResult = skin.tryFindRegion(style.windowResize);
         if(options.resizable && !resizeResult.has_value() && !skin.hasRegion(style.white))
             return MakeUnexpected(Failure());
         UiSkinRegion resize;
         if(resizeResult.has_value())
             resize = resizeResult.value();
-        const Expected<WindowMetrics> metrics = MeasureWindow(frame.value(), header.value(), collapse, resize, style, options, titleExtent, skin.referenceDensity());
+        const Expected<WindowMetrics> metrics = MeasureWindow(frame.value(), header.value(), collapse, close, resize, style, options, titleExtent, skin.referenceDensity());
         if(!metrics.has_value())
             return MakeUnexpected(Failure());
         return metrics.value();
+    }
+
+    public b8 collapsibleHeaderMetrics(
+        in UiSkin skin,
+        in WidgetStyle style,
+        mut Point outMinimum,
+        mut Insets outPadding,
+        mut f32 outIndicatorExtent
+    )const{
+        if(!IsFinite(VectorSingle(style.headerIndicatorExtent, style.gap, 0.0f, 0.0f)) || style.headerIndicatorExtent <= 0.0f || style.gap < 0.0f)
+            return false;
+        Optional<in UiSkinRegion> base = TryResolveSelectableStateRegion(skin, style.header, style.windowTitle);
+        if(!base.has_value())
+            base = TryResolveSelectableStateRegion(skin, style.button, style.button);
+        if(!base.has_value())
+            return false;
+        Array<Name, 4u> names;
+        names[0u] = style.header;
+        names[1u] = style.headerHover;
+        names[2u] = style.headerPressed;
+        names[3u] = style.headerDisabled;
+        for(in Name name : names){
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, base.value().name);
+            if(found.has_value())
+                AccumulateButtonRegionMetrics(found.value(), outMinimum, outPadding);
+        }
+        f32 indicatorExtent = style.headerIndicatorExtent;
+        const Expected<UiSkinRegion> indicator = skin.tryFindRegion(style.headerIndicator);
+        if(indicator.has_value())
+            indicatorExtent = ResolveUiSkinSquareExtent(indicatorExtent, indicator.value());
+        else{
+            const Expected<UiSkinRegion> collapse = skin.tryFindRegion(style.windowCollapse);
+            if(collapse.has_value())
+                indicatorExtent = ResolveUiSkinSquareExtent(indicatorExtent, collapse.value());
+        }
+        if(!IsFinite(VectorSingle(indicatorExtent)) || indicatorExtent <= 0.0f)
+            return false;
+        outIndicatorExtent = indicatorExtent;
+        return true;
+    }
+
+    public Expected<TabBarMetrics> tabBarMetrics(
+        in UiSkin skin,
+        in TabBarStyle style,
+        in Span<TabBarItem> tabs,
+        in Span<f32> labelWidths,
+        in f32 maxLabelHeight,
+        in TabBarOptions options
+    )const{
+        if(
+            !IsValidTabBarOptions(options)
+            || !IsValidTabBarStyle(style)
+            || tabs.size() != labelWidths.size()
+            || !IsFinite(VectorSingle(maxLabelHeight))
+            || maxLabelHeight < 0.0f
+        )
+            return MakeUnexpected(Failure());
+        const Optional<in UiSkinRegion> base = TryResolveSelectableStateRegion(skin, style.normal, style.fallback);
+        if(!base.has_value())
+            return MakeUnexpected(Failure());
+        const Optional<in UiSkinRegion> trackRegion = TryResolveSelectableStateRegion(skin, style.track, style.trackFallback);
+        if(!trackRegion.has_value())
+            return MakeUnexpected(Failure());
+        Point tabMinimum;
+        Insets padding = style.tabPadding;
+        Array<Name, 5u> names;
+        names[0u] = style.normal;
+        names[1u] = style.hover;
+        names[2u] = style.active;
+        names[3u] = style.pressed;
+        names[4u] = style.disabled;
+        for(in Name name : names){
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, base.value().name);
+            if(found.has_value())
+                AccumulateButtonRegionMetrics(found.value(), tabMinimum, padding);
+        }
+        TabBarMetrics metrics;
+        metrics.padding = padding;
+        metrics.tabMinimum = tabMinimum;
+        metrics.trackThickness = trackRegion.value().minimumHeight;
+        const f64 padX = cast<f64>(padding.left) + cast<f64>(padding.right);
+        const f64 padY = cast<f64>(padding.top) + cast<f64>(padding.bottom);
+        f64 closeBoxH = 0.0;
+        f64 totalWidth = 0.0;
+        for(usize index = 0u; index < tabs.size(); ++index){
+            f64 closeWidth = 0.0;
+            if(tabs[index].closable && style.closeExtent > 0.0f){
+                closeWidth = cast<f64>(style.closeGap) + cast<f64>(style.closeExtent);
+                closeBoxH = UiSimdMaxF64(closeBoxH, cast<f64>(style.closeExtent));
+            }
+            const f64 natural = padX + cast<f64>(labelWidths[index]) + closeWidth;
+            const f64 minTab = UiSimdMaxF64(cast<f64>(tabMinimum.x), cast<f64>(style.minimumTabWidth));
+            totalWidth += UiSimdMaxF64(natural, minTab);
+            if(index > 0u)
+                totalWidth += cast<f64>(style.tabGap);
+        }
+        const f64 contentMinH = UiSimdMaxF64(cast<f64>(maxLabelHeight), closeBoxH) + padY;
+        const f64 height = UiSimdMaxF64(cast<f64>(tabMinimum.y), UiSimdMaxF64(contentMinH, cast<f64>(style.activeIndicatorHeight)));
+        if(totalWidth > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
+            return MakeUnexpected(Failure());
+        metrics.contentSize = Point(cast<f32>(totalWidth), cast<f32>(height));
+        return metrics;
     }
 };
 

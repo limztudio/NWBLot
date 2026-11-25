@@ -24,29 +24,155 @@ class ShapedRun{
     public FontMetrics metrics = FontMetrics();
 }
 
+class TabShapedSegment{
+    public u32 beginGlyph = 0u;
+    public u32 endGlyph = 0u;
+    public u32 tabByte = 0u;
+    public u32 tabGlyphId = 0u;
+    public f32 tabAdvance = 0.0f;
+    public b8 isTab = false;
+}
+
 class TextShaper : ITextShaper{
     private SharedPool m_pool = SharedPool();
     private Vector<SharedFontFace> m_fonts;
+    private Vector<FontDescriptor> m_descriptors;
+    private Name m_defaultFamily = s_NameNone;
     private Vector<RawShapedGlyph> m_primary;
     private Vector<RawShapedGlyph> m_fallback;
     private Vector<TextFontSpan> m_spans;
+
+    public void setDefaultFamily(in Name family){ this.m_defaultFamily = family; }
+    public Name defaultFamily()const{ return this.m_defaultFamily; }
+    public usize fontCount()const{ return this.m_fonts.size(); }
+
+    public Optional<SharedFontFace> resolveFace(in FontDescriptor descriptor)const{
+        if(this.m_fonts.empty())
+            return Optional<SharedFontFace>();
+        const usize idx = ResolveBestFontDescriptorIndex(Span<FontDescriptor>(this.m_descriptors), this.m_defaultFamily, descriptor);
+        if(idx >= this.m_fonts.size())
+            return Optional<SharedFontFace>();
+        return Optional<SharedFontFace>(this.m_fonts[idx]);
+    }
+
+    [cpp_unwind]
+    public b8 registerFont(in FontSource source){
+        if(this.m_fonts.size() >= s_TextMaxFontSources)
+            return false;
+        if(!HasValidTextFontSourceMetadata<Font>(source.identity, source.generation) || !source.font.validatePayload() || !IsValidFontDescriptor(source.descriptor))
+            return false;
+        Expected<SharedFontFace> face = MakeFontFace(this.m_pool, source);
+        if(!face.has_value() || !face.value().deref().valid())
+            return false;
+        this.m_fonts.push_back(face.value());
+        this.m_descriptors.push_back(source.descriptor);
+        return true;
+    }
 
     [cpp_unwind]
     public b8 setFonts(in Span<FontSource> sources){
         if(!IsValidTextFontSourceCount(sources.size()))
             return false;
         Vector<SharedFontFace> fonts;
+        Vector<FontDescriptor> descriptors;
         fonts.reserve(sources.size());
+        descriptors.reserve(sources.size());
         for(in FontSource source : sources){
-            if(!HasValidTextFontSourceMetadata<Font>(source.identity, source.generation) || !source.font.validatePayload())
+            if(!HasValidTextFontSourceMetadata<Font>(source.identity, source.generation) || !source.font.validatePayload() || !IsValidFontDescriptor(source.descriptor))
                 return false;
             Expected<SharedFontFace> face = MakeFontFace(this.m_pool, source);
             if(!face.has_value() || !face.value().deref().valid())
                 return false;
             fonts.push_back(face.value());
+            descriptors.push_back(source.descriptor);
         }
         this.m_fonts = fonts;
+        this.m_descriptors = descriptors;
         return true;
+    }
+
+    [cpp_unwind]
+    private TextLayoutStatus shapeSegmentInto(in ShapeRequest request, in usize primaryIndex, in u32 segBegin, in u32 segEnd, mut FontMetrics inOutMetrics, mut Vector<ShapedGlyph> outGlyphs){
+        if(segBegin >= segEnd)
+            return TextLayoutStatus::Success;
+        const usize segGlyphStart = outGlyphs.size();
+        if(!this.m_fonts[primaryIndex].deref().shape(request, segBegin, segEnd, this.m_primary))
+            return TextLayoutStatus::FontFailure;
+        b8 hasMissingGlyph = false;
+        for(in RawShapedGlyph glyph : this.m_primary){
+            if(glyph.glyphId == 0u){
+                hasMissingGlyph = true;
+                break;
+            }
+        }
+        if(!hasMissingGlyph){
+            AppendRawShapedGlyphs<SharedFontFace>(this.m_fonts[primaryIndex], Span<RawShapedGlyph>(this.m_primary), 0u, this.m_primary.size(), outGlyphs);
+        }
+        else{
+            this.m_spans.clear();
+            this.m_spans.reserve(this.m_primary.size());
+            usize begin = 0u;
+            while(begin < this.m_primary.size()){
+                const usize end = FindClusterEnd(Span<RawShapedGlyph>(this.m_primary), begin);
+                TextFontSpan span = MakeInitialTextClusterSpan(primaryIndex, begin, end, this.m_primary[begin]);
+                if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_primary), begin, end)){
+                    span.fontIndex = this.m_fonts.size();
+                    for(usize fontIndex = 0u; fontIndex < this.m_fonts.size(); ++fontIndex){
+                        if(fontIndex == primaryIndex)
+                            continue;
+                        if(!this.m_fonts[fontIndex].deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
+                            return TextLayoutStatus::FontFailure;
+                        if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
+                            continue;
+                        span.fontIndex = fontIndex;
+                        break;
+                    }
+                    if(span.fontIndex == this.m_fonts.size())
+                        span.fontIndex = primaryIndex;
+                }
+                AppendOrMergeTextFontSpan(span, this.m_spans);
+                begin = end;
+            }
+            for(in TextFontSpan span : this.m_spans){
+                in SharedFontFace face = this.m_fonts[span.fontIndex];
+                if(span.fontIndex == primaryIndex){
+                    AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_primary), span.glyphBegin, span.glyphEnd, outGlyphs);
+                    continue;
+                }
+                if(!face.deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
+                    return TextLayoutStatus::FontFailure;
+                if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size())){
+                    AppendRawShapedGlyphs<SharedFontFace>(this.m_fonts[primaryIndex], Span<RawShapedGlyph>(this.m_primary), span.glyphBegin, span.glyphEnd, outGlyphs);
+                    continue;
+                }
+                const Expected<FontMetrics> metrics = face.deref().metrics(request.fontSize);
+                if(!metrics.has_value())
+                    return TextLayoutStatus::FontFailure;
+                inOutMetrics = MaxFontMetrics(inOutMetrics, metrics.value());
+                AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size(), outGlyphs);
+            }
+        }
+        if(request.wordSpacing != 0.0f || request.letterSpacing != 0.0f){
+            usize cBegin = segGlyphStart;
+            while(cBegin < outGlyphs.size()){
+                usize cEnd = cBegin + 1u;
+                while(cEnd < outGlyphs.size() && outGlyphs[cEnd].byteBegin == outGlyphs[cBegin].byteBegin)
+                    ++cEnd;
+                const u32 cb = outGlyphs[cBegin].byteBegin;
+                const u32 ce = outGlyphs[cBegin].byteEnd;
+                f32 delta = 0.0f;
+                if(request.wordSpacing != 0.0f && ce - cb == 1u && cast<usize>(cb) < request.text.size() && request.text[cast<usize>(cb)] == ' ')
+                    delta += request.wordSpacing;
+                if(request.letterSpacing != 0.0f && cEnd < outGlyphs.size())
+                    delta += request.letterSpacing;
+                if(delta != 0.0f){
+                    mut ShapedGlyph adjusted = outGlyphs[cEnd - 1u];
+                    adjusted.advance.x = UiSimdMax(0.0f, adjusted.advance.x + delta);
+                }
+                cBegin = cEnd;
+            }
+        }
+        return TextLayoutStatus::Success;
     }
 
     [cpp_unwind]
@@ -57,59 +183,114 @@ class TextShaper : ITextShaper{
             return validation;
         if(this.m_fonts.empty())
             return TextLayoutStatus::FontFailure;
-        const Expected<FontMetrics> primaryMetrics = this.m_fonts[0u].deref().metrics(request.fontSize);
-        if(!primaryMetrics.has_value() || !this.m_fonts[0u].deref().shape(request, 0u, cast<u32>(request.text.size()), this.m_primary))
+        const usize primaryIndex = ResolveBestFontDescriptorIndex(Span<FontDescriptor>(this.m_descriptors), this.m_defaultFamily, request.font);
+        const Expected<FontMetrics> primaryMetrics = this.m_fonts[primaryIndex].deref().metrics(request.fontSize);
+        if(!primaryMetrics.has_value())
             return TextLayoutStatus::FontFailure;
         outRun.metrics = primaryMetrics.value();
-        outRun.glyphs.reserve(this.m_primary.size());
-        b8 hasMissingGlyph = false;
-        for(in RawShapedGlyph glyph : this.m_primary){
-            if(glyph.glyphId == 0u){
-                hasMissingGlyph = true;
+        outRun.glyphs.reserve(request.text.size());
+        b8 hasTab = false;
+        for(usize i = 0u; i < request.text.size(); ++i){
+            if(request.text[i] == '\t'){
+                hasTab = true;
                 break;
             }
         }
-        if(!hasMissingGlyph){
-            AppendRawShapedGlyphs<SharedFontFace>(this.m_fonts[0u], Span<RawShapedGlyph>(this.m_primary), 0u, this.m_primary.size(), outRun.glyphs);
-            return TextLayoutStatus::Success;
+        if(!hasTab)
+            return this.shapeSegmentInto(request, primaryIndex, 0u, cast<u32>(request.text.size()), outRun.metrics, outRun.glyphs);
+
+        ShapeRequest spaceRequest;
+        spaceRequest.text = " ";
+        spaceRequest.language = request.language;
+        spaceRequest.fontSize = request.fontSize;
+        spaceRequest.scriptTag = request.scriptTag;
+        spaceRequest.direction = TextDirection::LeftToRight;
+        f32 spaceAdvance = request.fontSize * 0.5f;
+        u32 spaceGlyphId = 0u;
+        if(this.m_fonts[primaryIndex].deref().shape(spaceRequest, 0u, 1u, this.m_fallback) && !this.m_fallback.empty()){
+            spaceGlyphId = this.m_fallback[0u].glyphId;
+            if(this.m_fallback[0u].advance.x > 0.0f)
+                spaceAdvance = this.m_fallback[0u].advance.x;
         }
-        this.m_spans.clear();
-        this.m_spans.reserve(this.m_primary.size());
-        usize begin = 0u;
-        while(begin < this.m_primary.size()){
-            const usize end = FindClusterEnd(Span<RawShapedGlyph>(this.m_primary), begin);
-            TextFontSpan span = MakeInitialTextClusterSpan(begin, end, this.m_primary[begin]);
-            if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_primary), begin, end)){
-                span.fontIndex = this.m_fonts.size();
-                for(usize fontIndex = 1u; fontIndex < this.m_fonts.size(); ++fontIndex){
-                    if(!this.m_fonts[fontIndex].deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
-                        return TextLayoutStatus::FontFailure;
-                    if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
-                        continue;
-                    span.fontIndex = fontIndex;
-                    break;
-                }
-                if(span.fontIndex == this.m_fonts.size())
-                    return TextLayoutStatus::MissingGlyph;
-            }
-            AppendOrMergeTextFontSpan(span, this.m_spans);
-            begin = end;
-        }
-        for(in TextFontSpan span : this.m_spans){
-            in SharedFontFace face = this.m_fonts[span.fontIndex];
-            if(span.fontIndex == 0u){
-                AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_primary), span.glyphBegin, span.glyphEnd, outRun.glyphs);
+        const f64 tabStopWidth = cast<f64>(spaceAdvance) * cast<f64>(request.tabStopSpaces);
+        Vector<ShapedGlyph> tempGlyphs;
+        tempGlyphs.reserve(request.text.size());
+        Vector<TabShapedSegment> segments;
+        f64 penX = 0.0;
+        u32 pos = 0u;
+        const u32 len = cast<u32>(request.text.size());
+        while(pos < len){
+            if(request.text[cast<usize>(pos)] == '\t'){
+                const f64 ratio = (penX / tabStopWidth) + 1.0e-4;
+                const f64 nextStop = (VectorDoubleFloor(VectorDouble(ratio)).x + 1.0) * tabStopWidth;
+                const f64 tabAdv = UiSimdMaxF64(0.0, nextStop - penX);
+                penX = nextStop;
+                TabShapedSegment tabSeg;
+                tabSeg.tabByte = pos;
+                tabSeg.tabGlyphId = spaceGlyphId;
+                tabSeg.tabAdvance = cast<f32>(tabAdv);
+                tabSeg.isTab = true;
+                segments.push_back(tabSeg);
+                ++pos;
                 continue;
             }
-            if(!face.deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
-                return TextLayoutStatus::FontFailure;
-            if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
-                return TextLayoutStatus::MissingGlyph;
-            const Expected<FontMetrics> metrics = face.deref().metrics(request.fontSize);
-            if(!metrics.has_value())
-                return TextLayoutStatus::FontFailure;
-            outRun.metrics = MaxFontMetrics(outRun.metrics, metrics.value());
-            AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size(), outRun.glyphs);
+            u32 segEnd = pos;
+            while(segEnd < len && request.text[cast<usize>(segEnd)] != '\t')
+                ++segEnd;
+            const u32 beginGlyph = cast<u32>(tempGlyphs.size());
+            const TextLayoutStatus segStatus = this.shapeSegmentInto(request, primaryIndex, pos, segEnd, outRun.metrics, tempGlyphs);
+            if(segStatus != TextLayoutStatus::Success)
+                return segStatus;
+            const u32 endGlyph = cast<u32>(tempGlyphs.size());
+            for(u32 gi = beginGlyph; gi < endGlyph; ++gi)
+                penX += cast<f64>(tempGlyphs[cast<usize>(gi)].advance.x);
+            TabShapedSegment textSeg;
+            textSeg.beginGlyph = beginGlyph;
+            textSeg.endGlyph = endGlyph;
+            textSeg.isTab = false;
+            segments.push_back(textSeg);
+            pos = segEnd;
+        }
+        if(request.direction == TextDirection::LeftToRight){
+            for(in TabShapedSegment seg : segments){
+                if(seg.isTab){
+                    outRun.glyphs.push_back(ShapedGlyph(
+                        this.m_fonts[primaryIndex],
+                        seg.tabGlyphId,
+                        seg.tabByte,
+                        seg.tabByte + 1u,
+                        Point(),
+                        Point(seg.tabAdvance, 0.0f),
+                        Rect(),
+                        GlyphCoverageBounds(Rect(), true)
+                    ));
+                }
+                else{
+                    for(u32 gi = seg.beginGlyph; gi < seg.endGlyph; ++gi)
+                        outRun.glyphs.push_back(tempGlyphs[cast<usize>(gi)]);
+                }
+            }
+        }
+        else{
+            for(usize reverse = segments.size(); reverse > 0u; --reverse){
+                in TabShapedSegment seg = segments[reverse - 1u];
+                if(seg.isTab){
+                    outRun.glyphs.push_back(ShapedGlyph(
+                        this.m_fonts[primaryIndex],
+                        seg.tabGlyphId,
+                        seg.tabByte,
+                        seg.tabByte + 1u,
+                        Point(),
+                        Point(seg.tabAdvance, 0.0f),
+                        Rect(),
+                        GlyphCoverageBounds(Rect(), true)
+                    ));
+                }
+                else{
+                    for(u32 gi = seg.beginGlyph; gi < seg.endGlyph; ++gi)
+                        outRun.glyphs.push_back(tempGlyphs[cast<usize>(gi)]);
+                }
+            }
         }
         return TextLayoutStatus::Success;
     }
@@ -136,8 +317,8 @@ b8 HasValidTextFontSourceMetadata<TFont>(in AssetRef<TFont> identity, in u64 gen
     return identity.valid() && generation != 0u;
 }
 
-TextFontSpan MakeInitialTextClusterSpan(in usize begin, in usize end, in RawShapedGlyph leadGlyph){
-    return TextFontSpan(0u, begin, end, leadGlyph.byteBegin, leadGlyph.byteEnd);
+TextFontSpan MakeInitialTextClusterSpan(in usize fontIndex, in usize begin, in usize end, in RawShapedGlyph leadGlyph){
+    return TextFontSpan(fontIndex, begin, end, leadGlyph.byteBegin, leadGlyph.byteEnd);
 }
 
 

@@ -13,6 +13,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void UpdateCsgFrameReceiverCacheSignature(
+    in MeshSystem meshSystem,
+    in CsgSnapshotIdentityBuilder builder,
+    in EntityID entity,
+    in CsgReceiverComponent receiver,
+    mut World world,
+    mut u64 inOutHash,
+    mut b8 inOutCacheable
+){
+    const Optional<mut RendererComponent> borrowedRenderer = world.borrowComponent<RendererComponent>(entity);
+    const Optional<mut MeshComponent> borrowedMesh = world.borrowComponent<MeshComponent>(entity);
+    const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
+    const b8 hasRenderer = borrowedRenderer.has_value();
+    const b8 hasMesh = borrowedMesh.has_value();
+    const b8 hasTransform = borrowedTransform.has_value();
+    b8 visible = false;
+    Name material = s_NameNone;
+    Name mesh = s_NameNone;
+    VectorSingle position(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle rotation(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle scale(0.0f, 0.0f, 0.0f, 0.0f);
+    if(hasRenderer){
+        in RendererComponent renderer = borrowedRenderer.value();
+        visible = renderer.visible;
+        material = renderer.material.name();
+    }
+    if(hasMesh)
+        mesh = borrowedMesh.value().mesh.name();
+    if(hasTransform){
+        in TransformComponent transform = borrowedTransform.value();
+        position = VectorSingle(transform.position);
+        rotation = VectorSingle(transform.rotation);
+        scale = VectorSingle(transform.scale);
+    }
+    const b8 runtime = receiver.enabled && visible && meshSystem.hasRuntimeMeshBinding(entity);
+    builder.updateCsgFrameStateReceiverSignature(entity, receiver, hasRenderer, visible, material, hasMesh, mesh, runtime, hasTransform, position, rotation, scale, inOutHash, inOutCacheable);
+}
+
 Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World world, in CsgShapeRegistry registry, in MeshSystem meshSystem){
     if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
         return MakeUnexpected(Failure());
@@ -21,40 +59,23 @@ Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World worl
     signature.shapeRegistryRevision = registry.revision();
     u64 hash = s_Fnv64OffsetBasis;
     CsgSnapshotIdentityBuilder builder;
-    for(in auto row : world.view<CsgCutterComponent>())
-        builder.updateCsgFrameStateCutterSignature(Get<0>(row), Get<1>(row), hash);
+    for(in auto row : world.view<CsgCutterComponent>()){
+        const EntityID entity = Get<0>(row);
+        const CsgCutterComponent cutter = Get<1>(row);
+        MatrixSingle worldToShape = MatrixIdentity();
+        MatrixSingle shapeToWorld = MatrixIdentity();
+        ResolveCsgCutterWorldTransforms(world, entity, cutter, worldToShape, shapeToWorld);
+        builder.updateCsgFrameStateCutterSignature(entity, cutter, worldToShape, shapeToWorld, hash);
+    }
 
     b8 cacheable = true;
-    for(in auto row : world.view<StaticCsgMeshComponent>()){
+    for(in auto row : world.view<StaticCsgMeshComponent>())
+        UpdateCsgFrameReceiverCacheSignature(meshSystem, builder, Get<0>(row), Get<1>(row).asReceiver(), world, hash, cacheable);
+    for(in auto row : world.view<CsgReceiverComponent>()){
         const EntityID entity = Get<0>(row);
-        const CsgReceiverComponent receiver = Get<1>(row).asReceiver();
-        const Optional<mut RendererComponent> borrowedRenderer = world.borrowComponent<RendererComponent>(entity);
-        const Optional<mut MeshComponent> borrowedMesh = world.borrowComponent<MeshComponent>(entity);
-        const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
-        const b8 hasRenderer = borrowedRenderer.has_value();
-        const b8 hasMesh = borrowedMesh.has_value();
-        const b8 hasTransform = borrowedTransform.has_value();
-        b8 visible = false;
-        Name material = s_NameNone;
-        Name mesh = s_NameNone;
-        VectorSingle position(0.0f, 0.0f, 0.0f, 0.0f);
-        VectorSingle rotation(0.0f, 0.0f, 0.0f, 0.0f);
-        VectorSingle scale(0.0f, 0.0f, 0.0f, 0.0f);
-        if(hasRenderer){
-            in RendererComponent renderer = borrowedRenderer.value();
-            visible = renderer.visible;
-            material = renderer.material.name();
-        }
-        if(hasMesh)
-            mesh = borrowedMesh.value().mesh.name();
-        if(hasTransform){
-            in TransformComponent transform = borrowedTransform.value();
-            position = VectorSingle(transform.position);
-            rotation = VectorSingle(transform.rotation);
-            scale = VectorSingle(transform.scale);
-        }
-        const b8 runtime = receiver.enabled && visible && meshSystem.hasRuntimeMeshBinding(entity);
-        builder.updateCsgFrameStateReceiverSignature(entity, receiver, hasRenderer, visible, material, hasMesh, mesh, runtime, hasTransform, position, rotation, scale, hash, cacheable);
+        if(world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity))
+            continue;
+        UpdateCsgFrameReceiverCacheSignature(meshSystem, builder, entity, Get<1>(row), world, hash, cacheable);
     }
     if(!cacheable)
         return MakeUnexpected(Failure());

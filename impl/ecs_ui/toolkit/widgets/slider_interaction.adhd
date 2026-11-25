@@ -29,7 +29,52 @@ class SliderDragResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
+f32 ResolveSliderCenterTravelSpan(in SliderOrientation orientation, in Rect centerTravel){
+    if(orientation == SliderOrientation::Vertical)
+        return centerTravel.height;
+    return centerTravel.width;
+}
+
+f64 ResolveSliderDragTravelSpan(in SliderOrientation orientation, in Rect referenceRectangle, in Rect targetRectangle){
+    if(orientation == SliderOrientation::Vertical)
+        return cast<f64>(referenceRectangle.height) - cast<f64>(targetRectangle.height);
+    return cast<f64>(referenceRectangle.width) - cast<f64>(targetRectangle.width);
+}
+
+Expected<f64> SnapSliderValueToStep(in f64 value, in f64 minimum, in f64 maximum, in f64 step){
+    if(!IsFinite(VectorDouble(value, minimum, maximum, step)))
+        return MakeUnexpected(Failure());
+    if(step <= 0.0 || minimum == maximum)
+        return value;
+    const f64 clamped = UiSimdClampF64(value, minimum, maximum);
+    const f64 offset = clamped - minimum;
+    if(!IsFinite(VectorDouble(offset)))
+        return clamped;
+    const f64 steps = offset / step;
+    if(!IsFinite(VectorDouble(steps)))
+        return clamped;
+    const f64 snappedIndex = VectorDoubleFloor(VectorDouble(UiSimdMaxF64(0.0, steps) + 0.5)).x;
+    const f64 snapped = minimum + snappedIndex * step;
+    if(!IsFinite(VectorDouble(snapped)) || snapped > maximum){
+        const f64 lower = minimum + UiSimdMaxF64(0.0, snappedIndex - 1.0) * step;
+        if(IsFinite(VectorDouble(lower)) && lower >= minimum && lower <= maximum && (clamped - lower) < (maximum - clamped))
+            return lower;
+        return maximum;
+    }
+    if(snapped < maximum){
+        const f64 nextStep = snapped + step;
+        if((!IsFinite(VectorDouble(nextStep)) || nextStep > maximum) && (maximum - clamped) < (clamped - snapped))
+            return maximum;
+    }
+    const f64 result = UiSimdClampF64(snapped, minimum, maximum);
+    if(result == 0.0)
+        return 0.0;
+    return result;
+}
+
+f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredKeyStep, in f64 configuredStep){
+    if(configuredKeyStep > 0.0)
+        return configuredKeyStep;
     if(configuredStep > 0.0)
         return configuredStep;
     const f64 span = maximum - minimum;
@@ -48,17 +93,17 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     switch(kind){
     case ControlActionKind::Left:
     case ControlActionKind::Down:
-        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep, options.step);
         value = StepF64Bounded(value, options.minimum, options.maximum, step, false);
         break;
     case ControlActionKind::Right:
     case ControlActionKind::Up:
-        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep, options.step);
         value = StepF64Bounded(value, options.minimum, options.maximum, step, true);
         break;
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
-        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep, options.step);
         for(u32 index = 0u; index < s_SliderPageStepCount; ++index)
             value = StepF64Bounded(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
         break;
@@ -77,22 +122,35 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
 }
 
 Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture){
-    const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
+    f64 normalizedValue = 0.0;
+    if(options.orientation == SliderOrientation::Vertical)
+        normalizedValue = 1.0 - (cast<f64>(gesture.position.y) - cast<f64>(gesture.referenceRectangle.y)) / cast<f64>(gesture.referenceRectangle.height);
+    else
+        normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
         normalized = UiSimdMinF64(1.0, normalizedValue);
-    return InterpolateFiniteRange(options.minimum, options.maximum, normalized);
+    const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, normalized);
+    if(!interpolated.has_value())
+        return MakeUnexpected(Failure());
+    return SnapSliderValueToStep(interpolated.value(), options.minimum, options.maximum, options.step);
 }
 
 Expected<SliderDragResult> TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved){
     SliderDragResult result;
     result.value = currentValue;
     result.moved = previouslyMoved;
-    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
-    const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+    const f64 travel = ResolveSliderDragTravelSpan(options.orientation, gesture.referenceRectangle, gesture.targetRectangle);
+    f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+    if(options.orientation == SliderOrientation::Vertical)
+        delta = cast<f64>(gesture.origin.y) - cast<f64>(gesture.position.y);
     if(delta == 0.0){
-        if(previouslyMoved)
-            result.value = baseline;
+        if(previouslyMoved){
+            const Expected<f64> snappedBaseline = SnapSliderValueToStep(baseline, options.minimum, options.maximum, options.step);
+            if(!snappedBaseline.has_value())
+                return MakeUnexpected(Failure());
+            result.value = snappedBaseline.value();
+        }
         return result;
     }
     const Expected<f64> normalized = NormalizeFiniteRange(options.minimum, options.maximum, baseline);
@@ -105,24 +163,31 @@ Expected<SliderDragResult> TryComputeSliderDragValue(in f64 currentValue, in f64
     const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
         return MakeUnexpected(Failure());
-    result.value = interpolated.value();
+    const Expected<f64> snapped = SnapSliderValueToStep(interpolated.value(), options.minimum, options.maximum, options.step);
+    if(!snapped.has_value())
+        return MakeUnexpected(Failure());
+    result.value = snapped.value();
     result.moved = true;
     return result;
 }
 
-b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
+b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateKeyStep, in f64 stateStep, in b8 stateEnabled, in SliderOrientation stateOrientation, in SliderOptions options){
     return bit_cast<u64>(stateMin) == bit_cast<u64>(options.minimum)
         && bit_cast<u64>(stateMax) == bit_cast<u64>(options.maximum)
-        && bit_cast<u64>(stateStep) == bit_cast<u64>(options.keyStep)
-        && stateEnabled == options.enabled;
+        && bit_cast<u64>(stateKeyStep) == bit_cast<u64>(options.keyStep)
+        && bit_cast<u64>(stateStep) == bit_cast<u64>(options.step)
+        && stateEnabled == options.enabled
+        && stateOrientation == options.orientation;
 }
 
 Expected<b8> TryEvaluateSliderAdmission(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
+    in f64 stateKeyStep,
     in f64 stateStep,
     in b8 stateEnabled,
+    in SliderOrientation stateOrientation,
     in SliderPlacement stateAdmission,
     in SliderOptions options,
     in SliderPlacement placement
@@ -130,7 +195,7 @@ Expected<b8> TryEvaluateSliderAdmission(
     if(!IsValidSliderOptions(options) || !IsValidSliderPlacement(placement))
         return MakeUnexpected(Failure());
     return !admitted
-        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !SameSliderOptionsValues(stateMin, stateMax, stateKeyStep, stateStep, stateEnabled, stateOrientation, options)
         || !SameSliderPlacementGeometry(stateAdmission, placement);
 }
 
@@ -138,8 +203,10 @@ Expected<SliderActionOutcome> TryApplySliderControlAction(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
+    in f64 stateKeyStep,
     in f64 stateStep,
     in b8 stateEnabled,
+    in SliderOrientation stateOrientation,
     in ControlToken stateToken,
     in f64 currentValue,
     in SliderOptions options,
@@ -150,7 +217,7 @@ Expected<SliderActionOutcome> TryApplySliderControlAction(
     outcome.value = currentValue;
     if(
         !IsValidSliderOptions(options) || !admitted || !action.id.valid() || action.control != stateToken
-        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options) || action.kind > ControlActionKind::Right
+        || !SameSliderOptionsValues(stateMin, stateMax, stateKeyStep, stateStep, stateEnabled, stateOrientation, options) || action.kind > ControlActionKind::Right
     )
         return MakeUnexpected(Failure());
     SliderResult accepted = inOutResult;

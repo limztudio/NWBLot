@@ -1,0 +1,1084 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_PaintPathCoincidentEpsilonSq = 1.0e-6f;
+const f32 s_PaintPathAreaEpsilon = 1.0e-5f;
+const f32 s_PaintPathEarCrossEpsilon = 1.0e-7f;
+const f32 s_PaintPathArcKappaBase = 4.0f / 3.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> PaintPathVerb{
+    MoveTo = 0u,
+    LineTo = 1u,
+    QuadTo = 2u,
+    CubicTo = 3u,
+    Close = 4u,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PaintPathSubpath{
+    public usize pointBegin = 0u;
+    public usize pointEnd = 0u;
+    public b8 closed = false;
+}
+
+class PaintPath{
+    private Vector<PaintPathVerb> m_verbs;
+    private Vector<Point> m_points;
+    private Point m_current;
+    private Point m_subpathStart;
+    private b8 m_hasCurrent = false;
+
+    public void clear(){
+        this.m_verbs.clear();
+        this.m_points.clear();
+        this.m_current = Point();
+        this.m_subpathStart = Point();
+        this.m_hasCurrent = false;
+    }
+
+    public b8 empty()const{ return this.m_verbs.empty(); }
+    public usize verbCount()const{ return this.m_verbs.size(); }
+    public usize pointCount()const{ return this.m_points.size(); }
+    public in Vector<PaintPathVerb> verbs()const{ return this.m_verbs; }
+    public in Vector<Point> points()const{ return this.m_points; }
+
+    public void reserve(in usize verbCapacity, in usize pointCapacity){
+        this.m_verbs.reserve(verbCapacity);
+        this.m_points.reserve(pointCapacity);
+    }
+
+    public void moveTo(in Point point){
+        if(!IsFinite(VectorSingle(point.x, point.y, 0.0f, 0.0f).xy))
+            return;
+        this.m_verbs.push_back(PaintPathVerb::MoveTo);
+        this.m_points.push_back(point);
+        this.m_current = point;
+        this.m_subpathStart = point;
+        this.m_hasCurrent = true;
+    }
+
+    public void lineTo(in Point point){
+        if(!IsFinite(VectorSingle(point.x, point.y, 0.0f, 0.0f).xy))
+            return;
+        if(!this.m_hasCurrent){
+            this.moveTo(point);
+            return;
+        }
+        this.m_verbs.push_back(PaintPathVerb::LineTo);
+        this.m_points.push_back(point);
+        this.m_current = point;
+    }
+
+    public void quadTo(in Point control, in Point end){
+        if(!IsFinite(VectorSingle(control.x, control.y, end.x, end.y)))
+            return;
+        if(!this.m_hasCurrent)
+            this.moveTo(Point(0.0f, 0.0f));
+        this.m_verbs.push_back(PaintPathVerb::QuadTo);
+        this.m_points.push_back(control);
+        this.m_points.push_back(end);
+        this.m_current = end;
+    }
+
+    public void cubicTo(in Point control1, in Point control2, in Point end){
+        if(!IsFinite(VectorSingle(control1.x, control1.y, control2.x, control2.y)) || !IsFinite(VectorSingle(end.x, end.y, 0.0f, 0.0f).xy))
+            return;
+        if(!this.m_hasCurrent)
+            this.moveTo(Point(0.0f, 0.0f));
+        this.m_verbs.push_back(PaintPathVerb::CubicTo);
+        this.m_points.push_back(control1);
+        this.m_points.push_back(control2);
+        this.m_points.push_back(end);
+        this.m_current = end;
+    }
+
+    public void close(){
+        if(!this.m_hasCurrent)
+            return;
+        if(this.m_verbs.empty() || this.m_verbs.back() != PaintPathVerb::Close)
+            this.m_verbs.push_back(PaintPathVerb::Close);
+        this.m_current = this.m_subpathStart;
+    }
+
+    public void arcTo(in Point center, in f32 radiusX, in f32 radiusY, in f32 startAngleRadians, in f32 sweepAngleRadians, in b8 forceMoveTo){
+        if(!IsFinite(VectorSingle(center.x, center.y, radiusX, radiusY)) || !IsFinite(VectorSingle(startAngleRadians, sweepAngleRadians, 0.0f, 0.0f).xy))
+            return;
+        if(!(radiusX > 0.0f) || !(radiusY > 0.0f) || Abs(VectorSingle(sweepAngleRadians)).x <= 1.0e-5f)
+            return;
+        const f32 twoPi = 2.0f * s_Pi;
+        const f32 halfPi = 0.5f * s_Pi;
+        const f32 sweep = UiSimdClamp(sweepAngleRadians, -twoPi, twoPi);
+        const f32 absSweep = Abs(VectorSingle(sweep)).x;
+        usize segmentCount = 1u;
+        if(absSweep > halfPi)
+            segmentCount = cast<usize>(UiSimdClamp(Ceil(VectorSingle(absSweep / halfPi)).x, 1.0f, 4.0f));
+        const f32 segAngle = sweep / cast<f32>(segmentCount);
+        const f32 quarterAngle = 0.25f * segAngle;
+
+        VectorSingle qSin(0.0f);
+        VectorSingle qCos(0.0f);
+        VectorSinCos(qSin, qCos, VectorSingle(quarterAngle, segAngle, startAngleRadians, 0.0f));
+        if(Abs(VectorSingle(qCos.x)).x <= 1.0e-6f)
+            return;
+        const f32 kappa = s_PaintPathArcKappaBase * (qSin.x / qCos.x);
+        const f32 ds = qSin.y;
+        const f32 dc = qCos.y;
+        f32 s0 = qSin.z;
+        f32 c0 = qCos.z;
+
+        const Point startPt(center.x + radiusX * c0, center.y + radiusY * s0);
+        if(forceMoveTo || !this.m_hasCurrent)
+            this.moveTo(startPt);
+        else{
+            const f32 dx = startPt.x - this.m_current.x;
+            const f32 dy = startPt.y - this.m_current.y;
+            if(dx * dx + dy * dy > s_PaintPathCoincidentEpsilonSq)
+                this.lineTo(startPt);
+        }
+
+        for(usize seg = 0u; seg < segmentCount; ++seg){
+            const f32 c1 = c0 * dc - s0 * ds;
+            const f32 s1 = s0 * dc + c0 * ds;
+            const Point p0(center.x + radiusX * c0, center.y + radiusY * s0);
+            const Point p3(center.x + radiusX * c1, center.y + radiusY * s1);
+            const Point ctrl1(p0.x - kappa * radiusX * s0, p0.y + kappa * radiusY * c0);
+            const Point ctrl2(p3.x + kappa * radiusX * s1, p3.y - kappa * radiusY * c1);
+            this.cubicTo(ctrl1, ctrl2, p3);
+            c0 = c1;
+            s0 = s1;
+        }
+    }
+
+    public void addRect(in Rect rect){
+        if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(VectorSingle(rect.x, rect.y, rect.width, rect.height)))
+            return;
+        const f32 x1 = rect.x + rect.width;
+        const f32 y1 = rect.y + rect.height;
+        if(!IsFinite(VectorSingle(x1, y1, 0.0f, 0.0f).xy))
+            return;
+        this.moveTo(Point(rect.x, rect.y));
+        this.lineTo(Point(x1, rect.y));
+        this.lineTo(Point(x1, y1));
+        this.lineTo(Point(rect.x, y1));
+        this.close();
+    }
+
+    public void addRoundedRect(in Rect rect, in f32 radius){
+        if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(VectorSingle(rect.x, rect.y, rect.width, rect.height)) || !IsFinite(VectorSingle(radius)))
+            return;
+        const f32 halfMin = 0.5f * UiSimdMin(rect.width, rect.height);
+        const f32 r = UiSimdClamp(radius, 0.0f, halfMin);
+        if(r <= 1.0e-3f){
+            this.addRect(rect);
+            return;
+        }
+        const f32 x0 = rect.x;
+        const f32 y0 = rect.y;
+        const f32 x1 = rect.x + rect.width;
+        const f32 y1 = rect.y + rect.height;
+        const f32 halfPi = 0.5f * s_Pi;
+        this.moveTo(Point(x0 + r, y0));
+        this.lineTo(Point(x1 - r, y0));
+        this.arcTo(Point(x1 - r, y0 + r), r, r, -halfPi, halfPi, false);
+        this.lineTo(Point(x1, y1 - r));
+        this.arcTo(Point(x1 - r, y1 - r), r, r, 0.0f, halfPi, false);
+        this.lineTo(Point(x0 + r, y1));
+        this.arcTo(Point(x0 + r, y1 - r), r, r, halfPi, halfPi, false);
+        this.lineTo(Point(x0, y0 + r));
+        this.arcTo(Point(x0 + r, y0 + r), r, r, s_Pi, halfPi, false);
+        this.close();
+    }
+
+    public void addCircle(in Point center, in f32 radius){
+        this.addEllipse(center, radius, radius);
+    }
+
+    public void addEllipse(in Point center, in f32 radiusX, in f32 radiusY){
+        if(!(radiusX > 0.0f) || !(radiusY > 0.0f) || !IsFinite(VectorSingle(center.x, center.y, radiusX, radiusY)))
+            return;
+        this.arcTo(center, radiusX, radiusY, 0.0f, 2.0f * s_Pi, true);
+        this.close();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PaintPolyContour{
+    public usize vertBegin = 0u;
+    public usize vertCount = 0u;
+    public f32 signedArea2 = 0.0f;
+    public f32 absArea2 = 0.0f;
+    public f32 minX = 0.0f;
+    public f32 minY = 0.0f;
+    public f32 maxX = 0.0f;
+    public f32 maxY = 0.0f;
+    public Point probe;
+    public b8 hasProbe = false;
+    public u32 depth = 0u;
+    public i32 winding = 0;
+    public usize parentContour = usize.max;
+    public b8 isShell = false;
+    public b8 isHole = false;
+}
+
+class PaintTriRingNode{
+    public Point pt;
+    public u32 vertIndex = 0u;
+    public usize prev = usize.max;
+    public usize next = usize.max;
+    public b8 active = true;
+}
+
+class PaintHoleBridgeTarget{
+    public usize contourIndex = 0u;
+    public usize holeMaxVert = 0u;
+    public f32 maxX = 0.0f;
+    public f32 minY = 0.0f;
+}
+
+void PushFlatPathUniquePoint(in Point pt, in usize subpathBegin, mut Vector<Point> outPoints){
+    if(outPoints.size() > subpathBegin){
+        in Point prev = outPoints[outPoints.size() - 1u];
+        const f32 dx = pt.x - prev.x;
+        const f32 dy = pt.y - prev.y;
+        if(dx * dx + dy * dy <= s_PaintPathCoincidentEpsilonSq)
+            return;
+    }
+    outPoints.push_back(pt);
+}
+
+void FinalizeFlatPathSubpath(
+    in b8 hasOpen,
+    in b8 closed,
+    in usize subpathBegin,
+    mut Vector<Point> outPoints,
+    mut Vector<PaintPathSubpath> outSubpaths
+){
+    if(!hasOpen)
+        return;
+    if(closed && outPoints.size() > subpathBegin + 1u){
+        in Point first = outPoints[subpathBegin];
+        in Point last = outPoints[outPoints.size() - 1u];
+        const f32 dx = last.x - first.x;
+        const f32 dy = last.y - first.y;
+        if(dx * dx + dy * dy <= s_PaintPathCoincidentEpsilonSq)
+            outPoints.pop_back();
+    }
+    const usize count = outPoints.size() - subpathBegin;
+    if(count >= 2u){
+        PaintPathSubpath sub;
+        sub.pointBegin = subpathBegin;
+        sub.pointEnd = outPoints.size();
+        sub.closed = closed && count >= 3u;
+        outSubpaths.push_back(sub);
+    }
+    else
+        outPoints.resize(subpathBegin);
+}
+
+void FlattenPaintQuadSegment(
+    in Point p0,
+    in Point p1,
+    in Point p2,
+    in f32 transformScale,
+    in usize subpathBegin,
+    mut Vector<Point> outPoints
+){
+    const f32 devX = p1.x - 0.5f * (p0.x + p2.x);
+    const f32 devY = p1.y - 0.5f * (p0.y + p2.y);
+    const f32 chordX = p2.x - p0.x;
+    const f32 chordY = p2.y - p0.y;
+    const VectorSingle lens = Sqrt(VectorSingle(devX * devX + devY * devY, chordX * chordX + chordY * chordY, 0.0f, 0.0f));
+    const usize steps = cast<usize>(UiSimdClamp((lens.x * 2.0f + lens.y * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 32.0f));
+    const f32 invSteps = 1.0f / cast<f32>(steps);
+    const VectorSingle invStepsVec(invSteps);
+    const VectorSingle oneVec(1.0f);
+    const VectorSingle twoVec(2.0f);
+    const VectorSingle p0x(p0.x);
+    const VectorSingle p0y(p0.y);
+    const VectorSingle p1x(p1.x);
+    const VectorSingle p1y(p1.y);
+    const VectorSingle p2x(p2.x);
+    const VectorSingle p2y(p2.y);
+    usize i = 1u;
+    while(i + 4u <= steps + 1u){
+        const f32 f0 = cast<f32>(i);
+        const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+        const VectorSingle uVec = oneVec - tVec;
+        const VectorSingle w0 = uVec * uVec;
+        const VectorSingle w1 = twoVec * uVec * tVec;
+        const VectorSingle w2 = tVec * tVec;
+        const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x;
+        const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y;
+        PushFlatPathUniquePoint(Point(rx.x, ry.x), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.y, ry.y), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.z, ry.z), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.w, ry.w), subpathBegin, outPoints);
+        i += 4u;
+    }
+    while(i <= steps){
+        const f32 t = cast<f32>(i) * invSteps;
+        const f32 u = 1.0f - t;
+        const f32 w0 = u * u;
+        const f32 w1 = 2.0f * u * t;
+        const f32 w2 = t * t;
+        PushFlatPathUniquePoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y), subpathBegin, outPoints);
+        ++i;
+    }
+}
+
+void FlattenPaintCubicSegment(
+    in Point p0,
+    in Point p1,
+    in Point p2,
+    in Point p3,
+    in f32 transformScale,
+    in usize subpathBegin,
+    mut Vector<Point> outPoints
+){
+    const f32 d1x = p1.x - (p0.x + (p3.x - p0.x) * (1.0f / 3.0f));
+    const f32 d1y = p1.y - (p0.y + (p3.y - p0.y) * (1.0f / 3.0f));
+    const f32 d2x = p2.x - (p0.x + (p3.x - p0.x) * (2.0f / 3.0f));
+    const f32 d2y = p2.y - (p0.y + (p3.y - p0.y) * (2.0f / 3.0f));
+    const f32 chordX = p3.x - p0.x;
+    const f32 chordY = p3.y - p0.y;
+    const VectorSingle lens = Sqrt(VectorSingle(d1x * d1x + d1y * d1y, d2x * d2x + d2y * d2y, chordX * chordX + chordY * chordY, 0.0f));
+    const f32 dev = lens.x + lens.y;
+    const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + lens.z * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 48.0f));
+    const f32 invSteps = 1.0f / cast<f32>(steps);
+    const VectorSingle invStepsVec(invSteps);
+    const VectorSingle oneVec(1.0f);
+    const VectorSingle threeVec(3.0f);
+    const VectorSingle p0x(p0.x);
+    const VectorSingle p0y(p0.y);
+    const VectorSingle p1x(p1.x);
+    const VectorSingle p1y(p1.y);
+    const VectorSingle p2x(p2.x);
+    const VectorSingle p2y(p2.y);
+    const VectorSingle p3x(p3.x);
+    const VectorSingle p3y(p3.y);
+    usize i = 1u;
+    while(i + 4u <= steps + 1u){
+        const f32 f0 = cast<f32>(i);
+        const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+        const VectorSingle uVec = oneVec - tVec;
+        const VectorSingle uu = uVec * uVec;
+        const VectorSingle tt = tVec * tVec;
+        const VectorSingle w0 = uu * uVec;
+        const VectorSingle w1 = threeVec * uu * tVec;
+        const VectorSingle w2 = threeVec * uVec * tt;
+        const VectorSingle w3 = tt * tVec;
+        const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x + w3 * p3x;
+        const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y + w3 * p3y;
+        PushFlatPathUniquePoint(Point(rx.x, ry.x), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.y, ry.y), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.z, ry.z), subpathBegin, outPoints);
+        PushFlatPathUniquePoint(Point(rx.w, ry.w), subpathBegin, outPoints);
+        i += 4u;
+    }
+    while(i <= steps){
+        const f32 t = cast<f32>(i) * invSteps;
+        const f32 u = 1.0f - t;
+        const f32 uu = u * u;
+        const f32 tt = t * t;
+        const f32 w0 = uu * u;
+        const f32 w1 = 3.0f * uu * t;
+        const f32 w2 = 3.0f * u * tt;
+        const f32 w3 = tt * t;
+        PushFlatPathUniquePoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y), subpathBegin, outPoints);
+        ++i;
+    }
+}
+
+void FlattenPaintPath(
+    in PaintPath path,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in f32 transformScale,
+    mut Vector<Point> outPoints,
+    mut Vector<PaintPathSubpath> outSubpaths
+){
+    outPoints.clear();
+    outSubpaths.clear();
+    in Vector<PaintPathVerb> verbs = path.verbs();
+    in Vector<Point> pts = path.points();
+    if(verbs.empty())
+        return;
+
+    usize ptIdx = 0u;
+    usize subpathBegin = 0u;
+    b8 hasOpen = false;
+    b8 subpathClosed = false;
+    Point current;
+    Point start;
+
+    for(in PaintPathVerb verb : verbs){
+        if(verb == PaintPathVerb::MoveTo){
+            if(ptIdx >= pts.size())
+                break;
+            FinalizeFlatPathSubpath(hasOpen, subpathClosed, subpathBegin, outPoints, outSubpaths);
+            Point p = pts[ptIdx];
+            ++ptIdx;
+            if(hasTransform)
+                p = ApplyPaintTransform(xf, p);
+            subpathBegin = outPoints.size();
+            outPoints.push_back(p);
+            current = p;
+            start = p;
+            hasOpen = true;
+            subpathClosed = false;
+        }
+        else if(verb == PaintPathVerb::LineTo){
+            if(ptIdx >= pts.size())
+                break;
+            Point p = pts[ptIdx];
+            ++ptIdx;
+            if(hasTransform)
+                p = ApplyPaintTransform(xf, p);
+            if(!hasOpen){
+                subpathBegin = outPoints.size();
+                outPoints.push_back(p);
+                start = p;
+                hasOpen = true;
+            }
+            else
+                PushFlatPathUniquePoint(p, subpathBegin, outPoints);
+            current = p;
+            subpathClosed = false;
+        }
+        else if(verb == PaintPathVerb::QuadTo){
+            if(ptIdx + 1u >= pts.size())
+                break;
+            Point c = pts[ptIdx];
+            Point e = pts[ptIdx + 1u];
+            ptIdx += 2u;
+            if(hasTransform){
+                c = ApplyPaintTransform(xf, c);
+                e = ApplyPaintTransform(xf, e);
+            }
+            if(!hasOpen){
+                subpathBegin = outPoints.size();
+                outPoints.push_back(Point(0.0f, 0.0f));
+                current = Point(0.0f, 0.0f);
+                start = current;
+                hasOpen = true;
+            }
+            FlattenPaintQuadSegment(current, c, e, transformScale, subpathBegin, outPoints);
+            current = e;
+            subpathClosed = false;
+        }
+        else if(verb == PaintPathVerb::CubicTo){
+            if(ptIdx + 2u >= pts.size())
+                break;
+            Point c1 = pts[ptIdx];
+            Point c2 = pts[ptIdx + 1u];
+            Point e = pts[ptIdx + 2u];
+            ptIdx += 3u;
+            if(hasTransform){
+                c1 = ApplyPaintTransform(xf, c1);
+                c2 = ApplyPaintTransform(xf, c2);
+                e = ApplyPaintTransform(xf, e);
+            }
+            if(!hasOpen){
+                subpathBegin = outPoints.size();
+                outPoints.push_back(Point(0.0f, 0.0f));
+                current = Point(0.0f, 0.0f);
+                start = current;
+                hasOpen = true;
+            }
+            FlattenPaintCubicSegment(current, c1, c2, e, transformScale, subpathBegin, outPoints);
+            current = e;
+            subpathClosed = false;
+        }
+        else{
+            if(hasOpen){
+                subpathClosed = true;
+                current = start;
+            }
+        }
+    }
+    FinalizeFlatPathSubpath(hasOpen, subpathClosed, subpathBegin, outPoints, outSubpaths);
+}
+
+f32 Cross2D(in Point a, in Point b){
+    return a.x * b.y - a.y * b.x;
+}
+
+f32 ComputeContourSignedArea2(in Span<Point> pts, in usize begin, in usize end){
+    f32 area2 = 0.0f;
+    const usize count = end - begin;
+    for(usize i = 0u; i < count; ++i){
+        usize next = i + 1u;
+        if(next == count)
+            next = 0u;
+        in Point p0 = pts[begin + i];
+        in Point p1 = pts[begin + next];
+        area2 += p0.x * p1.y - p1.x * p0.y;
+    }
+    return area2;
+}
+
+b8 ComputeContourInteriorProbe(in Span<Point> verts, in usize begin, in usize count, mut Point outProbe){
+    if(count < 3u)
+        return false;
+    f32 minY = verts[begin].y;
+    for(usize i = 1u; i < count; ++i){
+        if(verts[begin + i].y < minY)
+            minY = verts[begin + i].y;
+    }
+    f32 nextY = s_UiMaxFloat;
+    for(usize i = 0u; i < count; ++i){
+        const f32 y = verts[begin + i].y;
+        if(y > minY + 1.0e-5f && y < nextY)
+            nextY = y;
+    }
+    if(nextY >= s_UiMaxFloat)
+        return false;
+    const f32 probeY = 0.5f * (minY + nextY);
+    f32 x0 = s_UiMaxFloat;
+    f32 x1 = s_UiMaxFloat;
+    b8 found0 = false;
+    b8 found1 = false;
+    for(usize i = 0u; i < count; ++i){
+        usize j = i + 1u;
+        if(j == count)
+            j = 0u;
+        in Point a = verts[begin + i];
+        in Point b = verts[begin + j];
+        if((a.y <= probeY && b.y > probeY) || (b.y <= probeY && a.y > probeY)){
+            const f32 ix = a.x + ((probeY - a.y) / (b.y - a.y)) * (b.x - a.x);
+            if(!found0 || ix < x0){
+                x1 = x0;
+                found1 = found0;
+                x0 = ix;
+                found0 = true;
+            }
+            else if(!found1 || ix < x1){
+                x1 = ix;
+                found1 = true;
+            }
+        }
+    }
+    if(!found0 || !found1)
+        return false;
+    outProbe = Point(0.5f * (x0 + x1), probeY);
+    return true;
+}
+
+i32 ComputePointContourWinding(in Point probe, in Span<Point> verts, in usize begin, in usize count){
+    i32 winding = 0;
+    for(usize i = 0u; i < count; ++i){
+        usize j = i + 1u;
+        if(j == count)
+            j = 0u;
+        in Point a = verts[begin + i];
+        in Point b = verts[begin + j];
+        if(a.y <= probe.y){
+            if(b.y > probe.y){
+                const f32 side = (b.x - a.x) * (probe.y - a.y) - (probe.x - a.x) * (b.y - a.y);
+                if(side > 0.0f)
+                    ++winding;
+            }
+        }
+        else{
+            if(b.y <= probe.y){
+                const f32 side = (b.x - a.x) * (probe.y - a.y) - (probe.x - a.x) * (b.y - a.y);
+                if(side < 0.0f)
+                    --winding;
+            }
+        }
+    }
+    return winding;
+}
+
+b8 IsPointInTriangleInclusiveCW(in Point q, in Point p, in Point v, in Point n){
+    const f32 e0 = Cross2D(Point(v.x - p.x, v.y - p.y), Point(q.x - p.x, q.y - p.y));
+    const f32 e1 = Cross2D(Point(n.x - v.x, n.y - v.y), Point(q.x - v.x, q.y - v.y));
+    const f32 e2 = Cross2D(Point(p.x - n.x, p.y - n.y), Point(q.x - n.x, q.y - n.y));
+    const f32 eps = -1.0e-6f;
+    return e0 >= eps && e1 >= eps && e2 >= eps;
+}
+
+b8 IsPointInsideRayBridgeTriangle(in Point r, in Point m, in Point iPt, in Point p){
+    const f32 area2 = Cross2D(Point(iPt.x - m.x, iPt.y - m.y), Point(p.x - m.x, p.y - m.y));
+    if(Abs(VectorSingle(area2)).x <= 1.0e-7f)
+        return false;
+    if(area2 > 0.0f)
+        return IsPointInTriangleInclusiveCW(r, m, iPt, p);
+    return IsPointInTriangleInclusiveCW(r, m, p, iPt);
+}
+
+void ReverseRingSlice(mut Vector<Point> verts, in usize begin, in usize count){
+    usize lo = 0u;
+    usize hi = count - 1u;
+    while(lo < hi){
+        const Point tmp = verts[begin + lo];
+        verts[begin + lo] = verts[begin + hi];
+        verts[begin + hi] = tmp;
+        ++lo;
+        --hi;
+    }
+}
+
+usize BridgeHoleIntoRing(
+    in usize holeBaseNode,
+    in usize holeMaxOffset,
+    mut Vector<PaintTriRingNode> nodes
+){
+    in Point m = nodes[holeBaseNode + holeMaxOffset].pt;
+    f32 bestIntersectX = s_UiMaxFloat;
+    usize bestEdgeA = usize.max;
+    usize bestEdgeB = usize.max;
+
+    const usize existingLimit = holeBaseNode;
+    for(usize nodeIdx = 0u; nodeIdx < existingLimit; ++nodeIdx){
+        if(!nodes[nodeIdx].active)
+            continue;
+        const usize nextIdx = nodes[nodeIdx].next;
+        in Point a = nodes[nodeIdx].pt;
+        in Point b = nodes[nextIdx].pt;
+        if(a.y == b.y){
+            if(a.y == m.y && a.x >= m.x && a.x < bestIntersectX){
+                bestIntersectX = a.x;
+                bestEdgeA = nodeIdx;
+                bestEdgeB = nextIdx;
+            }
+            continue;
+        }
+        if((a.y <= m.y && b.y >= m.y) || (b.y <= m.y && a.y >= m.y)){
+            const f32 ix = a.x + ((m.y - a.y) / (b.y - a.y)) * (b.x - a.x);
+            if(ix >= m.x - 1.0e-5f && ix < bestIntersectX){
+                bestIntersectX = ix;
+                bestEdgeA = nodeIdx;
+                bestEdgeB = nextIdx;
+            }
+        }
+    }
+    if(bestEdgeA == usize.max)
+        return 0u;
+
+    usize pNode = bestEdgeA;
+    if(nodes[bestEdgeB].pt.x > nodes[bestEdgeA].pt.x)
+        pNode = bestEdgeB;
+
+    const Point intersectPt(bestIntersectX, m.y);
+    const Point initialP = nodes[pNode].pt;
+    f32 bestScore = -s_UiMaxFloat;
+    f32 bestDistSq = s_UiMaxFloat;
+    usize bestReflexNode = usize.max;
+
+    for(usize nodeIdx = 0u; nodeIdx < existingLimit; ++nodeIdx){
+        if(!nodes[nodeIdx].active || nodeIdx == pNode)
+            continue;
+        in Point r = nodes[nodeIdx].pt;
+        if(r.x < m.x - 1.0e-5f)
+            continue;
+        in Point prevPt = nodes[nodes[nodeIdx].prev].pt;
+        in Point nextPt = nodes[nodes[nodeIdx].next].pt;
+        const f32 vertexCross = Cross2D(Point(r.x - prevPt.x, r.y - prevPt.y), Point(nextPt.x - prevPt.x, nextPt.y - prevPt.y));
+        if(vertexCross >= 0.0f)
+            continue;
+        if(!IsPointInsideRayBridgeTriangle(r, m, intersectPt, initialP))
+            continue;
+        const f32 dx = r.x - m.x;
+        const f32 dy = r.y - m.y;
+        const f32 distSq = dx * dx + dy * dy;
+        f32 cosAngle = 1.0f;
+        if(distSq > 1.0e-8f)
+            cosAngle = dx * Rsqrt(VectorSingle(distSq)).x;
+        if(bestReflexNode == usize.max || cosAngle > bestScore + 1.0e-6f || (Abs(VectorSingle(cosAngle - bestScore)).x <= 1.0e-6f && distSq < bestDistSq)){
+            bestScore = cosAngle;
+            bestDistSq = distSq;
+            bestReflexNode = nodeIdx;
+        }
+    }
+    if(bestReflexNode != usize.max)
+        pNode = bestReflexNode;
+
+    const usize mCloneNode = nodes.size();
+    PaintTriRingNode mClone;
+    mClone.pt = nodes[holeBaseNode + holeMaxOffset].pt;
+    mClone.vertIndex = nodes[holeBaseNode + holeMaxOffset].vertIndex;
+    nodes.push_back(mClone);
+
+    const usize pCloneNode = nodes.size();
+    PaintTriRingNode pClone;
+    pClone.pt = nodes[pNode].pt;
+    pClone.vertIndex = nodes[pNode].vertIndex;
+    nodes.push_back(pClone);
+
+    const usize pNext = nodes[pNode].next;
+    const usize mNode = holeBaseNode + holeMaxOffset;
+    const usize mPrev = nodes[mNode].prev;
+
+    nodes[pNode].next = mNode;
+    nodes[mNode].prev = pNode;
+
+    nodes[mPrev].next = mCloneNode;
+    nodes[mCloneNode].prev = mPrev;
+    nodes[mCloneNode].next = pCloneNode;
+
+    nodes[pCloneNode].prev = mCloneNode;
+    nodes[pCloneNode].next = pNext;
+    nodes[pNext].prev = pCloneNode;
+    return 2u;
+}
+
+void EarClipRingIntoIndices(
+    mut Vector<PaintTriRingNode> nodes,
+    in usize startCount,
+    mut Vector<u32> outTriIndices
+){
+    if(startCount < 3u || nodes.empty())
+        return;
+    usize remaining = startCount;
+    usize cursor = 0u;
+    while(cursor < nodes.size() && !nodes[cursor].active)
+        ++cursor;
+    usize failTries = 0u;
+    b8 allowCollinear = false;
+    usize totalSteps = 0u;
+    const usize maxSteps = startCount * startCount + 64u;
+
+    while(remaining >= 3u && totalSteps < maxSteps){
+        ++totalSteps;
+        if(!nodes[cursor].active){
+            ++cursor;
+            if(cursor >= nodes.size())
+                cursor = 0u;
+            continue;
+        }
+        const usize vNode = cursor;
+        const usize pNode = nodes[vNode].prev;
+        const usize nNode = nodes[vNode].next;
+        if(pNode == vNode || nNode == vNode || pNode == nNode)
+            break;
+
+        in Point p = nodes[pNode].pt;
+        in Point v = nodes[vNode].pt;
+        in Point n = nodes[nNode].pt;
+        const f32 pnDx = p.x - n.x;
+        const f32 pnDy = p.y - n.y;
+        if(nodes[pNode].vertIndex == nodes[nNode].vertIndex || pnDx * pnDx + pnDy * pnDy <= s_PaintPathCoincidentEpsilonSq){
+            const usize pPrev = nodes[pNode].prev;
+            nodes[pPrev].next = nNode;
+            nodes[nNode].prev = pPrev;
+            nodes[vNode].active = false;
+            nodes[pNode].active = false;
+            remaining -= 2u;
+            cursor = nNode;
+            failTries = 0u;
+            allowCollinear = false;
+            continue;
+        }
+
+        const f32 cross = Cross2D(Point(v.x - p.x, v.y - p.y), Point(n.x - p.x, n.y - p.y));
+        f32 threshold = s_PaintPathEarCrossEpsilon;
+        if(allowCollinear)
+            threshold = -1.0e-5f;
+
+        b8 isEar = false;
+        if(cross > threshold){
+            isEar = true;
+            if(cross > s_PaintPathEarCrossEpsilon){
+                usize qNode = nodes[nNode].next;
+                while(qNode != pNode){
+                    if(
+                        nodes[qNode].vertIndex != nodes[pNode].vertIndex
+                        && nodes[qNode].vertIndex != nodes[vNode].vertIndex
+                        && nodes[qNode].vertIndex != nodes[nNode].vertIndex
+                    ){
+                        in Point q = nodes[qNode].pt;
+                        const f32 qpx = q.x - p.x;
+                        const f32 qpy = q.y - p.y;
+                        const f32 qvx = q.x - v.x;
+                        const f32 qvy = q.y - v.y;
+                        const f32 qnx = q.x - n.x;
+                        const f32 qny = q.y - n.y;
+                        if(
+                            qpx * qpx + qpy * qpy > s_PaintPathCoincidentEpsilonSq
+                            && qvx * qvx + qvy * qvy > s_PaintPathCoincidentEpsilonSq
+                            && qnx * qnx + qny * qny > s_PaintPathCoincidentEpsilonSq
+                        ){
+                            if(IsPointInTriangleInclusiveCW(q, p, v, n)){
+                                isEar = false;
+                                break;
+                            }
+                        }
+                    }
+                    qNode = nodes[qNode].next;
+                }
+            }
+        }
+
+        if(isEar){
+            if(cross > s_PaintPathEarCrossEpsilon){
+                outTriIndices.push_back(nodes[pNode].vertIndex);
+                outTriIndices.push_back(nodes[vNode].vertIndex);
+                outTriIndices.push_back(nodes[nNode].vertIndex);
+            }
+            nodes[pNode].next = nNode;
+            nodes[nNode].prev = pNode;
+            nodes[vNode].active = false;
+            --remaining;
+            cursor = nNode;
+            failTries = 0u;
+            allowCollinear = false;
+        }
+        else{
+            cursor = nNode;
+            ++failTries;
+            if(failTries >= remaining){
+                if(allowCollinear)
+                    break;
+                allowCollinear = true;
+                failTries = 0u;
+            }
+        }
+    }
+}
+
+void TriangulatePaintPolygons(
+    in Span<Point> flatPoints,
+    in Span<PaintPathSubpath> subpaths,
+    in PaintFillRule fillRule,
+    mut Vector<Point> outVerts,
+    mut Vector<u32> outTriIndices,
+    mut Vector<PaintPathSubpath> outFringeContours
+){
+    outVerts.clear();
+    outTriIndices.clear();
+    outFringeContours.clear();
+
+    Vector<PaintPolyContour> contours;
+    Vector<Point> orientedPoints;
+    for(in PaintPathSubpath sub : subpaths){
+        const usize count = sub.pointEnd - sub.pointBegin;
+        if(count < 3u)
+            continue;
+        const f32 area2 = ComputeContourSignedArea2(flatPoints, sub.pointBegin, sub.pointEnd);
+        const f32 absArea2 = Abs(VectorSingle(area2)).x;
+        if(absArea2 <= s_PaintPathAreaEpsilon)
+            continue;
+
+        PaintPolyContour contour;
+        contour.vertBegin = orientedPoints.size();
+        contour.vertCount = count;
+        contour.signedArea2 = area2;
+        contour.absArea2 = absArea2;
+        f32 minX = flatPoints[sub.pointBegin].x;
+        f32 minY = flatPoints[sub.pointBegin].y;
+        f32 maxX = minX;
+        f32 maxY = minY;
+        for(usize i = 0u; i < count; ++i){
+            in Point pt = flatPoints[sub.pointBegin + i];
+            orientedPoints.push_back(pt);
+            minX = UiSimdMin(minX, pt.x);
+            minY = UiSimdMin(minY, pt.y);
+            maxX = UiSimdMax(maxX, pt.x);
+            maxY = UiSimdMax(maxY, pt.y);
+        }
+        contour.minX = minX;
+        contour.minY = minY;
+        contour.maxX = maxX;
+        contour.maxY = maxY;
+        contour.hasProbe = ComputeContourInteriorProbe(Span<Point>(orientedPoints), contour.vertBegin, count, contour.probe);
+        if(!contour.hasProbe)
+            contour.probe = orientedPoints[contour.vertBegin];
+        contours.push_back(contour);
+    }
+
+    const usize contourCount = contours.size();
+    if(contourCount == 0u)
+        return;
+
+    for(usize i = 0u; i < contourCount; ++i){
+        in Point probe = contours[i].probe;
+        u32 depth = 0u;
+        i32 winding = 0;
+        for(usize j = 0u; j < contourCount; ++j){
+            if(i == j || contours[j].absArea2 <= contours[i].absArea2)
+                continue;
+            if(
+                probe.x < contours[j].minX || probe.x > contours[j].maxX
+                || probe.y < contours[j].minY || probe.y > contours[j].maxY
+            )
+                continue;
+            if(ComputePointContourWinding(probe, Span<Point>(orientedPoints), contours[j].vertBegin, contours[j].vertCount) != 0){
+                ++depth;
+                if(contours[j].signedArea2 > 0.0f)
+                    ++winding;
+                else
+                    --winding;
+            }
+        }
+        contours[i].depth = depth;
+        contours[i].winding = winding;
+        if(fillRule == PaintFillRule::EvenOdd){
+            if((depth & 1u) == 0u)
+                contours[i].isShell = true;
+            else
+                contours[i].isHole = true;
+        }
+        else{
+            i32 selfSign = 1;
+            if(contours[i].signedArea2 < 0.0f)
+                selfSign = -1;
+            if(winding == 0)
+                contours[i].isShell = true;
+            else if(winding + selfSign == 0)
+                contours[i].isHole = true;
+        }
+    }
+
+    for(usize i = 0u; i < contourCount; ++i){
+        if(!contours[i].isHole)
+            continue;
+        in Point probe = contours[i].probe;
+        f32 bestArea2 = s_UiMaxFloat;
+        usize bestShell = usize.max;
+        for(usize j = 0u; j < contourCount; ++j){
+            if(!contours[j].isShell)
+                continue;
+            if(fillRule == PaintFillRule::EvenOdd && contours[j].depth + 1u != contours[i].depth)
+                continue;
+            if(contours[j].absArea2 <= contours[i].absArea2 || contours[j].absArea2 >= bestArea2)
+                continue;
+            if(
+                probe.x < contours[j].minX || probe.x > contours[j].maxX
+                || probe.y < contours[j].minY || probe.y > contours[j].maxY
+            )
+                continue;
+            if(ComputePointContourWinding(probe, Span<Point>(orientedPoints), contours[j].vertBegin, contours[j].vertCount) != 0){
+                bestArea2 = contours[j].absArea2;
+                bestShell = j;
+            }
+        }
+        contours[i].parentContour = bestShell;
+    }
+
+    for(usize i = 0u; i < contourCount; ++i){
+        if(contours[i].isShell && contours[i].signedArea2 < 0.0f){
+            ReverseRingSlice(orientedPoints, contours[i].vertBegin, contours[i].vertCount);
+            contours[i].signedArea2 = -contours[i].signedArea2;
+        }
+        else if(contours[i].isHole && contours[i].signedArea2 > 0.0f){
+            ReverseRingSlice(orientedPoints, contours[i].vertBegin, contours[i].vertCount);
+            contours[i].signedArea2 = -contours[i].signedArea2;
+        }
+    }
+
+    Vector<u32> contourOutBase(contourCount, 0u);
+    for(usize i = 0u; i < contourCount; ++i){
+        if(!contours[i].isShell && (!contours[i].isHole || contours[i].parentContour == usize.max))
+            continue;
+        const usize outBegin = outVerts.size();
+        contourOutBase[i] = cast<u32>(outBegin);
+        for(usize k = 0u; k < contours[i].vertCount; ++k)
+            outVerts.push_back(orientedPoints[contours[i].vertBegin + k]);
+        PaintPathSubpath fringeSub;
+        fringeSub.pointBegin = outBegin;
+        fringeSub.pointEnd = outVerts.size();
+        fringeSub.closed = true;
+        outFringeContours.push_back(fringeSub);
+    }
+
+    Vector<PaintHoleBridgeTarget> holes;
+    Vector<PaintTriRingNode> ringNodes;
+    for(usize shellIdx = 0u; shellIdx < contourCount; ++shellIdx){
+        if(!contours[shellIdx].isShell)
+            continue;
+        holes.clear();
+        for(usize hIdx = 0u; hIdx < contourCount; ++hIdx){
+            if(!contours[hIdx].isHole || contours[hIdx].parentContour != shellIdx)
+                continue;
+            PaintHoleBridgeTarget target;
+            target.contourIndex = hIdx;
+            target.maxX = orientedPoints[contours[hIdx].vertBegin].x;
+            target.minY = orientedPoints[contours[hIdx].vertBegin].y;
+            target.holeMaxVert = 0u;
+            for(usize k = 1u; k < contours[hIdx].vertCount; ++k){
+                in Point pt = orientedPoints[contours[hIdx].vertBegin + k];
+                if(pt.x > target.maxX || (pt.x == target.maxX && pt.y < target.minY)){
+                    target.maxX = pt.x;
+                    target.minY = pt.y;
+                    target.holeMaxVert = k;
+                }
+            }
+            holes.push_back(target);
+        }
+
+        for(usize a = 1u; a < holes.size(); ++a){
+            const PaintHoleBridgeTarget key = holes[a];
+            usize b = a;
+            while(b > 0u && (holes[b - 1u].maxX < key.maxX || (holes[b - 1u].maxX == key.maxX && holes[b - 1u].minY > key.minY))){
+                holes[b] = holes[b - 1u];
+                --b;
+            }
+            holes[b] = key;
+        }
+
+        ringNodes.clear();
+        const usize shellCount = contours[shellIdx].vertCount;
+        const u32 shellBase = contourOutBase[shellIdx];
+        for(usize k = 0u; k < shellCount; ++k){
+            PaintTriRingNode node;
+            node.pt = outVerts[cast<usize>(shellBase) + k];
+            node.vertIndex = shellBase + cast<u32>(k);
+            if(k == 0u)
+                node.prev = shellCount - 1u;
+            else
+                node.prev = k - 1u;
+            if(k + 1u == shellCount)
+                node.next = 0u;
+            else
+                node.next = k + 1u;
+            ringNodes.push_back(node);
+        }
+        usize totalRingVerts = shellCount;
+
+        for(in PaintHoleBridgeTarget holeTarget : holes){
+            const usize hIdx = holeTarget.contourIndex;
+            const usize hCount = contours[hIdx].vertCount;
+            const u32 hBase = contourOutBase[hIdx];
+            const usize hNodeBase = ringNodes.size();
+            for(usize k = 0u; k < hCount; ++k){
+                PaintTriRingNode node;
+                node.pt = outVerts[cast<usize>(hBase) + k];
+                node.vertIndex = hBase + cast<u32>(k);
+                if(k == 0u)
+                    node.prev = hNodeBase + hCount - 1u;
+                else
+                    node.prev = hNodeBase + k - 1u;
+                if(k + 1u == hCount)
+                    node.next = hNodeBase;
+                else
+                    node.next = hNodeBase + k + 1u;
+                ringNodes.push_back(node);
+            }
+            totalRingVerts += hCount + BridgeHoleIntoRing(hNodeBase, holeTarget.holeMaxVert, ringNodes);
+        }
+
+        EarClipRingIntoIndices(ringNodes, totalRingVerts, outTriIndices);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

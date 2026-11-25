@@ -13,6 +13,8 @@ const StringView s_DefaultProjectVirtualPathText = "project/project";
 const Name s_DefaultProjectVirtualPath = "project/project";
 
 const StringView s_TransformDiagnosticPrefix = "Transform component meta";
+const StringView s_LocalTransformDiagnosticPrefix = "LocalTransform component meta";
+const StringView s_SceneParentDiagnosticPrefix = "SceneParent component meta";
 const StringView s_CameraDiagnosticPrefix = "Camera component meta";
 const StringView s_ActiveCameraDiagnosticPrefix = "ActiveCamera component meta";
 const StringView s_LightDiagnosticPrefix = "Light component meta";
@@ -32,6 +34,8 @@ const StringView s_TransformRotationField = "rotation";
 const StringView s_TransformRotationEulerField = "rotation_euler";
 const StringView s_TransformRotationEulerDegreesField = "rotation_euler_degrees";
 const StringView s_TransformScaleField = "scale";
+const StringView s_SceneParentEntityNameField = "parent_entity_name";
+const StringView s_SceneParentInheritScaleField = "inherit_scale";
 
 const StringView s_CameraVerticalFovDegreesField = "vertical_fov_degrees";
 const StringView s_CameraVerticalFovRadiansField = "vertical_fov_radians";
@@ -86,6 +90,15 @@ class TransformComponentPayloadBinary{
     public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 scale(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class SceneParentComponentPayloadBinary{
+    public NameHash parentEntityNameHash;
+    public u8 inheritScale = 1u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
 }
 
 [serialize]
@@ -164,6 +177,36 @@ class ActiveCameraComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
+[arena, asset("local_transform_component")]
+class LocalTransformComponentAsset : IComponent{
+    public LocalTransformComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<LocalTransformComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("scene_parent_component")]
+class SceneParentComponentAsset : IComponent{
+    public SceneParentComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut SceneParentComponent dst = entity.addComponent<SceneParentComponent>();
+        dst = this.component;
+        dst.parent = s_InvalidEntityId;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,12 +218,24 @@ ComponentHeaderBinary MakeComponentHeaderBinary(in NameHash componentTypeHash, i
     return header;
 }
 
-TransformComponentPayloadBinary PackTransformComponentPayloadBinary(in TransformComponent component){
+TransformComponentPayloadBinary PackDecomposedTransformPayloadBinary(
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale
+){
     TransformComponentPayloadBinary binaryPayload;
-    binaryPayload.position = component.position;
-    binaryPayload.rotation = component.rotation;
-    binaryPayload.scale = component.scale;
+    binaryPayload.position = f32x4(position, 0.0f);
+    binaryPayload.rotation = f32x4(rotation);
+    binaryPayload.scale = f32x4(scale, 0.0f);
     return binaryPayload;
+}
+
+TransformComponentPayloadBinary PackTransformComponentPayloadBinary(in TransformComponent component){
+    return PackDecomposedTransformPayloadBinary(
+        VectorSingle(component.position),
+        VectorSingle(component.rotation),
+        VectorSingle(component.scale)
+    );
 }
 
 TransformComponent UnpackTransformComponentPayloadBinary(in TransformComponentPayloadBinary binaryPayload){
@@ -188,6 +243,46 @@ TransformComponent UnpackTransformComponentPayloadBinary(in TransformComponentPa
     component.position = binaryPayload.position;
     component.rotation = binaryPayload.rotation;
     component.scale = binaryPayload.scale;
+    return component;
+}
+
+TransformComponentPayloadBinary PackLocalTransformComponentPayloadBinary(in LocalTransformComponent component){
+    return PackDecomposedTransformPayloadBinary(
+        VectorSingle(component.position),
+        VectorSingle(component.rotation),
+        VectorSingle(component.scale)
+    );
+}
+
+LocalTransformComponent UnpackLocalTransformComponentPayloadBinary(in TransformComponentPayloadBinary binaryPayload){
+    LocalTransformComponent component;
+    component.position = binaryPayload.position;
+    component.rotation = binaryPayload.rotation;
+    component.scale = binaryPayload.scale;
+    return component;
+}
+
+SceneParentComponentPayloadBinary PackSceneParentComponentPayloadBinary(in SceneParentComponent component){
+    SceneParentComponentPayloadBinary binaryPayload;
+    binaryPayload.parentEntityNameHash = component.parentEntityName.hash();
+    if(component.inheritScale)
+        binaryPayload.inheritScale = 1u;
+    else
+        binaryPayload.inheritScale = 0u;
+    binaryPayload.reserved0 = 0u;
+    binaryPayload.reserved1 = 0u;
+    binaryPayload.reserved2 = 0u;
+    return binaryPayload;
+}
+
+Expected<SceneParentComponent> UnpackSceneParentComponentPayloadBinary(in SceneParentComponentPayloadBinary binaryPayload){
+    if(binaryPayload.inheritScale > 1u || binaryPayload.reserved0 != 0u || binaryPayload.reserved1 != 0u || binaryPayload.reserved2 != 0u)
+        return MakeUnexpected(Failure());
+
+    SceneParentComponent component;
+    component.parent = s_InvalidEntityId;
+    component.parentEntityName = Name(binaryPayload.parentEntityNameHash);
+    component.inheritScale = binaryPayload.inheritScale != 0u;
     return component;
 }
 

@@ -1,0 +1,627 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::beginScrollArea(in StringView stableKey, mut ScrollAreaState state, in ScrollAreaOptions options){
+    if(
+        this.panelDeclarationBlocked()
+        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || !this.m_skin.has_value()
+        || !IsValidScrollAreaOptions(options)
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const auto panel = this.region(this.m_style.panel, this.m_style.panel);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::ScrollArea);
+    if(!panel.has_value() || !widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration())){
+        this.m_context.fail();
+        return false;
+    }
+    const b8 popupSynced = this.synchronizePopup();
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    if(!this.applyScrollAreaInput(widget.value(), state, options)){
+        this.m_context.fail();
+        return false;
+    }
+    state.m_scroll = Point(UiSimdMax(0.0f, state.m_scroll.x), UiSimdMax(0.0f, state.m_scroll.y));
+    LayoutNodeDesc description;
+    description.direction = options.direction;
+    description.clipChildren = true;
+    description.scrollable = true;
+    description.horizontalScrollbar = options.horizontalScrollbar;
+    description.verticalScrollbar = options.verticalScrollbar;
+    description.width = options.width;
+    description.height = options.height;
+    description.padding = options.padding;
+    description.gap = options.gap;
+    description.scrollbarThickness = this.m_scrollbarStyle.thickness;
+    description.scrollOffset = state.m_scroll;
+    description.alignItems = options.alignItems;
+    description.justifyContent = options.justifyContent;
+    description.flexWrap = options.flexWrap;
+    description.hasCrossGap = options.hasCrossGap;
+    description.crossGap = options.crossGap;
+    description.gridColumns = options.gridColumns;
+    ApplyLayoutItemOptions(options.layout, description);
+    if(description.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), description);
+    if(!admittedNode.has_value() || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
+        return false;
+    }
+    BuilderScrollAreaFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut ScrollAreaState>(state);
+    frame.options = options;
+    frame.scrollbarStyle = this.m_scrollbarStyle;
+    frame.panelRegion = panel.value().name;
+    frame.stateRevision = state.revision();
+    frame.inputGeneration = state.inputGeneration();
+    const u32 scrollAreaIndex = cast<u32>(this.m_scope.value().m_scrollAreas.size());
+    const u32 beginItemIndex = cast<u32>(this.m_scope.value().m_items.size());
+    auto item = this.makeItem();
+    item.styleIndex = this.currentItemStyleIndex();
+    item.state = widget.value();
+    item.node = admittedNode.value();
+    item.scrollArea = scrollAreaIndex;
+    item.enabled = options.enabled && popupSynced;
+    item.checked = false;
+    this.m_scope.value().m_scrollAreas.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    this.m_scope.value().m_stack.push_back(admittedNode.value());
+    this.m_scope.value().m_scrollAreaStack.push_back(beginItemIndex);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::ScrollArea);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    return true;
+}
+
+b8 Builder::endScrollArea(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.back() != s_LayoutNoParent
+        || this.m_scope.value().m_scrollAreaStack.back() == s_LayoutNoParent
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::ScrollArea
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 beginItemIndex = this.m_scope.value().m_scrollAreaStack.back();
+    if(cast<usize>(beginItemIndex) >= this.m_scope.value().m_items.size()){
+        this.m_context.fail();
+        return false;
+    }
+    in BuilderItem beginItem = this.m_scope.value().m_items[beginItemIndex];
+    auto endItem = this.makeItem();
+    endItem.styleIndex = beginItem.styleIndex;
+    endItem.state = beginItem.state;
+    endItem.node = beginItem.node;
+    endItem.scrollArea = beginItem.scrollArea;
+    endItem.enabled = beginItem.enabled;
+    endItem.checked = true;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    return this.m_context.popScope();
+}
+
+b8 Builder::applyScrollAreaInput(in WidgetState widget, mut ScrollAreaState state, in ScrollAreaOptions options){
+    const ControlToken activeToken = ControlToken(state.instanceGeneration(), state.inputGeneration(), state.m_scrollInput.revision);
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, activeToken);
+    if(!options.enabled){
+        this.m_context.input().invalidateTarget(widget.id);
+        return true;
+    }
+    if(!state.m_scrollInput.prepared)
+        return true;
+    const auto horizontalId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
+    const auto verticalId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalThumb);
+    if(!horizontalId.has_value() || !verticalId.has_value())
+        return false;
+    auto horizontal = this.m_context.takePartPointerGesture(widget, horizontalId.value(), true);
+    b8 haveHorizontal = horizontal.has_value() && horizontal.value().control == activeToken;
+    auto vertical = this.m_context.takePartPointerGesture(widget, verticalId.value(), true);
+    b8 haveVertical = vertical.has_value() && vertical.value().control == activeToken;
+    auto action = this.m_context.takeControlAction(widget, true, activeToken);
+    b8 haveAction = action.has_value();
+    Point scroll = state.scroll();
+    while(haveHorizontal || haveVertical || haveAction){
+        u64 horizontalSequence = 0u;
+        u64 verticalSequence = 0u;
+        u64 actionSequence = 0u;
+        if(haveHorizontal)
+            horizontalSequence = horizontal.value().updateSequence;
+        if(haveVertical)
+            verticalSequence = vertical.value().updateSequence;
+        if(haveAction)
+            actionSequence = action.value().id.sequence;
+        const u8 stream = SelectNextScrollInputStream(
+            haveHorizontal,
+            horizontalSequence,
+            haveVertical,
+            verticalSequence,
+            haveAction,
+            actionSequence
+        );
+        if(stream == 0u){
+            const auto dragged = TryDragScrollbarOffset(horizontal.value(), true);
+            if(!dragged.has_value())
+                return false;
+            scroll.x = dragged.value();
+            horizontal = this.m_context.takePartPointerGesture(widget, horizontalId.value(), true);
+            haveHorizontal = horizontal.has_value() && horizontal.value().control == activeToken;
+        }
+        else if(stream == 1u){
+            const auto dragged = TryDragScrollbarOffset(vertical.value(), false);
+            if(!dragged.has_value())
+                return false;
+            scroll.y = dragged.value();
+            vertical = this.m_context.takePartPointerGesture(widget, verticalId.value(), true);
+            haveVertical = vertical.has_value() && vertical.value().control == activeToken;
+        }
+        else{
+            if(!TryApplyScrollAreaControlAction(action.value(), state.scrollbars(), state.m_scrollInput.step, scroll))
+                return false;
+            action = this.m_context.takeControlAction(widget, true, activeToken);
+            haveAction = action.has_value();
+        }
+    }
+    state.m_scroll = scroll;
+    return true;
+}
+
+b8 Builder::paintScrollAreaBegin(in BuilderItem item, in LayoutBox box){
+    if(item.scrollArea >= this.m_scope.value().m_scrollAreas.size())
+        return false;
+    mut BuilderScrollAreaFrame frame = this.m_scope.value().m_scrollAreas[item.scrollArea];
+    if(!this.popupAncestorsVisible() || !frame.state.has_value())
+        return false;
+    mut ScrollAreaState state = frame.state.value();
+    if(state.revision() != frame.stateRevision || state.inputGeneration() != frame.inputGeneration)
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    const auto placement = CalculateScrollViewportPlacementWithPolicies(
+        box.rectangle,
+        clip,
+        frame.options.padding,
+        box.contentSize,
+        box.scrollOffset,
+        frame.scrollbarStyle.thickness,
+        frame.scrollbarStyle.minimumThumb,
+        frame.options.horizontalScrollbar,
+        frame.options.verticalScrollbar
+    );
+    if(!placement.has_value())
+        return false;
+    Point step(0.0f, 0.0f);
+    if(frame.options.horizontalScrollbar != ScrollbarPolicy::Never)
+        step.x = frame.options.wheelStep;
+    if(frame.options.verticalScrollbar != ScrollbarPolicy::Never)
+        step.y = frame.options.wheelStep;
+    const ControlToken token = state.m_scrollInput.prepare(
+        item.state,
+        this.m_context.popupToken(),
+        state.instanceGeneration(),
+        state.revision(),
+        state.inputGeneration(),
+        item.enabled,
+        placement.value(),
+        step
+    );
+    this.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
+    if(!item.enabled)
+        this.m_context.input().invalidateTarget(item.state.id);
+    state.m_contentSize = box.contentSize;
+    state.m_scroll = box.scrollOffset;
+    frame.placement = placement.value();
+    frame.token = token;
+    if(frame.options.showBackground){
+        this.m_paint.pushClip(clip);
+        const b8 bgPainted = this.m_paint.drawRegion(frame.panelRegion, box.rectangle);
+        const b8 popped = this.m_paint.popClip();
+        if(!bgPainted || !popped)
+            return false;
+    }
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeScrollAreaHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        token,
+        step,
+        placement.value()
+    );
+    if(!this.m_context.addTarget(item.state, host))
+        return false;
+    u32 scrollActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        scrollActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::Region,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        scrollActions
+    );
+    if(!this.m_context.pushScrollOwner(item.state))
+        return false;
+    this.m_context.pushAccessibleParent(item.state.id);
+    return true;
+}
+
+b8 Builder::paintScrollAreaEnd(in BuilderItem item, in LayoutBox box){
+    this.m_context.popAccessibleParent();
+    if(!this.m_context.popScrollOwner())
+        return false;
+    if(item.scrollArea >= this.m_scope.value().m_scrollAreas.size())
+        return false;
+    in BuilderScrollAreaFrame frame = this.m_scope.value().m_scrollAreas[item.scrollArea];
+    if(!this.popupAncestorsVisible() || !frame.state.has_value())
+        return false;
+    in ScrollAreaState state = frame.state.value();
+    if(state.revision() != frame.stateRevision || state.inputGeneration() != frame.inputGeneration)
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    if(item.enabled && this.m_context.input().focus() == item.state.id){
+        this.m_paint.pushClip(clip);
+        this.m_paint.tryDrawRegion(this.itemWidgetStyle(item).focus, box.rectangle);
+        if(!this.m_paint.popClip())
+            return false;
+    }
+    return this.paintScrollbarsForHost(
+        item.state,
+        frame.scrollbarStyle,
+        frame.placement,
+        clip,
+        frame.token,
+        item.enabled
+    );
+}
+
+b8 Builder::paintScrollbarsForHost(
+    in WidgetState owner,
+    in ScrollbarStyle scrollbarStyle,
+    in ScrollViewportPlacement placement,
+    in Rect clip,
+    in ControlToken token,
+    in b8 enabled
+){
+    b8 horizontalHovered = false;
+    b8 horizontalPressed = false;
+    if(placement.horizontal.visible){
+        const auto thumbId = TryMakeWidgetId(owner.id, s_WidgetPartScrollHorizontalThumb);
+        if(!thumbId.has_value())
+            return false;
+        horizontalHovered = this.m_context.input().hover() == thumbId.value();
+        horizontalPressed = this.m_context.input().capture() == thumbId.value();
+    }
+    b8 verticalHovered = false;
+    b8 verticalPressed = false;
+    if(placement.vertical.visible){
+        const auto thumbId = TryMakeWidgetId(owner.id, s_WidgetPartScrollVerticalThumb);
+        if(!thumbId.has_value())
+            return false;
+        verticalHovered = this.m_context.input().hover() == thumbId.value();
+        verticalPressed = this.m_context.input().capture() == thumbId.value();
+    }
+    ControlVisualPainter painter;
+    if(!painter.paintTextAreaScrollbarsVisual(
+        this.m_paint,
+        this.m_skin.value(),
+        scrollbarStyle,
+        placement,
+        clip,
+        enabled,
+        horizontalHovered,
+        horizontalPressed,
+        verticalHovered,
+        verticalPressed
+    ))
+        return false;
+    if(!enabled)
+        return true;
+    if(!this.paintScrollbarAxisForHost(owner, placement.horizontal, clip, token, true, s_TextAreaScrollHorizontalBefore, s_TextAreaScrollHorizontalAfter, s_WidgetPartScrollHorizontalBefore, s_WidgetPartScrollHorizontalAfter, s_WidgetPartScrollHorizontalThumb)
+        || !this.paintScrollbarAxisForHost(owner, placement.vertical, clip, token, false, s_TextAreaScrollVerticalBefore, s_TextAreaScrollVerticalAfter, s_WidgetPartScrollVerticalBefore, s_WidgetPartScrollVerticalAfter, s_WidgetPartScrollVerticalThumb))
+        return false;
+    HitTargetFactory targets;
+    if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
+        const HitTarget target = targets.makeScrollbarCornerHitTarget(placement.corner, clip, token);
+        const auto cornerId = TryMakeWidgetId(owner.id, s_WidgetPartScrollCorner);
+        if(!cornerId.has_value() || !this.m_context.addPartTarget(owner, cornerId.value(), target))
+            return false;
+    }
+    return true;
+}
+
+b8 Builder::paintScrollbarAxisForHost(
+    in WidgetState owner,
+    in ScrollbarPlacement bar,
+    in Rect clip,
+    in ControlToken token,
+    in b8 horizontal,
+    in u32 beforeAction,
+    in u32 afterAction,
+    in StringView beforeKey,
+    in StringView afterKey,
+    in StringView thumbKey
+){
+    if(!bar.visible)
+        return true;
+    HitTargetFactory targets;
+    Rect beforeRect;
+    Rect afterRect;
+    ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
+    const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(
+        beforeRect,
+        clip,
+        token,
+        beforeAction
+    );
+    const auto beforeId = TryMakeWidgetId(owner.id, beforeKey);
+    if(!beforeId.has_value() || !this.m_context.addPartTarget(owner, beforeId.value(), beforeTarget))
+        return false;
+    const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(
+        afterRect,
+        clip,
+        token,
+        afterAction
+    );
+    const auto afterId = TryMakeWidgetId(owner.id, afterKey);
+    if(!afterId.has_value() || !this.m_context.addPartTarget(owner, afterId.value(), afterTarget))
+        return false;
+    const HitTarget thumbTarget = targets.makeScrollbarThumbHitTarget(bar, clip, token, horizontal);
+    const auto thumbId = TryMakeWidgetId(owner.id, thumbKey);
+    if(!thumbId.has_value() || !this.m_context.addPartTarget(owner, thumbId.value(), thumbTarget))
+        return false;
+    return true;
+}
+
+b8 Builder::collapsibleHeader(in StringView stableKey, in StringView text, mut b8 expanded, in CollapsibleHeaderOptions options){
+    WidgetOptions widgetOptions;
+    widgetOptions.width = options.width;
+    widgetOptions.height = options.height;
+    widgetOptions.enabled = options.enabled;
+    widgetOptions.layout = options.layout;
+    const auto item = this.addItem(stableKey, text, WidgetKind::CollapsibleHeader, widgetOptions);
+    if(!item.has_value())
+        return false;
+    if(this.m_context.takeActivation(item.value().state, item.value().enabled))
+        expanded = !expanded;
+    item.value().checked = expanded;
+    return expanded;
+}
+
+TabBarResult Builder::tabBar(in StringView stableKey, in Span<TabBarItem> tabs, mut TabBarState state, in TabBarOptions options){
+    TabBarResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidTabBarOptions(options)
+        || !IsValidTabBarStyle(this.m_tabBarStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    u64 contentHash = 0u;
+    if(!ValidateAndHashTabBarItems(tabs, contentHash)){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::TabBar);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration())){
+        this.m_context.fail();
+        return result;
+    }
+    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
+    ReconcileTabBarState(tabs, contentHash, state, result);
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = state.instanceGeneration();
+    token.contentRevision = state.m_contentRevision;
+    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+    const b8 interactive = IsTabBarInteractive(tabs, options);
+    if(!interactive)
+        this.m_context.input().invalidateTarget(widget.value().id);
+    while(true){
+        const auto action = this.m_context.takeControlAction(widget.value(), interactive, token);
+        if(!action.has_value())
+            break;
+        if(!ApplyTabBarControlAction(widget.value().id, tabs, action.value(), state, result)){
+            this.m_context.fail();
+            return TabBarResult();
+        }
+    }
+    result.selectedKey = state.selectedKey();
+    result.focused = interactive && this.m_context.input().focus() == widget.value().id;
+    BuilderTabBarFrame frame;
+    frame.state = Optional<mut TabBarState>(state);
+    frame.style = this.m_tabBarStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.token = token;
+    frame.stateRevision = state.revision();
+    frame.selectedKey = state.selectedKey();
+    frame.cursorKey = state.cursorKey();
+    frame.focusOnCommit = interactive && previouslyFocused && !result.focused;
+    frame.items.reserve(tabs.size());
+    frame.labels.reserve(tabs.size());
+    frame.labelWidths.reserve(tabs.size());
+    f32 maxLabelHeight = 0.0f;
+    for(in TabBarItem tab : tabs){
+        const auto measuredLabel = this.m_text.layoutAndMeasureShared(this.textShapeRequest(tab.label, frame.widgetStyle.fontSize), this.m_paint.displayMetrics());
+        if(!measuredLabel.has_value()){
+            this.m_context.fail();
+            return TabBarResult();
+        }
+        TabBarItem storedItem = tab;
+        storedItem.label = StringView();
+        frame.items.push_back(storedItem);
+        TabBarLabelEntry labelEntry;
+        labelEntry.text = measuredLabel.value().layout;
+        labelEntry.bounds = measuredLabel.value().bounds;
+        frame.labels.push_back(labelEntry);
+        frame.labelWidths.push_back(measuredLabel.value().bounds.width);
+        maxLabelHeight = UiSimdMax(maxLabelHeight, measuredLabel.value().bounds.height);
+    }
+    const Expected<TabBarMetrics> metrics = ControlStyleMetrics().tabBarMetrics(
+        this.m_skin.value(),
+        frame.style,
+        Span<TabBarItem>(frame.items),
+        Span<f32>(frame.labelWidths),
+        maxLabelHeight,
+        frame.options
+    );
+    if(!metrics.has_value()){
+        this.m_context.fail();
+        return TabBarResult();
+    }
+    frame.metrics = metrics.value();
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = interactive;
+    item.tabBar = cast<u32>(this.m_scope.value().m_tabBars.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, frame.metrics.contentSize, options.layout);
+    if(!this.addItemNode(description, item))
+        return TabBarResult();
+    this.m_scope.value().m_tabBars.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    result.valid = true;
+    return result;
+}
+
+b8 Builder::paintTabBar(in BuilderItem item, in LayoutBox box){
+    if(item.tabBar >= this.m_scope.value().m_tabBars.size())
+        return false;
+    mut BuilderTabBarFrame frame = this.m_scope.value().m_tabBars[item.tabBar];
+    if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.stateRevision)
+        return false;
+    const auto placement = PlaceTabBar(
+        box.rectangle,
+        this.visibleClip(box.clip),
+        Span<TabBarItem>(frame.items),
+        Span<f32>(frame.labelWidths),
+        frame.style,
+        frame.metrics,
+        frame.selectedKey,
+        frame.options.equalWidths
+    );
+    if(!placement.has_value())
+        return false;
+    const auto tabsGroupId = TryMakeWidgetId(item.state.id, s_WidgetPartTabs);
+    const auto closeGroupId = TryMakeWidgetId(item.state.id, s_WidgetPartTabClose);
+    if(!tabsGroupId.has_value() || !closeGroupId.has_value())
+        return false;
+    in InputRouter input = this.m_context.input();
+    const b8 focused = item.enabled && input.focus() == item.state.id;
+    WidgetId pressedId;
+    if(input.primaryDown())
+        pressedId = input.capture();
+    ControlVisualPainter painter;
+    if(!painter.paintTabBarVisual(
+        this.m_paint,
+        this.m_text,
+        frame.style,
+        frame.widgetStyle,
+        placement.value(),
+        Span<TabBarLabelEntry>(frame.labels),
+        item.enabled,
+        focused,
+        frame.cursorKey,
+        input.hover(),
+        pressedId,
+        tabsGroupId.value(),
+        closeGroupId.value()
+    ))
+        return false;
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeTabBarHostHitTarget(placement.value(), item.enabled, item.contextMenu, frame.token, frame.focusOnCommit);
+    if(!this.m_context.addTarget(item.state, host))
+        return false;
+    const Rect tabClip = this.visibleClip(box.clip);
+    u32 tabBarActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        tabBarActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::TabList,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, tabClip) | s_AccessibilityStateFocusable,
+        tabBarActions
+    );
+    for(u32 index = 0u; index < placement.value().count; ++index){
+        in TabBarTabPlacement tab = placement.value().tabs[index];
+        const auto tabPartId = TryMakeWidgetPartId(tabsGroupId.value(), tab.key);
+        if(!tabPartId.has_value())
+            return false;
+        if(item.enabled){
+            const HitTarget tabTarget = targets.makeTabBarPartHitTarget(tab.rectangle, tab.clip, tab.enabled, frame.token, tab.key);
+            if(!this.m_context.addPartTarget(item.state, tabPartId.value(), tabTarget))
+                return false;
+            if(tab.enabled && tab.closable && tab.closeButton.width > 0.0f && tab.closeButton.height > 0.0f){
+                const auto closePartId = TryMakeWidgetPartId(closeGroupId.value(), tab.key);
+                if(!closePartId.has_value())
+                    return false;
+                const HitTarget closeTarget = targets.makeTabBarPartHitTarget(tab.closeButton, tab.clip, true, frame.token, tab.key);
+                if(!this.m_context.addPartTarget(item.state, closePartId.value(), closeTarget))
+                    return false;
+            }
+        }
+        StringView tabName = StringView();
+        if(cast<usize>(index) < frame.labels.size() && frame.labels[cast<usize>(index)].text.valid())
+            tabName = frame.labels[cast<usize>(index)].text.deref().utf8();
+        u32 tabState = ResolveAccessibleVisibilityStateBits(item.enabled && tab.enabled, tab.clip) | s_AccessibilityStateFocusable;
+        if(tab.key == frame.selectedKey)
+            tabState |= s_AccessibilityStateSelected;
+        this.emitAccessiblePartNode(
+            tabPartId.value(),
+            item.state.id,
+            AccessibilityRole::Tab,
+            tab.rectangle,
+            tabName,
+            tabState,
+            s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+            cast<i32>(index + 1u),
+            cast<i32>(placement.value().count),
+            0
+        );
+    }
+    frame.state.value().m_placement = placement.value();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

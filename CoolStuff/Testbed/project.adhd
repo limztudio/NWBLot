@@ -10,13 +10,23 @@
 
 
 [arena]
-class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPainter{
+class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPainter, IProjectPreStepHandler{
     public Project(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = TakeNotNullUnique<World>(world);
         this.m_sceneSubsystems = ActiveSceneSubsystems();
         this.m_uiPreview = UiSkinPreview();
         this.m_physicsDebugOptions.maxLines = 32768u;
+        this.m_historyStepMs.fill(0.0f);
+        this.m_historyAwake.fill(0.0f);
+        this.m_sliderDebugThickness.setValue(1.5);
+        this.m_sliderDebugMaxLines.setValue(32768.0);
+        this.m_sliderGravityY.setValue(-9.81);
+        this.m_sliderSubSteps.setValue(4.0);
+        this.m_sliderFixedHz.setValue(60.0);
+        this.m_sliderContactHertz.setValue(cast<f64>(s_MaxContactHertz));
+        this.m_sliderGpuFraction.setValue(cast<f64>(s_DefaultGpuWorkloadFraction));
+        this.m_sliderInspectGravScale.setValue(1.0);
     }
 
     public ~Project(){
@@ -35,6 +45,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(!this.createDefaultScene())
             return false;
         SyncWorldModelRuntimes(this.m_world);
+        BindTestbedPhysicsPreStepCallback(this.m_world, this);
         this.registerInputHandler();
         return true;
     }
@@ -46,36 +57,61 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         [essential] info("ProjectTestbed: shutdown");
     }
 
+    public void onPhysicsPreStep(mut World world, mut PhysicsWorld physicsWorld, in f32 fixedDt)override{
+        ApplyTestbedGrabPreStep(world, physicsWorld, fixedDt, this.m_grabState);
+        StepTestbedShowcasePreStep(
+            world,
+            physicsWorld,
+            fixedDt,
+            this.m_controlMode,
+            VectorSingle(this.m_controlMoveAxes),
+            this.m_controlActionPressed,
+            VectorSingle(this.m_camForwardCache),
+            VectorSingle(this.m_camRightCache),
+            this.m_showcaseRefs
+        );
+    }
+
     public b8 onUpdate(in f32 delta)override{
         if(this.m_pendingBackendSwitch){
             this.m_pendingBackendSwitch = false;
             this.m_physicsBackendChoice = this.m_pendingBackendChoice;
-            if(!this.m_pendingSceneSwitch)
+            if(!this.m_pendingSceneSwitch){
                 ApplyPhysicsBackendChoice(this.m_world, this.m_physicsConfigEntity, this.m_physicsBackendChoice);
+                this.m_hasCachedHudStats = false;
+                this.m_hasCachedPhaseLine = false;
+            }
+        }
+        if(this.m_pendingSceneReset){
+            this.m_pendingSceneReset = false;
+            this.m_pendingSceneMode = this.m_physicsSceneMode;
+            this.m_pendingSceneSwitch = true;
         }
         if(this.m_pendingSceneSwitch){
             this.m_pendingSceneSwitch = false;
             this.m_physicsSceneMode = this.m_pendingSceneMode;
+            ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
+            this.m_selectedEntity = s_InvalidEntityId;
+            this.m_physicsSnapshotBytes.clear();
+            this.m_postSnapshotSpawnedEntities.clear();
+            this.m_showcaseRefs = TestbedShowcaseRefs();
             DestroyPhysicsSceneEntities(this.m_world, this.m_physicsConfigEntity, this.m_physicsEntities);
             if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress){
-                ReleaseTestbedGrab(this.m_grabState);
-                this.m_physicsSnapshotBytes.clear();
                 ClearPhysicsAccumulator(this.m_world);
                 SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, false);
                 CreateStressPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
                 [essential] info("ProjectTestbed: switched physics scene to stress (240 dynamic bodies, 36 joints)");
             }
             else if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase){
-                ReleaseTestbedGrab(this.m_grabState);
-                this.m_physicsSnapshotBytes.clear();
                 ClearPhysicsAccumulator(this.m_world);
                 SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, false);
-                CreateShowcasePhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
+                CreateShowcasePhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities, this.m_showcaseRefs);
+                this.m_showPhysicsDebug = true;
+                this.m_physicsDebugOptions.drawSubsystems = true;
+                this.m_uiWindow.initialized = false;
                 [essential] info("ProjectTestbed: switched physics scene to showcase (all 7 subsystems + shapes + joints)");
             }
             else{
-                ReleaseTestbedGrab(this.m_grabState);
-                this.m_physicsSnapshotBytes.clear();
                 ClearPhysicsAccumulator(this.m_world);
                 SetStartupGroundPlaneActive(this.m_world, this.m_startupSceneEntities, true);
                 CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
@@ -84,9 +120,33 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             if(this.m_physicsPaused)
                 SetPhysicsPaused(this.m_world, this.m_physicsConfigEntity, true);
             SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
+            ApplyTestbedPhysicsRuntimeParams(this.m_world, this.m_physicsConfigEntity, this.m_physicsBackendChoice, this.m_runtimeParams);
             this.m_hasCachedHudStats = false;
+            this.m_hasCachedPhaseLine = false;
             SyncWorldModelRuntimes(this.m_world);
             ResetTestbedCameraForPhysicsScene(this.m_world, this.m_physicsSceneMode);
+        }
+        if(this.m_pendingSnapCapture){
+            this.m_pendingSnapCapture = false;
+            if(CaptureTestbedPhysicsSnapshot(this.m_world, this.m_physicsSnapshotBytes))
+                this.m_postSnapshotSpawnedEntities.clear();
+            else
+                this.m_physicsSnapshotBytes.clear();
+        }
+        if(this.m_pendingSnapRestore){
+            this.m_pendingSnapRestore = false;
+            ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
+            DestroyPostSnapshotEntities(this.m_world, this.m_physicsEntities, this.m_postSnapshotSpawnedEntities);
+            if(RestoreTestbedPhysicsSnapshot(this.m_world, Span<u8>(this.m_physicsSnapshotBytes.data(), this.m_physicsSnapshotBytes.size()))){
+                this.m_physicsStepOnce = false;
+                this.m_hasCachedHudStats = false;
+                this.m_hasCachedPhaseLine = false;
+                SyncWorldModelRuntimes(this.m_world);
+            }
+        }
+        if(this.m_pendingParamsApply){
+            this.m_pendingParamsApply = false;
+            ApplyTestbedPhysicsRuntimeParams(this.m_world, this.m_physicsConfigEntity, this.m_physicsBackendChoice, this.m_runtimeParams);
         }
         if(this.m_pendingPauseToggle){
             this.m_pendingPauseToggle = false;
@@ -101,27 +161,80 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
         if(this.m_pendingGrabBegin){
             this.m_pendingGrabBegin = false;
-            if(!this.m_physicsPaused)
-                BeginTestbedGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+            const EntityID prevSelected = this.m_selectedEntity;
+            if(BeginTestbedPickOrGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, !this.m_physicsPaused, this.m_selectedEntity, this.m_grabState)){
+                if(this.m_selectedEntity != prevSelected){
+                    TestbedSelectedEntityInfo selInfo;
+                    QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, selInfo);
+                    if(selInfo.hasBody)
+                        this.m_sliderInspectGravScale.setValue(cast<f64>(selInfo.gravityScale));
+                    this.m_uiWindow.initialized = false;
+                }
+            }
         }
         if(this.m_pendingGrabEnd){
             this.m_pendingGrabEnd = false;
-            ReleaseTestbedGrab(this.m_grabState);
+            ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
         }
         if(this.m_grabState.active){
-            if(this.m_physicsPaused)
-                ReleaseTestbedGrab(this.m_grabState);
+            if(this.m_physicsPaused && this.m_grabState.targetKind != TestbedGrabTargetKind::GizmoAxis)
+                ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
             else
-                UpdateTestbedGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, safeDelta * this.m_physicsTimeScale, this.m_grabState);
+                UpdateTestbedPointerDragTarget(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+        }
+        else if(!WantsUiPointer(this.m_world)){
+            UpdateTestbedGizmoHover(this.m_world, this.m_selectedEntity, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+        }
+
+        if(this.m_pendingSpawn){
+            this.m_pendingSpawn = false;
+            SpawnTestbedItem(
+                this.m_world,
+                this.m_pendingSpawnKind,
+                !this.m_physicsSnapshotBytes.empty(),
+                this.m_showcaseRefs,
+                this.m_physicsEntities,
+                this.m_postSnapshotSpawnedEntities,
+                this.m_selectedEntity
+            );
+            SyncWorldModelRuntimes(this.m_world);
         }
         if(this.m_pendingShoot){
             this.m_pendingShoot = false;
-            ShootTestbedProjectile(this.m_world, this.m_physicsEntities);
+            ShootTestbedProjectileTracked(
+                this.m_world,
+                !this.m_physicsSnapshotBytes.empty(),
+                this.m_physicsEntities,
+                this.m_postSnapshotSpawnedEntities
+            );
             SyncWorldModelRuntimes(this.m_world);
         }
         if(this.m_pendingExplosion){
             this.m_pendingExplosion = false;
             TriggerTestbedExplosion(this.m_world);
+        }
+        if(this.m_pendingInspectAction != 0u){
+            const u32 act = this.m_pendingInspectAction;
+            this.m_pendingInspectAction = 0u;
+            if(act == 1u)
+                ApplySelectedEntityToggleWake(this.m_world, this.m_selectedEntity);
+            else if(act == 2u)
+                ApplySelectedEntityToggleEnabled(this.m_world, this.m_selectedEntity);
+            else if(act == 3u)
+                ApplySelectedEntityCycleBodyType(this.m_world, this.m_selectedEntity);
+            else if(act == 4u)
+                ApplySelectedEntityToggleBullet(this.m_world, this.m_selectedEntity);
+            else if(act == 5u)
+                ApplySelectedEntityUpwardImpulse(this.m_world, this.m_selectedEntity);
+            else if(act == 6u)
+                ApplySelectedEntityZeroVelocity(this.m_world, this.m_selectedEntity);
+            else if(act == 7u)
+                FocusTestbedCameraOnEntity(this.m_world, this.m_selectedEntity, this.m_orbitYaw, this.m_orbitPitch, this.m_orbitDistance);
+            else if(act == 8u){
+                ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
+                DeleteSelectedTestbedEntity(this.m_world, this.m_selectedEntity, this.m_showcaseRefs, this.m_physicsEntities, this.m_postSnapshotSpawnedEntities);
+                this.m_uiWindow.initialized = false;
+            }
         }
 
         f32 tickDelta = safeDelta * this.m_physicsTimeScale;
@@ -136,9 +249,11 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     public void windowFocusUpdate(in b8 focused)override{
         if(!focused){
             this.m_cameraInput.clear();
+            this.m_controlMoveAxes = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            this.m_controlActionPressed = false;
             this.m_pendingGrabBegin = false;
             this.m_pendingGrabEnd = false;
-            ReleaseTestbedGrab(this.m_grabState);
+            ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
         }
     }
 
@@ -146,7 +261,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         this.m_cameraInput.pointerCaptureLost();
         this.m_pendingGrabBegin = false;
         this.m_pendingGrabEnd = false;
-        ReleaseTestbedGrab(this.m_grabState);
+        ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
     }
 
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
@@ -166,8 +281,29 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_pendingExplosion = true;
             else if(key == cast<i32>(Key::F1)){
                 this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+                if(this.m_showPhysicsDebug)
+                    this.m_hasCachedPhaseLine = false;
                 this.m_uiWindow.initialized = false;
             }
+            else if(key == cast<i32>(Key::Space)){
+                if(this.m_controlMode == TestbedControlMode::Camera)
+                    this.m_pendingPauseToggle = true;
+            }
+            else if(key == cast<i32>(Key::Period)){
+                if(!this.m_physicsPaused)
+                    this.m_pendingPauseToggle = true;
+                this.m_physicsStepOnce = true;
+            }
+            else if(key == cast<i32>(Key::R))
+                this.m_pendingSceneReset = true;
+            else if(key == cast<i32>(Key::F5))
+                this.m_pendingSnapCapture = true;
+            else if(key == cast<i32>(Key::F9)){
+                if(!this.m_physicsSnapshotBytes.empty())
+                    this.m_pendingSnapRestore = true;
+            }
+            else if(key == cast<i32>(Key::Tab))
+                this.cycleControlMode();
         }
 
         return false;
@@ -201,12 +337,39 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         return false;
     }
 
+    public b8 mouseScrollUpdate(in f64 x, in f64 y)override{
+        if(WantsUiPointer(this.m_world) || !IsFinite(VectorDouble(x, y, 0.0, 0.0).xy))
+            return false;
+        const f32 wheelY = cast<f32>(y);
+        if(wheelY == 0.0f)
+            return false;
+        if(this.m_grabState.active && this.m_grabState.targetKind != TestbedGrabTargetKind::GizmoAxis){
+            this.m_grabState.distance = SimdClamp(this.m_grabState.distance + wheelY * 0.45f, 0.6f, 40.0f);
+            return true;
+        }
+        if(this.m_cameraMode != TestbedCameraMode::Fly){
+            this.m_orbitDistance = SimdClamp(this.m_orbitDistance - wheelY * 0.55f, 1.2f, 40.0f);
+            return true;
+        }
+        this.m_flySpeedScale = SimdClamp(this.m_flySpeedScale * (1.0f + wheelY * 0.12f), 0.2f, 5.0f);
+        return true;
+    }
+
     public void paintUiLayer(mut UiPaintContext context)override{
         this.m_lastViewportW = context.display.logicalWidth;
         this.m_lastViewportH = context.display.logicalHeight;
-        if(this.m_showPhysicsDebug || this.m_grabState.active){
+        if(this.m_showPhysicsDebug || this.m_grabState.active || (this.m_selectedEntity.valid() && this.m_world.deref().alive(this.m_selectedEntity))){
             const b8 prevTruncated = this.m_lastDebugDrawStats.truncated;
-            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(this.m_physicsDebugOptions, this.m_showPhysicsDebug, this.m_grabState, this.m_world, context, this.m_physicsDebugScratch, this.m_physicsScreenLines);
+            this.m_lastDebugDrawStats = PaintPhysicsDebugOverlay(
+                this.m_physicsDebugOptions,
+                this.m_showPhysicsDebug,
+                this.m_grabState,
+                this.m_selectedEntity,
+                this.m_world,
+                context,
+                this.m_physicsDebugScratch,
+                this.m_physicsScreenLines
+            );
             if(this.m_lastDebugDrawStats.truncated != prevTruncated)
                 this.m_uiWindow.initialized = false;
         }
@@ -217,6 +380,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         }
         const UiSkinPreviewGalleryLayout galleryLayout = this.m_uiPreview.measureGalleryLayout(context);
         this.drawUiControls(context, galleryLayout);
+        this.paintSparklines(context);
         this.m_uiPreview.paintWithLayout(context, galleryLayout);
     }
 
@@ -249,30 +413,101 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         this.m_inputRegistered = false;
     }
 
+    private void cycleControlMode(){
+        if(this.m_controlMode == TestbedControlMode::Camera){
+            this.m_controlMode = TestbedControlMode::Character;
+            if(this.m_cameraMode == TestbedCameraMode::Fly)
+                this.m_cameraMode = TestbedCameraMode::Chase;
+        }
+        else if(this.m_controlMode == TestbedControlMode::Character){
+            this.m_controlMode = TestbedControlMode::Vehicle;
+        }
+        else{
+            this.m_controlMode = TestbedControlMode::Camera;
+            this.m_cameraMode = TestbedCameraMode::Fly;
+        }
+        this.m_controlMoveAxes = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.m_controlActionPressed = false;
+    }
+
+    private EntityID resolveCameraTargetEntity()const{
+        if(this.m_controlMode == TestbedControlMode::Character && this.m_showcaseRefs.characterEntity.valid())
+            return this.m_showcaseRefs.characterEntity;
+        if(this.m_controlMode == TestbedControlMode::Vehicle && this.m_showcaseRefs.vehicleEntity.valid())
+            return this.m_showcaseRefs.vehicleEntity;
+        if(this.m_selectedEntity.valid())
+            return this.m_selectedEntity;
+        if(this.m_showcaseRefs.characterEntity.valid())
+            return this.m_showcaseRefs.characterEntity;
+        return this.m_showcaseRefs.vehicleEntity;
+    }
+
     private void updateMainCamera(in f32 delta){
         b8 pointerCaptured = false;
         b8 keyboardCaptured = false;
         QueryUiCaptureState(this.m_world, pointerCaptured, keyboardCaptured);
         const FlyCameraPointerDelta mouseDelta = this.m_cameraInput.takePointerDelta(pointerCaptured);
 
-        const VectorSingle moveAxes = FlyCameraMotion().buildMoveAxes(
+        const VectorSingle inputAxes = FlyCameraMotion().buildMoveAxes(
             keyboardCaptured,
             this.m_cameraInput.keyPressed(Key::D),
             this.m_cameraInput.keyPressed(Key::A),
             this.m_cameraInput.keyPressed(Key::W),
-            this.m_cameraInput.keyPressed(Key::S)
+            this.m_cameraInput.keyPressed(Key::S),
+            this.m_cameraInput.keyPressed(Key::E),
+            this.m_cameraInput.keyPressed(Key::Q)
         );
-        if(moveAxes.x == 0.0f && moveAxes.y == 0.0f && mouseDelta.x == 0.0f && mouseDelta.y == 0.0f)
-            return;
-        const b8 boosted = !keyboardCaptured && (this.m_cameraInput.keyPressed(Key::LeftShift) || this.m_cameraInput.keyPressed(Key::RightShift));
 
-        ApplyFlyCameraInputToMainCamera(this.m_world, moveAxes, boosted, VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f), delta);
+        if(this.m_controlMode != TestbedControlMode::Camera && !keyboardCaptured){
+            this.m_controlMoveAxes = f32x4(inputAxes);
+            this.m_controlActionPressed = this.m_cameraInput.keyPressed(Key::Space);
+        }
+        else{
+            this.m_controlMoveAxes = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            this.m_controlActionPressed = false;
+        }
+
+        if(this.m_cameraMode == TestbedCameraMode::Fly){
+            VectorSingle camMoveAxes = inputAxes;
+            if(this.m_controlMode != TestbedControlMode::Camera)
+                camMoveAxes = VectorSingle(0.0f, 0.0f, inputAxes.z, 0.0f);
+            if(camMoveAxes.x != 0.0f || camMoveAxes.y != 0.0f || camMoveAxes.z != 0.0f || mouseDelta.x != 0.0f || mouseDelta.y != 0.0f){
+                const b8 boosted = !keyboardCaptured && (this.m_cameraInput.keyPressed(Key::LeftShift) || this.m_cameraInput.keyPressed(Key::RightShift));
+                ApplyFlyCameraInputToMainCamera(
+                    this.m_world,
+                    camMoveAxes,
+                    boosted,
+                    VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f),
+                    delta,
+                    this.m_flySpeedScale
+                );
+            }
+        }
+        else{
+            UpdateTestbedChaseOrOrbitCamera(
+                this.m_world,
+                this.m_cameraMode,
+                this.resolveCameraTargetEntity(),
+                VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f),
+                this.m_orbitYaw,
+                this.m_orbitPitch,
+                this.m_orbitDistance
+            );
+        }
+
+        VectorSingle cPos(0.0f);
+        VectorSingle cFwd(0.0f, 0.0f, -1.0f, 0.0f);
+        VectorSingle cRight(1.0f, 0.0f, 0.0f, 0.0f);
+        QueryMainCameraBasis(this.m_world, cPos, cFwd, cRight);
+        this.m_camForwardCache = f32x4(cFwd, 0.0f);
+        this.m_camRightCache = f32x4(cRight, 0.0f);
     }
 
     private void destroyWorld(){
         if(this.m_worldDestroyed)
             return;
         this.m_worldDestroyed = true;
+        ClearTestbedPhysicsPreStepCallback(this.m_world);
         DestroyInitialProjectWorld(this.m_context, this.m_world);
     }
 
@@ -292,6 +527,108 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         return ok;
     }
 
+    private b8 appendSignedCentisText(mut CompactString str, in f32 val)const{
+        f32 mag = val;
+        b8 ok = true;
+        if(!IsFinite(VectorSingle(val)))
+            return str.append("0.00");
+        if(val < 0.0f){
+            ok = str.append("-") && ok;
+            mag = -val;
+        }
+        ok = this.appendCentisMsText(str, mag) && ok;
+        return ok;
+    }
+
+    private b8 formatPhaseLine(in TestbedPhysicsHudStats stats){
+        b8 ok = this.m_cachedPhaseLine.assign("Phases: BP ");
+        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.broadphaseMs) && ok;
+        ok = this.m_cachedPhaseLine.append(" NP ") && ok;
+        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.narrowphaseMs) && ok;
+        ok = this.m_cachedPhaseLine.append(" S ") && ok;
+        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.solveMs) && ok;
+        ok = this.m_cachedPhaseLine.append(" CCD ") && ok;
+        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.ccdMs) && ok;
+        return ok;
+    }
+
+    private void recordHudHistory(in f32 stepMs, in f32 awakeCount){
+        const u32 idx = this.m_historyWriteIndex % 96u;
+        f32 safeMs = 0.0f;
+        if(IsFinite(VectorSingle(stepMs)) && stepMs > 0.0f)
+            safeMs = stepMs;
+        this.m_historyStepMs[idx] = safeMs;
+        this.m_historyAwake[idx] = awakeCount;
+        this.m_historyWriteIndex = idx + 1u;
+        if(this.m_historyCount < 96u)
+            ++this.m_historyCount;
+    }
+
+    private void paintSparklines(mut UiPaintContext context)const{
+        if(!this.m_showPhysicsDebug || this.m_activeTab != TestbedUiTab::Sim || this.m_historyCount < 2u)
+            return;
+        const f32 vpW = context.display.logicalWidth;
+        const f32 vpH = context.display.logicalHeight;
+        if(vpW < 280.0f || vpH < 300.0f)
+            return;
+        const Rect box(20.0f, vpH - 74.0f, 220.0f, 54.0f);
+        context.paint.fillRect(box, Color(0.05f, 0.07f, 0.11f, 0.72f));
+        PaintLineStyle lineStyle;
+        lineStyle.thickness = 1.4f;
+
+        f32 maxMs = 4.0f;
+        f32 maxAwake = 4.0f;
+        const usize n = cast<usize>(this.m_historyCount);
+        for(usize i = 0u; i < n; ++i){
+            const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
+            maxMs = SimdMax(maxMs, this.m_historyStepMs[ringIdx]);
+            maxAwake = SimdMax(maxAwake, this.m_historyAwake[ringIdx]);
+        }
+        Array<Point, 96u> pts;
+        for(usize i = 0u; i < n; ++i){
+            const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
+            const f32 fracX = cast<f32>(i) / cast<f32>(n - 1u);
+            const f32 fracY = SimdClamp(this.m_historyStepMs[ringIdx] / maxMs, 0.0f, 1.0f);
+            pts[i] = Point(box.x + 6.0f + fracX * (box.width - 12.0f), box.y + box.height - 6.0f - fracY * (box.height - 12.0f));
+        }
+        context.paint.drawPolyline(Span<Point>(pts.data(), n), false, lineStyle, Color(0.24f, 0.86f, 0.98f, 0.95f));
+        for(usize i = 0u; i < n; ++i){
+            const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
+            const f32 fracX = cast<f32>(i) / cast<f32>(n - 1u);
+            const f32 fracY = SimdClamp(this.m_historyAwake[ringIdx] / maxAwake, 0.0f, 1.0f);
+            pts[i] = Point(box.x + 6.0f + fracX * (box.width - 12.0f), box.y + box.height - 6.0f - fracY * (box.height - 12.0f));
+        }
+        context.paint.drawPolyline(Span<Point>(pts.data(), n), false, lineStyle, Color(0.32f, 0.94f, 0.45f, 0.85f));
+    }
+
+    private StringView controlModeLabel()const{
+        if(this.m_controlMode == TestbedControlMode::Character)
+            return "Ctrl: Char";
+        if(this.m_controlMode == TestbedControlMode::Vehicle)
+            return "Ctrl: Veh";
+        return "Ctrl: Cam";
+    }
+
+    private StringView cameraModeLabel()const{
+        if(this.m_cameraMode == TestbedCameraMode::Chase)
+            return "Cam: Chase";
+        if(this.m_cameraMode == TestbedCameraMode::Orbit)
+            return "Cam: Orbit";
+        return "Cam: Fly";
+    }
+
+    private StringView colorModeLabel()const{
+        if(this.m_physicsDebugOptions.colorMode == PhysicsDebugColorMode::Island)
+            return "Col: Island";
+        if(this.m_physicsDebugOptions.colorMode == PhysicsDebugColorMode::Backend)
+            return "Col: Bkend";
+        if(this.m_physicsDebugOptions.colorMode == PhysicsDebugColorMode::Speed)
+            return "Col: Speed";
+        if(this.m_physicsDebugOptions.colorMode == PhysicsDebugColorMode::Layer)
+            return "Col: Layer";
+        return "Col: State";
+    }
+
     private void drawUiControls(mut UiPaintContext context, in UiSkinPreviewGalleryLayout galleryLayout){
         WindowOptions options = WindowOptions();
         Rect overviewBounds = Rect(s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight);
@@ -308,293 +645,514 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         }
         options.initialBounds = overviewBounds;
         options.contentHeightFirstUse = true;
+        b8 debugTabRendered = false;
+        b8 paramsTabRendered = false;
+        b8 inspectTabRendered = false;
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
             SeparatorOptions separator = SeparatorOptions();
             separator.thickness = 1.0f;
             TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
-            b8 hudLinesOk = true;
-            const b8 needPhysicsLine = !this.m_hasCachedHudStats
-                || stats.bodyCount != this.m_cachedHudStats.bodyCount
-                || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
-                || stats.contactCount != this.m_cachedHudStats.contactCount
-                || stats.jointCount != this.m_cachedHudStats.jointCount
-                || stats.islandCount != this.m_cachedHudStats.islandCount
-                || stats.backendUsed != this.m_cachedHudStats.backendUsed;
-            if(needPhysicsLine){
-                StringView backendName = "None";
-                if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
-                    backendName = "CPU";
-                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
-                    backendName = "GPU";
-                else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
-                    backendName = "CPU+GPU";
-                hudLinesOk = this.m_cachedPhysicsLine.assign("Physics: ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.bodyCount));
-                hudLinesOk = this.m_cachedPhysicsLine.append(" bodies (") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.awakeBodyCount));
-                hudLinesOk = this.m_cachedPhysicsLine.append(" awake), ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.contactCount));
-                hudLinesOk = this.m_cachedPhysicsLine.append(" contacts, ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.jointCount));
-                hudLinesOk = this.m_cachedPhysicsLine.append("j/") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.islandCount));
-                hudLinesOk = this.m_cachedPhysicsLine.append("i (") && hudLinesOk;
-                hudLinesOk = this.m_cachedPhysicsLine.append(backendName) && hudLinesOk;
-                hudLinesOk = this.m_cachedPhysicsLine.append(")") && hudLinesOk;
-            }
-            f64 clampedStepMs = 0.0;
-            if(IsFinite(VectorDouble(stats.stepMs)) && stats.stepMs > 0.0){
-                const VectorDouble stepMsVec(stats.stepMs);
-                const VectorDouble maxStepMsVec(1.0e9);
-                clampedStepMs = VectorDoubleSelect(maxStepMsVec, stepMsVec, VectorDoubleLess(stepMsVec, maxStepMsVec)).x;
-            }
-            const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
-            const b8 countsChanged = !this.m_hasCachedHudStats
-                || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
-                || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
-                || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
-                || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount;
-            const b8 needSplitLine = countsChanged || (stepCentis != this.m_cachedStepCentis && this.m_hudStepTimer >= 0.1f);
-            if(needSplitLine){
-                this.m_hudStepTimer = 0.0f;
-                this.m_cachedStepCentis = stepCentis;
-                const u64 wholeMs = cast<u64>(stepCentis / 100);
-                const u64 fracMs = cast<u64>(stepCentis % 100);
-                hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
-                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedIslandCount));
-                hudLinesOk = this.m_cachedSplitLine.append("i | GPU ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedBodyCount));
-                hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
-                hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
-                hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
-                if(fracMs < 10u)
-                    hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
-                AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
-                hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
+            const b8 forceHudRefresh = !this.m_hasCachedHudStats || stats.backendUsed != this.m_cachedHudStats.backendUsed;
+            const b8 allowHudRefresh = forceHudRefresh || this.m_hudStepTimer >= 0.1f;
+            if(allowHudRefresh){
+                b8 hudLinesOk = true;
+                StringView sceneName = "Default";
+                if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress)
+                    sceneName = "Stress";
+                else if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase)
+                    sceneName = "Showcase";
+                hudLinesOk = this.m_cachedStateLine.assign(sceneName) && hudLinesOk;
+                hudLinesOk = this.m_cachedStateLine.append(" | ") && hudLinesOk;
+                hudLinesOk = this.m_cachedStateLine.append(this.controlModeLabel()) && hudLinesOk;
+                hudLinesOk = this.m_cachedStateLine.append(" | ") && hudLinesOk;
+                hudLinesOk = this.m_cachedStateLine.append(this.cameraModeLabel()) && hudLinesOk;
 
-                hudLinesOk = this.m_cachedPhaseLine.assign("Phases: BP ") && hudLinesOk;
-                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.broadphaseMs) && hudLinesOk;
-                hudLinesOk = this.m_cachedPhaseLine.append(" NP ") && hudLinesOk;
-                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.narrowphaseMs) && hudLinesOk;
-                hudLinesOk = this.m_cachedPhaseLine.append(" S ") && hudLinesOk;
-                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.solveMs) && hudLinesOk;
-                hudLinesOk = this.m_cachedPhaseLine.append(" CCD ") && hudLinesOk;
-                hudLinesOk = this.appendCentisMsText(this.m_cachedPhaseLine, stats.ccdMs) && hudLinesOk;
+                const b8 needPhysicsLine = !this.m_hasCachedHudStats
+                    || stats.bodyCount != this.m_cachedHudStats.bodyCount
+                    || stats.awakeBodyCount != this.m_cachedHudStats.awakeBodyCount
+                    || stats.contactCount != this.m_cachedHudStats.contactCount
+                    || stats.jointCount != this.m_cachedHudStats.jointCount
+                    || stats.islandCount != this.m_cachedHudStats.islandCount
+                    || stats.backendUsed != this.m_cachedHudStats.backendUsed;
+                if(needPhysicsLine){
+                    StringView backendName = "None";
+                    if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Cpu))
+                        backendName = "CPU";
+                    else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Gpu))
+                        backendName = "GPU";
+                    else if(stats.backendUsed == cast<u8>(ExecutionBackendUsed::Hybrid))
+                        backendName = "CPU+GPU";
+                    hudLinesOk = this.m_cachedPhysicsLine.assign("Physics: ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.bodyCount));
+                    hudLinesOk = this.m_cachedPhysicsLine.append(" bodies (") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.awakeBodyCount));
+                    hudLinesOk = this.m_cachedPhysicsLine.append(" awake), ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.contactCount));
+                    hudLinesOk = this.m_cachedPhysicsLine.append(" contacts, ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.jointCount));
+                    hudLinesOk = this.m_cachedPhysicsLine.append("j/") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedPhysicsLine, cast<u64>(stats.islandCount));
+                    hudLinesOk = this.m_cachedPhysicsLine.append("i (") && hudLinesOk;
+                    hudLinesOk = this.m_cachedPhysicsLine.append(backendName) && hudLinesOk;
+                    hudLinesOk = this.m_cachedPhysicsLine.append(")") && hudLinesOk;
+                }
+                f64 clampedStepMs = 0.0;
+                if(IsFinite(VectorDouble(stats.stepMs)) && stats.stepMs > 0.0){
+                    const VectorDouble stepMsVec(stats.stepMs);
+                    const VectorDouble maxStepMsVec(1.0e9);
+                    clampedStepMs = VectorDoubleSelect(maxStepMsVec, stepMsVec, VectorDoubleLess(stepMsVec, maxStepMsVec)).x;
+                }
+                const i64 stepCentis = cast<i64>(clampedStepMs * 100.0 + 0.5);
+                const b8 countsChanged = !this.m_hasCachedHudStats
+                    || stats.cpuSolvedBodyCount != this.m_cachedHudStats.cpuSolvedBodyCount
+                    || stats.cpuSolvedIslandCount != this.m_cachedHudStats.cpuSolvedIslandCount
+                    || stats.gpuSolvedBodyCount != this.m_cachedHudStats.gpuSolvedBodyCount
+                    || stats.gpuSolvedIslandCount != this.m_cachedHudStats.gpuSolvedIslandCount;
+                const b8 needSplitLine = !this.m_hasCachedHudStats || countsChanged || stepCentis != this.m_cachedStepCentis;
+                if(needSplitLine){
+                    this.m_cachedStepCentis = stepCentis;
+                    const u64 wholeMs = cast<u64>(stepCentis / 100);
+                    const u64 fracMs = cast<u64>(stepCentis % 100);
+                    hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
+                    hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedIslandCount));
+                    hudLinesOk = this.m_cachedSplitLine.append("i | GPU ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedBodyCount));
+                    hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
+                    hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
+                    hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
+                    if(fracMs < 10u)
+                        hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
+                    AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
+                    hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
+                }
+                if(this.m_showPhysicsDebug)
+                    this.m_hasCachedPhaseLine = this.formatPhaseLine(stats);
+                else
+                    this.m_hasCachedPhaseLine = false;
+                this.recordHudHistory(cast<f32>(clampedStepMs), cast<f32>(stats.awakeBodyCount));
+                this.m_hudStepTimer = 0.0f;
+                this.m_cachedHudStats = stats;
+                this.m_hasCachedHudStats = hudLinesOk;
             }
-            this.m_cachedHudStats = stats;
-            this.m_hasCachedHudStats = hudLinesOk;
-            b8 declared =
-                context.ui.label("renderer", s_RendererLine)
-                && context.ui.separator("separator", separator)
-                && context.ui.label("character", s_CharacterLine)
-                && context.ui.separator("physics_sep", separator)
-                && context.ui.label("physics", this.m_cachedPhysicsLine.view())
-                && context.ui.label("physics_split", this.m_cachedSplitLine.view())
-            ;
+
+            b8 declared = context.ui.label("state_summary", this.m_cachedStateLine.view());
             WidgetOptions btnOpts = WidgetOptions();
             btnOpts.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
-            declared = context.ui.beginRow("physics_scene_row") && declared;
-            StringView defaultSceneLabel = "Default";
-            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Default)
-                defaultSceneLabel = "[Default]";
-            if(context.ui.button("scene_default", defaultSceneLabel, btnOpts)){
-                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
-                this.m_pendingSceneSwitch = true;
+
+            declared = context.ui.beginRow("testbed_tab_row") && declared;
+            if(context.ui.selectable("tab_sim", "Sim", this.m_activeTab == TestbedUiTab::Sim, btnOpts)){
+                this.m_activeTab = TestbedUiTab::Sim;
+                this.m_uiWindow.initialized = false;
             }
-            StringView stressSceneLabel = "Stress";
-            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress)
-                stressSceneLabel = "[Stress]";
-            if(context.ui.button("scene_stress", stressSceneLabel, btnOpts)){
-                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Stress;
-                this.m_pendingSceneSwitch = true;
+            if(context.ui.selectable("tab_debug", "Dbg", this.m_activeTab == TestbedUiTab::Debug, btnOpts)){
+                this.m_activeTab = TestbedUiTab::Debug;
+                this.m_uiWindow.initialized = false;
             }
-            StringView showcaseSceneLabel = "Showcase";
-            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase)
-                showcaseSceneLabel = "[Showcase]";
-            if(context.ui.button("scene_showcase", showcaseSceneLabel, btnOpts)){
-                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Showcase;
-                this.m_pendingSceneSwitch = true;
+            if(context.ui.selectable("tab_spawn", "Spn", this.m_activeTab == TestbedUiTab::Spawn, btnOpts)){
+                this.m_activeTab = TestbedUiTab::Spawn;
+                this.m_uiWindow.initialized = false;
             }
-            StringView debugLabel = "Debug: Off";
-            if(this.m_showPhysicsDebug)
-                debugLabel = "Debug: On";
-            if(context.ui.button("physics_debug_toggle", debugLabel, btnOpts)){
-                this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+            if(context.ui.selectable("tab_params", "Prm", this.m_activeTab == TestbedUiTab::Params, btnOpts)){
+                this.m_activeTab = TestbedUiTab::Params;
+                this.m_uiWindow.initialized = false;
+            }
+            if(context.ui.selectable("tab_inspect", "Ins", this.m_activeTab == TestbedUiTab::Inspect, btnOpts)){
+                this.m_activeTab = TestbedUiTab::Inspect;
                 this.m_uiWindow.initialized = false;
             }
             declared = context.ui.endContainer() && declared;
-            declared = context.ui.beginRow("physics_backend_row") && declared;
-            StringView hybridLabel = "Hybrid";
-            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::Hybrid)
-                hybridLabel = "[Hybrid]";
-            if(context.ui.button("backend_hybrid", hybridLabel, btnOpts)){
-                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
-                this.m_pendingBackendSwitch = true;
-            }
-            StringView cpuLabel = "CPU";
-            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::CpuOnly)
-                cpuLabel = "[CPU]";
-            if(context.ui.button("backend_cpu", cpuLabel, btnOpts)){
-                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::CpuOnly;
-                this.m_pendingBackendSwitch = true;
-            }
-            StringView gpuLabel = "GPU";
-            if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::GpuFull)
-                gpuLabel = "[GPU]";
-            if(context.ui.button("backend_gpu", gpuLabel, btnOpts)){
-                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::GpuFull;
-                this.m_pendingBackendSwitch = true;
-            }
-            StringView timeLabel = "Time: 1x";
-            if(this.m_physicsTimeScale < 0.35f)
-                timeLabel = "Time: 0.25x";
-            else if(this.m_physicsTimeScale < 0.75f)
-                timeLabel = "Time: 0.5x";
-            else if(this.m_physicsTimeScale > 1.5f)
-                timeLabel = "Time: 2x";
-            if(context.ui.button("physics_time_scale", timeLabel, btnOpts)){
-                if(this.m_physicsTimeScale > 1.5f)
-                    this.m_physicsTimeScale = 1.0f;
-                else if(this.m_physicsTimeScale > 0.75f)
-                    this.m_physicsTimeScale = 0.5f;
-                else if(this.m_physicsTimeScale > 0.35f)
-                    this.m_physicsTimeScale = 0.25f;
-                else
-                    this.m_physicsTimeScale = 2.0f;
-            }
-            declared = context.ui.endContainer() && declared;
-            declared = context.ui.beginRow("physics_sim_row") && declared;
-            StringView pauseLabel = "Pause";
-            if(this.m_physicsPaused)
-                pauseLabel = "Resume";
-            if(context.ui.button("physics_pause_toggle", pauseLabel, btnOpts))
-                this.m_pendingPauseToggle = true;
-            if(context.ui.button("physics_step_once", "Step", btnOpts)){
-                if(!this.m_physicsPaused)
+            declared = context.ui.separator("tab_sep", separator) && declared;
+
+            if(this.m_activeTab == TestbedUiTab::Sim){
+                declared = context.ui.label("physics", this.m_cachedPhysicsLine.view()) && declared;
+                declared = context.ui.label("physics_split", this.m_cachedSplitLine.view()) && declared;
+                if(this.m_showPhysicsDebug){
+                    if(!this.m_hasCachedPhaseLine)
+                        this.m_hasCachedPhaseLine = this.formatPhaseLine(stats);
+                    declared = context.ui.label("physics_debug_phases", this.m_cachedPhaseLine.view()) && declared;
+                }
+                declared = context.ui.beginRow("physics_scene_row") && declared;
+                StringView defaultSceneLabel = "Default";
+                if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Default)
+                    defaultSceneLabel = "[Default]";
+                if(context.ui.button("scene_default", defaultSceneLabel, btnOpts)){
+                    this.m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
+                    this.m_pendingSceneSwitch = true;
+                }
+                StringView stressSceneLabel = "Stress";
+                if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress)
+                    stressSceneLabel = "[Stress]";
+                if(context.ui.button("scene_stress", stressSceneLabel, btnOpts)){
+                    this.m_pendingSceneMode = TestbedPhysicsSceneMode::Stress;
+                    this.m_pendingSceneSwitch = true;
+                }
+                StringView showcaseSceneLabel = "Showcase";
+                if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Showcase)
+                    showcaseSceneLabel = "[Showcase]";
+                if(context.ui.button("scene_showcase", showcaseSceneLabel, btnOpts)){
+                    this.m_pendingSceneMode = TestbedPhysicsSceneMode::Showcase;
+                    this.m_pendingSceneSwitch = true;
+                }
+                StringView debugLabel = "Debug: Off";
+                if(this.m_showPhysicsDebug)
+                    debugLabel = "Debug: On";
+                if(context.ui.button("physics_debug_toggle", debugLabel, btnOpts)){
+                    this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+                    if(this.m_showPhysicsDebug)
+                        this.m_hasCachedPhaseLine = false;
+                    this.m_uiWindow.initialized = false;
+                }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_backend_row") && declared;
+                StringView hybridLabel = "Hybrid";
+                if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::Hybrid)
+                    hybridLabel = "[Hybrid]";
+                if(context.ui.button("backend_hybrid", hybridLabel, btnOpts)){
+                    this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
+                    this.m_pendingBackendSwitch = true;
+                }
+                StringView cpuLabel = "CPU";
+                if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::CpuOnly)
+                    cpuLabel = "[CPU]";
+                if(context.ui.button("backend_cpu", cpuLabel, btnOpts)){
+                    this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::CpuOnly;
+                    this.m_pendingBackendSwitch = true;
+                }
+                StringView gpuLabel = "GPU";
+                if(this.m_physicsBackendChoice == TestbedPhysicsBackendChoice::GpuFull)
+                    gpuLabel = "[GPU]";
+                if(context.ui.button("backend_gpu", gpuLabel, btnOpts)){
+                    this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::GpuFull;
+                    this.m_pendingBackendSwitch = true;
+                }
+                StringView timeLabel = "Time: 1x";
+                if(this.m_physicsTimeScale < 0.35f)
+                    timeLabel = "Time: 0.25x";
+                else if(this.m_physicsTimeScale < 0.75f)
+                    timeLabel = "Time: 0.5x";
+                else if(this.m_physicsTimeScale > 1.5f)
+                    timeLabel = "Time: 2x";
+                if(context.ui.button("physics_time_scale", timeLabel, btnOpts)){
+                    if(this.m_physicsTimeScale > 1.5f)
+                        this.m_physicsTimeScale = 1.0f;
+                    else if(this.m_physicsTimeScale > 0.75f)
+                        this.m_physicsTimeScale = 0.5f;
+                    else if(this.m_physicsTimeScale > 0.35f)
+                        this.m_physicsTimeScale = 0.25f;
+                    else
+                        this.m_physicsTimeScale = 2.0f;
+                }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_sim_row") && declared;
+                StringView pauseLabel = "Pause";
+                if(this.m_physicsPaused)
+                    pauseLabel = "Resume";
+                if(context.ui.button("physics_pause_toggle", pauseLabel, btnOpts))
                     this.m_pendingPauseToggle = true;
-                this.m_physicsStepOnce = true;
-            }
-            if(context.ui.button("physics_snap_capture", "Snap", btnOpts)){
-                if(!CaptureTestbedPhysicsSnapshot(this.m_world, this.m_physicsSnapshotBytes))
-                    this.m_physicsSnapshotBytes.clear();
-            }
-            WidgetOptions loadBtnOpts = btnOpts;
-            loadBtnOpts.enabled = !this.m_physicsSnapshotBytes.empty();
-            if(context.ui.button("physics_snap_restore", "Load", loadBtnOpts)){
-                if(RestoreTestbedPhysicsSnapshot(this.m_world, Span<u8>(this.m_physicsSnapshotBytes.data(), this.m_physicsSnapshotBytes.size()))){
-                    ReleaseTestbedGrab(this.m_grabState);
-                    this.m_physicsStepOnce = false;
-                    this.m_hasCachedHudStats = false;
+                if(context.ui.button("physics_step_once", "Step", btnOpts)){
+                    if(!this.m_physicsPaused)
+                        this.m_pendingPauseToggle = true;
+                    this.m_physicsStepOnce = true;
                 }
+                if(context.ui.button("physics_snap_capture", "Snap", btnOpts))
+                    this.m_pendingSnapCapture = true;
+                WidgetOptions loadBtnOpts = btnOpts;
+                loadBtnOpts.enabled = !this.m_physicsSnapshotBytes.empty();
+                if(context.ui.button("physics_snap_restore", "Load", loadBtnOpts))
+                    this.m_pendingSnapRestore = true;
+                if(context.ui.button("physics_scene_reset", "Reset", btnOpts))
+                    this.m_pendingSceneReset = true;
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("physics_mode_row") && declared;
+                if(context.ui.button("ctrl_mode_btn", this.controlModeLabel(), btnOpts))
+                    this.cycleControlMode();
+                if(context.ui.button("cam_mode_btn", this.cameraModeLabel(), btnOpts)){
+                    if(this.m_cameraMode == TestbedCameraMode::Fly)
+                        this.m_cameraMode = TestbedCameraMode::Chase;
+                    else if(this.m_cameraMode == TestbedCameraMode::Chase)
+                        this.m_cameraMode = TestbedCameraMode::Orbit;
+                    else
+                        this.m_cameraMode = TestbedCameraMode::Fly;
+                }
+                declared = context.ui.endContainer() && declared;
+                declared = context.ui.label("hotkeys_legend", "Space Pause . Step R Reset F5/F9 Snap Tab Mode") && declared;
             }
-            declared = context.ui.endContainer() && declared;
-            if(this.m_showPhysicsDebug){
-                declared = context.ui.label("physics_debug_phases", this.m_cachedPhaseLine.view()) && declared;
+            else if(this.m_activeTab == TestbedUiTab::Debug){
+                debugTabRendered = true;
+                declared = context.ui.beginRow("dbg_top_row") && declared;
+                StringView dbgBtn = "Debug: Off";
+                if(this.m_showPhysicsDebug)
+                    dbgBtn = "Debug: On";
+                if(context.ui.button("dbg_master", dbgBtn, btnOpts))
+                    this.m_showPhysicsDebug = !this.m_showPhysicsDebug;
+                if(context.ui.button("dbg_colormode", this.colorModeLabel(), btnOpts)){
+                    const u8 nextMode = (cast<u8>(this.m_physicsDebugOptions.colorMode) + 1u) % cast<u8>(PhysicsDebugColorMode::kCount);
+                    this.m_physicsDebugOptions.colorMode = cast<PhysicsDebugColorMode>(nextMode);
+                }
+                declared = context.ui.endContainer() && declared;
+
+                f64 budgetFrac = 0.0;
+                if(this.m_physicsDebugOptions.maxLines > 0u)
+                    budgetFrac = SimdClamp(cast<f32>(this.m_lastDebugDrawStats.emittedLines) / cast<f32>(this.m_physicsDebugOptions.maxLines), 0.0f, 1.0f);
+                declared = context.ui.progress("dbg_budget_bar", budgetFrac) && declared;
+                b8 bLineOk = this.m_cachedTempLine.assign("Lines: ");
+                AppendUnsignedU64Text(this.m_cachedTempLine, cast<u64>(this.m_lastDebugDrawStats.emittedLines));
+                bLineOk = this.m_cachedTempLine.append(" / ") && bLineOk;
+                AppendUnsignedU64Text(this.m_cachedTempLine, cast<u64>(this.m_physicsDebugOptions.maxLines));
                 if(this.m_lastDebugDrawStats.truncated)
-                    declared = context.ui.label("physics_debug_trunc", "Debug draw truncated at maxLines limit") && declared;
-                declared = context.ui.beginRow("physics_debug_filter_row") && declared;
-                StringView shapesLabel = "Shapes: On";
-                if(!this.m_physicsDebugOptions.drawShapes)
-                    shapesLabel = "Shapes: Off";
-                if(context.ui.button("physics_debug_shapes", shapesLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawShapes = !this.m_physicsDebugOptions.drawShapes;
-                StringView aabbLabel = "AABBs: Off";
-                if(this.m_physicsDebugOptions.drawAabbs)
-                    aabbLabel = "AABBs: On";
-                if(context.ui.button("physics_debug_aabbs", aabbLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawAabbs = !this.m_physicsDebugOptions.drawAabbs;
-                StringView bvhLabel = "Fat/BVH: Off";
-                if(this.m_physicsDebugOptions.drawFatAabbs || this.m_physicsDebugOptions.drawBroadPhaseTree || this.m_physicsDebugOptions.drawMeshBvh)
-                    bvhLabel = "Fat/BVH: On";
-                if(context.ui.button("physics_debug_bvh", bvhLabel, btnOpts)){
-                    const b8 nextBvh = !(this.m_physicsDebugOptions.drawFatAabbs || this.m_physicsDebugOptions.drawBroadPhaseTree || this.m_physicsDebugOptions.drawMeshBvh);
-                    this.m_physicsDebugOptions.drawFatAabbs = nextBvh;
-                    this.m_physicsDebugOptions.drawBroadPhaseTree = nextBvh;
-                    this.m_physicsDebugOptions.drawMeshBvh = nextBvh;
-                }
+                    bLineOk = this.m_cachedTempLine.append(" (TRUNC)") && bLineOk;
+                if(bLineOk)
+                    declared = context.ui.label("dbg_budget_lbl", this.m_cachedTempLine.view()) && declared;
+
+                declared = context.ui.beginRow("dbg_chk_r1") && declared;
+                context.ui.checkbox("dbg_shapes", "Shapes", this.m_physicsDebugOptions.drawShapes, btnOpts);
+                context.ui.checkbox("dbg_aabbs", "AABBs", this.m_physicsDebugOptions.drawAabbs, btnOpts);
+                context.ui.checkbox("dbg_fat", "FatAABB", this.m_physicsDebugOptions.drawFatAabbs, btnOpts);
                 declared = context.ui.endContainer() && declared;
 
-                declared = context.ui.beginRow("physics_debug_contact_row") && declared;
-                StringView contactLabel = "Contacts: On";
-                if(!this.m_physicsDebugOptions.drawContacts)
-                    contactLabel = "Contacts: Off";
-                if(context.ui.button("physics_debug_contacts", contactLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawContacts = !this.m_physicsDebugOptions.drawContacts;
-                StringView impLabel = "Spec/Imp: Off";
-                if(this.m_physicsDebugOptions.drawSpeculativeContacts || this.m_physicsDebugOptions.drawContactImpulses || this.m_physicsDebugOptions.drawContactDetails)
-                    impLabel = "Spec/Imp: On";
-                if(context.ui.button("physics_debug_contact_details", impLabel, btnOpts)){
-                    const b8 nextImp = !(this.m_physicsDebugOptions.drawSpeculativeContacts || this.m_physicsDebugOptions.drawContactImpulses || this.m_physicsDebugOptions.drawContactDetails);
-                    this.m_physicsDebugOptions.drawSpeculativeContacts = nextImp;
-                    this.m_physicsDebugOptions.drawContactImpulses = nextImp;
-                    this.m_physicsDebugOptions.drawContactDetails = nextImp;
-                }
-                StringView jointLabel = "Joints: On";
-                if(!this.m_physicsDebugOptions.drawJoints)
-                    jointLabel = "Joints: Off";
-                if(context.ui.button("physics_debug_joints", jointLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawJoints = !this.m_physicsDebugOptions.drawJoints;
-                StringView jForceLabel = "Forces: Off";
-                if(this.m_physicsDebugOptions.drawJointForces)
-                    jForceLabel = "Forces: On";
-                if(context.ui.button("physics_debug_joint_forces", jForceLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawJointForces = !this.m_physicsDebugOptions.drawJointForces;
+                declared = context.ui.beginRow("dbg_chk_r2") && declared;
+                context.ui.checkbox("dbg_bpbvh", "BroadBVH", this.m_physicsDebugOptions.drawBroadPhaseTree, btnOpts);
+                context.ui.checkbox("dbg_mbvh", "MeshBVH", this.m_physicsDebugOptions.drawMeshBvh, btnOpts);
+                context.ui.checkbox("dbg_contacts", "Contacts", this.m_physicsDebugOptions.drawContacts, btnOpts);
                 declared = context.ui.endContainer() && declared;
 
-                declared = context.ui.beginRow("physics_debug_body_row") && declared;
-                StringView axesLabel = "Axes: Off";
-                if(this.m_physicsDebugOptions.drawBodyAxes || this.m_physicsDebugOptions.drawBodyOriginVsCom)
-                    axesLabel = "Axes: On";
-                if(context.ui.button("physics_debug_axes", axesLabel, btnOpts)){
-                    const b8 nextAxes = !(this.m_physicsDebugOptions.drawBodyAxes || this.m_physicsDebugOptions.drawBodyOriginVsCom);
-                    this.m_physicsDebugOptions.drawBodyAxes = nextAxes;
-                    this.m_physicsDebugOptions.drawBodyOriginVsCom = nextAxes;
-                }
-                StringView velLabel = "Vel: Off";
-                if(this.m_physicsDebugOptions.drawVelocities)
-                    velLabel = "Vel: On";
-                if(context.ui.button("physics_debug_vel", velLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawVelocities = !this.m_physicsDebugOptions.drawVelocities;
-                StringView islLabel = "Islands: Off";
-                if(this.m_physicsDebugOptions.drawIslands)
-                    islLabel = "Islands: On";
-                if(context.ui.button("physics_debug_islands", islLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawIslands = !this.m_physicsDebugOptions.drawIslands;
-                StringView disLabel = "Disabled: Off";
-                if(this.m_physicsDebugOptions.drawDisabledBodies)
-                    disLabel = "Disabled: On";
-                if(context.ui.button("physics_debug_disabled", disLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawDisabledBodies = !this.m_physicsDebugOptions.drawDisabledBodies;
+                declared = context.ui.beginRow("dbg_chk_r3") && declared;
+                context.ui.checkbox("dbg_spec", "Speculative", this.m_physicsDebugOptions.drawSpeculativeContacts, btnOpts);
+                context.ui.checkbox("dbg_imp", "Impulses", this.m_physicsDebugOptions.drawContactImpulses, btnOpts);
+                context.ui.checkbox("dbg_cdet", "CDetails", this.m_physicsDebugOptions.drawContactDetails, btnOpts);
                 declared = context.ui.endContainer() && declared;
 
-                declared = context.ui.beginRow("physics_debug_ext_row") && declared;
-                StringView subLabel = "Subsys: Off";
-                if(this.m_physicsDebugOptions.drawSubsystems)
-                    subLabel = "Subsys: On";
-                if(context.ui.button("physics_debug_subsys", subLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawSubsystems = !this.m_physicsDebugOptions.drawSubsystems;
-                StringView interpLabel = "Interp: Off";
-                if(this.m_physicsDebugOptions.useInterpolatedTransforms)
-                    interpLabel = "Interp: On";
-                if(context.ui.button("physics_debug_interp", interpLabel, btnOpts)){
-                    this.m_physicsDebugOptions.useInterpolatedTransforms = !this.m_physicsDebugOptions.useInterpolatedTransforms;
+                declared = context.ui.beginRow("dbg_chk_r4") && declared;
+                context.ui.checkbox("dbg_joints", "Joints", this.m_physicsDebugOptions.drawJoints, btnOpts);
+                context.ui.checkbox("dbg_jforces", "JForces", this.m_physicsDebugOptions.drawJointForces, btnOpts);
+                context.ui.checkbox("dbg_axes", "Axes", this.m_physicsDebugOptions.drawBodyAxes, btnOpts);
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("dbg_chk_r5") && declared;
+                context.ui.checkbox("dbg_origcom", "OrigCoM", this.m_physicsDebugOptions.drawBodyOriginVsCom, btnOpts);
+                context.ui.checkbox("dbg_vel", "Velocities", this.m_physicsDebugOptions.drawVelocities, btnOpts);
+                context.ui.checkbox("dbg_islands", "Islands", this.m_physicsDebugOptions.drawIslands, btnOpts);
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("dbg_chk_r6") && declared;
+                context.ui.checkbox("dbg_dis", "Disabled", this.m_physicsDebugOptions.drawDisabledBodies, btnOpts);
+                context.ui.checkbox("dbg_ccd", "CCD/Flags", this.m_physicsDebugOptions.drawCcdAndFlags, btnOpts);
+                context.ui.checkbox("dbg_inertia", "Inertia", this.m_physicsDebugOptions.drawInertiaTensors, btnOpts);
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("dbg_chk_r7") && declared;
+                context.ui.checkbox("dbg_subsys", "Subsystems", this.m_physicsDebugOptions.drawSubsystems, btnOpts);
+                if(context.ui.checkbox("dbg_interp", "Interp", this.m_physicsDebugOptions.useInterpolatedTransforms, btnOpts))
                     SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
-                }
-                StringView inertiaLabel = "Inertia: Off";
-                if(this.m_physicsDebugOptions.drawInertiaTensors)
-                    inertiaLabel = "Inertia: On";
-                if(context.ui.button("physics_debug_inertia", inertiaLabel, btnOpts))
-                    this.m_physicsDebugOptions.drawInertiaTensors = !this.m_physicsDebugOptions.drawInertiaTensors;
+                context.ui.checkbox("dbg_labels", "Labels", this.m_physicsDebugOptions.drawLabels, btnOpts);
                 declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("dbg_chk_r8") && declared;
+                context.ui.checkbox("dbg_snorm", "SoftNorm", this.m_physicsDebugOptions.drawSoftBodyNormals, btnOpts);
+                context.ui.checkbox("dbg_svel", "SoftVel", this.m_physicsDebugOptions.drawSoftBodyVelocities, btnOpts);
+                context.ui.checkbox("dbg_vf", "VehForce", this.m_physicsDebugOptions.drawVehicleForces, btnOpts);
+                declared = context.ui.endContainer() && declared;
+
+                context.ui.checkbox("dbg_ragtgt", "Ragdoll Target Pose", this.m_physicsDebugOptions.drawRagdollTargetPose, btnOpts);
+
+                SliderOptions thickOpts = SliderOptions();
+                thickOpts.minimum = 0.5;
+                thickOpts.maximum = 5.0;
+                thickOpts.keyStep = 0.1;
+                declared = context.ui.label("dbg_thick_lbl", "Line Thickness (0.5 - 5.0)") && declared;
+                declared = context.ui.slider("dbg_thick_sld", this.m_sliderDebugThickness, thickOpts) && declared;
+
+                SliderOptions maxLOpts = SliderOptions();
+                maxLOpts.minimum = 4096.0;
+                maxLOpts.maximum = 65536.0;
+                maxLOpts.keyStep = 1024.0;
+                declared = context.ui.label("dbg_maxl_lbl", "Max Lines (4096 - 65536)") && declared;
+                declared = context.ui.slider("dbg_maxl_sld", this.m_sliderDebugMaxLines, maxLOpts) && declared;
+            }
+            else if(this.m_activeTab == TestbedUiTab::Spawn){
+                declared = context.ui.beginRow("spn_r1") && declared;
+                if(context.ui.button("spn_box", "Box", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Box; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_sph", "Sphere", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Sphere; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_cap", "Capsule", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Capsule; this.m_pendingSpawn = true; }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("spn_r2") && declared;
+                if(context.ui.button("spn_cyl", "Cylinder", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Cylinder; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_cone", "Cone", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Cone; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_stk", "Stack", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Stack; this.m_pendingSpawn = true; }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("spn_r3") && declared;
+                if(context.ui.button("spn_brl", "Barrel", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Barrel; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_sb", "SoftBody", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::SoftBody; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_rag", "Ragdoll", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Ragdoll; this.m_pendingSpawn = true; }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("spn_r4") && declared;
+                if(context.ui.button("spn_art", "Articul", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Articulation; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_chr", "Character", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Character; this.m_pendingSpawn = true; }
+                if(context.ui.button("spn_veh", "Vehicle", btnOpts)){ this.m_pendingSpawnKind = TestbedSpawnKind::Vehicle; this.m_pendingSpawn = true; }
+                declared = context.ui.endContainer() && declared;
+
+                declared = context.ui.beginRow("spn_r5") && declared;
+                if(context.ui.button("spn_shoot", "Shoot (F)", btnOpts))
+                    this.m_pendingShoot = true;
+                if(context.ui.button("spn_expl", "Explode (G)", btnOpts))
+                    this.m_pendingExplosion = true;
+                if(context.ui.button("spn_clr", "Reset", btnOpts))
+                    this.m_pendingSceneReset = true;
+                declared = context.ui.endContainer() && declared;
+            }
+            else if(this.m_activeTab == TestbedUiTab::Params){
+                paramsTabRendered = true;
+                SliderOptions gravOpts = SliderOptions();
+                gravOpts.minimum = -25.0; gravOpts.maximum = 5.0; gravOpts.keyStep = 0.5;
+                declared = context.ui.label("prm_grav_lbl", "Gravity Y (-25 .. 5)") && declared;
+                declared = context.ui.slider("prm_grav_sld", this.m_sliderGravityY, gravOpts) && declared;
+
+                SliderOptions subOpts = SliderOptions();
+                subOpts.minimum = 1.0; subOpts.maximum = 8.0; subOpts.keyStep = 1.0;
+                declared = context.ui.label("prm_sub_lbl", "SubSteps (1 .. 8)") && declared;
+                declared = context.ui.slider("prm_sub_sld", this.m_sliderSubSteps, subOpts) && declared;
+
+                SliderOptions hzOpts = SliderOptions();
+                hzOpts.minimum = 30.0; hzOpts.maximum = 120.0; hzOpts.keyStep = 5.0;
+                declared = context.ui.label("prm_hz_lbl", "Fixed Hz (30 .. 120)") && declared;
+                declared = context.ui.slider("prm_hz_sld", this.m_sliderFixedHz, hzOpts) && declared;
+
+                SliderOptions chzOpts = SliderOptions();
+                chzOpts.minimum = 10.0; chzOpts.maximum = 120.0; chzOpts.keyStep = 5.0;
+                declared = context.ui.label("prm_chz_lbl", "Contact Hertz (10 .. 120)") && declared;
+                declared = context.ui.slider("prm_chz_sld", this.m_sliderContactHertz, chzOpts) && declared;
+
+                SliderOptions gpuOpts = SliderOptions();
+                gpuOpts.minimum = 0.0; gpuOpts.maximum = 1.0; gpuOpts.keyStep = 0.05;
+                declared = context.ui.label("prm_gpu_lbl", "Hybrid GPU Fraction (0 .. 1)") && declared;
+                declared = context.ui.slider("prm_gpu_sld", this.m_sliderGpuFraction, gpuOpts) && declared;
+
+                declared = context.ui.beginRow("prm_chk_row") && declared;
+                if(context.ui.checkbox("prm_sleep", "Sleep", this.m_runtimeParams.enableSleep, btnOpts))
+                    this.m_pendingParamsApply = true;
+                if(context.ui.checkbox("prm_ccd", "CCD", this.m_runtimeParams.enableContinuous, btnOpts))
+                    this.m_pendingParamsApply = true;
+                if(context.ui.checkbox("prm_warm", "WarmStart", this.m_runtimeParams.enableWarmStarting, btnOpts))
+                    this.m_pendingParamsApply = true;
+                declared = context.ui.endContainer() && declared;
+            }
+            else{
+                inspectTabRendered = true;
+                TestbedSelectedEntityInfo info;
+                QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, info);
+                if(!info.valid){
+                    declared = context.ui.label("ins_none", "No entity selected (LMB pick in viewport)") && declared;
+                }
+                else{
+                    StringView kindStr = "RigidBody";
+                    if(info.subsystemTag == 1u) kindStr = "Character";
+                    else if(info.subsystemTag == 2u) kindStr = "Vehicle";
+                    else if(info.subsystemTag == 3u) kindStr = "Ragdoll";
+                    else if(info.subsystemTag == 4u) kindStr = "Articulation";
+                    else if(info.subsystemTag == 5u) kindStr = "SoftBody";
+                    else if(info.subsystemTag == 6u) kindStr = "Fluid";
+                    else if(info.subsystemTag == 7u) kindStr = "ForceField";
+
+                    b8 iOk = this.m_cachedTempLine.assign(kindStr);
+                    if(info.hasBody){
+                        StringView typeStr = "Static";
+                        if(info.bodyType == BodyType::Dynamic) typeStr = "Dyn";
+                        else if(info.bodyType == BodyType::Kinematic) typeStr = "Kin";
+                        iOk = this.m_cachedTempLine.append(" [") && iOk;
+                        iOk = this.m_cachedTempLine.append(typeStr) && iOk;
+                        if(info.isAwake)
+                            iOk = this.m_cachedTempLine.append(" Awake") && iOk;
+                        else
+                            iOk = this.m_cachedTempLine.append(" Sleep") && iOk;
+                        iOk = this.m_cachedTempLine.append("] m=") && iOk;
+                        iOk = this.appendCentisMsText(this.m_cachedTempLine, info.mass) && iOk;
+                        iOk = this.m_cachedTempLine.append(" v=") && iOk;
+                        iOk = this.appendCentisMsText(this.m_cachedTempLine, info.speed) && iOk;
+                    }
+                    if(iOk)
+                        declared = context.ui.label("ins_hdr", this.m_cachedTempLine.view()) && declared;
+
+                    b8 pOk = this.m_cachedInspectPosLine.assign("Pos (");
+                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.x) && pOk;
+                    pOk = this.m_cachedInspectPosLine.append(", ") && pOk;
+                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.y) && pOk;
+                    pOk = this.m_cachedInspectPosLine.append(", ") && pOk;
+                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.z) && pOk;
+                    pOk = this.m_cachedInspectPosLine.append(")") && pOk;
+                    if(pOk)
+                        declared = context.ui.label("ins_pos", this.m_cachedInspectPosLine.view()) && declared;
+
+                    WidgetOptions bodyOpts = btnOpts;
+                    bodyOpts.enabled = info.hasBody;
+                    declared = context.ui.beginRow("ins_r1") && declared;
+                    if(context.ui.button("ins_wake", "Wake/Slp", bodyOpts)) this.m_pendingInspectAction = 1u;
+                    if(context.ui.button("ins_en", "En/Dis", bodyOpts)) this.m_pendingInspectAction = 2u;
+                    if(context.ui.button("ins_type", "BodyType", bodyOpts)) this.m_pendingInspectAction = 3u;
+                    if(context.ui.button("ins_ccd", "Bullet", bodyOpts)) this.m_pendingInspectAction = 4u;
+                    declared = context.ui.endContainer() && declared;
+
+                    declared = context.ui.beginRow("ins_r2") && declared;
+                    if(context.ui.button("ins_imp", "+Y Imp", bodyOpts)) this.m_pendingInspectAction = 5u;
+                    if(context.ui.button("ins_zero", "ZeroVel", bodyOpts)) this.m_pendingInspectAction = 6u;
+                    if(context.ui.button("ins_foc", "Focus", btnOpts)) this.m_pendingInspectAction = 7u;
+                    if(context.ui.button("ins_del", "Delete", btnOpts)) this.m_pendingInspectAction = 8u;
+                    declared = context.ui.endContainer() && declared;
+
+                    if(info.hasBody){
+                        SliderOptions gsOpts = SliderOptions();
+                        gsOpts.minimum = -2.0; gsOpts.maximum = 4.0; gsOpts.keyStep = 0.25;
+                        declared = context.ui.label("ins_gs_lbl", "Gravity Scale (-2 .. 4)") && declared;
+                        declared = context.ui.slider("ins_gs_sld", this.m_sliderInspectGravScale, gsOpts) && declared;
+                    }
+                }
             }
             [essential] assert(declared);
         }
         const b8 ended = context.ui.endWindow();
         [essential] assert(ended);
+
+        if(debugTabRendered){
+            if(this.m_sliderDebugThickness.result().valid && this.m_sliderDebugThickness.result().valueChanged)
+                this.m_physicsDebugOptions.lineThickness = SimdClamp(cast<f32>(this.m_sliderDebugThickness.value()), 0.5f, 8.0f);
+            if(this.m_sliderDebugMaxLines.result().valid && this.m_sliderDebugMaxLines.result().valueChanged)
+                this.m_physicsDebugOptions.maxLines = Clamp(cast<u32>(this.m_sliderDebugMaxLines.value() + 0.5), 4096u, 65536u);
+        }
+        if(paramsTabRendered){
+            if(this.m_sliderGravityY.result().valid && this.m_sliderGravityY.result().valueChanged){
+                this.m_runtimeParams.gravityY = cast<f32>(this.m_sliderGravityY.value());
+                this.m_pendingParamsApply = true;
+            }
+            if(this.m_sliderSubSteps.result().valid && this.m_sliderSubSteps.result().valueChanged){
+                this.m_runtimeParams.subStepCount = Clamp(cast<u32>(this.m_sliderSubSteps.value() + 0.5), 1u, 8u);
+                this.m_pendingParamsApply = true;
+            }
+            if(this.m_sliderFixedHz.result().valid && this.m_sliderFixedHz.result().valueChanged){
+                this.m_runtimeParams.fixedHz = cast<f32>(this.m_sliderFixedHz.value());
+                this.m_pendingParamsApply = true;
+            }
+            if(this.m_sliderContactHertz.result().valid && this.m_sliderContactHertz.result().valueChanged){
+                this.m_runtimeParams.contactHertz = cast<f32>(this.m_sliderContactHertz.value());
+                this.m_pendingParamsApply = true;
+            }
+            if(this.m_sliderGpuFraction.result().valid && this.m_sliderGpuFraction.result().valueChanged){
+                this.m_runtimeParams.gpuWorkloadFraction = SimdClamp(cast<f32>(this.m_sliderGpuFraction.value()), 0.0f, 1.0f);
+                this.m_pendingParamsApply = true;
+            }
+        }
+        if(inspectTabRendered && this.m_selectedEntity.valid()){
+            if(this.m_sliderInspectGravScale.result().valid && this.m_sliderInspectGravScale.result().valueChanged)
+                ApplySelectedEntityGravityScale(this.m_world, this.m_selectedEntity, cast<f32>(this.m_sliderInspectGravScale.value()));
+        }
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -606,14 +1164,27 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_inputRegistered = false;
     private b8 m_worldDestroyed = false;
     private EntityID m_physicsConfigEntity;
+    private EntityID m_selectedEntity = s_InvalidEntityId;
     private Vector<EntityID> m_physicsEntities;
+    private Vector<EntityID> m_postSnapshotSpawnedEntities;
+    private TestbedShowcaseRefs m_showcaseRefs = TestbedShowcaseRefs();
+    private TestbedPhysicsRuntimeParams m_runtimeParams = TestbedPhysicsRuntimeParams();
     private TestbedPhysicsSceneMode m_physicsSceneMode = TestbedPhysicsSceneMode::Default;
     private TestbedPhysicsBackendChoice m_physicsBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
     private TestbedPhysicsSceneMode m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
     private TestbedPhysicsBackendChoice m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
+    private TestbedUiTab m_activeTab = TestbedUiTab::Sim;
+    private TestbedControlMode m_controlMode = TestbedControlMode::Camera;
+    private TestbedCameraMode m_cameraMode = TestbedCameraMode::Fly;
+    private TestbedSpawnKind m_pendingSpawnKind = TestbedSpawnKind::Box;
     private b8 m_pendingSceneSwitch = false;
+    private b8 m_pendingSceneReset = false;
     private b8 m_pendingBackendSwitch = false;
     private b8 m_pendingPauseToggle = false;
+    private b8 m_pendingSnapCapture = false;
+    private b8 m_pendingSnapRestore = false;
+    private b8 m_pendingParamsApply = false;
+    private b8 m_pendingSpawn = false;
     private b8 m_physicsPaused = false;
     private b8 m_physicsStepOnce = false;
     private f32 m_physicsTimeScale = 1.0f;
@@ -621,10 +1192,19 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_pendingExplosion = false;
     private b8 m_pendingGrabBegin = false;
     private b8 m_pendingGrabEnd = false;
+    private u32 m_pendingInspectAction = 0u;
     private f32 m_lastViewportW = 0.0f;
     private f32 m_lastViewportH = 0.0f;
     private f32 m_lastPointerX = 0.0f;
     private f32 m_lastPointerY = 0.0f;
+    private f32 m_flySpeedScale = 1.0f;
+    private f32 m_orbitYaw = s_Pi;
+    private f32 m_orbitPitch = -0.25f;
+    private f32 m_orbitDistance = 5.5f;
+    private f32x4 m_controlMoveAxes(0.0f, 0.0f, 0.0f, 0.0f);
+    private b8 m_controlActionPressed = false;
+    private f32x4 m_camForwardCache(0.0f, 0.0f, -1.0f, 0.0f);
+    private f32x4 m_camRightCache(1.0f, 0.0f, 0.0f, 0.0f);
     private TestbedGrabState m_grabState = TestbedGrabState();
     private Vector<u8> m_physicsSnapshotBytes;
     private InstantiatedSceneEntities m_startupSceneEntities = InstantiatedSceneEntities();
@@ -634,12 +1214,28 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private PhysicsDebugDrawScratch m_physicsDebugScratch = PhysicsDebugDrawScratch();
     private Vector<PaintLineSegment> m_physicsScreenLines;
     private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
+    private CompactString m_cachedStateLine;
     private CompactString m_cachedPhysicsLine;
     private CompactString m_cachedSplitLine;
     private CompactString m_cachedPhaseLine;
+    private CompactString m_cachedTempLine;
+    private CompactString m_cachedInspectPosLine;
     private i64 m_cachedStepCentis = -1;
     private f32 m_hudStepTimer = 0.0f;
     private b8 m_hasCachedHudStats = false;
+    private b8 m_hasCachedPhaseLine = false;
+    private Array<f32, 96u> m_historyStepMs;
+    private Array<f32, 96u> m_historyAwake;
+    private u32 m_historyWriteIndex = 0u;
+    private u32 m_historyCount = 0u;
+    private SliderState m_sliderDebugThickness = SliderState();
+    private SliderState m_sliderDebugMaxLines = SliderState();
+    private SliderState m_sliderGravityY = SliderState();
+    private SliderState m_sliderSubSteps = SliderState();
+    private SliderState m_sliderFixedHz = SliderState();
+    private SliderState m_sliderContactHertz = SliderState();
+    private SliderState m_sliderGpuFraction = SliderState();
+    private SliderState m_sliderInspectGravScale = SliderState();
 }
 
 

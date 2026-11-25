@@ -11,6 +11,7 @@
 const usize s_ComponentHeaderBinaryBytes = 80u;
 
 const usize s_TransformComponentPayloadBinaryBytes = 48u;
+const usize s_SceneParentComponentPayloadBinaryBytes = 72u;
 const usize s_CameraComponentPayloadBinaryBytes = 16u;
 const usize s_LightComponentPayloadBinaryBytes = 40u;
 
@@ -93,19 +94,31 @@ b8 TryNormalizeTransformQuaternion(in VectorSingle rawQuaternion, mut VectorSing
     return true;
 }
 
-b8 IsValidTransformComponentParameters(in TransformComponent component){
+b8 IsValidDecomposedTransformParameters(
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale
+){
     if(
-        !IsFinite(VectorSingle(component.position.x, component.position.y, component.position.z, 0.0f))
-        || !IsFinite(VectorSingle(component.rotation.x, component.rotation.y, component.rotation.z, component.rotation.w))
-        || !IsFinite(VectorSingle(component.scale.x, component.scale.y, component.scale.z, 0.0f))
+        !IsFinite(VectorSingle(position.x, position.y, position.z, 0.0f))
+        || !IsFinite(rotation)
+        || !IsFinite(VectorSingle(scale.x, scale.y, scale.z, 0.0f))
     )
         return false;
 
-    const f32 rotationLengthSq = LengthSq(VectorSingle(component.rotation));
+    const f32 rotationLengthSq = LengthSq(rotation);
     if(!IsFinite(VectorSingle(rotationLengthSq)))
         return false;
     const VectorSingle difference = VectorSingle(rotationLengthSq) - VectorSingle(1.0f);
     return Abs(difference).x <= s_TransformRotationUnitLengthSquaredTolerance;
+}
+
+b8 IsValidTransformComponentParameters(in TransformComponent component){
+    return IsValidDecomposedTransformParameters(
+        VectorSingle(component.position),
+        VectorSingle(component.rotation),
+        VectorSingle(component.scale)
+    );
 }
 
 b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Name virtualPath){
@@ -117,6 +130,25 @@ b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Na
         , virtualPath.resolvedText()
     );
     return false;
+}
+
+b8 ValidateLocalTransformComponentAssetPayload(in LocalTransformComponent component, in Name virtualPath){
+    if(IsValidDecomposedTransformParameters(
+        VectorSingle(component.position),
+        VectorSingle(component.rotation),
+        VectorSingle(component.scale)
+    ))
+        return true;
+
+    error(
+        "LocalTransformComponentAsset::validatePayload failed: local transform '{}' must have finite position/scale and unit quaternion rotation"
+        , virtualPath.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateSceneParentComponentAssetPayload(in SceneParentComponent component, in Name virtualPath){
+    return virtualPath != s_NameNone;
 }
 
 b8 ValidateCameraComponentAssetPayload(in CameraComponent component, in Name virtualPath){

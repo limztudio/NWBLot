@@ -1,0 +1,448 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/input/router.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u64 s_GamepadDefaultDeviceBaseId = 0x47414D4500000000u;
+const u64 s_GamepadStickControlBase = 64u;
+const u64 s_GamepadScrollControl = 96u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> GamepadStickDirection{
+    None,
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+class GamepadNavigationConfig{
+    public f32 stickDeadzone = 0.35f;
+    public f32 stickReleaseThreshold = 0.25f;
+    public f32 scrollDeadzone = 0.20f;
+    public f32 scrollSpeed = 12.0f;
+    public f32 initialRepeatDelaySeconds = 0.40f;
+    public f32 repeatIntervalSeconds = 0.12f;
+    public u64 deviceBaseId = s_GamepadDefaultDeviceBaseId;
+}
+
+class GamepadSlotState{
+    public f32 leftX = 0.0f;
+    public f32 leftY = 0.0f;
+    public f32 rightX = 0.0f;
+    public f32 rightY = 0.0f;
+    public f32 leftTrigger = 0.0f;
+    public f32 rightTrigger = 0.0f;
+    public u32 heldButtons = 0u;
+    public GamepadStickDirection stickDirection = GamepadStickDirection::None;
+    public GamepadStickDirection dpadDirection = GamepadStickDirection::None;
+    public f32 stickRepeatTimer = 0.0f;
+    public f32 dpadRepeatTimer = 0.0f;
+    public b8 connected = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TryMapGamepadStickFocusDirection(in GamepadStickDirection stickDir, mut FocusDirection outDir){
+    switch(stickDir){
+    case GamepadStickDirection::Up:
+        outDir = FocusDirection::Up;
+        return true;
+    case GamepadStickDirection::Down:
+        outDir = FocusDirection::Down;
+        return true;
+    case GamepadStickDirection::Left:
+        outDir = FocusDirection::Left;
+        return true;
+    case GamepadStickDirection::Right:
+        outDir = FocusDirection::Right;
+        return true;
+    default:
+        return false;
+    }
+}
+
+b8 TryMapGamepadDpadStickDirection(in i32 button, mut GamepadStickDirection outDir){
+    if(button == cast<i32>(GamepadButton::DPadUp)){
+        outDir = GamepadStickDirection::Up;
+        return true;
+    }
+    if(button == cast<i32>(GamepadButton::DPadDown)){
+        outDir = GamepadStickDirection::Down;
+        return true;
+    }
+    if(button == cast<i32>(GamepadButton::DPadLeft)){
+        outDir = GamepadStickDirection::Left;
+        return true;
+    }
+    if(button == cast<i32>(GamepadButton::DPadRight)){
+        outDir = GamepadStickDirection::Right;
+        return true;
+    }
+    return false;
+}
+
+u64 GamepadDpadControlForDirection(in GamepadStickDirection dir){
+    switch(dir){
+    case GamepadStickDirection::Up: return cast<u64>(GamepadButton::DPadUp) + 1u;
+    case GamepadStickDirection::Down: return cast<u64>(GamepadButton::DPadDown) + 1u;
+    case GamepadStickDirection::Left: return cast<u64>(GamepadButton::DPadLeft) + 1u;
+    case GamepadStickDirection::Right: return cast<u64>(GamepadButton::DPadRight) + 1u;
+    default: return 0u;
+    }
+}
+
+InputCommand ResolveGamepadDirectionCommand(in InputRouter router, in FocusDirection dir){
+    b8 navigable = false;
+    b8 horizontalNav = false;
+    b8 horizontalOnly = false;
+    if(router.focus().valid()){
+        const Optional<in HitTarget> focused = router.findTarget(router.focus());
+        if(focused.has_value()){
+            HitTarget host = focused.value();
+            if(!host.navigable && host.commandOwner.valid()){
+                const Optional<in HitTarget> owner = router.findTarget(host.commandOwner, host.commandOwnerDeclarationGeneration);
+                if(owner.has_value())
+                    host = owner.value();
+            }
+            if(host.navigable){
+                navigable = true;
+                horizontalNav = host.horizontalNavigation;
+                horizontalOnly = host.horizontalOnlyNavigation;
+            }
+        }
+    }
+    if(navigable){
+        if(dir == FocusDirection::Left){
+            if(horizontalNav)
+                return InputCommand::Left;
+            return InputCommand::FocusLeft;
+        }
+        if(dir == FocusDirection::Right){
+            if(horizontalNav)
+                return InputCommand::Right;
+            return InputCommand::FocusRight;
+        }
+        if(dir == FocusDirection::Up){
+            if(!horizontalOnly)
+                return InputCommand::Up;
+            return InputCommand::FocusUp;
+        }
+        if(!horizontalOnly)
+            return InputCommand::Down;
+        return InputCommand::FocusDown;
+    }
+    switch(dir){
+    case FocusDirection::Up: return InputCommand::FocusUp;
+    case FocusDirection::Down: return InputCommand::FocusDown;
+    case FocusDirection::Left: return InputCommand::FocusLeft;
+    case FocusDirection::Right: return InputCommand::FocusRight;
+    }
+    return InputCommand::FocusDown;
+}
+
+InputCommand ResolveGamepadButtonCommand(in i32 button, in InputRouter router){
+    if(button == cast<i32>(GamepadButton::A))
+        return InputCommand::Activate;
+    if(button == cast<i32>(GamepadButton::B))
+        return InputCommand::Cancel;
+    if(button == cast<i32>(GamepadButton::X))
+        return InputCommand::ContextMenu;
+    if(button == cast<i32>(GamepadButton::Y) || button == cast<i32>(GamepadButton::Start))
+        return InputCommand::Submit;
+    if(button == cast<i32>(GamepadButton::LeftBumper))
+        return InputCommand::FocusPrevious;
+    if(button == cast<i32>(GamepadButton::RightBumper))
+        return InputCommand::FocusNext;
+    GamepadStickDirection dpadDir = GamepadStickDirection::None;
+    if(TryMapGamepadDpadStickDirection(button, dpadDir)){
+        FocusDirection focusDir = FocusDirection::Down;
+        if(TryMapGamepadStickFocusDirection(dpadDir, focusDir))
+            return ResolveGamepadDirectionCommand(router, focusDir);
+    }
+    return InputCommand::None;
+}
+
+GamepadStickDirection ClassifyLeftStickDirection(in f32 lx, in f32 ly){
+    const VectorSingle absVec = Abs(VectorSingle(lx, ly, 0.0f, 0.0f));
+    if(absVec.x >= absVec.y){
+        if(lx >= 0.0f)
+            return GamepadStickDirection::Right;
+        return GamepadStickDirection::Left;
+    }
+    if(ly >= 0.0f)
+        return GamepadStickDirection::Up;
+    return GamepadStickDirection::Down;
+}
+
+Point ResolveGamepadScrollAnchor(in InputRouter router){
+    if(router.focus().valid()){
+        const Optional<in HitTarget> focused = router.findTarget(router.focus());
+        if(focused.has_value()){
+            const VectorSingle bounds = ComputeVisibleSpatialBounds(focused.value());
+            return Point((bounds.x + bounds.z) * 0.5f, (bounds.y + bounds.w) * 0.5f);
+        }
+    }
+    if(router.pointerKnown())
+        return router.pointerPosition();
+    for(in HitTarget target : router.targets()){
+        if(target.scrollable && target.enabled){
+            const VectorSingle bounds = ComputeVisibleSpatialBounds(target);
+            if(bounds.z > bounds.x && bounds.w > bounds.y)
+                return Point((bounds.x + bounds.z) * 0.5f, (bounds.y + bounds.w) * 0.5f);
+        }
+    }
+    return Point(0.0f, 0.0f);
+}
+
+class GamepadNavigationAdapter{
+    public GamepadNavigationConfig m_config;
+    private Array<GamepadSlotState, 4u> m_slots;
+
+    public GamepadNavigationConfig config()const{ return this.m_config; }
+    public void setConfig(in GamepadNavigationConfig config){ this.m_config = config; }
+
+    private u64 deviceIdForPad(in u32 gamepadIndex)const{
+        return this.m_config.deviceBaseId + cast<u64>(gamepadIndex);
+    }
+
+    [cpp_unwind]
+    private b8 queueCommand(
+        in u64 deviceId,
+        in u64 controlId,
+        in InputEventType type,
+        in InputCommand command,
+        in b8 repeat,
+        mut InputRouter router
+    ){
+        InputEvent ev;
+        ev.type = type;
+        ev.command = command;
+        ev.repeat = repeat;
+        ev.edit = false;
+        ev.allowText = false;
+        ev.source = InputSource(deviceId, controlId);
+        const Expected<InputEvent> queued = router.queue(ev);
+        return queued.has_value();
+    }
+
+    [cpp_unwind]
+    public void onConnection(in u32 gamepadIndex, in b8 connected, mut InputRouter router){
+        if(gamepadIndex >= s_MaxGamepadCount)
+            return;
+        const u64 deviceId = this.deviceIdForPad(gamepadIndex);
+        GamepadSlotState cleanState;
+        cleanState.connected = connected;
+        this.m_slots[gamepadIndex] = cleanState;
+        if(!connected)
+            router.cancelDeviceInput(deviceId);
+    }
+
+    [cpp_unwind]
+    public void reset(mut InputRouter router){
+        for(u32 index = 0u; index < s_MaxGamepadCount; ++index)
+            this.onConnection(index, false, router);
+    }
+
+    [cpp_unwind]
+    public b8 onButton(in u32 gamepadIndex, in i32 button, in i32 action, mut InputRouter router){
+        if(gamepadIndex >= s_MaxGamepadCount || button < 0 || button >= cast<i32>(GamepadButton::kCount))
+            return false;
+        if(action != s_InputActionPress && action != s_InputActionRepeat && action != s_InputActionReleaseBase)
+            return false;
+
+        this.m_slots[gamepadIndex].connected = true;
+        const u64 deviceId = this.deviceIdForPad(gamepadIndex);
+        const u64 controlId = cast<u64>(button) + 1u;
+        const u32 bit = cast<u32>(1u) << cast<u32>(button);
+        const InputCommand command = ResolveGamepadButtonCommand(button, router);
+        if(command == InputCommand::None)
+            return false;
+
+        GamepadStickDirection dpadDir = GamepadStickDirection::None;
+        const b8 isDpad = TryMapGamepadDpadStickDirection(button, dpadDir);
+
+        if(action == s_InputActionReleaseBase){
+            this.m_slots[gamepadIndex].heldButtons &= ~bit;
+            if(isDpad && this.m_slots[gamepadIndex].dpadDirection == dpadDir){
+                this.m_slots[gamepadIndex].dpadDirection = GamepadStickDirection::None;
+                this.m_slots[gamepadIndex].dpadRepeatTimer = 0.0f;
+            }
+            if(!this.queueCommand(deviceId, controlId, InputEventType::CommandUp, command, false, router))
+                return false;
+            return router.process().commandConsumed;
+        }
+
+        const b8 isRepeat = action == s_InputActionRepeat;
+        this.m_slots[gamepadIndex].heldButtons |= bit;
+        if(isDpad && !isRepeat){
+            this.m_slots[gamepadIndex].dpadDirection = dpadDir;
+            this.m_slots[gamepadIndex].dpadRepeatTimer = this.m_config.initialRepeatDelaySeconds;
+        }
+        if(!this.queueCommand(deviceId, controlId, InputEventType::CommandDown, command, isRepeat, router))
+            return false;
+        return router.process().commandConsumed;
+    }
+
+    [cpp_unwind]
+    public b8 onAxis(in u32 gamepadIndex, in i32 axis, in f32 value, mut InputRouter router){
+        if(gamepadIndex >= s_MaxGamepadCount || axis < 0 || axis >= cast<i32>(GamepadAxis::kCount) || !IsFinite(VectorSingle(value)))
+            return false;
+
+        this.m_slots[gamepadIndex].connected = true;
+        if(axis == cast<i32>(GamepadAxis::LeftTrigger)){
+            this.m_slots[gamepadIndex].leftTrigger = UiSimdClamp(value, 0.0f, 1.0f);
+            return false;
+        }
+        if(axis == cast<i32>(GamepadAxis::RightTrigger)){
+            this.m_slots[gamepadIndex].rightTrigger = UiSimdClamp(value, 0.0f, 1.0f);
+            return false;
+        }
+
+        const f32 clamped = UiSimdClamp(value, -1.0f, 1.0f);
+        if(axis == cast<i32>(GamepadAxis::RightX)){
+            this.m_slots[gamepadIndex].rightX = clamped;
+            return false;
+        }
+        if(axis == cast<i32>(GamepadAxis::RightY)){
+            this.m_slots[gamepadIndex].rightY = clamped;
+            return false;
+        }
+
+        if(axis == cast<i32>(GamepadAxis::LeftX))
+            this.m_slots[gamepadIndex].leftX = clamped;
+        else
+            this.m_slots[gamepadIndex].leftY = clamped;
+
+        const VectorSingle vec(this.m_slots[gamepadIndex].leftX, this.m_slots[gamepadIndex].leftY, 0.0f, 0.0f);
+        const VectorSingle vecSq = VectorMultiply(vec, vec);
+        const f32 mag = Sqrt(VectorSingle(vecSq.x + vecSq.y)).x;
+        const GamepadStickDirection previous = this.m_slots[gamepadIndex].stickDirection;
+        f32 threshold = this.m_config.stickDeadzone;
+        if(previous != GamepadStickDirection::None)
+            threshold = this.m_config.stickReleaseThreshold;
+
+        GamepadStickDirection nextDir = GamepadStickDirection::None;
+        if(mag >= threshold)
+            nextDir = ClassifyLeftStickDirection(vec.x, vec.y);
+
+        if(nextDir == previous)
+            return false;
+
+        const u64 deviceId = this.deviceIdForPad(gamepadIndex);
+        b8 queuedAny = false;
+        if(previous != GamepadStickDirection::None){
+            FocusDirection prevFocusDir = FocusDirection::Down;
+            InputCommand prevCmd = InputCommand::FocusDown;
+            if(TryMapGamepadStickFocusDirection(previous, prevFocusDir))
+                prevCmd = ResolveGamepadDirectionCommand(router, prevFocusDir);
+            if(this.queueCommand(deviceId, s_GamepadStickControlBase + cast<u64>(previous), InputEventType::CommandUp, prevCmd, false, router))
+                queuedAny = true;
+        }
+        this.m_slots[gamepadIndex].stickDirection = nextDir;
+        if(nextDir != GamepadStickDirection::None){
+            this.m_slots[gamepadIndex].stickRepeatTimer = this.m_config.initialRepeatDelaySeconds;
+            FocusDirection nextFocusDir = FocusDirection::Down;
+            InputCommand nextCmd = InputCommand::FocusDown;
+            if(TryMapGamepadStickFocusDirection(nextDir, nextFocusDir))
+                nextCmd = ResolveGamepadDirectionCommand(router, nextFocusDir);
+            if(this.queueCommand(deviceId, s_GamepadStickControlBase + cast<u64>(nextDir), InputEventType::CommandDown, nextCmd, false, router))
+                queuedAny = true;
+        }
+        else
+            this.m_slots[gamepadIndex].stickRepeatTimer = 0.0f;
+
+        if(!queuedAny)
+            return false;
+        return router.process().commandConsumed;
+    }
+
+    [cpp_unwind]
+    public b8 tick(in f32 deltaSeconds, mut InputRouter router){
+        if(!IsFinite(VectorSingle(deltaSeconds)) || deltaSeconds <= 0.0f)
+            return false;
+
+        b8 queuedAny = false;
+        for(u32 index = 0u; index < s_MaxGamepadCount; ++index){
+            if(!this.m_slots[index].connected)
+                continue;
+            const u64 deviceId = this.deviceIdForPad(index);
+
+            const GamepadStickDirection dpadDir = this.m_slots[index].dpadDirection;
+            const f32 repeatStep = UiSimdMax(this.m_config.repeatIntervalSeconds, 0.01f);
+            if(dpadDir != GamepadStickDirection::None){
+                this.m_slots[index].dpadRepeatTimer -= deltaSeconds;
+                if(this.m_slots[index].dpadRepeatTimer <= 0.0f){
+                    this.m_slots[index].dpadRepeatTimer += repeatStep;
+                    if(this.m_slots[index].dpadRepeatTimer <= 0.0f)
+                        this.m_slots[index].dpadRepeatTimer = repeatStep;
+                    FocusDirection focusDir = FocusDirection::Down;
+                    if(TryMapGamepadStickFocusDirection(dpadDir, focusDir)){
+                        const u64 controlId = GamepadDpadControlForDirection(dpadDir);
+                        const InputCommand cmd = ResolveGamepadDirectionCommand(router, focusDir);
+                        if(this.queueCommand(deviceId, controlId, InputEventType::CommandUp, cmd, false, router)
+                            && this.queueCommand(deviceId, controlId, InputEventType::CommandDown, cmd, false, router)
+                        )
+                            queuedAny = true;
+                    }
+                }
+            }
+
+            const GamepadStickDirection stickDir = this.m_slots[index].stickDirection;
+            if(stickDir != GamepadStickDirection::None){
+                this.m_slots[index].stickRepeatTimer -= deltaSeconds;
+                if(this.m_slots[index].stickRepeatTimer <= 0.0f){
+                    this.m_slots[index].stickRepeatTimer += repeatStep;
+                    if(this.m_slots[index].stickRepeatTimer <= 0.0f)
+                        this.m_slots[index].stickRepeatTimer = repeatStep;
+                    FocusDirection focusDir = FocusDirection::Down;
+                    if(TryMapGamepadStickFocusDirection(stickDir, focusDir)){
+                        const u64 controlId = s_GamepadStickControlBase + cast<u64>(stickDir);
+                        const InputCommand cmd = ResolveGamepadDirectionCommand(router, focusDir);
+                        if(this.queueCommand(deviceId, controlId, InputEventType::CommandUp, cmd, false, router)
+                            && this.queueCommand(deviceId, controlId, InputEventType::CommandDown, cmd, false, router)
+                        )
+                            queuedAny = true;
+                    }
+                }
+            }
+
+            const VectorSingle rightStick(this.m_slots[index].rightX, this.m_slots[index].rightY, 0.0f, 0.0f);
+            const VectorSingle rightSq = VectorMultiply(rightStick, rightStick);
+            const f32 rMag = Sqrt(VectorSingle(rightSq.x + rightSq.y)).x;
+            if(rMag > this.m_config.scrollDeadzone && this.m_config.scrollDeadzone < 0.999f){
+                const f32 rescaled = UiSimdClamp((rMag - this.m_config.scrollDeadzone) / (1.0f - this.m_config.scrollDeadzone), 0.0f, 1.0f);
+                const f32 scale = (rescaled * rescaled) / rMag * this.m_config.scrollSpeed * deltaSeconds;
+                const VectorSingle scrollVec = VectorMultiply(rightStick, VectorSingle(scale));
+                PointerInput scrollInput;
+                scrollInput.source = InputSource(deviceId, s_GamepadScrollControl);
+                scrollInput.phase = PointerPhase::Scroll;
+                scrollInput.hoverCapable = false;
+                scrollInput.position = ResolveGamepadScrollAnchor(router);
+                scrollInput.scrollX = cast<f64>(scrollVec.x);
+                scrollInput.scrollY = cast<f64>(scrollVec.y);
+                if(router.queuePointer(scrollInput).has_value())
+                    queuedAny = true;
+            }
+        }
+
+        if(!queuedAny)
+            return false;
+        const InputRoutingResult result = router.process();
+        return result.commandConsumed || result.pointerConsumed;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -322,7 +322,7 @@ void VerifyUiWindowBehaviorTests_OverflowingResizeRejectsBoundsAndGestureBaselin
     gesture.id.sequence = 1u;
     gesture.referenceRectangle = Rect(0.0f, 30.0f, largeCoordinate, 140.0f);
     gesture.position.x = largeCoordinate;
-    EXPECT_FALSE(TryApplyWindowResize(gesture, Point(160.0f, 80.0f), state));
+    EXPECT_FALSE(TryApplyWindowResize(gesture, Point(160.0f, 80.0f), Point(0.0f, 0.0f), WindowResizeEdge::BottomRight, state));
     EXPECT_FLOAT_EQ(state.bounds.width, 200.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
     EXPECT_EQ(state.resizeGesture.id.sequence, 0u);
@@ -781,6 +781,309 @@ void VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication(mut
     EXPECT_FALSE(self.m_context.finishFrame());
 }
 
+void VerifyUiWindowTests_MaximumSizeClampsInitializationFirstUseAndResizeAndRejectsInvalidLimits(mut UiWindowTests self){
+    WindowState invalidState = WindowState();
+    WindowOptions invalidOptions = WindowOptions();
+    invalidOptions.minimumSize = Point(180.0f, 100.0f);
+    invalidOptions.maximumSize = Point(150.0f, 200.0f);
+    ASSERT_TRUE(self.begin(1u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "MaxInvalid", invalidState, invalidOptions));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(invalidState.initialized);
+    EXPECT_FALSE(self.m_context.finishFrame());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    invalidOptions.maximumSize = Point(200.0f, bit_cast<f32>(s_UiWheelWindowQuietNaNF32Bits));
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "MaxNaN", invalidState, invalidOptions));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(invalidState.initialized);
+    EXPECT_FALSE(self.m_context.finishFrame());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    WindowState clampedState = WindowState();
+    WindowOptions clampedOptions = WindowOptions();
+    clampedOptions.initialBounds = Rect(10.0f, 20.0f, 340.0f, 260.0f);
+    clampedOptions.minimumSize = Point(160.0f, 80.0f);
+    clampedOptions.maximumSize = Point(220.0f, 140.0f);
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "MaxClamp", clampedState, clampedOptions));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_FLOAT_EQ(clampedState.bounds.width, 220.0f);
+    EXPECT_FLOAT_EQ(clampedState.bounds.height, 140.0f);
+
+    self.drag(Point(222.0f, 152.0f), Point(420.0f, 360.0f));
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "MaxClamp", clampedState, clampedOptions));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_FLOAT_EQ(clampedState.bounds.width, 220.0f);
+    EXPECT_FLOAT_EQ(clampedState.bounds.height, 140.0f);
+
+    WindowState fitState = WindowState();
+    WindowOptions fitOptions = WindowOptions();
+    fitOptions.initialBounds = Rect(10.0f, 20.0f, 170.0f, 90.0f);
+    fitOptions.minimumSize = Point(160.0f, 80.0f);
+    fitOptions.maximumSize = Point(210.0f, 130.0f);
+    fitOptions.contentWidthFirstUse = true;
+    fitOptions.contentHeightFirstUse = true;
+    WidgetOptions bigButton = WidgetOptions();
+    bigButton.width = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+    bigButton.height = LayoutSize(LayoutSizePolicy::Fixed, 240.0f);
+    ASSERT_TRUE(self.begin(5u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "MaxFit", fitState, fitOptions));
+    EXPECT_FALSE(self.m_builder.button("big", "Big", bigButton));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+    EXPECT_FLOAT_EQ(fitState.bounds.width, 210.0f);
+    EXPECT_FLOAT_EQ(fitState.bounds.height, 130.0f);
+}
+
+void VerifyUiWindowTests_CloseButtonHidesWindowImmediatelyReservesTitleSpaceAndAllowsReopen(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(20.0f, 30.0f, 240.0f, 150.0f);
+    options.closable = true;
+    options.collapsible = true;
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Closable", state, options));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    const DrawSnapshot openSnap = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_FALSE(openSnap.vertices().empty());
+    const auto foundClose = self.tryTarget(self.id("@window.close"));
+    ASSERT_TRUE(foundClose.has_value());
+    const HitTarget closeTarget = foundClose.value();
+    EXPECT_TRUE(closeTarget.focusable);
+    EXPECT_TRUE(closeTarget.activatable);
+    EXPECT_FLOAT_EQ(closeTarget.rectangle.x, 233.0f);
+    EXPECT_FLOAT_EQ(closeTarget.rectangle.width, 20.0f);
+
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_EQ(self.m_context.input().focus(), self.id("@window.close"));
+
+    self.click(Point(243.0f, 46.0f));
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Closable", state, options));
+    EXPECT_FALSE(self.m_context.failed());
+    EXPECT_TRUE(state.closeRequested);
+    EXPECT_FALSE(state.open);
+    ASSERT_TRUE(self.finishWindow());
+    const DrawSnapshot closedSnap = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_TRUE(closedSnap.vertices().empty());
+    EXPECT_FALSE(self.hasTarget(self.id("@window.close")));
+    EXPECT_FALSE(self.hasTarget(self.id("@window.title")));
+
+    ASSERT_TRUE(self.begin(3u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Closable", state, options));
+    EXPECT_FALSE(state.closeRequested);
+    EXPECT_FALSE(state.open);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+
+    state.open = true;
+    ASSERT_TRUE(self.begin(4u));
+    EXPECT_TRUE(self.m_builder.beginWindow("window", "Closable", state, options));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.close")));
+}
+
+void VerifyUiWindowTests_EdgeAndCornerResizeHandlesAnchorOppositeEdgesAndRespectMinMax(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(100.0f, 100.0f, 200.0f, 140.0f);
+    options.minimumSize = Point(160.0f, 90.0f);
+    options.maximumSize = Point(260.0f, 180.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.left")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.right")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.top")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.bottom")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.top_left")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.top_right")));
+    EXPECT_TRUE(self.hasTarget(self.id("@window.resize.bottom_left")));
+
+    self.drag(Point(102.0f, 170.0f), Point(72.0f, 170.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(state.bounds.x, 70.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 230.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 100.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
+
+    self.drag(Point(72.0f, 170.0f), Point(10.0f, 170.0f));
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_FLOAT_EQ(state.bounds.x, 40.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 260.0f);
+
+    self.drag(Point(42.0f, 102.0f), Point(92.0f, 82.0f));
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    EXPECT_FLOAT_EQ(state.bounds.x, 90.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 80.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 210.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 160.0f);
+
+    self.drag(Point(298.0f, 82.0f), Point(328.0f, 122.0f));
+    ASSERT_TRUE(self.begin(5u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+    EXPECT_FLOAT_EQ(state.bounds.x, 90.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 120.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 240.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 120.0f);
+
+    self.drag(Point(92.0f, 238.0f), Point(250.0f, 290.0f));
+    ASSERT_TRUE(self.begin(6u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Edges", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(6u));
+    EXPECT_FLOAT_EQ(state.bounds.x, 170.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 160.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 172.0f);
+}
+
+void VerifyUiWindowTests_MultiWindowBringToFrontReordersPaintAndHitTestingWhileKeepingPopupsAbove(mut UiWindowTests self){
+    WindowState stateA = WindowState();
+    WindowState stateB = WindowState();
+    WindowOptions optA = WindowOptions();
+    optA.initialBounds = Rect(20.0f, 20.0f, 220.0f, 160.0f);
+    WindowOptions optB = WindowOptions();
+    optB.initialBounds = Rect(100.0f, 60.0f, 220.0f, 160.0f);
+    const WidgetId winAId = RequireUiWidgetId(RequireUiRootId(self.m_root), "win_a");
+    const WidgetId winBId = RequireUiWidgetId(RequireUiRootId(self.m_root), "win_b");
+
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    EXPECT_FALSE(self.m_builder.button("btn_a", "BtnA"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    EXPECT_FALSE(self.m_builder.button("btn_b", "BtnB"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_LT(stateA.zOrder, stateB.zOrder);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(150.0f, 140.0f)), winBId);
+
+    self.click(Point(40.0f, 140.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    EXPECT_FALSE(self.m_builder.button("btn_a", "BtnA"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    EXPECT_FALSE(self.m_builder.button("btn_b", "BtnB"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    const DrawSnapshot raisedSnap = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_GT(stateA.zOrder, stateB.zOrder);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(150.0f, 140.0f)), winAId);
+    ASSERT_GE(raisedSnap.commands().size(), 2u);
+    u32 prevZOrder = 0u;
+    for(in DrawCommand cmd : raisedSnap.commands()){
+        EXPECT_EQ(cmd.layer, 0u);
+        EXPECT_GE(cmd.zOrder, prevZOrder);
+        prevZOrder = cmd.zOrder;
+    }
+    EXPECT_EQ(prevZOrder, stateA.zOrder);
+
+    self.click(Point(40.0f, 140.0f));
+    self.click(Point(280.0f, 190.0f));
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    EXPECT_FALSE(self.m_builder.button("btn_b", "BtnB"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    EXPECT_FALSE(self.m_builder.button("btn_a", "BtnA"));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_GT(stateB.zOrder, stateA.zOrder);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(150.0f, 140.0f)), winBId);
+
+    PopupState popup = PopupState();
+    popup.open();
+    PopupOptions popupOpts = PopupOptions();
+    popupOpts.anchor = Rect(120.0f, 120.0f, 40.0f, 20.0f);
+    popupOpts.size = Point(100.0f, 80.0f);
+    optA.bringToFrontOnPress = false;
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginPopup("pop", popup, popupOpts));
+    EXPECT_FALSE(self.m_builder.button("pop_btn", "Pop"));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.finishRoot());
+    const DrawSnapshot popupSnap = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+    ASSERT_FALSE(popupSnap.commands().empty());
+    EXPECT_GT(popupSnap.commands().back().layer, 0u);
+    const WidgetId popId = RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(self.m_root), "pop"), "pop_btn");
+    const auto foundPopBtn = self.tryTarget(popId);
+    ASSERT_TRUE(foundPopBtn.has_value());
+    const Rect popBtnRect = foundPopBtn.value().rectangle;
+    const Point popCenter(popBtnRect.x + popBtnRect.width * 0.5f, popBtnRect.y + popBtnRect.height * 0.5f);
+    EXPECT_GE(popCenter.x, 100.0f);
+    EXPECT_LE(popCenter.x, 240.0f);
+    EXPECT_GE(popCenter.y, 60.0f);
+    EXPECT_LE(popCenter.y, 180.0f);
+    EXPECT_EQ(self.m_context.input().hitTest(popCenter), popId);
+
+    popup.close();
+    ASSERT_TRUE(self.begin(5u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+
+    self.click(Point(40.0f, 140.0f));
+    ASSERT_TRUE(self.begin(6u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(6u));
+    EXPECT_LT(stateA.zOrder, stateB.zOrder);
+
+    self.m_builder.bringWindowToFront(stateA);
+    ASSERT_TRUE(self.begin(7u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_a", "A", stateA, optA));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_b", "B", stateB, optB));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(7u));
+    EXPECT_GT(stateA.zOrder, stateB.zOrder);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(150.0f, 140.0f)), winAId);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -818,6 +1121,10 @@ NWB_ADHD_GTEST_F(UiWindowTests, NewResizeAnchorsDisplayedSizeWhenHostModelIsAhea
 NWB_ADHD_GTEST_F(UiWindowTests, MissingResizeFallbackRejectsAdmissionBeforeChangingHostState, VerifyUiWindowTests_MissingResizeFallbackRejectsAdmissionBeforeChangingHostState)
 NWB_ADHD_GTEST_F(UiWindowTests, MissingRequiredSkinKeepsPreviousAcceptedTargets, VerifyUiWindowTests_MissingRequiredSkinKeepsPreviousAcceptedTargets)
 NWB_ADHD_GTEST_F(UiWindowTests, InvalidOptionsAndWrongEndRejectCandidatePublication, VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication)
+NWB_ADHD_GTEST_F(UiWindowTests, MaximumSizeClampsInitializationFirstUseAndResizeAndRejectsInvalidLimits, VerifyUiWindowTests_MaximumSizeClampsInitializationFirstUseAndResizeAndRejectsInvalidLimits)
+NWB_ADHD_GTEST_F(UiWindowTests, CloseButtonHidesWindowImmediatelyReservesTitleSpaceAndAllowsReopen, VerifyUiWindowTests_CloseButtonHidesWindowImmediatelyReservesTitleSpaceAndAllowsReopen)
+NWB_ADHD_GTEST_F(UiWindowTests, EdgeAndCornerResizeHandlesAnchorOppositeEdgesAndRespectMinMax, VerifyUiWindowTests_EdgeAndCornerResizeHandlesAnchorOppositeEdgesAndRespectMinMax)
+NWB_ADHD_GTEST_F(UiWindowTests, MultiWindowBringToFrontReordersPaintAndHitTestingWhileKeepingPopupsAbove, VerifyUiWindowTests_MultiWindowBringToFrontReordersPaintAndHitTestingWhileKeepingPopupsAbove)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

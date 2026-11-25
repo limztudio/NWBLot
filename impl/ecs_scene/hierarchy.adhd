@@ -1,0 +1,273 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SceneHierarchyMaxDepth = 32u;
+const f32 s_SceneHierarchyScaleEpsilon = 0.00001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(is_standard_layout<LocalTransformComponent>(), "LocalTransformComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<LocalTransformComponent>(), "LocalTransformComponent must stay cheap to move in dense ECS storage");
+static_assert(align_of<LocalTransformComponent>() >= align_of<f32x4>(), "LocalTransformComponent must stay aligned for SIMD component loads");
+static_assert(size_of<LocalTransformComponent>() == size_of<TransformComponent>(), "LocalTransformComponent must match TransformComponent layout");
+static_assert((size_of<LocalTransformComponent>() % align_of<LocalTransformComponent>()) == 0u, "LocalTransformComponent array stride must keep every element SIMD-aligned");
+static_assert((offset_of<LocalTransformComponent>(position) % align_of<f32x4>()) == 0u, "LocalTransformComponent::position must stay aligned");
+static_assert((offset_of<LocalTransformComponent>(rotation) % align_of<f32x4>()) == 0u, "LocalTransformComponent::rotation must stay aligned");
+static_assert((offset_of<LocalTransformComponent>(scale) % align_of<f32x4>()) == 0u, "LocalTransformComponent::scale must stay aligned");
+static_assert(is_standard_layout<SceneParentComponent>(), "SceneParentComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<SceneParentComponent>(), "SceneParentComponent must stay cheap to move in dense ECS storage");
+static_assert(is_standard_layout<SceneEntityNameComponent>(), "SceneEntityNameComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<SceneEntityNameComponent>(), "SceneEntityNameComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle SafeNormalizeSceneQuaternion(in VectorSingle q){
+    if(!IsFinite(q))
+        return VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+    const f32 lenSq = LengthSq(q);
+    if(!IsFinite(VectorSingle(lenSq)) || lenSq <= s_NormalizeLengthSquaredEpsilon)
+        return VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+    return Normalize(q);
+}
+
+void ComposeSceneWorldTransform(
+    in TransformComponent parentWorld,
+    in LocalTransformComponent local,
+    in b8 inheritScale,
+    mut TransformComponent outWorld
+){
+    VectorSingle pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
+    if(inheritScale)
+        pScale = VectorSingle(parentWorld.scale);
+    const VectorSingle pRot = SafeNormalizeSceneQuaternion(VectorSingle(parentWorld.rotation));
+    const VectorSingle cRot = SafeNormalizeSceneQuaternion(VectorSingle(local.rotation));
+    const VectorSingle scaledLocalPos = VectorSetW(VectorSingle(local.position) * pScale, 0.0f);
+    outWorld.position = f32x4(VectorSingle(parentWorld.position) + RotateSceneVector3(scaledLocalPos, pRot), 0.0f);
+    outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(QuaternionMultiply(pRot, cRot)));
+    outWorld.scale = f32x4(pScale * VectorSingle(local.scale), 0.0f);
+}
+
+void DecomposeWorldToSceneLocalTransform(
+    in TransformComponent parentWorld,
+    in TransformComponent childWorld,
+    in b8 inheritScale,
+    mut LocalTransformComponent outLocal
+){
+    const VectorSingle pRot = SafeNormalizeSceneQuaternion(VectorSingle(parentWorld.rotation));
+    const VectorSingle cRot = SafeNormalizeSceneQuaternion(VectorSingle(childWorld.rotation));
+    const VectorSingle pRotInv = QuaternionConjugate(pRot);
+    const VectorSingle deltaPos = VectorSetW(VectorSingle(childWorld.position) - VectorSingle(parentWorld.position), 0.0f);
+    VectorSingle localPos = RotateSceneVector3(deltaPos, pRotInv);
+    VectorSingle localScale = VectorSingle(childWorld.scale);
+    if(inheritScale){
+        const VectorSingle safeScale = VectorSingle(parentWorld.scale, 1.0f);
+        const VectorSingle denom = VectorSelect(VectorSingle(1.0f), safeScale, VectorGreater(Abs(safeScale), VectorSingle(s_SceneHierarchyScaleEpsilon)));
+        localPos = VectorSetW(localPos / denom, 0.0f);
+        localScale = VectorSetW(localScale / denom, 0.0f);
+    }
+    outLocal.position = f32x4(localPos, 0.0f);
+    outLocal.rotation = f32x4(SafeNormalizeSceneQuaternion(QuaternionMultiply(pRotInv, cRot)));
+    outLocal.scale = f32x4(localScale, 0.0f);
+}
+
+EntityID FindSceneEntityByName(in EntityID requester, in Name targetName, mut World world){
+    if(targetName == s_NameNone)
+        return s_InvalidEntityId;
+
+    u32 requesterScopeId = 0u;
+    if(requester.valid() && world.alive(requester) && world.hasComponent<SceneEntityNameComponent>(requester))
+        requesterScopeId = world.getComponent<SceneEntityNameComponent>(requester).scopeId;
+
+    EntityID scopedMatch = s_InvalidEntityId;
+    EntityID fallbackMatch = s_InvalidEntityId;
+    mut World worldMut = world;
+    world.view<SceneEntityNameComponent>().each(lambda[in targetName, in requesterScopeId, mut worldMut, mut scopedMatch, mut fallbackMatch](
+        in EntityID entity,
+        in SceneEntityNameComponent entry
+    ) -> void{
+        if(scopedMatch.valid() || entry.name != targetName || !worldMut.alive(entity))
+            return;
+        if(requesterScopeId != 0u && entry.scopeId == requesterScopeId){
+            scopedMatch = entity;
+            return;
+        }
+        if(!fallbackMatch.valid())
+            fallbackMatch = entity;
+    });
+    if(scopedMatch.valid())
+        return scopedMatch;
+    return fallbackMatch;
+}
+
+u32 AllocateSceneNameScopeId(mut World world){
+    u32 maxScope = 0u;
+    world.view<SceneEntityNameComponent>().each(lambda[mut maxScope](
+        in EntityID entity,
+        in SceneEntityNameComponent entry
+    ) -> void{
+        if(entry.scopeId > maxScope)
+            maxScope = entry.scopeId;
+    });
+    return maxScope + 1u;
+}
+
+void ResolveSceneParentNames(mut World world){
+    if(world.view<SceneParentComponent>().candidateCount() == 0u)
+        return;
+
+    mut World worldMut = world;
+    world.view<SceneParentComponent>().each(lambda[mut worldMut](in EntityID entity, mut SceneParentComponent sp) -> void{
+        if(sp.parentEntityName != s_NameNone){
+            b8 needsResolve = !sp.parent.valid() || sp.parent == entity || !worldMut.alive(sp.parent);
+            if(!needsResolve && worldMut.hasComponent<SceneEntityNameComponent>(sp.parent)){
+                if(worldMut.getComponent<SceneEntityNameComponent>(sp.parent).name != sp.parentEntityName)
+                    needsResolve = true;
+            }
+            if(needsResolve){
+                const EntityID resolved = FindSceneEntityByName(entity, sp.parentEntityName, worldMut);
+                if(resolved != entity)
+                    sp.parent = resolved;
+                else
+                    sp.parent = s_InvalidEntityId;
+            }
+        }
+        else if(sp.parent.valid() && (!worldMut.alive(sp.parent) || sp.parent == entity))
+            sp.parent = s_InvalidEntityId;
+    });
+}
+
+u32 ComputeSceneHierarchyDepthChecked(in World world, in EntityID entity, mut b8 outDirectCycle){
+    outDirectCycle = false;
+    FixedVector<EntityID, 33u> visited;
+    visited.push_back(entity);
+
+    EntityID cur = entity;
+    u32 depth = 0u;
+    for(u32 step = 0u; step < s_SceneHierarchyMaxDepth; ++step){
+        if(!world.hasComponent<SceneParentComponent>(cur))
+            break;
+        const EntityID parent = world.getComponent<SceneParentComponent>(cur).parent;
+        if(!parent.valid() || !world.alive(parent) || parent == cur)
+            break;
+        b8 seen = false;
+        for(usize k = 0u; k < visited.size(); ++k){
+            if(visited[k] == parent){
+                seen = true;
+                break;
+            }
+        }
+        if(seen){
+            if(parent == entity){
+                outDirectCycle = true;
+                return 0u;
+            }
+            break;
+        }
+        if(!world.hasComponent<SceneParentComponent>(parent) || !world.hasComponent<LocalTransformComponent>(parent))
+            break;
+        ++depth;
+        if(depth >= s_SceneHierarchyMaxDepth)
+            return s_SceneHierarchyMaxDepth;
+        visited.push_back(parent);
+        cur = parent;
+    }
+    return depth;
+}
+
+void PropagateSceneHierarchyTransforms(mut World world){
+    ResolveSceneParentNames(world);
+    if(world.view<SceneParentComponent>().candidateCount() == 0u || world.view<LocalTransformComponent>().candidateCount() == 0u)
+        return;
+
+    Vector<EntityID> entities = Vector<EntityID>();
+    world.view<SceneParentComponent, LocalTransformComponent>().each(lambda[mut entities](
+        in EntityID entity,
+        in SceneParentComponent sp,
+        in LocalTransformComponent local
+    ) -> void{
+        entities.push_back(entity);
+    });
+    if(entities.empty())
+        return;
+
+    for(in EntityID entity : entities){
+        if(!world.hasComponent<TransformComponent>(entity))
+            world.entity(entity).addComponent<TransformComponent>();
+    }
+
+    Array<Vector<EntityID>, 33u> depthBuckets = Array<Vector<EntityID>, 33u>();
+    Vector<EntityID> directCycleEntities = Vector<EntityID>();
+    u32 maxDepth = 0u;
+    for(in EntityID entity : entities){
+        b8 directCycle = false;
+        const u32 depth = ComputeSceneHierarchyDepthChecked(world, entity, directCycle);
+        if(directCycle)
+            directCycleEntities.push_back(entity);
+        else{
+            depthBuckets[depth].push_back(entity);
+            if(depth > maxDepth)
+                maxDepth = depth;
+        }
+    }
+
+    for(in EntityID entity : directCycleEntities){
+        const LocalTransformComponent localXf = world.getComponent<LocalTransformComponent>(entity);
+        mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
+        outWorld.position = localXf.position;
+        outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(localXf.rotation)));
+        outWorld.scale = localXf.scale;
+    }
+
+    for(u32 depth = 0u; depth <= maxDepth; ++depth){
+        in Vector<EntityID> bucket = depthBuckets[depth];
+        for(in EntityID entity : bucket){
+            const SceneParentComponent sp = world.getComponent<SceneParentComponent>(entity);
+            const LocalTransformComponent localXf = world.getComponent<LocalTransformComponent>(entity);
+            if(sp.parent.valid() && sp.parent != entity && world.alive(sp.parent) && world.hasComponent<TransformComponent>(sp.parent)){
+                const TransformComponent parentXf = world.getComponent<TransformComponent>(sp.parent);
+                mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
+                ComposeSceneWorldTransform(parentXf, localXf, sp.inheritScale, outWorld);
+            }
+            else{
+                mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
+                outWorld.position = localXf.position;
+                outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(localXf.rotation)));
+                outWorld.scale = localXf.scale;
+            }
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, system("scene_hierarchy")]
+class SceneHierarchySystem{
+    public SceneHierarchySystem(){
+        this.readAccess<SceneEntityNameComponent>();
+        this.readAccess<LocalTransformComponent>();
+        this.writeAccess<SceneParentComponent>();
+        this.writeAccess<TransformComponent>();
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        PropagateSceneHierarchyTransforms(world);
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

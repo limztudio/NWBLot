@@ -15,10 +15,13 @@ const Color s_EditBoxSelectionColor = Color(0.20f, 0.40f, 0.78f, 0.75f);
 const Color s_EditBoxInactiveSelectionColor = Color(0.28f, 0.31f, 0.38f, 0.55f);
 const Color s_EditBoxCaretColor = Color(0.95f, 0.97f, 1.0f, 1.0f);
 const Color s_EditBoxPreeditColor = Color(0.50f, 0.72f, 1.0f, 1.0f);
+const Color s_EditBoxPreeditTargetColor = Color(0.95f, 0.78f, 0.25f, 1.0f);
+const Color s_EditBoxPreeditConvertedColor = Color(0.35f, 0.85f, 0.65f, 1.0f);
 
 const f32 s_TextAreaDefaultHeight = 160.0f;
 const u32 s_UiEditMinInterpolatedStops = 2u;
 const usize s_EditCaretMaxExtraMappingStops = 2u;
+const u32 s_EditBoxDefaultMaskCodePoint = 0x2au;
 const Name s_EditBoxNormalRegionName = "edit.normal";
 const Name s_EditBoxHoverRegionName = "edit.hover";
 const Name s_EditBoxFocusedRegionName = "edit.focused";
@@ -77,10 +80,13 @@ class EditBoxStyle{
     public Color background = s_StyleInsetColor;
     public Color text = s_StyleTextColor;
     public Color disabledText = s_StyleDisabledTextColor;
+    public Color placeholderText = s_StyleDisabledTextColor;
     public Color selection = s_EditBoxSelectionColor;
     public Color inactiveSelection = s_EditBoxInactiveSelectionColor;
     public Color caret = s_EditBoxCaretColor;
     public Color preedit = s_EditBoxPreeditColor;
+    public Color preeditTarget = s_EditBoxPreeditTargetColor;
+    public Color preeditConverted = s_EditBoxPreeditConvertedColor;
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall);
 }
 
@@ -101,6 +107,11 @@ class EditBoxOptions{
     public LayoutSize height;
     public b8 enabled = true;
     public b8 readOnly = false;
+    public b8 password = false;
+    public b8 acceptTab = false;
+    public u32 maskCodePoint = s_EditBoxDefaultMaskCodePoint;
+    public StringView placeholder = "";
+    public LayoutItemOptions layout;
 }
 
 class EditBoxState{
@@ -171,7 +182,12 @@ class TextAreaOptions{
     public LayoutSize height = LayoutSize(LayoutSizePolicy::Fixed, s_TextAreaDefaultHeight);
     public b8 enabled = true;
     public b8 readOnly = false;
+    public b8 acceptTab = false;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
     public f32 wheelLines = s_StyleScrollWheelStep;
+    public StringView placeholder = "";
+    public LayoutItemOptions layout;
 }
 
 class TextAreaScrollSnapshot{
@@ -229,14 +245,26 @@ class TextAreaScrollSnapshot{
     public b8 readOnly;
 }
 
+b8 IsValidEditBoxMaskCodePoint(in u32 scalar){
+    return scalar >= s_TextUnicodeSpace
+        && scalar <= 0x10ffffu
+        && (scalar < 0xd800u || scalar > 0xdfffu)
+        && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last)
+        && scalar != s_TextUnicodeLineSeparator
+        && scalar != s_TextUnicodeParagraphSeparator;
+}
+
 void ApplySkinPaletteToEditBoxStyle(in UiSkinPalette palette, mut EditBoxStyle style){
     style.background = ResolveUiSkinColor(palette, UiSkinColorRole::EditBackground);
     style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
     style.disabledText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.placeholderText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
     style.selection = ResolveUiSkinColor(palette, UiSkinColorRole::EditSelection);
     style.inactiveSelection = ResolveUiSkinColor(palette, UiSkinColorRole::EditInactiveSelection);
     style.caret = ResolveUiSkinColor(palette, UiSkinColorRole::EditCaret);
     style.preedit = ResolveUiSkinColor(palette, UiSkinColorRole::EditPreedit);
+    style.preeditTarget = style.caret;
+    style.preeditConverted = style.preedit;
 }
 
 void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect segment){

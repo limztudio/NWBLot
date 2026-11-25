@@ -1,0 +1,1308 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_TableHeaderDividerThickness = 1.0f;
+const f32 s_TableGridLineThickness = 1.0f;
+const f32 s_TableSortIndicatorExtent = 7.0f;
+const f32 s_TableSortIndicatorGap = 6.0f;
+const u64 s_TreeInitialWidthProbeRows = 128u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TryHandleScrollTrackClick(
+    in ControlAction action,
+    in WidgetId vBefore,
+    in WidgetId vAfter,
+    in WidgetId hBefore,
+    in WidgetId hAfter,
+    in b8 allowHorizontal,
+    in ScrollPlacement placement,
+    in ScrollViewportPlacement scrollbars,
+    mut ScrollState scroll,
+    mut ScrollState scrollX,
+    mut b8 outEnsureCursor,
+    mut b8 outHandled
+){
+    outHandled = false;
+    if(action.kind != ControlActionKind::Activate)
+        return true;
+    if(action.source == vBefore || action.source == vAfter){
+        outHandled = true;
+        f64 delta = -1.0;
+        if(action.source == vBefore)
+            delta = 1.0;
+        const f64 step = UiSimdMaxF64(1.0, cast<f64>(placement.viewport.height));
+        const f64 maximum = UiSimdMaxF64(0.0, scrollbars.vertical.maximum);
+        const Expected<f64> nextY = TryComputeListWheelOffset(scroll.offset(), delta, step, maximum);
+        if(!nextY.has_value() || !scroll.setOffset(nextY.value()))
+            return false;
+        outEnsureCursor = false;
+        return true;
+    }
+    if(action.source == hBefore || action.source == hAfter){
+        outHandled = true;
+        if(!allowHorizontal)
+            return true;
+        f64 deltaX = 1.0;
+        if(action.source == hBefore)
+            deltaX = -1.0;
+        const f64 stepX = UiSimdMaxF64(1.0, scrollbars.horizontal.viewportExtent);
+        const f64 maximumX = UiSimdMaxF64(0.0, scrollbars.horizontal.maximum);
+        const Expected<f64> nextX = TryComputeListHorizontalWheelOffset(scrollX.offset(), deltaX, stepX, maximumX);
+        if(!nextX.has_value() || !scrollX.setOffset(nextX.value()))
+            return false;
+        outEnsureCursor = false;
+        return true;
+    }
+    return true;
+}
+
+f32 ResolveAlignedCellTextInsetX(in TextAlignment alignment, in f32 colWidth, in Insets cellPadding, in Rect textBounds){
+    if(alignment == TextAlignment::Center)
+        return UiSimdMax(cellPadding.left, (colWidth - textBounds.width) * s_RectCenterFraction);
+    if(alignment == TextAlignment::Trailing)
+        return UiSimdMax(cellPadding.left, (colWidth - cellPadding.right) - textBounds.width);
+    return cellPadding.left;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TreeResult Builder::treeView(in StringView stableKey, in borrow ITreeDataSource source, mut TreeState state, in TreeOptions options){
+    TreeResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidTreeOptions(options)
+        || !IsValidTreeStyle(this.m_treeStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto metrics = this.loadSelectableMetrics();
+    const Optional<in UiSkinRegion> panelRegion = this.region(this.m_treeStyle.list.background, this.m_treeStyle.list.backgroundFallback);
+    if(!metrics.has_value() || !panelRegion.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    const auto declared = this.m_context.declare(stableKey, WidgetKind::TreeView);
+    if(!declared.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    mut WidgetState widget = declared.value();
+    if(!this.m_context.claimState(widget, state.instanceGeneration())){
+        this.m_context.fail();
+        return result;
+    }
+    if(!ReconcileTreeState(state, source, 0u)){
+        this.m_context.fail();
+        return result;
+    }
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    if(!token.valid()){
+        this.m_context.fail();
+        return result;
+    }
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    const auto vThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollbar);
+    const auto hThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
+    const auto vBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
+    const auto vAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
+    const auto hBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
+    const auto hAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
+    const auto toggleRoot = TryMakeWidgetId(widget.id, s_WidgetPartTreeToggle);
+    if(
+        !vThumbId.has_value() || !hThumbId.has_value()
+        || !vBeforeId.has_value() || !vAfterId.has_value()
+        || !hBeforeId.has_value() || !hAfterId.has_value()
+        || !toggleRoot.has_value()
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    result.valid = true;
+    result.focused = options.enabled && this.m_context.input().focus() == widget.id;
+    const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
+    if(options.enabled){
+        auto horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
+        b8 haveH = horizontal.has_value() && horizontal.value().control == token;
+        auto vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
+        b8 haveV = vertical.has_value() && vertical.value().control == token;
+        auto action = this.m_context.takeControlAction(widget, true, token);
+        b8 haveAction = action.has_value();
+        while(haveH || haveV || haveAction){
+            u64 hSeq = 0u;
+            u64 vSeq = 0u;
+            u64 aSeq = 0u;
+            if(haveH)
+                hSeq = horizontal.value().updateSequence;
+            if(haveV)
+                vSeq = vertical.value().updateSequence;
+            if(haveAction)
+                aSeq = action.value().id.sequence;
+            const u8 stream = SelectNextScrollInputStream(haveH, hSeq, haveV, vSeq, haveAction, aSeq);
+            if(stream == 0u){
+                const auto offsetX = TryComputeListHorizontalGestureScrollOffset(horizontal.value());
+                if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value())){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                state.m_ensureCursor = false;
+                horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
+                haveH = horizontal.has_value() && horizontal.value().control == token;
+            }
+            else if(stream == 1u){
+                const auto offsetY = TryComputeListGestureScrollOffset(vertical.value());
+                if(!offsetY.has_value() || !state.m_scroll.setOffset(offsetY.value())){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                state.m_ensureCursor = false;
+                vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
+                haveV = vertical.has_value() && vertical.value().control == token;
+            }
+            else{
+                b8 trackHandled = false;
+                if(!TryHandleScrollTrackClick(
+                    action.value(),
+                    vBeforeId.value(),
+                    vAfterId.value(),
+                    hBeforeId.value(),
+                    hAfterId.value(),
+                    allowHorizontal,
+                    state.m_placement,
+                    state.m_scrollbars,
+                    state.m_scroll,
+                    state.m_scrollX,
+                    state.m_ensureCursor,
+                    trackHandled
+                )){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                if(!trackHandled){
+                    b8 isToggle = false;
+                    if(action.value().kind == ControlActionKind::Activate){
+                        const auto toggleId = TryMakeWidgetPartId(toggleRoot.value(), action.value().value);
+                        isToggle = toggleId.has_value() && action.value().source == toggleId.value();
+                    }
+                    TreeResult stepResult;
+                    if(!ApplyTreeControlAction(source, options, action.value(), isToggle, state, stepResult)){
+                        this.m_context.fail();
+                        result.valid = false;
+                        return result;
+                    }
+                    result.selectionChanged = result.selectionChanged || stepResult.selectionChanged;
+                    if(stepResult.expansionChanged){
+                        result.expansionChanged = true;
+                        result.toggledKey = stepResult.toggledKey;
+                    }
+                    if(stepResult.activated){
+                        result.activated = true;
+                        result.activatedKey = stepResult.activatedKey;
+                    }
+                }
+                action = this.m_context.takeControlAction(widget, true, token);
+                haveAction = action.has_value();
+            }
+        }
+    }
+    else
+        this.m_context.input().invalidateTarget(widget.id);
+    const ShapeRequest probeRequest = this.textShapeRequest("Ag", this.m_style.fontSize);
+    const auto baseMeasured = this.m_text.layoutAndMeasureShared(probeRequest, this.m_paint.displayMetrics());
+    const u64 visibleCount = state.visibleCount();
+    const auto measureKey = TryBuildListMeasureKey(
+        source.instanceGeneration(),
+        source.revision(),
+        visibleCount,
+        this.m_text.identity(),
+        this.m_text.generation(),
+        this.m_style.fontSize,
+        this.m_paint.displayMetrics(),
+        metrics.value(),
+        this.m_textScriptTag,
+        StringView(this.m_textLanguage),
+        this.m_textDirection
+    );
+    if(!baseMeasured.has_value() || !measureKey.has_value() || !MatchesTreeSource(source, token.contentGeneration, token.contentRevision)){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    f32 rowHeight = ResolveListRowBaseHeight(metrics.value(), baseMeasured.value().bounds.height);
+    if(state.m_measureKey == measureKey.value() && state.m_rowHeight > rowHeight)
+        rowHeight = state.m_rowHeight;
+    else
+        state.m_measureKey = measureKey.value();
+    TreeStyle resolvedStyle = this.m_treeStyle;
+    resolvedStyle.list.row.padding = metrics.value().padding;
+    f64 contentWidth = state.m_contentWidth;
+    if(allowHorizontal && contentWidth <= 0.0 && visibleCount > 0u){
+        const u64 probeCount = Min(visibleCount, s_TreeInitialWidthProbeRows);
+        for(u64 idx = 0u; idx < probeCount; ++idx){
+            in TreeVisibleNode node = state.m_visibleNodes[cast<usize>(idx)];
+            const StringView lbl = source.label(node.key);
+            if(!MatchesTreeSource(source, token.contentGeneration, token.contentRevision)){
+                this.m_context.fail();
+                result.valid = false;
+                return result;
+            }
+            const auto measured = this.m_text.layoutAndMeasureShared(this.textShapeRequest(lbl, this.m_style.fontSize), this.m_paint.displayMetrics());
+            if(!measured.has_value()){
+                this.m_context.fail();
+                result.valid = false;
+                return result;
+            }
+            rowHeight = ComputeListRowPaddedHeight(measured.value().bounds.height, resolvedStyle.list.row.padding, rowHeight);
+            const f64 rowW = cast<f64>(
+                (cast<f32>(node.depth) * resolvedStyle.indentWidth)
+                + resolvedStyle.list.row.padding.left
+                + resolvedStyle.toggleExtent
+                + resolvedStyle.toggleGap
+                + measured.value().bounds.width
+                + resolvedStyle.list.row.padding.right
+            );
+            contentWidth = UiSimdMaxF64(contentWidth, rowW);
+        }
+        state.m_contentWidth = contentWidth;
+    }
+    state.m_rowHeight = rowHeight;
+    const Point intrinsic = ResolveListIntrinsicSize(panelRegion.value(), resolvedStyle.list.padding, rowHeight);
+    LayoutNodeDesc description;
+    description.width = options.width;
+    description.height = options.height;
+    description.intrinsicSize = intrinsic;
+    description.minWidth = intrinsic.x;
+    description.minHeight = intrinsic.y;
+    ApplyLayoutItemOptions(options.layout, description);
+    const u32 treeIndex = cast<u32>(this.m_scope.value().m_treeViews.size());
+    auto item = this.makeItem();
+    item.styleIndex = this.currentItemStyleIndex();
+    item.state = widget;
+    item.treeView = treeIndex;
+    item.enabled = options.enabled;
+    if(!this.addItemNode(description, item)){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    BuilderTreeFrame frame;
+    frame.widget = widget;
+    frame.source = Optional<in ITreeDataSource>(source);
+    frame.state = Optional<mut TreeState>(state);
+    frame.widgetStyle = this.m_style;
+    frame.style = resolvedStyle;
+    frame.options = options;
+    frame.measureKey = measureKey.value();
+    frame.token = token;
+    frame.padding = resolvedStyle.list.padding;
+    frame.scrollOffset = state.m_scroll.offset();
+    frame.scrollOffsetX = state.m_scrollX.offset();
+    frame.contentWidth = contentWidth;
+    frame.visibleCount = visibleCount;
+    frame.cursorKey = state.cursorKey();
+    frame.rowHeight = rowHeight;
+    frame.revealCursor = state.m_ensureCursor;
+    frame.focusOnCommit = result.focused;
+    AppendOwned<BuilderTreeFrame>(this.m_scope.value().m_treeViews, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    return result;
+}
+
+b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
+    if(item.treeView >= this.m_scope.value().m_treeViews.size())
+        return false;
+    mut BuilderTreeFrame frame = this.m_scope.value().m_treeViews[item.treeView];
+    if(!this.treeMatches(frame))
+        return false;
+    mut TreeState state = frame.state.value();
+    in ITreeDataSource source = frame.source.value();
+    const Rect clip = this.visibleClip(box.clip);
+    Span<f64> emptyOffsets;
+    f64 scrollY = frame.scrollOffset;
+    f64 scrollX = frame.scrollOffsetX;
+    auto placed = CalculateListScrollPlacement(
+        box.rectangle,
+        clip,
+        frame.padding,
+        frame.style.list.scrollbarWidth,
+        frame.style.list.minimumThumb,
+        frame.visibleCount,
+        frame.rowHeight,
+        emptyOffsets,
+        frame.contentWidth,
+        scrollX,
+        scrollY,
+        frame.options.horizontalScrollbar,
+        frame.options.verticalScrollbar
+    );
+    if(!placed.has_value())
+        return false;
+    if(frame.revealCursor && frame.cursorKey != 0u){
+        const auto curFound = state.m_visibleIndexByKey.find(frame.cursorKey);
+        if(curFound != state.m_visibleIndexByKey.end()){
+            const f64 start = cast<f64>(curFound.value()) * cast<f64>(frame.rowHeight);
+            const f64 end = start + cast<f64>(frame.rowHeight);
+            const Expected<f64> ensured = TryEnsureScrollVisible(scrollY, start, end, cast<f64>(placed.value().placement.viewport.height));
+            if(!ensured.has_value())
+                return false;
+            if(ensured.value() != scrollY){
+                scrollY = ensured.value();
+                placed = CalculateListScrollPlacement(
+                    box.rectangle,
+                    clip,
+                    frame.padding,
+                    frame.style.list.scrollbarWidth,
+                    frame.style.list.minimumThumb,
+                    frame.visibleCount,
+                    frame.rowHeight,
+                    emptyOffsets,
+                    frame.contentWidth,
+                    scrollX,
+                    scrollY,
+                    frame.options.horizontalScrollbar,
+                    frame.options.verticalScrollbar
+                );
+                if(!placed.has_value())
+                    return false;
+            }
+        }
+    }
+    in ScrollPlacement placement = placed.value().placement;
+    in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
+    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+        return false;
+    state.m_scrollRowHeight = frame.rowHeight;
+    state.m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
+        state.m_ensureCursor = false;
+    state.m_placement = placement;
+    state.m_scrollbars = scrollbars;
+    state.m_visibleFirstRow = placement.firstRow;
+    state.m_visibleEndRow = placement.endRow;
+    const Optional<usize> panelIdx = this.m_paint.resolveRegionIndex(frame.style.list.background, frame.style.list.backgroundFallback);
+    if(!panelIdx.has_value())
+        return false;
+    this.m_paint.pushClip(clip);
+    this.m_paint.drawRegionByIndex(panelIdx.value(), box.rectangle);
+    const b8 panelPopped = this.m_paint.popClip();
+    if(!panelPopped)
+        return false;
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeTreeHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        frame.token,
+        frame.rowHeight,
+        frame.options,
+        placement,
+        scrollbars,
+        frame.visibleCount,
+        frame.focusOnCommit
+    );
+    if(!this.m_context.addTarget(frame.widget, host))
+        return false;
+    u32 treeActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        treeActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::Tree,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        treeActions
+    );
+    const auto rowRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartRows);
+    const auto toggleRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartTreeToggle);
+    if(!rowRoot.has_value() || !toggleRoot.has_value())
+        return false;
+    const auto langSlice = ReadBinaryTextSlice(Span<u8>(frame.measureKey.language), 0u, frame.measureKey.languageLength);
+    if(!langSlice.has_value())
+        return false;
+    in InputRouter input = this.m_context.input();
+    const b8 treeFocused = item.enabled && input.focus() == frame.widget.id;
+    const b8 allowHorizontal = frame.options.horizontalScrollbar != ScrollbarPolicy::Never;
+    in SelectableStyle rowStyle = frame.style.list.row;
+    in Insets rowPad = rowStyle.padding;
+    const Rect rowClip = placement.contentClip;
+    f64 nextContentWidth = frame.contentWidth;
+    for(u64 visIdx = placement.firstRow; visIdx < placement.endRow; ++visIdx){
+        if(!this.treeMatches(frame) || visIdx >= cast<u64>(state.m_visibleNodes.size()))
+            return false;
+        in TreeVisibleNode node = state.m_visibleNodes[cast<usize>(visIdx)];
+        const Expected<Rect> rowBoundsOpt = CalculateScrollRowBounds(visIdx, placement, frame.rowHeight);
+        if(!rowBoundsOpt.has_value())
+            return false;
+        const Rect rowRect = rowBoundsOpt.value();
+        const auto rowPartId = TryMakeWidgetPartId(rowRoot.value(), node.key);
+        const auto togglePartId = TryMakeWidgetPartId(toggleRoot.value(), node.key);
+        if(!rowPartId.has_value() || !togglePartId.has_value())
+            return false;
+        const b8 rowEnabled = item.enabled && node.enabled;
+        const b8 rowSelected = state.isSelected(node.key);
+        const b8 rowHovered = rowEnabled && input.hover() == rowPartId.value();
+        const b8 rowFocused = treeFocused && state.cursorKey() == node.key;
+        Name preferred = rowStyle.normal;
+        Name fallback = rowStyle.fallback;
+        if(!rowEnabled){
+            preferred = rowStyle.disabled;
+            fallback = rowStyle.disabledFallback;
+        }
+        else if(rowSelected){
+            preferred = rowStyle.selected;
+            fallback = rowStyle.selectedFallback;
+        }
+        else if(rowHovered){
+            preferred = rowStyle.hover;
+            fallback = rowStyle.hoverFallback;
+        }
+        const Optional<usize> rowRegionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+        if(!rowRegionIdx.has_value())
+            return false;
+        this.m_paint.pushClip(rowClip);
+        this.m_paint.pushClip(rowRect);
+        this.m_paint.drawRegionByIndex(rowRegionIdx.value(), rowRect);
+        if(rowEnabled && rowFocused)
+            this.m_paint.tryDrawRegion(rowStyle.focus, rowRect);
+        const f32 baseX = rowRect.x - cast<f32>(scrollbars.horizontal.offset) + rowPad.left;
+        const f32 indentX = baseX + cast<f32>(node.depth) * frame.style.indentWidth;
+        if(frame.style.showGuideLines && node.depth > 0u){
+            const f32 halfToggle = frame.style.toggleExtent * s_RectCenterFraction;
+            const f32 midY = rowRect.y + rowRect.height * s_RectCenterFraction;
+            for(u32 d = 0u; d < node.depth; ++d){
+                const f32 lineX = baseX + cast<f32>(d) * frame.style.indentWidth + halfToggle;
+                this.m_paint.drawLine(Point(lineX, rowRect.y), Point(lineX, rowRect.y + rowRect.height), 1.0f, frame.style.guideLineColor);
+                if(d + 1u == node.depth)
+                    this.m_paint.drawLine(Point(lineX, midY), Point(indentX, midY), 1.0f, frame.style.guideLineColor);
+            }
+        }
+        Rect toggleRect;
+        if(node.hasChildren){
+            const f32 innerH = UiSimdMax(4.0f, rowRect.height - rowPad.top - rowPad.bottom);
+            const f32 toggleSize = UiSimdMin(frame.style.toggleExtent, innerH);
+            const f32 toggleY = rowRect.y + UiSimdMax(0.0f, (rowRect.height - toggleSize) * s_RectCenterFraction);
+            toggleRect = Rect(indentX, toggleY, toggleSize, toggleSize);
+            const b8 toggleHover = rowEnabled && input.hover() == togglePartId.value();
+            Color toggleColor = frame.style.toggleColor;
+            if(!rowEnabled)
+                toggleColor = frame.widgetStyle.disabledText;
+            else if(toggleHover)
+                toggleColor = frame.style.toggleHoverColor;
+            const f32 cx = toggleRect.x + toggleRect.width * s_RectCenterFraction;
+            const f32 cy = toggleRect.y + toggleRect.height * s_RectCenterFraction;
+            const f32 r = toggleSize * 0.28f;
+            Array<Point, 3u> tri;
+            if(node.expanded){
+                tri[0u] = Point(cx - r, cy - r * 0.45f);
+                tri[1u] = Point(cx + r, cy - r * 0.45f);
+                tri[2u] = Point(cx, cy + r * 0.65f);
+            }
+            else{
+                tri[0u] = Point(cx - r * 0.45f, cy - r);
+                tri[1u] = Point(cx + r * 0.65f, cy);
+                tri[2u] = Point(cx - r * 0.45f, cy + r);
+            }
+            this.m_paint.fillConvexPolygon(Span<Point>(tri), toggleColor);
+        }
+        const StringView labelText = source.label(node.key);
+        if(!this.treeMatches(frame))
+            return false;
+        ShapeRequest req;
+        req.text = labelText;
+        req.language = langSlice.value();
+        req.fontSize = frame.widgetStyle.fontSize;
+        req.scriptTag = frame.measureKey.scriptTag;
+        req.direction = frame.measureKey.direction;
+        const auto measured = this.m_text.layoutAndMeasureShared(req, this.m_paint.displayMetrics());
+        if(!measured.has_value() || !this.treeMatches(frame))
+            return false;
+        const f32 textX = indentX + frame.style.toggleExtent + frame.style.toggleGap;
+        const Rect textContent = InsetUiRectBounds(rowRect, rowPad);
+        const f32 textInset = textX - rowRect.x;
+        const Point textOrigin = ResolveCenteredTextOrigin(rowRect, textInset, measured.value().bounds);
+        Color textColor = frame.widgetStyle.disabledText;
+        if(rowEnabled)
+            textColor = frame.widgetStyle.text;
+        this.m_paint.pushClip(textContent);
+        const b8 textPainted = this.m_text.paint(this.m_paint, measured.value().layout.deref(), textOrigin, textColor);
+        const b8 textPopped = this.m_paint.popClip();
+        const b8 rectPopped = this.m_paint.popClip();
+        const b8 clipPopped = this.m_paint.popClip();
+        if(!textPainted || !textPopped || !rectPopped || !clipPopped)
+            return false;
+        if(allowHorizontal){
+            const f64 rowW = cast<f64>(
+                (cast<f32>(node.depth) * frame.style.indentWidth)
+                + rowPad.left
+                + frame.style.toggleExtent
+                + frame.style.toggleGap
+                + measured.value().bounds.width
+                + rowPad.right
+            );
+            nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+        }
+        if(item.enabled){
+            const HitTarget rowTarget = targets.makeListRowHitTarget(rowRect, rowClip, rowEnabled, frame.token, node.key);
+            if(!this.m_context.addPartTarget(frame.widget, rowPartId.value(), rowTarget))
+                return false;
+            if(node.hasChildren && toggleRect.width > 0.0f && toggleRect.height > 0.0f){
+                const HitTarget toggleTarget = targets.makeTreeToggleHitTarget(toggleRect, rowClip, rowEnabled, frame.token, node.key);
+                if(!this.m_context.addPartTarget(frame.widget, togglePartId.value(), toggleTarget))
+                    return false;
+            }
+        }
+        u32 nodeState = ResolveAccessibleVisibilityStateBits(rowEnabled, rowClip) | s_AccessibilityStateFocusable;
+        if(rowSelected)
+            nodeState |= s_AccessibilityStateSelected;
+        u32 nodeActions = s_AccessibilityActionSelect | s_AccessibilityActionFocus;
+        if(node.hasChildren){
+            if(node.expanded){
+                nodeState |= s_AccessibilityStateExpanded;
+                nodeActions |= s_AccessibilityActionCollapse;
+            }
+            else{
+                nodeState |= s_AccessibilityStateCollapsed;
+                nodeActions |= s_AccessibilityActionExpand;
+            }
+        }
+        this.emitAccessiblePartNode(
+            rowPartId.value(),
+            frame.widget.id,
+            AccessibilityRole::TreeItem,
+            rowRect,
+            labelText,
+            nodeState,
+            nodeActions,
+            cast<i32>(visIdx + 1u),
+            cast<i32>(frame.visibleCount),
+            cast<i32>(node.depth + 1u)
+        );
+    }
+    state.m_contentWidth = nextContentWidth;
+    return this.paintScrollbarsAndTargets(frame.widget, item.enabled, frame.token, frame.style.list, scrollbars, clip) && this.treeMatches(frame);
+}
+
+TableResult Builder::dataTable(
+    in StringView stableKey,
+    in Span<TableColumn> columns,
+    in borrow ITableDataSource source,
+    mut TableState state,
+    in TableOptions options
+){
+    TableResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidTableOptions(options)
+        || !IsValidTableStyle(this.m_tableStyle)
+        || !IsValidTableColumns(columns)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto metrics = this.loadSelectableMetrics();
+    const Optional<in UiSkinRegion> panelRegion = this.region(this.m_tableStyle.list.background, this.m_tableStyle.list.backgroundFallback);
+    if(!metrics.has_value() || !panelRegion.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    const auto declared = this.m_context.declare(stableKey, WidgetKind::DataTable);
+    if(!declared.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    mut WidgetState widget = declared.value();
+    if(!this.m_context.claimState(widget, state.instanceGeneration())){
+        this.m_context.fail();
+        return result;
+    }
+    if(!ReconcileTableState(state, columns, source)){
+        this.m_context.fail();
+        return result;
+    }
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    if(!token.valid()){
+        this.m_context.fail();
+        return result;
+    }
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    const auto vThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollbar);
+    const auto hThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
+    const auto vBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
+    const auto vAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
+    const auto hBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
+    const auto hAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
+    const auto headerRoot = TryMakeWidgetId(widget.id, s_WidgetPartTableHeader);
+    const auto resizeRoot = TryMakeWidgetId(widget.id, s_WidgetPartTableResize);
+    if(
+        !vThumbId.has_value() || !hThumbId.has_value()
+        || !vBeforeId.has_value() || !vAfterId.has_value()
+        || !hBeforeId.has_value() || !hAfterId.has_value()
+        || !headerRoot.has_value() || !resizeRoot.has_value()
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    result.valid = true;
+    result.focused = options.enabled && this.m_context.input().focus() == widget.id;
+    const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
+    if(options.enabled){
+        for(in TableColumn col : columns){
+            const auto resizeId = TryMakeWidgetPartId(resizeRoot.value(), col.key);
+            if(!resizeId.has_value()){
+                this.m_context.fail();
+                result.valid = false;
+                return result;
+            }
+            if(!col.resizable || !options.showHeader){
+                this.m_context.input().invalidateTarget(resizeId.value());
+                continue;
+            }
+            while(true){
+                const auto gestureOpt = this.m_context.takePartPointerGesture(widget, resizeId.value(), true);
+                if(!gestureOpt.has_value())
+                    break;
+                if(gestureOpt.value().control != token)
+                    continue;
+                const f32 prevWidth = ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth);
+                if(!ApplyTableColumnResizeGesture(gestureOpt.value(), col.key, columns, state)){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                const f32 nextWidth = ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth);
+                if(nextWidth != prevWidth)
+                    result.columnResized = true;
+                if(gestureOpt.value().state == PointerGestureState::Completed){
+                    state.m_activeResizeSequence = 0u;
+                    state.m_activeResizeColumnKey = 0u;
+                }
+            }
+        }
+        auto horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
+        b8 haveH = horizontal.has_value() && horizontal.value().control == token;
+        auto vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
+        b8 haveV = vertical.has_value() && vertical.value().control == token;
+        auto action = this.m_context.takeControlAction(widget, true, token);
+        b8 haveAction = action.has_value();
+        while(haveH || haveV || haveAction){
+            u64 hSeq = 0u;
+            u64 vSeq = 0u;
+            u64 aSeq = 0u;
+            if(haveH)
+                hSeq = horizontal.value().updateSequence;
+            if(haveV)
+                vSeq = vertical.value().updateSequence;
+            if(haveAction)
+                aSeq = action.value().id.sequence;
+            const u8 stream = SelectNextScrollInputStream(haveH, hSeq, haveV, vSeq, haveAction, aSeq);
+            if(stream == 0u){
+                const auto offsetX = TryComputeListHorizontalGestureScrollOffset(horizontal.value());
+                if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value())){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                state.m_ensureCursor = false;
+                horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
+                haveH = horizontal.has_value() && horizontal.value().control == token;
+            }
+            else if(stream == 1u){
+                const auto offsetY = TryComputeListGestureScrollOffset(vertical.value());
+                if(!offsetY.has_value() || !state.m_scroll.setOffset(offsetY.value())){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                state.m_ensureCursor = false;
+                vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
+                haveV = vertical.has_value() && vertical.value().control == token;
+            }
+            else{
+                b8 trackHandled = false;
+                if(!TryHandleScrollTrackClick(
+                    action.value(),
+                    vBeforeId.value(),
+                    vAfterId.value(),
+                    hBeforeId.value(),
+                    hAfterId.value(),
+                    allowHorizontal,
+                    state.m_placement,
+                    state.m_scrollbars,
+                    state.m_scroll,
+                    state.m_scrollX,
+                    state.m_ensureCursor,
+                    trackHandled
+                )){
+                    this.m_context.fail();
+                    result.valid = false;
+                    return result;
+                }
+                if(!trackHandled){
+                    b8 isHeader = false;
+                    if(action.value().kind == ControlActionKind::Activate){
+                        const auto headerId = TryMakeWidgetPartId(headerRoot.value(), action.value().value);
+                        isHeader = headerId.has_value() && action.value().source == headerId.value();
+                    }
+                    TableResult stepResult;
+                    if(!ApplyTableControlAction(columns, source, options, action.value(), isHeader, state, stepResult)){
+                        this.m_context.fail();
+                        result.valid = false;
+                        return result;
+                    }
+                    result.selectionChanged = result.selectionChanged || stepResult.selectionChanged;
+                    result.sortChanged = result.sortChanged || stepResult.sortChanged;
+                    if(stepResult.activated){
+                        result.activated = true;
+                        result.activatedKey = stepResult.activatedKey;
+                    }
+                }
+                action = this.m_context.takeControlAction(widget, true, token);
+                haveAction = action.has_value();
+            }
+        }
+    }
+    else{
+        this.m_context.input().invalidateTarget(widget.id);
+        state.m_activeResizeSequence = 0u;
+        state.m_activeResizeColumnKey = 0u;
+    }
+    result.sortColumnKey = state.sortColumnKey();
+    result.sortDirection = state.sortDirection();
+    const u64 rowCount = source.rowCount();
+    const ShapeRequest probeRequest = this.textShapeRequest("Ag", this.m_style.fontSize);
+    const auto baseMeasured = this.m_text.layoutAndMeasureShared(probeRequest, this.m_paint.displayMetrics());
+    const auto measureKey = TryBuildListMeasureKey(
+        source.instanceGeneration(),
+        source.revision(),
+        rowCount,
+        this.m_text.identity(),
+        this.m_text.generation(),
+        this.m_style.fontSize,
+        this.m_paint.displayMetrics(),
+        metrics.value(),
+        this.m_textScriptTag,
+        StringView(this.m_textLanguage),
+        this.m_textDirection
+    );
+    if(!baseMeasured.has_value() || !measureKey.has_value() || !MatchesTableSource(source, token.contentGeneration, token.contentRevision)){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    const f32 textLineHeight = baseMeasured.value().bounds.height;
+    f32 rowHeight = UiSimdMax(metrics.value().minimum.y, textLineHeight + this.m_tableStyle.cellPadding.top + this.m_tableStyle.cellPadding.bottom);
+    rowHeight = UiSimdMax(rowHeight, ResolveListRowBaseHeight(metrics.value(), textLineHeight));
+    state.m_measureKey = measureKey.value();
+    state.m_rowHeight = rowHeight;
+    TableStyle resolvedStyle = this.m_tableStyle;
+    resolvedStyle.list.row.padding = metrics.value().padding;
+    const f64 contentWidth = ComputeTableTotalWidth(columns, state);
+    state.m_contentWidth = contentWidth;
+    f32 headerExtra = 0.0f;
+    if(options.showHeader)
+        headerExtra = resolvedStyle.headerHeight;
+    Point intrinsic = ResolveListIntrinsicSize(panelRegion.value(), resolvedStyle.list.padding, rowHeight);
+    intrinsic.y += headerExtra;
+    LayoutNodeDesc description;
+    description.width = options.width;
+    description.height = options.height;
+    description.intrinsicSize = intrinsic;
+    description.minWidth = intrinsic.x;
+    description.minHeight = intrinsic.y;
+    ApplyLayoutItemOptions(options.layout, description);
+    const u32 tableIndex = cast<u32>(this.m_scope.value().m_dataTables.size());
+    auto item = this.makeItem();
+    item.styleIndex = this.currentItemStyleIndex();
+    item.state = widget;
+    item.dataTable = tableIndex;
+    item.enabled = options.enabled;
+    if(!this.addItemNode(description, item)){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    BuilderTableFrame frame;
+    frame.widget = widget;
+    frame.source = Optional<in ITableDataSource>(source);
+    frame.state = Optional<mut TableState>(state);
+    frame.widgetStyle = this.m_style;
+    frame.style = resolvedStyle;
+    frame.options = options;
+    frame.measureKey = measureKey.value();
+    frame.token = token;
+    frame.padding = resolvedStyle.list.padding;
+    frame.scrollOffset = state.m_scroll.offset();
+    frame.scrollOffsetX = state.m_scrollX.offset();
+    frame.contentWidth = contentWidth;
+    frame.rowCount = rowCount;
+    frame.cursorKey = state.cursorKey();
+    frame.rowHeight = rowHeight;
+    frame.revealCursor = state.m_ensureCursor;
+    frame.focusOnCommit = result.focused;
+    frame.columns.reserve(columns.size());
+    frame.columnTitles.reserve(columns.size());
+    for(in TableColumn col : columns){
+        TableColumn storedCol = col;
+        storedCol.width = ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth);
+        frame.columns.push_back(storedCol);
+        String titleCopy;
+        titleCopy.assign(col.title);
+        frame.columnTitles.push_back(titleCopy);
+    }
+    AppendOwned<BuilderTableFrame>(this.m_scope.value().m_dataTables, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    return result;
+}
+
+b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
+    if(item.dataTable >= this.m_scope.value().m_dataTables.size())
+        return false;
+    mut BuilderTableFrame frame = this.m_scope.value().m_dataTables[item.dataTable];
+    if(!this.tableMatches(frame))
+        return false;
+    mut TableState state = frame.state.value();
+    in ITableDataSource source = frame.source.value();
+    const Rect clip = this.visibleClip(box.clip);
+    const Optional<usize> panelIdx = this.m_paint.resolveRegionIndex(frame.style.list.background, frame.style.list.backgroundFallback);
+    if(!panelIdx.has_value())
+        return false;
+    f32 headerHeight = 0.0f;
+    if(frame.options.showHeader)
+        headerHeight = UiSimdMin(UiSimdMax(0.0f, box.rectangle.height - frame.padding.top - frame.padding.bottom), frame.style.headerHeight);
+    const Rect headerOuter(
+        box.rectangle.x + frame.padding.left,
+        box.rectangle.y + frame.padding.top,
+        UiSimdMax(0.0f, box.rectangle.width - frame.padding.left - frame.padding.right),
+        headerHeight
+    );
+    const Rect bodyOuter(
+        box.rectangle.x,
+        box.rectangle.y + frame.padding.top + headerHeight,
+        box.rectangle.width,
+        UiSimdMax(0.0f, box.rectangle.height - frame.padding.top - headerHeight)
+    );
+    const Insets bodyPadding(frame.padding.left, 0.0f, frame.padding.right, frame.padding.bottom);
+    Span<f64> emptyOffsets;
+    f64 scrollY = frame.scrollOffset;
+    f64 scrollX = frame.scrollOffsetX;
+    auto placed = CalculateListScrollPlacement(
+        bodyOuter,
+        clip,
+        bodyPadding,
+        frame.style.list.scrollbarWidth,
+        frame.style.list.minimumThumb,
+        frame.rowCount,
+        frame.rowHeight,
+        emptyOffsets,
+        frame.contentWidth,
+        scrollX,
+        scrollY,
+        frame.options.horizontalScrollbar,
+        frame.options.verticalScrollbar
+    );
+    if(!placed.has_value())
+        return false;
+    if(frame.revealCursor && frame.cursorKey != 0u){
+        const auto curFound = state.m_displayIndexByKey.find(frame.cursorKey);
+        if(curFound != state.m_displayIndexByKey.end()){
+            const f64 start = cast<f64>(curFound.value()) * cast<f64>(frame.rowHeight);
+            const f64 end = start + cast<f64>(frame.rowHeight);
+            const Expected<f64> ensured = TryEnsureScrollVisible(scrollY, start, end, cast<f64>(placed.value().placement.viewport.height));
+            if(!ensured.has_value())
+                return false;
+            if(ensured.value() != scrollY){
+                scrollY = ensured.value();
+                placed = CalculateListScrollPlacement(
+                    bodyOuter,
+                    clip,
+                    bodyPadding,
+                    frame.style.list.scrollbarWidth,
+                    frame.style.list.minimumThumb,
+                    frame.rowCount,
+                    frame.rowHeight,
+                    emptyOffsets,
+                    frame.contentWidth,
+                    scrollX,
+                    scrollY,
+                    frame.options.horizontalScrollbar,
+                    frame.options.verticalScrollbar
+                );
+                if(!placed.has_value())
+                    return false;
+            }
+        }
+    }
+    in ScrollPlacement placement = placed.value().placement;
+    in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
+    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+        return false;
+    state.m_scrollRowHeight = frame.rowHeight;
+    state.m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
+        state.m_ensureCursor = false;
+    state.m_placement = placement;
+    state.m_scrollbars = scrollbars;
+    state.m_contentWidth = frame.contentWidth;
+    state.m_visibleFirstRow = placement.firstRow;
+    state.m_visibleEndRow = placement.endRow;
+    this.m_paint.pushClip(clip);
+    this.m_paint.drawRegionByIndex(panelIdx.value(), box.rectangle);
+    if(!this.m_paint.popClip())
+        return false;
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeTableHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        frame.token,
+        frame.rowHeight,
+        frame.options,
+        placement,
+        scrollbars,
+        frame.rowCount,
+        frame.focusOnCommit
+    );
+    if(!this.m_context.addTarget(frame.widget, host))
+        return false;
+    u32 tableActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        tableActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::Table,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        tableActions
+    );
+    const auto rowRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartRows);
+    const auto headerRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartTableHeader);
+    const auto resizeRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartTableResize);
+    if(!rowRoot.has_value() || !headerRoot.has_value() || !resizeRoot.has_value())
+        return false;
+    const auto langSlice = ReadBinaryTextSlice(Span<u8>(frame.measureKey.language), 0u, frame.measureKey.languageLength);
+    if(!langSlice.has_value())
+        return false;
+    in InputRouter input = this.m_context.input();
+    const b8 tableFocused = item.enabled && input.focus() == frame.widget.id;
+    const Rect viewportHeaderClip = IntersectUiRectsBounds(
+        Rect(headerOuter.x, headerOuter.y, placement.viewport.width, headerOuter.height),
+        clip
+    );
+    if(frame.options.showHeader && viewportHeaderClip.width > 0.0f && viewportHeaderClip.height > 0.0f){
+        this.m_paint.pushClip(viewportHeaderClip);
+        f32 colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
+        const f32 viewLeft = viewportHeaderClip.x;
+        const f32 viewRight = viewportHeaderClip.x + viewportHeaderClip.width;
+        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+            in TableColumn col = frame.columns[colIdx];
+            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
+            colX += col.width;
+            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
+                continue;
+            const auto headerId = TryMakeWidgetPartId(headerRoot.value(), col.key);
+            if(!headerId.has_value())
+                return false;
+            const b8 headerEnabled = item.enabled && col.sortable;
+            const b8 headerHovered = headerEnabled && input.hover() == headerId.value();
+            const b8 headerPressed = headerEnabled && input.pressed(headerId.value());
+            Name preferred = frame.style.header;
+            Color bgFallback = frame.widgetStyle.disabledText;
+            if(headerPressed){
+                preferred = frame.style.headerPressed;
+                bgFallback = frame.style.headerDividerColor;
+            }
+            else if(headerHovered){
+                preferred = frame.style.headerHover;
+                bgFallback = frame.style.alternatingRowColor;
+            }
+            else
+                bgFallback = frame.style.alternatingRowColor;
+            this.m_paint.pushClip(cellRect);
+            const Optional<usize> headerRegion = this.m_paint.resolveRegionIndex(preferred, frame.style.headerFallback);
+            if(headerRegion.has_value())
+                this.m_paint.drawRegionByIndex(headerRegion.value(), cellRect);
+            else
+                this.m_paint.fillRect(cellRect, bgFallback);
+            const StringView titleView(frame.columnTitles[colIdx]);
+            if(!titleView.empty()){
+                ShapeRequest titleReq;
+                titleReq.text = titleView;
+                titleReq.language = langSlice.value();
+                titleReq.fontSize = frame.widgetStyle.fontSize;
+                titleReq.scriptTag = frame.measureKey.scriptTag;
+                titleReq.direction = frame.measureKey.direction;
+                const auto titleMeasured = this.m_text.layoutAndMeasureShared(titleReq, this.m_paint.displayMetrics());
+                if(!titleMeasured.has_value())
+                    return false;
+                f32 reservedSortW = 0.0f;
+                if(state.sortColumnKey() == col.key && state.sortDirection() != TableSortDirection::None)
+                    reservedSortW = s_TableSortIndicatorExtent + s_TableSortIndicatorGap;
+                const f32 textAvailW = UiSimdMax(0.0f, col.width - reservedSortW);
+                const f32 insetX = ResolveAlignedCellTextInsetX(col.alignment, textAvailW, frame.style.cellPadding, titleMeasured.value().bounds);
+                const Point titleOrigin = ResolveCenteredTextOrigin(cellRect, insetX, titleMeasured.value().bounds);
+                const Rect textClip = InsetUiRectBounds(Rect(cellRect.x, cellRect.y, textAvailW, cellRect.height), frame.style.cellPadding);
+                this.m_paint.pushClip(textClip);
+                Color titleColor = frame.widgetStyle.disabledText;
+                if(item.enabled)
+                    titleColor = frame.widgetStyle.text;
+                const b8 paintedTitle = this.m_text.paint(this.m_paint, titleMeasured.value().layout.deref(), titleOrigin, titleColor);
+                const b8 titlePopped = this.m_paint.popClip();
+                if(!paintedTitle || !titlePopped)
+                    return false;
+            }
+            if(state.sortColumnKey() == col.key && state.sortDirection() != TableSortDirection::None){
+                const f32 indSize = UiSimdMin(s_TableSortIndicatorExtent, UiSimdMax(4.0f, cellRect.height * 0.4f));
+                const f32 indCx = (cellRect.x + cellRect.width - frame.style.cellPadding.right) - indSize * s_RectCenterFraction;
+                const f32 indCy = cellRect.y + cellRect.height * s_RectCenterFraction;
+                const f32 half = indSize * s_RectCenterFraction;
+                Array<Point, 3u> tri;
+                if(state.sortDirection() == TableSortDirection::Ascending){
+                    tri[0u] = Point(indCx - half, indCy + half * 0.55f);
+                    tri[1u] = Point(indCx + half, indCy + half * 0.55f);
+                    tri[2u] = Point(indCx, indCy - half * 0.65f);
+                }
+                else{
+                    tri[0u] = Point(indCx - half, indCy - half * 0.55f);
+                    tri[1u] = Point(indCx + half, indCy - half * 0.55f);
+                    tri[2u] = Point(indCx, indCy + half * 0.65f);
+                }
+                this.m_paint.fillConvexPolygon(Span<Point>(tri), frame.style.sortIndicatorColor);
+            }
+            const f32 edgeX = cellRect.x + cellRect.width - s_TableHeaderDividerThickness * s_RectCenterFraction;
+            this.m_paint.drawLine(Point(edgeX, cellRect.y), Point(edgeX, cellRect.y + cellRect.height), s_TableHeaderDividerThickness, frame.style.headerDividerColor);
+            if(!this.m_paint.popClip())
+                return false;
+        }
+        const f32 bottomY = headerOuter.y + headerOuter.height - s_TableHeaderDividerThickness * s_RectCenterFraction;
+        this.m_paint.drawLine(
+            Point(viewportHeaderClip.x, bottomY),
+            Point(viewportHeaderClip.x + viewportHeaderClip.width, bottomY),
+            s_TableHeaderDividerThickness,
+            frame.style.headerDividerColor
+        );
+        if(!this.m_paint.popClip())
+            return false;
+    }
+    in SelectableStyle rowStyle = frame.style.list.row;
+    const Rect rowClip = placement.contentClip;
+    for(u64 displayRow = placement.firstRow; displayRow < placement.endRow; ++displayRow){
+        if(!this.tableMatches(frame) || displayRow >= cast<u64>(state.m_sortedOrder.size()))
+            return false;
+        const u64 srcIdx = state.displayRowSourceIndex(displayRow);
+        const u64 rKey = source.rowKey(srcIdx);
+        const b8 rEnabled = item.enabled && source.rowEnabled(srcIdx);
+        if(rKey == 0u || !this.tableMatches(frame))
+            return false;
+        const Expected<Rect> rowBoundsOpt = CalculateScrollRowBounds(displayRow, placement, frame.rowHeight);
+        if(!rowBoundsOpt.has_value())
+            return false;
+        const Rect rowRect = rowBoundsOpt.value();
+        const auto rowPartId = TryMakeWidgetPartId(rowRoot.value(), rKey);
+        if(!rowPartId.has_value())
+            return false;
+        const b8 rowSelected = state.isSelected(rKey);
+        const b8 rowHovered = rEnabled && input.hover() == rowPartId.value();
+        const b8 rowFocused = tableFocused && state.cursorKey() == rKey;
+        Name preferred = rowStyle.normal;
+        Name fallback = rowStyle.fallback;
+        if(!rEnabled){
+            preferred = rowStyle.disabled;
+            fallback = rowStyle.disabledFallback;
+        }
+        else if(rowSelected){
+            preferred = rowStyle.selected;
+            fallback = rowStyle.selectedFallback;
+        }
+        else if(rowHovered){
+            preferred = rowStyle.hover;
+            fallback = rowStyle.hoverFallback;
+        }
+        const Optional<usize> rowRegionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+        if(!rowRegionIdx.has_value())
+            return false;
+        this.m_paint.pushClip(rowClip);
+        this.m_paint.pushClip(rowRect);
+        this.m_paint.drawRegionByIndex(rowRegionIdx.value(), rowRect);
+        if(frame.style.showAlternatingRows && (displayRow % 2u) == 1u && !rowSelected && !rowHovered)
+            this.m_paint.fillRect(rowRect, frame.style.alternatingRowColor);
+        if(rEnabled && rowFocused)
+            this.m_paint.tryDrawRegion(rowStyle.focus, rowRect);
+        f32 cellX = rowRect.x - cast<f32>(scrollbars.horizontal.offset);
+        const f32 viewLeft = rowClip.x;
+        const f32 viewRight = rowClip.x + rowClip.width;
+        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+            in TableColumn col = frame.columns[colIdx];
+            const Rect cellRect(cellX, rowRect.y, col.width, rowRect.height);
+            cellX += col.width;
+            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
+                continue;
+            const StringView cellStr = source.cellText(srcIdx, col.key);
+            if(!this.tableMatches(frame))
+                return false;
+            if(!cellStr.empty()){
+                ShapeRequest cellReq;
+                cellReq.text = cellStr;
+                cellReq.language = langSlice.value();
+                cellReq.fontSize = frame.widgetStyle.fontSize;
+                cellReq.scriptTag = frame.measureKey.scriptTag;
+                cellReq.direction = frame.measureKey.direction;
+                const auto cellMeasured = this.m_text.layoutAndMeasureShared(cellReq, this.m_paint.displayMetrics());
+                if(!cellMeasured.has_value() || !this.tableMatches(frame))
+                    return false;
+                const f32 insetX = ResolveAlignedCellTextInsetX(col.alignment, col.width, frame.style.cellPadding, cellMeasured.value().bounds);
+                const Point origin = ResolveCenteredTextOrigin(cellRect, insetX, cellMeasured.value().bounds);
+                const Rect cellClip = InsetUiRectBounds(cellRect, frame.style.cellPadding);
+                Color cellColor = frame.widgetStyle.disabledText;
+                if(rEnabled)
+                    cellColor = frame.widgetStyle.text;
+                this.m_paint.pushClip(cellClip);
+                const b8 cellPainted = this.m_text.paint(this.m_paint, cellMeasured.value().layout.deref(), origin, cellColor);
+                const b8 cellPopped = this.m_paint.popClip();
+                if(!cellPainted || !cellPopped)
+                    return false;
+            }
+            if(frame.style.showGridLines){
+                const f32 gridX = cellRect.x + cellRect.width - s_TableGridLineThickness * s_RectCenterFraction;
+                this.m_paint.drawLine(Point(gridX, cellRect.y), Point(gridX, cellRect.y + cellRect.height), s_TableGridLineThickness, frame.style.gridLineColor);
+            }
+        }
+        if(frame.style.showGridLines){
+            const f32 gridY = rowRect.y + rowRect.height - s_TableGridLineThickness * s_RectCenterFraction;
+            this.m_paint.drawLine(Point(rowRect.x, gridY), Point(rowRect.x + rowRect.width, gridY), s_TableGridLineThickness, frame.style.gridLineColor);
+        }
+        const b8 rowRectPopped = this.m_paint.popClip();
+        const b8 rowClipPopped = this.m_paint.popClip();
+        if(!rowRectPopped || !rowClipPopped)
+            return false;
+        if(item.enabled){
+            const HitTarget rowTarget = targets.makeListRowHitTarget(rowRect, rowClip, rEnabled, frame.token, rKey);
+            if(!this.m_context.addPartTarget(frame.widget, rowPartId.value(), rowTarget))
+                return false;
+        }
+        u32 rowState = ResolveAccessibleVisibilityStateBits(rEnabled, rowClip) | s_AccessibilityStateFocusable;
+        if(rowSelected)
+            rowState |= s_AccessibilityStateSelected;
+        StringView rowName = StringView();
+        if(!frame.columns.empty())
+            rowName = source.cellText(srcIdx, frame.columns[0u].key);
+        this.emitAccessiblePartNode(
+            rowPartId.value(),
+            frame.widget.id,
+            AccessibilityRole::TableRow,
+            rowRect,
+            rowName,
+            rowState,
+            s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+            cast<i32>(displayRow + 1u),
+            cast<i32>(frame.rowCount),
+            0
+        );
+    }
+    if(frame.options.showHeader && viewportHeaderClip.width > 0.0f && viewportHeaderClip.height > 0.0f){
+        const f32 viewLeft = viewportHeaderClip.x;
+        const f32 viewRight = viewportHeaderClip.x + viewportHeaderClip.width;
+        f32 colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
+        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+            in TableColumn col = frame.columns[colIdx];
+            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
+            colX += col.width;
+            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
+                continue;
+            const auto headerId = TryMakeWidgetPartId(headerRoot.value(), col.key);
+            if(!headerId.has_value())
+                return false;
+            const Rect hitRect = IntersectUiRectsBounds(cellRect, viewportHeaderClip);
+            if(hitRect.width > 0.0f && hitRect.height > 0.0f){
+                if(item.enabled){
+                    const HitTarget headerTarget = targets.makeTableHeaderHitTarget(hitRect, viewportHeaderClip, col.sortable, frame.token, col.key);
+                    if(!this.m_context.addPartTarget(frame.widget, headerId.value(), headerTarget))
+                        return false;
+                }
+                u32 headerActions = s_AccessibilityActionNone;
+                if(item.enabled && col.sortable)
+                    headerActions = s_AccessibilityActionInvoke;
+                this.emitAccessiblePartNode(
+                    headerId.value(),
+                    frame.widget.id,
+                    AccessibilityRole::TableHeader,
+                    hitRect,
+                    StringView(frame.columnTitles[colIdx]),
+                    ResolveAccessibleVisibilityStateBits(item.enabled && col.sortable, viewportHeaderClip),
+                    headerActions,
+                    cast<i32>(colIdx + 1u),
+                    cast<i32>(frame.columns.size()),
+                    0
+                );
+            }
+        }
+        colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
+        const f32 resizeW = frame.style.resizeHandleWidth;
+        const f32 resizeHalfW = resizeW * s_RectCenterFraction;
+        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+            in TableColumn col = frame.columns[colIdx];
+            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
+            const f32 rightEdge = colX + col.width;
+            colX = rightEdge;
+            if(!col.resizable)
+                continue;
+            const Rect resizeRect = IntersectUiRectsBounds(Rect(rightEdge - resizeHalfW, headerOuter.y, resizeW, headerOuter.height), viewportHeaderClip);
+            if(resizeRect.width <= 0.0f || resizeRect.height <= 0.0f)
+                continue;
+            const auto resizeId = TryMakeWidgetPartId(resizeRoot.value(), col.key);
+            if(!resizeId.has_value())
+                return false;
+            const HitTarget resizeTarget = targets.makeTableResizeHitTarget(resizeRect, viewportHeaderClip, cellRect, true, frame.token, col.key);
+            if(!this.m_context.addPartTarget(frame.widget, resizeId.value(), resizeTarget))
+                return false;
+        }
+    }
+    return this.paintScrollbarsAndTargets(frame.widget, item.enabled, frame.token, frame.style.list, scrollbars, clip) && this.tableMatches(frame);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

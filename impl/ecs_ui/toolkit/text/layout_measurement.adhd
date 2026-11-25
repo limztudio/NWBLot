@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/text/bidi.adhd>
 #include <impl/ecs_ui/toolkit/text/sdf_support.adhd>
 
 
@@ -36,12 +37,16 @@ Expected<TextLine> TryBuildInitialTextLine(
     in usize glyphCount,
     in usize firstCluster,
     in f32 top,
-    in FontMetrics metrics
+    in FontMetrics metrics,
+    in f32 lineHeightMultiplier,
+    in f32 lineHeightOverride
 ){
-    const VectorDouble sums = VectorDouble(cast<f64>(top), cast<f64>(metrics.ascender), 0.0, 0.0) + VectorDouble(cast<f64>(metrics.ascender), cast<f64>(metrics.descender), 0.0, 0.0);
-    const f64 baseline = sums.x;
-    const f64 height = sums.y + cast<f64>(metrics.lineGap);
-    if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(cast<f64>(top) + height))
+    const f64 baseHeight = (cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap);
+    f64 targetHeight = baseHeight * cast<f64>(lineHeightMultiplier);
+    if(lineHeightOverride > 0.0f)
+        targetHeight = cast<f64>(lineHeightOverride);
+    const f64 baseline = cast<f64>(top) + cast<f64>(metrics.ascender) + (targetHeight - baseHeight) * 0.5;
+    if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(cast<f64>(top) + targetHeight))
         return MakeUnexpected(Failure());
     TextLine line;
     line.byteBegin = cast<u32>(byteBegin);
@@ -52,7 +57,7 @@ Expected<TextLine> TryBuildInitialTextLine(
     line.firstCluster = cast<u32>(firstCluster);
     line.top = top;
     line.baseline = cast<f32>(baseline);
-    line.height = cast<f32>(height);
+    line.height = cast<f32>(targetHeight);
     return line;
 }
 
@@ -146,6 +151,14 @@ void ExpandMeasuredTextBoundsWithRaster(
     inOutBounds = VectorDouble(minXY.x, minXY.y, maxXY.x, maxXY.y);
 }
 
+class ShapedBidiLineRun<TFace>{
+    public FontMetrics metrics;
+    public Span<ShapedGlyphRecord<TFace>> glyphs;
+    public StringView runText = "";
+    public u32 runByteOffset = 0u;
+    public TextDirection direction = TextDirection::LeftToRight;
+}
+
 TextLayoutStatus PlaceShapedLineInto<TFace>(
     in usize byteBegin,
     in usize byteEnd,
@@ -154,6 +167,8 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     in Span<ShapedGlyphRecord<TFace>> runGlyphs,
     in StringView lineText,
     in TextDirection direction,
+    in f32 lineHeightMultiplier,
+    in f32 lineHeightOverride,
     mut Vector<PlacedGlyphRecord<TFace>> inOutGlyphs,
     mut Vector<TextCluster> inOutClusters,
     mut Vector<TextLine> inOutLines,
@@ -171,7 +186,9 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
         runGlyphs.size(),
         inOutClusters.size(),
         inOutMeasure.y,
-        runMetrics
+        runMetrics,
+        lineHeightMultiplier,
+        lineHeightOverride
     );
     if(!lineResult.has_value())
         return TextLayoutStatus::InvalidParameters;
@@ -231,21 +248,283 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     return TextLayoutStatus::Success;
 }
 
+TextLayoutStatus PlaceShapedBidiLineInto<TFace>(
+    in usize byteBegin,
+    in usize byteEnd,
+    in usize breakEnd,
+    in Span<ShapedBidiLineRun<TFace>> runs,
+    in f32 lineHeightMultiplier,
+    in f32 lineHeightOverride,
+    mut Vector<PlacedGlyphRecord<TFace>> inOutGlyphs,
+    mut Vector<TextCluster> inOutClusters,
+    mut Vector<TextLine> inOutLines,
+    mut Point inOutMeasure,
+    mut VectorDouble inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    if(runs.empty())
+        return TextLayoutStatus::FontFailure;
+    FontMetrics mergedMetrics = runs[0u].metrics;
+    usize totalGlyphs = 0u;
+    for(in ShapedBidiLineRun<TFace> run : runs){
+        if(!ValidateShapedRun(run.metrics, run.glyphs, run.runText, run.direction))
+            return TextLayoutStatus::FontFailure;
+        mergedMetrics = MaxFontMetrics(mergedMetrics, run.metrics);
+        totalGlyphs += run.glyphs.size();
+    }
+    const Expected<TextLine> lineResult = TryBuildInitialTextLine(
+        byteBegin,
+        byteEnd,
+        breakEnd,
+        inOutGlyphs.size(),
+        totalGlyphs,
+        inOutClusters.size(),
+        inOutMeasure.y,
+        mergedMetrics,
+        lineHeightMultiplier,
+        lineHeightOverride
+    );
+    if(!lineResult.has_value())
+        return TextLayoutStatus::InvalidParameters;
+    TextLine line = lineResult.value();
+    f32 pen = 0.0f;
+    for(in ShapedBidiLineRun<TFace> run : runs){
+        usize first = 0u;
+        while(first < run.glyphs.size()){
+            usize end = first + 1u;
+            while(end < run.glyphs.size() && run.glyphs[end].byteBegin == run.glyphs[first].byteBegin)
+                ++end;
+            const f32 clusterLeft = pen;
+            const u32 firstGlyph = cast<u32>(inOutGlyphs.size());
+            for(usize index = first; index < end; ++index){
+                const ShapedGlyphRecord<TFace> glyph = run.glyphs[index];
+                const Expected<Point> position = TryAdvanceTextGlyphPosition(
+                    line.baseline,
+                    glyph.offset,
+                    glyph.advance,
+                    glyph.ink,
+                    glyph.coverage,
+                    pen,
+                    inOutInkBounds,
+                    inOutHasInk
+                );
+                if(!position.has_value())
+                    return TextLayoutStatus::InvalidParameters;
+                PlacedGlyphRecord<TFace> placed;
+                placed.face = glyph.face;
+                placed.glyphId = glyph.glyphId;
+                placed.byteBegin = run.runByteOffset + glyph.byteBegin;
+                placed.byteEnd = run.runByteOffset + glyph.byteEnd;
+                placed.position = position.value();
+                placed.ink = glyph.ink;
+                placed.coverage = glyph.coverage;
+                inOutGlyphs.push_back(placed);
+            }
+            inOutClusters.push_back(MakeTextCluster(
+                run.runByteOffset,
+                run.glyphs[first].byteBegin,
+                run.glyphs[first].byteEnd,
+                firstGlyph,
+                cast<u32>(end - first),
+                cast<u32>(inOutLines.size()),
+                run.direction,
+                clusterLeft,
+                pen
+            ));
+            first = end;
+        }
+    }
+    const f32 nextHeight = line.top + line.height;
+    if(!IsFinite(VectorSingle(pen, nextHeight, pen, nextHeight).xy))
+        return TextLayoutStatus::InvalidParameters;
+    line.advance = pen;
+    line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
+    inOutLines.push_back(line);
+    inOutMeasure = Point(UiSimdMax(inOutMeasure.x, pen), nextHeight);
+    return TextLayoutStatus::Success;
+}
+
+Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
+    return Rect(cast<f32>(inkBounds.x), cast<f32>(inkBounds.y), cast<f32>(inkBounds.z), cast<f32>(inkBounds.w));
+}
+
+f32 SumShapedGlyphRangeWidth<TFace>(in Span<ShapedGlyphRecord<TFace>> runGlyphs, in usize first, in usize last){
+    f32 width = 0.0f;
+    for(usize i = first; i < last; ++i)
+        width += runGlyphs[i].advance.x;
+    return width;
+}
+
+b8 TryResolveNextWrappedTextSegment<TFace>(
+    in StringView fullText,
+    in usize segBegin,
+    in usize lineEnd,
+    in usize hardBreakEnd,
+    in ShapeRequest request,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    mut usize outVisualEnd,
+    mut usize outBreakEnd,
+    mut usize outNextSegBegin
+){
+    outVisualEnd = lineEnd;
+    outBreakEnd = hardBreakEnd;
+    outNextSegBegin = lineEnd;
+    if(request.wrapMode == TextWrapMode::None || request.maxWidth <= 0.0f || segBegin >= lineEnd || runGlyphs.empty())
+        return false;
+    const f32 totalAdvance = SumShapedGlyphRangeWidth<TFace>(runGlyphs, 0u, runGlyphs.size());
+    if(totalAdvance <= request.maxWidth)
+        return false;
+
+    f32 accumWidth = 0.0f;
+    usize firstClusterEnd = 0u;
+    usize fitEnd = 0u;
+    usize wordEnd = 0u;
+    const b8 ltr = request.direction == TextDirection::LeftToRight;
+    if(ltr){
+        usize cursor = 0u;
+        while(cursor < runGlyphs.size()){
+            const usize cFirst = cursor;
+            usize cLast = cursor + 1u;
+            while(cLast < runGlyphs.size() && runGlyphs[cLast].byteBegin == runGlyphs[cFirst].byteBegin)
+                ++cLast;
+            const usize relEnd = cast<usize>(runGlyphs[cFirst].byteEnd);
+            if(firstClusterEnd == 0u)
+                firstClusterEnd = relEnd;
+            accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
+            if(accumWidth <= request.maxWidth){
+                fitEnd = relEnd;
+                if(request.wrapMode == TextWrapMode::Word){
+                    const u8 lastByte = cast<u8>(fullText[segBegin + relEnd - 1u]);
+                    if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-'))
+                        wordEnd = relEnd;
+                }
+            }
+            else
+                break;
+            cursor = cLast;
+        }
+    }
+    else{
+        usize cursor = runGlyphs.size();
+        while(cursor > 0u){
+            const usize cLast = cursor;
+            usize cFirst = cLast - 1u;
+            while(cFirst > 0u && runGlyphs[cFirst - 1u].byteBegin == runGlyphs[cLast - 1u].byteBegin)
+                --cFirst;
+            const usize relEnd = cast<usize>(runGlyphs[cFirst].byteEnd);
+            if(firstClusterEnd == 0u)
+                firstClusterEnd = relEnd;
+            accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
+            if(accumWidth <= request.maxWidth){
+                fitEnd = relEnd;
+                if(request.wrapMode == TextWrapMode::Word){
+                    const u8 lastByte = cast<u8>(fullText[segBegin + relEnd - 1u]);
+                    if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-'))
+                        wordEnd = relEnd;
+                }
+            }
+            else
+                break;
+            cursor = cFirst;
+        }
+    }
+
+    if(firstClusterEnd == 0u)
+        firstClusterEnd = lineEnd - segBegin;
+    usize chosenEnd = firstClusterEnd;
+    if(request.wrapMode == TextWrapMode::Word && wordEnd > 0u)
+        chosenEnd = wordEnd;
+    else if(fitEnd > 0u)
+        chosenEnd = fitEnd;
+
+    usize visualEnd = segBegin + chosenEnd;
+    usize nextBegin = visualEnd;
+    if(request.wrapMode == TextWrapMode::Word && !request.preserveWrapSpaces){
+        while(visualEnd > segBegin && fullText[visualEnd - 1u] == ' ')
+            --visualEnd;
+        while(nextBegin < lineEnd && fullText[nextBegin] == ' ')
+            ++nextBegin;
+    }
+    outVisualEnd = visualEnd;
+    outNextSegBegin = nextBegin;
+    if(nextBegin >= lineEnd){
+        outNextSegBegin = lineEnd;
+        outBreakEnd = hardBreakEnd;
+    }
+    else
+        outBreakEnd = nextBegin;
+    return outVisualEnd < lineEnd;
+}
+
+void ApplyTextLayoutAlignment<TFace>(
+    in TextAlignment alignment,
+    in Point measure,
+    mut Vector<TextLine> lines,
+    mut Vector<PlacedGlyphRecord<TFace>> glyphs,
+    mut Vector<TextCluster> clusters,
+    mut Rect inOutInkBounds
+){
+    if(alignment == TextAlignment::Leading || lines.size() <= 1u)
+        return;
+    b8 anyShifted = false;
+    for(usize lineIndex = 0u; lineIndex < lines.size(); ++lineIndex){
+        const f32 slack = measure.x - lines[lineIndex].advance;
+        if(slack <= 0.0f)
+            continue;
+        f32 dx = slack;
+        if(alignment == TextAlignment::Center)
+            dx = slack * 0.5f;
+        if(dx == 0.0f)
+            continue;
+        anyShifted = true;
+        in TextLine line = lines[lineIndex];
+        const usize gEnd = cast<usize>(line.firstGlyph) + cast<usize>(line.glyphCount);
+        for(usize g = cast<usize>(line.firstGlyph); g < gEnd; ++g){
+            mut PlacedGlyphRecord<TFace> placed = glyphs[g];
+            placed.position.x += dx;
+        }
+        const usize cEnd = cast<usize>(line.firstCluster) + cast<usize>(line.clusterCount);
+        for(usize c = cast<usize>(line.firstCluster); c < cEnd; ++c){
+            mut TextCluster cluster = clusters[c];
+            cluster.leadingX += dx;
+            cluster.trailingX += dx;
+        }
+    }
+    if(!anyShifted)
+        return;
+    VectorDouble inkBounds = VectorDoubleZero();
+    b8 hasInk = false;
+    for(usize g = 0u; g < glyphs.size(); ++g){
+        in PlacedGlyphRecord<TFace> placed = glyphs[g];
+        VectorDouble translated(0.0);
+        if(TryTranslateTextInk(placed.position, placed.ink, translated))
+            TryIncludeTextInk(translated, inkBounds, hasInk);
+    }
+    if(hasInk)
+        inOutInkBounds = StoreTextLayoutInkBounds(inkBounds);
+}
+
 TextLayoutStatus SetLabelTextRequest(
     in ShapeRequest request,
     mut String inOutText,
     mut String inOutLanguage,
     mut f32 inOutFontSize,
+    mut f32 inOutMaxWidth,
     mut u32 inOutScriptTag,
     mut TextDirection inOutDirection,
+    mut TextWrapMode inOutWrapMode,
+    mut TextAlignment inOutAlignment,
     mut b8 inOutDirty
 ){
     ShapeRequest current;
     current.text = inOutText;
     current.language = inOutLanguage;
     current.fontSize = inOutFontSize;
+    current.maxWidth = inOutMaxWidth;
     current.scriptTag = inOutScriptTag;
     current.direction = inOutDirection;
+    current.wrapMode = inOutWrapMode;
+    current.alignment = inOutAlignment;
     if(SameShapeRequest(request, current))
         return TextLayoutStatus::Success;
     const TextLayoutStatus status = ValidateTextRequest(request, true);
@@ -255,8 +534,11 @@ TextLayoutStatus SetLabelTextRequest(
     inOutText.assign(request.text);
     inOutLanguage.assign(request.language);
     inOutFontSize = request.fontSize;
+    inOutMaxWidth = request.maxWidth;
     inOutScriptTag = request.scriptTag;
     inOutDirection = request.direction;
+    inOutWrapMode = request.wrapMode;
+    inOutAlignment = request.alignment;
     return TextLayoutStatus::Success;
 }
 

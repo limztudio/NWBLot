@@ -1,0 +1,353 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <impl/ecs_ui/toolkit/input/gamepad.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPlatformInteractionFixture : WidgetFixture{
+    public SliderState m_slider;
+    public EditModel m_secretModel;
+    public EditBoxState m_secretState;
+    public EditModel m_plainModel;
+    public EditBoxState m_plainState;
+    public ToastState m_toasts;
+
+    public void addExtendedSkinRegions(){
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        const Array<StringView, 4u> extraNames("edit.normal", "slider.track", "slider.thumb.normal", "slider.thumb.hover");
+        for(u32 idx = 0u; idx < extraNames.size(); ++idx){
+            UiSkinRegion reg;
+            const auto parsed = ParseName(extraNames[idx]);
+            ASSERT_TRUE(parsed.has_value());
+            reg.name = parsed.value();
+            reg.rectangle.x = 96u + idx * 8u;
+            reg.rectangle.width = 8u;
+            reg.rectangle.height = 8u;
+            reg.padding = MakeFixtureSkinInsets(2.0f, 2.0f, 2.0f, 2.0f);
+            reg.minimumWidth = 12.0f;
+            reg.minimumHeight = 12.0f;
+            regions.push_back(reg);
+        }
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, regions);
+    }
+
+    public Point targetCenter(in WidgetId targetId)const{
+        const auto found = this.target(targetId);
+        EXPECT_TRUE(found.has_value());
+        if(!found.has_value())
+            return Point();
+        in Rect r = found.value().rectangle;
+        return Point(r.x + r.width * 0.5f, r.y + r.height * 0.5f);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiPlatformInteraction_CursorResolutionCaptureGrabAndFrameOverride(mut UiPlatformInteractionFixture self){
+    self.addExtendedSkinRegions();
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+    ASSERT_TRUE(self.m_builder.editBox("edit", self.m_plainModel, self.m_plainState).valid);
+    self.m_builder.hyperlink("link", "Docs");
+    self.m_builder.setNextCursor(PointerCursor::Grab);
+    self.m_builder.button("dragBtn", "Drag");
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(1u));
+
+    const WidgetId editId = self.id("edit", "panel");
+    const WidgetId linkId = self.id("link", "panel");
+    const WidgetId grabId = self.id("dragBtn", "panel");
+
+    InputEvent moveEdit;
+    moveEdit.type = InputEventType::PointerMove;
+    moveEdit.position = self.targetCenter(editId);
+    self.send(moveEdit);
+    EXPECT_EQ(self.m_context.resolveCursor(), PointerCursor::TextInput);
+
+    InputEvent moveLink;
+    moveLink.type = InputEventType::PointerMove;
+    moveLink.position = self.targetCenter(linkId);
+    self.send(moveLink);
+    EXPECT_EQ(self.m_context.resolveCursor(), PointerCursor::Hand);
+
+    const Point grabPos = self.targetCenter(grabId);
+    InputEvent moveGrab;
+    moveGrab.type = InputEventType::PointerMove;
+    moveGrab.position = grabPos;
+    self.send(moveGrab);
+    EXPECT_EQ(self.m_context.resolveCursor(), PointerCursor::Grab);
+
+    InputEvent pressGrab;
+    pressGrab.type = InputEventType::PrimaryDown;
+    pressGrab.position = grabPos;
+    self.send(pressGrab);
+    InputEvent dragAway;
+    dragAway.type = InputEventType::PointerMove;
+    dragAway.position = Point(480.0f, 380.0f);
+    self.send(dragAway);
+    EXPECT_EQ(self.m_context.resolveCursor(), PointerCursor::Grabbing);
+
+    self.m_context.setFrameCursor(PointerCursor::Wait);
+    EXPECT_EQ(self.m_context.resolveCursor(), PointerCursor::Wait);
+
+    InputEvent releaseGrab;
+    releaseGrab.type = InputEventType::PrimaryUp;
+    releaseGrab.position = Point(480.0f, 380.0f);
+    self.send(releaseGrab);
+}
+
+void VerifyUiPlatformInteraction_SpatialFocusGridNeighborsTrapSliderAndClipCulling(mut UiPlatformInteractionFixture self){
+    self.addExtendedSkinRegions();
+    const WidgetId panelId = RequireUiWidgetId(RequireUiRootId(self.m_root), "panel");
+    const WidgetId gridId = RequireUiWidgetId(panelId, "grid");
+    const WidgetId row0Id = RequireUiWidgetId(gridId, "row0");
+    const WidgetId row1Id = RequireUiWidgetId(gridId, "row1");
+    const WidgetId trapRowId = RequireUiWidgetId(panelId, "trapRow");
+    const WidgetId aId = RequireUiWidgetId(row0Id, "a");
+    const WidgetId bId = RequireUiWidgetId(row0Id, "b");
+    const WidgetId cId = RequireUiWidgetId(row1Id, "c");
+    const WidgetId dId = RequireUiWidgetId(row1Id, "d");
+    const WidgetId trapId0 = RequireUiWidgetId(trapRowId, "s0");
+    const WidgetId trapId1 = RequireUiWidgetId(trapRowId, "s1");
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+    ASSERT_TRUE(self.m_builder.beginColumn("grid"));
+    if(true){
+        ASSERT_TRUE(self.m_builder.beginRow("row0"));
+        WidgetOptions opt;
+        opt.width = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+        opt.height = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+        self.m_builder.setNextFocusNeighbors(dId, cId, WidgetId(), bId);
+        self.m_builder.button("a", "A", opt);
+        self.m_builder.button("b", "B", opt);
+        ASSERT_TRUE(self.m_builder.endContainer());
+
+        ASSERT_TRUE(self.m_builder.beginRow("row1"));
+        self.m_builder.button("c", "C", opt);
+        self.m_builder.button("d", "D", opt);
+        ASSERT_TRUE(self.m_builder.endContainer());
+    }
+    ASSERT_TRUE(self.m_builder.endContainer());
+
+    ASSERT_TRUE(self.m_builder.beginFocusScope("trap", true));
+    ASSERT_TRUE(self.m_builder.beginRow("trapRow"));
+    WidgetOptions smallOpt;
+    smallOpt.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+    smallOpt.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
+    self.m_builder.button("s0", "S0", smallOpt);
+    self.m_builder.button("s1", "S1", smallOpt);
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.endFocusScope());
+
+    self.m_builder.button("outside", "Out", smallOpt);
+
+    SliderOptions sliderOpts;
+    sliderOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 180.0f);
+    sliderOpts.minimum = 0.0;
+    sliderOpts.maximum = 100.0;
+    sliderOpts.step = 10.0;
+    ASSERT_TRUE(self.m_builder.slider("slider", self.m_slider, sliderOpts));
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(1u));
+
+    const WidgetId sliderId = self.id("slider", "panel");
+    mut InputRouter router = self.m_context.input();
+    ASSERT_TRUE(router.setFocus(aId));
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Right));
+    EXPECT_EQ(router.focus(), bId);
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Down));
+    EXPECT_EQ(router.focus(), dId);
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Left));
+    EXPECT_EQ(router.focus(), cId);
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Up));
+    EXPECT_EQ(router.focus(), aId);
+
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Up));
+    EXPECT_EQ(router.focus(), dId);
+
+    ASSERT_TRUE(router.setFocus(trapId1));
+    EXPECT_FALSE(router.moveFocus(FocusDirection::Right));
+    EXPECT_EQ(router.focus(), trapId1);
+    EXPECT_TRUE(router.moveFocus(FocusDirection::Left));
+    EXPECT_EQ(router.focus(), trapId0);
+
+    ASSERT_TRUE(router.setFocus(sliderId));
+    EXPECT_EQ(ResolveGamepadDirectionCommand(router, FocusDirection::Right), InputCommand::Right);
+    EXPECT_EQ(ResolveGamepadDirectionCommand(router, FocusDirection::Up), InputCommand::FocusUp);
+
+    InputRouter clipRouter;
+    Vector<HitTarget> clipTargets;
+    HitTarget visLeft;
+    visLeft.id = aId;
+    visLeft.declarationGeneration = 1u;
+    visLeft.rectangle = Rect(10.0f, 10.0f, 80.0f, 30.0f);
+    visLeft.clip = Rect(0.0f, 0.0f, 200.0f, 200.0f);
+    visLeft.focusable = true;
+    visLeft.activatable = true;
+    HitTarget clippedRight;
+    clippedRight.id = bId;
+    clippedRight.declarationGeneration = 1u;
+    clippedRight.rectangle = Rect(120.0f, 10.0f, 80.0f, 30.0f);
+    clippedRight.clip = Rect(0.0f, 0.0f, 100.0f, 200.0f);
+    clippedRight.focusable = true;
+    clippedRight.activatable = true;
+    clipTargets.push_back(visLeft);
+    clipTargets.push_back(clippedRight);
+    Vector<PopupScope> emptyPopups;
+    ASSERT_TRUE(clipRouter.commitTargets(Span<HitTarget>(clipTargets), 1u, Span<PopupScope>(emptyPopups), 0u));
+    ASSERT_TRUE(clipRouter.setFocus(aId));
+    EXPECT_FALSE(clipRouter.moveFocus(FocusDirection::Right));
+}
+
+void VerifyUiPlatformInteraction_GamepadDeadzoneHysteresisRepeatScrollAndDisconnect(mut UiPlatformInteractionFixture self){
+    self.addExtendedSkinRegions();
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+    ASSERT_TRUE(self.m_builder.beginRow("row"));
+    WidgetOptions opt;
+    opt.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+    opt.height = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+    self.m_builder.button("leftBtn", "L", opt);
+    self.m_builder.button("rightBtn", "R", opt);
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(1u));
+
+    const WidgetId rowId = RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(self.m_root), "panel"), "row");
+    const WidgetId leftId = RequireUiWidgetId(rowId, "leftBtn");
+    const WidgetId rightId = RequireUiWidgetId(rowId, "rightBtn");
+    mut InputRouter router = self.m_context.input();
+    ASSERT_TRUE(router.setFocus(leftId));
+
+    GamepadNavigationAdapter pad;
+    pad.onConnection(0u, true, router);
+
+    EXPECT_FALSE(pad.onAxis(0u, cast<i32>(GamepadAxis::LeftX), 0.20f, router));
+    EXPECT_EQ(router.focus(), leftId);
+
+    EXPECT_TRUE(pad.onAxis(0u, cast<i32>(GamepadAxis::LeftX), 0.55f, router));
+    EXPECT_EQ(router.focus(), rightId);
+
+    EXPECT_FALSE(pad.onAxis(0u, cast<i32>(GamepadAxis::LeftX), 0.30f, router));
+    EXPECT_TRUE(pad.onAxis(0u, cast<i32>(GamepadAxis::LeftX), 0.10f, router));
+    EXPECT_EQ(router.focus(), rightId);
+    EXPECT_FALSE(pad.tick(0.50f, router));
+    EXPECT_FALSE(pad.onAxis(0u, cast<i32>(GamepadAxis::LeftX), 0.05f, router));
+
+    ASSERT_TRUE(router.setFocus(rightId));
+    EXPECT_TRUE(pad.onButton(0u, cast<i32>(GamepadButton::DPadLeft), s_InputActionPress, router));
+    EXPECT_EQ(router.focus(), leftId);
+    EXPECT_FALSE(pad.tick(0.10f, router));
+    ASSERT_TRUE(router.setFocus(rightId));
+    EXPECT_TRUE(pad.tick(0.45f, router));
+    EXPECT_EQ(router.focus(), leftId);
+
+    pad.onConnection(0u, false, router);
+    EXPECT_FALSE(pad.tick(0.50f, router));
+}
+
+void VerifyUiPlatformInteraction_AccessibilityHierarchyPasswordToastAndActions(mut UiPlatformInteractionFixture self){
+    self.addExtendedSkinRegions();
+    ASSERT_TRUE(self.m_secretModel.setText("top-secret"));
+    ASSERT_TRUE(self.m_plainModel.setText("hello"));
+
+    ToastOptions toastOpts;
+    ASSERT_NE(self.m_toasts.push("Info", "Saved", ToastSeverity::Info, 5.0f), 0u);
+
+    EditBoxOptions secretOpts;
+    secretOpts.password = true;
+
+    SliderOptions sliderOpts;
+    sliderOpts.minimum = 0.0;
+    sliderOpts.maximum = 100.0;
+    sliderOpts.step = 5.0;
+    ASSERT_TRUE(self.m_slider.setValue(20.0));
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+    self.m_builder.setNextAccessibleLabel("Primary Action");
+    self.m_builder.setNextAccessibleDescription("Runs primary task");
+    self.m_builder.button("actionBtn", "Run");
+    self.m_builder.button("nextBtn", "Next");
+    ASSERT_TRUE(self.m_builder.editBox("secret", self.m_secretModel, self.m_secretState, secretOpts).valid);
+    ASSERT_TRUE(self.m_builder.editBox("plain", self.m_plainModel, self.m_plainState).valid);
+    ASSERT_TRUE(self.m_builder.slider("slider", self.m_slider, sliderOpts));
+    ASSERT_TRUE(self.m_builder.toastStack("toasts", self.m_toasts, toastOpts).valid);
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(1u));
+
+    in AccessibleTree tree = self.m_context.accessibility();
+    const WidgetId panelId = RequireUiWidgetId(RequireUiRootId(self.m_root), "panel");
+    const WidgetId actionId = self.id("actionBtn", "panel");
+    const WidgetId nextId = self.id("nextBtn", "panel");
+    const WidgetId secretId = self.id("secret", "panel");
+    const WidgetId plainId = self.id("plain", "panel");
+    const WidgetId sliderId = self.id("slider", "panel");
+
+    const auto actionNode = tree.findNode(actionId);
+    ASSERT_TRUE(actionNode.has_value());
+    EXPECT_EQ(actionNode.value().parentId, panelId.value);
+    EXPECT_EQ(tree.nodeName(actionNode.value()), "Primary Action");
+    EXPECT_EQ(tree.nodeDescription(actionNode.value()), "Runs primary task");
+
+    const auto nextNode = tree.findNode(nextId);
+    ASSERT_TRUE(nextNode.has_value());
+    EXPECT_EQ(tree.nodeName(nextNode.value()), "Next");
+    EXPECT_EQ(tree.nodeDescription(nextNode.value()), "");
+
+    const auto secretNode = tree.findNode(secretId);
+    ASSERT_TRUE(secretNode.has_value());
+    EXPECT_NE(secretNode.value().stateBits & s_AccessibilityStatePassword, 0u);
+    EXPECT_EQ(tree.nodeValue(secretNode.value()), "");
+
+    const auto plainNode = tree.findNode(plainId);
+    ASSERT_TRUE(plainNode.has_value());
+    EXPECT_EQ(tree.nodeValue(plainNode.value()), "hello");
+
+    EXPECT_EQ(tree.announcementCount(), 1u);
+    EXPECT_EQ(tree.announcementAt(0u).liveMode, AccessibilityLiveMode::Polite);
+
+    AccessibilityActionEvent invokeAction;
+    invokeAction.targetId = actionId.value;
+    invokeAction.kind = AccessibilityActionKind::Invoke;
+    EXPECT_TRUE(self.m_context.applyAccessibleAction(invokeAction));
+
+    AccessibilityActionEvent setSliderAction;
+    setSliderAction.targetId = sliderId.value;
+    setSliderAction.kind = AccessibilityActionKind::SetValue;
+    setSliderAction.numericValue = 75.0;
+    EXPECT_TRUE(self.m_context.applyAccessibleAction(setSliderAction));
+
+    ASSERT_NE(self.m_toasts.push("Failure", "Disk full", ToastSeverity::Error, 5.0f), 0u);
+
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+    const b8 actionActivated = self.m_builder.button("actionBtn", "Run");
+    self.m_builder.button("nextBtn", "Next");
+    ASSERT_TRUE(self.m_builder.editBox("secret", self.m_secretModel, self.m_secretState, secretOpts).valid);
+    ASSERT_TRUE(self.m_builder.editBox("plain", self.m_plainModel, self.m_plainState).valid);
+    ASSERT_TRUE(self.m_builder.slider("slider", self.m_slider, sliderOpts));
+    ASSERT_TRUE(self.m_builder.toastStack("toasts", self.m_toasts, toastOpts).valid);
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(2u));
+
+    EXPECT_TRUE(actionActivated);
+    EXPECT_EQ(self.m_slider.value(), 75.0);
+    EXPECT_EQ(tree.announcementCount(), 1u);
+    EXPECT_EQ(tree.announcementAt(0u).liveMode, AccessibilityLiveMode::Assertive);
+    EXPECT_TRUE(tree.hitTest(self.targetCenter(actionId)) == actionId);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiPlatformInteractionFixture, CursorResolutionCaptureGrabAndFrameOverride, VerifyUiPlatformInteraction_CursorResolutionCaptureGrabAndFrameOverride)
+NWB_ADHD_GTEST_F(UiPlatformInteractionFixture, SpatialFocusGridNeighborsTrapSliderAndClipCulling, VerifyUiPlatformInteraction_SpatialFocusGridNeighborsTrapSliderAndClipCulling)
+NWB_ADHD_GTEST_F(UiPlatformInteractionFixture, GamepadDeadzoneHysteresisRepeatScrollAndDisconnect, VerifyUiPlatformInteraction_GamepadDeadzoneHysteresisRepeatScrollAndDisconnect)
+NWB_ADHD_GTEST_F(UiPlatformInteractionFixture, AccessibilityHierarchyPasswordToastAndActions, VerifyUiPlatformInteraction_AccessibilityHierarchyPasswordToastAndActions)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -136,12 +136,28 @@ Expected<usize> TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Spa
         return byte;
     const usize first = cast<usize>(line.firstStop);
     const usize end = first + cast<usize>(line.stopCount);
+    b8 ascending = true;
+    b8 descending = true;
+    for(usize index = first + 1u; index < end; ++index){
+        if(stops[index].lineIndex != lineIndex)
+            return MakeUnexpected(Failure());
+        if(stops[index].x < stops[index - 1u].x)
+            ascending = false;
+        if(stops[index].x > stops[index - 1u].x)
+            descending = false;
+    }
+    if(!ascending && !descending)
+        return MakeUnexpected(Failure());
     usize selected = first;
     for(usize index = first + 1u; index < end; ++index){
-        if(stops[index].lineIndex != lineIndex || stops[index].x < stops[index - 1u].x)
-            return MakeUnexpected(Failure());
-        if(localPoint.x < stops[index].x)
-            break;
+        if(ascending){
+            if(localPoint.x < stops[index].x)
+                break;
+        }
+        else{
+            if(localPoint.x > stops[index].x)
+                break;
+        }
         selected = index;
     }
     if(selected + 1u == end)

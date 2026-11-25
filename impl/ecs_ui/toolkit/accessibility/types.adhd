@@ -1,0 +1,137 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_AccessibleNoIndex = 0xffffffffu;
+const usize s_AccessibleMaxAnnouncements = 64u;
+const u64 s_AccessibleInputDeviceId = 0x4131315900000000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AccessibleNodeDesc{
+    public WidgetId id;
+    public WidgetId parentId;
+    public AccessibilityRole role = AccessibilityRole::None;
+    public AccessibilityLiveMode liveMode = AccessibilityLiveMode::Off;
+    public u32 stateBits = s_AccessibilityStateEnabled;
+    public u32 actionBits = s_AccessibilityActionNone;
+    public Rect bounds;
+    public f64 numericValue = 0.0;
+    public f64 numericMin = 0.0;
+    public f64 numericMax = 0.0;
+    public f64 numericStep = 0.0;
+    public i32 positionInSet = 0;
+    public i32 setSize = 0;
+    public i32 level = 0;
+    public StringView name = StringView();
+    public StringView description = StringView();
+    public StringView valueText = StringView();
+}
+
+class AccessibleAnnouncement{
+    public u32 textOffset = 0u;
+    public u32 textLength = 0u;
+    public AccessibilityLiveMode liveMode = AccessibilityLiveMode::Polite;
+}
+
+class AccessibleOverride{
+    public String label;
+    public String description;
+    public AccessibilityRole role = AccessibilityRole::None;
+    public AccessibilityLiveMode liveMode = AccessibilityLiveMode::Off;
+    public b8 hasLabel = false;
+    public b8 hasDescription = false;
+    public b8 hasRole = false;
+    public b8 hasLiveMode = false;
+
+    public b8 any()const{
+        return this.hasLabel || this.hasDescription || this.hasRole || this.hasLiveMode;
+    }
+
+    public void reset(){
+        this.label.clear();
+        this.description.clear();
+        this.role = AccessibilityRole::None;
+        this.liveMode = AccessibilityLiveMode::Off;
+        this.hasLabel = false;
+        this.hasDescription = false;
+        this.hasRole = false;
+        this.hasLiveMode = false;
+    }
+}
+
+class AccessibleNumericValueRequest{
+    public WidgetId targetId;
+    public f64 value = 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ResolveAccessibleVisibilityStateBits(in b8 enabled, in Rect clip){
+    u32 bits = s_AccessibilityStateNone;
+    if(enabled)
+        bits |= s_AccessibilityStateEnabled;
+    if(clip.width <= 0.0f || clip.height <= 0.0f)
+        bits |= s_AccessibilityStateOffscreen;
+    return bits;
+}
+
+AccessibilityRole DefaultAccessibilityRoleForWidgetKind(in WidgetKind kind){
+    switch(kind){
+    case WidgetKind::Panel: return AccessibilityRole::Panel;
+    case WidgetKind::Container: return AccessibilityRole::Group;
+    case WidgetKind::Label: return AccessibilityRole::Text;
+    case WidgetKind::Button: return AccessibilityRole::Button;
+    case WidgetKind::Checkbox: return AccessibilityRole::CheckBox;
+    case WidgetKind::Window: return AccessibilityRole::Window;
+    case WidgetKind::Separator: return AccessibilityRole::None;
+    case WidgetKind::EditBox: return AccessibilityRole::TextField;
+    case WidgetKind::Popup: return AccessibilityRole::Panel;
+    case WidgetKind::Selectable: return AccessibilityRole::ListItem;
+    case WidgetKind::VirtualList: return AccessibilityRole::List;
+    case WidgetKind::ComboBox:
+    case WidgetKind::SearchComboBox:
+        return AccessibilityRole::ComboBox;
+    case WidgetKind::Tooltip: return AccessibilityRole::Tooltip;
+    case WidgetKind::ContextMenu: return AccessibilityRole::Menu;
+    case WidgetKind::TextArea: return AccessibilityRole::TextArea;
+    case WidgetKind::RadioGroup: return AccessibilityRole::RadioGroup;
+    case WidgetKind::Slider: return AccessibilityRole::Slider;
+    case WidgetKind::Progress: return AccessibilityRole::ProgressBar;
+    case WidgetKind::Image: return AccessibilityRole::Image;
+    case WidgetKind::ScrollArea: return AccessibilityRole::Region;
+    case WidgetKind::CollapsibleHeader: return AccessibilityRole::ToggleButton;
+    case WidgetKind::TabBar: return AccessibilityRole::TabList;
+    case WidgetKind::Splitter: return AccessibilityRole::Splitter;
+    case WidgetKind::SpinBox: return AccessibilityRole::SpinButton;
+    case WidgetKind::TreeView: return AccessibilityRole::Tree;
+    case WidgetKind::DataTable: return AccessibilityRole::Table;
+    case WidgetKind::MenuBar: return AccessibilityRole::MenuBar;
+    case WidgetKind::ToastStack: return AccessibilityRole::Alert;
+    case WidgetKind::ColorPicker: return AccessibilityRole::ColorPicker;
+    case WidgetKind::DragSource:
+    case WidgetKind::DropTarget:
+        return AccessibilityRole::Group;
+    case WidgetKind::Hyperlink: return AccessibilityRole::Link;
+    case WidgetKind::RichText: return AccessibilityRole::Text;
+    case WidgetKind::Plot: return AccessibilityRole::Image;
+    case WidgetKind::Canvas: return AccessibilityRole::Canvas;
+    case WidgetKind::DockSpace: return AccessibilityRole::DockSpace;
+    default: return AccessibilityRole::None;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

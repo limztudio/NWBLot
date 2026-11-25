@@ -111,17 +111,21 @@ b8 ReadOptionalSceneFloat3Field(
     return true;
 }
 
-Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset){
-    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+b8 ParseDecomposedTransformData(
+    in Path nwbFilePath,
+    in StringView diagnosticPrefix,
+    in MetascriptValue asset,
+    mut VectorSingle outPosition,
+    mut VectorSingle outRotation,
+    mut VectorSingle outScale
+){
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, lambda[](in StringView fieldName) -> b8{
         return IsAllowedTransformComponentField(fieldName);
     }))
-        return MakeUnexpected(Failure());
+        return false;
 
-    TransformComponent component;
-    VectorSingle position = VectorSingle(component.position);
-    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformPositionField, position))
-        return MakeUnexpected(Failure());
-    component.position = f32x4(position);
+    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, diagnosticPrefix, s_TransformPositionField, outPosition))
+        return false;
 
     const b8 hasRotation = asset.hasField(s_TransformRotationField);
     const b8 hasEuler = asset.hasField(s_TransformRotationEulerField);
@@ -136,43 +140,98 @@ Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in
     if(rotationFieldCount > 1u){
         error(
             "{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"
-            , s_TransformDiagnosticPrefix
+            , diagnosticPrefix
             , PathToString(nwbFilePath)
         );
-        return MakeUnexpected(Failure());
+        return false;
     }
 
     if(hasRotation){
         b8 parsedOk = true;
-        VectorSingle parsedRotation = VectorSingle(component.rotation);
+        VectorSingle parsedRotation = outRotation;
         asset.visitField(
             s_TransformRotationField,
-            lambda[in nwbFilePath, mut parsedOk, mut parsedRotation](in MetascriptValue fieldValue) -> void{
-                if(!ParseSceneQuaternionValue(nwbFilePath, fieldValue, s_TransformDiagnosticPrefix, s_TransformRotationField, parsedRotation))
+            lambda[in nwbFilePath, in diagnosticPrefix, mut parsedOk, mut parsedRotation](in MetascriptValue fieldValue) -> void{
+                if(!ParseSceneQuaternionValue(nwbFilePath, fieldValue, diagnosticPrefix, s_TransformRotationField, parsedRotation))
                     parsedOk = false;
             }
         );
         if(!parsedOk)
-            return MakeUnexpected(Failure());
-        component.rotation = f32x4(parsedRotation);
+            return false;
+        outRotation = parsedRotation;
     }
     else if(hasEuler){
         VectorSingle eulerRadians = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerField, eulerRadians))
-            return MakeUnexpected(Failure());
-        component.rotation = f32x4(BuildTransformEulerQuaternion(eulerRadians, false));
+        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, diagnosticPrefix, s_TransformRotationEulerField, eulerRadians))
+            return false;
+        outRotation = BuildTransformEulerQuaternion(eulerRadians, false);
     }
     else if(hasEulerDegrees){
         VectorSingle eulerDegrees = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformRotationEulerDegreesField, eulerDegrees))
-            return MakeUnexpected(Failure());
-        component.rotation = f32x4(BuildTransformEulerQuaternion(eulerDegrees, true));
+        if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, diagnosticPrefix, s_TransformRotationEulerDegreesField, eulerDegrees))
+            return false;
+        outRotation = BuildTransformEulerQuaternion(eulerDegrees, true);
     }
 
+    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, diagnosticPrefix, s_TransformScaleField, outScale))
+        return false;
+    return true;
+}
+
+Expected<TransformComponent> ParseTransformComponentData(in Path nwbFilePath, in MetascriptValue asset){
+    TransformComponent component;
+    VectorSingle pos = VectorSingle(component.position);
+    VectorSingle rot = VectorSingle(component.rotation);
     VectorSingle scale = VectorSingle(component.scale);
-    if(!ReadOptionalSceneFloat3Field(nwbFilePath, asset, s_TransformDiagnosticPrefix, s_TransformScaleField, scale))
+    if(!ParseDecomposedTransformData(nwbFilePath, s_TransformDiagnosticPrefix, asset, pos, rot, scale))
         return MakeUnexpected(Failure());
-    component.scale = f32x4(scale);
+    AssignDecomposedTransformComponent(pos, rot, scale, component);
+    return component;
+}
+
+Expected<LocalTransformComponent> ParseLocalTransformComponentData(in Path nwbFilePath, in MetascriptValue asset){
+    LocalTransformComponent component;
+    VectorSingle pos = VectorSingle(component.position);
+    VectorSingle rot = VectorSingle(component.rotation);
+    VectorSingle scale = VectorSingle(component.scale);
+    if(!ParseDecomposedTransformData(nwbFilePath, s_LocalTransformDiagnosticPrefix, asset, pos, rot, scale))
+        return MakeUnexpected(Failure());
+    AssignDecomposedLocalTransformComponent(pos, rot, scale, component);
+    return component;
+}
+
+Expected<SceneParentComponent> ParseSceneParentComponentData(in Path nwbFilePath, in MetascriptValue asset){
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneParentDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return fieldName == s_SceneParentEntityNameField || fieldName == s_SceneParentInheritScaleField;
+    }))
+        return MakeUnexpected(Failure());
+
+    SceneParentComponent component;
+    const Expected<MetadataStringField> parentNameField = ReadMetadataStringField(
+        nwbFilePath,
+        asset,
+        s_SceneParentDiagnosticPrefix,
+        s_SceneParentEntityNameField,
+        false
+    );
+    if(!parentNameField.has_value())
+        return MakeUnexpected(Failure());
+    if(parentNameField.value().present){
+        const StringView trimmed = TrimView(parentNameField.value().text);
+        if(trimmed.empty() || trimmed != parentNameField.value().text){
+            error("{} '{}': field '{}' must not be empty or padded", s_SceneParentDiagnosticPrefix, PathToString(nwbFilePath), s_SceneParentEntityNameField);
+            return MakeUnexpected(Failure());
+        }
+        const Expected<Name> parsedName = ParseName(trimmed);
+        if(!parsedName.has_value() || parsedName.value() == s_NameNone){
+            error("{} '{}': field '{}' is invalid", s_SceneParentDiagnosticPrefix, PathToString(nwbFilePath), s_SceneParentEntityNameField);
+            return MakeUnexpected(Failure());
+        }
+        component.parentEntityName = parsedName.value();
+    }
+
+    if(!ReadOptionalMetadataBoolField(nwbFilePath, asset, s_SceneParentDiagnosticPrefix, s_SceneParentInheritScaleField, component.inheritScale))
+        return MakeUnexpected(Failure());
     return component;
 }
 

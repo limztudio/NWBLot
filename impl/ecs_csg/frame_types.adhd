@@ -94,7 +94,9 @@ CsgResolvedReceiver MakeCsgResolvedReceiver(in CsgReceiverComponent receiver, in
 
 b8 HasCsgFrameCandidates(mut World world){
     return world.view<CsgCutterComponent>().candidateCount() > 0u
-        && (world.view<StaticCsgMeshComponent>().candidateCount() > 0u || world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u);
+        && (world.view<StaticCsgMeshComponent>().candidateCount() > 0u
+            || world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u
+            || world.view<CsgReceiverComponent>().candidateCount() > 0u);
 }
 
 void AddCsgFrameReceiverWork(in CsgReceiverKind receiverKind, in b8 opaqueWork, in b8 transparentWork, in u32 cutterCount, mut CsgFrameState inOutState){
@@ -126,6 +128,8 @@ Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(in World world, in Ent
         return MakeCsgResolvedReceiver(world.getComponent<StaticCsgMeshComponent>(entity).asReceiver(), CsgReceiverKind::Static);
     if(world.hasComponent<SkinnedCsgMeshComponent>(entity))
         return MakeCsgResolvedReceiver(world.getComponent<SkinnedCsgMeshComponent>(entity).asReceiver(), CsgReceiverKind::Skinned);
+    if(world.hasComponent<CsgReceiverComponent>(entity))
+        return MakeCsgResolvedReceiver(world.getComponent<CsgReceiverComponent>(entity), CsgReceiverKind::Static);
     return MakeUnexpected(Failure());
 }
 

@@ -24,6 +24,14 @@ const u32 s_PaintQuadVertexCount = 4u;
 const u32 s_PaintQuadIndexCount = 6u;
 const u32 s_PaintNineSliceAxisCells = 3u;
 const usize s_PaintCallbackInlineBytes = 64u;
+const u32 s_PaintZOrderSentinelLayer = 0xffffffffu;
+const usize s_PaintMaxGradientStops = 16u;
+const usize s_PaintMaxAnalyticClipDepth = 8u;
+const usize s_PaintMaxOpacityDepth = 16u;
+const usize s_PaintMaxBlendModeDepth = 16u;
+const usize s_PaintMaxEffectLayers = 8u;
+const usize s_PaintBlendModeCount = 6u;
+const f32 s_PaintMaxBlurRadius = 64.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,6 +43,11 @@ enum<u8> PaintMaterial{
     Glyph,
     SdfGlyph,
     Image,
+    ColorGlyph,
+    Gradient,
+    DropShadow,
+    Blur,
+    EffectLayerComposite,
 }
 
 enum<u8> UiRectPrecision{
@@ -42,6 +55,38 @@ enum<u8> UiRectPrecision{
     BoundedEndpoints,
     PreciseExtents,
     EmptyPaint,
+}
+
+enum<u8> PaintBlendMode{
+    Normal = 0u,
+    Additive = 1u,
+    Multiply = 2u,
+    Screen = 3u,
+    Erase = 4u,
+    Replace = 5u,
+}
+
+enum<u8> PaintFillRule{
+    NonZero = 0u,
+    EvenOdd = 1u,
+}
+
+enum<u8> PaintGradientKind{
+    Linear = 0u,
+    Radial = 1u,
+    Conic = 2u,
+}
+
+enum<u8> PaintGradientSpread{
+    Clamp = 0u,
+    Repeat = 1u,
+    Mirror = 2u,
+}
+
+enum<u8> PaintClipShapeKind{
+    None = 0u,
+    RoundedRect = 1u,
+    Ellipse = 2u,
 }
 
 class Point{
@@ -92,8 +137,12 @@ class DrawCommand{
     public u32 sdfPageIndex = 0xffffffffu;
     public u32 sdfChannel = 0u;
     public u32 layer = 0u;
+    public u32 zOrder = 0u;
     public u32 textureImageIndex = 0xffffffffu;
     public PaintMaterial material = PaintMaterial::Solid;
+    public u32 effectOffset = 0xffffffffu;
+    public u32 clipMaskOffset = 0xffffffffu;
+    public PaintBlendMode blendMode = PaintBlendMode::Normal;
 }
 
 class ResolvedGlyphDraw{
@@ -102,6 +151,7 @@ class ResolvedGlyphDraw{
     public u32 pageIndex = u32.max;
     public u32 channel = 0u;
     public b8 isSdf = false;
+    public b8 isColor = false;
 }
 
 enum<u8> PaintLineCap{
@@ -158,6 +208,12 @@ class PaintOverlayFrame{
     public usize clipDepth = 0u;
     public usize transformBase = 0u;
     public usize transformDepth = 0u;
+    public usize opacityDepth = 0u;
+    public usize opacityBase = 0u;
+    public usize blendModeDepth = 0u;
+    public usize blendModeBase = 0u;
+    public f32 savedOpacity = 1.0f;
+    public PaintBlendMode savedBlendMode = PaintBlendMode::Normal;
     public u32 layer = 0u;
 }
 
@@ -165,6 +221,59 @@ class PaintClipEntry{
     public Rect rect;
     public f32 right = 0.0f;
     public f32 bottom = 0.0f;
+    public u32 clipMaskOffset = 0xffffffffu;
+    public PaintBlendMode blendMode = PaintBlendMode::Normal;
+}
+
+class PaintGradientStop{
+    public f32 offset = 0.0f;
+    public Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+class PaintGradient{
+    public PaintGradientKind kind = PaintGradientKind::Linear;
+    public PaintGradientSpread spread = PaintGradientSpread::Clamp;
+    public Point start = Point(0.0f, 0.0f);
+    public Point end = Point(1.0f, 0.0f);
+    public f32 startRadius = 0.0f;
+    public f32 endRadius = 1.0f;
+    public f32 startAngle = 0.0f;
+    public Array<PaintGradientStop, s_PaintMaxGradientStops> stops;
+    public u32 stopCount = 0u;
+
+    public b8 addStop(in f32 offset, in Color color){
+        if(cast<usize>(this.stopCount) >= s_PaintMaxGradientStops)
+            return false;
+        if(!IsFinite(VectorSingle(offset)) || !IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f)
+            return false;
+        this.stops[cast<usize>(this.stopCount)].offset = UiSimdClamp(offset, 0.0f, 1.0f);
+        this.stops[cast<usize>(this.stopCount)].color = color;
+        ++this.stopCount;
+        return true;
+    }
+}
+
+class PaintShadowStyle{
+    public Point offset = Point(0.0f, 4.0f);
+    public f32 blurRadius = 8.0f;
+    public f32 spread = 0.0f;
+    public Color color = Color(0.0f, 0.0f, 0.0f, 0.35f);
+    public b8 inset = false;
+}
+
+class PaintEffectLayer{
+    public Rect bounds;
+    public Rect expandedBounds;
+    public Rect clip;
+    public u32 commandBegin = 0u;
+    public u32 commandEnd = 0u;
+    public u32 blurFirstIndex = 0u;
+    public u32 blurHorizontalOffset = 0xffffffffu;
+    public u32 blurVerticalOffset = 0xffffffffu;
+    public u32 clipMaskOffset = 0xffffffffu;
+    public f32 opacity = 1.0f;
+    public f32 blurRadius = 0.0f;
+    public PaintBlendMode blendMode = PaintBlendMode::Normal;
 }
 
 

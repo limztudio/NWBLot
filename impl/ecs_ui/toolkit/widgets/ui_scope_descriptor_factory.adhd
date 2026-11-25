@@ -49,6 +49,8 @@ class UiScopeDescriptorFactory{
         scope.parent = parent;
         scope.bounds = placement.bounds;
         scope.viewport = placement.viewport;
+        scope.modal = options.modal;
+        scope.blockOutsideInput = options.modal || options.blockOutsideInput;
         scope.dismissOutside = options.dismissOutside;
         scope.dismissCancel = options.dismissCancel;
         scope.autofocus = options.autofocus;
@@ -104,10 +106,18 @@ class UiScopeDescriptorFactory{
     )const{
         LayoutNodeDesc description;
         description.direction = direction;
+        description.clipChildren = options.clipChildren;
         description.width = options.width;
         description.height = options.height;
         description.padding = options.padding;
         description.gap = options.gap;
+        description.alignItems = options.alignItems;
+        description.justifyContent = options.justifyContent;
+        description.flexWrap = options.flexWrap;
+        description.hasCrossGap = options.hasCrossGap;
+        description.crossGap = options.crossGap;
+        description.gridColumns = options.gridColumns;
+        ApplyLayoutItemOptions(options.layout, description);
         return description;
     }
 };

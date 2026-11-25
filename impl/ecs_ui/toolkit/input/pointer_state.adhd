@@ -42,6 +42,7 @@ class InputPointerState : NoCopy{
         mut InputCommandState commands,
         mut Vector<InputAction> actions,
         mut Vector<ControlAction> controlActions,
+        mut Vector<WindowPressRecord> windowPresses,
         mut u64 nextActionSequence,
         mut InputRoutingResult result
     ){
@@ -62,6 +63,7 @@ class InputPointerState : NoCopy{
             actions,
             controlActions,
             this.m_pointerGestures,
+            windowPresses,
             this.m_activeGestureSequence,
             nextActionSequence,
             this.m_primaryDown,
@@ -86,6 +88,7 @@ class InputPointerState : NoCopy{
         in InputPopupState popups,
         in b8 windowFocused,
         mut Vector<ContextMenuAction> contextMenuActions,
+        mut Vector<WindowPressRecord> windowPresses,
         mut u64 nextActionSequence,
         mut InputRoutingResult result
     ){
@@ -102,6 +105,7 @@ class InputPointerState : NoCopy{
             popups.records(),
             popups.canAppendDismissal(),
             contextMenuActions,
+            windowPresses,
             nextActionSequence,
             this.m_secondaryDown,
             this.m_secondarySequenceConsumed,

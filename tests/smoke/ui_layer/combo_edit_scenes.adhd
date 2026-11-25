@@ -32,7 +32,7 @@ const Array<StringView, 16u> s_UiImageSmokeRectNames(
 
 class UiComboSmokeScene : IUiSmokeInputScene{
     private UiNumberedSmokeSource m_source = UiNumberedSmokeSource(2u);
-    private ComboState m_state = ComboState();
+    private ComboState m_state;
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
     private Array<u64, 16u> m_lastValues;
     private PopupPlacement m_lastPopup = PopupPlacement();
@@ -123,7 +123,7 @@ class UiInteractiveSmokeScene : IUiSmokeScene{
 
 class UiListSmokeScene : IUiSmokeInputScene{
     private UiNumberedSmokeSource m_source = UiNumberedSmokeSource(1u);
-    private ListState m_state = ListState();
+    private ListState m_state;
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
     private DisplayMetrics m_lastDisplay = DisplayMetrics();
     private Array<u64, 12u> m_lastValues;

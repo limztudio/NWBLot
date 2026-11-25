@@ -46,11 +46,15 @@ void InstallRouterPopups(
         nextTop = stagedPopups.back().scope.token;
     WidgetId candidateFocus = inOutFocus;
     u64 candidateDeclaration = inOutFocusDeclaration;
-    if(!popups.empty()){
-        candidateFocus = popups[0u].restoreFocus;
-        candidateDeclaration = popups[0u].restoreDeclaration;
-    }
     PopupToken candidatePopup;
+    if(!popups.empty()){
+        const b8 preserveNonBlockingFocus = !IsPopupScopeBlockingOutside(popups[0u].scope)
+            && IsEligibleRouterPopupRestoreTarget(targets, lookup, inOutFocus, inOutFocusDeclaration, candidatePopup);
+        if(!preserveNonBlockingFocus){
+            candidateFocus = popups[0u].restoreFocus;
+            candidateDeclaration = popups[0u].restoreDeclaration;
+        }
+    }
     const b8 lostFocus = !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration);
     if(!IsEligibleRouterPopupRestoreTarget(targets, lookup, candidateFocus, candidateDeclaration, candidatePopup)){
         candidateFocus = WidgetId();

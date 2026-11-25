@@ -114,8 +114,19 @@ b8 IsListRowsFocused(in WidgetId focusId, in WidgetId listId, in WidgetId comman
     return focusId == listId || (commandFocus.valid() && focusId == commandFocus);
 }
 
-Optional<in UiSkinRegion> Builder::prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame){
+Optional<in UiSkinRegion> Builder::prepareListFrame(
+    in borrow IListDataSource source,
+    in Optional<in IListRowHeightProvider> rowHeights,
+    mut ListState state,
+    in ListOptions options,
+    in ControlToken token,
+    in u64 rowCount,
+    in b8 focusOnCommit,
+    in WidgetId commandFocus,
+    mut BuilderListFrame outFrame
+){
     outFrame.source = Optional<in IListDataSource>(source);
+    outFrame.rowHeights = rowHeights;
     outFrame.state = Optional<mut ListState>(state);
     outFrame.widgetStyle = this.m_style;
     outFrame.style = this.m_listStyle;
@@ -141,6 +152,10 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
     if(!metrics.has_value())
         return false;
     frame.style.row.padding = metrics.value().padding;
+    u64 heightRevision = 0u;
+    const b8 hasVariableHeights = frame.rowHeights.has_value();
+    if(hasVariableHeights)
+        heightRevision = frame.rowHeights.value().rowHeightRevision();
     const auto keyResult = TryBuildListMeasureKey(
         frame.token.contentGeneration,
         frame.token.contentRevision,
@@ -151,46 +166,77 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
         this.m_paint.displayMetrics(),
         metrics.value(),
         this.m_textScriptTag,
-        StringView(this.m_textLanguage)
+        StringView(this.m_textLanguage),
+        this.m_textDirection,
+        heightRevision,
+        hasVariableHeights
     );
     if(!keyResult.has_value())
         return false;
     const ListMeasureKey key = keyResult.value();
     frame.measureKey = key;
     mut ListState state = frame.state.value();
-    if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){
+    f32 resolvedRowHeight = state.m_rowHeight;
+    const b8 measureKeyChanged = key != state.m_measureKey || state.m_rowHeight <= 0.0f;
+    if(measureKeyChanged){
         const auto measuredEmpty = this.m_text.layoutAndMeasureShared(this.textShapeRequest("", key.fontSize), this.m_paint.displayMetrics());
         if(!measuredEmpty.has_value())
             return false;
         const f32 height = ResolveListRowBaseHeight(metrics.value(), measuredEmpty.value().bounds.height);
         if(!IsFinite(VectorSingle(height)) || height <= 0.0f || !this.listMatches(frame))
             return false;
-        state.m_measureKey = key;
-        state.m_rowHeight = height;
+        resolvedRowHeight = height;
+        if(!hasVariableHeights){
+            state.m_measureKey = key;
+            state.m_rowHeight = height;
+            state.m_contentWidth = 0.0;
+            state.m_rowOffsets.clear();
+        }
     }
-    if(NeedsListScrollOffsetRescale(state.m_scrollRowHeight, state.m_scrollSourceGeneration, key.sourceGeneration, state.m_rowHeight)){
+    if(!hasVariableHeights && NeedsListScrollOffsetRescale(state.m_scrollRowHeight, state.m_scrollSourceGeneration, key.sourceGeneration, resolvedRowHeight)){
         const f64 offset = ComputeListRescaledScrollOffset(
             state.m_placement.contentClip.y,
             state.m_placement.viewport.y,
             state.scrollOffset(),
             state.m_scrollRowHeight,
-            state.m_rowHeight
+            resolvedRowHeight
         );
         if(!state.m_scroll.setOffset(offset))
             return false;
     }
-    state.m_scrollRowHeight = state.m_rowHeight;
-    state.m_scrollSourceGeneration = key.sourceGeneration;
-    frame.rowHeight = state.m_rowHeight;
+    if(!hasVariableHeights){
+        state.m_scrollRowHeight = resolvedRowHeight;
+        state.m_scrollSourceGeneration = key.sourceGeneration;
+    }
+    frame.rowHeight = resolvedRowHeight;
     frame.scrollOffset = state.scrollOffset();
+    frame.scrollOffsetX = state.scrollOffsetX();
+    if(hasVariableHeights && measureKeyChanged)
+        frame.contentWidth = cast<f64>(frame.options.contentWidth);
+    else
+        frame.contentWidth = UiSimdMaxF64(cast<f64>(frame.options.contentWidth), state.m_contentWidth);
     frame.cursorKey = state.cursorKey();
     frame.revealCursor = state.m_ensureCursor;
     return this.listMatches(frame);
 }
 
 ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options){
+    return this.declareVirtualList(stableKey, source, Optional<in IListRowHeightProvider>(), state, options);
+}
+
+ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSource source, in borrow IListRowHeightProvider rowHeights, mut ListState state, in ListOptions options){
+    return this.declareVirtualList(stableKey, source, Optional<in IListRowHeightProvider>(rowHeights), state, options);
+}
+
+ListResult Builder::declareVirtualList(
+    in StringView stableKey,
+    in borrow IListDataSource source,
+    in Optional<in IListRowHeightProvider> rowHeights,
+    mut ListState state,
+    in ListOptions options
+){
     ListResult result;
-    if(this.itemDeclarationBlocked() || !IsValidVirtualListWheelRows(options.wheelRows)){
+    if(this.itemDeclarationBlocked() || !IsValidVirtualListDeclarationOptions(options)){
         this.m_context.fail();
         return result;
     }
@@ -205,6 +251,7 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
         return result;
     const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
     const u64 previousSelection = state.selectedKey();
+    const usize previousSelectedCount = state.selectedCount();
     if(!ReconcileListState(state, source)){
         this.m_context.fail();
         return result;
@@ -217,7 +264,7 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
     if(!options.enabled)
         this.m_context.input().invalidateTarget(widget.value().id);
     result.valid = true;
-    result.selectionChanged = previousSelection != state.selectedKey();
+    result.selectionChanged = previousSelection != state.selectedKey() || previousSelectedCount != state.selectedCount();
     result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
     ListInput input(this.m_context);
     const ListInputMatches matches = lambda[]() -> b8{ return true; };
@@ -241,11 +288,19 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
         return result;
     }
     auto frame = this.makeListFrame();
-    const auto background = this.prepareListFrame(source, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, WidgetId(), frame);
+    const auto background = this.prepareListFrame(source, rowHeights, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, WidgetId(), frame);
     if(!background.has_value()){
         this.m_context.fail();
         result.valid = false;
         return result;
+    }
+    if(rowHeights.has_value()){
+        ListLayoutPreparer preparer(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
+        if(!preparer.ensureVariableRowOffsets(frame, state) || !this.listMatches(frame)){
+            this.m_context.fail();
+            result.valid = false;
+            return result;
+        }
     }
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         while(true){
@@ -253,14 +308,14 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
             provisional.rectangle = ResolveListProbeRect(background.value(), frame.padding, frame.style.scrollbarWidth, frame.rowHeight);
             provisional.clip = provisional.rectangle;
             ListLayoutPreparer layout(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
-            const auto placement = layout.measureListPlacement(frame, provisional, provisional.clip);
-            if(!placement.has_value()){
+            const auto placed = layout.measureListPlacement(frame, provisional, provisional.clip);
+            if(!placed.has_value()){
                 this.m_context.fail();
                 result.valid = false;
                 return result;
             }
             const f32 height = ResolveListIntrinsicSize(background.value(), frame.padding, frame.rowHeight).y;
-            if(height == placement.value().bounds.height)
+            if(height == placed.value().placement.bounds.height)
                 break;
         }
     }
@@ -272,6 +327,7 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = ResolveListIntrinsicSize(background.value(), frame.padding, frame.rowHeight);
+    ApplyLayoutItemOptions(options.layout, description);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -279,6 +335,483 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
     AppendOwned<BuilderListFrame>(this.m_scope.value().m_lists, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return result;
+}
+
+b8 Builder::beginVirtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options, mut ListResult outResult){
+    return this.beginVirtualListInternal(stableKey, source, Optional<in IListRowHeightProvider>(), state, options, outResult);
+}
+
+b8 Builder::beginVirtualList(in StringView stableKey, in borrow IListDataSource source, in borrow IListRowHeightProvider rowHeights, mut ListState state, in ListOptions options, mut ListResult outResult){
+    return this.beginVirtualListInternal(stableKey, source, Optional<in IListRowHeightProvider>(rowHeights), state, options, outResult);
+}
+
+b8 Builder::beginVirtualListInternal(
+    in StringView stableKey,
+    in borrow IListDataSource source,
+    in Optional<in IListRowHeightProvider> rowHeights,
+    mut ListState state,
+    in ListOptions options,
+    mut ListResult outResult
+){
+    outResult = ListResult();
+    if(
+        this.itemDeclarationBlocked()
+        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || !IsValidVirtualListDeclarationOptions(options)
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.synchronizePopup()){
+        outResult.valid = true;
+        return false;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::VirtualList);
+    if(!widget.has_value())
+        return false;
+    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
+    const u64 previousSelection = state.selectedKey();
+    const usize previousSelectedCount = state.selectedCount();
+    if(!ReconcileListState(state, source)){
+        this.m_context.fail();
+        return false;
+    }
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+    if(!options.enabled)
+        this.m_context.input().invalidateTarget(widget.value().id);
+    outResult.valid = true;
+    outResult.selectionChanged = previousSelection != state.selectedKey() || previousSelectedCount != state.selectedCount();
+    outResult.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
+    ListInput input(this.m_context);
+    const ListInputMatches matches = lambda[]() -> b8{ return true; };
+    const Optional<in IListDataSource> sourceLoan(source);
+    const Optional<in ListOptions> optionsLoan(options);
+    const ListInputApplyAction apply = lambda[in sourceLoan, in optionsLoan, mut state, mut outResult](in ControlAction action) -> ListActionOutcome{
+        if(ApplyListControlAction(sourceLoan.value(), optionsLoan.value(), action, state, outResult))
+            return ListActionOutcome::Continue;
+        return ListActionOutcome::Failed;
+    };
+    if(!input.consume(
+        widget.value(),
+        token,
+        options.enabled,
+        state,
+        matches,
+        apply
+    )){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    auto frame = this.makeListFrame();
+    const auto background = this.prepareListFrame(source, rowHeights, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !outResult.focused, WidgetId(), frame);
+    if(!background.has_value()){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    ListLayoutPreparer preparer(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
+    if(!preparer.ensureVariableRowOffsets(frame, state) || !this.listMatches(frame)){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    const Point intrinsicSize = ResolveListIntrinsicSize(background.value(), frame.padding, frame.rowHeight);
+    Rect probeRect;
+    Rect probeClip;
+    if(state.m_placement.bounds.width > 0.0f && state.m_placement.bounds.height > 0.0f){
+        probeRect = state.m_placement.bounds;
+        probeClip = probeRect;
+        if(options.width.policy == LayoutSizePolicy::Fixed && options.width.value > 0.0f && options.width.value != probeRect.width){
+            probeRect.width = options.width.value;
+            probeClip = probeRect;
+        }
+        if(options.height.policy == LayoutSizePolicy::Fixed && options.height.value > 0.0f && options.height.value != probeRect.height){
+            probeRect.height = options.height.value;
+            probeClip = probeRect;
+        }
+    }
+    else{
+        f32 probeW = this.m_scope.value().m_bounds.width;
+        f32 probeH = this.m_scope.value().m_bounds.height;
+        if(options.width.policy == LayoutSizePolicy::Fixed && options.width.value > 0.0f)
+            probeW = options.width.value;
+        else if(probeW <= 0.0f)
+            probeW = intrinsicSize.x;
+        if(options.height.policy == LayoutSizePolicy::Fixed && options.height.value > 0.0f)
+            probeH = options.height.value;
+        else if(probeH <= 0.0f)
+            probeH = intrinsicSize.y;
+        probeRect = Rect(0.0f, 0.0f, probeW, probeH);
+        probeClip = probeRect;
+    }
+    const Span<f64> rowOffsets(state.m_rowOffsets);
+    auto placed = CalculateListScrollPlacement(
+        probeRect,
+        probeClip,
+        frame.padding,
+        frame.style.scrollbarWidth,
+        frame.style.minimumThumb,
+        frame.rowCount,
+        frame.rowHeight,
+        rowOffsets,
+        frame.contentWidth,
+        frame.scrollOffsetX,
+        frame.scrollOffset,
+        options.horizontalScrollbar,
+        options.verticalScrollbar
+    );
+    if(!placed.has_value()){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    if(frame.revealCursor && frame.cursorKey != 0u){
+        const auto resolved = frame.source.value().indexOf(frame.cursorKey);
+        if(!resolved.has_value() || resolved.value() >= frame.rowCount || !this.listMatches(frame)){
+            this.m_context.fail();
+            outResult.valid = false;
+            return false;
+        }
+        const u64 cursorIndex = resolved.value();
+        if(frame.source.value().key(cursorIndex) != frame.cursorKey || !frame.source.value().enabled(cursorIndex) || !this.listMatches(frame)){
+            this.m_context.fail();
+            outResult.valid = false;
+            return false;
+        }
+        VectorDouble span(0.0);
+        ScrollState revealScroll;
+        if(!TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight, rowOffsets, span)
+            || !revealScroll.setOffset(placed.value().placement.offset)
+            || !revealScroll.ensureVisible(span.x, span.y, cast<f64>(placed.value().placement.viewport.height))){
+            this.m_context.fail();
+            outResult.valid = false;
+            return false;
+        }
+        placed = CalculateListScrollPlacement(
+            probeRect,
+            probeClip,
+            frame.padding,
+            frame.style.scrollbarWidth,
+            frame.style.minimumThumb,
+            frame.rowCount,
+            frame.rowHeight,
+            rowOffsets,
+            frame.contentWidth,
+            frame.scrollOffsetX,
+            revealScroll.offset(),
+            options.horizontalScrollbar,
+            options.verticalScrollbar
+        );
+        if(!placed.has_value()){
+            this.m_context.fail();
+            outResult.valid = false;
+            return false;
+        }
+    }
+    frame.scrollOffset = placed.value().placement.offset;
+    frame.scrollOffsetX = placed.value().scrollbars.horizontal.offset;
+    frame.placement = placed.value().placement;
+    frame.scrollbars = placed.value().scrollbars;
+    frame.isCustomRows = true;
+    frame.listItemIndex = cast<u32>(this.m_scope.value().m_items.size());
+    if(!state.m_scroll.setOffset(frame.scrollOffset) || !state.m_scrollX.setOffset(frame.scrollOffsetX)){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    state.m_placement = frame.placement;
+    state.m_scrollbars = frame.scrollbars;
+    state.m_visibleFirstRow = frame.placement.firstRow;
+    state.m_visibleEndRow = frame.placement.endRow;
+    LayoutNodeDesc description;
+    description.direction = LayoutDirection::Overlay;
+    description.clipChildren = true;
+    description.width = options.width;
+    description.height = options.height;
+    description.padding = frame.padding;
+    description.padding.right += frame.scrollbars.vertical.track.width;
+    description.padding.bottom += frame.scrollbars.horizontal.track.height;
+    description.intrinsicSize = intrinsicSize;
+    ApplyLayoutItemOptions(options.layout, description);
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.checked = false;
+    item.listRow = s_LayoutNoParent;
+    const u32 listIndex = cast<u32>(this.m_scope.value().m_lists.size());
+    item.list = listIndex;
+    if(!this.addItemNode(description, item) || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
+        outResult.valid = false;
+        return false;
+    }
+    AppendOwned<BuilderListFrame>(this.m_scope.value().m_lists, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    this.m_scope.value().m_stack.push_back(item.node);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::VirtualList);
+    this.m_scope.value().m_virtualListStack.push_back(listIndex);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    return true;
+}
+
+b8 Builder::beginVirtualListRow(in u64 index){
+    if(
+        this.itemDeclarationBlocked()
+        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || this.m_scope.value().m_scopeKinds.empty()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::VirtualList
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 listIndex = this.m_scope.value().m_virtualListStack.back();
+    if(cast<usize>(listIndex) >= this.m_scope.value().m_lists.size()){
+        this.m_context.fail();
+        return false;
+    }
+    mut BuilderListFrame frame = this.m_scope.value().m_lists[cast<usize>(listIndex)];
+    if(!this.listMatches(frame) || index >= frame.rowCount || frame.customRows.size() >= s_ListMaxPreparedRows || cast<usize>(frame.listItemIndex) >= this.m_scope.value().m_items.size()){
+        this.m_context.fail();
+        return false;
+    }
+    const u64 key = frame.source.value().key(index);
+    if(key == 0u || !this.listMatches(frame)){
+        this.m_context.fail();
+        return false;
+    }
+    const auto resolved = frame.source.value().indexOf(key);
+    if(!resolved.has_value() || resolved.value() != index || !this.listMatches(frame)){
+        this.m_context.fail();
+        return false;
+    }
+    const b8 rowEnabled = frame.options.enabled && frame.source.value().enabled(index);
+    if(!this.listMatches(frame)){
+        this.m_context.fail();
+        return false;
+    }
+    for(in auto existing : frame.customRows){
+        if(existing.key == key || existing.index == index){
+            this.m_context.fail();
+            return false;
+        }
+    }
+    f64 rowTop = cast<f64>(index) * cast<f64>(frame.rowHeight);
+    f32 rowHeight = frame.rowHeight;
+    in ListState state = frame.state.value();
+    if(!state.m_rowOffsets.empty()){
+        if(cast<usize>(index) + 1u >= state.m_rowOffsets.size()){
+            this.m_context.fail();
+            return false;
+        }
+        const f64 start = state.m_rowOffsets[cast<usize>(index)];
+        const f64 end = state.m_rowOffsets[cast<usize>(index) + 1u];
+        const f64 diff = end - start;
+        if(!IsFinite(VectorDouble(start, end, diff, 0.0)) || diff <= 0.0 || diff > s_UiMaxFloatF64){
+            this.m_context.fail();
+            return false;
+        }
+        rowTop = start;
+        rowHeight = cast<f32>(diff);
+    }
+    LayoutNodeDesc rowDesc;
+    rowDesc.direction = LayoutDirection::Row;
+    rowDesc.alignItems = LayoutAlign::Center;
+    rowDesc.padding = frame.style.row.padding;
+    rowDesc.gap = this.m_style.gap;
+    rowDesc.clipChildren = true;
+    rowDesc.positionMode = LayoutPositionMode::Absolute;
+    rowDesc.pinLeft = true;
+    rowDesc.pinTop = true;
+    rowDesc.absoluteOffset = Point(-cast<f32>(frame.scrollOffsetX), cast<f32>(rowTop - frame.scrollOffset));
+    rowDesc.height = LayoutSize(LayoutSizePolicy::Fixed, rowHeight);
+    if(frame.options.horizontalScrollbar == ScrollbarPolicy::Never)
+        rowDesc.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    else if(frame.options.contentWidth > 0.0f)
+        rowDesc.width = LayoutSize(LayoutSizePolicy::Fixed, UiSimdMax(frame.placement.viewport.width, frame.options.contentWidth));
+    else{
+        rowDesc.width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+        rowDesc.minWidth = frame.placement.viewport.width;
+    }
+    String scopeKey;
+    scopeKey.assign("row.");
+    AppendUnsignedU64Text(scopeKey, key);
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), rowDesc);
+    if(!admittedNode.has_value() || !this.m_context.pushScope(StringView(scopeKey))){
+        this.m_context.fail();
+        return false;
+    }
+    BuilderCustomListRow rowEntry;
+    rowEntry.index = index;
+    rowEntry.key = key;
+    rowEntry.enabled = rowEnabled;
+    const u32 customRowIndex = cast<u32>(frame.customRows.size());
+    frame.customRows.push_back(rowEntry);
+    auto rowItem = this.makeItem();
+    rowItem.styleIndex = this.currentItemStyleIndex();
+    rowItem.selectableStyleIndex = this.currentSelectableStyleIndex();
+    rowItem.state = this.m_scope.value().m_items[cast<usize>(frame.listItemIndex)].state;
+    rowItem.node = admittedNode.value();
+    rowItem.list = listIndex;
+    rowItem.listRow = customRowIndex;
+    rowItem.enabled = frame.options.enabled;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, rowItem);
+    this.m_scope.value().m_stack.push_back(admittedNode.value());
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::VirtualListRow);
+    this.m_scope.value().m_virtualListStack.push_back(listIndex);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    return true;
+}
+
+b8 Builder::endVirtualListRow(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::VirtualListRow
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    return this.m_context.popScope();
+}
+
+b8 Builder::endVirtualList(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::VirtualList
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 listIndex = this.m_scope.value().m_virtualListStack.back();
+    if(cast<usize>(listIndex) >= this.m_scope.value().m_lists.size()){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 beginItemIndex = this.m_scope.value().m_lists[cast<usize>(listIndex)].listItemIndex;
+    if(cast<usize>(beginItemIndex) >= this.m_scope.value().m_items.size()){
+        this.m_context.fail();
+        return false;
+    }
+    in BuilderItem beginItem = this.m_scope.value().m_items[cast<usize>(beginItemIndex)];
+    auto endItem = this.makeItem();
+    endItem.styleIndex = beginItem.styleIndex;
+    endItem.state = beginItem.state;
+    endItem.node = beginItem.node;
+    endItem.list = listIndex;
+    endItem.listRow = s_LayoutNoParent;
+    endItem.enabled = beginItem.enabled;
+    endItem.checked = true;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    return this.m_context.popScope();
+}
+
+b8 Builder::paintScrollbarsAndTargets(in WidgetState widget, in b8 enabled, in ControlToken token, in ListStyle style, in ScrollViewportPlacement scrollbars, in Rect clip){
+    if(!scrollbars.vertical.visible && !scrollbars.horizontal.visible)
+        return true;
+    b8 vHover = false;
+    b8 vPressed = false;
+    Expected<WidgetId> vThumbId = MakeUnexpected(Failure());
+    if(scrollbars.vertical.visible){
+        vThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollbar);
+        if(!vThumbId.has_value())
+            return false;
+        vHover = enabled && this.m_context.input().hover() == vThumbId.value();
+        vPressed = enabled && this.m_context.input().capture() == vThumbId.value();
+    }
+    b8 hHover = false;
+    b8 hPressed = false;
+    Expected<WidgetId> hThumbId = MakeUnexpected(Failure());
+    if(scrollbars.horizontal.visible){
+        hThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
+        if(!hThumbId.has_value())
+            return false;
+        hHover = enabled && this.m_context.input().hover() == hThumbId.value();
+        hPressed = enabled && this.m_context.input().capture() == hThumbId.value();
+    }
+    ControlVisualPainter painter;
+    if(!painter.paintListScrollbarsVisual(this.m_paint, this.m_skin.value(), style, scrollbars, clip, enabled, hPressed, hHover, vPressed, vHover))
+        return false;
+    if(!enabled)
+        return true;
+    HitTargetFactory targets;
+    if(scrollbars.vertical.visible){
+        Rect beforeRect;
+        Rect afterRect;
+        ResolveScrollTrackBeforeAfterRects(scrollbars.vertical.track, scrollbars.vertical.thumb, false, beforeRect, afterRect);
+        const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(beforeRect, clip, token, s_TextAreaScrollVerticalBefore);
+        const auto beforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
+        if(!beforeId.has_value() || !this.m_context.addPartTarget(widget, beforeId.value(), beforeTarget))
+            return false;
+        const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(afterRect, clip, token, s_TextAreaScrollVerticalAfter);
+        const auto afterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
+        if(!afterId.has_value() || !this.m_context.addPartTarget(widget, afterId.value(), afterTarget))
+            return false;
+        const HitTarget thumbTarget = targets.makeScrollbarThumbHitTarget(scrollbars.vertical, clip, token, false);
+        if(!this.m_context.addPartTarget(widget, vThumbId.value(), thumbTarget))
+            return false;
+    }
+    if(scrollbars.horizontal.visible){
+        Rect beforeRect;
+        Rect afterRect;
+        ResolveScrollTrackBeforeAfterRects(scrollbars.horizontal.track, scrollbars.horizontal.thumb, true, beforeRect, afterRect);
+        const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(beforeRect, clip, token, s_TextAreaScrollHorizontalBefore);
+        const auto beforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
+        if(!beforeId.has_value() || !this.m_context.addPartTarget(widget, beforeId.value(), beforeTarget))
+            return false;
+        const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(afterRect, clip, token, s_TextAreaScrollHorizontalAfter);
+        const auto afterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
+        if(!afterId.has_value() || !this.m_context.addPartTarget(widget, afterId.value(), afterTarget))
+            return false;
+        const HitTarget thumbTarget = targets.makeScrollbarThumbHitTarget(scrollbars.horizontal, clip, token, true);
+        if(!this.m_context.addPartTarget(widget, hThumbId.value(), thumbTarget))
+            return false;
+    }
+    if(scrollbars.corner.width > 0.0f && scrollbars.corner.height > 0.0f){
+        const HitTarget cornerTarget = targets.makeScrollbarCornerHitTarget(scrollbars.corner, clip, token);
+        const auto cornerId = TryMakeWidgetId(widget.id, s_WidgetPartScrollCorner);
+        if(!cornerId.has_value() || !this.m_context.addPartTarget(widget, cornerId.value(), cornerTarget))
+            return false;
+    }
+    return true;
+}
+
+b8 Builder::paintListScrollbarsAndTargets(in BuilderItem item, in BuilderListFrame frame, in ScrollViewportPlacement scrollbars, in Rect clip){
+    return this.paintScrollbarsAndTargets(item.state, item.enabled, frame.token, frame.style, scrollbars, clip);
 }
 
 b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
@@ -292,14 +825,158 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
     const auto measuredPlacement = layout.measureListPlacement(frame, box, clip);
     if(!measuredPlacement.has_value())
         return false;
-    in ScrollPlacement placement = measuredPlacement.value();
-    if(!frame.state.value().m_scroll.setOffset(frame.scrollOffset))
+    in ScrollPlacement placement = measuredPlacement.value().placement;
+    in ScrollViewportPlacement scrollbars = measuredPlacement.value().scrollbars;
+    mut ListState state = frame.state.value();
+    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
         return false;
-    frame.state.value().m_scrollRowHeight = frame.rowHeight;
-    frame.state.value().m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && frame.state.value().cursorKey() == frame.cursorKey)
-        frame.state.value().m_ensureCursor = false;
-    frame.state.value().m_placement = placement;
+    state.m_scrollRowHeight = frame.rowHeight;
+    state.m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
+        state.m_ensureCursor = false;
+    state.m_placement = placement;
+    state.m_scrollbars = scrollbars;
+    state.m_visibleFirstRow = placement.firstRow;
+    state.m_visibleEndRow = placement.endRow;
+    const auto background = this.region(frame.style.background, frame.style.backgroundFallback);
+    if(!background.has_value())
+        return false;
+    this.m_paint.pushClip(clip);
+    const b8 painted = this.m_paint.drawRegion(background.value().name, box.rectangle);
+    const b8 popped = this.m_paint.popClip();
+    if(!painted || !popped)
+        return false;
+    HitTargetFactory targets;
+    const Span<f64> rowOffsets(state.m_rowOffsets);
+    const HitTarget host = targets.makeListHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        frame.token,
+        frame.rowHeight,
+        frame.options.wheelRows,
+        placement,
+        scrollbars,
+        frame.options,
+        frame.rowCount,
+        !rowOffsets.empty(),
+        frame.focusOnCommit
+    );
+    if(!this.m_context.addTarget(item.state, host))
+        return false;
+    u32 listActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        listActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::List,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        listActions
+    );
+    if(!this.paintListRows(item, frame, placement, rowOffsets))
+        return false;
+    frame.rows.clear();
+    return this.paintListScrollbarsAndTargets(item, frame, scrollbars, clip);
+}
+
+b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement, in Span<f64> rowOffsets){
+    HitTargetFactory targets;
+    in Vector<BuilderListRow> rows = frame.rows;
+    const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
+    if(!rowsId.has_value())
+        return false;
+    const b8 focused = IsListRowsFocused(this.m_context.input().focus(), item.state.id, frame.commandFocus);
+    const b8 variableHeights = !rowOffsets.empty();
+    const f32 horizontalScroll = cast<f32>(frame.scrollOffsetX);
+    usize found = ListRowInsertionIndex(rows, placement.firstRow);
+    for(u64 index = placement.firstRow; index < placement.endRow; ++index){
+        if(found == rows.size() || rows[found].index != index || !this.listStateMatches(frame))
+            return false;
+        in BuilderListRow row = rows[found];
+        ++found;
+        const u64 key = row.key;
+        const b8 enabled = item.enabled && row.enabled;
+        const auto part = TryMakeWidgetPartId(rowsId.value(), key);
+        if(!part.has_value())
+            return false;
+        Expected<Rect> rectangle(Rect());
+        if(variableHeights)
+            rectangle = CalculateVariableScrollRowBounds(index, placement, rowOffsets);
+        else
+            rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
+        if(!rectangle.has_value())
+            return false;
+        SelectablePaintFlags flags;
+        flags.enabled = enabled;
+        flags.selected = frame.state.value().isSelected(key);
+        flags.hover = this.m_context.input().hover() == part.value();
+        flags.focused = focused && frame.state.value().cursorKey() == key;
+        if(!row.text.valid() || !PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text.deref(), row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText, horizontalScroll))
+            return false;
+        if(item.enabled){
+            const HitTarget target = targets.makeListRowHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);
+            if(!this.m_context.addPartTarget(item.state, part.value(), target))
+                return false;
+        }
+        u32 rowState = ResolveAccessibleVisibilityStateBits(enabled, placement.contentClip) | s_AccessibilityStateFocusable;
+        if(flags.selected)
+            rowState |= s_AccessibilityStateSelected;
+        this.emitAccessiblePartNode(
+            part.value(),
+            item.state.id,
+            AccessibilityRole::ListItem,
+            rectangle.value(),
+            row.text.deref().utf8(),
+            rowState,
+            s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+            cast<i32>(index + 1u),
+            cast<i32>(frame.rowCount),
+            0
+        );
+    }
+    return this.listMatches(frame);
+}
+
+b8 Builder::paintVirtualListBegin(in BuilderItem item, in LayoutBox box){
+    if(item.list >= this.m_scope.value().m_lists.size())
+        return false;
+    mut BuilderListFrame frame = this.m_scope.value().m_lists[item.list];
+    if(!this.listMatches(frame))
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    if(frame.options.horizontalScrollbar != ScrollbarPolicy::Never){
+        in Vector<LayoutTreeNode> treeNodes = this.m_scope.value().m_layout.nodes();
+        for(u32 child = treeNodes[cast<usize>(item.node)].firstChild; child != s_LayoutNoParent; child = treeNodes[cast<usize>(child)].nextSibling){
+            const Optional<LayoutBox> rowBox = this.m_scope.value().m_layout.box(child);
+            if(rowBox.has_value())
+                frame.contentWidth = UiSimdMaxF64(frame.contentWidth, cast<f64>(rowBox.value().rectangle.width));
+        }
+    }
+    in ListState state = frame.state.value();
+    const Span<f64> rowOffsets(state.m_rowOffsets);
+    const auto placed = CalculateListScrollPlacement(
+        box.rectangle,
+        clip,
+        frame.padding,
+        frame.style.scrollbarWidth,
+        frame.style.minimumThumb,
+        frame.rowCount,
+        frame.rowHeight,
+        rowOffsets,
+        frame.contentWidth,
+        frame.scrollOffsetX,
+        frame.scrollOffset,
+        frame.options.horizontalScrollbar,
+        frame.options.verticalScrollbar
+    );
+    if(!placed.has_value())
+        return false;
+    frame.placement = placed.value().placement;
+    frame.scrollbars = placed.value().scrollbars;
     const auto background = this.region(frame.style.background, frame.style.backgroundFallback);
     if(!background.has_value())
         return false;
@@ -317,69 +994,148 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
         frame.token,
         frame.rowHeight,
         frame.options.wheelRows,
-        placement,
+        placed.value().placement,
+        placed.value().scrollbars,
+        frame.options,
         frame.rowCount,
+        !rowOffsets.empty(),
         frame.focusOnCommit
     );
-    if(!this.m_context.addTarget(item.state, host) || !this.paintListRows(item, frame, placement))
+    if(!this.m_context.addTarget(item.state, host))
         return false;
-    frame.rows.clear();
-    if(placement.scrollbarVisible){
-        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);
-        if(!thumbId.has_value())
-            return false;
-        const b8 hover = this.m_context.input().hover() == thumbId.value();
-        ControlVisualPainter painter;
-        if(!painter.paintListScrollbarVisual(this.m_paint, this.m_skin.value(), frame.style, placement, clip, hover))
-            return false;
-        if(item.enabled){
-            const HitTarget trackTarget = targets.makeListScrollbarTrackHitTarget(placement, clip, frame.token);
-            const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
-            if(!trackId.has_value() || !this.m_context.addPartTarget(item.state, trackId.value(), trackTarget))
-                return false;
-            const HitTarget thumbTarget = targets.makeListScrollbarThumbHitTarget(placement, clip, frame.token);
-            if(!this.m_context.addPartTarget(item.state, thumbId.value(), thumbTarget))
-                return false;
-        }
-    }
+    u32 vlistActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        vlistActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::List,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        vlistActions
+    );
+    if(!this.m_context.pushScrollOwner(item.state))
+        return false;
+    this.m_context.pushAccessibleParent(item.state.id);
     return true;
 }
 
-b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement){
-    HitTargetFactory targets;
-    in Vector<BuilderListRow> rows = frame.rows;
+b8 Builder::paintVirtualListRow(in BuilderItem item, in LayoutBox box){
+    if(item.list >= this.m_scope.value().m_lists.size())
+        return false;
+    mut BuilderListFrame frame = this.m_scope.value().m_lists[item.list];
+    if(!this.listMatches(frame) || cast<usize>(item.listRow) >= frame.customRows.size())
+        return false;
+    in BuilderCustomListRow row = frame.customRows[cast<usize>(item.listRow)];
+    in ListState state = frame.state.value();
     const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
     if(!rowsId.has_value())
         return false;
+    const auto part = TryMakeWidgetPartId(rowsId.value(), row.key);
+    if(!part.has_value())
+        return false;
     const b8 focused = IsListRowsFocused(this.m_context.input().focus(), item.state.id, frame.commandFocus);
-    usize found = ListRowInsertionIndex(rows, placement.firstRow);
-    for(u64 index = placement.firstRow; index < placement.endRow; ++index){
-        if(found == rows.size() || rows[found].index != index || !this.listStateMatches(frame))
-            return false;
-        in BuilderListRow row = rows[found];
-        ++found;
-        const u64 key = row.key;
-        const b8 enabled = item.enabled && row.enabled;
-        const auto part = TryMakeWidgetPartId(rowsId.value(), key);
-        if(!part.has_value())
-            return false;
-        const auto rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
-        if(!rectangle.has_value())
-            return false;
-        SelectablePaintFlags flags;
-        flags.enabled = enabled;
-        flags.selected = frame.state.value().selectedKey() == key;
-        flags.hover = this.m_context.input().hover() == part.value();
-        flags.focused = focused && frame.state.value().cursorKey() == key;
-        if(!row.text.valid() || !PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text.deref(), row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
-            return false;
-        if(item.enabled){
-            const HitTarget target = targets.makeListRowHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);
-            if(!this.m_context.addPartTarget(item.state, part.value(), target))
-                return false;
-        }
+    const b8 enabled = item.enabled && row.enabled;
+    const b8 selected = state.isSelected(row.key);
+    const b8 hover = this.m_context.input().hover() == part.value();
+    const b8 rowFocused = focused && state.cursorKey() == row.key;
+    in SelectableStyle rowStyle = frame.style.row;
+    Name preferred = rowStyle.normal;
+    Name fallback = rowStyle.fallback;
+    if(!enabled){
+        preferred = rowStyle.disabled;
+        fallback = rowStyle.disabledFallback;
     }
+    else if(selected){
+        preferred = rowStyle.selected;
+        fallback = rowStyle.selectedFallback;
+    }
+    else if(hover){
+        preferred = rowStyle.hover;
+        fallback = rowStyle.hoverFallback;
+    }
+    const Optional<usize> regionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+    if(!regionIdx.has_value())
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    const Rect rowClip = IntersectUiRectsBounds(box.rectangle, clip);
+    this.m_paint.pushClip(clip);
+    this.m_paint.pushClip(box.rectangle);
+    this.m_paint.drawRegionByIndex(regionIdx.value(), box.rectangle);
+    if(enabled && rowFocused)
+        this.m_paint.tryDrawRegion(rowStyle.focus, box.rectangle);
+    const b8 rectPopped = this.m_paint.popClip();
+    const b8 clipPopped = this.m_paint.popClip();
+    if(!rectPopped || !clipPopped)
+        return false;
+    if(item.enabled){
+        HitTargetFactory targets;
+        const HitTarget target = targets.makeListRowHitTarget(box.rectangle, rowClip, enabled, frame.token, row.key);
+        if(!this.m_context.addPartTarget(item.state, part.value(), target))
+            return false;
+    }
+    u32 vrowState = ResolveAccessibleVisibilityStateBits(enabled, rowClip) | s_AccessibilityStateFocusable;
+    if(selected)
+        vrowState |= s_AccessibilityStateSelected;
+    this.emitAccessiblePartNode(
+        part.value(),
+        item.state.id,
+        AccessibilityRole::ListItem,
+        box.rectangle,
+        StringView(),
+        vrowState,
+        s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+        cast<i32>(row.index + 1u),
+        cast<i32>(frame.rowCount),
+        0
+    );
     return this.listMatches(frame);
+}
+
+b8 Builder::paintVirtualListEnd(in BuilderItem item, in LayoutBox box){
+    this.m_context.popAccessibleParent();
+    if(!this.m_context.popScrollOwner())
+        return false;
+    if(item.list >= this.m_scope.value().m_lists.size())
+        return false;
+    mut BuilderListFrame frame = this.m_scope.value().m_lists[item.list];
+    if(!this.listMatches(frame))
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    mut ListState state = frame.state.value();
+    const Span<f64> rowOffsets(state.m_rowOffsets);
+    const auto placed = CalculateListScrollPlacement(
+        box.rectangle,
+        clip,
+        frame.padding,
+        frame.style.scrollbarWidth,
+        frame.style.minimumThumb,
+        frame.rowCount,
+        frame.rowHeight,
+        rowOffsets,
+        frame.contentWidth,
+        frame.scrollOffsetX,
+        frame.scrollOffset,
+        frame.options.horizontalScrollbar,
+        frame.options.verticalScrollbar
+    );
+    if(!placed.has_value())
+        return false;
+    in ScrollPlacement placement = placed.value().placement;
+    in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
+    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+        return false;
+    state.m_scrollRowHeight = frame.rowHeight;
+    state.m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
+        state.m_ensureCursor = false;
+    state.m_placement = placement;
+    state.m_scrollbars = scrollbars;
+    state.m_contentWidth = frame.contentWidth;
+    state.m_visibleFirstRow = placement.firstRow;
+    state.m_visibleEndRow = placement.endRow;
+    return this.paintListScrollbarsAndTargets(item, frame, scrollbars, clip) && this.listMatches(frame);
 }
 
 NumericEditBoxResult Builder::integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerEditOptions options){

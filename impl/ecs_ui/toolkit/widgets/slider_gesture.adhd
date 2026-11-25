@@ -17,6 +17,8 @@ class SliderState : NoCopy{
     public f64 m_minimum = 0.0;
     public f64 m_maximum = 1.0;
     public f64 m_keyStep = 0.0;
+    public f64 m_step = 0.0;
+    public SliderOrientation m_orientation = SliderOrientation::Horizontal;
     public SliderPlacement m_admission;
     public InputActionId m_press;
     public SliderResult m_result;
@@ -97,6 +99,8 @@ class SliderState : NoCopy{
             this.m_minimum,
             this.m_maximum,
             this.m_keyStep,
+            this.m_step,
+            this.m_orientation,
             this.m_admission,
             this.m_press,
             this.m_result,
@@ -116,8 +120,10 @@ Expected<SliderGestureOutcome> TrySeekSliderPointerGesture(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
+    in f64 stateKeyStep,
     in f64 stateStep,
     in b8 stateEnabled,
+    in SliderOrientation stateOrientation,
     in ControlToken stateToken,
     in SliderPlacement stateAdmission,
     in f64 currentValue,
@@ -129,13 +135,14 @@ Expected<SliderGestureOutcome> TrySeekSliderPointerGesture(
     outcome.value = currentValue;
     if(
         !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
-        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !SameSliderOptionsValues(stateMin, stateMax, stateKeyStep, stateStep, stateEnabled, stateOrientation, options)
         || !EqualUiRect(gesture.referenceRectangle, stateAdmission.centerTravel)
     )
         return MakeUnexpected(Failure());
     SliderResult accepted = inOutResult;
     accepted.valid = true;
-    if(!options.enabled || options.minimum == options.maximum || gesture.referenceRectangle.width <= 0.0f){
+    const f32 travelSpan = ResolveSliderCenterTravelSpan(options.orientation, gesture.referenceRectangle);
+    if(!options.enabled || options.minimum == options.maximum || travelSpan <= 0.0f){
         accepted.dragging = false;
         inOutResult = accepted;
         return outcome;
@@ -157,8 +164,10 @@ Expected<SliderGestureOutcome> TryDragSliderPointerGesture(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
+    in f64 stateKeyStep,
     in f64 stateStep,
     in b8 stateEnabled,
+    in SliderOrientation stateOrientation,
     in ControlToken stateToken,
     in SliderPlacement stateAdmission,
     in f64 currentValue,
@@ -175,7 +184,7 @@ Expected<SliderGestureOutcome> TryDragSliderPointerGesture(
     const f64 baseline = bit_cast<f64>(gesture.value);
     if(
         !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
-        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !SameSliderOptionsValues(stateMin, stateMax, stateKeyStep, stateStep, stateEnabled, stateOrientation, options)
         || !EqualUiRect(gesture.referenceRectangle, stateAdmission.travelBounds)
         || gesture.targetRectangle.width != stateAdmission.thumbExtent.x
         || gesture.targetRectangle.height != stateAdmission.thumbExtent.y || !IsFinite(VectorDouble(baseline))
@@ -183,7 +192,7 @@ Expected<SliderGestureOutcome> TryDragSliderPointerGesture(
         return MakeUnexpected(Failure());
     SliderResult accepted = inOutResult;
     accepted.valid = true;
-    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+    const f64 travel = ResolveSliderDragTravelSpan(options.orientation, gesture.referenceRectangle, gesture.targetRectangle);
     if(!options.enabled || options.minimum == options.maximum || travel <= 0.0){
         accepted.dragging = false;
         inOutResult = accepted;
@@ -214,10 +223,17 @@ Expected<f32> TryResolveSliderTrackContentWidth(in SliderMetrics metrics, in f32
     return UiSimdMax(metrics.contentSize.x, cast<f32>(width));
 }
 
+Expected<f32> TryResolveSliderTrackContentHeight(in SliderMetrics metrics, in f32 trackMinimumHeight){
+    const f64 height = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom) + cast<f64>(metrics.thumbExtent.y) + cast<f64>(trackMinimumHeight);
+    if(!IsFinite(VectorDouble(height)) || height > s_UiMaxFloatF64)
+        return MakeUnexpected(Failure());
+    return UiSimdMax(metrics.contentSize.y, cast<f32>(height));
+}
+
 b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement placement){
     return options.enabled
         && options.minimum != options.maximum
-        && placement.centerTravel.width > 0.0f
+        && ResolveSliderCenterTravelSpan(placement.orientation, placement.centerTravel) > 0.0f
         && placement.thumb.width > 0.0f
         && placement.thumb.height > 0.0f
         && placement.clip.width > 0.0f
@@ -249,6 +265,8 @@ void ResetSliderStateFields(
     mut f64 outMinimum,
     mut f64 outMaximum,
     mut f64 outKeyStep,
+    mut f64 outStep,
+    mut SliderOrientation outOrientation,
     mut SliderPlacement outAdmission,
     mut InputActionId outPress,
     mut SliderResult outResult,
@@ -261,6 +279,8 @@ void ResetSliderStateFields(
     outMinimum = 0.0;
     outMaximum = 1.0;
     outKeyStep = 0.0;
+    outStep = 0.0;
+    outOrientation = SliderOrientation::Horizontal;
     outAdmission = SliderPlacement();
     outPress = InputActionId();
     outResult = SliderResult();
@@ -276,7 +296,9 @@ void CommitSliderAdmissionState(
     mut f64 outMinimum,
     mut f64 outMaximum,
     mut f64 outKeyStep,
+    mut f64 outStep,
     mut b8 outEnabled,
+    mut SliderOrientation outOrientation,
     mut SliderPlacement outAdmission,
     mut b8 outAdmitted,
     mut InputActionId outPress,
@@ -285,7 +307,9 @@ void CommitSliderAdmissionState(
     outMinimum = options.minimum;
     outMaximum = options.maximum;
     outKeyStep = options.keyStep;
+    outStep = options.step;
     outEnabled = options.enabled;
+    outOrientation = options.orientation;
     outAdmission = placement;
     outAdmitted = true;
     outPress = InputActionId();
@@ -293,7 +317,7 @@ void CommitSliderAdmissionState(
 }
 
 b8 AdmitSliderState(mut SliderState state, in SliderOptions options, in SliderPlacement placement){
-    const Expected<b8> changed = TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.m_admission, options, placement);
+    const Expected<b8> changed = TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_step, state.m_enabled, state.m_orientation, state.m_admission, options, placement);
     if(!changed.has_value())
         return false;
     if(!changed.value())
@@ -306,7 +330,9 @@ b8 AdmitSliderState(mut SliderState state, in SliderOptions options, in SliderPl
         state.m_minimum,
         state.m_maximum,
         state.m_keyStep,
+        state.m_step,
         state.m_enabled,
+        state.m_orientation,
         state.m_admission,
         state.m_admitted,
         state.m_press,
@@ -316,7 +342,7 @@ b8 AdmitSliderState(mut SliderState state, in SliderOptions options, in SliderPl
 }
 
 b8 ApplySliderControlAction(in SliderOptions options, in ControlAction action, mut SliderState state, mut SliderResult result){
-    const Expected<SliderActionOutcome> outcome = TryApplySliderControlAction(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_value, options, action, result);
+    const Expected<SliderActionOutcome> outcome = TryApplySliderControlAction(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_step, state.m_enabled, state.m_orientation, state.controlToken(), state.m_value, options, action, result);
     if(!outcome.has_value())
         return false;
     if(outcome.value().advanceRevision){
@@ -327,7 +353,7 @@ b8 ApplySliderControlAction(in SliderOptions options, in ControlAction action, m
 }
 
 b8 SeekSliderPointerGesture(in SliderOptions options, in PointerGesture gesture, mut SliderState state, mut SliderResult result){
-    const Expected<SliderGestureOutcome> outcome = TrySeekSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, options, gesture, result);
+    const Expected<SliderGestureOutcome> outcome = TrySeekSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_step, state.m_enabled, state.m_orientation, state.controlToken(), state.m_admission, state.m_value, options, gesture, result);
     if(!outcome.has_value())
         return false;
     if(outcome.value().advanceRevision){
@@ -340,7 +366,7 @@ b8 SeekSliderPointerGesture(in SliderOptions options, in PointerGesture gesture,
 }
 
 b8 DragSliderPointerGesture(in SliderOptions options, in PointerGesture gesture, mut SliderState state, mut SliderResult result){
-    const Expected<SliderGestureOutcome> outcome = TryDragSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, state.m_press, state.m_pressMoved, options, gesture, result);
+    const Expected<SliderGestureOutcome> outcome = TryDragSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_step, state.m_enabled, state.m_orientation, state.controlToken(), state.m_admission, state.m_value, state.m_press, state.m_pressMoved, options, gesture, result);
     if(!outcome.has_value())
         return false;
     if(outcome.value().advanceRevision){

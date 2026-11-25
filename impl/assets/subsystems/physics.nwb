@@ -13,3 +13,5 @@ asset.lbvh_broadphase_cs = "engine/physics/lbvh_broadphase_cs";
 asset.gpu_resident_step_cs = "engine/physics/gpu_resident_step_cs";
 asset.spatial_query_cs = "engine/physics/spatial_query_cs";
 asset.export_render_transforms_cs = "engine/physics/export_render_transforms_cs";
+asset.gpu_resident_contact_prep_cs = "engine/physics/gpu_resident_contact_prep_cs";
+asset.gpu_subsystems_cs = "engine/physics/gpu_subsystems_cs";

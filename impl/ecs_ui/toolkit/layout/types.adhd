@@ -21,6 +21,48 @@ enum<u8> LayoutDirection{
     Row,
     Column,
     Overlay,
+    Grid,
+}
+
+enum<u8> LayoutAlign{
+    Start,
+    Center,
+    End,
+    Stretch,
+}
+
+enum<u8> LayoutAlignSelf{
+    Auto,
+    Start,
+    Center,
+    End,
+    Stretch,
+}
+
+enum<u8> LayoutJustify{
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+enum<u8> LayoutPositionMode{
+    Flow,
+    Absolute,
+}
+
+enum<u8> LayoutAnchor{
+    TopLeft,
+    TopCenter,
+    TopRight,
+    CenterLeft,
+    Center,
+    CenterRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
 }
 
 enum<u32> LayoutSizePolicy{
@@ -29,19 +71,75 @@ enum<u32> LayoutSizePolicy{
     Stretch,
 }
 
+enum<u8> ScrollbarPolicy{
+    Auto,
+    Always,
+    Never,
+}
+
 class LayoutSize{
     public LayoutSizePolicy policy = LayoutSizePolicy::Content;
     public f32 value = 0.0f;
 }
 
+class LayoutItemOptions{
+    public f32 minWidth = 0.0f;
+    public f32 maxWidth = 0.0f;
+    public f32 minHeight = 0.0f;
+    public f32 maxHeight = 0.0f;
+    public f32 aspectRatio = 0.0f;
+    public Insets margin;
+    public LayoutAlignSelf alignSelf = LayoutAlignSelf::Auto;
+    public u32 gridColumnSpan = 1u;
+    public u32 gridRowSpan = 1u;
+    public LayoutPositionMode positionMode = LayoutPositionMode::Flow;
+    public LayoutAnchor anchor = LayoutAnchor::TopLeft;
+    public b8 pinLeft = false;
+    public b8 pinTop = false;
+    public b8 pinRight = false;
+    public b8 pinBottom = false;
+    public Insets absoluteInsets;
+    public Point absoluteOffset;
+    public i32 zIndex = 0;
+}
+
 class LayoutNodeDesc{
     public LayoutDirection direction = LayoutDirection::Leaf;
     public b8 clipChildren = true;
+    public b8 scrollable = false;
+    public b8 flexWrap = false;
+    public b8 hasCrossGap = false;
+    public b8 pinLeft = false;
+    public b8 pinTop = false;
+    public b8 pinRight = false;
+    public b8 pinBottom = false;
+    public ScrollbarPolicy horizontalScrollbar = ScrollbarPolicy::Auto;
+    public ScrollbarPolicy verticalScrollbar = ScrollbarPolicy::Auto;
+    public LayoutAlign alignItems = LayoutAlign::Start;
+    public LayoutJustify justifyContent = LayoutJustify::Start;
+    public LayoutAlignSelf alignSelf = LayoutAlignSelf::Auto;
+    public LayoutPositionMode positionMode = LayoutPositionMode::Flow;
+    public LayoutAnchor anchor = LayoutAnchor::TopLeft;
     public LayoutSize width;
     public LayoutSize height;
+    public f32 minWidth = 0.0f;
+    public f32 maxWidth = 0.0f;
+    public f32 minHeight = 0.0f;
+    public f32 maxHeight = 0.0f;
+    public f32 aspectRatio = 0.0f;
     public Insets padding;
+    public Insets margin;
+    public Insets absoluteInsets;
+    public Point absoluteOffset;
     public f32 gap = 0.0f;
+    public f32 crossGap = 0.0f;
+    public u32 gridColumns = 1u;
+    public u32 gridColumnSpan = 1u;
+    public u32 gridRowSpan = 1u;
+    public f32 scrollbarThickness = 0.0f;
+    public Point scrollOffset;
     public Point intrinsicSize;
+    public i32 zIndex = 0;
 }
 
 class LayoutBox{
@@ -50,6 +148,8 @@ class LayoutBox{
     public Rect clip;
     public Rect hit;
     public Point measuredSize;
+    public Point contentSize;
+    public Point scrollOffset;
 }
 
 class LayoutTreeNode{

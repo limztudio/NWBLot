@@ -150,6 +150,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
+    if(mode == NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_LARGE_INDIRECT){
+        if(tid == 0u){
+            const uint awakeLargeCount = min(g_NwbPhysicsUintBuffers[largeListSlot][1u], itemOffset);
+            const uint largeGroups = (awakeLargeCount > 0u) ? ((itemCount + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE) : 0u;
+            const uint indirectSlot = g_NwbPhysicsPushConstants.slots1.z;
+            g_NwbPhysicsUintBuffers[indirectSlot][6u] = largeGroups;
+            g_NwbPhysicsUintBuffers[indirectSlot][7u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][8u] = 1u;
+        }
+        return;
+    }
+
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS){
         if(tid >= itemCount)
             return;
@@ -231,13 +243,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             maxOut = worldCenter + ext;
         }
         else{
+            const NwbPhysicsGpuShapeProxy shapeProxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx];
+            float3 effOrigin = bodyOrigin;
+            float4 effQ = bodyQ;
+            nwbPhysicsResolveShapeWorldPose(shapeProxy, bodyOrigin, bodyQ, effOrigin, effQ);
             const float4 localRotQ = ((bodyMeta.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
-                ? g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotationOrMeta
+                ? shapeProxy.localRotationOrMeta
                 : float4(0.0f, 0.0f, 0.0f, 1.0f);
             const float4 worldQ = (localRotQ.w < 0.999999f)
-                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotQ))
-                : bodyQ;
-            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(effQ, localRotQ))
+                : effQ;
+            const float3 worldCenter = effOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, effQ);
             float3 axisX;
             float3 axisY;
             float3 axisZ;
@@ -342,14 +358,27 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             }
         }
 
+        const bool isAwakeLarge = isLarge && (tid >= awakeOffset);
+        const uint largeOffset = WavePrefixCountBits(isLarge);
+        const uint largeCount = WaveActiveCountBits(isLarge);
+        const uint awakeLargeOffset = WavePrefixCountBits(isAwakeLarge);
+        const uint awakeLargeCount = WaveActiveCountBits(isAwakeLarge);
+        uint largeBase = 0u;
+        uint awakeLargeBase = 0u;
+        if(WaveIsFirstLane()){
+            if(largeCount > 0u)
+                InterlockedAdd(g_NwbPhysicsUintBuffers[largeListSlot][0u], largeCount, largeBase);
+            if(awakeLargeCount > 0u)
+                InterlockedAdd(g_NwbPhysicsUintBuffers[largeListSlot][1u], awakeLargeCount, awakeLargeBase);
+        }
+        largeBase = WaveReadLaneFirst(largeBase);
+        awakeLargeBase = WaveReadLaneFirst(awakeLargeBase);
         if(isLarge){
-            uint largePos = 0u;
-            InterlockedAdd(g_NwbPhysicsUintBuffers[largeListSlot][0u], 1u, largePos);
+            const uint largePos = largeBase + largeOffset;
             if(largePos < itemCount)
                 g_NwbPhysicsUintBuffers[largeListSlot][2u + largePos] = tid;
-            if(tid >= awakeOffset){
-                uint awakeLargePos = 0u;
-                InterlockedAdd(g_NwbPhysicsUintBuffers[largeListSlot][1u], 1u, awakeLargePos);
+            if(isAwakeLarge){
+                const uint awakeLargePos = awakeLargeBase + awakeLargeOffset;
                 if(awakeLargePos < (itemCount - awakeOffset))
                     g_NwbPhysicsUintBuffers[largeListSlot][2u + itemCount + awakeLargePos] = tid;
             }
@@ -508,6 +537,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float3 minB = float3(0.0f, 0.0f, 0.0f);
         float3 maxB = float3(0.0f, 0.0f, 0.0f);
         uint bodyB = NWB_PHYSICS_INVALID_INDEX;
+        bool loadedB = false;
         uint4 metaB = uint4(0u, 0u, 0u, 0u);
         uint4 filterB = uint4(0u, 0u, 0u, 0u);
         if(active){
@@ -516,8 +546,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             minB = aabb0B.xyz;
             maxB = aabb1B.xyz;
             bodyB = asuint(aabb1B.w);
-            metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
-            filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
         }
 
         for(uint tileBase = 0u; tileBase < awakeLargeCount; tileBase += NWB_PHYSICS_WORKGROUP_SIZE){
@@ -543,6 +571,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const uint4 metaA = s_LargeMeta[j];
                     if(metaA.x == bodyB)
                         continue;
+                    if(!loadedB){
+                        metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
+                        filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
+                        loadedB = true;
+                    }
                     const uint4 filterA = s_LargeFilter[j];
                     if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                         continue;

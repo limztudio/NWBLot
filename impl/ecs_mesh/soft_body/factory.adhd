@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/meshlet_triangle_indices.adhd>
+#include <impl/physics/soft_body.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+Expected<SoftBody> CreateSoftBodyFromMesh(
+    in Mesh sourceMesh,
+    in SoftBodyMeshCreateParams params,
+    mut Vector<u32> outSourcePositionToParticle
+){
+    outSourcePositionToParticle.clear();
+    if(sourceMesh.positionStream().empty() || sourceMesh.meshlets().empty()){
+        error("CreateSoftBodyFromMesh: source mesh has empty positions or meshlets");
+        return MakeUnexpected(Failure());
+    }
+
+    const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(sourceMesh);
+    if(!indices.has_value() || indices.value().empty() || (indices.value().size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u){
+        error("CreateSoftBodyFromMesh: failed to decode triangle indices from source mesh");
+        return MakeUnexpected(Failure());
+    }
+
+    SoftBody sb = CreateSoftBodyFromTriangles(
+        Span<f32x3u>(sourceMesh.positionStream()),
+        Span<u32>(indices.value()),
+        params,
+        outSourcePositionToParticle
+    );
+    if(sb.particles.empty() || sb.surfaceTriangles.empty()){
+        error("CreateSoftBodyFromMesh: source mesh produced empty soft body surface");
+        return MakeUnexpected(Failure());
+    }
+
+    return sb;
+}
+
+[cpp_unwind]
+Expected<SoftBody> CreateSoftBodyFromMesh(in Mesh sourceMesh, in SoftBodyMeshCreateParams params){
+    Vector<u32> unusedMap;
+    return CreateSoftBodyFromMesh(sourceMesh, params, unusedMap);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

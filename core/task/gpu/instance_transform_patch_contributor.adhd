@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphInstanceTransformPatchRequest"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuTaskGraphInstanceTransformPatchRequest{
+    GpuGraphResourceId instanceBufferResource;
+    u32 instanceBufferUavSlot;
+    u32 instanceStrideFloat4;
+    Name passIdentityPrefix;
+    GpuTaskId dependency;
+    b8 mergeWithPrevious;
+};
+
+[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphInstanceTransformPatchContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IGpuTaskGraphInstanceTransformPatchContributor{
+    [cpp_flags(unwind)]
+    b8 prepareInstanceTransformPatches();
+    [cpp_flags(unwind)]
+    Expected<GpuTaskId> declareInstanceTransformPatch(in GpuTaskGraphInstanceTransformPatchRequest request, in Span<u32> instanceEntityIds, mut GpuTaskGraph graph);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

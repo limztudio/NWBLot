@@ -69,6 +69,7 @@ X11TextInputService::X11TextInputService(Alloc::GlobalArena& arena, Display& dis
     : QueuedTextInputService(arena)
     , m_display(display)
     , m_window(window)
+    , m_insertionStyles(arena)
     , m_preedit(arena)
     , m_insertion(arena)
     , m_lookup(arena)
@@ -333,4 +334,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

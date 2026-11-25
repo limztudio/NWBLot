@@ -18,6 +18,20 @@
 #include <impl/ecs_ui/toolkit/widgets/slider_frame.adhd>
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_area.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tab_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/splitter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/spin_box.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tree_view.adhd>
+#include <impl/ecs_ui/toolkit/widgets/data_table.adhd>
+#include <impl/ecs_ui/toolkit/widgets/modal_dialog.adhd>
+#include <impl/ecs_ui/toolkit/widgets/menu_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/toast.adhd>
+#include <impl/ecs_ui/toolkit/widgets/color_picker.adhd>
+#include <impl/ecs_ui/toolkit/widgets/drag_drop.adhd>
+#include <impl/ecs_ui/toolkit/widgets/rich_text.adhd>
+#include <impl/ecs_ui/toolkit/widgets/plot_canvas.adhd>
+#include <impl/ecs_ui/toolkit/widgets/dock_space.adhd>
 #include <impl/ecs_ui/toolkit/widgets/combo.adhd>
 #include <impl/ecs_ui/toolkit/widgets/combo_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/control_visual_paint.adhd>
@@ -28,6 +42,19 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+enum<u8> BuilderScopeKind{
+    Root,
+    Container,
+    ScrollArea,
+    VirtualList,
+    VirtualListRow,
+    SplitterFirst,
+    SplitterSecond,
+    SpinBox,
+    DockSpace,
+    DockPanel,
+}
 
 [move_only]
 class BuilderOperationEnd : NoCopy{
@@ -51,6 +78,7 @@ class BuilderItem{
     public u32 node = 0u;
     public u32 editBox = s_LayoutNoParent;
     public u32 list = s_LayoutNoParent;
+    public u32 listRow = s_LayoutNoParent;
     public u32 radioGroup = s_LayoutNoParent;
     public u32 slider = s_LayoutNoParent;
     public u32 progress = s_LayoutNoParent;
@@ -59,10 +87,35 @@ class BuilderItem{
     public u32 textArea = s_LayoutNoParent;
     public u32 integerEdit = s_LayoutNoParent;
     public u32 floatEdit = s_LayoutNoParent;
+    public u32 scrollArea = s_LayoutNoParent;
+    public u32 tabBar = s_LayoutNoParent;
+    public u32 splitter = s_LayoutNoParent;
+    public u32 spinBox = s_LayoutNoParent;
+    public u32 treeView = s_LayoutNoParent;
+    public u32 dataTable = s_LayoutNoParent;
+    public u32 menuBar = s_LayoutNoParent;
+    public u32 colorPicker = s_LayoutNoParent;
+    public u32 hyperlink = s_LayoutNoParent;
+    public u32 richText = s_LayoutNoParent;
+    public u32 plot = s_LayoutNoParent;
+    public u32 canvas = s_LayoutNoParent;
+    public u32 dockSpace = s_LayoutNoParent;
+    public TextAlignment textAlignment = TextAlignment::Leading;
     public b8 enabled = true;
     public b8 checked = false;
     public b8 contextMenu = false;
     public b8 annotated = false;
+    public b8 textEllipsis = false;
+    public PointerCursor cursorOverride = PointerCursor::Default;
+    public b8 hasCursorOverride = false;
+    public WidgetId focusNeighborUp;
+    public WidgetId focusNeighborDown;
+    public WidgetId focusNeighborLeft;
+    public WidgetId focusNeighborRight;
+    public b8 hasFocusNeighbors = false;
+    public u32 focusGroupId = 0u;
+    public b8 trapDirectionalFocus = false;
+    public u32 accessibleOverride = s_LayoutNoParent;
 }
 
 class BuilderEditBoxFrame{
@@ -71,6 +124,8 @@ class BuilderEditBoxFrame{
     public Optional<mut EditBoxState> editState;
     public EditBoxOptions editOptions;
     public EditBoxPaintFlags editFlags;
+    public SharedTextLayout placeholder;
+    public Rect placeholderBounds;
     public u32 editViewCache = u32.max;
 }
 
@@ -85,17 +140,49 @@ class CachedEditBoxView{
     public usize atlasGlyphCount = 0u;
     public u32 fontSizeBits = 0u;
     public u32 scriptTag = 0u;
+    public u32 maskCodePoint = s_EditBoxDefaultMaskCodePoint;
+    public TextDirection direction = TextDirection::LeftToRight;
     public u32 pixelScaleXBits = 0u;
     public u32 pixelScaleYBits = 0u;
+    public u32 wrapWidthBits = 0u;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public b8 preserveWrapSpaces = false;
+    public b8 password = false;
     public b8 valid = false;
 
-    public b8 matchesShape(in TextAreaModelStamp stamp, in u64 textId, in u64 textGen, in u32 sizeBits, in u32 script, in StringView lang)const{
+    public b8 matchesShape(in TextAreaModelStamp stamp, in u64 textId, in u64 textGen, in u32 sizeBits, in u32 script, in StringView lang, in TextDirection dir, in b8 pass, in u32 mask)const{
+        return this.matchesShape(stamp, textId, textGen, sizeBits, script, lang, dir, pass, mask, TextWrapMode::None, 0u, s_TextDefaultTabStopSpaces, false);
+    }
+
+    public b8 matchesShape(
+        in TextAreaModelStamp stamp,
+        in u64 textId,
+        in u64 textGen,
+        in u32 sizeBits,
+        in u32 script,
+        in StringView lang,
+        in TextDirection dir,
+        in b8 pass,
+        in u32 mask,
+        in TextWrapMode mode,
+        in u32 wrapBits,
+        in u32 tabSpaces,
+        in b8 keepWrapSpaces
+    )const{
         return this.valid
             && this.modelStamp == stamp
             && this.textIdentity == textId
             && this.textGeneration == textGen
             && this.fontSizeBits == sizeBits
             && this.scriptTag == script
+            && this.direction == dir
+            && this.password == pass
+            && this.maskCodePoint == mask
+            && this.wrapMode == mode
+            && this.wrapWidthBits == wrapBits
+            && this.tabStopSpaces == tabSpaces
+            && this.preserveWrapSpaces == keepWrapSpaces
             && StringView(this.language) == lang;
     }
 
@@ -115,13 +202,17 @@ class BuilderWindowFrame{
     public b8 firstUse = false;
     public WidgetState titleState;
     public WidgetState collapseState;
+    public WidgetState closeState;
     public WidgetState resizeState;
+    public Array<WidgetState, 7u> resizeEdgeStates;
     public SharedTextLayout title;
     public Rect titleBounds;
 }
 
 class BuilderTextAreaFrame{
     public f32 wheelLines = s_StyleScrollWheelStep;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
     public Optional<in EditModel> model;
     public Optional<mut TextAreaState> state;
     public EditNavigationSnapshot navigation;
@@ -151,22 +242,36 @@ class BuilderListRow{
     public b8 enabled = false;
 }
 
+class BuilderCustomListRow{
+    public u64 index = 0u;
+    public u64 key = 0u;
+    public b8 enabled = false;
+}
+
 class BuilderListFrame{
     public Vector<BuilderListRow> rows;
+    public Vector<BuilderCustomListRow> customRows;
     public Optional<in IListDataSource> source;
+    public Optional<in IListRowHeightProvider> rowHeights;
     public Optional<mut ListState> state;
     public WidgetStyle widgetStyle;
     public ListStyle style;
     public ListOptions options;
     public ListMeasureKey measureKey;
+    public ScrollPlacement placement;
+    public ScrollViewportPlacement scrollbars;
     public f64 scrollOffset = 0.0;
+    public f64 scrollOffsetX = 0.0;
+    public f64 contentWidth = 0.0;
     public u64 cursorKey = 0u;
     public f32 rowHeight = 0.0f;
     public b8 revealCursor = false;
     public b8 focusOnCommit = false;
+    public b8 isCustomRows = false;
     public ControlToken token;
     public Insets padding;
     public u64 rowCount = 0u;
+    public u32 listItemIndex = s_LayoutNoParent;
     public WidgetId commandFocus;
 }
 
@@ -231,11 +336,295 @@ class BuilderContextMenuFrame{
     public u32 anchorIndex = 0u;
     public u32 list = s_LayoutNoParent;
     public b8 open = false;
+    public b8 focusOnCommit = false;
+}
+
+class MenuBarLabelEntry{
+    public u64 key = 0u;
+    public SharedTextLayout text;
+    public Rect bounds;
+    public b8 enabled = true;
+    public b8 hasDropdown = false;
+}
+
+class BuilderMenuBarFrame{
+    public WidgetState widget;
+    public WidgetState popup;
+    public WidgetState rows;
+    public Optional<in IListDataSource> source;
+    public Optional<mut MenuBarState> state;
+    public MenuBarStyle style;
+    public PopupStyle popupStyle;
+    public WidgetStyle widgetStyle;
+    public MenuBarOptions options;
+    public PopupToken popupToken;
+    public PopupToken parentToken;
+    public ControlToken token;
+    public ControlToken listToken;
+    public Vector<MenuBarLabelEntry> labels;
+    public u64 rowCount = 0u;
+    public u64 revision = 0u;
+    public u64 openMenuKey = 0u;
+    public u32 list = s_LayoutNoParent;
+    public b8 open = false;
+    public b8 focusOnCommit = false;
+}
+
+class ToastPaintEntry{
+    public u64 id = 0u;
+    public ToastSeverity severity = ToastSeverity::Info;
+    public b8 dismissible = true;
+    public SharedTextLayout title;
+    public Rect titleBounds;
+    public SharedTextLayout message;
+    public Rect messageBounds;
+    public f32 cardHeight = 0.0f;
+}
+
+class BuilderToastFrame{
+    public WidgetState widget;
+    public Optional<mut ToastState> state;
+    public ToastStyle style;
+    public WidgetStyle widgetStyle;
+    public ToastOptions options;
+    public ControlToken token;
+    public Vector<ToastPaintEntry> entries;
+    public u64 revision = 0u;
+    public u32 layer = 1u;
+}
+
+class BuilderColorPickerFrame{
+    public WidgetState widget;
+    public Optional<mut ColorPickerState> state;
+    public ColorPickerStyle style;
+    public WidgetStyle widgetStyle;
+    public ColorPickerOptions options;
+    public ControlToken token;
+    public ColorHsv hsv;
+    public Color color;
+    public Color originalColor;
+    public SharedTextLayout hexText;
+    public Rect hexBounds;
+    public u64 revision = 0u;
+}
+
+class BuilderDragSourceFrame{
+    public WidgetState widget;
+    public Optional<mut DragDropState> state;
+    public DragDropStyle style;
+    public WidgetStyle widgetStyle;
+    public DragDropOptions options;
+    public u32 anchorIndex = 0u;
+    public u32 layer = 1u;
+    public u64 instanceGeneration = 0u;
+    public b8 dragging = false;
+    public SharedTextLayout previewText;
+    public Rect previewBounds;
+}
+
+class BuilderDropTargetFrame{
+    public WidgetState widget;
+    public Optional<mut DragDropState> state;
+    public DragDropStyle style;
+    public DragDropOptions options;
+    public u32 anchorIndex = 0u;
+    public u32 layer = 1u;
+    public u64 instanceGeneration = 0u;
+    public b8 highlighted = false;
+}
+
+class BuilderHyperlinkFrame{
+    public HyperlinkStyle style;
+    public HyperlinkOptions options;
+}
+
+class BuilderRichTextFrame{
+    public WidgetState widget;
+    public ControlToken token;
+    public HyperlinkStyle linkStyle;
+    public WidgetStyle widgetStyle;
+    public RichTextOptions options;
+    public Vector<RichTextRun> runs;
+}
+
+class PlotSeriesCopy{
+    public Vector<f32> values;
+    public Color color;
+    public f32 lineThickness = 2.0f;
+    public PlotKind kind = PlotKind::Line;
+    public SharedTextLayout label;
+    public Rect labelBounds;
+}
+
+class BuilderPlotFrame{
+    public WidgetState widget;
+    public PlotStyle style;
+    public WidgetStyle widgetStyle;
+    public PlotOptions options;
+    public Vector<PlotSeriesCopy> series;
+    public f32 minY = 0.0f;
+    public f32 maxY = 1.0f;
+    public usize maxSamples = 0u;
+    public usize hoveredSampleIndex = 0u;
+    public f32 hoveredValue = 0.0f;
+    public b8 hovered = false;
+}
+
+class BuilderCanvasFrame{
+    public WidgetState widget;
+    public ControlToken token;
+    public CanvasOptions options;
+    public Optional<mut ICanvasPainter> painter;
+}
+
+class DockPanelTitleEntry{
+    public u64 key = 0u;
+    public SharedTextLayout title;
+    public Rect titleBounds;
+}
+
+class BuilderDockSpaceFrame{
+    public WidgetState widget;
+    public Optional<mut DockSpaceState> state;
+    public DockSpaceStyle style;
+    public WidgetStyle widgetStyle;
+    public DockSpaceOptions options;
+    public ControlToken token;
+    public u64 revision = 0u;
+    public u32 node = s_LayoutNoParent;
+    public u32 layer = 1u;
+    public Rect arrangedBounds;
+    public Vector<DockPanelTitleEntry> panelTitles;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class BuilderScrollAreaFrame{
+    public WidgetState widget;
+    public Optional<mut ScrollAreaState> state;
+    public ScrollAreaOptions options;
+    public ScrollbarStyle scrollbarStyle;
+    public ScrollViewportPlacement placement;
+    public Name panelRegion = s_StylePanelNormalRegionName;
+    public ControlToken token;
+    public u64 stateRevision = 0u;
+    public u64 inputGeneration = 0u;
+}
+
+class BuilderZTraversalEntry{
+    public u32 node = 0u;
+    public b8 isEnd = false;
+}
+
+class BuilderTabBarFrame{
+    public Optional<mut TabBarState> state;
+    public TabBarStyle style;
+    public WidgetStyle widgetStyle;
+    public TabBarOptions options;
+    public TabBarMetrics metrics;
+    public Vector<TabBarItem> items;
+    public Vector<TabBarLabelEntry> labels;
+    public Vector<f32> labelWidths;
+    public ControlToken token;
+    public u64 stateRevision = 0u;
+    public u64 selectedKey = 0u;
+    public u64 cursorKey = 0u;
+    public b8 focusOnCommit = false;
+}
+
+class BuilderSplitterFrame{
+    public WidgetState widget;
+    public Optional<mut SplitterState> state;
+    public SplitterStyle style;
+    public SplitterOptions options;
+    public ControlToken token;
+    public u64 revision = 0u;
+    public u32 containerNode = s_LayoutNoParent;
+    public u32 firstPaneNode = s_LayoutNoParent;
+    public u32 handleNode = s_LayoutNoParent;
+    public u32 secondPaneNode = s_LayoutNoParent;
+    public b8 secondPaneStarted = false;
+}
+
+class BuilderSpinBoxFrame{
+    public WidgetState widget;
+    public Optional<mut IntegerEditModel> integerModel;
+    public Optional<mut FloatEditModel> floatModel;
+    public IntegerBounds integerBounds;
+    public FloatBounds floatBounds;
+    public Optional<mut EditBoxState> editState;
+    public ControlToken token;
+    public u32 decNode = s_LayoutNoParent;
+    public u32 incNode = s_LayoutNoParent;
+    public f32 buttonWidth = s_SpinBoxDefaultButtonWidth;
+    public b8 canStep = false;
+    public b8 allowWheel = true;
+    public b8 wrap = false;
+    public b8 isFloat = false;
+    public i64 integerStep = s_SpinBoxDefaultIntegerStep;
+    public i64 integerFastStep = s_SpinBoxDefaultIntegerFastStep;
+    public f64 floatStep = s_SpinBoxDefaultFloatStep;
+    public f64 floatFastStep = s_SpinBoxDefaultFloatFastStep;
+}
+
+class BuilderTreeFrame{
+    public WidgetState widget;
+    public Vector<SharedTextLayout> rowTexts;
+    public Vector<Rect> rowTextBounds;
+    public Optional<in ITreeDataSource> source;
+    public Optional<mut TreeState> state;
+    public WidgetStyle widgetStyle;
+    public TreeStyle style;
+    public TreeOptions options;
+    public ListMeasureKey measureKey;
+    public ScrollPlacement placement;
+    public ScrollViewportPlacement scrollbars;
+    public ControlToken token;
+    public Insets padding;
+    public f64 scrollOffset = 0.0;
+    public f64 scrollOffsetX = 0.0;
+    public f64 contentWidth = 0.0;
+    public u64 visibleCount = 0u;
+    public u64 cursorKey = 0u;
+    public f32 rowHeight = 0.0f;
+    public b8 revealCursor = false;
+    public b8 focusOnCommit = false;
+}
+
+class BuilderTableFrame{
+    public WidgetState widget;
+    public Vector<TableColumn> columns;
+    public Vector<String> columnTitles;
+    public Vector<SharedTextLayout> headerLayouts;
+    public Vector<Rect> headerBounds;
+    public Vector<SharedTextLayout> cellLayouts;
+    public Vector<Rect> cellBounds;
+    public Optional<in ITableDataSource> source;
+    public Optional<mut TableState> state;
+    public WidgetStyle widgetStyle;
+    public TableStyle style;
+    public TableOptions options;
+    public ListMeasureKey measureKey;
+    public ScrollPlacement placement;
+    public ScrollViewportPlacement scrollbars;
+    public ControlToken token;
+    public Insets padding;
+    public f64 scrollOffset = 0.0;
+    public f64 scrollOffsetX = 0.0;
+    public f64 contentWidth = 0.0;
+    public u64 rowCount = 0u;
+    public u64 cursorKey = 0u;
+    public f32 rowHeight = 0.0f;
+    public b8 revealCursor = false;
+    public b8 focusOnCommit = false;
+}
+
+class BuilderFocusScopeEntry{
+    public u32 id = 0u;
+    public b8 trapDirectional = false;
+}
 
 [friend(Builder, ListLayoutPreparer)]
 class BuilderScopeFrame : NoCopy{
@@ -261,13 +650,41 @@ class BuilderScopeFrame : NoCopy{
     private Vector<BuilderItem> m_comboEditors;
     private Vector<BuilderTooltipFrame> m_tooltips;
     private Vector<BuilderContextMenuFrame> m_contextMenus;
+    private Vector<BuilderScrollAreaFrame> m_scrollAreas;
+    private Vector<BuilderTabBarFrame> m_tabBars;
+    private Vector<BuilderSplitterFrame> m_splitters;
+    private Vector<BuilderSpinBoxFrame> m_spinBoxes;
+    private Vector<BuilderTreeFrame> m_treeViews;
+    private Vector<BuilderTableFrame> m_dataTables;
+    private Vector<BuilderMenuBarFrame> m_menuBars;
+    private Vector<BuilderToastFrame> m_toasts;
+    private Vector<BuilderColorPickerFrame> m_colorPickers;
+    private Vector<BuilderDragSourceFrame> m_dragSources;
+    private Vector<BuilderDropTargetFrame> m_dropTargets;
+    private Vector<BuilderHyperlinkFrame> m_hyperlinks;
+    private Vector<BuilderRichTextFrame> m_richTexts;
+    private Vector<BuilderPlotFrame> m_plots;
+    private Vector<BuilderCanvasFrame> m_canvases;
+    private Vector<BuilderDockSpaceFrame> m_dockSpaces;
+    private Vector<u32> m_dockSpaceStack;
     private Vector<u32> m_stack;
+    private Vector<u32> m_scrollAreaStack;
+    private Vector<BuilderScopeKind> m_scopeKinds;
+    private Vector<u32> m_virtualListStack;
+    private Vector<u32> m_splitterStack;
+    private Vector<u32> m_zNodeBeginItem;
+    private Vector<u32> m_zNodeEndItem;
+    private Vector<BuilderZTraversalEntry> m_zTraversalStack;
+    private Vector<u32> m_zChildScratch;
+    private Vector<AccessibleOverride> m_accessibleOverrides;
+    private Vector<BuilderFocusScopeEntry> m_focusScopeStack;
     private BuilderWindowFrame m_window;
     private WidgetState m_panelState;
     private Rect m_bounds;
     private b8 m_popupVisible = false;
     private b8 m_panelActive = false;
     private b8 m_windowActive = false;
+    private b8 m_hasNonZeroZIndex = false;
 
     [cpp_unwind]
     public BuilderScopeFrame(){
@@ -275,6 +692,10 @@ class BuilderScopeFrame : NoCopy{
         this.m_radioGroups.reserve(s_WidgetFrameReserve);
         this.m_sliders.reserve(s_WidgetFrameReserve);
         this.m_stack.reserve(s_ContextMaxScopeDepth);
+        this.m_scrollAreaStack.reserve(s_ContextMaxScopeDepth);
+        this.m_scopeKinds.reserve(s_ContextMaxScopeDepth);
+        this.m_virtualListStack.reserve(s_ContextMaxScopeDepth);
+        this.m_splitterStack.reserve(s_ContextMaxScopeDepth);
     }
 
     private b8 popupVisible()const{
@@ -307,7 +728,34 @@ class BuilderScopeFrame : NoCopy{
         return frame.source.has_value() && this.listStateMatches(context, frame)
             && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.listStateMatches(context, frame)
             && frame.source.value().revision() == frame.token.contentRevision && this.listStateMatches(context, frame)
-            && frame.source.value().rowCount() == frame.rowCount && this.listStateMatches(context, frame);
+            && frame.source.value().rowCount() == frame.rowCount && this.listStateMatches(context, frame)
+            && (!frame.rowHeights.has_value() || !frame.measureKey.variableRowHeights || (frame.rowHeights.value().rowHeightRevision() == frame.measureKey.rowHeightRevision && this.listStateMatches(context, frame)));
+    }
+
+    private b8 treeStateMatches(in Context context, in BuilderTreeFrame frame)const{
+        return this.popupAncestorsVisible(context) && frame.state.has_value()
+            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+    }
+
+    [cpp_unwind]
+    private b8 treeMatches(in Context context, in BuilderTreeFrame frame)const{
+        return frame.source.has_value() && this.treeStateMatches(context, frame)
+            && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.treeStateMatches(context, frame)
+            && frame.source.value().revision() == frame.token.contentRevision && this.treeStateMatches(context, frame)
+            && frame.state.value().visibleCount() == frame.visibleCount;
+    }
+
+    private b8 tableStateMatches(in Context context, in BuilderTableFrame frame)const{
+        return this.popupAncestorsVisible(context) && frame.state.has_value()
+            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+    }
+
+    [cpp_unwind]
+    private b8 tableMatches(in Context context, in BuilderTableFrame frame)const{
+        return frame.source.has_value() && this.tableStateMatches(context, frame)
+            && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.tableStateMatches(context, frame)
+            && frame.source.value().revision() == frame.token.contentRevision && this.tableStateMatches(context, frame)
+            && frame.source.value().rowCount() == frame.rowCount && this.tableStateMatches(context, frame);
     }
 
     private void reset(){
@@ -332,7 +780,35 @@ class BuilderScopeFrame : NoCopy{
         this.m_comboEditors.clear();
         this.m_tooltips.clear();
         this.m_contextMenus.clear();
+        this.m_scrollAreas.clear();
+        this.m_tabBars.clear();
+        this.m_splitters.clear();
+        this.m_spinBoxes.clear();
+        this.m_treeViews.clear();
+        this.m_dataTables.clear();
+        this.m_menuBars.clear();
+        this.m_toasts.clear();
+        this.m_colorPickers.clear();
+        this.m_dragSources.clear();
+        this.m_dropTargets.clear();
+        this.m_hyperlinks.clear();
+        this.m_richTexts.clear();
+        this.m_plots.clear();
+        this.m_canvases.clear();
+        this.m_dockSpaces.clear();
+        this.m_dockSpaceStack.clear();
         this.m_stack.clear();
+        this.m_scrollAreaStack.clear();
+        this.m_scopeKinds.clear();
+        this.m_virtualListStack.clear();
+        this.m_splitterStack.clear();
+        this.m_zNodeBeginItem.clear();
+        this.m_zNodeEndItem.clear();
+        this.m_zTraversalStack.clear();
+        this.m_zChildScratch.clear();
+        this.m_accessibleOverrides.clear();
+        this.m_focusScopeStack.clear();
+        this.m_hasNonZeroZIndex = false;
         this.m_layout.reset();
     }
 }

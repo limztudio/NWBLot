@@ -68,7 +68,7 @@ void ResolveModelAttachmentJointQueryGroup(
 ){
     for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
         if(!TryResolveModelAttachmentJointQuery(jointPalette, inoutQueries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]))
-            break;
+            continue;
     }
 }
 

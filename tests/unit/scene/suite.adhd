@@ -11,9 +11,10 @@
 #include <impl/assets_graphics/components.adhd>
 #include <impl/assets_graphics/renderer_subsystem.adhd>
 #include <impl/assets_graphics/transparent_subsystem.adhd>
-#include <impl/assets_mesh/skin_types.adhd>
+#include <impl/assets_mesh/skin_asset.adhd>
 #include <impl/assets_scene/asset.adhd>
 #include <impl/assets_scene/component_assets.adhd>
+#include <impl/assets_scene/component_binary.adhd>
 #include <impl/assets_subsystem/asset.adhd>
 #include <impl/assets_ui_skin/types.adhd>
 #include <impl/ecs_scene/module.adhd>
@@ -737,6 +738,296 @@ void VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName(){
     EXPECT_FALSE(active.instantiateEntities(tw.world));
 }
 
+void VerifySceneHierarchy_CycleScalePropagationDecomposeAndScopedNames(){
+    EcsTestWorld tw;
+    mut SceneHierarchySystem sys = tw.world.addSystem<SceneHierarchySystem>();
+
+    Entity gp = tw.world.createEntity();
+    {
+        mut TransformComponent xf = gp.addComponent<TransformComponent>();
+        xf.position = f32x4(10.0f, 0.0f, 0.0f, 0.0f);
+        xf.scale = f32x4(2.0f, 3.0f, 4.0f, 0.0f);
+    }
+    Entity parent = tw.world.createEntity();
+    parent.addComponent<TransformComponent>();
+    {
+        mut LocalTransformComponent lxf = parent.addComponent<LocalTransformComponent>();
+        lxf.position = f32x4(1.0f, 2.0f, 0.0f, 0.0f);
+        lxf.scale = f32x4(0.5f, 1.0f, 1.0f, 0.0f);
+    }
+    parent.addComponent<SceneParentComponent>().parent = gp.id();
+
+    Entity scaledChild = tw.world.createEntity();
+    scaledChild.addComponent<TransformComponent>();
+    scaledChild.addComponent<LocalTransformComponent>().position = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    {
+        mut SceneParentComponent sp = scaledChild.addComponent<SceneParentComponent>();
+        sp.parent = parent.id();
+        sp.inheritScale = true;
+    }
+
+    Entity unscaledChild = tw.world.createEntity();
+    unscaledChild.addComponent<TransformComponent>();
+    unscaledChild.addComponent<LocalTransformComponent>().position = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    {
+        mut SceneParentComponent sp = unscaledChild.addComponent<SceneParentComponent>();
+        sp.parent = parent.id();
+        sp.inheritScale = false;
+    }
+
+    Entity cycA = tw.world.createEntity();
+    cycA.addComponent<TransformComponent>();
+    cycA.addComponent<LocalTransformComponent>().position = f32x4(5.0f, 6.0f, 7.0f, 0.0f);
+    Entity cycB = tw.world.createEntity();
+    cycB.addComponent<TransformComponent>();
+    cycB.addComponent<LocalTransformComponent>().position = f32x4(8.0f, 9.0f, 10.0f, 0.0f);
+    cycA.addComponent<SceneParentComponent>().parent = cycB.id();
+    cycB.addComponent<SceneParentComponent>().parent = cycA.id();
+
+    Entity selfEnt = tw.world.createEntity();
+    selfEnt.addComponent<TransformComponent>();
+    selfEnt.addComponent<LocalTransformComponent>().position = f32x4(-2.0f, 3.0f, -4.0f, 0.0f);
+    selfEnt.addComponent<SceneParentComponent>().parent = selfEnt.id();
+
+    ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+    EXPECT_NEAR(parent.getComponent<TransformComponent>().position.x, 12.0f, 0.001f);
+    EXPECT_NEAR(parent.getComponent<TransformComponent>().position.y, 6.0f, 0.001f);
+    EXPECT_NEAR(parent.getComponent<TransformComponent>().scale.x, 1.0f, 0.001f);
+    EXPECT_NEAR(parent.getComponent<TransformComponent>().scale.y, 3.0f, 0.001f);
+    EXPECT_NEAR(scaledChild.getComponent<TransformComponent>().position.x, 12.0f, 0.001f);
+    EXPECT_NEAR(scaledChild.getComponent<TransformComponent>().position.y, 9.0f, 0.001f);
+    EXPECT_NEAR(scaledChild.getComponent<TransformComponent>().scale.y, 3.0f, 0.001f);
+    EXPECT_NEAR(unscaledChild.getComponent<TransformComponent>().scale.y, 1.0f, 0.001f);
+    EXPECT_NEAR(cycA.getComponent<TransformComponent>().position.x, 5.0f, 0.001f);
+    EXPECT_NEAR(selfEnt.getComponent<TransformComponent>().position.x, -2.0f, 0.001f);
+
+    LocalTransformComponent recovered;
+    DecomposeWorldToSceneLocalTransform(
+        parent.getComponent<TransformComponent>(),
+        scaledChild.getComponent<TransformComponent>(),
+        true,
+        recovered
+    );
+    EXPECT_NEAR(recovered.position.y, 1.0f, 0.001f);
+    EXPECT_NEAR(recovered.scale.y, 1.0f, 0.001f);
+
+    const u32 scopeA = AllocateSceneNameScopeId(tw.world);
+    Entity namedA = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = namedA.addComponent<SceneEntityNameComponent>();
+        n.name = Name("shared_rig");
+        n.scopeId = scopeA;
+    }
+    const u32 scopeB = AllocateSceneNameScopeId(tw.world);
+    EXPECT_NE(scopeA, scopeB);
+    Entity namedB = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = namedB.addComponent<SceneEntityNameComponent>();
+        n.name = Name("shared_rig");
+        n.scopeId = scopeB;
+    }
+    Entity requesterB = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = requesterB.addComponent<SceneEntityNameComponent>();
+        n.name = Name("part_b");
+        n.scopeId = scopeB;
+    }
+    const EntityID resolvedB = FindSceneEntityByName(requesterB.id(), Name("shared_rig"), tw.world);
+    ASSERT_TRUE(resolvedB.valid());
+    EXPECT_EQ(resolvedB, namedB.id());
+    EXPECT_FALSE(FindSceneEntityByName(requesterB.id(), Name("missing_rig"), tw.world).valid());
+}
+
+void VerifyGraphicsAndSceneComponentCodecs_RoundtripAndRejectMalformed(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+
+    HeapStorage arena(Name("tests/scene/graphics_component_codecs"));
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
+    ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
+
+    {
+        LocalTransformComponentAsset src(Name("project/c/local_xf"));
+        src.component.position = f32x4(1.0f, -2.0f, 3.0f, 0.0f);
+        src.component.scale = f32x4(2.0f, 2.0f, 2.0f, 0.0f);
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        ComponentHeaderBinary hdr;
+        hdr.componentTypeHash = LocalTransformComponentAsset::AssetTypeName().hash();
+        hdr.payloadByteCount = payload.size();
+        Vector<u8> bin;
+        AppendPOD(bin, hdr);
+        for(in u8 b : payload)
+            bin.push_back(b);
+        LocalTransformComponentAsset dst(Name("project/c/local_xf"));
+        ASSERT_TRUE(dst.loadBinary(bin));
+        EXPECT_FLOAT_EQ(dst.component.position.x, 1.0f);
+        EXPECT_FLOAT_EQ(dst.component.scale.x, 2.0f);
+    }
+
+    {
+        SceneParentComponentAsset src(Name("project/c/scene_parent"));
+        src.component.parentEntityName = Name("parent_node");
+        src.component.inheritScale = false;
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        SceneParentComponentAsset dst(Name("project/c/scene_parent"));
+        ASSERT_TRUE(dst.loadComponentPayload(payload));
+        EXPECT_EQ(dst.component.parentEntityName, Name("parent_node"));
+        EXPECT_FALSE(dst.component.inheritScale);
+
+        payload[payload.size() - 1u] = 7u;
+        EXPECT_FALSE(dst.loadComponentPayload(payload));
+    }
+
+    {
+        MaterialInstanceComponentAsset src(Name("project/c/mat_inst"));
+        src.component.materialInterface = Name("engine/materials/std");
+        MaterialInstanceParameter param;
+        param.parameterName = Name("surface.color");
+        param.blockName = Name("surface");
+        param.fieldName = Name("color");
+        param.fieldType = MaterialLayoutFieldType::f32x4;
+        param.value = u32x4u(1u, 2u, 3u, 4u);
+        src.component.overrides.push_back(param);
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        MaterialInstanceComponentAsset dst(Name("project/c/mat_inst"));
+        ASSERT_TRUE(dst.loadComponentPayload(payload));
+        EXPECT_EQ(dst.component.materialInterface, Name("engine/materials/std"));
+        ASSERT_EQ(dst.component.overrides.size(), 1u);
+        EXPECT_EQ(dst.component.overrides[0u].value.w, 4u);
+        EXPECT_EQ(dst.component.revision, 1u);
+
+        MaterialInstanceComponentHeaderBinary badHdr;
+        badHdr.materialInterfaceHash = Name("engine/materials/std").hash();
+        badHdr.overrideCount = 0xffffffffu;
+        Vector<u8> dosPayload;
+        AppendPOD(dosPayload, badHdr);
+        EXPECT_FALSE(dst.loadComponentPayload(dosPayload));
+
+        badHdr.overrideCount = 0u;
+        badHdr.reserved0 = 1u;
+        dosPayload.clear();
+        AppendPOD(dosPayload, badHdr);
+        EXPECT_FALSE(dst.loadComponentPayload(dosPayload));
+
+        MaterialInstanceComponentAsset dup(Name("project/c/mat_dup"));
+        dup.component = src.component;
+        dup.component.overrides.push_back(param);
+        EXPECT_FALSE(dup.validatePayload());
+    }
+
+    {
+        SkeletonJointPaletteComponentAsset src(Name("project/c/pal"));
+        src.component.skinningMode = cast<u32>(SkeletonSkinningMode::DualQuaternion);
+        src.component.joints.push_back(MakeIdentitySkeletonJointMatrix());
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        SkeletonJointPaletteComponentAsset dst(Name("project/c/pal"));
+        ASSERT_TRUE(dst.loadComponentPayload(payload));
+        EXPECT_EQ(dst.component.skinningMode, cast<u32>(SkeletonSkinningMode::DualQuaternion));
+        ASSERT_EQ(dst.component.joints.size(), 1u);
+
+        SkeletonComponentHeaderBinary badHdr;
+        badHdr.jointCount = 0xffffffffu;
+        badHdr.skinningMode = 0u;
+        Vector<u8> badPayload;
+        AppendPOD(badPayload, badHdr);
+        EXPECT_FALSE(dst.loadComponentPayload(badPayload));
+
+        badHdr.jointCount = 1u;
+        badPayload.clear();
+        AppendPOD(badPayload, badHdr);
+        SkeletonJointMatrix nanJoint = MakeIdentitySkeletonJointMatrix();
+        nanJoint._11 = bit_cast<f32>(0x7fc00000u);
+        AppendPOD(badPayload, nanJoint);
+        EXPECT_FALSE(dst.loadComponentPayload(badPayload));
+    }
+
+    {
+        SkeletonPoseComponentAsset src(Name("project/c/pose"));
+        src.component.parentJoints.push_back(s_SkeletonInvalidJointIndex);
+        src.component.parentJoints.push_back(0u);
+        src.component.localJoints.push_back(MakeIdentitySkeletonJointMatrix());
+        src.component.localJoints.push_back(MakeIdentitySkeletonJointMatrix());
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        SkeletonPoseComponentAsset dst(Name("project/c/pose"));
+        ASSERT_TRUE(dst.loadComponentPayload(payload));
+        ASSERT_EQ(dst.component.localJoints.size(), 2u);
+
+        SkeletonComponentHeaderBinary badTopoHdr;
+        badTopoHdr.jointCount = 2u;
+        badTopoHdr.skinningMode = 0u;
+        Vector<u8> badTopoPayload;
+        AppendPOD(badTopoPayload, badTopoHdr);
+        AppendPOD(badTopoPayload, 1u);
+        AppendPOD(badTopoPayload, 0u);
+        AppendPOD(badTopoPayload, MakeIdentitySkeletonJointMatrix());
+        AppendPOD(badTopoPayload, MakeIdentitySkeletonJointMatrix());
+        EXPECT_FALSE(dst.loadComponentPayload(badTopoPayload));
+    }
+
+    {
+        SkinnedMeshBindingComponentAsset src(Name("project/c/skin_bind"));
+        src.component.skin = AssetRef<Skin>(Name("project/skins/hero"));
+        src.component.skeletonEntityName = Name("hero_skeleton");
+        Vector<u8> payload;
+        ASSERT_TRUE(src.serializeComponentPayload(payload));
+        SkinnedMeshBindingComponentAsset dst(Name("project/c/skin_bind"));
+        ASSERT_TRUE(dst.loadComponentPayload(payload));
+        EXPECT_EQ(dst.component.skin.name(), Name("project/skins/hero"));
+        EXPECT_EQ(dst.component.skeletonEntityName, Name("hero_skeleton"));
+        EXPECT_FALSE(dst.component.skeletonEntity.valid());
+    }
+
+    {
+        CsgReceiverComponentAsset rSrc(Name("project/c/csg_r"));
+        rSrc.component.receiverGroup = Name("grp_a");
+        rSrc.component.affectTransparentPass = false;
+        Vector<u8> payload;
+        ASSERT_TRUE(rSrc.serializeComponentPayload(payload));
+        CsgReceiverComponentAsset rDst(Name("project/c/csg_r"));
+        ASSERT_TRUE(rDst.loadComponentPayload(payload));
+        EXPECT_EQ(rDst.component.receiverGroup, Name("grp_a"));
+        EXPECT_FALSE(rDst.component.affectTransparentPass);
+
+        StaticCsgMeshComponentAsset stDst(Name("project/c/csg_st"));
+        ASSERT_TRUE(stDst.loadComponentPayload(payload));
+        EXPECT_EQ(stDst.component.receiverGroup, Name("grp_a"));
+
+        SkinnedCsgMeshComponentAsset skDst(Name("project/c/csg_sk"));
+        ASSERT_TRUE(skDst.loadComponentPayload(payload));
+        EXPECT_EQ(skDst.component.receiverGroup, Name("grp_a"));
+
+        payload[67u] = 2u;
+        EXPECT_FALSE(rDst.loadComponentPayload(payload));
+    }
+
+    {
+        CsgCutterComponentAsset cSrc(Name("project/c/csg_c"));
+        cSrc.component.receiverGroup = Name("grp_a");
+        cSrc.component.shapeType = Name("engine/csg/box");
+        cSrc.component.syncFromTransform = false;
+        cSrc.component.parameterBytes.push_back(42u);
+        Vector<u8> payload;
+        ASSERT_TRUE(cSrc.serializeComponentPayload(payload));
+        CsgCutterComponentAsset cDst(Name("project/c/csg_c"));
+        ASSERT_TRUE(cDst.loadComponentPayload(payload));
+        EXPECT_EQ(cDst.component.shapeType, Name("engine/csg/box"));
+        EXPECT_FALSE(cDst.component.syncFromTransform);
+        ASSERT_EQ(cDst.component.parameterBytes.size(), 1u);
+        EXPECT_EQ(cDst.component.parameterBytes[0u], 42u);
+
+        payload[230u] = 1u;
+        EXPECT_FALSE(cDst.loadComponentPayload(payload));
+    }
+}
+
 NWB_ADHD_GTEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover, VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover)
 
 NWB_ADHD_GTEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding, VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding)
@@ -766,6 +1057,10 @@ NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, V
 NWB_ADHD_GTEST(SceneSubsystemAssets, ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases, VerifySceneSubsystemAssets_ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases)
 
 NWB_ADHD_GTEST(SceneSubsystemAssets, UnloadDestroyRollbackAndDuplicateEntityName, VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName)
+
+NWB_ADHD_GTEST(SceneHierarchy, CycleScalePropagationDecomposeAndScopedNames, VerifySceneHierarchy_CycleScalePropagationDecomposeAndScopedNames)
+
+NWB_ADHD_GTEST(SceneComponentCodecs, GraphicsAndSceneComponentCodecsRoundtripAndRejectMalformed, VerifyGraphicsAndSceneComponentCodecs_RoundtripAndRejectMalformed)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

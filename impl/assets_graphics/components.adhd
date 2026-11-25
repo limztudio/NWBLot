@@ -3,14 +3,23 @@
 
 
 #include <impl/assets_scene/components.adhd>
+#include <impl/ecs_csg/components.adhd>
 #include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_model/components.adhd>
 #include <impl/ecs_render/components.adhd>
 #include <impl/ecs_render/material/pipeline_types.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void AssignCsgMeshReceiverFromBase<const u8 Kind>(in CsgReceiverComponent source, mut CsgMeshReceiverComponent<Kind> outTarget){
+    outTarget.receiverGroup = source.receiverGroup;
+    outTarget.enabled = source.enabled;
+    outTarget.affectOpaquePass = source.affectOpaquePass;
+    outTarget.affectTransparentPass = source.affectTransparentPass;
+}
 
 [arena, asset("model_component")]
 class ModelComponentAsset : IComponent{
@@ -54,6 +63,118 @@ class RendererComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
+[arena, asset("material_instance_component")]
+class MaterialInstanceComponentAsset : IComponent{
+    public MaterialInstanceComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<MaterialInstanceComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("skeleton_joint_palette_component")]
+class SkeletonJointPaletteComponentAsset : IComponent{
+    public SkeletonJointPaletteComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<SkeletonJointPaletteComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("skeleton_pose_component")]
+class SkeletonPoseComponentAsset : IComponent{
+    public SkeletonPoseComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<SkeletonPoseComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("skinned_mesh_binding_component")]
+class SkinnedMeshBindingComponentAsset : IComponent{
+    public SkinnedMeshBindingComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<SkinnedMeshBindingComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("csg_receiver_component")]
+class CsgReceiverComponentAsset : IComponent{
+    public CsgReceiverComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<CsgReceiverComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("static_csg_mesh_component")]
+class StaticCsgMeshComponentAsset : IComponent{
+    public StaticCsgMeshComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<StaticCsgMeshComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("skinned_csg_mesh_component")]
+class SkinnedCsgMeshComponentAsset : IComponent{
+    public SkinnedCsgMeshComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<SkinnedCsgMeshComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("csg_cutter_component")]
+class CsgCutterComponentAsset : IComponent{
+    public CsgCutterComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<CsgCutterComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
 [serialize]
 class SingleAssetRefComponentPayloadBinary{
     public NameHash assetHash;
@@ -70,6 +191,61 @@ class RendererComponentPayloadBinary{
     public u8 opticalBoundaryMode = 0u;
     public u8 reserved0 = 0u;
     public u32 reserved1 = 0u;
+}
+
+[serialize]
+class MaterialInstanceComponentHeaderBinary{
+    public NameHash materialInterfaceHash;
+    public u32 overrideCount = 0u;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class MaterialInstanceParameterBinary{
+    public NameHash parameterNameHash;
+    public NameHash blockNameHash;
+    public NameHash fieldNameHash;
+    public u32 fieldType = 0u;
+    public u32 valueX = 0u;
+    public u32 valueY = 0u;
+    public u32 valueZ = 0u;
+    public u32 valueW = 0u;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SkeletonComponentHeaderBinary{
+    public u32 jointCount = 0u;
+    public u32 skinningMode = 0u;
+}
+
+[serialize]
+class SkinnedMeshBindingComponentPayloadBinary{
+    public NameHash skinHash;
+    public NameHash skeletonEntityNameHash;
+}
+
+[serialize]
+class CsgReceiverComponentPayloadBinary{
+    public NameHash receiverGroupHash;
+    public u8 enabled = 1u;
+    public u8 affectOpaquePass = 1u;
+    public u8 affectTransparentPass = 1u;
+    public u8 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+[serialize]
+class CsgCutterComponentHeaderBinary{
+    public NameHash receiverGroupHash;
+    public NameHash shapeTypeHash;
+    public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x3x4 shapeToWorld(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public u32 parameterByteCount = 0u;
+    public u8 active = 1u;
+    public u8 syncFromTransform = 1u;
+    public u16 reserved0 = 0u;
+    public Array<u32, 2> reserved1;
 }
 
 

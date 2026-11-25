@@ -1360,9 +1360,18 @@ Manifold CollideSphereAndMesh(
     u32 stackCount = 0u;
     if(queryR >= 0.0f)
         stackCount = 1u;
-    while(stackCount > 0u){
-        --stackCount;
-        const u32 nodeIdx = stack[stackCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1426,14 +1435,8 @@ Manifold CollideSphereAndMesh(
             }
         }
         else{
-            if(stackCount < 256u){
-                stack[stackCount] = node.leftOrFirst();
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = node.rightOrCount();
-                ++stackCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
         }
     }
 
@@ -1576,9 +1579,18 @@ Manifold CollideCapsuleAndMesh(
     u32 stackCount = 0u;
     if(queryR >= 0.0f)
         stackCount = 1u;
-    while(stackCount > 0u){
-        --stackCount;
-        const u32 nodeIdx = stack[stackCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1699,14 +1711,8 @@ Manifold CollideCapsuleAndMesh(
             }
         }
         else{
-            if(stackCount < 256u){
-                stack[stackCount] = node.leftOrFirst();
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = node.rightOrCount();
-                ++stackCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
         }
     }
 
@@ -2005,9 +2011,10 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
     candidates = reduced;
 }
 
-void ReduceMeshCandidatesAndWriteManifold(
+void ReduceSinglePlaneMeshCandidates(
     in VectorSingle normal,
     in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
+    in b8 requireMatch,
     mut Manifold outManifold
 ){
     if(candidates.empty())
@@ -2026,6 +2033,8 @@ void ReduceMeshCandidatesAndWriteManifold(
         verts.push_back(cv);
     }
     if(verts.empty()){
+        if(requireMatch)
+            return;
         usize bestIdx = 0u;
         for(usize i = 1u; i < limit; ++i){
             if(candidates[i].pointSep.w < candidates[bestIdx].pointSep.w)
@@ -2057,6 +2066,49 @@ void ReduceMeshCandidatesAndWriteManifold(
             c.pointSep.w,
             c.featureId
         );
+    }
+}
+
+void ReduceMeshCandidatesAndWriteManifold(
+    in VectorSingle normal,
+    in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
+    mut Manifold outManifold
+){
+    ReduceSinglePlaneMeshCandidates(normal, candidates, false, outManifold);
+}
+
+void ReduceMeshCandidatesMultiPlane(
+    in VectorSingle normal,
+    in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Manifold outSecondaryManifold
+){
+    outSecondaryManifold = Manifold();
+    if(candidates.empty())
+        return;
+
+    ReduceSinglePlaneMeshCandidates(normal, candidates, false, outManifold);
+
+    const usize limit = Min(candidates.size(), cast<usize>(s_MaxClipPoints));
+    b8 foundSec = false;
+    usize bestSecIdx = 0u;
+    f32 bestSecSep = s_MaxF32;
+    for(usize i = 0u; i < limit; ++i){
+        const f32 sep = candidates[i].pointSep.w;
+        if(sep > maxDistance)
+            continue;
+        if(Vector3Dot(VectorSingle(candidates[i].normal, 0.0f), normal).x > 0.7f)
+            continue;
+        if(!foundSec || sep < bestSecSep){
+            foundSec = true;
+            bestSecSep = sep;
+            bestSecIdx = i;
+        }
+    }
+    if(foundSec){
+        const VectorSingle secNormal = SafeNormalizeVec3(VectorSingle(candidates[bestSecIdx].normal, 0.0f), normal);
+        ReduceSinglePlaneMeshCandidates(secNormal, candidates, true, outSecondaryManifold);
     }
 }
 
@@ -2706,18 +2758,21 @@ Manifold CollideConvexProxyVsPlane(
     return m;
 }
 
-Manifold CollideConvexProxyAndMesh(
+void CollideConvexProxyAndMeshMulti(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
-    in f32 maxDistance
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Manifold outSecondaryManifold
 ){
-    Manifold m;
+    outManifold = Manifold();
+    outSecondaryManifold = Manifold();
     if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA))
-        return m;
+        return;
 
     VectorSingle localPosA(0.0f);
     VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
@@ -2741,9 +2796,18 @@ Manifold CollideConvexProxyAndMesh(
     Array<u32, 256u> stack;
     stack[0u] = 0u;
     u32 stackCount = 1u;
-    while(stackCount > 0u){
-        --stackCount;
-        const u32 nodeIdx = stack[stackCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -2817,14 +2881,8 @@ Manifold CollideConvexProxyAndMesh(
             }
         }
         else{
-            if(stackCount < 256u){
-                stack[stackCount] = node.leftOrFirst();
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = node.rightOrCount();
-                ++stackCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
         }
     }
 
@@ -2857,8 +2915,22 @@ Manifold CollideConvexProxyAndMesh(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
-    return m;
+        ReduceMeshCandidatesMultiPlane(chosenNormal, candidates, maxDistance, outManifold, outSecondaryManifold);
+}
+
+Manifold CollideConvexProxyAndMesh(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold primary;
+    Manifold secondary;
+    CollideConvexProxyAndMeshMulti(proxyA, posA, rotA, meshB, posB, rotB, maxDistance, primary, secondary);
+    return primary;
 }
 
 

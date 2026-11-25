@@ -29,6 +29,33 @@ const StringView s_MeshComponentLoadPayloadContext = "MeshComponentAsset::loadCo
 const StringView s_MeshComponentValidatePayloadContext = "MeshComponentAsset::validatePayload";
 const StringView s_MeshComponentKindLabel = "mesh_component";
 
+const StringView s_SkinnedMeshBindingLoadPayloadContext = "SkinnedMeshBindingComponentAsset::loadComponentPayload";
+const StringView s_SkinnedMeshBindingValidatePayloadContext = "SkinnedMeshBindingComponentAsset::validatePayload";
+const StringView s_SkinnedMeshBindingKindLabel = "skinned_mesh_binding_component";
+const StringView s_CsgReceiverLoadPayloadContext = "CsgReceiverComponentAsset::loadComponentPayload";
+const StringView s_StaticCsgMeshLoadPayloadContext = "StaticCsgMeshComponentAsset::loadComponentPayload";
+const StringView s_SkinnedCsgMeshLoadPayloadContext = "SkinnedCsgMeshComponentAsset::loadComponentPayload";
+
+b8 LoadGraphicsComponentAssetBinary<AssetT : IComponent>(in Name virtualPath, in Span<u8> binary, mut AssetT target){
+    AssetT candidate(virtualPath);
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    target.component = candidate.component;
+    return true;
+}
+
+b8 DeserializeCsgMeshReceiverPayload<const u8 Kind>(
+    in Span<u8> payload,
+    in StringView context,
+    mut CsgMeshReceiverComponent<Kind> outComponent
+){
+    const Expected<CsgReceiverComponent> resolved = GraphicsComponentBinaryCodec().deserializeCsgReceiver(payload, context);
+    if(!resolved.has_value())
+        return false;
+    AssignCsgMeshReceiverFromBase<Kind>(resolved.value(), outComponent);
+    return true;
+}
+
 b8 ValidateSingleAssetRefComponentPayload(
     in IComponent componentAsset,
     in b8 validAssetRef,
@@ -126,6 +153,207 @@ b8 RendererComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBin
     return GraphicsComponentBinaryCodec().appendRenderer(this.component, outBinary);
 }
 
+b8 MaterialInstanceComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 MaterialInstanceComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<MaterialInstanceComponent> component = GraphicsComponentBinaryCodec().deserializeMaterialInstance(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 MaterialInstanceComponentAsset::validatePayload()const{
+    const StringView context = "MaterialInstanceComponentAsset::validatePayload";
+    if(!this.checkVirtualPath(context))
+        return false;
+    return GraphicsComponentBinaryCodec().validateMaterialInstance(this.component, this.virtualPath(), context);
+}
+
+b8 MaterialInstanceComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeMaterialInstance(this.component, outPayload);
+}
+
+b8 MaterialInstanceComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendMaterialInstance(this.component, outBinary);
+}
+
+b8 SkeletonJointPaletteComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 SkeletonJointPaletteComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<SkeletonJointPaletteComponent> component = GraphicsComponentBinaryCodec().deserializeSkeletonJointPalette(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 SkeletonJointPaletteComponentAsset::validatePayload()const{
+    const StringView context = "SkeletonJointPaletteComponentAsset::validatePayload";
+    if(!this.checkVirtualPath(context))
+        return false;
+    return GraphicsComponentBinaryCodec().validateSkeletonJointPalette(this.component, this.virtualPath(), context);
+}
+
+b8 SkeletonJointPaletteComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeSkeletonJointPalette(this.component, outPayload);
+}
+
+b8 SkeletonJointPaletteComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendSkeletonJointPalette(this.component, outBinary);
+}
+
+b8 SkeletonPoseComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 SkeletonPoseComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<SkeletonPoseComponent> component = GraphicsComponentBinaryCodec().deserializeSkeletonPose(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 SkeletonPoseComponentAsset::validatePayload()const{
+    const StringView context = "SkeletonPoseComponentAsset::validatePayload";
+    if(!this.checkVirtualPath(context))
+        return false;
+    return GraphicsComponentBinaryCodec().validateSkeletonPose(this.component, this.virtualPath(), context);
+}
+
+b8 SkeletonPoseComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeSkeletonPose(this.component, outPayload);
+}
+
+b8 SkeletonPoseComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendSkeletonPose(this.component, outBinary);
+}
+
+b8 SkinnedMeshBindingComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 SkinnedMeshBindingComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<SkinnedMeshBindingComponent> component = GraphicsComponentBinaryCodec().deserializeSkinnedMeshBinding(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 SkinnedMeshBindingComponentAsset::validatePayload()const{
+    return ValidateSingleAssetRefComponentPayload(
+        this,
+        this.component.skin.valid(),
+        s_SkinnedMeshBindingValidatePayloadContext,
+        s_SkinnedMeshBindingKindLabel
+    );
+}
+
+b8 SkinnedMeshBindingComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeSkinnedMeshBinding(this.component, outPayload);
+}
+
+b8 SkinnedMeshBindingComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendSkinnedMeshBinding(this.component, outBinary);
+}
+
+b8 CsgReceiverComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 CsgReceiverComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<CsgReceiverComponent> component = GraphicsComponentBinaryCodec().deserializeCsgReceiver(payload, s_CsgReceiverLoadPayloadContext);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 CsgReceiverComponentAsset::validatePayload()const{
+    return this.checkVirtualPath("CsgReceiverComponentAsset::validatePayload");
+}
+
+b8 CsgReceiverComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeCsgReceiver(this.component, outPayload);
+}
+
+b8 CsgReceiverComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendCsgReceiver(this.component, outBinary);
+}
+
+b8 StaticCsgMeshComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 StaticCsgMeshComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return DeserializeCsgMeshReceiverPayload<0u>(payload, s_StaticCsgMeshLoadPayloadContext, this.component);
+}
+
+b8 StaticCsgMeshComponentAsset::validatePayload()const{
+    return this.checkVirtualPath("StaticCsgMeshComponentAsset::validatePayload");
+}
+
+b8 StaticCsgMeshComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeCsgReceiver(this.component.asReceiver(), outPayload);
+}
+
+b8 StaticCsgMeshComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendCsgReceiver(this.component.asReceiver(), outBinary);
+}
+
+b8 SkinnedCsgMeshComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 SkinnedCsgMeshComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return DeserializeCsgMeshReceiverPayload<1u>(payload, s_SkinnedCsgMeshLoadPayloadContext, this.component);
+}
+
+b8 SkinnedCsgMeshComponentAsset::validatePayload()const{
+    return this.checkVirtualPath("SkinnedCsgMeshComponentAsset::validatePayload");
+}
+
+b8 SkinnedCsgMeshComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeCsgReceiver(this.component.asReceiver(), outPayload);
+}
+
+b8 SkinnedCsgMeshComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendCsgReceiver(this.component.asReceiver(), outBinary);
+}
+
+b8 CsgCutterComponentAsset::loadBinary(in Span<u8> binary){
+    return LoadGraphicsComponentAssetBinary(this.virtualPath(), binary, this);
+}
+
+b8 CsgCutterComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<CsgCutterComponent> component = GraphicsComponentBinaryCodec().deserializeCsgCutter(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 CsgCutterComponentAsset::validatePayload()const{
+    const StringView context = "CsgCutterComponentAsset::validatePayload";
+    if(!this.checkVirtualPath(context))
+        return false;
+    return GraphicsComponentBinaryCodec().validateCsgCutter(this.component, this.virtualPath(), context);
+}
+
+b8 CsgCutterComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeCsgCutter(this.component, outPayload);
+}
+
+b8 CsgCutterComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return GraphicsComponentBinaryCodec().appendCsgCutter(this.component, outBinary);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,6 +371,14 @@ register_asset CsgSubsystem using TypedSubsystemAutoRegistrar<CsgSubsystem>;
 register_asset ModelComponentAsset using TypedComponentAutoRegistrar<ModelComponentAsset>;
 register_asset MeshComponentAsset using TypedComponentAutoRegistrar<MeshComponentAsset>;
 register_asset RendererComponentAsset using TypedComponentAutoRegistrar<RendererComponentAsset>;
+register_asset MaterialInstanceComponentAsset using TypedComponentAutoRegistrar<MaterialInstanceComponentAsset>;
+register_asset SkeletonJointPaletteComponentAsset using TypedComponentAutoRegistrar<SkeletonJointPaletteComponentAsset>;
+register_asset SkeletonPoseComponentAsset using TypedComponentAutoRegistrar<SkeletonPoseComponentAsset>;
+register_asset SkinnedMeshBindingComponentAsset using TypedComponentAutoRegistrar<SkinnedMeshBindingComponentAsset>;
+register_asset CsgReceiverComponentAsset using TypedComponentAutoRegistrar<CsgReceiverComponentAsset>;
+register_asset StaticCsgMeshComponentAsset using TypedComponentAutoRegistrar<StaticCsgMeshComponentAsset>;
+register_asset SkinnedCsgMeshComponentAsset using TypedComponentAutoRegistrar<SkinnedCsgMeshComponentAsset>;
+register_asset CsgCutterComponentAsset using TypedComponentAutoRegistrar<CsgCutterComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

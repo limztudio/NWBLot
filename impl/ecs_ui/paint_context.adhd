@@ -14,6 +14,8 @@ class UiPaintContext{
     public mut World world;
     public mut IClipboardService clipboard;
     public mut ITextInputService textInput;
+    public mut ICursorService cursor;
+    public mut IAccessibilityService accessibility;
     public mut PaintBuilder paint;
     public mut TextService text;
     public in DisplayMetrics display;
@@ -21,10 +23,12 @@ class UiPaintContext{
     public EntityID entity = s_InvalidEntityId;
     public f32 deltaSeconds = 0.0f;
 
-    public UiPaintContext(mut World world, mut IClipboardService clipboard, mut ITextInputService textInput, mut PaintBuilder paint, mut TextService text, in DisplayMetrics display, mut Builder ui){
+    public UiPaintContext(mut World world, mut IClipboardService clipboard, mut ITextInputService textInput, mut ICursorService cursor, mut IAccessibilityService accessibility, mut PaintBuilder paint, mut TextService text, in DisplayMetrics display, mut Builder ui){
         this.world = world;
         this.clipboard = clipboard;
         this.textInput = textInput;
+        this.cursor = cursor;
+        this.accessibility = accessibility;
         this.paint = paint;
         this.text = text;
         this.display = display;

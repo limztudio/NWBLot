@@ -11,6 +11,18 @@
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tab_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/splitter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tree_view.adhd>
+#include <impl/ecs_ui/toolkit/widgets/data_table.adhd>
+#include <impl/ecs_ui/toolkit/widgets/modal_dialog.adhd>
+#include <impl/ecs_ui/toolkit/widgets/menu_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/toast.adhd>
+#include <impl/ecs_ui/toolkit/widgets/color_picker.adhd>
+#include <impl/ecs_ui/toolkit/widgets/drag_drop.adhd>
+#include <impl/ecs_ui/toolkit/widgets/rich_text.adhd>
+#include <impl/ecs_ui/toolkit/widgets/plot_canvas.adhd>
+#include <impl/ecs_ui/toolkit/widgets/dock_space.adhd>
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/paint.adhd>
 #include <impl/ecs_ui/toolkit/text/service.adhd>
@@ -51,7 +63,19 @@ void ApplyBuilderSkinStyles(
     mut PopupStyle inOutPopupStyle,
     mut RadioGroupStyle inOutRadioGroupStyle,
     mut SliderStyle inOutSliderStyle,
-    mut ProgressStyle inOutProgressStyle
+    mut ProgressStyle inOutProgressStyle,
+    mut TabBarStyle inOutTabBarStyle,
+    mut SplitterStyle inOutSplitterStyle,
+    mut TreeStyle inOutTreeStyle,
+    mut TableStyle inOutTableStyle,
+    mut DialogStyle inOutDialogStyle,
+    mut MenuBarStyle inOutMenuBarStyle,
+    mut ToastStyle inOutToastStyle,
+    mut ColorPickerStyle inOutColorPickerStyle,
+    mut DragDropStyle inOutDragDropStyle,
+    mut HyperlinkStyle inOutHyperlinkStyle,
+    mut PlotStyle inOutPlotStyle,
+    mut DockSpaceStyle inOutDockSpaceStyle
 ){
     if(inOutStyle.fontSize == inOutSkinDefaultFontSize)
         inOutStyle.fontSize = nextDefaultFontSize;
@@ -65,6 +89,18 @@ void ApplyBuilderSkinStyles(
     ApplySkinPaletteToRadioGroupStyle(palette, inOutRadioGroupStyle);
     ApplySkinPaletteToSliderStyle(palette, inOutSliderStyle);
     ApplySkinPaletteToProgressStyle(palette, inOutProgressStyle);
+    ApplySkinPaletteToTabBarStyle(palette, inOutTabBarStyle);
+    ApplySkinPaletteToSplitterStyle(palette, inOutSplitterStyle);
+    ApplySkinPaletteToTreeStyle(palette, inOutTreeStyle);
+    ApplySkinPaletteToTableStyle(palette, inOutTableStyle);
+    ApplySkinPaletteToDialogStyle(palette, inOutDialogStyle);
+    ApplySkinPaletteToMenuBarStyle(palette, inOutMenuBarStyle);
+    ApplySkinPaletteToToastStyle(palette, inOutToastStyle);
+    ApplySkinPaletteToColorPickerStyle(palette, inOutColorPickerStyle);
+    ApplySkinPaletteToDragDropStyle(palette, inOutDragDropStyle);
+    ApplySkinPaletteToHyperlinkStyle(palette, inOutHyperlinkStyle);
+    ApplySkinPaletteToPlotStyle(palette, inOutPlotStyle);
+    ApplySkinPaletteToDockSpaceStyle(palette, inOutDockSpaceStyle);
 }
 
 b8 TryFinalizeWindowFirstUseArrangement(

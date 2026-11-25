@@ -110,6 +110,22 @@ class HeightfieldHeaderBinary{
     public u32 materialCount = 0u;
     public u32 cellMaterialCount = 0u;
     public f32 thickness = 0.0f;
+    public u32 cellHoleByteCount = 0u;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u32 reserved3 = 0u;
+    public u32 reserved4 = 0u;
+}
+
+const u8 s_HeightfieldFlagFlipDiagonal = 0x01u;
+
+[serialize]
+class CompoundHullHeaderBinary{
+    public u32 magic = s_CompoundHullMagic;
+    public u32 version = s_CompoundHullVersion;
+    public u32 hullCount = 0u;
     public u32 reserved0 = 0u;
 }
 
@@ -366,7 +382,15 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeConvexHullUnchecked(in HullShape hull, mut Vector<u8> outBinary)const{
+    private usize hullSerializedBytes(in HullShape hull)const{
+        return size_of<ConvexHullHeaderBinary>()
+            + hull.vertices.size() * size_of<ConvexHullVertexBinary>()
+            + hull.facePlanes.size() * size_of<ConvexHullPlaneBinary>()
+            + hull.faceTopologies.size() * size_of<ConvexHullFaceTopologyBinary>()
+            + hull.halfEdges.size() * size_of<ConvexHullHalfEdgeBinary>();
+    }
+
+    private b8 appendConvexHullUnchecked(in HullShape hull, mut Vector<u8> outBinary)const{
         if(
             hull.vertices.size() > cast<usize>(u32.max)
             || hull.faceTopologies.size() > cast<usize>(u32.max)
@@ -377,17 +401,6 @@ class PhysicsAssetBinaryCodec{
         static_assert(size_of<Plane3D>() == size_of<ConvexHullPlaneBinary>() && offset_of<Plane3D>(normalOffset) == offset_of<ConvexHullPlaneBinary>(normalOffset));
         static_assert(size_of<HalfEdge>() == size_of<ConvexHullHalfEdgeBinary>() && offset_of<HalfEdge>(tail) == offset_of<ConvexHullHalfEdgeBinary>(tail) && offset_of<HalfEdge>(face) == offset_of<ConvexHullHalfEdgeBinary>(face) && offset_of<HalfEdge>(next) == offset_of<ConvexHullHalfEdgeBinary>(next) && offset_of<HalfEdge>(twin) == offset_of<ConvexHullHalfEdgeBinary>(twin));
 
-        const usize totalBytes =
-            size_of<ConvexHullHeaderBinary>()
-            + hull.vertices.size() * size_of<ConvexHullVertexBinary>()
-            + hull.facePlanes.size() * size_of<ConvexHullPlaneBinary>()
-            + hull.faceTopologies.size() * size_of<ConvexHullFaceTopologyBinary>()
-            + hull.halfEdges.size() * size_of<ConvexHullHalfEdgeBinary>();
-        if(!CanStoreValueCount(outBinary, totalBytes))
-            return false;
-
-        outBinary.clear();
-        outBinary.reserve(totalBytes);
         ConvexHullHeaderBinary hdr;
         hdr.vertexCount = cast<u32>(hull.vertices.size());
         hdr.faceCount = cast<u32>(hull.facePlanes.size());
@@ -415,14 +428,30 @@ class PhysicsAssetBinaryCodec{
         return AppendBinaryVectorPayload(outBinary, hull.halfEdges).has_value();
     }
 
+    public b8 serializeConvexHullUnchecked(in HullShape hull, mut Vector<u8> outBinary)const{
+        if(
+            hull.vertices.size() > cast<usize>(u32.max)
+            || hull.faceTopologies.size() > cast<usize>(u32.max)
+            || hull.halfEdges.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const usize totalBytes = this.hullSerializedBytes(hull);
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        return this.appendConvexHullUnchecked(hull, outBinary);
+    }
+
     public b8 serializeConvexHull(in HullShape hull, mut Vector<u8> outBinary)const{
         if(!this.validHullShapeData(hull))
             return false;
         return this.serializeConvexHullUnchecked(hull, outBinary);
     }
 
-    public Expected<HullShape> deserializeConvexHull(in Span<u8> binary)const{
-        usize cursor = 0u;
+    private Expected<HullShape> readConvexHullPayload(in Span<u8> binary, mut usize cursor)const{
         const Expected<ConvexHullHeaderBinary> hdrRes = ReadPOD<ConvexHullHeaderBinary>(binary, cursor);
         if(!hdrRes.has_value()){
             error("ConvexHullAsset::loadBinary failed: truncated header");
@@ -438,7 +467,7 @@ class PhysicsAssetBinaryCodec{
             cast<u64>(hdr.vertexCount) * cast<u64>(size_of<ConvexHullVertexBinary>())
             + cast<u64>(hdr.faceCount) * (cast<u64>(size_of<ConvexHullPlaneBinary>()) + cast<u64>(size_of<ConvexHullFaceTopologyBinary>()))
             + cast<u64>(hdr.halfEdgeCount) * cast<u64>(size_of<ConvexHullHalfEdgeBinary>());
-        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+        if(expectedDataBytes > cast<u64>(binary.size() - cursor)){
             error("ConvexHullAsset::loadBinary failed: payload size mismatch");
             return MakeUnexpected(Failure());
         }
@@ -483,7 +512,97 @@ class PhysicsAssetBinaryCodec{
         return hull;
     }
 
-    public b8 validMeshShapeData(in MeshShape mesh)const{
+    public Expected<HullShape> deserializeConvexHull(in Span<u8> binary)const{
+        usize cursor = 0u;
+        Expected<HullShape> hullRes = this.readConvexHullPayload(binary, cursor);
+        if(!hullRes.has_value())
+            return MakeUnexpected(Failure());
+        if(cursor != binary.size()){
+            error("ConvexHullAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return hullRes;
+    }
+
+    public b8 validCompoundHullData(in Vector<HullShape> hulls)const{
+        if(hulls.empty() || hulls.size() > cast<usize>(u32.max))
+            return false;
+        for(usize i = 0u; i < hulls.size(); ++i){
+            if(!this.validHullShapeData(hulls[i]))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateCompoundHull(in Vector<HullShape> hulls, in Name virtualPath)const{
+        if(this.validCompoundHullData(hulls))
+            return true;
+        error("CompoundHullAsset::validatePayload failed: invalid compound hull for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeCompoundHullUnchecked(in Vector<HullShape> hulls, mut Vector<u8> outBinary)const{
+        static_assert(size_of<CompoundHullHeaderBinary>() == 16u);
+        if(hulls.empty() || hulls.size() > cast<usize>(u32.max))
+            return false;
+        usize totalBytes = size_of<CompoundHullHeaderBinary>();
+        for(usize i = 0u; i < hulls.size(); ++i){
+            const usize hullBytes = this.hullSerializedBytes(hulls[i]);
+            if(hullBytes > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += hullBytes;
+        }
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        CompoundHullHeaderBinary hdr;
+        hdr.hullCount = cast<u32>(hulls.size());
+        AppendPOD(outBinary, hdr);
+        for(usize i = 0u; i < hulls.size(); ++i){
+            if(!this.appendConvexHullUnchecked(hulls[i], outBinary))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 serializeCompoundHull(in Vector<HullShape> hulls, mut Vector<u8> outBinary)const{
+        if(!this.validCompoundHullData(hulls))
+            return false;
+        return this.serializeCompoundHullUnchecked(hulls, outBinary);
+    }
+
+    public Expected<Vector<HullShape>> deserializeCompoundHull(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<CompoundHullHeaderBinary> hdrRes = ReadPOD<CompoundHullHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("CompoundHullAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in CompoundHullHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_CompoundHullMagic || hdr.version != s_CompoundHullVersion || hdr.hullCount == 0u || hdr.reserved0 != 0u){
+            error("CompoundHullAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        Vector<HullShape> hulls;
+        hulls.reserve(hdr.hullCount);
+        for(u32 i = 0u; i < hdr.hullCount; ++i){
+            Expected<HullShape> hullRes = this.readConvexHullPayload(binary, cursor);
+            if(!hullRes.has_value()){
+                error("CompoundHullAsset::loadBinary failed: invalid child hull {}", i);
+                return MakeUnexpected(Failure());
+            }
+            hulls.push_back(hullRes.value());
+        }
+        if(cursor != binary.size()){
+            error("CompoundHullAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return hulls;
+    }
+
+    public b8 validMeshShapeNonMaterialData(in MeshShape mesh)const{
         if(
             mesh.triangles.empty()
             || mesh.nodes.empty()
@@ -526,10 +645,6 @@ class PhysicsAssetBinaryCodec{
                 return false;
         }
 
-        for(usize mi = 0u; mi < mesh.materials.size(); ++mi){
-            if(!this.validSurfaceMaterial(mesh.materials[mi]))
-                return false;
-        }
         if(!mesh.triangleMaterialIndices.empty()){
             if(mesh.triangleMaterialIndices.size() != mesh.triangles.size() || mesh.materials.empty())
                 return false;
@@ -542,6 +657,16 @@ class PhysicsAssetBinaryCodec{
         if(!mesh.triangleUserData.empty() && mesh.triangleUserData.size() != mesh.triangles.size())
             return false;
 
+        return true;
+    }
+
+    public b8 validMeshShapeData(in MeshShape mesh)const{
+        if(!this.validMeshShapeNonMaterialData(mesh))
+            return false;
+        for(usize mi = 0u; mi < mesh.materials.size(); ++mi){
+            if(!this.validSurfaceMaterial(mesh.materials[mi]))
+                return false;
+        }
         return true;
     }
 
@@ -638,7 +763,7 @@ class PhysicsAssetBinaryCodec{
         mesh.localAabbMinRadius = hdr.localAabbMinRadius;
         mesh.localAabbMaxMeta = hdr.localAabbMaxMeta;
 
-        mesh.triangles.reserve(hdr.triangleCount);
+        mesh.triangles.resize(hdr.triangleCount);
         for(u32 i = 0u; i < hdr.triangleCount; ++i){
             const Expected<CollisionMeshTriangleBinary> tbRes = ReadPOD<CollisionMeshTriangleBinary>(binary, cursor);
             if(!tbRes.has_value())
@@ -646,12 +771,11 @@ class PhysicsAssetBinaryCodec{
             in CollisionMeshTriangleBinary tb = tbRes.value();
             if(tb.v0Zero.w != 0.0f || tb.v1Zero.w != 0.0f || tb.v2Zero.w != 0.0f || tb.normalZero.w != 0.0f)
                 return MakeUnexpected(Failure());
-            MeshTriangle tri;
+            mut MeshTriangle tri = mesh.triangles[i];
             tri.v0 = f32x3u(tb.v0Zero.x, tb.v0Zero.y, tb.v0Zero.z);
             tri.v1 = f32x3u(tb.v1Zero.x, tb.v1Zero.y, tb.v1Zero.z);
             tri.v2 = f32x3u(tb.v2Zero.x, tb.v2Zero.y, tb.v2Zero.z);
             tri.normal = f32x3u(tb.normalZero.x, tb.normalZero.y, tb.normalZero.z);
-            mesh.triangles.push_back(tri);
         }
 
         static_assert(size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>() && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft) && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight));
@@ -676,11 +800,35 @@ class PhysicsAssetBinaryCodec{
         )
             return MakeUnexpected(Failure());
 
-        if(!this.validMeshShapeData(mesh)){
+        if(!this.validMeshShapeNonMaterialData(mesh)){
             error("CollisionMeshAsset::loadBinary failed: invalid collision mesh BVH or triangle data");
             return MakeUnexpected(Failure());
         }
         return mesh;
+    }
+
+    private b8 validHeightfieldCellMaterialIndices(in HeightfieldShape hf)const{
+        if(!hf.cellMaterialIndices.empty()){
+            if(hf.materials.empty())
+                return false;
+            const usize expectedCells = cast<usize>(hf.rows - 1u) * cast<usize>(hf.cols - 1u);
+            if(hf.cellMaterialIndices.size() != expectedCells)
+                return false;
+            const usize matCount = hf.materials.size();
+            for(usize i = 0u; i < hf.cellMaterialIndices.size(); ++i){
+                if(cast<usize>(hf.cellMaterialIndices[i]) >= matCount)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private b8 validHeightfieldCellHoles(in HeightfieldShape hf)const{
+        if(hf.cellHoles.empty())
+            return true;
+        const usize cellCount = cast<usize>(hf.rows - 1u) * cast<usize>(hf.cols - 1u);
+        const usize expectedBytes = (cellCount + 7u) / 8u;
+        return hf.cellHoles.size() == expectedBytes;
     }
 
     public b8 validHeightfieldShapeData(in HeightfieldShape hf)const{
@@ -702,19 +850,7 @@ class PhysicsAssetBinaryCodec{
             if(!this.validSurfaceMaterial(hf.materials[i]))
                 return false;
         }
-        if(!hf.cellMaterialIndices.empty()){
-            if(hf.materials.empty())
-                return false;
-            const usize expectedCells = cast<usize>(hf.rows - 1u) * cast<usize>(hf.cols - 1u);
-            if(hf.cellMaterialIndices.size() != expectedCells)
-                return false;
-            const usize matCount = hf.materials.size();
-            for(usize i = 0u; i < hf.cellMaterialIndices.size(); ++i){
-                if(cast<usize>(hf.cellMaterialIndices[i]) >= matCount)
-                    return false;
-            }
-        }
-        return true;
+        return this.validHeightfieldCellMaterialIndices(hf) && this.validHeightfieldCellHoles(hf);
     }
 
     public b8 validateHeightfield(in HeightfieldShape hf, in Name virtualPath)const{
@@ -731,11 +867,13 @@ class PhysicsAssetBinaryCodec{
             || hf.heights.size() > cast<usize>(u32.max)
             || hf.materials.size() > cast<usize>(u32.max)
             || hf.cellMaterialIndices.size() > cast<usize>(u32.max)
+            || hf.cellHoles.size() > cast<usize>(u32.max)
         )
             return false;
 
         static_assert(
-            size_of<HeightfieldHeaderBinary>() == 64u
+            size_of<HeightfieldHeaderBinary>() == 80u
+            && offset_of<HeightfieldHeaderBinary>(reserved4) == 76u
             && size_of<f32>() == size_of<u32>()
             && size_of<CollisionMeshU16Binary>() == size_of<u16>()
         );
@@ -744,7 +882,8 @@ class PhysicsAssetBinaryCodec{
             size_of<HeightfieldHeaderBinary>()
             + hf.heights.size() * size_of<f32>()
             + hf.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
-            + hf.cellMaterialIndices.size() * size_of<CollisionMeshU16Binary>();
+            + hf.cellMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
+            + hf.cellHoles.size();
         if(!CanStoreValueCount(outBinary, totalBytes))
             return false;
 
@@ -758,13 +897,18 @@ class PhysicsAssetBinaryCodec{
         hdr.materialCount = cast<u32>(hf.materials.size());
         hdr.cellMaterialCount = cast<u32>(hf.cellMaterialIndices.size());
         hdr.thickness = hf.thickness;
+        hdr.cellHoleByteCount = cast<u32>(hf.cellHoles.size());
+        if(hf.flipDiagonal)
+            hdr.flags = s_HeightfieldFlagFlipDiagonal;
         AppendPOD(outBinary, hdr);
 
         if(!AppendBinaryVectorPayload(outBinary, hf.heights).has_value())
             return false;
         for(usize i = 0u; i < hf.materials.size(); ++i)
             AppendPOD(outBinary, this.packSurfaceMaterialFields(hf.materials[i]));
-        return AppendBinaryVectorPayload(outBinary, hf.cellMaterialIndices).has_value();
+        if(!AppendBinaryVectorPayload(outBinary, hf.cellMaterialIndices).has_value())
+            return false;
+        return AppendBinaryVectorPayload(outBinary, hf.cellHoles).has_value();
     }
 
     public b8 serializeHeightfield(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
@@ -781,7 +925,16 @@ class PhysicsAssetBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in HeightfieldHeaderBinary hdr = hdrRes.value();
-        if(hdr.magic != s_HeightfieldMagic || hdr.version != s_HeightfieldVersion || hdr.reserved0 != 0u){
+        if(
+            hdr.magic != s_HeightfieldMagic
+            || hdr.version != s_HeightfieldVersion
+            || hdr.reserved0 != 0u
+            || hdr.reserved1 != 0u
+            || hdr.reserved2 != 0u
+            || hdr.reserved3 != 0u
+            || hdr.reserved4 != 0u
+            || (hdr.flags & 0xfeu) != 0u
+        ){
             error("HeightfieldAsset::loadBinary failed: invalid header or unsupported version");
             return MakeUnexpected(Failure());
         }
@@ -798,7 +951,8 @@ class PhysicsAssetBinaryCodec{
         const u64 expectedDataBytes =
             heightCount * cast<u64>(size_of<f32>())
             + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
-            + cast<u64>(hdr.cellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>());
+            + cast<u64>(hdr.cellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>())
+            + cast<u64>(hdr.cellHoleByteCount);
         if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
             error("HeightfieldAsset::loadBinary failed: payload size mismatch");
             return MakeUnexpected(Failure());
@@ -810,6 +964,7 @@ class PhysicsAssetBinaryCodec{
         hf.originMaxY = hdr.originMaxY;
         hf.scaleMinMaxY = hdr.scaleMinMaxY;
         hf.thickness = hdr.thickness;
+        hf.flipDiagonal = (hdr.flags & s_HeightfieldFlagFlipDiagonal) != 0u;
 
         if(!ReadBinaryVectorPayload(binary, cast<u32>(heightCount), cursor, hf.heights).has_value())
             return MakeUnexpected(Failure());
@@ -827,12 +982,48 @@ class PhysicsAssetBinaryCodec{
 
         if(!ReadBinaryVectorPayload(binary, hdr.cellMaterialCount, cursor, hf.cellMaterialIndices).has_value())
             return MakeUnexpected(Failure());
+        if(!ReadBinaryVectorPayload(binary, hdr.cellHoleByteCount, cursor, hf.cellHoles).has_value())
+            return MakeUnexpected(Failure());
 
-        hf.updateHeightRange();
-        if(!this.validHeightfieldShapeData(hf)){
+        f32 loY = s_MaxF32;
+        f32 hiY = -s_MaxF32;
+        b8 anyFinite = false;
+        const b8 validOrigin = IsValidPositionVec3(hf.origin());
+        for(usize i = 0u; i < hf.heights.size(); ++i){
+            const f32 h = hf.heights[i];
+            if(!IsFinite(VectorSingle(h))){
+                if(h == h){
+                    error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
+                    return MakeUnexpected(Failure());
+                }
+                continue;
+            }
+            const f32 y = hf.originMaxY.y + h * hf.scaleMinMaxY.y;
+            if(Abs(VectorSingle(y)).x > s_HugeCoordinate){
+                error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
+                return MakeUnexpected(Failure());
+            }
+            if(!anyFinite){
+                loY = y;
+                hiY = y;
+                anyFinite = true;
+            }
+            else{
+                loY = SimdMin(loY, y);
+                hiY = SimdMax(hiY, y);
+            }
+        }
+        if(!anyFinite){
+            loY = hf.originMaxY.y;
+            hiY = hf.originMaxY.y;
+        }
+        hf.scaleMinMaxY.w = loY;
+        hf.originMaxY.w = hiY;
+        if(!hf.isValid() || !validOrigin || !this.validHeightfieldCellMaterialIndices(hf) || !this.validHeightfieldCellHoles(hf)){
             error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
             return MakeUnexpected(Failure());
         }
+        hf.buildHierarchy();
         return hf;
     }
 }

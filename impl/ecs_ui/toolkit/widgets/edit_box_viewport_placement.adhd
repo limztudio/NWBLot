@@ -108,10 +108,13 @@ b8 IsValidEditBoxPaintStyle(in EditBoxStyle style){
     return IsValidPaintColor(style.background)
         && IsValidPaintColor(style.text)
         && IsValidPaintColor(style.disabledText)
+        && IsValidPaintColor(style.placeholderText)
         && IsValidPaintColor(style.selection)
         && IsValidPaintColor(style.inactiveSelection)
         && IsValidPaintColor(style.caret)
-        && IsValidPaintColor(style.preedit);
+        && IsValidPaintColor(style.preedit)
+        && IsValidPaintColor(style.preeditTarget)
+        && IsValidPaintColor(style.preeditConverted);
 }
 
 Name ResolvePreferredEditBoxBackgroundName(in EditBoxStyle style, in EditBoxPaintFlags flags){

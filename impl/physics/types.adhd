@@ -65,6 +65,14 @@ enum<u8> JointMotion{
 }
 
 [reflect]
+enum<u8> SixDofSwingLimitMode{
+    None = 0u,
+    Cone = 1u,
+    Pyramid = 2u,
+    kCount
+}
+
+[reflect]
 enum<u8> PhysicsBackendMode{
     Auto = 0u,
     CpuOnly = 1u,
@@ -111,6 +119,7 @@ flag<u32> BodyFlags{
     EnableGyroscopicTorque = 0x00010000u,
     HasCustomMaxAngularVelocity = 0x00020000u,
     JustWoke = 0x00040000u,
+    LastStepGpuSolved = 0x00080000u,
 }
 
 const u32 s_BodyFixedRotationFlags =
@@ -480,6 +489,15 @@ class JointDef{
     public Vector<f32x4> pathPoints;
     public b8 pathClosed = false;
     public b8 pathLockRotation = false;
+    public b8 enableTwistLimit = false;
+    public b8 enableSlerpDrive = false;
+    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32 slerpHertz = 0.0f;
+    public f32 slerpDampingRatio = 1.0f;
+    public f32 slerpMaxTorque = 0.0f;
+    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
+    public f32 sixDofSwingLimitY = 0.0f;
+    public f32 sixDofSwingLimitZ = 0.0f;
     public u64 userData = 0u;
 }
 
@@ -504,6 +522,7 @@ class PreSolveContext{
     public u32 pointCount = 0u;
     public u8 pointEnableMask = 0x0fu;
     public b8 enabled = true;
+    public b8 modifyPointPositions = false;
 
     public f32 pointSeparation(in u32 idx)const{
         if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints))
@@ -514,6 +533,25 @@ class PreSolveContext{
     public void setPointSeparation(in u32 idx, in f32 sep){
         if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints))
             this.points[idx].w = sep;
+    }
+
+    public b8 addPoint(in VectorSingle worldPoint, in f32 separation){
+        if(this.pointCount >= cast<u32>(s_MaxManifoldPoints))
+            return false;
+        const u32 idx = this.pointCount;
+        this.points[idx] = f32x4(worldPoint, separation);
+        this.setPointEnabled(idx, true);
+        ++this.pointCount;
+        this.modifyPointPositions = true;
+        return true;
+    }
+
+    public void setPointPosition(in u32 idx, in VectorSingle worldPoint){
+        if(idx < this.pointCount && idx < cast<u32>(s_MaxManifoldPoints)){
+            const f32 sep = this.points[idx].w;
+            this.points[idx] = f32x4(worldPoint, sep);
+            this.modifyPointPositions = true;
+        }
     }
 
     public b8 isPointEnabled(in u32 idx)const{

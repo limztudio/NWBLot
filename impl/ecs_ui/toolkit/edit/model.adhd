@@ -20,6 +20,7 @@ class EditModel : NoCopy{
     private Vector<usize> m_boundaries;
     private Vector<EditHistoryRecord> m_history;
     private String m_preedit;
+    private Vector<EditPreeditClause> m_preeditClauses;
     private usize m_anchor = 0u;
     private usize m_caret = 0u;
     private usize m_historyCursor = 0u;
@@ -210,6 +211,10 @@ class EditModel : NoCopy{
         return ResolveEditWordRangeAt(this.text(), this.m_boundaries, position);
     }
 
+    public Expected<EditWordRange> lineRangeAt(in usize position)const{
+        return ResolveEditLineRangeAt(this.text(), this.m_boundaries, this.m_textMode, position);
+    }
+
     [cpp_unwind] public b8 replaceSelection(in StringView value){
         return this.replaceRange(this.selectionStart(), this.selectionEnd(), value);
     }
@@ -314,6 +319,7 @@ class EditModel : NoCopy{
 
     public b8 beginComposition(){
         EditCompositionRules rules;
+        this.m_preeditClauses.clear();
         return rules.begin(
             this.m_anchor,
             this.m_caret,
@@ -328,8 +334,22 @@ class EditModel : NoCopy{
     }
 
     [cpp_unwind] public b8 updateComposition(in StringView value, in usize anchor, in usize caret){
+        return this.updateComposition(value, anchor, caret, Span<EditPreeditClause>());
+    }
+
+    [cpp_unwind] public b8 updateComposition(in StringView value, in usize anchor, in usize caret, in Span<EditPreeditClause> clauses){
+        usize prevEnd = 0u;
+        for(in EditPreeditClause clause : clauses){
+            if(clause.beginByte >= clause.endByte || clause.endByte > value.size() || clause.beginByte < prevEnd)
+                return false;
+            if(!IsUtf8ScalarBoundary(value, clause.beginByte) || !IsUtf8ScalarBoundary(value, clause.endByte))
+                return false;
+            if(cast<u8>(clause.style) > cast<u8>(EditPreeditClauseStyle::Selected))
+                return false;
+            prevEnd = clause.endByte;
+        }
         EditCompositionRules rules;
-        return rules.update(
+        if(!rules.update(
             this.m_compositionActive,
             value,
             anchor,
@@ -343,14 +363,23 @@ class EditModel : NoCopy{
             this.m_preeditAnchor,
             this.m_preeditCaret,
             this.m_compositionGeneration
-        );
+        ))
+            return false;
+        this.m_preeditClauses.clear();
+        this.m_preeditClauses.reserve(clauses.size());
+        for(in EditPreeditClause clause : clauses)
+            this.m_preeditClauses.push_back(clause);
+        return true;
     }
 
     [cpp_unwind] public b8 commitComposition(in StringView value){
         if(!this.m_compositionActive)
             return false;
         const EditWordRange range = ResolveEditCompositionRange(this.m_compositionAnchor, this.m_compositionCaret);
-        return this.replaceRange(range.begin, range.end, value);
+        const b8 committed = this.replaceRange(range.begin, range.end, value);
+        if(committed)
+            this.m_preeditClauses.clear();
+        return committed;
     }
 
     public void cancelComposition(){
@@ -364,11 +393,12 @@ class EditModel : NoCopy{
             this.m_compositionActive,
             this.m_compositionGeneration
         );
+        this.m_preeditClauses.clear();
     }
 
     public EditCompositionView composition()const{
         EditCompositionRules rules;
-        return rules.view(
+        EditCompositionView result = rules.view(
             StringView(this.m_preedit),
             this.m_preeditAnchor,
             this.m_preeditCaret,
@@ -376,6 +406,9 @@ class EditModel : NoCopy{
             this.m_compositionCaret,
             this.m_compositionActive
         );
+        if(result.active && !this.m_preeditClauses.empty())
+            result.clauses = Span<EditPreeditClause>(this.m_preeditClauses);
+        return result;
     }
 
     [owner_result] private EditHistoryRecord createHistorySlot()const{

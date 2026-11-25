@@ -25,7 +25,9 @@ NWB_CORE_BEGIN
 
 class GraphicsRuntime;
 class InputDispatcher;
+interface IAccessibilityService;
 interface IClipboardService;
+interface ICursorService;
 interface ITextInputService;
 
 class CpuTaskScheduler;
@@ -85,6 +87,8 @@ public:
     Core::InputDispatcher& input;
     Core::IClipboardService& clipboard;
     Core::ITextInputService& textInput;
+    Core::ICursorService& cursor;
+    Core::IAccessibilityService& accessibility;
     Core::Alloc::GlobalArena& objectArena;
     Core::CpuTaskScheduler& cpuTasks;
     Core::GpuTaskScheduler& gpuTasks;
@@ -148,4 +152,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

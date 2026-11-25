@@ -11,6 +11,7 @@ extern class FreeTypeBitmapView{
     i32 left;
     i32 top;
     b8 grayscale;
+    b8 colorBgra;
 };
 
 [cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeFaceVisitResult"), cpp_flags(self_defaulted)]
@@ -28,6 +29,9 @@ extern const i32 s_FreeTypeLoadNoHinting;
 [cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("FT_LOAD_NO_BITMAP")]
 extern const i32 s_FreeTypeLoadNoBitmap;
 
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("FT_LOAD_COLOR")]
+extern const i32 s_FreeTypeLoadColor;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,6 +43,9 @@ extern class FreeTypeFaceView{
     u32 unitsPerEm()const;
     b8 isSfnt()const;
     b8 isScalable()const;
+    b8 hasColor()const;
+    i32 strikeCount()const;
+    i32 selectBestStrike(in u32 pixelSize, mut u32 outStrikePpem)const;
     b8 hasMultipleMasters()const;
     i32 selectUnicodeCharmap();
     i32 setPixelSizes(in u32 width, in u32 height);

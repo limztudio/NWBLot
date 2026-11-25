@@ -605,6 +605,79 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
     }
 }
 
+void VerifyCsg_GenericReceiverAndCutterTransformSyncEdgeCases(){
+    {
+        EcsTestWorld testWorld = EcsTestWorld();
+        mut World world = testWorld.world;
+
+        const EntityID genericReceiver = world.createEntity().id();
+        world.entity(genericReceiver).addComponent<CsgReceiverComponent>().receiverGroup = s_CsgInputNameProjectCsgGroupA;
+
+        const EntityID stackedReceiver = world.createEntity().id();
+        world.entity(stackedReceiver).addComponent<CsgReceiverComponent>().receiverGroup = s_CsgInputNameProjectCsgGroupA;
+        world.entity(stackedReceiver).addComponent<StaticCsgMeshComponent>().receiverGroup = s_CsgInputNameProjectCsgGroupA;
+
+        const EntityID cutterEntity = world.createEntity().id();
+        mut CsgCutterComponent cutter = world.entity(cutterEntity).addComponent<CsgCutterComponent>();
+        cutter.receiverGroup = s_CsgInputNameProjectCsgGroupA;
+        cutter.shapeType = s_CsgInputNameEngineCsgBox;
+
+        const CsgFrameState state = BuildCsgFrameState(world);
+        EXPECT_EQ(state.receiverCount, 2u);
+        EXPECT_EQ(state.cutterCount, 2u);
+        EXPECT_TRUE(state.hasOpaqueStaticWork);
+
+        const Expected<CsgResolvedReceiver> resolved = ResolveCsgReceiverComponent(world, genericReceiver);
+        ASSERT_TRUE(resolved.has_value());
+        EXPECT_EQ(resolved.value().receiverKind, CsgReceiverKind::Static);
+    }
+
+    {
+        HeapStorage arena(Name("tests/csg/cutter_transform_sync"));
+        TestValueSlot<CsgShapeRegistry> regSlot;
+        mut CsgShapeRegistry registry = regSlot.constructIn(arena);
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(registry));
+
+        EcsTestWorld testWorld = EcsTestWorld();
+        mut World world = testWorld.world;
+
+        const EntityID receiverEntity = world.createEntity().id();
+        world.entity(receiverEntity).addComponent<CsgReceiverComponent>().receiverGroup = s_CsgInputNameProjectCsgGroupA;
+
+        const EntityID cutterEntity = world.createEntity().id();
+        mut TransformComponent xf = world.entity(cutterEntity).addComponent<TransformComponent>();
+        xf.position = f32x4(3.0f, -2.0f, 5.0f, 0.0f);
+        mut CsgCutterComponent cutter = world.entity(cutterEntity).addComponent<CsgCutterComponent>();
+        cutter.receiverGroup = s_CsgInputNameProjectCsgGroupA;
+        cutter.shapeType = s_CsgInputNameEngineCsgBox;
+        cutter.shapeToWorld._14 = 99.0f;
+        cutter.worldToShape._14 = -99.0f;
+
+        CsgFrameReceiverLookup lookup(world);
+        lookup.precomputeCutters(registry);
+        const auto drawState = lookup.resolveReceiverDrawState(receiverEntity, CsgReceiverPass::Opaque);
+        ASSERT_TRUE(drawState.has_value());
+        const Span<CsgPrecomputedCutter> precomputed = lookup.precomputedReceiverCutters(drawState.value());
+        ASSERT_EQ(precomputed.size(), 1u);
+        EXPECT_FLOAT_EQ(precomputed[0u].shapeToWorld._14, 3.0f);
+        EXPECT_FLOAT_EQ(precomputed[0u].worldToShape._14, -3.0f);
+
+        cutter.syncFromTransform = false;
+        CsgFrameReceiverLookup manualLookup(world);
+        manualLookup.precomputeCutters(registry);
+        const Span<CsgPrecomputedCutter> manualPrecomputed = manualLookup.precomputedReceiverCutters(manualLookup.resolveReceiverDrawState(receiverEntity, CsgReceiverPass::Opaque).value());
+        ASSERT_EQ(manualPrecomputed.size(), 1u);
+        EXPECT_FLOAT_EQ(manualPrecomputed[0u].shapeToWorld._14, 99.0f);
+
+        cutter.syncFromTransform = true;
+        xf.scale = f32x4(0.0f, 1.0f, 1.0f, 0.0f);
+        MatrixSingle outW2S = MatrixIdentity();
+        MatrixSingle outS2W = MatrixIdentity();
+        ResolveCsgCutterWorldTransforms(world, cutterEntity, cutter, outW2S, outS2W);
+        EXPECT_FLOAT_EQ(outS2W[0u].w, 99.0f);
+    }
+}
+
 NWB_ADHD_GTEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices, VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices)
 
 NWB_ADHD_GTEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit, VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit)
@@ -622,6 +695,8 @@ NWB_ADHD_GTEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDefor
 NWB_ADHD_GTEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs, VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs)
 
 NWB_ADHD_GTEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs, VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs)
+
+NWB_ADHD_GTEST(Csg, GenericReceiverAndCutterTransformSyncEdgeCases, VerifyCsg_GenericReceiverAndCutterTransformSyncEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -36,6 +36,7 @@ struct FreeTypeBitmapView{
     i32 left;
     i32 top;
     b8 grayscale;
+    b8 colorBgra;
 };
 
 struct FreeTypeFaceVisitResult{
@@ -62,6 +63,41 @@ public:
     [[nodiscard]] u32 unitsPerEm()const noexcept{ return m_face->units_per_EM; }
     [[nodiscard]] b8 isSfnt()const noexcept{ return FT_IS_SFNT(m_face) != 0; }
     [[nodiscard]] b8 isScalable()const noexcept{ return FT_IS_SCALABLE(m_face) != 0; }
+    [[nodiscard]] b8 hasColor()const noexcept{ return FT_HAS_COLOR(m_face) != 0; }
+    [[nodiscard]] i32 strikeCount()const noexcept{ return m_face->num_fixed_sizes; }
+    [[nodiscard]] i32 selectBestStrike(const u32 pixelSize, u32& outStrikePpem)const noexcept{
+        outStrikePpem = pixelSize;
+        if(!m_face || m_face->num_fixed_sizes <= 0 || !m_face->available_sizes)
+            return FT_Err_Invalid_Argument;
+        i32 bestIdx = 0;
+        u32 bestPpem = 0u;
+        b8 bestAbove = false;
+        u32 bestDiff = 0xffffffffu;
+        for(i32 i = 0; i < m_face->num_fixed_sizes; ++i){
+            const FT_Bitmap_Size& sz = m_face->available_sizes[i];
+            u32 ppem = 0u;
+            if(sz.y_ppem > 0)
+                ppem = static_cast<u32>((sz.y_ppem + 32) >> 6);
+            else if(sz.height > 0)
+                ppem = static_cast<u32>(sz.height);
+            const b8 above = ppem >= pixelSize;
+            u32 diff = 0u;
+            if(above)
+                diff = ppem - pixelSize;
+            else
+                diff = pixelSize - ppem;
+            if(i == 0 || (above != bestAbove && above) || (above == bestAbove && diff < bestDiff)){
+                bestIdx = i;
+                bestPpem = ppem;
+                bestAbove = above;
+                bestDiff = diff;
+            }
+        }
+        const i32 err = FT_Select_Size(m_face, bestIdx);
+        if(err == 0 && bestPpem > 0u)
+            outStrikePpem = bestPpem;
+        return err;
+    }
     [[nodiscard]] b8 hasMultipleMasters()const noexcept{ return FT_HAS_MULTIPLE_MASTERS(m_face) != 0; }
     [[nodiscard]] i32 selectUnicodeCharmap()noexcept{ return FT_Select_Charmap(m_face, FT_ENCODING_UNICODE); }
 
@@ -77,7 +113,7 @@ public:
         Span<const u8> pixels;
         if(bitmap.buffer && !MultiplyOverflows<usize>(pitch, bitmap.rows))
             pixels = Span<const u8>(bitmap.buffer, pitch * bitmap.rows);
-        return { pixels, bitmap.width, bitmap.rows, bitmap.pitch, slot->bitmap_left, slot->bitmap_top, bitmap.pixel_mode == FT_PIXEL_MODE_GRAY };
+        return { pixels, bitmap.width, bitmap.rows, bitmap.pitch, slot->bitmap_left, slot->bitmap_top, bitmap.pixel_mode == FT_PIXEL_MODE_GRAY, bitmap.pixel_mode == FT_PIXEL_MODE_BGRA };
     }
 
 
@@ -184,4 +220,3 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -58,25 +58,58 @@ class CachedMeasuredText{
 class CachedTextLayout{
     public String text;
     public String language;
+    public FontDescriptor font;
     public SharedTextLayout layout;
     public Rect measuredBounds = Rect();
     public u64 measuredAtlasIdentity = 0u;
     public usize measuredAtlasGlyphCount = 0u;
     public u32 fontSizeBits = 0u;
+    public u32 letterSpacingBits = 0u;
+    public u32 wordSpacingBits = 0u;
+    public u32 lineHeightMultBits = 0u;
+    public u32 lineHeightOverBits = 0u;
+    public u32 maxWidthBits = 0u;
     public u32 scriptTag = 0u;
     public u32 measuredPixelScaleXBits = 0u;
     public u32 measuredPixelScaleYBits = 0u;
     public u32 next = u32.max;
     public TextDirection direction = TextDirection::LeftToRight;
+    public TextBidiMode bidiMode = TextBidiMode::None;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
+    public Array<OpenTypeFeature, s_TextMaxOpenTypeFeatures> features;
+    public u8 featureCount = 0u;
+    public b8 preserveWrapSpaces = false;
     public b8 hasMeasured = false;
     public b8 measuredNeedsAtlasRecheck = false;
 
     public b8 matches(in ShapeRequest request)const{
-        return this.fontSizeBits == bit_cast<u32>(request.fontSize)
-            && this.scriptTag == request.scriptTag
-            && this.direction == request.direction
-            && StringView(this.language) == request.language
-            && StringView(this.text) == request.text;
+        if(
+            this.font != request.font
+            || this.fontSizeBits != bit_cast<u32>(request.fontSize)
+            || this.letterSpacingBits != bit_cast<u32>(request.letterSpacing)
+            || this.wordSpacingBits != bit_cast<u32>(request.wordSpacing)
+            || this.lineHeightMultBits != bit_cast<u32>(request.lineHeightMultiplier)
+            || this.lineHeightOverBits != bit_cast<u32>(request.lineHeightOverride)
+            || this.maxWidthBits != bit_cast<u32>(request.maxWidth)
+            || this.scriptTag != request.scriptTag
+            || this.direction != request.direction
+            || this.bidiMode != request.bidiMode
+            || this.wrapMode != request.wrapMode
+            || this.alignment != request.alignment
+            || this.tabStopSpaces != request.tabStopSpaces
+            || this.preserveWrapSpaces != request.preserveWrapSpaces
+            || this.featureCount != request.featureCount
+            || StringView(this.language) != request.language
+            || StringView(this.text) != request.text
+        )
+            return false;
+        for(usize fi = 0u; fi < cast<usize>(this.featureCount); ++fi){
+            if(this.features[fi] != request.features[fi])
+                return false;
+        }
+        return true;
     }
 }
 
@@ -119,6 +152,30 @@ class TextService : NoCopy{
         ++this.m_generation;
         return true;
     }
+
+    [cpp_unwind]
+    public b8 registerFont(in FontSource source){
+        if(this.m_generation == u64.max || !this.m_shaper.registerFont(source))
+            return false;
+        this.m_layoutCacheHead.clear();
+        this.m_layoutCacheEntries.clear();
+        ++this.m_generation;
+        return true;
+    }
+
+    public void setDefaultFamily(in Name family){
+        if(this.m_shaper.defaultFamily() == family)
+            return;
+        this.m_shaper.setDefaultFamily(family);
+        this.m_layoutCacheHead.clear();
+        this.m_layoutCacheEntries.clear();
+        if(this.m_generation < u64.max)
+            ++this.m_generation;
+    }
+
+    public Name defaultFamily()const{ return this.m_shaper.defaultFamily(); }
+    public usize fontCount()const{ return this.m_shaper.fontCount(); }
+    public Optional<SharedFontFace> resolveFace(in FontDescriptor descriptor)const{ return this.m_shaper.resolveFace(descriptor); }
 
     [cpp_unwind, owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
@@ -165,10 +222,24 @@ class TextService : NoCopy{
         mut CachedTextLayout entry = this.m_layoutCacheEntries[newIndex];
         entry.text.assign(request.text);
         entry.language.assign(request.language);
+        entry.font = request.font;
         entry.layout = shaped.value();
         entry.fontSizeBits = bit_cast<u32>(request.fontSize);
+        entry.letterSpacingBits = bit_cast<u32>(request.letterSpacing);
+        entry.wordSpacingBits = bit_cast<u32>(request.wordSpacing);
+        entry.lineHeightMultBits = bit_cast<u32>(request.lineHeightMultiplier);
+        entry.lineHeightOverBits = bit_cast<u32>(request.lineHeightOverride);
+        entry.maxWidthBits = bit_cast<u32>(request.maxWidth);
         entry.scriptTag = request.scriptTag;
         entry.direction = request.direction;
+        entry.bidiMode = request.bidiMode;
+        entry.wrapMode = request.wrapMode;
+        entry.alignment = request.alignment;
+        entry.tabStopSpaces = request.tabStopSpaces;
+        entry.preserveWrapSpaces = request.preserveWrapSpaces;
+        entry.featureCount = request.featureCount;
+        for(usize fi = 0u; fi < cast<usize>(request.featureCount); ++fi)
+            entry.features[fi] = request.features[fi];
         const auto insertIt = this.m_layoutCacheHead.find(hash);
         if(insertIt != this.m_layoutCacheHead.end()){
             entry.next = insertIt.value();
@@ -282,6 +353,8 @@ class TextService : NoCopy{
                 ExpandMeasuredTextBoundsWithSdfSupport(support, bounds);
                 continue;
             }
+            if(glyph.coverage.known && glyph.coverage.ink.width <= 0.0f && glyph.coverage.ink.height <= 0.0f)
+                continue;
             if(!glyph.face.valid() || !glyph.face.deref().valid())
                 return MakeUnexpected(Failure());
             const Optional<in AtlasGlyph> cached = this.m_atlas.find(glyph.face, glyph.glyphId, raster.pixelSize);
@@ -377,32 +450,148 @@ class TextService : NoCopy{
             }
         }
 
+        if(
+            !IsFinite(VectorSingle(deviceScale.x, deviceScale.y, raster.rasterPpem, raster.rasterScale))
+            || raster.rasterPpem < 1.0f
+            || raster.rasterPpem > s_TextMaxRasterPpemF32
+            || raster.rasterScale <= 0.0f
+            || deviceScale.x <= 0.0f
+            || deviceScale.y <= 0.0f
+        )
+            return false;
+
+        Rect activeCullClip = clip;
+        if(hasTransform)
+            activeCullClip = localCullClip;
+        const b8 useActiveCullClip = !hasTransform || hasLocalCullClip;
+        const VectorDouble activeClipMin(cast<f64>(activeCullClip.x), cast<f64>(activeCullClip.y), 0.0, 0.0);
+        const VectorDouble activeClipMax = activeClipMin + VectorDouble(cast<f64>(activeCullClip.width), cast<f64>(activeCullClip.height), 0.0, 0.0);
+        const VectorDouble screenClipMin(cast<f64>(clip.x), cast<f64>(clip.y), 0.0, 0.0);
+        const VectorDouble screenClipMax = screenClipMin + VectorDouble(cast<f64>(clip.width), cast<f64>(clip.height), 0.0, 0.0);
+
+        const f64 fontSizeF64 = cast<f64>(layout.fontSize());
+        const VectorDouble topLeftVec(cast<f64>(topLeft.x), cast<f64>(topLeft.y), cast<f64>(topLeft.x), cast<f64>(topLeft.y));
+        const f64 covShapedSize = VectorDoubleFloor(VectorDouble((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel)).x / s_TextFixedPointScaleF64;
+        const f64 covUnknownCorrection = fontSizeF64 / covShapedSize;
+        const VectorDouble covUnknownCorrectionVec(covUnknownCorrection);
+        const f64 covRasterScaleF64 = cast<f64>(raster.rasterPpem) / fontSizeF64;
+        const VectorDouble covHalfPixVec = VectorDouble(s_TextHalfPixel) / VectorDouble(cast<f64>(deviceScale.x), cast<f64>(deviceScale.y), cast<f64>(deviceScale.x), cast<f64>(deviceScale.y));
+        const f64 covBaseMarginScalar = (1.0 / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / covRasterScaleF64);
+        const VectorDouble covKnownMarginVec = VectorDouble(covBaseMarginScalar) + covHalfPixVec;
+        const f64 covUnknownMarginBaseScalar = (UiSimdMaxF64(1.0, covUnknownCorrection) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / covRasterScaleF64);
+
+        if(useActiveCullClip){
+            const VectorDouble layoutUnion = ComputeInitialMeasuredTextBounds(layout.measure(), layout.inkBounds());
+            const f64 layoutPad = UiSimdMaxF64(fontSizeF64 * 4.0, 64.0) + covUnknownMarginBaseScalar + UiSimdMaxF64(covHalfPixVec.x, covHalfPixVec.y);
+            const f64 layoutMinX = topLeftVec.x + layoutUnion.x - layoutPad;
+            const f64 layoutMinY = topLeftVec.y + layoutUnion.y - layoutPad;
+            const f64 layoutMaxX = topLeftVec.x + layoutUnion.z + layoutPad;
+            const f64 layoutMaxY = topLeftVec.y + layoutUnion.w + layoutPad;
+            if(
+                FitsTextCoordinates(VectorDouble(layoutMinX, layoutMinY, layoutMaxX, layoutMaxY))
+                && (layoutMaxX <= activeClipMin.x || layoutMaxY <= activeClipMin.y || layoutMinX >= activeClipMax.x || layoutMinY >= activeClipMax.y)
+            )
+                return true;
+        }
+
         this.m_preparedGlyphs.clear();
         this.m_preparedGlyphs.reserve(glyphs.size());
         this.m_coverageCandidateSlots.clear();
         this.m_pages.clear();
         this.m_sdfPages.clear();
+
+        u64 lastFaceId = 0u;
+        b8 lastFaceHasCache = false;
+        b8 lastFaceValid = false;
+        b8 lastFaceCoverageInkReliable = false;
+        b8 lastFaceHasUsableBaked = false;
+        u32 lastFaceBakedUnitsPerEm = 0u;
+        VectorDouble lastFaceBakedScaleVec(0.0);
+        VectorDouble lastFaceUnknownMarginVec(0.0);
+
         u64 lastSdfAtlasId = 0u;
         u32 lastSdfGroup = u32.max;
         u32 lastSdfInternedIndex = u32.max;
+        f32 lastSdfInvW = 0.0f;
+        f32 lastSdfInvH = 0.0f;
+
         for(usize index = 0u; index < glyphs.size(); ++index){
             in PlacedGlyph glyph = glyphs[index];
-            const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
-            if(atlas.has_value()){
+            if(!glyph.face.valid())
+                return false;
+            in FontFace faceRef = glyph.face.deref();
+            const u64 faceId = faceRef.faceIdentity();
+            if(!lastFaceHasCache || faceId != lastFaceId){
+                lastFaceId = faceId;
+                lastFaceHasCache = true;
+                lastFaceValid = faceRef.valid();
+                if(!lastFaceValid)
+                    return false;
+                lastFaceCoverageInkReliable = faceRef.coverageInkReliable();
+                const u32 faceUnitsPerEm = faceRef.unitsPerEm();
+                lastFaceUnknownMarginVec = VectorDouble(covUnknownMarginBaseScalar + (fontSizeF64 / cast<f64>(faceUnitsPerEm))) + covHalfPixVec;
+                lastFaceHasUsableBaked = false;
+                if(!faceRef.hasColor() && faceRef.bakedAtlas().valid()){
+                    in BakedFontAtlas candidateBaked = faceRef.bakedAtlas().deref();
+                    if(candidateBaked.valid() && CanUseBakedFontAtlasAtPhysicalSize(candidateBaked.bakePpem(), raster.physicalSize) && candidateBaked.unitsPerEm() != 0u){
+                        lastFaceHasUsableBaked = true;
+                        lastFaceBakedUnitsPerEm = candidateBaked.unitsPerEm();
+                        lastFaceBakedScaleVec = VectorDouble(fontSizeF64 / cast<f64>(lastFaceBakedUnitsPerEm));
+                    }
+                }
+            }
+
+            if(lastFaceHasUsableBaked && faceRef.bakedAtlas().deref().hasGlyph(glyph.glyphId)){
                 if(!IsFinite(VectorSingle(glyph.position.x, glyph.position.y, 0.0f, 0.0f)))
                     return false;
-                in BakedFontAtlas baked = atlas.value();
+                in BakedFontAtlas baked = faceRef.bakedAtlas().deref();
                 in FontAtlasGlyph record = baked.glyph(glyph.glyphId);
+                Rect localRect;
                 VectorDouble rawRectangle(0.0);
-                if(!TryLoadGlyphAtlasRectangle(glyph.position, topLeft, layout.fontSize(), baked.unitsPerEm(), record, rawRectangle))
-                    return false;
-                const Rect localRect = ToTextGlyphAtlasRect(rawRectangle);
+                if(record.drawable != 0u){
+                    if(
+                        !IsFinite(VectorSingle(record.planeLeft, record.planeTop, record.planeRight, record.planeBottom))
+                        || record.planeRight <= record.planeLeft || record.planeBottom <= record.planeTop
+                    )
+                        return false;
+                    const VectorDouble origin = topLeftVec + VectorDouble(cast<f64>(glyph.position.x), cast<f64>(glyph.position.y), 0.0, 0.0);
+                    const VectorDouble planeOrigin(cast<f64>(record.planeLeft), cast<f64>(record.planeTop), 0.0, 0.0);
+                    const VectorDouble xy = origin + planeOrigin * lastFaceBakedScaleVec;
+                    const VectorDouble wh = (VectorDouble(cast<f64>(record.planeRight), cast<f64>(record.planeBottom), 0.0, 0.0) - planeOrigin) * lastFaceBakedScaleVec;
+                    const VectorDouble candidate(xy.x, xy.y, wh.x, wh.y);
+                    if(!FitsTextCoordinates(candidate) || wh.x < 0.0 || wh.y < 0.0)
+                        return false;
+                    if(!FitsTextCoordinate(xy.x + wh.x) || !FitsTextCoordinate(xy.y + wh.y))
+                        return false;
+                    const VectorSingle rounded(cast<f32>(xy.x), cast<f32>(xy.y), cast<f32>(wh.x), cast<f32>(wh.y));
+                    const VectorSingle roundedEnds = rounded + VectorSingle(rounded.z, rounded.w, 0.0f, 0.0f);
+                    if(!IsFinite(rounded) || !IsFinite(roundedEnds.xy))
+                        return false;
+                    rawRectangle = VectorDouble(rounded);
+                    localRect = Rect(rounded.x, rounded.y, rounded.z, rounded.w);
+                }
+
                 if(hasTransform){
                     if(HasPositivePreparedGlyphExtent(localRect)){
-                        const TextGlyphIntersection xfStatus = TryIntersectTextRects(ComputeTransformedPaintRectBounds(xf, localRect), clip);
-                        if(xfStatus == TextGlyphIntersection::Invalid)
+                        if(hasLocalCullClip){
+                            const f64 lMinX = cast<f64>(localRect.x);
+                            const f64 lMinY = cast<f64>(localRect.y);
+                            if(
+                                lMinX >= activeClipMax.x
+                                || lMinY >= activeClipMax.y
+                                || lMinX + cast<f64>(localRect.width) <= activeClipMin.x
+                                || lMinY + cast<f64>(localRect.height) <= activeClipMin.y
+                            )
+                                continue;
+                        }
+                        const Rect xfBounds = ComputeTransformedPaintRectBounds(xf, localRect);
+                        const f64 xMinX = cast<f64>(xfBounds.x);
+                        const f64 xMinY = cast<f64>(xfBounds.y);
+                        const f64 xMaxX = xMinX + cast<f64>(xfBounds.width);
+                        const f64 xMaxY = xMinY + cast<f64>(xfBounds.height);
+                        if(!IsValidUiRect(xfBounds) || !FitsTextCoordinates(VectorDouble(xMinX, xMinY, xMaxX, xMaxY)) || xMaxX < xMinX || xMaxY < xMinY || xMaxX - xMinX > s_TextMaxCoordinateF64 || xMaxY - xMinY > s_TextMaxCoordinateF64)
                             return false;
-                        if(xfStatus == TextGlyphIntersection::Invisible)
+                        if(xMaxX <= xMinX || xMaxY <= xMinY || xMaxX <= screenClipMin.x || xMaxY <= screenClipMin.y || xMinX >= screenClipMax.x || xMinY >= screenClipMax.y)
                             continue;
                     }
                     else{
@@ -415,41 +604,76 @@ class TextService : NoCopy{
                     }
                 }
                 else{
-                    const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle, clip);
-                    if(candidateStatus == TextGlyphIntersection::Invalid)
+                    const VectorDouble maxXY = VectorDouble(rawRectangle.x, rawRectangle.y, 0.0, 0.0) + VectorDouble(rawRectangle.z, rawRectangle.w, 0.0, 0.0);
+                    if(!FitsTextCoordinates(VectorDouble(rawRectangle.x, rawRectangle.y, maxXY.x, maxXY.y)) || maxXY.x < rawRectangle.x || maxXY.y < rawRectangle.y || maxXY.x - rawRectangle.x > s_TextMaxCoordinateF64 || maxXY.y - rawRectangle.y > s_TextMaxCoordinateF64)
                         return false;
-                    if(candidateStatus == TextGlyphIntersection::Invisible)
+                    if(maxXY.x <= rawRectangle.x || maxXY.y <= rawRectangle.y || maxXY.x <= screenClipMin.x || maxXY.y <= screenClipMin.y || rawRectangle.x >= screenClipMax.x || rawRectangle.y >= screenClipMax.y)
                         continue;
                 }
+
                 ResolvedGlyphDraw item;
                 item.rectangle = localRect;
                 if(HasPositivePreparedGlyphExtent(item.rectangle)){
-                    in SharedSdfAtlasPage sdfPage = baked.page(record.group);
-                    in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
-                    item.channel = record.channel;
-                    item.uv = ResolveSdfGlyphUv(record, binding.width, binding.height);
                     const u64 bakedIdentity = baked.identity();
-                    if(bakedIdentity == lastSdfAtlasId && record.group == lastSdfGroup)
+                    if(bakedIdentity == lastSdfAtlasId && record.group == lastSdfGroup){
                         item.pageIndex = lastSdfInternedIndex;
+                    }
                     else{
+                        in SharedSdfAtlasPage sdfPage = baked.page(record.group);
+                        in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
+                        lastSdfInvW = 1.0f / cast<f32>(binding.width);
+                        lastSdfInvH = 1.0f / cast<f32>(binding.height);
                         item.pageIndex = InternPreparedPage<SdfAtlasPage>(this.m_sdfPages, sdfPage);
                         lastSdfAtlasId = bakedIdentity;
                         lastSdfGroup = record.group;
                         lastSdfInternedIndex = item.pageIndex;
                     }
+                    item.channel = record.channel;
+                    const VectorSingle uvVec = VectorSingle(cast<f32>(record.x), cast<f32>(record.y), cast<f32>(record.width), cast<f32>(record.height)) * VectorSingle(lastSdfInvW, lastSdfInvH, lastSdfInvW, lastSdfInvH);
+                    item.uv = StoreRect(uvVec);
                     item.isSdf = true;
                 }
                 this.m_preparedGlyphs.push_back(item);
             }
             else{
-                TextGlyphIntersection status = TextGlyphIntersection::Visible;
-                if(!hasTransform)
-                    status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, clip, deviceScale);
-                else if(hasLocalCullClip)
-                    status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, localCullClip, deviceScale);
-                if(status == TextGlyphIntersection::Invalid)
+                if(!IsValidTextGlyphLocation(glyph.position, topLeft))
                     return false;
-                if(status == TextGlyphIntersection::Visible){
+                if(!IsValidUiRect(glyph.ink) || (glyph.coverage.known && !IsValidUiRect(glyph.coverage.ink)))
+                    return false;
+                b8 pushCandidate = true;
+                if(useActiveCullClip){
+                    Rect ink = glyph.ink;
+                    if(glyph.coverage.known){
+                        ink = glyph.coverage.ink;
+                        if(ink.width <= 0.0f || ink.height <= 0.0f)
+                            pushCandidate = false;
+                    }
+                    else if(ink.width <= 0.0f || ink.height <= 0.0f || !lastFaceCoverageInkReliable){
+                        pushCandidate = true;
+                    }
+                    if(pushCandidate && (glyph.coverage.known || (ink.width > 0.0f && ink.height > 0.0f && lastFaceCoverageInkReliable))){
+                        const VectorDouble inkOrigin(cast<f64>(ink.x), cast<f64>(ink.y), cast<f64>(ink.x), cast<f64>(ink.y));
+                        const VectorDouble inkEnd = inkOrigin + VectorDouble(cast<f64>(ink.width), cast<f64>(ink.height), cast<f64>(ink.width), cast<f64>(ink.height));
+                        const VectorDouble pos = topLeftVec + VectorDouble(cast<f64>(glyph.position.x), cast<f64>(glyph.position.y), cast<f64>(glyph.position.x), cast<f64>(glyph.position.y));
+                        VectorDouble minXY(0.0);
+                        VectorDouble maxXY(0.0);
+                        if(glyph.coverage.known){
+                            minXY = (pos + inkOrigin) - covKnownMarginVec;
+                            maxXY = (pos + inkEnd) + covKnownMarginVec;
+                        }
+                        else{
+                            const VectorDouble correctedOrigin = inkOrigin * covUnknownCorrectionVec;
+                            const VectorDouble correctedEnd = inkEnd * covUnknownCorrectionVec;
+                            minXY = (pos + Min(inkOrigin, correctedOrigin)) - lastFaceUnknownMarginVec;
+                            maxXY = (pos + Max(inkEnd, correctedEnd)) + lastFaceUnknownMarginVec;
+                        }
+                        if(!FitsTextCoordinates(VectorDouble(minXY.x, minXY.y, maxXY.x, maxXY.y)) || maxXY.x < minXY.x || maxXY.y < minXY.y || maxXY.x - minXY.x > s_TextMaxCoordinateF64 || maxXY.y - minXY.y > s_TextMaxCoordinateF64)
+                            return false;
+                        if(maxXY.x <= minXY.x || maxXY.y <= minXY.y || maxXY.x <= activeClipMin.x || maxXY.y <= activeClipMin.y || minXY.x >= activeClipMax.x || minXY.y >= activeClipMax.y)
+                            pushCandidate = false;
+                    }
+                }
+                if(pushCandidate){
                     this.m_coverageCandidateSlots.push_back(cast<u32>(this.m_preparedGlyphs.size()));
                     ResolvedGlyphDraw placeholder;
                     placeholder.pageIndex = cast<u32>(index);
@@ -462,7 +686,16 @@ class TextService : NoCopy{
         if(!this.m_coverageCandidateSlots.empty()){
             u64 lastCovFaceId = 0u;
             u32 lastCovGlyphId = u32.max;
-            AtlasGlyph lastCovRecord;
+            u32 lastCovPageIndex = s_GlyphAtlasNoPage;
+            Rect lastCovPixels;
+            i32 lastCovBearingX = 0;
+            i32 lastCovBearingY = 0;
+            f32 lastCovBitmapScale = 1.0f;
+            b8 lastCovIsColor = false;
+            const VectorDouble covScaleVec(cast<f64>(deviceScale.x), cast<f64>(deviceScale.y), cast<f64>(deviceScale.x), cast<f64>(deviceScale.y));
+            const VectorDouble covInvScaleVec(1.0 / cast<f64>(deviceScale.x), 1.0 / cast<f64>(deviceScale.y), 1.0 / cast<f64>(deviceScale.x), 1.0 / cast<f64>(deviceScale.y));
+            const VectorSingle covInvAtlasExtentVec(1.0f / cast<f32>(s_GlyphAtlasPageExtent));
+            const VectorDouble halfPixelVec(s_TextHalfPixel);
             for(in u32 slotIndex : this.m_coverageCandidateSlots){
                 mut ResolvedGlyphDraw item = this.m_preparedGlyphs[slotIndex];
                 in PlacedGlyph glyph = glyphs[item.pageIndex];
@@ -472,29 +705,52 @@ class TextService : NoCopy{
                         const Optional<in AtlasGlyph> preparedSlot = this.m_atlas.prepareAndFind(glyph.face, glyph.glyphId, raster.pixelSize);
                         if(!preparedSlot.has_value())
                             return false;
+                        in AtlasGlyph foundRec = preparedSlot.value();
                         lastCovFaceId = faceId;
                         lastCovGlyphId = glyph.glyphId;
-                        lastCovRecord = preparedSlot.value();
+                        lastCovPageIndex = foundRec.pageIndex;
+                        lastCovPixels = foundRec.pixels;
+                        lastCovBearingX = foundRec.bearingX;
+                        lastCovBearingY = foundRec.bearingY;
+                        lastCovBitmapScale = foundRec.bitmapScale;
+                        lastCovIsColor = foundRec.isColor;
                     }
                 }
                 else
                     return false;
-                const Expected<Rect> rectangle = CoverageRectangle(glyph, lastCovRecord, raster.rasterScale, topLeft, deviceScale);
-                if(!rectangle.has_value())
+                if(!IsValidUiRect(lastCovPixels) || !(lastCovBitmapScale > 0.0f))
                     return false;
-                Rect cullRect = rectangle.value();
+                Rect covRect;
+                if(lastCovPageIndex != s_GlyphAtlasNoPage){
+                    const VectorDouble covInvRasterScaleVec(1.0 / (cast<f64>(raster.rasterScale) * cast<f64>(lastCovBitmapScale)));
+                    const VectorDouble origin = topLeftVec + VectorDouble(cast<f64>(glyph.position.x), cast<f64>(glyph.position.y), cast<f64>(glyph.position.x), cast<f64>(glyph.position.y));
+                    const VectorDouble bearing = VectorDouble(cast<f64>(lastCovBearingX), cast<f64>(lastCovBearingY), cast<f64>(lastCovBearingX), cast<f64>(lastCovBearingY)) * covInvRasterScaleVec;
+                    const VectorDouble pos = origin + VectorDouble(bearing.x, -bearing.y, bearing.x, -bearing.y);
+                    const VectorDouble rounded = VectorDoubleMultiplyAddExpression(pos, covScaleVec, halfPixelVec);
+                    const VectorDouble aligned = VectorDoubleFloor(rounded) * covInvScaleVec;
+                    const VectorDouble sz = VectorDouble(cast<f64>(lastCovPixels.width), cast<f64>(lastCovPixels.height), 0.0, 0.0) * covInvRasterScaleVec;
+                    const Expected<Rect> resolvedRect = TryMakeUiRect(aligned.x, aligned.y, sz.x, sz.y, UiRectPrecision::BoundedEndpoints);
+                    if(!resolvedRect.has_value())
+                        return false;
+                    covRect = resolvedRect.value();
+                }
+                Rect cullRect = covRect;
                 if(hasTransform)
-                    cullRect = ComputeTransformedPaintRectBounds(xf, rectangle.value());
-                const TextGlyphIntersection status = TryIntersectTextRects(cullRect, clip);
-                if(status == TextGlyphIntersection::Invalid)
+                    cullRect = ComputeTransformedPaintRectBounds(xf, covRect);
+                const f64 cMinX = cast<f64>(cullRect.x);
+                const f64 cMinY = cast<f64>(cullRect.y);
+                const f64 cMaxX = cMinX + cast<f64>(cullRect.width);
+                const f64 cMaxY = cMinY + cast<f64>(cullRect.height);
+                if(!IsValidUiRect(cullRect) || !FitsTextCoordinates(VectorDouble(cMinX, cMinY, cMaxX, cMaxY)) || cMaxX < cMinX || cMaxY < cMinY || cMaxX - cMinX > s_TextMaxCoordinateF64 || cMaxY - cMinY > s_TextMaxCoordinateF64)
                     return false;
-                if(status == TextGlyphIntersection::Invisible){
+                if(cMaxX <= cMinX || cMaxY <= cMinY || cMaxX <= screenClipMin.x || cMaxY <= screenClipMin.y || cMinX >= screenClipMax.x || cMinY >= screenClipMax.y){
                     item.pageIndex = u32.max;
                     continue;
                 }
-                item.rectangle = rectangle.value();
-                item.uv = ResolveCoverageGlyphUv(lastCovRecord.pixels);
-                item.pageIndex = lastCovRecord.pageIndex;
+                item.rectangle = covRect;
+                item.uv = StoreRect(LoadRect(lastCovPixels) * covInvAtlasExtentVec);
+                item.pageIndex = lastCovPageIndex;
+                item.isColor = lastCovIsColor;
             }
             Array<u32, s_GlyphAtlasMaxPages> resolvedCoveragePages;
             for(usize pageSlot = 0u; pageSlot < s_GlyphAtlasMaxPages; ++pageSlot)
@@ -560,9 +816,24 @@ b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
 usize ComputeTextLayoutCacheHash(in ShapeRequest request){
     usize seed = HashValue(request.text);
     seed = HashCombineValue(seed, request.language);
+    seed = HashCombineValue(seed, request.font.hash());
     seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.letterSpacing));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.wordSpacing));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.lineHeightMultiplier));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.lineHeightOverride));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.maxWidth));
     seed = HashCombineValue(seed, request.scriptTag);
-    return HashCombineValue(seed, cast<u8>(request.direction));
+    seed = HashCombineValue(seed, cast<u8>(request.direction));
+    seed = HashCombineValue(seed, cast<u8>(request.bidiMode));
+    seed = HashCombineValue(seed, cast<u8>(request.wrapMode));
+    seed = HashCombineValue(seed, cast<u8>(request.alignment));
+    seed = HashCombineValue(seed, request.tabStopSpaces);
+    seed = HashCombineValue(seed, cast<u8>(request.preserveWrapSpaces));
+    seed = HashCombineValue(seed, request.featureCount);
+    for(usize fi = 0u; fi < cast<usize>(request.featureCount); ++fi)
+        seed = HashCombineValue(seed, request.features[fi].hash());
+    return seed;
 }
 
 

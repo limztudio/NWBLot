@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "router_focus_traversal.adhd"
+#include "router_spatial_focus.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +27,7 @@ Expected<InputEvent> TryResolveRouterSourceEvent(
             resolved.type = InputEventType::CommandUp;
         resolved.source = InputSource(0u, cast<u64>(event.key) + 1u);
     }
-    else if(!event.source.valid() || event.command > InputCommand::ContextMenu)
+    else if(!event.source.valid() || event.command > s_InputCommandMax)
         return MakeUnexpected(Failure());
     usize heldIndex = boundSources.size();
     for(usize index = 0u; index < boundSources.size(); ++index){
@@ -139,7 +139,19 @@ void ReleaseRouterCommand(
         if(IsCurrentRouterControlCommandOwner(targets, lookup, popups, source)){
             const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.controlOwner.host, source.controlOwner.declarationGeneration);
             if(hostIndex.has_value())
-                AppendRouterControlAction(targets[hostIndex.value()], focused, layoutGeneration, ControlActionKind::Submit, 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+                AppendRouterControlAction(
+                    targets[hostIndex.value()],
+                    focused,
+                    layoutGeneration,
+                    ControlActionKind::Submit,
+                    0.0,
+                    0.0,
+                    event.extend || event.shift || source.submitExtend,
+                    event.control || source.submitToggle,
+                    controlActions,
+                    inOutNextActionSequence,
+                    inOutResult
+                );
         }
     }
     else if(focused.activatable)
@@ -179,8 +191,11 @@ void RouteRouterActiveCommandAction(
     if(control.navigable){
         if(submitCommand){
             controlHandled = true;
-            if(!event.repeat && !alreadyPressed)
+            if(!event.repeat && !alreadyPressed){
                 inOutSource.controlOwner = ControlCommandOwner(control.id, control.declarationGeneration, control.popup, control.control, false);
+                inOutSource.submitExtend = event.extend || event.shift;
+                inOutSource.submitToggle = event.control;
+            }
         }
         else
             controlHandled = TryRouteRouterControlNavigation(event, control, focused, alreadyPressed, layoutGeneration, inOutSource, controlActions, inOutNextActionSequence, inOutResult);
@@ -200,7 +215,7 @@ b8 OwnsRouterCommandSource(
 }
 
 b8 WantsRouterCommands(in Span<PopupRecord> popups, in WidgetId focus, in Span<CommandSource> commandSources){
-    if(!popups.empty() || focus.valid())
+    if(HasBlockingRouterPopup(popups) || focus.valid())
         return true;
     for(in CommandSource source : commandSources){
         if(source.consumed)

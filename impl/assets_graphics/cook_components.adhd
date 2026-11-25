@@ -5,7 +5,9 @@
 #include <impl/assets_graphics/components.adhd>
 #include <impl/assets_graphics/cook_types.adhd>
 #include <impl/assets_material/asset.adhd>
+#include <impl/assets_material/bind_value_parser.adhd>
 #include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_mesh/skin_asset.adhd>
 #include <impl/assets_model/asset.adhd>
 #include <impl/assets_scene/cook.adhd>
 
@@ -19,10 +21,26 @@ const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_
 type ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
 type MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
 type RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
+type MaterialInstanceComponentCookEntry = TypedComponentCookEntry<MaterialInstanceComponent>;
+type SkeletonJointPaletteComponentCookEntry = TypedComponentCookEntry<SkeletonJointPaletteComponent>;
+type SkeletonPoseComponentCookEntry = TypedComponentCookEntry<SkeletonPoseComponent>;
+type SkinnedMeshBindingComponentCookEntry = TypedComponentCookEntry<SkinnedMeshBindingComponent>;
+type CsgReceiverComponentCookEntry = TypedComponentCookEntry<CsgReceiverComponent>;
+type StaticCsgMeshComponentCookEntry = TypedComponentCookEntry<StaticCsgMeshComponent>;
+type SkinnedCsgMeshComponentCookEntry = TypedComponentCookEntry<SkinnedCsgMeshComponent>;
+type CsgCutterComponentCookEntry = TypedComponentCookEntry<CsgCutterComponent>;
 
 type ModelComponentCodec = TypedComponentAssetCodec<ModelComponentAsset>;
 type MeshComponentCodec = TypedComponentAssetCodec<MeshComponentAsset>;
 type RendererComponentCodec = TypedComponentAssetCodec<RendererComponentAsset>;
+type MaterialInstanceComponentCodec = TypedComponentAssetCodec<MaterialInstanceComponentAsset>;
+type SkeletonJointPaletteComponentCodec = TypedComponentAssetCodec<SkeletonJointPaletteComponentAsset>;
+type SkeletonPoseComponentCodec = TypedComponentAssetCodec<SkeletonPoseComponentAsset>;
+type SkinnedMeshBindingComponentCodec = TypedComponentAssetCodec<SkinnedMeshBindingComponentAsset>;
+type CsgReceiverComponentCodec = TypedComponentAssetCodec<CsgReceiverComponentAsset>;
+type StaticCsgMeshComponentCodec = TypedComponentAssetCodec<StaticCsgMeshComponentAsset>;
+type SkinnedCsgMeshComponentCodec = TypedComponentAssetCodec<SkinnedCsgMeshComponentAsset>;
+type CsgCutterComponentCodec = TypedComponentAssetCodec<CsgCutterComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,6 +209,434 @@ Expected<RendererComponentCookEntry> ParseRendererComponentCookMetadata(in Name 
     if(!ReadOptionalRendererPriorityFields(file, asset, entry.component.opticalVolumePriority, entry.component.opticalMediumPriority))
         return MakeUnexpected(Failure());
     if(!BuildComponentAssetFromEntry<RendererComponentAsset, RendererComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<Name> ReadUnpaddedNameField(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    in b8 required
+){
+    const Expected<MetadataStringField> rawField = ReadMetadataStringField(file, asset, prefix, field, required);
+    if(!rawField.has_value())
+        return MakeUnexpected(Failure());
+    if(!rawField.value().present)
+        return s_NameNone;
+    const StringView trimmed = TrimView(rawField.value().text);
+    if(trimmed.empty() || trimmed != rawField.value().text){
+        error("{} '{}': field '{}' must not be empty or padded", prefix, file, field);
+        return MakeUnexpected(Failure());
+    }
+    const Expected<Name> parsed = ParseName(trimmed);
+    if(!parsed.has_value() || parsed.value() == s_NameNone){
+        error("{} '{}': field '{}' is invalid", prefix, file, field);
+        return MakeUnexpected(Failure());
+    }
+    return parsed.value();
+}
+
+b8 LessMaterialInstanceParameter(in MaterialInstanceParameter lhs, in MaterialInstanceParameter rhs){
+    return lhs.parameterName < rhs.parameterName;
+}
+
+b8 ReadOptionalSkeletonSkinningModeField(in Path file, in MetascriptValue asset, in StringView prefix, mut u32 inOutMode){
+    if(!asset.hasField(s_SkeletonSkinningModeField))
+        return true;
+    const Expected<MetadataStringField> field = ReadMetadataStringField(file, asset, prefix, s_SkeletonSkinningModeField, true);
+    if(!field.has_value())
+        return false;
+    if(field.value().text == s_SkeletonSkinningModeLinearBlendText){
+        inOutMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+        return true;
+    }
+    if(field.value().text == s_SkeletonSkinningModeDualQuaternionText){
+        inOutMode = cast<u32>(SkeletonSkinningMode::DualQuaternion);
+        return true;
+    }
+    error("{} '{}': field '{}' must be 'linear_blend' or 'dual_quaternion'", prefix, file, s_SkeletonSkinningModeField);
+    return false;
+}
+
+Expected<f32x3x4> ReadMetadataAffineMatrix3x4Value(
+    in Path file,
+    in MetascriptValue value,
+    in StringView prefix,
+    in StringView field
+){
+    if(!value.isList() || value.listView().size() != 12u){
+        error("{} '{}': field '{}' entries must be 12-element numeric lists", prefix, file, field);
+        return MakeUnexpected(Failure());
+    }
+    Array<f32, 12> elements = Array<f32, 12>();
+    const Span<MetascriptValue> items = value.listView();
+    for(usize i = 0u; i < 12u; ++i){
+        const Expected<f32> element = ReadMetadataFiniteF32Value(file, items[i], prefix, field);
+        if(!element.has_value())
+            return MakeUnexpected(Failure());
+        elements[i] = element.value();
+    }
+    return f32x3x4(
+        elements[0u], elements[1u], elements[2u], elements[3u],
+        elements[4u], elements[5u], elements[6u], elements[7u],
+        elements[8u], elements[9u], elements[10u], elements[11u]
+    );
+}
+
+b8 ReadOptionalAffineMatrix3x4Field(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    mut MatrixSingle inOutMatrix
+){
+    const Optional<in MetascriptValue> fieldVal = asset.borrowField(field);
+    if(!fieldVal.has_value())
+        return true;
+    const Expected<f32x3x4> parsed = ReadMetadataAffineMatrix3x4Value(file, fieldVal.value(), prefix, field);
+    if(!parsed.has_value())
+        return false;
+    inOutMatrix = MatrixSingle(parsed.value());
+    return true;
+}
+
+b8 ReadOptionalMatrix3x4ListField(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    mut Vector<SkeletonJointMatrix> outMatrices
+){
+    if(!asset.hasField(field))
+        return true;
+    const Expected<Span<MetascriptValue>> listResult = ReadMetadataListField(file, asset, prefix, field);
+    if(!listResult.has_value())
+        return false;
+    const Span<MetascriptValue> items = listResult.value();
+    if(items.size() > cast<usize>(u32.max)){
+        error("{} '{}': field '{}' count overflows", prefix, file, field);
+        return false;
+    }
+    outMatrices.clear();
+    outMatrices.reserve(items.size());
+    for(in MetascriptValue item : items){
+        const Expected<f32x3x4> matrix = ReadMetadataAffineMatrix3x4Value(file, item, prefix, field);
+        if(!matrix.has_value() || !IsFiniteSkeletonJointMatrix(MatrixSingle(matrix.value())))
+            return false;
+        outMatrices.push_back(matrix.value());
+    }
+    return true;
+}
+
+b8 ReadOptionalParentJointListField(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    mut Vector<u32> outParentJoints
+){
+    if(!asset.hasField(field))
+        return true;
+    const Expected<Span<MetascriptValue>> listResult = ReadMetadataListField(file, asset, prefix, field);
+    if(!listResult.has_value())
+        return false;
+    const Span<MetascriptValue> items = listResult.value();
+    if(items.size() > cast<usize>(u32.max)){
+        error("{} '{}': field '{}' count overflows", prefix, file, field);
+        return false;
+    }
+    outParentJoints.clear();
+    outParentJoints.reserve(items.size());
+    for(in MetascriptValue item : items){
+        if(!item.isInteger()){
+            error("{} '{}': field '{}' entries must be integers", prefix, file, field);
+            return false;
+        }
+        const i64 val = item.asInteger();
+        if(val == -1 || val == cast<i64>(s_SkeletonInvalidJointIndex))
+            outParentJoints.push_back(s_SkeletonInvalidJointIndex);
+        else if(val >= 0 && val < cast<i64>(s_SkeletonInvalidJointIndex))
+            outParentJoints.push_back(cast<u32>(val));
+        else{
+            error("{} '{}': field '{}' entry {} is out of range", prefix, file, field, val);
+            return false;
+        }
+    }
+    return true;
+}
+
+b8 ReadOptionalByteListField(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    mut Vector<u8> outBytes
+){
+    if(!asset.hasField(field))
+        return true;
+    const Expected<Span<MetascriptValue>> listResult = ReadMetadataListField(file, asset, prefix, field);
+    if(!listResult.has_value())
+        return false;
+    const Span<MetascriptValue> items = listResult.value();
+    if(items.size() > cast<usize>(u32.max)){
+        error("{} '{}': field '{}' byte count overflows", prefix, file, field);
+        return false;
+    }
+    outBytes.clear();
+    outBytes.reserve(items.size());
+    for(in MetascriptValue item : items){
+        if(!item.isInteger()){
+            error("{} '{}': field '{}' entries must be integers", prefix, file, field);
+            return false;
+        }
+        const i64 val = item.asInteger();
+        if(val < 0 || val > 255){
+            error("{} '{}': field '{}' byte {} out of range [0, 255]", prefix, file, field, val);
+            return false;
+        }
+        outBytes.push_back(cast<u8>(val));
+    }
+    return true;
+}
+
+Expected<MaterialInstanceComponentCookEntry> ParseMaterialInstanceComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    MaterialInstanceComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, asset, s_MaterialInstanceComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_MaterialInstanceComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, asset, s_MaterialInstanceComponentDiagnosticPrefix, IsAllowedMaterialInstanceComponentMetadataField))
+        return MakeUnexpected(Failure());
+
+    const Expected<Name> materialInterface = ReadUnpaddedNameField(
+        file, asset, s_MaterialInstanceComponentDiagnosticPrefix, s_MaterialInstanceInterfaceField, true
+    );
+    if(!materialInterface.has_value())
+        return MakeUnexpected(Failure());
+    entry.component.materialInterface = materialInterface.value();
+
+    const Optional<in MetascriptValue> overridesField = asset.borrowField(s_MaterialInstanceOverridesField);
+    if(overridesField.has_value()){
+        if(!overridesField.value().isMap()){
+            error("{} '{}': field '{}' must be a map", s_MaterialInstanceComponentDiagnosticPrefix, file, s_MaterialInstanceOverridesField);
+            return MakeUnexpected(Failure());
+        }
+        const String fileText = PathToString(file);
+        const StringView fileTextRef = fileText;
+        if(!overridesField.value().forEachMapEntry(lambda[in fileTextRef, mut entry](in StringView paramKey, in MetascriptValue paramValue) -> b8{
+            const StringView trimmedKey = TrimView(paramKey);
+            if(trimmedKey.empty() || trimmedKey != paramKey){
+                error("{} '{}': override key '{}' must not be empty or padded", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey);
+                return false;
+            }
+            const usize dotIndex = trimmedKey.find('.');
+            if(dotIndex == 0u || dotIndex + 1u >= trimmedKey.size() || trimmedKey.find('.', dotIndex + 1u) < trimmedKey.size()){
+                error("{} '{}': override key '{}' must use block.field form", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey);
+                return false;
+            }
+            const Expected<Name> paramName = ParseName(trimmedKey);
+            const Expected<Name> blockName = ParseName(trimmedKey.substr(0u, dotIndex));
+            const Expected<Name> fieldName = ParseName(trimmedKey.substr(dotIndex + 1u));
+            if(!paramName.has_value() || paramName.value() == s_NameNone || !blockName.has_value() || blockName.value() == s_NameNone || !fieldName.has_value() || fieldName.value() == s_NameNone){
+                error("{} '{}': override key '{}' is invalid", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey);
+                return false;
+            }
+            if(!paramValue.isString()){
+                error("{} '{}': override '{}' value must be a typed value string", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey);
+                return false;
+            }
+            const Expected<MaterialTypedValueData> typed = ParseMaterialTypedValue(trimmedKey, TrimView(paramValue.asString()));
+            if(!typed.has_value()){
+                error("{} '{}': override '{}' has invalid typed value '{}'", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey, paramValue.asString());
+                return false;
+            }
+            const MaterialLayoutFieldType fieldType = MaterialLayoutFieldTypeFromParameterType(
+                cast<MaterialParameterValueType>(typed.value().meta.z),
+                typed.value().meta.w
+            );
+            if(!IsMaterialLayoutNumericFieldType(fieldType)){
+                error("{} '{}': override '{}' must have a numeric field type", s_MaterialInstanceComponentDiagnosticPrefix, fileTextRef, paramKey);
+                return false;
+            }
+            MaterialInstanceParameter param;
+            param.parameterName = paramName.value();
+            param.blockName = blockName.value();
+            param.fieldName = fieldName.value();
+            param.fieldType = fieldType;
+            param.value = MaterialTypedValueToLayoutValue(typed.value());
+            entry.component.overrides.push_back(param);
+            return true;
+        }))
+            return MakeUnexpected(Failure());
+
+        if(entry.component.overrides.size() > 1u)
+            SortSequence<MaterialInstanceParameter>(entry.component.overrides, LessMaterialInstanceParameter);
+        if(!entry.component.overrides.empty())
+            entry.component.revision = 1u;
+    }
+
+    if(!BuildComponentAssetFromEntry<MaterialInstanceComponentAsset, MaterialInstanceComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<SkeletonJointPaletteComponentCookEntry> ParseSkeletonJointPaletteComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    SkeletonJointPaletteComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, asset, s_SkeletonJointPaletteComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SkeletonJointPaletteComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, asset, s_SkeletonJointPaletteComponentDiagnosticPrefix, IsAllowedSkeletonJointPaletteComponentMetadataField))
+        return MakeUnexpected(Failure());
+
+    if(!ReadOptionalSkeletonSkinningModeField(file, asset, s_SkeletonJointPaletteComponentDiagnosticPrefix, entry.component.skinningMode))
+        return MakeUnexpected(Failure());
+    if(!ReadOptionalMatrix3x4ListField(file, asset, s_SkeletonJointPaletteComponentDiagnosticPrefix, s_SkeletonJointPaletteJointsField, entry.component.joints))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<SkeletonJointPaletteComponentAsset, SkeletonJointPaletteComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<SkeletonPoseComponentCookEntry> ParseSkeletonPoseComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    SkeletonPoseComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, asset, s_SkeletonPoseComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SkeletonPoseComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, asset, s_SkeletonPoseComponentDiagnosticPrefix, IsAllowedSkeletonPoseComponentMetadataField))
+        return MakeUnexpected(Failure());
+
+    if(!ReadOptionalSkeletonSkinningModeField(file, asset, s_SkeletonPoseComponentDiagnosticPrefix, entry.component.skinningMode))
+        return MakeUnexpected(Failure());
+    if(!ReadOptionalParentJointListField(file, asset, s_SkeletonPoseComponentDiagnosticPrefix, s_SkeletonPoseParentJointsField, entry.component.parentJoints))
+        return MakeUnexpected(Failure());
+    if(!ReadOptionalMatrix3x4ListField(file, asset, s_SkeletonPoseComponentDiagnosticPrefix, s_SkeletonPoseLocalJointsField, entry.component.localJoints))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<SkeletonPoseComponentAsset, SkeletonPoseComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<SkinnedMeshBindingComponentCookEntry> ParseSkinnedMeshBindingComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    SkinnedMeshBindingComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, asset, s_SkinnedMeshBindingComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SkinnedMeshBindingComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, asset, s_SkinnedMeshBindingComponentDiagnosticPrefix, IsAllowedSkinnedMeshBindingComponentMetadataField))
+        return MakeUnexpected(Failure());
+
+    const Expected<AssetRef<Skin>> skinRef = ReadGraphicsComponentReference<Skin>(
+        file, asset, s_SkinnedMeshBindingComponentDiagnosticPrefix, s_SkinnedMeshBindingSkinField
+    );
+    if(!skinRef.has_value())
+        return MakeUnexpected(Failure());
+    entry.component.skin = skinRef.value();
+
+    const Expected<Name> skeletonEntityName = ReadUnpaddedNameField(
+        file, asset, s_SkinnedMeshBindingComponentDiagnosticPrefix, s_SkinnedMeshBindingSkeletonEntityNameField, false
+    );
+    if(!skeletonEntityName.has_value())
+        return MakeUnexpected(Failure());
+    entry.component.skeletonEntityName = skeletonEntityName.value();
+    if(!BuildComponentAssetFromEntry<SkinnedMeshBindingComponentAsset, SkinnedMeshBindingComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 ReadCsgReceiverComponentCookData(
+    in Name virtualPath,
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    mut Name outVirtualPath,
+    mut CsgReceiverComponent outComponent
+){
+    if(!ValidateOptionalSceneMetadataMap(file, asset, prefix))
+        return false;
+    TypedComponentCookEntry<CsgReceiverComponent> tempEntry;
+    if(!AssignCookEntryVirtualPath(virtualPath, file, prefix, tempEntry))
+        return false;
+    outVirtualPath = tempEntry.virtualPath;
+    if(!asset.isMap())
+        return true;
+    if(!ValidateMetadataAssetFields(file, asset, prefix, IsAllowedCsgReceiverComponentMetadataField))
+        return false;
+    const Expected<Name> receiverGroup = ReadUnpaddedNameField(file, asset, prefix, s_CsgReceiverGroupField, false);
+    if(!receiverGroup.has_value())
+        return false;
+    outComponent.receiverGroup = receiverGroup.value();
+    if(!ReadOptionalMetadataBoolField(file, asset, prefix, s_CsgReceiverEnabledField, outComponent.enabled))
+        return false;
+    if(!ReadOptionalMetadataBoolField(file, asset, prefix, s_CsgReceiverAffectOpaquePassField, outComponent.affectOpaquePass))
+        return false;
+    return ReadOptionalMetadataBoolField(file, asset, prefix, s_CsgReceiverAffectTransparentPassField, outComponent.affectTransparentPass);
+}
+
+Expected<CsgReceiverComponentCookEntry> ParseCsgReceiverComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    CsgReceiverComponentCookEntry entry;
+    if(!ReadCsgReceiverComponentCookData(virtualPath, file, asset, s_CsgReceiverComponentDiagnosticPrefix, entry.virtualPath, entry.component))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<CsgReceiverComponentAsset, CsgReceiverComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<TypedComponentCookEntry<CsgMeshReceiverComponent<Kind>>> ParseCsgMeshReceiverComponentCookMetadata<AssetT : IComponent, const u8 Kind>(
+    in Name virtualPath,
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix
+){
+    TypedComponentCookEntry<CsgMeshReceiverComponent<Kind>> entry;
+    CsgReceiverComponent receiver;
+    if(!ReadCsgReceiverComponentCookData(virtualPath, file, asset, prefix, entry.virtualPath, receiver))
+        return MakeUnexpected(Failure());
+    AssignCsgMeshReceiverFromBase<Kind>(receiver, entry.component);
+    if(!BuildComponentAssetFromEntry<AssetT, TypedComponentCookEntry<CsgMeshReceiverComponent<Kind>>>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<StaticCsgMeshComponentCookEntry> ParseStaticCsgMeshComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    return ParseCsgMeshReceiverComponentCookMetadata<StaticCsgMeshComponentAsset, 0u>(
+        virtualPath, file, asset, s_StaticCsgMeshComponentDiagnosticPrefix
+    );
+}
+
+Expected<SkinnedCsgMeshComponentCookEntry> ParseSkinnedCsgMeshComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    return ParseCsgMeshReceiverComponentCookMetadata<SkinnedCsgMeshComponentAsset, 1u>(
+        virtualPath, file, asset, s_SkinnedCsgMeshComponentDiagnosticPrefix
+    );
+}
+
+Expected<CsgCutterComponentCookEntry> ParseCsgCutterComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){
+    CsgCutterComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, asset, s_CsgCutterComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CsgCutterComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, asset, s_CsgCutterComponentDiagnosticPrefix, IsAllowedCsgCutterComponentMetadataField))
+        return MakeUnexpected(Failure());
+
+    const Expected<Name> receiverGroup = ReadUnpaddedNameField(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgReceiverGroupField, false);
+    if(!receiverGroup.has_value())
+        return MakeUnexpected(Failure());
+    entry.component.receiverGroup = receiverGroup.value();
+
+    const Expected<Name> shapeType = ReadUnpaddedNameField(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterShapeTypeField, true);
+    if(!shapeType.has_value())
+        return MakeUnexpected(Failure());
+    entry.component.shapeType = shapeType.value();
+
+    MatrixSingle worldToShape = MatrixSingle(entry.component.worldToShape);
+    if(!ReadOptionalAffineMatrix3x4Field(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterWorldToShapeField, worldToShape))
+        return MakeUnexpected(Failure());
+    entry.component.worldToShape = f32x3x4(worldToShape);
+    MatrixSingle shapeToWorld = MatrixSingle(entry.component.shapeToWorld);
+    if(!ReadOptionalAffineMatrix3x4Field(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterShapeToWorldField, shapeToWorld))
+        return MakeUnexpected(Failure());
+    entry.component.shapeToWorld = f32x3x4(shapeToWorld);
+    if(!ReadOptionalByteListField(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterParameterBytesField, entry.component.parameterBytes))
+        return MakeUnexpected(Failure());
+    if(!ReadOptionalMetadataBoolField(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterActiveField, entry.component.active))
+        return MakeUnexpected(Failure());
+    if(!ReadOptionalMetadataBoolField(file, asset, s_CsgCutterComponentDiagnosticPrefix, s_CsgCutterSyncFromTransformField, entry.component.syncFromTransform))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<CsgCutterComponentAsset, CsgCutterComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
 }

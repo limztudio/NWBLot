@@ -11,6 +11,7 @@
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tab_bar.adhd>
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/paint.adhd>
 #include <impl/ecs_ui/toolkit/text/service.adhd>
@@ -50,7 +51,7 @@ class ControlVisualPainter{
             return painted && sepPopped;
         }
         if(kind == WidgetKind::Button){
-            const Name preferred = ResolveButtonPreferredName(style, enabled, pressed, hover);
+            const Name preferred = ResolveButtonPreferredName(style, enabled, pressed || checked, hover);
             painted = paint.drawRegionWithFallback(preferred, style.button, rectangle);
             ResolveButtonTextPlacement(rectangle, padding, measured, textClip, origin);
         }
@@ -65,6 +66,36 @@ class ControlVisualPainter{
                 if(!enabled)
                     tint = Color(1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha);
                 paint.tryDrawRegion(style.checkboxMark, mark, tint);
+            }
+        }
+        else if(kind == WidgetKind::CollapsibleHeader){
+            painted = this.paintCollapsibleHeaderBackplate(paint, style, rectangle, enabled, pressed, hover);
+            Rect indicator;
+            ResolveCollapsibleHeaderLayout(rectangle, padding, checkboxExtent, style.gap, measured, indicator, textClip, origin);
+            if(painted && indicator.width > 0.0f && indicator.height > 0.0f){
+                Color iconColor = style.disabledText;
+                if(enabled)
+                    iconColor = style.text;
+                if(!paint.tryDrawRegion(style.headerIndicator, indicator, iconColor)){
+                    const f32 insetX = indicator.width * 0.25f;
+                    const f32 insetY = indicator.height * 0.25f;
+                    const f32 left = indicator.x + insetX;
+                    const f32 right = (indicator.x + indicator.width) - insetX;
+                    const f32 top = indicator.y + insetY;
+                    const f32 bottom = (indicator.y + indicator.height) - insetY;
+                    const f32 midX = indicator.x + indicator.width * 0.5f;
+                    const f32 midY = indicator.y + indicator.height * 0.5f;
+                    if(checked){
+                        const f32 dy = (bottom - top) * 0.35f;
+                        paint.drawLine(Point(left, midY - dy), Point(midX, midY + dy), 1.5f, iconColor);
+                        paint.drawLine(Point(midX, midY + dy), Point(right, midY - dy), 1.5f, iconColor);
+                    }
+                    else{
+                        const f32 dx = (right - left) * 0.35f;
+                        paint.drawLine(Point(midX - dx, top), Point(midX + dx, midY), 1.5f, iconColor);
+                        paint.drawLine(Point(midX + dx, midY), Point(midX - dx, bottom), 1.5f, iconColor);
+                    }
+                }
             }
         }
         if(painted && focused && enabled && interactive)
@@ -205,6 +236,66 @@ class ControlVisualPainter{
         return painted && textPopped && rowPopped;
     }
 
+    private b8 paintCollapsibleHeaderBackplate(
+        mut PaintBuilder paint,
+        in WidgetStyle style,
+        in Rect bounds,
+        in b8 enabled,
+        in b8 pressed,
+        in b8 hovered
+    )const{
+        Name primary = style.header;
+        Name secondary = style.windowTitle;
+        if(!enabled){
+            primary = style.headerDisabled;
+            secondary = style.buttonDisabled;
+        }
+        else if(pressed){
+            primary = style.headerPressed;
+            secondary = style.buttonPressed;
+        }
+        else if(hovered){
+            primary = style.headerHover;
+            secondary = style.buttonHover;
+        }
+        if(paint.tryDrawRegion(primary, bounds) || paint.tryDrawRegion(secondary, bounds))
+            return true;
+        return paint.drawRegionWithFallback(style.windowTitle, style.button, bounds);
+    }
+
+    private b8 paintWindowTitleButtonBackplate(mut PaintBuilder paint, in WidgetStyle style, in Rect bounds, in b8 hovered, in b8 pressed)const{
+        if(!hovered && !pressed)
+            return true;
+        Name preferred = style.buttonHover;
+        if(pressed)
+            preferred = style.buttonPressed;
+        return paint.drawRegionWithFallback(preferred, style.windowTitle, bounds);
+    }
+
+    private b8 paintCloseButtonSymbol(
+        mut PaintBuilder paint,
+        in WidgetStyle style,
+        in Name closeRegion,
+        in Rect bounds,
+        in Color symbolColor,
+        in b8 hovered,
+        in b8 pressed
+    )const{
+        if(!this.paintWindowTitleButtonBackplate(paint, style, bounds, hovered, pressed))
+            return false;
+        if(!paint.tryDrawRegion(closeRegion, bounds, symbolColor)){
+            const f32 insetX = bounds.width * 0.25f;
+            const f32 insetY = bounds.height * 0.25f;
+            const f32 left = bounds.x + insetX;
+            const f32 right = (bounds.x + bounds.width) - insetX;
+            const f32 top = bounds.y + insetY;
+            const f32 bottom = (bounds.y + bounds.height) - insetY;
+            paint.drawLine(Point(left, top), Point(right, bottom), 1.5f, symbolColor);
+            paint.drawLine(Point(right, top), Point(left, bottom), 1.5f, symbolColor);
+        }
+        return true;
+    }
+
     public b8 paintWindowTitleHeader(
         mut PaintBuilder paint,
         mut TextService text,
@@ -216,6 +307,10 @@ class ControlVisualPainter{
         in b8 collapseHovered,
         in b8 collapsePressed,
         in b8 collapseFocused,
+        in b8 closable,
+        in b8 closeHovered,
+        in b8 closePressed,
+        in b8 closeFocused,
         in TextLayout titleLayout,
         in Rect titleBounds,
         in Rect header,
@@ -225,12 +320,8 @@ class ControlVisualPainter{
         b8 painted = paint.drawRegion(style.windowTitle, header);
         if(collapsible){
             const Rect collapse = ResolveWindowCollapseBounds(state, metrics);
-            if(painted && (collapseHovered || collapsePressed)){
-                Name preferredHover = style.buttonHover;
-                if(collapsePressed)
-                    preferredHover = style.buttonPressed;
-                painted = paint.drawRegionWithFallback(preferredHover, style.windowTitle, collapse);
-            }
+            if(painted)
+                painted = this.paintWindowTitleButtonBackplate(paint, style, collapse, collapseHovered, collapsePressed);
             if(painted){
                 Color collapseTint = style.text;
                 if(state.collapsed)
@@ -240,7 +331,14 @@ class ControlVisualPainter{
             if(painted && collapseFocused)
                 paint.tryDrawRegion(style.focus, collapse);
         }
-        const Rect content = ResolveWindowTitleContentBounds(header, metrics, collapsible, style.gap);
+        if(closable){
+            const Rect closeRect = ResolveWindowCloseBounds(state, metrics);
+            if(painted)
+                painted = this.paintCloseButtonSymbol(paint, style, style.windowClose, closeRect, style.text, closeHovered, closePressed);
+            if(painted && closeFocused)
+                paint.tryDrawRegion(style.focus, closeRect);
+        }
+        const Rect content = ResolveWindowTitleContentBounds(header, metrics, collapsible, closable, style.gap);
         const Point origin = ResolveCenteredTextOrigin(content, 0.0f, titleBounds);
         paint.pushClip(content);
         if(painted)
@@ -309,26 +407,74 @@ class ControlVisualPainter{
         return painted && contentPopped && popped && ended;
     }
 
-    public b8 paintListScrollbarVisual(
+    public b8 paintListScrollbarAxisVisual(
         mut PaintBuilder paint,
         in UiSkin skin,
         in ListStyle style,
-        in ScrollPlacement placement,
+        in Rect track,
+        in Rect thumb,
         in Rect clip,
+        in b8 enabled,
+        in b8 pressed,
         in b8 hover
     ){
         Name preferredThumb = style.thumb;
-        if(hover)
+        if(!enabled)
+            preferredThumb = style.thumbDisabled;
+        else if(pressed)
+            preferredThumb = style.thumbPressed;
+        else if(hover)
             preferredThumb = style.thumbHover;
         const Optional<usize> trackIdx = paint.resolveRegionIndex(style.track, style.trackFallback);
         const Optional<usize> thumbIdx = paint.resolveRegionIndex(preferredThumb, style.thumbFallback);
         if(!trackIdx.has_value() || !thumbIdx.has_value())
             return false;
         paint.pushClip(clip);
-        paint.drawRegionByIndex(trackIdx.value(), placement.track);
-        paint.drawRegionByIndex(thumbIdx.value(), placement.thumb);
+        paint.drawRegionByIndex(trackIdx.value(), track);
+        paint.drawRegionByIndex(thumbIdx.value(), thumb);
         const b8 trackPopped = paint.popClip();
         return trackPopped;
+    }
+
+    public b8 paintListScrollbarVisual(
+        mut PaintBuilder paint,
+        in UiSkin skin,
+        in ListStyle style,
+        in ScrollPlacement placement,
+        in Rect clip,
+        in b8 enabled,
+        in b8 pressed,
+        in b8 hover
+    ){
+        return this.paintListScrollbarAxisVisual(paint, skin, style, placement.track, placement.thumb, clip, enabled, pressed, hover);
+    }
+
+    public b8 paintListScrollbarsVisual(
+        mut PaintBuilder paint,
+        in UiSkin skin,
+        in ListStyle style,
+        in ScrollViewportPlacement scrollbars,
+        in Rect clip,
+        in b8 enabled,
+        in b8 horizontalPressed,
+        in b8 horizontalHover,
+        in b8 verticalPressed,
+        in b8 verticalHover
+    ){
+        if(scrollbars.vertical.visible && !this.paintListScrollbarAxisVisual(paint, skin, style, scrollbars.vertical.track, scrollbars.vertical.thumb, clip, enabled, verticalPressed, verticalHover))
+            return false;
+        if(scrollbars.horizontal.visible && !this.paintListScrollbarAxisVisual(paint, skin, style, scrollbars.horizontal.track, scrollbars.horizontal.thumb, clip, enabled, horizontalPressed, horizontalHover))
+            return false;
+        if(scrollbars.corner.width > 0.0f && scrollbars.corner.height > 0.0f){
+            const Optional<usize> cornerIdx = paint.resolveRegionIndex(style.track, style.trackFallback);
+            if(!cornerIdx.has_value())
+                return false;
+            paint.pushClip(clip);
+            paint.drawRegionByIndex(cornerIdx.value(), scrollbars.corner);
+            if(!paint.popClip())
+                return false;
+        }
+        return true;
     }
 
     public b8 paintTextAreaScrollbarAxisVisual(
@@ -372,6 +518,102 @@ class ControlVisualPainter{
         if(painted && placement.corner.width > 0.0f && placement.corner.height > 0.0f){
             if(!paint.drawRegionWithFallback(scrollbarStyle.track, scrollbarStyle.trackFallback, placement.corner))
                 paint.fillRect(placement.corner, scrollbarStyle.trackColor);
+        }
+        const b8 popped = paint.popClip();
+        return painted && popped;
+    }
+
+    public b8 paintTabBarVisual(
+        mut PaintBuilder paint,
+        mut TextService text,
+        in TabBarStyle style,
+        in WidgetStyle widgetStyle,
+        in TabBarPlacement placement,
+        in Span<TabBarLabelEntry> labels,
+        in b8 interactive,
+        in b8 focused,
+        in u64 cursorKey,
+        in WidgetId hoveredId,
+        in WidgetId pressedId,
+        in WidgetId tabsGroupId,
+        in WidgetId closeGroupId
+    ){
+        if(labels.size() != cast<usize>(placement.count))
+            return false;
+        paint.pushClip(placement.clip);
+        b8 painted = true;
+        if(placement.track.width > 0.0f && placement.track.height > 0.0f)
+            painted = paint.drawRegionWithFallback(style.track, style.trackFallback, placement.track);
+        for(u32 index = 0u; painted && index < placement.count; ++index){
+            in TabBarTabPlacement tab = placement.tabs[index];
+            in TabBarLabelEntry labelEntry = labels[index];
+            if(!labelEntry.text.valid()){
+                painted = false;
+                break;
+            }
+            const Expected<WidgetId> partId = TryMakeWidgetPartId(tabsGroupId, tab.key);
+            if(!partId.has_value()){
+                painted = false;
+                break;
+            }
+            const b8 tabEnabled = interactive && tab.enabled;
+            const b8 tabHovered = tabEnabled && hoveredId == partId.value();
+            const b8 tabPressed = tabEnabled && pressedId == partId.value();
+            Name preferred = style.normal;
+            Name stateFallback = style.fallback;
+            Color tint;
+            if(!tabEnabled){
+                preferred = style.disabled;
+                stateFallback = widgetStyle.buttonDisabled;
+                tint = style.disabledTint;
+            }
+            else if(tabPressed){
+                preferred = style.pressed;
+                stateFallback = widgetStyle.buttonPressed;
+                tint = style.pressedTint;
+            }
+            else if(tab.selected){
+                preferred = style.active;
+                stateFallback = widgetStyle.windowTitle;
+            }
+            else if(tabHovered){
+                preferred = style.hover;
+                stateFallback = widgetStyle.buttonHover;
+                tint = style.hoverTint;
+            }
+            paint.pushClip(tab.clip);
+            if(!paint.tryDrawRegion(preferred, tab.rectangle, tint) && !paint.tryDrawRegion(stateFallback, tab.rectangle, tint))
+                painted = paint.drawRegionWithFallback(style.normal, style.fallback, tab.rectangle, tint);
+            if(painted && tab.selected && tab.activeIndicator.width > 0.0f && tab.activeIndicator.height > 0.0f)
+                paint.fillRect(tab.activeIndicator, style.indicatorColor);
+            if(painted && tabEnabled && focused && tab.key == cursorKey)
+                paint.tryDrawRegion(style.focus, tab.rectangle);
+            if(painted && tab.textClip.width > 0.0f && tab.textClip.height > 0.0f){
+                paint.pushClip(tab.textClip);
+                const f32 textInset = UiSimdMax(0.0f, (tab.textClip.width - labelEntry.bounds.width) * s_RectCenterFraction);
+                const Point origin = ResolveCenteredTextOrigin(tab.textClip, textInset, labelEntry.bounds);
+                Color activeTextColor = widgetStyle.disabledText;
+                if(tabEnabled)
+                    activeTextColor = widgetStyle.text;
+                painted = text.paint(paint, labelEntry.text.deref(), origin, activeTextColor);
+                const b8 textPopped = paint.popClip();
+                painted = painted && textPopped;
+            }
+            if(painted && tab.closable && tab.closeButton.width > 0.0f && tab.closeButton.height > 0.0f){
+                const Expected<WidgetId> closePartId = TryMakeWidgetPartId(closeGroupId, tab.key);
+                if(!closePartId.has_value())
+                    painted = false;
+                else{
+                    const b8 closeHovered = tabEnabled && hoveredId == closePartId.value();
+                    const b8 closePressed = tabEnabled && pressedId == closePartId.value();
+                    Color closeColor = widgetStyle.disabledText;
+                    if(tabEnabled)
+                        closeColor = widgetStyle.text;
+                    painted = this.paintCloseButtonSymbol(paint, widgetStyle, style.close, tab.closeButton, closeColor, closeHovered, closePressed);
+                }
+            }
+            const b8 tabPopped = paint.popClip();
+            painted = painted && tabPopped;
         }
         const b8 popped = paint.popClip();
         return painted && popped;

@@ -13,14 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Rect s_FullImageUvRect = Rect(0.0f, 0.0f, 1.0f, 1.0f);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 IsValidPanelDirection(in LayoutDirection direction){
-    return direction == LayoutDirection::Row || direction == LayoutDirection::Column;
+    return direction == LayoutDirection::Row || direction == LayoutDirection::Column || direction == LayoutDirection::Overlay || direction == LayoutDirection::Grid;
 }
 
 b8 IsValidSeparatorDeclaration(in SeparatorOptions options){
@@ -28,19 +22,24 @@ b8 IsValidSeparatorDeclaration(in SeparatorOptions options){
 }
 
 b8 IsBasicControlInteractive(in WidgetKind kind){
-    return kind == WidgetKind::Button || kind == WidgetKind::Checkbox;
+    return kind == WidgetKind::Button || kind == WidgetKind::Checkbox || kind == WidgetKind::CollapsibleHeader;
 }
 
 b8 NeedsBasicControlHitTarget(in b8 interactive, in b8 annotated){
     return interactive || annotated;
 }
 
-LayoutNodeDesc BuildSizedLeafNodeDesc(in LayoutSize width, in LayoutSize height, in Point intrinsicSize){
-    LayoutNodeDesc description;
-    description.width = width;
-    description.height = height;
-    description.intrinsicSize = intrinsicSize;
-    return description;
+class BuilderItemOverridesGuard : NoCopy{
+    private mut Context m_context;
+
+    public BuilderItemOverridesGuard(mut Context context){
+        this.m_context = context;
+    }
+
+    public ~BuilderItemOverridesGuard(){
+        this.m_context.clearNextTargetOverrides();
+        this.m_context.clearNextAccessibleOverride();
+    }
 }
 
 
@@ -71,6 +70,10 @@ b8 Builder::beginPanel(in StringView stableKey, in Rect bounds, in LayoutDirecti
     }
     node = admittedNode.value();
     this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::Root);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
     this.m_scope.value().m_panelActive = true;
     return true;
 }
@@ -87,6 +90,11 @@ b8 Builder::endPanel(){
     const b8 popped = this.m_context.popScope();
     this.m_scope.value().m_panelActive = false;
     this.m_scope.value().m_stack.clear();
+    this.m_scope.value().m_scrollAreaStack.clear();
+    this.m_scope.value().m_scopeKinds.clear();
+    this.m_scope.value().m_virtualListStack.clear();
+    this.m_scope.value().m_splitterStack.clear();
+    this.m_scope.value().m_dockSpaceStack.clear();
     const b8 combosPainted = painted && popped && this.paintDeferred();
     this.publishSliderResults(combosPainted);
     this.releaseDeferredLoans();
@@ -96,11 +104,27 @@ b8 Builder::endPanel(){
 }
 
 b8 Builder::endContainer(){
-    if(this.declarationBlocked() || !this.m_scope.value().m_panelActive || this.m_scope.value().m_stack.size() <= 1u){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scrollAreaStack.back() != s_LayoutNoParent
+        || this.m_scope.value().m_virtualListStack.back() != s_LayoutNoParent
+        || this.m_scope.value().m_splitterStack.back() != s_LayoutNoParent
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::Container
+    ){
         this.m_context.fail();
         return false;
     }
     this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
     return this.m_context.popScope();
 }
 
@@ -147,10 +171,168 @@ void Builder::reset(){
     this.m_itemSelectableStyles.clear();
     this.m_widgetStyleDirty = true;
     this.m_selectableStyleDirty = true;
+    this.m_pendingCursor = PointerCursor::Default;
+    this.m_hasPendingCursor = false;
+    this.m_pendingFocusUp = WidgetId();
+    this.m_pendingFocusDown = WidgetId();
+    this.m_pendingFocusLeft = WidgetId();
+    this.m_pendingFocusRight = WidgetId();
+    this.m_hasPendingFocusNeighbors = false;
+    this.m_pendingAccessibleOverride.reset();
     if(this.m_editBoxCacheEntries.size() >= 256u){
         this.m_editBoxCacheIndex.clear();
         this.m_editBoxCacheEntries.clear();
     }
+}
+
+b8 Builder::beginFocusScope(in StringView stableKey, in b8 trapDirectional){
+    if(this.panelDeclarationBlocked() || stableKey.empty() || this.m_scope.value().m_focusScopeStack.size() >= s_ContextMaxScopeDepth){
+        this.m_context.fail();
+        return false;
+    }
+    const WidgetId scope = this.m_context.scopeId();
+    const Expected<WidgetId> id = TryMakeWidgetId(scope, stableKey);
+    if(!id.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    const u64 raw = id.value().value;
+    u32 groupId = cast<u32>((raw ^ (raw >> 32u)) & 0xFFFFFFFFu);
+    if(groupId == 0u)
+        groupId = 1u;
+    BuilderFocusScopeEntry entry;
+    entry.id = groupId;
+    entry.trapDirectional = trapDirectional;
+    this.m_scope.value().m_focusScopeStack.push_back(entry);
+    return true;
+}
+
+b8 Builder::endFocusScope(){
+    if(this.declarationBlocked() || this.m_scope.value().m_focusScopeStack.empty()){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_focusScopeStack.pop_back();
+    return true;
+}
+
+BuilderItem Builder::makeItem(){
+    BuilderItem item;
+    if(this.m_hasPendingCursor){
+        item.cursorOverride = this.m_pendingCursor;
+        item.hasCursorOverride = true;
+        this.m_pendingCursor = PointerCursor::Default;
+        this.m_hasPendingCursor = false;
+    }
+    if(this.m_hasPendingFocusNeighbors){
+        item.focusNeighborUp = this.m_pendingFocusUp;
+        item.focusNeighborDown = this.m_pendingFocusDown;
+        item.focusNeighborLeft = this.m_pendingFocusLeft;
+        item.focusNeighborRight = this.m_pendingFocusRight;
+        item.hasFocusNeighbors = true;
+        this.m_pendingFocusUp = WidgetId();
+        this.m_pendingFocusDown = WidgetId();
+        this.m_pendingFocusLeft = WidgetId();
+        this.m_pendingFocusRight = WidgetId();
+        this.m_hasPendingFocusNeighbors = false;
+    }
+    if(this.m_scope.has_value() && !this.m_scope.value().m_focusScopeStack.empty()){
+        in BuilderFocusScopeEntry topGroup = this.m_scope.value().m_focusScopeStack.back();
+        item.focusGroupId = topGroup.id;
+        item.trapDirectionalFocus = topGroup.trapDirectional;
+    }
+    if(this.m_scope.has_value() && this.m_pendingAccessibleOverride.any()){
+        item.accessibleOverride = cast<u32>(this.m_scope.value().m_accessibleOverrides.size());
+        this.m_scope.value().m_accessibleOverrides.push_back(this.m_pendingAccessibleOverride);
+        this.m_pendingAccessibleOverride.reset();
+    }
+    return item;
+}
+
+b8 Builder::emitAccessibleNode(
+    in WidgetState state,
+    in AccessibilityRole role,
+    in Rect bounds,
+    in StringView name,
+    in StringView valueText,
+    in u32 stateBits,
+    in u32 actionBits
+){
+    return this.emitAccessibleRangeNode(state, role, bounds, name, valueText, 0.0, 0.0, 0.0, 0.0, stateBits, actionBits);
+}
+
+b8 Builder::emitAccessibleRangeNode(
+    in WidgetState state,
+    in AccessibilityRole role,
+    in Rect bounds,
+    in StringView name,
+    in StringView valueText,
+    in f64 value,
+    in f64 minValue,
+    in f64 maxValue,
+    in f64 stepValue,
+    in u32 stateBits,
+    in u32 actionBits
+){
+    if(!state.id.valid())
+        return false;
+    AccessibleNodeDesc desc;
+    desc.id = state.id;
+    desc.role = role;
+    desc.stateBits = stateBits;
+    desc.actionBits = actionBits;
+    desc.bounds = bounds;
+    desc.name = name;
+    desc.valueText = valueText;
+    desc.numericValue = value;
+    desc.numericMin = minValue;
+    desc.numericMax = maxValue;
+    desc.numericStep = stepValue;
+    if((stateBits & s_AccessibilityStateFocusable) != 0u){
+        if(this.m_context.input().focus() == state.id)
+            desc.stateBits |= s_AccessibilityStateFocused;
+        if(this.m_context.input().pressed(state.id))
+            desc.stateBits |= s_AccessibilityStatePressed;
+    }
+    if(this.m_context.input().hover() == state.id)
+        desc.stateBits |= s_AccessibilityStateHovered;
+    return this.m_context.addAccessibleNode(desc);
+}
+
+b8 Builder::emitAccessiblePartNode(
+    in WidgetId id,
+    in WidgetId parentId,
+    in AccessibilityRole role,
+    in Rect bounds,
+    in StringView name,
+    in u32 stateBits,
+    in u32 actionBits,
+    in i32 positionInSet,
+    in i32 setSize,
+    in i32 level
+){
+    if(!id.valid())
+        return false;
+    AccessibleNodeDesc desc;
+    desc.id = id;
+    desc.parentId = parentId;
+    desc.role = role;
+    desc.stateBits = stateBits;
+    desc.actionBits = actionBits;
+    desc.bounds = bounds;
+    desc.name = name;
+    desc.positionInSet = positionInSet;
+    desc.setSize = setSize;
+    desc.level = level;
+    if((stateBits & s_AccessibilityStateFocusable) != 0u){
+        if(this.m_context.input().focus() == id)
+            desc.stateBits |= s_AccessibilityStateFocused;
+        if(this.m_context.input().pressed(id))
+            desc.stateBits |= s_AccessibilityStatePressed;
+    }
+    if(this.m_context.input().hover() == id)
+        desc.stateBits |= s_AccessibilityStateHovered;
+    return this.m_context.addAccessibleNode(desc);
 }
 
 b8 Builder::separator(in StringView stableKey, in SeparatorOptions options){
@@ -196,7 +378,19 @@ void Builder::setSkin(in borrow UiSkin skin){
         this.m_popupStyle,
         this.m_radioGroupStyle,
         this.m_sliderStyle,
-        this.m_progressStyle
+        this.m_progressStyle,
+        this.m_tabBarStyle,
+        this.m_splitterStyle,
+        this.m_treeStyle,
+        this.m_tableStyle,
+        this.m_dialogStyle,
+        this.m_menuBarStyle,
+        this.m_toastStyle,
+        this.m_colorPickerStyle,
+        this.m_dragDropStyle,
+        this.m_hyperlinkStyle,
+        this.m_plotStyle,
+        this.m_dockSpaceStyle
     );
     this.m_customPaletteStyleDirty = false;
     this.m_widgetStyleDirty = true;
@@ -205,6 +399,10 @@ void Builder::setSkin(in borrow UiSkin skin){
 }
 
 b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
+    return this.setTextShaping(scriptTag, language, this.m_textDirection);
+}
+
+b8 Builder::setTextShaping(in u32 scriptTag, in StringView language, in TextDirection direction){
     if(!this.balanced() || this.m_context.failed()){
         this.m_context.fail();
         return false;
@@ -212,10 +410,34 @@ b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
     ShapeRequest request;
     request.language = language;
     request.scriptTag = scriptTag;
+    request.direction = direction;
     if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
         return false;
     this.m_textLanguage.assign(language);
     this.m_textScriptTag = scriptTag;
+    this.m_textDirection = direction;
+    return true;
+}
+
+b8 Builder::setTextDirection(in TextDirection direction){
+    if(!this.balanced() || this.m_context.failed()){
+        this.m_context.fail();
+        return false;
+    }
+    if(direction != TextDirection::LeftToRight && direction != TextDirection::RightToLeft)
+        return false;
+    this.m_textDirection = direction;
+    return true;
+}
+
+b8 Builder::setTextBidiMode(in TextBidiMode mode){
+    if(!this.balanced() || this.m_context.failed()){
+        this.m_context.fail();
+        return false;
+    }
+    if(mode > TextBidiMode::ForceRightToLeft)
+        return false;
+    this.m_textBidiMode = mode;
     return true;
 }
 
@@ -232,11 +454,45 @@ b8 Builder::beginContainer(in StringView stableKey, in LayoutDirection direction
         return false;
     }
     node = admittedNode.value();
+    if(description.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
     this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::Container);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
     return true;
 }
 
+b8 Builder::label(in StringView stableKey, in StringView text, in LabelOptions options){
+    WidgetOptions widgetOptions;
+    widgetOptions.width = options.width;
+    widgetOptions.height = options.height;
+    widgetOptions.enabled = options.enabled;
+    widgetOptions.layout = options.layout;
+    f32 effectiveMaxWidth = options.maxWidth;
+    if(options.wrapMode != TextWrapMode::None && options.maxWidth == 0.0f && options.width.policy == LayoutSizePolicy::Fixed && options.width.value > 0.0f)
+        effectiveMaxWidth = options.width.value;
+    return this.addTextItemInternal(stableKey, text, WidgetKind::Label, widgetOptions, options.alignment, options.wrapMode, effectiveMaxWidth, options.ellipsis).has_value();
+}
+
 Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringView text, in WidgetKind kind, in WidgetOptions options){
+    const Expected<u32> index = this.addTextItemInternal(stableKey, text, kind, options, TextAlignment::Leading, TextWrapMode::None, 0.0f, false);
+    if(!index.has_value())
+        return MakeUnexpected(Failure());
+    return Expected<mut BuilderItem>(this.m_scope.value().m_items[index.value()]);
+}
+
+Expected<u32> Builder::addTextItemInternal(
+    in StringView stableKey,
+    in StringView text,
+    in WidgetKind kind,
+    in WidgetOptions options,
+    in TextAlignment alignment,
+    in TextWrapMode wrapMode,
+    in f32 maxWidth,
+    in b8 ellipsis
+){
     if(this.itemDeclarationBlocked()){
         this.m_context.fail();
         return MakeUnexpected(Failure());
@@ -248,7 +504,12 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
     item.styleIndex = this.currentItemStyleIndex();
     item.state = state.value();
     item.enabled = options.enabled && this.synchronizePopup();
-    const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    item.textAlignment = alignment;
+    item.textEllipsis = ellipsis;
+    ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    request.alignment = alignment;
+    request.wrapMode = wrapMode;
+    request.maxWidth = maxWidth;
     const auto measuredText = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
     if(!measuredText.has_value()){
         this.m_context.fail();
@@ -284,11 +545,22 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
         intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, checkboxExtent.value(), this.m_style.gap);
         item.checkboxExtent = checkboxExtent.value();
     }
-    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsicSize);
+    else if(kind == WidgetKind::CollapsibleHeader){
+        Point minimum;
+        f32 indicatorExtent = 0.0f;
+        if(!this.m_skin.has_value() || !ControlStyleMetrics().collapsibleHeaderMetrics(this.m_skin.value(), this.m_style, minimum, item.padding, indicatorExtent)){
+            this.m_context.fail();
+            return MakeUnexpected(Failure());
+        }
+        const Point content(textSize.x + indicatorExtent + this.m_style.gap, UiSimdMax(textSize.y, indicatorExtent));
+        intrinsicSize = ResolvePaddedIntrinsicSize(content, item.padding, minimum);
+        item.checkboxExtent = indicatorExtent;
+    }
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsicSize, options.layout);
     if(!this.addItemNode(description, item))
         return MakeUnexpected(Failure());
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
-    return Expected<mut BuilderItem>(this.m_scope.value().m_items[this.m_scope.value().m_items.size() - 1u]);
+    return cast<u32>(this.m_scope.value().m_items.size() - 1u);
 }
 
 b8 Builder::addItemNode(in LayoutNodeDesc description, mut BuilderItem item){
@@ -298,6 +570,8 @@ b8 Builder::addItemNode(in LayoutNodeDesc description, mut BuilderItem item){
         return false;
     }
     item.node = admittedNode.value();
+    if(description.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
     return true;
 }
 
@@ -387,8 +661,20 @@ b8 Builder::validateDeferredSources()const{
         if(!this.comboMatches(frame))
             return false;
     }
+    for(in auto frame : this.m_scope.value().m_treeViews){
+        if(!this.treeMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_dataTables){
+        if(!this.tableMatches(frame))
+            return false;
+    }
     for(in auto frame : this.m_scope.value().m_contextMenus){
         if(!this.contextMenuMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_menuBars){
+        if(frame.open && !this.menuBarMatches(frame))
             return false;
     }
     return true;
@@ -431,6 +717,50 @@ b8 Builder::validateDeferredStates()const{
         if(!frame.state.has_value() || frame.state.value().revision() != frame.revision)
             return false;
     }
+    for(in auto frame : this.m_scope.value().m_scrollAreas){
+        if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.stateRevision || frame.state.value().inputGeneration() != frame.inputGeneration)
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_tabBars){
+        if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.stateRevision)
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_splitters){
+        if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.revision)
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_treeViews){
+        if(!this.treeStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_dataTables){
+        if(!this.tableStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_menuBars){
+        if(!this.menuBarStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_toasts){
+        if(!this.toastStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_colorPickers){
+        if(!this.colorPickerStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_dragSources){
+        if(!this.dragSourceStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_dropTargets){
+        if(!this.dropTargetStateMatches(frame))
+            return false;
+    }
+    for(in auto frame : this.m_scope.value().m_dockSpaces){
+        if(!this.dockSpaceStateMatches(frame))
+            return false;
+    }
     return true;
 }
 
@@ -453,6 +783,7 @@ void Builder::releaseDeferredLoans(){
     }
     for(mut auto frame : this.m_scope.value().m_lists){
         frame.source.reset();
+        frame.rowHeights.reset();
         frame.state.reset();
     }
     for(mut auto frame : this.m_scope.value().m_combos){
@@ -467,6 +798,41 @@ void Builder::releaseDeferredLoans(){
         frame.state.reset();
     }
     for(mut auto frame : this.m_scope.value().m_tooltips)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_scrollAreas)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_tabBars)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_splitters)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_spinBoxes){
+        frame.integerModel.reset();
+        frame.floatModel.reset();
+        frame.editState.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_treeViews){
+        frame.source.reset();
+        frame.state.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_dataTables){
+        frame.source.reset();
+        frame.state.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_menuBars){
+        frame.source.reset();
+        frame.state.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_toasts)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_colorPickers)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_dragSources)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_dropTargets)
+        frame.state.reset();
+    for(mut auto frame : this.m_scope.value().m_canvases)
+        frame.painter.reset();
+    for(mut auto frame : this.m_scope.value().m_dockSpaces)
         frame.state.reset();
 }
 
@@ -530,7 +896,7 @@ b8 Builder::publishImageFrame(in WidgetState widget, mut ImageFrame frame){
     auto item = this.makeItem();
     item.state = widget;
     item.image = cast<u32>(this.m_scope.value().m_images.size());
-    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(frame.options.width, frame.options.height, frame.metrics.contentSize);
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(frame.options.width, frame.options.height, frame.metrics.contentSize, frame.options.layout);
     if(!this.addItemNode(description, item))
         return false;
     AppendOwned<ImageFrame>(this.m_scope.value().m_images, frame);
@@ -542,15 +908,24 @@ b8 Builder::paintImage(in BuilderItem item, in LayoutBox box){
     if(item.image >= this.m_scope.value().m_images.size())
         return false;
     in ImageFrame frame = this.m_scope.value().m_images[item.image];
-    const auto placement = PlaceImage(box.rectangle, this.visibleClip(box.clip));
+    const auto placement = PlaceImage(box.rectangle, this.visibleClip(box.clip), frame.metrics.contentSize, frame.options.uvRect, frame.options.fitMode);
     if(!placement.has_value())
         return false;
     this.m_paint.pushClip(placement.value().clip);
     b8 painted = false;
     if(frame.source.valid())
-        painted = this.m_paint.drawImage(frame.source, placement.value().bounds, s_FullImageUvRect, frame.options.tint);
+        painted = this.m_paint.drawImage(frame.source, placement.value().drawBounds, placement.value().uvRect, frame.options.tint);
     else
-        painted = this.m_paint.drawRegion(frame.region, placement.value().bounds, frame.options.tint);
+        painted = this.m_paint.drawRegion(frame.region, placement.value().drawBounds, placement.value().uvRect, frame.options.tint);
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::Image,
+        placement.value().bounds,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(true, placement.value().clip),
+        s_AccessibilityActionNone
+    );
     return this.finishClipPaint(item, placement.value().bounds, placement.value().clip, painted);
 }
 
@@ -570,20 +945,49 @@ b8 Builder::progress(in StringView stableKey, in f64 fraction, in ProgressOption
     const auto widget = this.m_context.declare(stableKey, WidgetKind::Progress);
     if(!widget.has_value())
         return false;
+    const StringView labelText = options.label;
     ProgressFrame frame;
     frame.fraction = fraction;
     frame.options = options;
+    frame.options.label = StringView();
     frame.style = this.m_progressStyle;
-    const Expected<ProgressMetrics> progressMetrics = ControlStyleMetrics().progressMetrics(this.m_skin.value(), fraction, options, frame.style);
+    const Expected<ProgressMetrics> progressMetrics = ControlStyleMetrics().progressMetrics(this.m_skin.value(), fraction, frame.options, frame.style);
     if(!progressMetrics.has_value()){
         this.m_context.fail();
         return false;
     }
     frame.metrics = progressMetrics.value();
+    if(!labelText.empty()){
+        const auto labelLayout = this.m_text.layoutShared(this.textShapeRequest(labelText, this.m_style.fontSize));
+        if(!labelLayout.has_value()){
+            this.m_context.fail();
+            return false;
+        }
+        const auto labelBounds = this.m_text.measure(labelLayout.value().deref(), this.m_paint.displayMetrics());
+        if(!labelBounds.has_value()){
+            this.m_context.fail();
+            return false;
+        }
+        frame.label = labelLayout.value();
+        frame.labelBounds = labelBounds.value();
+        const VectorDouble labelPadding(
+            cast<f64>(frame.metrics.padding.left) + cast<f64>(frame.metrics.padding.right),
+            cast<f64>(frame.metrics.padding.top) + cast<f64>(frame.metrics.padding.bottom),
+            0.0,
+            0.0
+        );
+        const VectorDouble minLabel = labelPadding + VectorDouble(cast<f64>(frame.labelBounds.width), cast<f64>(frame.labelBounds.height), 0.0, 0.0);
+        if(!IsFinite(minLabel.xy) || minLabel.x > s_UiMaxFloatF64 || minLabel.y > s_UiMaxFloatF64){
+            this.m_context.fail();
+            return false;
+        }
+        frame.metrics.contentSize.x = UiSimdMax(frame.metrics.contentSize.x, cast<f32>(minLabel.x));
+        frame.metrics.contentSize.y = UiSimdMax(frame.metrics.contentSize.y, cast<f32>(minLabel.y));
+    }
     auto item = this.makeItem();
     item.state = widget.value();
     item.progress = cast<u32>(this.m_scope.value().m_progress.size());
-    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(frame.options.width, frame.metrics.contentSize);
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(frame.options.width, frame.metrics.contentSize, frame.options.layout);
     if(!this.addItemNode(description, item))
         return false;
     AppendOwned<ProgressFrame>(this.m_scope.value().m_progress, frame);
@@ -596,10 +1000,42 @@ b8 Builder::paintProgress(in BuilderItem item, in LayoutBox box){
     if(item.progress >= this.m_scope.value().m_progress.size())
         return false;
     in ProgressFrame frame = this.m_scope.value().m_progress[item.progress];
-    const auto placement = PlaceProgress(box.rectangle, this.visibleClip(box.clip), frame.metrics, frame.fraction);
+    const auto placement = PlaceProgress(box.rectangle, this.visibleClip(box.clip), frame.metrics, frame.fraction, frame.options.indeterminate, frame.options.indeterminatePhase);
     if(!placement.has_value())
         return false;
-    const b8 painted = painter.paintProgressBarRegions(this.m_paint, frame.style, placement.value());
+    b8 painted = painter.paintProgressBarRegions(this.m_paint, frame.style, placement.value());
+    if(painted && frame.label.valid() && placement.value().content.width > 0.0f && placement.value().content.height > 0.0f){
+        in Rect content = placement.value().content;
+        in Rect textBounds = frame.labelBounds;
+        const VectorSingle originVec = (VectorSingle(content.x, content.y, 0.0f, 0.0f) + (VectorSingle(content.width, content.height, 0.0f, 0.0f) - VectorSingle(textBounds.width, textBounds.height, 0.0f, 0.0f)) * VectorSingle(0.5f)) - VectorSingle(textBounds.x, textBounds.y, 0.0f, 0.0f);
+        this.m_paint.pushClip(content);
+        painted = this.m_text.paint(this.m_paint, frame.label.deref(), Point(originVec.x, originVec.y), frame.style.text);
+        const b8 labelPopped = this.m_paint.popClip();
+        painted = painted && labelPopped;
+    }
+    StringView labelName = StringView();
+    if(frame.label.valid())
+        labelName = frame.label.deref().utf8();
+    f64 frac = frame.fraction;
+    if(frame.options.indeterminate)
+        frac = 0.0;
+    else if(frac < 0.0)
+        frac = 0.0;
+    else if(frac > 1.0)
+        frac = 1.0;
+    this.emitAccessibleRangeNode(
+        item.state,
+        AccessibilityRole::ProgressBar,
+        placement.value().bounds,
+        labelName,
+        StringView(),
+        frac,
+        0.0,
+        1.0,
+        0.0,
+        ResolveAccessibleVisibilityStateBits(true, placement.value().clip),
+        s_AccessibilityActionNone
+    );
     return this.finishClipPaint(item, placement.value().bounds, placement.value().clip, painted);
 }
 
@@ -612,22 +1048,115 @@ b8 Builder::paintPanel(){
     const Optional<LayoutBox> panel = this.m_scope.value().m_layout.box(0u);
     if(!panel.has_value())
         return false;
-    this.m_paint.pushClip(this.visibleClip(panel.value().clip));
+    const Rect panelClip = this.visibleClip(panel.value().clip);
+    this.m_paint.pushClip(panelClip);
     const b8 painted = this.m_paint.drawRegion(this.m_scope.value().m_panelStyle.panel, panel.value().rectangle);
     const b8 popped = this.m_paint.popClip();
-    const HitTarget barrier = targets.makeBarrierHitTarget(panel.value().rectangle, this.visibleClip(panel.value().clip));
+    const HitTarget barrier = targets.makeBarrierHitTarget(panel.value().rectangle, panelClip);
     if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier))
         return false;
-    return this.paintItems();
+    this.emitAccessibleNode(
+        this.m_scope.value().m_panelState,
+        AccessibilityRole::Panel,
+        panel.value().rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(true, panelClip),
+        s_AccessibilityActionNone
+    );
+    const b8 pushedParent = this.m_context.pushAccessibleParent(this.m_scope.value().m_panelState.id);
+    const b8 itemsOk = this.paintItems();
+    if(pushedParent)
+        this.m_context.popAccessibleParent();
+    return itemsOk;
 }
 
 b8 Builder::paintItems(){
     if(!this.m_scope.value().m_items.empty() && !this.popupAncestorsVisible())
         return false;
+    if(this.m_scope.value().m_hasNonZeroZIndex)
+        return this.paintItemsSortedByZIndex();
     for(in auto item : this.m_scope.value().m_items){
         const Optional<LayoutBox> box = this.m_scope.value().m_layout.box(item.node);
-        if(!box.has_value() || !this.paintItem(item, box.value()))
+        if(!box.has_value() || !this.paintItem(item, box.value())){
+            this.m_context.clearScrollOwners();
             return false;
+        }
+    }
+    return true;
+}
+
+b8 Builder::paintItemsSortedByZIndex(){
+    const u32 nodeCount = this.m_scope.value().m_layout.nodeCount();
+    if(nodeCount == 0u)
+        return true;
+    this.m_scope.value().m_zNodeBeginItem.clear();
+    this.m_scope.value().m_zNodeBeginItem.resize(cast<usize>(nodeCount), s_LayoutNoParent);
+    this.m_scope.value().m_zNodeEndItem.clear();
+    this.m_scope.value().m_zNodeEndItem.resize(cast<usize>(nodeCount), s_LayoutNoParent);
+    this.m_scope.value().m_zTraversalStack.clear();
+    for(u32 itemIdx = 0u; cast<usize>(itemIdx) < this.m_scope.value().m_items.size(); ++itemIdx){
+        in BuilderItem item = this.m_scope.value().m_items[cast<usize>(itemIdx)];
+        if(item.node >= nodeCount){
+            this.m_context.clearScrollOwners();
+            return false;
+        }
+        if((item.state.kind == WidgetKind::ScrollArea && item.checked) || (item.state.kind == WidgetKind::VirtualList && item.checked && item.listRow == s_LayoutNoParent))
+            this.m_scope.value().m_zNodeEndItem[cast<usize>(item.node)] = itemIdx;
+        else
+            this.m_scope.value().m_zNodeBeginItem[cast<usize>(item.node)] = itemIdx;
+    }
+    in Vector<LayoutTreeNode> treeNodes = this.m_scope.value().m_layout.nodes();
+    BuilderZTraversalEntry rootEntry;
+    rootEntry.node = 0u;
+    rootEntry.isEnd = false;
+    this.m_scope.value().m_zTraversalStack.push_back(rootEntry);
+    while(!this.m_scope.value().m_zTraversalStack.empty()){
+        const BuilderZTraversalEntry entry = this.m_scope.value().m_zTraversalStack.back();
+        this.m_scope.value().m_zTraversalStack.pop_back();
+        const Optional<LayoutBox> box = this.m_scope.value().m_layout.box(entry.node);
+        if(!box.has_value()){
+            this.m_context.clearScrollOwners();
+            return false;
+        }
+        if(entry.isEnd){
+            const u32 endIdx = this.m_scope.value().m_zNodeEndItem[cast<usize>(entry.node)];
+            if(endIdx != s_LayoutNoParent && !this.paintItem(this.m_scope.value().m_items[cast<usize>(endIdx)], box.value())){
+                this.m_context.clearScrollOwners();
+                return false;
+            }
+            continue;
+        }
+        const u32 beginIdx = this.m_scope.value().m_zNodeBeginItem[cast<usize>(entry.node)];
+        if(beginIdx != s_LayoutNoParent && !this.paintItem(this.m_scope.value().m_items[cast<usize>(beginIdx)], box.value())){
+            this.m_context.clearScrollOwners();
+            return false;
+        }
+        if(this.m_scope.value().m_zNodeEndItem[cast<usize>(entry.node)] != s_LayoutNoParent){
+            BuilderZTraversalEntry endEntry;
+            endEntry.node = entry.node;
+            endEntry.isEnd = true;
+            this.m_scope.value().m_zTraversalStack.push_back(endEntry);
+        }
+        this.m_scope.value().m_zChildScratch.clear();
+        for(u32 child = treeNodes[cast<usize>(entry.node)].firstChild; child != s_LayoutNoParent; child = treeNodes[cast<usize>(child)].nextSibling)
+            this.m_scope.value().m_zChildScratch.push_back(child);
+        for(usize si = 1u; si < this.m_scope.value().m_zChildScratch.size(); ++si){
+            const u32 keyNode = this.m_scope.value().m_zChildScratch[si];
+            const i32 keyZ = treeNodes[cast<usize>(keyNode)].description.zIndex;
+            usize sj = si;
+            while(sj > 0u && treeNodes[cast<usize>(this.m_scope.value().m_zChildScratch[sj - 1u])].description.zIndex > keyZ){
+                this.m_scope.value().m_zChildScratch[sj] = this.m_scope.value().m_zChildScratch[sj - 1u];
+                --sj;
+            }
+            this.m_scope.value().m_zChildScratch[sj] = keyNode;
+        }
+        for(usize reverse = this.m_scope.value().m_zChildScratch.size(); reverse > 0u; --reverse){
+            BuilderZTraversalEntry childEntry;
+            childEntry.node = this.m_scope.value().m_zChildScratch[reverse - 1u];
+            childEntry.isEnd = false;
+            this.m_scope.value().m_zTraversalStack.push_back(childEntry);
+        }
     }
     return true;
 }
@@ -635,16 +1164,81 @@ b8 Builder::paintItems(){
 b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
     HitTargetFactory targets;
     ControlVisualPainter painter;
+    BuilderItemOverridesGuard overridesGuard(this.m_context);
+    if(item.hasCursorOverride)
+        this.m_context.setNextTargetCursor(item.cursorOverride);
+    if(item.hasFocusNeighbors)
+        this.m_context.setNextFocusNeighbors(item.focusNeighborUp, item.focusNeighborDown, item.focusNeighborLeft, item.focusNeighborRight);
+    if(item.focusGroupId != 0u)
+        this.m_context.setNextTargetFocusGroup(item.focusGroupId, item.trapDirectionalFocus);
+    if(item.accessibleOverride != s_LayoutNoParent && cast<usize>(item.accessibleOverride) < this.m_scope.value().m_accessibleOverrides.size())
+        this.m_context.setNextAccessibleOverride(this.m_scope.value().m_accessibleOverrides[cast<usize>(item.accessibleOverride)]);
+    if(item.state.kind == WidgetKind::ScrollArea){
+        if(!item.checked)
+            return this.paintScrollAreaBegin(item, box);
+        return this.paintScrollAreaEnd(item, box);
+    }
+    if(item.state.kind == WidgetKind::TabBar)
+        return this.paintTabBar(item, box);
+    if(item.state.kind == WidgetKind::Splitter)
+        return this.paintSplitterHandle(item, box);
+    if(item.state.kind == WidgetKind::SpinBox){
+        if(!item.checked)
+            return this.paintSpinBoxBegin(item, box);
+        return this.paintSpinBoxEnd(item, box);
+    }
+    if(item.state.kind == WidgetKind::TreeView)
+        return this.paintTreeView(item, box);
+    if(item.state.kind == WidgetKind::DataTable)
+        return this.paintDataTable(item, box);
+    if(item.state.kind == WidgetKind::MenuBar)
+        return this.paintMenuBar(item, box);
+    if(item.state.kind == WidgetKind::ColorPicker)
+        return this.paintColorPicker(item, box);
+    if(item.state.kind == WidgetKind::Hyperlink)
+        return this.paintHyperlink(item, box);
+    if(item.state.kind == WidgetKind::RichText)
+        return this.paintRichText(item, box);
+    if(item.state.kind == WidgetKind::Plot)
+        return this.paintPlot(item, box);
+    if(item.state.kind == WidgetKind::Canvas)
+        return this.paintCanvas(item, box);
+    if(item.state.kind == WidgetKind::DockSpace)
+        return this.paintDockSpace(item, box);
     if(item.state.kind == WidgetKind::ComboBox || item.state.kind == WidgetKind::SearchComboBox)
         return this.paintCombo(item, box);
     if(item.state.kind == WidgetKind::TextArea)
         return this.paintTextArea(item, box);
-    if(item.state.kind == WidgetKind::EditBox)
+    if(item.state.kind == WidgetKind::EditBox){
+        if(item.spinBox != s_LayoutNoParent){
+            if(item.spinBox >= this.m_scope.value().m_spinBoxes.size() || item.editBox >= this.m_scope.value().m_editBoxes.size())
+                return false;
+            in BuilderSpinBoxFrame spinFrame = this.m_scope.value().m_spinBoxes[item.spinBox];
+            in BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
+            in EditBoxView view = this.editViewForFrame(editFrame);
+            const HitTarget navigation = targets.makeComboQueryNavigationTarget(
+                spinFrame.canStep,
+                view.composing(),
+                spinFrame.widget.id,
+                spinFrame.widget.declarationGeneration,
+                spinFrame.token
+            );
+            return this.paintEditBox(item, box, Optional<in HitTarget>(navigation));
+        }
         return this.paintEditBox(item, box);
+    }
     if(item.state.kind == WidgetKind::Selectable)
         return this.paintSelectable(item, box);
-    if(item.state.kind == WidgetKind::VirtualList)
+    if(item.state.kind == WidgetKind::VirtualList){
+        if(item.listRow != s_LayoutNoParent)
+            return this.paintVirtualListRow(item, box);
+        if(item.list < this.m_scope.value().m_lists.size() && this.m_scope.value().m_lists[item.list].isCustomRows){
+            if(!item.checked)
+                return this.paintVirtualListBegin(item, box);
+            return this.paintVirtualListEnd(item, box);
+        }
         return this.paintList(item, box);
+    }
     if(item.state.kind == WidgetKind::RadioGroup)
         return this.paintRadioGroup(item, box);
     if(item.state.kind == WidgetKind::Slider)
@@ -653,6 +1247,8 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         return this.paintProgress(item, box);
     if(item.state.kind == WidgetKind::Image)
         return this.paintImage(item, box);
+    if(item.state.kind == WidgetKind::Label)
+        return this.paintLabel(item, box);
     in WidgetStyle itemStyle = this.itemWidgetStyle(item);
     if(item.state.kind == WidgetKind::Separator){
         const Rect clip = this.visibleClip(box.clip);
@@ -689,8 +1285,147 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         interactive
     ))
         return false;
+    u32 stateBits = ResolveAccessibleVisibilityStateBits(item.enabled, clip);
+    u32 actionBits = s_AccessibilityActionNone;
+    AccessibilityRole a11yRole = AccessibilityRole::Button;
+    if(interactive)
+        stateBits |= s_AccessibilityStateFocusable;
+    if(item.state.kind == WidgetKind::Checkbox){
+        a11yRole = AccessibilityRole::CheckBox;
+        if(item.checked)
+            stateBits |= s_AccessibilityStateChecked;
+        actionBits = s_AccessibilityActionToggle | s_AccessibilityActionFocus;
+    }
+    else if(item.state.kind == WidgetKind::CollapsibleHeader){
+        a11yRole = AccessibilityRole::ToggleButton;
+        if(item.checked){
+            stateBits |= s_AccessibilityStateExpanded;
+            actionBits = s_AccessibilityActionCollapse | s_AccessibilityActionToggle | s_AccessibilityActionFocus;
+        }
+        else{
+            stateBits |= s_AccessibilityStateCollapsed;
+            actionBits = s_AccessibilityActionExpand | s_AccessibilityActionToggle | s_AccessibilityActionFocus;
+        }
+    }
+    else{
+        a11yRole = AccessibilityRole::Button;
+        actionBits = s_AccessibilityActionInvoke | s_AccessibilityActionFocus;
+    }
+    if(item.contextMenu)
+        actionBits |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        a11yRole,
+        box.rectangle,
+        item.text.deref().utf8(),
+        StringView(),
+        stateBits,
+        actionBits
+    );
     if(NeedsBasicControlHitTarget(interactive, item.annotated)){
         const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
+        return this.m_context.addTarget(item.state, target);
+    }
+    return true;
+}
+
+Expected<CachedMeasuredText> Builder::resolveEllipsisLabel(in TextLayout layout, in f32 maxWidth){
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    const ShapeRequest ellipsisReq = this.textShapeRequest("...", layout.fontSize());
+    const auto ellipsisMeasured = this.m_text.layoutAndMeasureShared(ellipsisReq, display);
+    if(!ellipsisMeasured.has_value())
+        return MakeUnexpected(Failure());
+    if(ellipsisMeasured.value().bounds.width >= maxWidth)
+        return ellipsisMeasured.value();
+
+    const StringView utf8 = layout.utf8();
+    in Vector<TextCluster> clusters = layout.clusters();
+    Vector<usize> cuts;
+    cuts.reserve(clusters.size() + 1u);
+    cuts.push_back(0u);
+    if(layout.direction() == TextDirection::LeftToRight){
+        for(usize i = 0u; i < clusters.size(); ++i){
+            const usize endByte = cast<usize>(clusters[i].byteEnd);
+            if(endByte > cuts.back() && endByte < utf8.size())
+                cuts.push_back(endByte);
+        }
+    }
+    else{
+        for(usize i = clusters.size(); i > 0u; --i){
+            const usize endByte = cast<usize>(clusters[i - 1u].byteEnd);
+            if(endByte > cuts.back() && endByte < utf8.size())
+                cuts.push_back(endByte);
+        }
+    }
+
+    CachedMeasuredText best = ellipsisMeasured.value();
+    usize low = 1u;
+    usize high = cuts.size();
+    String candidate;
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        const usize prefixBytes = cuts[mid];
+        candidate.clear();
+        candidate.reserve(prefixBytes + 3u);
+        candidate.append(utf8.substr(0u, prefixBytes));
+        candidate.append("...");
+        const ShapeRequest req = this.textShapeRequest(StringView(candidate), layout.fontSize());
+        const auto measured = this.m_text.layoutAndMeasureShared(req, display);
+        if(!measured.has_value())
+            return MakeUnexpected(Failure());
+        if(measured.value().bounds.width <= maxWidth){
+            best = measured.value();
+            low = mid + 1u;
+        }
+        else
+            high = mid;
+    }
+    return best;
+}
+
+b8 Builder::paintLabel(in BuilderItem item, in LayoutBox box){
+    if(!item.text.valid())
+        return false;
+    HitTargetFactory targets;
+    in WidgetStyle itemStyle = this.itemWidgetStyle(item);
+    const Rect clip = this.visibleClip(box.clip);
+    SharedTextLayout activeLayout = item.text;
+    Rect activeBounds = item.textBounds;
+    if(item.textEllipsis && activeBounds.width > box.rectangle.width && box.rectangle.width > 0.0f && activeLayout.deref().lines().size() <= 1u){
+        const auto resolved = this.resolveEllipsisLabel(activeLayout.deref(), box.rectangle.width);
+        if(!resolved.has_value())
+            return false;
+        activeLayout = resolved.value().layout;
+        activeBounds = resolved.value().bounds;
+    }
+    f32 originX = box.rectangle.x;
+    if(item.textAlignment == TextAlignment::Center)
+        originX = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - activeBounds.width) * s_RectCenterFraction);
+    else if(item.textAlignment == TextAlignment::Trailing)
+        originX = box.rectangle.x + UiSimdMax(0.0f, box.rectangle.width - activeBounds.width);
+    const Point origin = ResolveLabelPaintOrigin(Rect(originX, box.rectangle.y, 0.0f, 0.0f), activeBounds);
+    const Rect textClip = IntersectUiRectsBounds(box.rectangle, clip);
+    this.m_paint.pushClip(clip);
+    this.m_paint.pushClip(textClip);
+    Color activeColor = itemStyle.disabledText;
+    if(item.enabled)
+        activeColor = itemStyle.text;
+    const b8 painted = this.m_text.paint(this.m_paint, activeLayout.deref(), origin, activeColor);
+    const b8 textPopped = this.m_paint.popClip();
+    const b8 clipPopped = this.m_paint.popClip();
+    if(!painted || !textPopped || !clipPopped)
+        return false;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::Text,
+        box.rectangle,
+        activeLayout.deref().utf8(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip),
+        s_AccessibilityActionNone
+    );
+    if(item.annotated){
+        const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, false, item.contextMenu);
         return this.m_context.addTarget(item.state, target);
     }
     return true;
@@ -710,6 +1445,21 @@ b8 Builder::paintSelectable(in BuilderItem item, in LayoutBox box){
     const Rect clip = this.visibleClip(box.clip);
     if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text.deref(), item.textBounds, item.padding, box.rectangle, clip, this.itemSelectableStyle(item), flags, itemStyle.text, itemStyle.disabledText))
         return false;
+    u32 stateBits = ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable;
+    if(item.checked)
+        stateBits |= s_AccessibilityStateSelected;
+    u32 actionBits = s_AccessibilityActionSelect | s_AccessibilityActionInvoke | s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        actionBits |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::ListItem,
+        box.rectangle,
+        item.text.deref().utf8(),
+        StringView(),
+        stateBits,
+        actionBits
+    );
     const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
     return this.m_context.addTarget(item.state, target);
 }

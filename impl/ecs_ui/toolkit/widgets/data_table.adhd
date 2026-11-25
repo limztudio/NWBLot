@@ -1,0 +1,812 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "list.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_TableDefaultHeaderHeight = 28.0f;
+const f32 s_TableDefaultColumnWidth = 120.0f;
+const f32 s_TableDefaultMinColumnWidth = 40.0f;
+const f32 s_TableDefaultResizeHandleWidth = 6.0f;
+const u64 s_TableMaxSortableRows = 65536u;
+const Color s_TableDefaultDividerColor = Color(0.28f, 0.32f, 0.38f, 0.85f);
+const Color s_TableDefaultGridLineColor = Color(0.22f, 0.25f, 0.30f, 0.65f);
+const Color s_TableDefaultAlternatingRowColor = Color(1.0f, 1.0f, 1.0f, 0.04f);
+const Color s_TableDefaultSortIndicatorColor = Color(0.85f, 0.90f, 0.96f, 1.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TableSortDirection{
+    None,
+    Ascending,
+    Descending,
+    kCount,
+}
+
+class TableColumn{
+    public u64 key = 0u;
+    public StringView title = "";
+    public f32 width = s_TableDefaultColumnWidth;
+    public f32 minWidth = s_TableDefaultMinColumnWidth;
+    public f32 maxWidth = 0.0f;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public b8 sortable = true;
+    public b8 resizable = true;
+}
+
+interface ITableDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 rowKey(in u64 rowIndex)const;
+    b8 rowEnabled(in u64 rowIndex)const;
+    StringView cellText(in u64 rowIndex, in u64 columnKey)const;
+    i32 compareRows(in u64 lhsRowIndex, in u64 rhsRowIndex, in u64 columnKey)const;
+}
+
+class TableStyle{
+    public ListStyle list;
+    public Name header = s_StyleHeaderNormalRegionName;
+    public Name headerHover = s_StyleHeaderHoverRegionName;
+    public Name headerPressed = s_StyleHeaderPressedRegionName;
+    public Name headerFallback = s_StyleButtonNormalRegionName;
+    public Color headerDividerColor = s_TableDefaultDividerColor;
+    public Color gridLineColor = s_TableDefaultGridLineColor;
+    public Color alternatingRowColor = s_TableDefaultAlternatingRowColor;
+    public Color sortIndicatorColor = s_TableDefaultSortIndicatorColor;
+    public f32 headerHeight = s_TableDefaultHeaderHeight;
+    public f32 resizeHandleWidth = s_TableDefaultResizeHandleWidth;
+    public Insets cellPadding = Insets(s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall);
+    public b8 showAlternatingRows = true;
+    public b8 showGridLines = true;
+}
+
+class TableOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Fixed, s_ListDefaultHeight);
+    public ListSelectionMode selectionMode = ListSelectionMode::Single;
+    public ScrollbarPolicy horizontalScrollbar = ScrollbarPolicy::Auto;
+    public ScrollbarPolicy verticalScrollbar = ScrollbarPolicy::Auto;
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public f32 wheelColumns = 32.0f;
+    public b8 enabled = true;
+    public b8 selectOnNavigate = true;
+    public b8 showHeader = true;
+    public b8 allowUnsortedCycle = true;
+    public LayoutItemOptions layout;
+}
+
+class TableResult{
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 sortChanged = false;
+    public b8 columnResized = false;
+    public b8 activated = false;
+    public b8 focused = false;
+    public u64 activatedKey = 0u;
+    public u64 sortColumnKey = 0u;
+    public TableSortDirection sortDirection = TableSortDirection::None;
+}
+
+class TableState : NoCopy{
+    public ListMeasureKey m_measureKey;
+    public Vector<u64> m_columnKeys;
+    public Vector<f32> m_columnWidths;
+    public u64 m_sortColumnKey = 0u;
+    public TableSortDirection m_sortDirection = TableSortDirection::None;
+    public Vector<u64> m_sortedOrder;
+    public HashMap<u64, u64> m_displayIndexByKey;
+    public Vector<u64> m_selectedKeys;
+    public HashSet<u64> m_selectedKeySet;
+    public ScrollState m_scroll;
+    public ScrollState m_scrollX;
+    public ScrollPlacement m_placement;
+    public ScrollViewportPlacement m_scrollbars;
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_anchor = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public u64 m_sortRevision = 1u;
+    public u64 m_cachedSortRevision = 0u;
+    public u64 m_activeResizeSequence = 0u;
+    public u64 m_activeResizeColumnKey = 0u;
+    public f32 m_resizeStartWidth = 0.0f;
+    public u64 m_visibleFirstRow = 0u;
+    public u64 m_visibleEndRow = 0u;
+    public f64 m_contentWidth = 0.0;
+    public f32 m_rowHeight = 0.0f;
+    public f32 m_scrollRowHeight = 0.0f;
+    public u64 m_scrollSourceGeneration = 0u;
+    public b8 m_ensureCursor = false;
+
+    public u64 instanceGeneration()const{ return this.m_scroll.instanceGeneration(); }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 sortColumnKey()const{ return this.m_sortColumnKey; }
+    public TableSortDirection sortDirection()const{ return this.m_sortDirection; }
+    public u64 selectedKey()const{ return this.m_selected; }
+    public u64 cursorKey()const{ return this.m_cursor; }
+    public u64 anchorKey()const{ return this.m_anchor; }
+    public in Vector<u64> selectedKeys()const{ return this.m_selectedKeys; }
+    public usize selectedCount()const{ return this.m_selectedKeys.size(); }
+    public b8 isSelected(in u64 key)const{ return key != 0u && (this.m_selected == key || this.m_selectedKeySet.find(key) != this.m_selectedKeySet.end()); }
+    public f64 scrollOffset()const{ return this.m_scroll.offset(); }
+    public f64 scrollOffsetX()const{ return this.m_scrollX.offset(); }
+    public u64 visibleFirstRow()const{ return this.m_visibleFirstRow; }
+    public u64 visibleEndRow()const{ return this.m_visibleEndRow; }
+    public in ScrollPlacement placement()const{ return this.m_placement; }
+    public in ScrollViewportPlacement scrollbars()const{ return this.m_scrollbars; }
+    public u64 sortedRowCount()const{ return cast<u64>(this.m_sortedOrder.size()); }
+
+    public u64 displayRowSourceIndex(in u64 displayRow)const{
+        if(cast<usize>(displayRow) >= this.m_sortedOrder.size())
+            return displayRow;
+        return this.m_sortedOrder[cast<usize>(displayRow)];
+    }
+
+    public f32 columnWidth(in u64 columnKey, in f32 defaultWidth)const{
+        for(usize idx = 0u; idx < this.m_columnKeys.size(); ++idx){
+            if(this.m_columnKeys[idx] == columnKey)
+                return this.m_columnWidths[idx];
+        }
+        return defaultWidth;
+    }
+
+    public void setColumnWidth(in u64 columnKey, in f32 width){
+        if(columnKey == 0u || !IsFinite(VectorSingle(width)) || width <= 0.0f)
+            return;
+        for(usize idx = 0u; idx < this.m_columnKeys.size(); ++idx){
+            if(this.m_columnKeys[idx] == columnKey){
+                this.m_columnWidths[idx] = width;
+                return;
+            }
+        }
+        this.m_columnKeys.push_back(columnKey);
+        this.m_columnWidths.push_back(width);
+    }
+
+    public b8 setSort(in u64 columnKey, in TableSortDirection direction){
+        if(direction >= TableSortDirection::kCount)
+            return false;
+        if(direction == TableSortDirection::None){
+            this.m_sortColumnKey = 0u;
+            this.m_sortDirection = TableSortDirection::None;
+        }
+        else{
+            if(columnKey == 0u)
+                return false;
+            this.m_sortColumnKey = columnKey;
+            this.m_sortDirection = direction;
+        }
+        AdvanceNonWrappingRevision(this.m_sortRevision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        return true;
+    }
+
+    public void select(in u64 key){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        if(key != 0u){
+            this.m_selectedKeys.push_back(key);
+            this.m_selectedKeySet.insert(key);
+        }
+        this.m_selected = key;
+        this.m_cursor = key;
+        this.m_anchor = key;
+        this.m_ensureCursor = key != 0u;
+    }
+
+    public void clearSelection(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        this.m_selected = 0u;
+        this.m_anchor = 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidTableOptions(in TableOptions options){
+    return IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && options.selectionMode < ListSelectionMode::kCount
+        && options.horizontalScrollbar <= ScrollbarPolicy::Never
+        && options.verticalScrollbar <= ScrollbarPolicy::Never
+        && IsFinite(VectorSingle(options.wheelRows, options.wheelColumns, 0.0f, 0.0f))
+        && options.wheelRows > 0.0f
+        && options.wheelColumns > 0.0f;
+}
+
+b8 IsValidTableStyle(in TableStyle style){
+    return IsBoundedUiPadding(style.list.row.padding)
+        && IsValidUiPadding(style.list.padding)
+        && IsValidUiPadding(style.cellPadding)
+        && IsFinite(VectorSingle(style.list.scrollbarWidth, style.list.minimumThumb, style.headerHeight, style.resizeHandleWidth))
+        && style.list.scrollbarWidth >= 0.0f
+        && style.list.minimumThumb >= 0.0f
+        && style.headerHeight > 0.0f
+        && style.resizeHandleWidth > 0.0f
+        && IsValidPaintColor(style.headerDividerColor)
+        && IsValidPaintColor(style.gridLineColor)
+        && IsValidPaintColor(style.alternatingRowColor)
+        && IsValidPaintColor(style.sortIndicatorColor);
+}
+
+b8 IsValidTableColumns(in Span<TableColumn> columns){
+    if(columns.empty())
+        return false;
+    HashSet<u64> seen;
+    if(columns.size() > 16u)
+        seen.reserve(columns.size());
+    for(usize idx = 0u; idx < columns.size(); ++idx){
+        in TableColumn col = columns[idx];
+        if(
+            col.key == 0u
+            || col.alignment > TextAlignment::Trailing
+            || !IsFinite(VectorSingle(col.width, col.minWidth, col.maxWidth, 0.0f))
+            || col.minWidth <= 0.0f
+            || col.width < col.minWidth
+            || (col.maxWidth != 0.0f && (col.maxWidth < col.minWidth || col.width > col.maxWidth))
+        )
+            return false;
+        if(columns.size() <= 16u){
+            for(usize prev = 0u; prev < idx; ++prev){
+                if(columns[prev].key == col.key)
+                    return false;
+            }
+        }
+        else{
+            if(seen.find(col.key) != seen.end())
+                return false;
+            seen.insert(col.key);
+        }
+    }
+    return true;
+}
+
+f32 ClampTableColumnWidth(in f32 width, in f32 minWidth, in f32 maxWidth){
+    if(!IsFinite(VectorSingle(width, minWidth, maxWidth, 0.0f)))
+        return minWidth;
+    f32 clamped = UiSimdMax(minWidth, width);
+    if(maxWidth > 0.0f)
+        clamped = UiSimdMin(maxWidth, clamped);
+    return clamped;
+}
+
+TableSortDirection CycleTableSortDirection(in TableSortDirection current, in b8 allowUnsorted){
+    if(current == TableSortDirection::None)
+        return TableSortDirection::Ascending;
+    if(current == TableSortDirection::Ascending)
+        return TableSortDirection::Descending;
+    if(allowUnsorted)
+        return TableSortDirection::None;
+    return TableSortDirection::Ascending;
+}
+
+f64 ComputeTableTotalWidth(in Span<TableColumn> columns, in TableState state){
+    f64 total = 0.0;
+    for(in TableColumn col : columns)
+        total += cast<f64>(ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth));
+    return total;
+}
+
+b8 MatchesTableSource(in ITableDataSource source, in u64 generation, in u64 revision){
+    return source.instanceGeneration() == generation && source.revision() == revision;
+}
+
+b8 SyncTableColumnsAndSort(in Span<TableColumn> columns, in ITableDataSource source, mut TableState state){
+    const u64 generation = source.instanceGeneration();
+    const u64 revision = source.revision();
+    if(generation == 0u || revision == 0u || !IsValidTableColumns(columns))
+        return false;
+    Vector<u64> syncedKeys;
+    Vector<f32> syncedWidths;
+    syncedKeys.reserve(columns.size());
+    syncedWidths.reserve(columns.size());
+    for(in TableColumn col : columns){
+        syncedKeys.push_back(col.key);
+        syncedWidths.push_back(ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth));
+    }
+    state.m_columnKeys.clear();
+    state.m_columnWidths.clear();
+    state.m_columnKeys.reserve(syncedKeys.size());
+    state.m_columnWidths.reserve(syncedWidths.size());
+    for(usize idx = 0u; idx < syncedKeys.size(); ++idx){
+        state.m_columnKeys.push_back(syncedKeys[idx]);
+        state.m_columnWidths.push_back(syncedWidths[idx]);
+    }
+    if(state.m_sortColumnKey != 0u){
+        b8 sortColValid = false;
+        for(in TableColumn col : columns){
+            if(col.key == state.m_sortColumnKey && col.sortable){
+                sortColValid = true;
+                break;
+            }
+        }
+        if(!sortColValid){
+            state.m_sortColumnKey = 0u;
+            state.m_sortDirection = TableSortDirection::None;
+            AdvanceNonWrappingRevision(state.m_sortRevision);
+        }
+    }
+    const u64 count = source.rowCount();
+    if(!MatchesTableSource(source, generation, revision) || count > s_TableMaxSortableRows)
+        return false;
+    const b8 needResort = state.m_sourceGeneration != generation
+        || state.m_sourceRevision != revision
+        || state.m_cachedSortRevision != state.m_sortRevision
+        || cast<u64>(state.m_sortedOrder.size()) != count;
+    if(!needResort)
+        return true;
+    Vector<u64> order;
+    order.resize(cast<usize>(count), 0u);
+    Vector<u64> rowKeys;
+    rowKeys.resize(cast<usize>(count), 0u);
+    HashSet<u64> seenKeys;
+    seenKeys.reserve(cast<usize>(count));
+    for(u64 idx = 0u; idx < count; ++idx){
+        order[cast<usize>(idx)] = idx;
+        const u64 rowKey = source.rowKey(idx);
+        if(rowKey == 0u || !MatchesTableSource(source, generation, revision) || seenKeys.find(rowKey) != seenKeys.end())
+            return false;
+        seenKeys.insert(rowKey);
+        rowKeys[cast<usize>(idx)] = rowKey;
+    }
+    if(state.m_sortDirection != TableSortDirection::None && state.m_sortColumnKey != 0u && count > 1u){
+        const b8 descending = state.m_sortDirection == TableSortDirection::Descending;
+        const u64 sortKey = state.m_sortColumnKey;
+        Vector<u64> scratch;
+        scratch.resize(cast<usize>(count), 0u);
+        usize runWidth = 1u;
+        while(runWidth < cast<usize>(count)){
+            usize left = 0u;
+            while(left < cast<usize>(count)){
+                usize mid = Min(left + runWidth, cast<usize>(count));
+                usize right = Min(left + 2u * runWidth, cast<usize>(count));
+                usize i = left;
+                usize j = mid;
+                usize out = left;
+                while(i < mid && j < right){
+                    const i32 cmp = source.compareRows(order[i], order[j], sortKey);
+                    if(!MatchesTableSource(source, generation, revision))
+                        return false;
+                    b8 takeLeft = cmp <= 0;
+                    if(descending)
+                        takeLeft = cmp >= 0;
+                    if(takeLeft){
+                        scratch[out] = order[i];
+                        ++i;
+                    }
+                    else{
+                        scratch[out] = order[j];
+                        ++j;
+                    }
+                    ++out;
+                }
+                while(i < mid){
+                    scratch[out] = order[i];
+                    ++i;
+                    ++out;
+                }
+                while(j < right){
+                    scratch[out] = order[j];
+                    ++j;
+                    ++out;
+                }
+                left += 2u * runWidth;
+            }
+            for(usize idx = 0u; idx < cast<usize>(count); ++idx)
+                order[idx] = scratch[idx];
+            runWidth *= 2u;
+        }
+    }
+    if(!MatchesTableSource(source, generation, revision))
+        return false;
+    state.m_sortedOrder.clear();
+    state.m_sortedOrder.reserve(order.size());
+    state.m_displayIndexByKey.clear();
+    state.m_displayIndexByKey.reserve(order.size());
+    for(usize displayIdx = 0u; displayIdx < order.size(); ++displayIdx){
+        const u64 srcIdx = order[displayIdx];
+        state.m_sortedOrder.push_back(srcIdx);
+        state.m_displayIndexByKey.try_emplace(rowKeys[cast<usize>(srcIdx)], cast<u64>(displayIdx));
+    }
+    state.m_cachedSortRevision = state.m_sortRevision;
+    return true;
+}
+
+b8 ReconcileTableState(mut TableState state, in Span<TableColumn> columns, in ITableDataSource source){
+    const u64 inputGeneration = state.m_inputGeneration;
+    const u64 generation = source.instanceGeneration();
+    const u64 revision = source.revision();
+    if(generation == 0u || revision == 0u || !IsValidTableColumns(columns))
+        return false;
+    const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+    if(replacement){
+        state.m_sortedOrder.clear();
+        state.m_displayIndexByKey.clear();
+        state.m_selectedKeys.clear();
+        state.m_selectedKeySet.clear();
+        state.m_selected = 0u;
+        state.m_cursor = 0u;
+        state.m_anchor = 0u;
+        state.m_contentWidth = 0.0;
+        if(!state.m_scroll.setOffset(0.0) || !state.m_scrollX.setOffset(0.0))
+            return false;
+    }
+    if(!SyncTableColumnsAndSort(columns, source, state) || state.m_inputGeneration != inputGeneration)
+        return false;
+    u64 selected = 0u;
+    u64 cursor = 0u;
+    u64 anchor = 0u;
+    Vector<u64> keptKeys;
+    HashSet<u64> keptSet;
+    b8 cursorPresent = false;
+    b8 anchorPresent = false;
+    if(!replacement){
+        selected = state.m_selected;
+        cursor = state.m_cursor;
+        anchor = state.m_anchor;
+        keptKeys.reserve(state.m_selectedKeys.size() + 1u);
+        for(in u64 key : state.m_selectedKeys){
+            if(key == 0u || keptSet.find(key) != keptSet.end())
+                continue;
+            const auto found = state.m_displayIndexByKey.find(key);
+            if(found != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(found.value())])){
+                keptKeys.push_back(key);
+                keptSet.insert(key);
+            }
+        }
+        if(selected != 0u && keptSet.find(selected) == keptSet.end()){
+            const auto foundSel = state.m_displayIndexByKey.find(selected);
+            if(foundSel != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(foundSel.value())])){
+                keptKeys.push_back(selected);
+                keptSet.insert(selected);
+            }
+        }
+        if(keptSet.find(selected) == keptSet.end()){
+            if(keptKeys.empty())
+                selected = 0u;
+            else
+                selected = keptKeys.back();
+        }
+        if(cursor != 0u){
+            const auto foundCur = state.m_displayIndexByKey.find(cursor);
+            if(foundCur != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(foundCur.value())]))
+                cursorPresent = true;
+        }
+        if(anchor != 0u){
+            const auto foundAnch = state.m_displayIndexByKey.find(anchor);
+            if(foundAnch != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(foundAnch.value())]))
+                anchorPresent = true;
+        }
+        if(!MatchesTableSource(source, generation, revision) || state.m_inputGeneration != inputGeneration)
+            return false;
+    }
+    CopyListSelectionContainers(Span<u64>(keptKeys), state.m_selectedKeys, state.m_selectedKeySet);
+    if(anchorPresent)
+        state.m_anchor = anchor;
+    else
+        state.m_anchor = selected;
+    const b8 changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision;
+    state.m_selected = selected;
+    if(cursorPresent)
+        state.m_cursor = cursor;
+    else
+        state.m_cursor = selected;
+    state.m_ensureCursor = state.m_cursor != 0u && (state.m_ensureCursor || changed);
+    state.m_sourceGeneration = generation;
+    state.m_sourceRevision = revision;
+    return true;
+}
+
+Expected<u64> FindEnabledTableRowKey(in TableState state, in ITableDataSource source, in u64 startDisplayIdx, in b8 reverse){
+    const u64 count = cast<u64>(state.m_sortedOrder.size());
+    if(count == 0u || startDisplayIdx >= count)
+        return MakeUnexpected(Failure());
+    u64 idx = startDisplayIdx;
+    while(true){
+        const u64 srcIdx = state.m_sortedOrder[cast<usize>(idx)];
+        if(source.rowEnabled(srcIdx))
+            return source.rowKey(srcIdx);
+        if(reverse){
+            if(idx == 0u)
+                return MakeUnexpected(Failure());
+            --idx;
+        }
+        else{
+            if(idx + 1u == count)
+                return MakeUnexpected(Failure());
+            ++idx;
+        }
+    }
+}
+
+void CollectEnabledTableRangeKeys(in TableState state, in ITableDataSource source, in u64 startDisplayIdx, in u64 endDisplayIdx, mut Vector<u64> outKeys){
+    outKeys.clear();
+    const u64 count = cast<u64>(state.m_sortedOrder.size());
+    if(startDisplayIdx >= count || endDisplayIdx >= count)
+        return;
+    const u64 lo = Min(startDisplayIdx, endDisplayIdx);
+    const u64 hi = Max(startDisplayIdx, endDisplayIdx);
+    for(u64 i = lo; i <= hi; ++i){
+        const u64 srcIdx = state.m_sortedOrder[cast<usize>(i)];
+        if(source.rowEnabled(srcIdx)){
+            const u64 k = source.rowKey(srcIdx);
+            if(k != 0u)
+                outKeys.push_back(k);
+        }
+    }
+}
+
+b8 ApplyTableColumnResizeGesture(in PointerGesture gesture, in u64 columnKey, in Span<TableColumn> columns, mut TableState state){
+    if(
+        !gesture.id.valid()
+        || !IsFinite(VectorSingle(gesture.origin.x, gesture.position.x, 0.0f, 0.0f))
+        || gesture.state > PointerGestureState::Completed
+    )
+        return false;
+    for(in TableColumn col : columns){
+        if(col.key != columnKey)
+            continue;
+        if(!col.resizable)
+            return false;
+        if(state.m_activeResizeSequence != gesture.id.sequence || state.m_activeResizeColumnKey != columnKey){
+            state.m_activeResizeSequence = gesture.id.sequence;
+            state.m_activeResizeColumnKey = columnKey;
+            state.m_resizeStartWidth = ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth);
+        }
+        const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+        const f32 nextW = ClampTableColumnWidth(cast<f32>(cast<f64>(state.m_resizeStartWidth) + delta), col.minWidth, col.maxWidth);
+        state.setColumnWidth(col.key, nextW);
+        return true;
+    }
+    return false;
+}
+
+b8 ApplyTableControlAction(
+    in Span<TableColumn> columns,
+    in ITableDataSource source,
+    in TableOptions options,
+    in ControlAction action,
+    in b8 isHeaderAction,
+    mut TableState state,
+    mut TableResult result
+){
+    const u64 inputGeneration = state.m_inputGeneration;
+    if(!IsValidTableOptions(options) || !options.enabled || !IsValidTableColumns(columns) || action.control.empty())
+        return false;
+    ControlToken token;
+    token.instanceGeneration = inputGeneration;
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    if(!token.valid() || action.control != token || cast<u8>(action.kind) > cast<u8>(ControlActionKind::Right))
+        return false;
+    if((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u)
+        return false;
+    if(action.kind == ControlActionKind::Wheel){
+        b8 scrolled = false;
+        if(action.delta != 0.0){
+            const Expected<f64> nextY = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
+            if(!nextY.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(nextY.value()))
+                return false;
+            scrolled = true;
+        }
+        if(action.deltaX != 0.0 && options.horizontalScrollbar != ScrollbarPolicy::Never){
+            const Expected<f64> nextX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), action.deltaX, action.stepX, action.maximumX);
+            if(!nextX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(nextX.value()))
+                return false;
+            scrolled = true;
+        }
+        if(scrolled)
+            state.m_ensureCursor = false;
+        result.valid = true;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right){
+        if(options.horizontalScrollbar != ScrollbarPolicy::Never){
+            f64 deltaX = 1.0;
+            if(action.kind == ControlActionKind::Left)
+                deltaX = -1.0;
+            f64 stepX = action.stepX;
+            if(stepX <= 0.0)
+                stepX = cast<f64>(options.wheelColumns);
+            f64 maxX = action.maximumX;
+            if(maxX <= 0.0 && state.m_scrollbars.horizontal.maximum > 0.0)
+                maxX = state.m_scrollbars.horizontal.maximum;
+            const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), deltaX, stepX, maxX);
+            if(!offsetX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(offsetX.value()))
+                return false;
+            state.m_ensureCursor = false;
+        }
+        result.valid = true;
+        return true;
+    }
+    if(isHeaderAction && action.kind == ControlActionKind::Activate){
+        for(in TableColumn col : columns){
+            if(col.key != action.value)
+                continue;
+            if(!col.sortable){
+                result.valid = true;
+                return true;
+            }
+            TableSortDirection nextDir = TableSortDirection::Ascending;
+            if(state.m_sortColumnKey == col.key)
+                nextDir = CycleTableSortDirection(state.m_sortDirection, options.allowUnsortedCycle);
+            if(nextDir == TableSortDirection::None){
+                state.m_sortColumnKey = 0u;
+                state.m_sortDirection = TableSortDirection::None;
+            }
+            else{
+                state.m_sortColumnKey = col.key;
+                state.m_sortDirection = nextDir;
+            }
+            AdvanceNonWrappingRevision(state.m_sortRevision);
+            if(!ReconcileTableState(state, columns, source) || state.m_inputGeneration != inputGeneration)
+                return false;
+            result.sortChanged = true;
+            result.sortColumnKey = state.m_sortColumnKey;
+            result.sortDirection = state.m_sortDirection;
+            result.valid = true;
+            return true;
+        }
+        return false;
+    }
+    const u64 count = cast<u64>(state.m_sortedOrder.size());
+    if(count == 0u){
+        result.valid = true;
+        return true;
+    }
+    const b8 activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
+    u64 candidate = 0u;
+    if(activate){
+        u64 lookupKey = state.m_cursor;
+        if(action.kind == ControlActionKind::Activate)
+            lookupKey = action.value;
+        const auto found = state.m_displayIndexByKey.find(lookupKey);
+        if(found == state.m_displayIndexByKey.end()){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        else if(!source.rowEnabled(state.m_sortedOrder[cast<usize>(found.value())])){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        else
+            candidate = lookupKey;
+    }
+    else{
+        const b8 reverse = action.kind == ControlActionKind::Up || action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::End;
+        u64 start = 0u;
+        if(reverse)
+            start = count - 1u;
+        if(action.kind == ControlActionKind::Home)
+            start = 0u;
+        else if(action.kind == ControlActionKind::End)
+            start = count - 1u;
+        else{
+            const auto foundCur = state.m_displayIndexByKey.find(state.m_cursor);
+            if(foundCur != state.m_displayIndexByKey.end()){
+                const u64 curIdx = foundCur.value();
+                u64 dist = 1u;
+                if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
+                    dist = action.pageRows;
+                if(reverse)
+                    start = curIdx - Min(dist, curIdx);
+                else
+                    start = curIdx + Min(dist, count - 1u - curIdx);
+            }
+        }
+        const Expected<u64> foundKey = FindEnabledTableRowKey(state, source, start, reverse);
+        if(foundKey.has_value())
+            candidate = foundKey.value();
+    }
+    if(!MatchesTableSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
+        return false;
+    if(candidate == 0u){
+        result.valid = true;
+        return true;
+    }
+    if(options.selectionMode == ListSelectionMode::Single){
+        const u64 prevSelected = state.m_selected;
+        ListOptions listOpts;
+        listOpts.selectOnNavigate = options.selectOnNavigate;
+        ListResult listResult;
+        ApplyListCandidateSelection(listOpts, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, listResult);
+        if(state.m_selected != prevSelected || (state.m_selected != 0u && state.m_selectedKeySet.find(state.m_selected) == state.m_selectedKeySet.end()) || (state.m_selected == 0u && !state.m_selectedKeys.empty())){
+            state.m_selectedKeys.clear();
+            state.m_selectedKeySet.clear();
+            if(state.m_selected != 0u){
+                state.m_selectedKeys.push_back(state.m_selected);
+                state.m_selectedKeySet.insert(state.m_selected);
+            }
+        }
+        if(activate || options.selectOnNavigate)
+            state.m_anchor = state.m_selected;
+        result.selectionChanged = result.selectionChanged || listResult.selectionChanged;
+        if(activate){
+            result.activated = true;
+            result.activatedKey = candidate;
+        }
+        result.valid = true;
+        return true;
+    }
+    const auto candDisplayFound = state.m_displayIndexByKey.find(candidate);
+    if(candDisplayFound == state.m_displayIndexByKey.end())
+        return false;
+    const u64 candIdx = candDisplayFound.value();
+    u64 nextAnchor = state.m_anchor;
+    Vector<u64> rangeKeys;
+    if(action.extend){
+        u64 resolvedAnchorKey = state.m_anchor;
+        u64 anchorIdx = candIdx;
+        b8 haveAnchor = false;
+        if(resolvedAnchorKey != 0u){
+            const auto anchorFound = state.m_displayIndexByKey.find(resolvedAnchorKey);
+            if(anchorFound != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(anchorFound.value())])){
+                haveAnchor = true;
+                anchorIdx = anchorFound.value();
+            }
+        }
+        if(!haveAnchor && state.m_cursor != 0u){
+            const auto curFound = state.m_displayIndexByKey.find(state.m_cursor);
+            if(curFound != state.m_displayIndexByKey.end() && source.rowEnabled(state.m_sortedOrder[cast<usize>(curFound.value())])){
+                haveAnchor = true;
+                resolvedAnchorKey = state.m_cursor;
+                anchorIdx = curFound.value();
+            }
+        }
+        if(!haveAnchor)
+            resolvedAnchorKey = candidate;
+        nextAnchor = resolvedAnchorKey;
+        CollectEnabledTableRangeKeys(state, source, anchorIdx, candIdx, rangeKeys);
+    }
+    if(!MatchesTableSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
+        return false;
+    const b8 changed = ApplyIndexedMultiSelectionMutation(
+        options.selectionMode,
+        options.selectOnNavigate,
+        activate,
+        action.extend,
+        action.toggle,
+        candidate,
+        nextAnchor,
+        Span<u64>(rangeKeys),
+        state.m_selectedKeys,
+        state.m_selectedKeySet,
+        state.m_selected,
+        state.m_cursor,
+        state.m_anchor,
+        state.m_ensureCursor
+    );
+    result.selectionChanged = result.selectionChanged || changed;
+    if(activate){
+        result.activated = true;
+        result.activatedKey = candidate;
+    }
+    result.valid = true;
+    return true;
+}
+
+void ApplySkinPaletteToTableStyle(in UiSkinPalette palette, mut TableStyle style){
+    style.headerDividerColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.gridLineColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.sortIndicatorColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

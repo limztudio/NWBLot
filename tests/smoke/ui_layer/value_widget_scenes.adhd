@@ -59,9 +59,9 @@ class UiProgressSmokeScene : IUiSmokeInputScene{
 
 class UiRadioGroupSmokeScene : IUiSmokeInputScene{
     private UiRadioGroupSmokeSource m_source = UiRadioGroupSmokeSource();
-    private RadioGroupState m_state = RadioGroupState();
-    private RadioGroupState m_disabled = RadioGroupState();
-    private RadioGroupState m_popupRadio = RadioGroupState();
+    private RadioGroupState m_state;
+    private RadioGroupState m_disabled;
+    private RadioGroupState m_popupRadio;
     private PopupState m_parent = PopupState();
     private UiRadioGroupSnapshot m_snapshot = UiRadioGroupSnapshot();
     private u32 m_changes = 0u;

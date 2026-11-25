@@ -174,6 +174,10 @@ b8 Builder::beginPopup(in StringView stableKey, mut PopupState state, in PopupOp
     }
     node = admittedNode.value();
     this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::Root);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
     this.m_scope.value().m_popupState = Optional<mut PopupState>(state);
     this.m_scope.value().m_popupToken = token;
     this.m_scope.value().m_popupOptions = options;
@@ -197,6 +201,11 @@ b8 Builder::endPopup(){
     const b8 popupEnded = this.m_context.endPopupScope(visible && arranged);
     this.m_scope.value().m_panelActive = false;
     this.m_scope.value().m_stack.clear();
+    this.m_scope.value().m_scrollAreaStack.clear();
+    this.m_scope.value().m_scopeKinds.clear();
+    this.m_scope.value().m_virtualListStack.clear();
+    this.m_scope.value().m_splitterStack.clear();
+    this.m_scope.value().m_dockSpaceStack.clear();
     if(!arranged || !overlayEnded || !scopePopped || !popupEnded){
         this.m_context.fail();
         if(this.m_scope.value().m_parent.has_value())
@@ -332,7 +341,26 @@ b8 Builder::paintPopup(){
     const HitTarget barrier = targets.makeBarrierHitTarget(panel.value().rectangle, this.m_scope.value().m_popupPlacement.viewport);
     if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier))
         return false;
-    return this.paintItems();
+    AccessibilityRole role = AccessibilityRole::Panel;
+    u32 popupState = ResolveAccessibleVisibilityStateBits(true, this.m_scope.value().m_popupPlacement.viewport);
+    if(this.m_scope.value().m_popupOptions.modal){
+        role = AccessibilityRole::Dialog;
+        popupState |= s_AccessibilityStateModal;
+    }
+    this.emitAccessibleNode(
+        this.m_scope.value().m_panelState,
+        role,
+        panel.value().rectangle,
+        StringView(),
+        StringView(),
+        popupState,
+        s_AccessibilityActionNone
+    );
+    const b8 pushedParent = this.m_context.pushAccessibleParent(this.m_scope.value().m_panelState.id);
+    const b8 itemsOk = this.paintItems();
+    if(pushedParent)
+        this.m_context.popAccessibleParent();
+    return itemsOk;
 }
 
 RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options){
@@ -418,7 +446,7 @@ RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDat
     item.state = widget.value();
     item.enabled = interactive;
     item.radioGroup = cast<u32>(this.m_scope.value().m_radioGroups.size());
-    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize, options.layout);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -485,6 +513,19 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
     const HitTarget host = targets.makeRadioGroupHostHitTarget(placement.value(), item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
     if(!this.m_context.addTarget(item.state, host))
         return false;
+    const Rect groupClip = this.visibleClip(box.clip);
+    u32 groupActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        groupActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::RadioGroup,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, groupClip) | s_AccessibilityStateFocusable,
+        groupActions
+    );
     const auto choices = TryMakeWidgetId(item.state.id, s_WidgetPartChoices);
     if(!choices.has_value())
         return false;
@@ -534,6 +575,21 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
             if(!this.m_context.addPartTarget(item.state, part.value(), target))
                 return false;
         }
+        u32 choiceState = ResolveAccessibleVisibilityStateBits(visualFlags.enabled, row.clip) | s_AccessibilityStateFocusable;
+        if(visualFlags.checked)
+            choiceState |= s_AccessibilityStateChecked;
+        this.emitAccessiblePartNode(
+            part.value(),
+            item.state.id,
+            AccessibilityRole::RadioButton,
+            row.rectangle,
+            frame.m_labels[index].m_text.deref().utf8(),
+            choiceState,
+            s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+            cast<i32>(index + 1u),
+            cast<i32>(placement.value().count),
+            0
+        );
     }
     if(!this.radioGroupMatches(frame))
         return false;
@@ -554,15 +610,27 @@ b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOpti
     if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return false;
     state.m_result = SliderResult();
+    if(!IsValidSliderOptions(options)){
+        this.m_context.fail();
+        return false;
+    }
+    f64 requestedValue = 0.0;
+    if(options.enabled && this.m_context.takeAccessibleNumericValue(widget.value(), requestedValue)){
+        f64 clamped = requestedValue;
+        if(clamped < options.minimum)
+            clamped = options.minimum;
+        if(clamped > options.maximum)
+            clamped = options.maximum;
+        if(clamped != state.value() && !state.setValue(clamped)){
+            this.m_context.fail();
+            return false;
+        }
+    }
     SliderFrame frame(state);
     frame.m_options = options;
     frame.m_style = this.m_sliderStyle;
     frame.m_snapshot = state.snapshot();
     frame.m_widget = widget.value();
-    if(!IsValidSliderOptions(options)){
-        this.m_context.fail();
-        return false;
-    }
     const auto metrics = MeasureSlider(options, frame.m_style);
     if(!metrics.has_value()){
         this.m_context.fail();
@@ -577,7 +645,7 @@ b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOpti
     item.state = widget.value();
     item.enabled = options.enabled;
     item.slider = cast<u32>(this.m_scope.value().m_sliders.size());
-    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize, options.layout);
     if(!this.addItemNode(description, item))
         return false;
     AppendOwned<SliderFrame>(this.m_scope.value().m_sliders, frame);
@@ -676,6 +744,24 @@ b8 Builder::paintSlider(in BuilderItem item, in LayoutBox box){
     }
     if(!this.sliderMatches(frame))
         return false;
+    u32 sliderActions = s_AccessibilityActionFocus;
+    if(interactive)
+        sliderActions |= s_AccessibilityActionIncrement | s_AccessibilityActionDecrement | s_AccessibilityActionSetValue;
+    if(item.contextMenu)
+        sliderActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleRangeNode(
+        item.state,
+        AccessibilityRole::Slider,
+        placement.value().bounds,
+        StringView(),
+        StringView(),
+        frame.m_state.value(),
+        frame.m_options.minimum,
+        frame.m_options.maximum,
+        frame.m_options.step,
+        ResolveAccessibleVisibilityStateBits(interactive, clip) | s_AccessibilityStateFocusable,
+        sliderActions
+    );
     frame.m_state.m_placement = placement.value();
     frame.m_result.valid = true;
     return true;

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/layout/paint_skin_emission.adhd>
+#include <impl/ecs_ui/toolkit/paint_effects.adhd>
 #include <impl/ecs_ui/toolkit/paint_image_bindings.adhd>
 
 
@@ -19,6 +20,9 @@ class DrawSnapshot{
     private Vector<u32> m_indices;
     private Vector<DrawCommand> m_commands;
     private PaintImageBindings m_images;
+    private Vector<u32> m_effectWords;
+    private Vector<DrawCommand> m_effectCommands;
+    private Vector<PaintEffectLayer> m_effectLayers;
 
     private void resetStorage(){
         this.m_generation = 0u;
@@ -28,6 +32,9 @@ class DrawSnapshot{
         this.m_indices.clear();
         this.m_commands.clear();
         this.m_images.clear();
+        this.m_effectWords.clear();
+        this.m_effectCommands.clear();
+        this.m_effectLayers.clear();
     }
 
     public u64 generation()const{ return this.m_generation; }
@@ -39,6 +46,9 @@ class DrawSnapshot{
     public in Vector<SharedGlyphPage> glyphPages()const{ return this.m_images.glyphPages(); }
     public in Vector<SharedSdfAtlasPage> sdfPages()const{ return this.m_images.sdfPages(); }
     public in Vector<SharedImageSource> textureImages()const{ return this.m_images.textureImages(); }
+    public in Vector<u32> effectWords()const{ return this.m_effectWords; }
+    public in Vector<DrawCommand> effectCommands()const{ return this.m_effectCommands; }
+    public in Vector<PaintEffectLayer> effectLayers()const{ return this.m_effectLayers; }
 }
 
 class PaintTransformStackEntry{
@@ -52,23 +62,21 @@ class PaintTransformStackEntry{
 
 Rect ComputeTransformedPaintRectBounds(in PaintTransform2D xf, in Rect rect){
     const VectorSingle endXY = VectorSingle(rect.x + rect.width, rect.y + rect.height, 0.0f, 0.0f);
-    if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(endXY.xy))
+    if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(VectorSingle(rect.x, rect.y, endXY.x, endXY.y)))
         return Rect(0.0f, 0.0f, 0.0f, 0.0f);
-    const Point p00 = ApplyPaintTransform(xf, Point(rect.x, rect.y));
-    const Point p10 = ApplyPaintTransform(xf, Point(endXY.x, rect.y));
-    const Point p11 = ApplyPaintTransform(xf, Point(endXY.x, endXY.y));
-    const Point p01 = ApplyPaintTransform(xf, Point(rect.x, endXY.y));
-    const VectorSingle v01(p00.x, p00.y, p10.x, p10.y);
-    const VectorSingle v23(p11.x, p11.y, p01.x, p01.y);
-    if(!IsFinite(v01) || !IsFinite(v23))
+    const f32 hw = 0.5f * rect.width;
+    const f32 hh = 0.5f * rect.height;
+    const f32 cx = rect.x + hw;
+    const f32 cy = rect.y + hh;
+    const VectorSingle absM = Abs(VectorSingle(xf.m00, xf.m10, xf.m01, xf.m11));
+    const f32 tcx = xf.m00 * cx + xf.m01 * cy + xf.tx;
+    const f32 tcy = xf.m10 * cx + xf.m11 * cy + xf.ty;
+    const f32 ex = absM.x * hw + absM.z * hh;
+    const f32 ey = absM.y * hw + absM.w * hh;
+    const VectorSingle outBounds(tcx - ex, tcy - ey, 2.0f * ex, 2.0f * ey);
+    if(!IsFinite(outBounds) || !IsFinite(VectorSingle(outBounds.x + outBounds.z, outBounds.y + outBounds.w, 0.0f, 0.0f).xy))
         return Rect(0.0f, 0.0f, 0.0f, 0.0f);
-    const VectorSingle pairMin = Min(v01, v23);
-    const VectorSingle pairMax = Max(v01, v23);
-    const f32 minX = UiSimdMin(pairMin.x, pairMin.z);
-    const f32 maxX = UiSimdMax(pairMax.x, pairMax.z);
-    const f32 minY = UiSimdMin(pairMin.y, pairMin.w);
-    const f32 maxY = UiSimdMax(pairMax.y, pairMax.w);
-    return Rect(minX, minY, maxX - minX, maxY - minY);
+    return Rect(outBounds.x, outBounds.y, outBounds.z, outBounds.w);
 }
 
 class PaintBuilder : NoCopy{
@@ -78,18 +86,55 @@ class PaintBuilder : NoCopy{
     private Vector<PaintClipEntry> m_clips;
     private Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> m_overlays;
     private Array<PaintTransformStackEntry, s_PaintMaxTransformDepth> m_transforms;
+    private Array<f32, s_PaintMaxOpacityDepth> m_opacities;
+    private Array<PaintBlendMode, s_PaintMaxBlendModeDepth> m_blendModes;
     private Vector<DrawCommand> m_sortScratch;
     private Vector<Point> m_polyScratch;
+    private Vector<Point> m_xfPolyScratch;
+    private Vector<PaintLineSegment> m_lineSegScratch;
+    private Vector<Point> m_pathFlatPoints;
+    private Vector<PaintPathSubpath> m_pathSubpaths;
+    private Vector<Point> m_triVerts;
+    private Vector<u32> m_triIndices;
+    private Vector<PaintPathSubpath> m_triFringe;
+    private Vector<DrawCommand> m_effectLayerScratch;
     private usize m_overlayDepth = 0u;
     private usize m_transformBase = 0u;
     private usize m_transformDepth = 0u;
+    private usize m_opacityDepth = 0u;
+    private usize m_opacityBase = 0u;
+    private usize m_blendModeDepth = 0u;
+    private usize m_blendModeBase = 0u;
+    private usize m_analyticClipDepth = 0u;
     private u64 m_cachedSkinRegionVersion = 0u;
+    private u64 m_regionsCacheStamp = 0u;
     private u64 m_ownerIdentity = AllocateServiceIdentity();
     private u32 m_layer = 0u;
+    private u32 m_zOrder = 0u;
+    private usize m_zOrderCommandStart = 0u;
+    private usize m_zOrderClipDepth = 0u;
+    private usize m_zOrderTransformDepth = 0u;
+    private f32 m_cachedAaWidth = 1.0f;
+    private f32 m_currentOpacity = 1.0f;
+    private PaintBlendMode m_currentBlendMode = PaintBlendMode::Normal;
+    private PaintEffectLayer m_activeEffectLayer;
+    private usize m_effectLayerClipDepth = 0u;
+    private usize m_effectLayerTransformDepth = 0u;
+    private usize m_effectLayerOpacityDepth = 0u;
+    private usize m_effectLayerOpacityBase = 0u;
+    private usize m_effectLayerBlendModeDepth = 0u;
+    private usize m_effectLayerBlendModeBase = 0u;
+    private usize m_effectLayerSavedAnalyticClipDepth = 0u;
+    private f32 m_effectLayerSavedOpacity = 1.0f;
+    private PaintBlendMode m_effectLayerSavedBlendMode = PaintBlendMode::Normal;
     private b8 m_commandsOrdered = true;
     private b8 m_commandsStrictlyDescending = true;
     private b8 m_recording = false;
     private b8 m_hasActiveTransform = false;
+    private b8 m_zOrderActive = false;
+    private b8 m_effectLayerActive = false;
+    private b8 m_effectLayerSavedOrdered = true;
+    private b8 m_effectLayerSavedDescending = true;
 
     [cpp_unwind]
     public void begin(in DisplayMetrics metrics, in u64 generation, in u64 skinGeneration, in AssetRef<UiSkin> skinRef, in UiSkin skin){
@@ -99,19 +144,41 @@ class PaintBuilder : NoCopy{
         this.m_snapshot.m_generation = generation;
         this.m_snapshot.m_displayMetrics = metrics;
         this.m_snapshot.m_images.clear();
-        if(this.m_cachedSkinRegionVersion != skin.regionVersion() || this.m_regions.size() != skin.regions().size()){
+        this.m_snapshot.m_effectWords.clear();
+        this.m_snapshot.m_effectCommands.clear();
+        this.m_snapshot.m_effectLayers.clear();
+        if(this.m_regionsCacheStamp == 0u || this.m_cachedSkinRegionVersion != skin.regionVersion() || this.m_regions.size() != skin.regions().size()){
             RefreshPaintBuilderSkinRegions(Span<UiSkinRegion>(skin.regions()), this.m_regions, this.m_regionLookup);
             this.m_cachedSkinRegionVersion = skin.regionVersion();
+            ++this.m_regionsCacheStamp;
         }
+        f32 aaScale = 1.0f;
+        if(IsFinite(VectorSingle(metrics.pixelScaleX, metrics.pixelScaleY, 0.0f, 0.0f).xy))
+            aaScale = UiSimdMax(1.0f, UiSimdMax(metrics.pixelScaleX, metrics.pixelScaleY));
+        this.m_cachedAaWidth = 1.0f / aaScale;
         this.m_transformBase = 0u;
         this.m_transformDepth = 0u;
         this.m_hasActiveTransform = false;
+        this.m_opacityDepth = 0u;
+        this.m_opacityBase = 0u;
+        this.m_currentOpacity = 1.0f;
+        this.m_blendModeDepth = 0u;
+        this.m_blendModeBase = 0u;
+        this.m_currentBlendMode = PaintBlendMode::Normal;
+        this.m_analyticClipDepth = 0u;
+        this.m_zOrderClipDepth = 0u;
+        this.m_zOrderTransformDepth = 0u;
+        this.m_effectLayerActive = false;
+        this.m_activeEffectLayer = PaintEffectLayer();
         BeginPaintBuilderRecordingCached(
             metrics,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands,
-            this.m_clips, this.m_overlayDepth, this.m_layer, this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_recording
+            this.m_clips, this.m_overlayDepth, this.m_layer,
+            this.m_zOrderActive, this.m_zOrder, this.m_zOrderCommandStart,
+            this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_recording
         );
     }
+    public u64 regionsCacheStamp()const{ return this.m_regionsCacheStamp; }
     [cpp_unwind]
     public void reserve(in usize quadCount){ this.reserve(quadCount, s_PaintDefaultClipDepth); }
     [cpp_unwind]
@@ -123,11 +190,124 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform){
             const Rect xfClip = ComputeTransformedPaintRectBounds(this.m_transforms[this.m_transformDepth - 1u].xf, clip);
             PushPaintClipValidatedParent(this.m_recording, xfClip, this.m_clips);
+        }
+        else
+            PushPaintClipValidatedParent(this.m_recording, clip, this.m_clips);
+        if(this.m_recording && !this.m_clips.empty())
+            this.m_clips.back().blendMode = this.m_currentBlendMode;
+    }
+    private void pushAnalyticClip(in PaintClipShapeKind kind, in Rect clip, in f32 cornerRadius){
+        if(this.m_hasActiveTransform){
+            const Rect xfClip = ComputeTransformedPaintRectBounds(this.m_transforms[this.m_transformDepth - 1u].xf, clip);
+            PushPaintClipValidatedParent(this.m_recording, xfClip, this.m_clips);
+        }
+        else
+            PushPaintClipValidatedParent(this.m_recording, clip, this.m_clips);
+        if(!this.m_recording || this.m_clips.empty())
+            return;
+        this.m_clips.back().blendMode = this.m_currentBlendMode;
+        if(clip.width <= 0.0f || clip.height <= 0.0f || !IsFinite(VectorSingle(clip.x, clip.y, clip.width, clip.height)) || !IsFinite(VectorSingle(cornerRadius))){
+            this.m_clips.back().rect = Rect(0.0f, 0.0f, 0.0f, 0.0f);
+            this.m_clips.back().right = 0.0f;
+            this.m_clips.back().bottom = 0.0f;
             return;
         }
-        PushPaintClipValidatedParent(this.m_recording, clip, this.m_clips);
+        if(this.m_clips.back().rect.width <= 0.0f || this.m_clips.back().rect.height <= 0.0f)
+            return;
+        if(this.m_analyticClipDepth >= s_PaintMaxAnalyticClipDepth)
+            return;
+        const Point halfSize(0.5f * clip.width, 0.5f * clip.height);
+        Point center(clip.x + halfSize.x, clip.y + halfSize.y);
+        f32 invM00 = 1.0f;
+        f32 invM01 = 0.0f;
+        f32 invM10 = 0.0f;
+        f32 invM11 = 1.0f;
+        if(this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            center = ApplyPaintTransform(xf, center);
+            const f32 det = xf.m00 * xf.m11 - xf.m01 * xf.m10;
+            if(!IsFinite(VectorSingle(det)) || Abs(VectorSingle(det)).x <= 1.0e-8f){
+                this.m_clips.back().rect = Rect(0.0f, 0.0f, 0.0f, 0.0f);
+                this.m_clips.back().right = 0.0f;
+                this.m_clips.back().bottom = 0.0f;
+                return;
+            }
+            const f32 invDet = 1.0f / det;
+            invM00 = xf.m11 * invDet;
+            invM01 = -xf.m01 * invDet;
+            invM10 = -xf.m10 * invDet;
+            invM11 = xf.m00 * invDet;
+        }
+        f32 clampedRadius = 0.0f;
+        if(kind == PaintClipShapeKind::RoundedRect)
+            clampedRadius = UiSimdClamp(cornerRadius, 0.0f, UiSimdMin(halfSize.x, halfSize.y));
+        const u32 parentMask = this.m_clips.back().clipMaskOffset;
+        this.m_clips.back().clipMaskOffset = PackPaintAnalyticClipRecord(
+            kind, parentMask, center, halfSize, clampedRadius, invM00, invM01, invM10, invM11, this.m_snapshot.m_effectWords
+        );
+        ++this.m_analyticClipDepth;
     }
-    public b8 popClip(){ return PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips); }
+    [cpp_unwind]
+    public void pushRoundedClip(in Rect clip, in f32 cornerRadius){
+        this.pushAnalyticClip(PaintClipShapeKind::RoundedRect, clip, cornerRadius);
+    }
+    [cpp_unwind]
+    public void pushEllipseClip(in Rect clip){
+        this.pushAnalyticClip(PaintClipShapeKind::Ellipse, clip, 0.0f);
+    }
+    public b8 popClip(){
+        if(!this.m_recording)
+            return PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips);
+        if(this.m_effectLayerActive && this.m_clips.size() <= this.m_effectLayerClipDepth + 1u)
+            return false;
+        const u32 poppedMask = this.m_clips.back().clipMaskOffset;
+        if(!PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips))
+            return false;
+        if(poppedMask != this.m_clips.back().clipMaskOffset && this.m_analyticClipDepth > 0u)
+            --this.m_analyticClipDepth;
+        this.m_clips.back().blendMode = this.m_currentBlendMode;
+        return true;
+    }
+    public b8 pushOpacity(in f32 opacity){
+        if(!this.m_recording || this.m_opacityDepth >= s_PaintMaxOpacityDepth)
+            return false;
+        if(!IsFinite(VectorSingle(opacity)) || opacity < 0.0f || opacity > 1.0f)
+            return false;
+        this.m_opacities[this.m_opacityDepth] = this.m_currentOpacity;
+        ++this.m_opacityDepth;
+        this.m_currentOpacity *= UiSimdClamp(opacity, 0.0f, 1.0f);
+        return true;
+    }
+    public b8 popOpacity(){
+        if(!this.m_recording || this.m_opacityDepth <= this.m_opacityBase)
+            return false;
+        --this.m_opacityDepth;
+        this.m_currentOpacity = this.m_opacities[this.m_opacityDepth];
+        return true;
+    }
+    public f32 currentOpacity()const{
+        return this.m_currentOpacity;
+    }
+    public b8 pushBlendMode(in PaintBlendMode mode){
+        if(!this.m_recording || this.m_blendModeDepth >= s_PaintMaxBlendModeDepth || mode > PaintBlendMode::Replace)
+            return false;
+        this.m_blendModes[this.m_blendModeDepth] = this.m_currentBlendMode;
+        ++this.m_blendModeDepth;
+        this.m_currentBlendMode = mode;
+        this.m_clips.back().blendMode = mode;
+        return true;
+    }
+    public b8 popBlendMode(){
+        if(!this.m_recording || this.m_blendModeDepth <= this.m_blendModeBase)
+            return false;
+        --this.m_blendModeDepth;
+        this.m_currentBlendMode = this.m_blendModes[this.m_blendModeDepth];
+        this.m_clips.back().blendMode = this.m_currentBlendMode;
+        return true;
+    }
+    public PaintBlendMode currentBlendMode()const{
+        return this.m_currentBlendMode;
+    }
 
     private f32 activeTransformScale(){
         mut PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
@@ -313,26 +493,32 @@ class PaintBuilder : NoCopy{
         return this.activeTransformScale();
     }
     private f32 activeAaWidth()const{
-        const f32 px = this.m_snapshot.m_displayMetrics.pixelScaleX;
-        const f32 py = this.m_snapshot.m_displayMetrics.pixelScaleY;
-        f32 scale = 1.0f;
-        if(IsFinite(VectorSingle(px, py, 0.0f, 0.0f).xy))
-            scale = UiSimdMax(1.0f, UiSimdMax(px, py));
-        return 1.0f / scale;
+        return this.m_cachedAaWidth;
     }
 
     [cpp_unwind]
     public b8 beginOverlay(in u32 layer){
-        if(!BeginPaintOverlay(this.m_recording, layer, this.m_snapshot.m_displayMetrics, this.m_overlays, this.m_overlayDepth, this.m_layer, this.m_clips))
+        if(this.m_zOrderActive || this.m_effectLayerActive || !BeginPaintOverlay(this.m_recording, layer, this.m_snapshot.m_displayMetrics, this.m_overlays, this.m_overlayDepth, this.m_layer, this.m_clips))
             return false;
         this.m_overlays[this.m_overlayDepth - 1u].transformBase = this.m_transformBase;
         this.m_overlays[this.m_overlayDepth - 1u].transformDepth = this.m_transformDepth;
+        this.m_overlays[this.m_overlayDepth - 1u].opacityBase = this.m_opacityBase;
+        this.m_overlays[this.m_overlayDepth - 1u].opacityDepth = this.m_opacityDepth;
+        this.m_overlays[this.m_overlayDepth - 1u].blendModeBase = this.m_blendModeBase;
+        this.m_overlays[this.m_overlayDepth - 1u].blendModeDepth = this.m_blendModeDepth;
+        this.m_overlays[this.m_overlayDepth - 1u].savedOpacity = this.m_currentOpacity;
+        this.m_overlays[this.m_overlayDepth - 1u].savedBlendMode = this.m_currentBlendMode;
         this.m_transformBase = this.m_transformDepth;
         this.m_hasActiveTransform = false;
+        this.m_opacityBase = this.m_opacityDepth;
+        this.m_currentOpacity = 1.0f;
+        this.m_blendModeBase = this.m_blendModeDepth;
+        this.m_currentBlendMode = PaintBlendMode::Normal;
+        this.m_clips.back().blendMode = PaintBlendMode::Normal;
         return true;
     }
     public b8 endOverlay(){
-        if(this.m_transformDepth != this.m_transformBase)
+        if(this.m_effectLayerActive || this.m_transformDepth != this.m_transformBase || this.m_opacityDepth != this.m_opacityBase || this.m_blendModeDepth != this.m_blendModeBase)
             return false;
         if(!EndPaintOverlay(this.m_recording, this.m_overlays, this.m_overlayDepth, this.m_layer, this.m_clips))
             return false;
@@ -340,12 +526,64 @@ class PaintBuilder : NoCopy{
         this.m_transformBase = restored.transformBase;
         this.m_transformDepth = restored.transformDepth;
         this.m_hasActiveTransform = this.m_transformDepth > this.m_transformBase && this.m_transforms[this.m_transformDepth - 1u].active;
+        this.m_opacityBase = restored.opacityBase;
+        this.m_opacityDepth = restored.opacityDepth;
+        this.m_currentOpacity = restored.savedOpacity;
+        this.m_blendModeBase = restored.blendModeBase;
+        this.m_blendModeDepth = restored.blendModeDepth;
+        this.m_currentBlendMode = restored.savedBlendMode;
+        this.m_clips.back().blendMode = this.m_currentBlendMode;
+        return true;
+    }
+    public b8 beginZOrder(in u32 zOrder){
+        if(!this.m_recording || this.m_overlayDepth != 0u || this.m_zOrderActive || this.m_effectLayerActive || zOrder == 0u)
+            return false;
+        this.m_zOrder = zOrder;
+        this.m_zOrderCommandStart = this.m_snapshot.m_commands.size();
+        this.m_zOrderClipDepth = this.m_clips.size();
+        this.m_zOrderTransformDepth = this.m_transformDepth;
+        this.m_zOrderActive = true;
+        this.m_layer = s_PaintZOrderSentinelLayer;
+        return true;
+    }
+    public b8 endZOrder(){
+        if(
+            !this.m_recording
+            || this.m_overlayDepth != 0u
+            || !this.m_zOrderActive
+            || this.m_clips.size() != this.m_zOrderClipDepth
+            || this.m_transformDepth != this.m_zOrderTransformDepth
+        )
+            return false;
+        for(usize index = this.m_zOrderCommandStart; index < this.m_snapshot.m_commands.size(); ++index){
+            this.m_snapshot.m_commands[index].layer = 0u;
+            this.m_snapshot.m_commands[index].zOrder = this.m_zOrder;
+        }
+        if(this.m_snapshot.m_commands.size() > this.m_zOrderCommandStart){
+            this.m_commandsStrictlyDescending = false;
+            if(
+                this.m_zOrderCommandStart > 0u
+                && MakePaintCommandSortKey(this.m_snapshot.m_commands[this.m_zOrderCommandStart - 1u])
+                    > MakePaintCommandSortKey(this.m_snapshot.m_commands[this.m_zOrderCommandStart])
+            )
+                this.m_commandsOrdered = false;
+        }
+        this.m_layer = 0u;
+        this.m_zOrder = 0u;
+        this.m_zOrderCommandStart = 0u;
+        this.m_zOrderClipDepth = 0u;
+        this.m_zOrderTransformDepth = 0u;
+        this.m_zOrderActive = false;
         return true;
     }
 
     [cpp_unwind]
     public void fillRect(in Rect rectangle){
         assert(this.m_recording);
+        if(this.m_currentOpacity < 1.0f){
+            this.fillRect(rectangle, Color());
+            return;
+        }
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
                 return;
@@ -382,6 +620,7 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public void fillRect(in Rect rectangle, in Color color){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
                 return;
@@ -390,7 +629,7 @@ class PaintBuilder : NoCopy{
             if(entry.axisAlignedPositive){
                 const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
                 EmitPaintSolidQuadValidated(
-                    this.m_recording, this.m_clips.back(), scaledRect, color, this.m_layer,
+                    this.m_recording, this.m_clips.back(), scaledRect, modulated, this.m_layer,
                     this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
                 );
                 return;
@@ -404,20 +643,21 @@ class PaintBuilder : NoCopy{
             EmitPaintTransformedQuad(
                 this.m_recording, this.m_clips.back(),
                 p00, p10, p11, p01,
-                Rect(0.0f, 0.0f, 0.0f, 0.0f), color, PaintMaterial::Solid, this.m_layer,
+                Rect(0.0f, 0.0f, 0.0f, 0.0f), modulated, PaintMaterial::Solid, this.m_layer,
                 u32.max, u32.max, 0u, u32.max,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintSolidQuadValidated(
-            this.m_recording, this.m_clips.back(), rectangle, color, this.m_layer,
+            this.m_recording, this.m_clips.back(), rectangle, modulated, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
     [cpp_unwind]
     public void drawLine(in Point start, in Point end, in f32 thickness, in Color color){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             in PaintTransform2D xf = entry.xf;
@@ -437,19 +677,20 @@ class PaintBuilder : NoCopy{
             EmitPaintLine(
                 this.m_recording, this.m_clips.back(),
                 ApplyPaintTransform(xf, start), ApplyPaintTransform(xf, end),
-                thickness * perpScale, color, this.m_layer,
+                thickness * perpScale, modulated, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintLine(
-            this.m_recording, this.m_clips.back(), start, end, thickness, color, this.m_layer,
+            this.m_recording, this.m_clips.back(), start, end, thickness, modulated, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
     [cpp_unwind]
     public void drawLine(in Point start, in Point end, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             in PaintTransform2D xf = entry.xf;
@@ -478,36 +719,48 @@ class PaintBuilder : NoCopy{
             EmitPaintLineStyledCore(
                 this.m_recording, this.m_clips.back(),
                 ApplyPaintTransform(xf, start), ApplyPaintTransform(xf, end),
-                scaledStyle, capHalfLen, this.activeAaWidth(), color, this.m_layer,
+                scaledStyle, capHalfLen, this.activeAaWidth(), modulated, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintLineStyledCore(
-            this.m_recording, this.m_clips.back(), start, end, style, 0.5f * style.thickness, this.activeAaWidth(), color, this.m_layer,
+            this.m_recording, this.m_clips.back(), start, end, style, 0.5f * style.thickness, this.activeAaWidth(), modulated, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
     [cpp_unwind]
     public void drawLineBatch(in Span<PaintLineSegment> lines, in f32 thickness){
         assert(this.m_recording);
+        Span<PaintLineSegment> batch = lines;
+        if(this.m_currentOpacity < 1.0f){
+            this.m_lineSegScratch.clear();
+            this.m_lineSegScratch.reserve(lines.size());
+            for(in PaintLineSegment seg : lines){
+                PaintLineSegment copySeg = seg;
+                copySeg.color = ApplyPaintOpacity(seg.color, this.m_currentOpacity);
+                this.m_lineSegScratch.push_back(copySeg);
+            }
+            batch = Span<PaintLineSegment>(this.m_lineSegScratch);
+        }
         if(this.m_hasActiveTransform){
             in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
             const f32 scale = this.activeTransformScale();
             EmitPaintLineBatchTransformed(
-                this.m_recording, this.m_clips.back(), lines, thickness, xf, scale, this.m_layer,
+                this.m_recording, this.m_clips.back(), batch, thickness, xf, scale, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintLineBatch(
-            this.m_recording, this.m_clips.back(), lines, thickness, this.m_layer,
+            this.m_recording, this.m_clips.back(), batch, thickness, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
     [cpp_unwind]
     public void drawPolyline(in Span<Point> points, in b8 closed, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         const f32 aaWidth = this.activeAaWidth();
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
@@ -516,13 +769,13 @@ class PaintBuilder : NoCopy{
             if(entry.uniformScale)
                 scale = this.activeTransformScale();
             EmitPaintPolylineTransformed(
-                this.m_recording, this.m_clips.back(), points, closed, xf, entry.uniformScale, scale, style, aaWidth, color, this.m_layer,
-                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                this.m_recording, this.m_clips.back(), points, closed, xf, entry.uniformScale, scale, style, aaWidth, modulated, this.m_layer,
+                this.m_xfPolyScratch, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintPolyline(
-            this.m_recording, this.m_clips.back(), points, closed, style, aaWidth, color, this.m_layer,
+            this.m_recording, this.m_clips.back(), points, closed, style, aaWidth, modulated, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
@@ -557,7 +810,7 @@ class PaintBuilder : NoCopy{
         }
         this.m_polyScratch.push_back(pt);
     }
-    private b8 buildRoundedRectPoints(in Rect rectangle, in f32 radius){
+    private b8 buildRoundedRectPoints(in Rect rectangle, in f32 radius, in b8 applyTransform){
         if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
             return false;
         if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(VectorSingle(radius)))
@@ -568,7 +821,8 @@ class PaintBuilder : NoCopy{
             return false;
 
         this.m_polyScratch.clear();
-        const usize segPerCorner = cast<usize>(UiSimdClamp(r * this.currentTransformScale() * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
+        const f32 scale = this.currentTransformScale();
+        const usize segPerCorner = cast<usize>(UiSimdClamp(r * scale * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
         const f32 stepAngle = (s_Pi * 0.5f) / cast<f32>(segPerCorner);
         VectorSingle sStepVec(0.0f);
         VectorSingle cStepVec(0.0f);
@@ -576,28 +830,88 @@ class PaintBuilder : NoCopy{
         const f32 ds = sStepVec.x;
         const f32 dc = cStepVec.x;
 
+        this.m_polyScratch.reserve(4u * (segPerCorner + 1u));
+        Array<f32, 17u> arcCos;
+        Array<f32, 17u> arcSin;
+        f32 c = 1.0f;
+        f32 s = 0.0f;
+        for(usize si = 0u; si < segPerCorner; ++si){
+            arcCos[si] = c * r;
+            arcSin[si] = s * r;
+            const f32 nextC = c * dc - s * ds;
+            const f32 nextS = c * ds + s * dc;
+            c = nextC;
+            s = nextS;
+        }
+        arcCos[segPerCorner] = 0.0f;
+        arcSin[segPerCorner] = r;
+
         Array<Point, 4u> centers;
         centers[0u] = Point(rectangle.x + r, rectangle.y + r);
         centers[1u] = Point(rectangle.x + rectangle.width - r, rectangle.y + r);
         centers[2u] = Point(rectangle.x + rectangle.width - r, rectangle.y + rectangle.height - r);
         centers[3u] = Point(rectangle.x + r, rectangle.y + rectangle.height - r);
-        Array<Point, 4u> startDirs;
-        startDirs[0u] = Point(-1.0f, 0.0f);
-        startDirs[1u] = Point(0.0f, -1.0f);
-        startDirs[2u] = Point(1.0f, 0.0f);
-        startDirs[3u] = Point(0.0f, 1.0f);
 
-        for(usize ci = 0u; ci < 4u; ++ci){
-            f32 ux = startDirs[ci].x;
-            f32 uy = startDirs[ci].y;
-            for(usize si = 0u; si <= segPerCorner; ++si){
-                this.pushScratchUniquePoint(Point(centers[ci].x + ux * r, centers[ci].y + uy * r));
-                const f32 nextUx = ux * dc - uy * ds;
-                const f32 nextUy = ux * ds + uy * dc;
-                ux = nextUx;
-                uy = nextUy;
+        if(applyTransform && this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            for(usize ci = 0u; ci < 4u; ++ci)
+                centers[ci] = ApplyPaintTransform(xf, centers[ci]);
+            Array<f32, 4u> uSignX(-1.0f, 0.0f, 1.0f, 0.0f);
+            Array<f32, 4u> uSignY(0.0f, -1.0f, 0.0f, 1.0f);
+            Array<f32, 4u> vSignX(0.0f, 1.0f, 0.0f, -1.0f);
+            Array<f32, 4u> vSignY(-1.0f, 0.0f, 1.0f, 0.0f);
+            const b8 checkInterior = r * ds * scale <= 1.1e-3f;
+            for(usize ci = 0u; ci < 4u; ++ci){
+                in Point cen = centers[ci];
+                const f32 ux = xf.m00 * uSignX[ci] + xf.m01 * uSignY[ci];
+                const f32 uy = xf.m10 * uSignX[ci] + xf.m11 * uSignY[ci];
+                const f32 vx = xf.m00 * vSignX[ci] + xf.m01 * vSignY[ci];
+                const f32 vy = xf.m10 * vSignX[ci] + xf.m11 * vSignY[ci];
+                for(usize si = 0u; si <= segPerCorner; ++si){
+                    const f32 ac = arcCos[si];
+                    const f32 as = arcSin[si];
+                    const Point pt(cen.x + ux * ac + vx * as, cen.y + uy * ac + vy * as);
+                    if(si == 0u || checkInterior)
+                        this.pushScratchUniquePoint(pt);
+                    else
+                        this.m_polyScratch.push_back(pt);
+                }
             }
         }
+        else{
+            const b8 checkInterior = r * ds <= 1.1e-3f;
+            for(usize ci = 0u; ci < 4u; ++ci){
+                in Point cen = centers[ci];
+                for(usize si = 0u; si <= segPerCorner; ++si){
+                    const f32 ac = arcCos[si];
+                    const f32 as = arcSin[si];
+                    f32 ox = 0.0f;
+                    f32 oy = 0.0f;
+                    if(ci == 0u){
+                        ox = -ac;
+                        oy = -as;
+                    }
+                    else if(ci == 1u){
+                        ox = as;
+                        oy = -ac;
+                    }
+                    else if(ci == 2u){
+                        ox = ac;
+                        oy = as;
+                    }
+                    else{
+                        ox = -as;
+                        oy = ac;
+                    }
+                    const Point pt(cen.x + ox, cen.y + oy);
+                    if(si == 0u || checkInterior)
+                        this.pushScratchUniquePoint(pt);
+                    else
+                        this.m_polyScratch.push_back(pt);
+                }
+            }
+        }
+
         if(this.m_polyScratch.size() >= 2u){
             in Point firstPt = this.m_polyScratch[0u];
             in Point lastPt = this.m_polyScratch[this.m_polyScratch.size() - 1u];
@@ -608,7 +922,7 @@ class PaintBuilder : NoCopy{
         }
         return this.m_polyScratch.size() >= 3u;
     }
-    private b8 buildEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY){
+    private b8 buildEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY, in b8 applyTransform){
         if(!IsFinite(VectorSingle(center.x, center.y, radiusX, radiusY)) || !(radiusX > 0.0f) || !(radiusY > 0.0f))
             return false;
         const f32 maxR = UiSimdMax(radiusX, radiusY);
@@ -623,23 +937,33 @@ class PaintBuilder : NoCopy{
         this.m_polyScratch.reserve(segCount);
         f32 ux = 1.0f;
         f32 uy = 0.0f;
-        for(usize i = 0u; i < segCount; ++i){
-            this.m_polyScratch.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
-            const f32 nextUx = ux * dc - uy * ds;
-            const f32 nextUy = ux * ds + uy * dc;
-            ux = nextUx;
-            uy = nextUy;
+        if(applyTransform && this.m_hasActiveTransform){
+            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+            const Point tc = ApplyPaintTransform(xf, center);
+            const Point basisU(xf.m00 * radiusX, xf.m10 * radiusX);
+            const Point basisV(xf.m01 * radiusY, xf.m11 * radiusY);
+            for(usize i = 0u; i < segCount; ++i){
+                this.m_polyScratch.push_back(Point(tc.x + basisU.x * ux + basisV.x * uy, tc.y + basisU.y * ux + basisV.y * uy));
+                const f32 nextUx = ux * dc - uy * ds;
+                const f32 nextUy = ux * ds + uy * dc;
+                ux = nextUx;
+                uy = nextUy;
+            }
+        }
+        else{
+            for(usize i = 0u; i < segCount; ++i){
+                this.m_polyScratch.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
+                const f32 nextUx = ux * dc - uy * ds;
+                const f32 nextUy = ux * ds + uy * dc;
+                ux = nextUx;
+                uy = nextUy;
+            }
         }
         return true;
     }
-    private void emitFilledScratchPolygon(in Color color){
+    private void emitFilledScratchPolygonDirect(in Color color){
         if(this.m_polyScratch.size() < 3u)
             return;
-        if(this.m_hasActiveTransform){
-            in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
-            for(usize i = 0u; i < this.m_polyScratch.size(); ++i)
-                this.m_polyScratch[i] = ApplyPaintTransform(xf, this.m_polyScratch[i]);
-        }
         EmitPaintFilledConvexPolygon(
             this.m_recording, this.m_clips.back(), Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()),
             color, this.activeAaWidth(), this.m_layer,
@@ -651,19 +975,19 @@ class PaintBuilder : NoCopy{
         assert(this.m_recording);
         if(!this.m_recording)
             return;
-        if(!this.buildRoundedRectPoints(rectangle, radius)){
+        if(!this.buildRoundedRectPoints(rectangle, radius, true)){
             if(rectangle.width > 0.0f && rectangle.height > 0.0f && IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
                 this.fillRect(rectangle, color);
             return;
         }
-        this.emitFilledScratchPolygon(color);
+        this.emitFilledScratchPolygonDirect(ApplyPaintOpacity(color, this.m_currentOpacity));
     }
     [cpp_unwind]
     public void strokeRoundedRect(in Rect rectangle, in f32 radius, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording)
             return;
-        if(!this.buildRoundedRectPoints(rectangle, radius)){
+        if(!this.buildRoundedRectPoints(rectangle, radius, false)){
             this.strokeRect(rectangle, style, color);
             return;
         }
@@ -680,14 +1004,14 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public void fillEllipse(in Point center, in f32 radiusX, in f32 radiusY, in Color color){
         assert(this.m_recording);
-        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, true))
             return;
-        this.emitFilledScratchPolygon(color);
+        this.emitFilledScratchPolygonDirect(ApplyPaintOpacity(color, this.m_currentOpacity));
     }
     [cpp_unwind]
     public void strokeEllipse(in Point center, in f32 radiusX, in f32 radiusY, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
-        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY))
+        if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, false))
             return;
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
     }
@@ -705,17 +1029,14 @@ class PaintBuilder : NoCopy{
         const usize segCount = cast<usize>(UiSimdClamp(absSweep * radius * this.currentTransformScale() / 3.0f, 4.0f, 64.0f));
         const f32 stepAngle = sweep / cast<f32>(segCount);
 
-        VectorSingle sStartVec(0.0f);
-        VectorSingle cStartVec(0.0f);
-        VectorSinCos(sStartVec, cStartVec, VectorSingle(startAngleRadians));
-        VectorSingle sStepVec(0.0f);
-        VectorSingle cStepVec(0.0f);
-        VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
+        VectorSingle sVec(0.0f);
+        VectorSingle cVec(0.0f);
+        VectorSinCos(sVec, cVec, VectorSingle(startAngleRadians, stepAngle, 0.0f, 0.0f));
 
-        const f32 ds = sStepVec.x;
-        const f32 dc = cStepVec.x;
-        f32 ux = cStartVec.x;
-        f32 uy = sStartVec.x;
+        f32 ux = cVec.x;
+        f32 uy = sVec.x;
+        const f32 ds = sVec.y;
+        const f32 dc = cVec.y;
         this.m_polyScratch.clear();
         usize emitCount = segCount + 1u;
         if(closed)
@@ -735,6 +1056,7 @@ class PaintBuilder : NoCopy{
         assert(this.m_recording);
         if(!this.m_recording || points.size() < 3u)
             return;
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
             this.m_polyScratch.clear();
@@ -743,13 +1065,13 @@ class PaintBuilder : NoCopy{
                 this.m_polyScratch.push_back(ApplyPaintTransform(xf, points[i]));
             EmitPaintFilledConvexPolygon(
                 this.m_recording, this.m_clips.back(), Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()),
-                color, this.activeAaWidth(), this.m_layer,
+                modulated, this.activeAaWidth(), this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintFilledConvexPolygon(
-            this.m_recording, this.m_clips.back(), points, color, this.activeAaWidth(), this.m_layer,
+            this.m_recording, this.m_clips.back(), points, modulated, this.activeAaWidth(), this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
@@ -762,19 +1084,44 @@ class PaintBuilder : NoCopy{
         const f32 devY = p1.y - 0.5f * (p0.y + p2.y);
         const f32 chordX = p2.x - p0.x;
         const f32 chordY = p2.y - p0.y;
-        const f32 dev = Sqrt(VectorSingle(devX * devX + devY * devY)).x;
-        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
-        const usize steps = cast<usize>(UiSimdClamp((dev * 2.0f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 32.0f));
+        const VectorSingle lens = Sqrt(VectorSingle(devX * devX + devY * devY, chordX * chordX + chordY * chordY, 0.0f, 0.0f));
+        const usize steps = cast<usize>(UiSimdClamp((lens.x * 2.0f + lens.y * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 32.0f));
         this.m_polyScratch.clear();
         this.m_polyScratch.reserve(steps + 1u);
         const f32 invSteps = 1.0f / cast<f32>(steps);
-        for(usize i = 0u; i <= steps; ++i){
+        const VectorSingle invStepsVec(invSteps);
+        const VectorSingle oneVec(1.0f);
+        const VectorSingle twoVec(2.0f);
+        const VectorSingle p0x(p0.x);
+        const VectorSingle p0y(p0.y);
+        const VectorSingle p1x(p1.x);
+        const VectorSingle p1y(p1.y);
+        const VectorSingle p2x(p2.x);
+        const VectorSingle p2y(p2.y);
+        usize i = 0u;
+        while(i + 4u <= steps + 1u){
+            const f32 f0 = cast<f32>(i);
+            const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+            const VectorSingle uVec = oneVec - tVec;
+            const VectorSingle w0 = uVec * uVec;
+            const VectorSingle w1 = twoVec * uVec * tVec;
+            const VectorSingle w2 = tVec * tVec;
+            const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x;
+            const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y;
+            this.m_polyScratch.push_back(Point(rx.x, ry.x));
+            this.m_polyScratch.push_back(Point(rx.y, ry.y));
+            this.m_polyScratch.push_back(Point(rx.z, ry.z));
+            this.m_polyScratch.push_back(Point(rx.w, ry.w));
+            i += 4u;
+        }
+        while(i <= steps){
             const f32 t = cast<f32>(i) * invSteps;
             const f32 u = 1.0f - t;
             const f32 w0 = u * u;
             const f32 w1 = 2.0f * u * t;
             const f32 w2 = t * t;
             this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y));
+            ++i;
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
@@ -787,15 +1134,45 @@ class PaintBuilder : NoCopy{
         const f32 d1y = p1.y - (p0.y + (p3.y - p0.y) * (1.0f / 3.0f));
         const f32 d2x = p2.x - (p0.x + (p3.x - p0.x) * (2.0f / 3.0f));
         const f32 d2y = p2.y - (p0.y + (p3.y - p0.y) * (2.0f / 3.0f));
-        const f32 dev = Sqrt(VectorSingle(d1x * d1x + d1y * d1y)).x + Sqrt(VectorSingle(d2x * d2x + d2y * d2y)).x;
         const f32 chordX = p3.x - p0.x;
         const f32 chordY = p3.y - p0.y;
-        const f32 chord = Sqrt(VectorSingle(chordX * chordX + chordY * chordY)).x;
-        const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + chord * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 48.0f));
+        const VectorSingle lens = Sqrt(VectorSingle(d1x * d1x + d1y * d1y, d2x * d2x + d2y * d2y, chordX * chordX + chordY * chordY, 0.0f));
+        const f32 dev = lens.x + lens.y;
+        const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + lens.z * 0.25f) * this.currentTransformScale() / 4.0f + 4.0f, 4.0f, 48.0f));
         this.m_polyScratch.clear();
         this.m_polyScratch.reserve(steps + 1u);
         const f32 invSteps = 1.0f / cast<f32>(steps);
-        for(usize i = 0u; i <= steps; ++i){
+        const VectorSingle invStepsVec(invSteps);
+        const VectorSingle oneVec(1.0f);
+        const VectorSingle threeVec(3.0f);
+        const VectorSingle p0x(p0.x);
+        const VectorSingle p0y(p0.y);
+        const VectorSingle p1x(p1.x);
+        const VectorSingle p1y(p1.y);
+        const VectorSingle p2x(p2.x);
+        const VectorSingle p2y(p2.y);
+        const VectorSingle p3x(p3.x);
+        const VectorSingle p3y(p3.y);
+        usize i = 0u;
+        while(i + 4u <= steps + 1u){
+            const f32 f0 = cast<f32>(i);
+            const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
+            const VectorSingle uVec = oneVec - tVec;
+            const VectorSingle uu = uVec * uVec;
+            const VectorSingle tt = tVec * tVec;
+            const VectorSingle w0 = uu * uVec;
+            const VectorSingle w1 = threeVec * uu * tVec;
+            const VectorSingle w2 = threeVec * uVec * tt;
+            const VectorSingle w3 = tt * tVec;
+            const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x + w3 * p3x;
+            const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y + w3 * p3y;
+            this.m_polyScratch.push_back(Point(rx.x, ry.x));
+            this.m_polyScratch.push_back(Point(rx.y, ry.y));
+            this.m_polyScratch.push_back(Point(rx.z, ry.z));
+            this.m_polyScratch.push_back(Point(rx.w, ry.w));
+            i += 4u;
+        }
+        while(i <= steps){
             const f32 t = cast<f32>(i) * invSteps;
             const f32 u = 1.0f - t;
             const f32 uu = u * u;
@@ -805,33 +1182,39 @@ class PaintBuilder : NoCopy{
             const f32 w2 = 3.0f * u * tt;
             const f32 w3 = tt * t;
             this.m_polyScratch.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y));
+            ++i;
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
     [cpp_unwind]
     public void fillRectGradient(in Rect rectangle, in Color topLeftColor, in Color topRightColor, in Color bottomRightColor, in Color bottomLeftColor){
         assert(this.m_recording);
+        const Color tl = ApplyPaintOpacity(topLeftColor, this.m_currentOpacity);
+        const Color tr = ApplyPaintOpacity(topRightColor, this.m_currentOpacity);
+        const Color br = ApplyPaintOpacity(bottomRightColor, this.m_currentOpacity);
+        const Color bl = ApplyPaintOpacity(bottomLeftColor, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransform2D xf = this.m_transforms[this.m_transformDepth - 1u].xf;
             EmitPaintTransformedGradientRect(
                 this.m_recording, this.m_clips.back(), xf, rectangle,
-                topLeftColor, topRightColor, bottomRightColor, bottomLeftColor, this.m_layer,
+                tl, tr, br, bl, this.m_layer,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintGradientRect(
             this.m_recording, this.m_clips.back(), rectangle,
-            topLeftColor, topRightColor, bottomRightColor, bottomLeftColor, this.m_layer,
+            tl, tr, br, bl, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
     [cpp_unwind]
     private void emitSkinRegionDirect(in UiSkinRegion region, in Rect rectangle, in Color tint){
+        const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             EmitPaintSkinRegionCore(
-                this.m_recording, this.m_clips.back(), region, rectangle, tint,
+                this.m_recording, this.m_clips.back(), region, rectangle, modulated,
                 this.m_snapshot.m_skinBinding.atlasWidth, this.m_snapshot.m_skinBinding.atlasHeight, this.m_snapshot.m_skinBinding.referenceDensity,
                 true, entry.xf, entry.axisAlignedPositive,
                 this.m_layer, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -839,8 +1222,28 @@ class PaintBuilder : NoCopy{
             return;
         }
         EmitPaintSkinRegionCore(
-            this.m_recording, this.m_clips.back(), region, rectangle, tint,
+            this.m_recording, this.m_clips.back(), region, rectangle, modulated,
             this.m_snapshot.m_skinBinding.atlasWidth, this.m_snapshot.m_skinBinding.atlasHeight, this.m_snapshot.m_skinBinding.referenceDensity,
+            false, PaintTransformIdentity(), true,
+            this.m_layer, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    private void emitSkinRegionSubRectDirect(in UiSkinRegion region, in Rect rectangle, in Rect uvSubRect, in Color tint){
+        const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
+        if(this.m_hasActiveTransform){
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            EmitPaintSkinRegionSubRectCore(
+                this.m_recording, this.m_clips.back(), region, rectangle, uvSubRect, modulated,
+                this.m_snapshot.m_skinBinding.atlasWidth, this.m_snapshot.m_skinBinding.atlasHeight,
+                true, entry.xf, entry.axisAlignedPositive,
+                this.m_layer, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+            );
+            return;
+        }
+        EmitPaintSkinRegionSubRectCore(
+            this.m_recording, this.m_clips.back(), region, rectangle, uvSubRect, modulated,
+            this.m_snapshot.m_skinBinding.atlasWidth, this.m_snapshot.m_skinBinding.atlasHeight,
             false, PaintTransformIdentity(), true,
             this.m_layer, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
@@ -869,6 +1272,19 @@ class PaintBuilder : NoCopy{
     public b8 drawRegion(in Name regionName, in Rect rectangle, in Color tint){
         assert(this.m_recording);
         return this.tryDrawRegion(regionName, rectangle, tint);
+    }
+    [cpp_unwind]
+    public b8 drawRegion(in Name regionName, in Rect rectangle, in Rect uvSubRect, in Color tint){
+        assert(this.m_recording);
+        if(!IsValidPaintUvRect(uvSubRect))
+            return false;
+        if(uvSubRect.x == 0.0f && uvSubRect.y == 0.0f && uvSubRect.width == 1.0f && uvSubRect.height == 1.0f)
+            return this.tryDrawRegion(regionName, rectangle, tint);
+        const auto found = this.m_regionLookup.find(regionName);
+        if(found == this.m_regionLookup.end())
+            return false;
+        this.emitSkinRegionSubRectDirect(this.m_regions[found.value()], rectangle, uvSubRect, tint);
+        return true;
     }
     [cpp_unwind]
     public b8 tryDrawRegion(in Name regionName, in Rect rectangle){ return this.tryDrawRegion(regionName, rectangle, Color()); }
@@ -932,17 +1348,18 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public b8 drawResolvedGlyphBatch(in Span<ResolvedGlyphDraw> glyphs, in Color tint){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             return EmitPaintResolvedGlyphBatchCore(
-                this.m_recording, this.m_clips.back(), glyphs, tint, true, entry.xf, entry.axisAlignedPositive, this.m_layer,
+                this.m_recording, this.m_clips.back(), glyphs, modulated, true, entry.xf, entry.axisAlignedPositive, this.m_layer,
                 Span<SharedGlyphPage>(this.m_snapshot.m_images.glyphPages()),
                 Span<SharedSdfAtlasPage>(this.m_snapshot.m_images.sdfPages()),
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
         }
         return EmitPaintResolvedGlyphBatch(
-            this.m_recording, this.m_clips.back(), glyphs, tint, this.m_layer,
+            this.m_recording, this.m_clips.back(), glyphs, modulated, this.m_layer,
             Span<SharedGlyphPage>(this.m_snapshot.m_images.glyphPages()),
             Span<SharedSdfAtlasPage>(this.m_snapshot.m_images.sdfPages()),
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -954,12 +1371,25 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     public b8 drawGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv, in Color tint){
         assert(this.m_recording);
-        if(!page.valid() || !IsValidPaintUvRect(uv))
+        if(!page.valid() || page.deref().binding().channelCount != 1u || !IsValidPaintUvRect(uv))
             return false;
         const Expected<u32> index = this.m_snapshot.m_images.resolveGlyph(page);
         if(!index.has_value())
             return false;
         this.emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index.value(), u32.max, 0u, u32.max);
+        return true;
+    }
+    [cpp_unwind]
+    public b8 drawColorGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv){ return this.drawColorGlyph(page, rectangle, uv, Color()); }
+    [cpp_unwind]
+    public b8 drawColorGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv, in Color tint){
+        assert(this.m_recording);
+        if(!page.valid() || page.deref().binding().channelCount != 4u || !IsValidPaintUvRect(uv))
+            return false;
+        const Expected<u32> index = this.m_snapshot.m_images.resolveGlyph(page);
+        if(!index.has_value())
+            return false;
+        this.emitQuad(rectangle, uv, tint, PaintMaterial::ColorGlyph, index.value(), u32.max, 0u, u32.max);
         return true;
     }
     [cpp_unwind]
@@ -998,10 +1428,471 @@ class PaintBuilder : NoCopy{
         return true;
     }
 
+    [cpp_unwind]
+    public void fillPath(in PaintPath path, in Color color){
+        this.fillPath(path, color, PaintFillRule::NonZero);
+    }
+    [cpp_unwind]
+    public void fillPath(in PaintPath path, in Color color, in PaintFillRule fillRule){
+        assert(this.m_recording);
+        if(!this.m_recording || path.empty())
+            return;
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
+        if(!IsValidPaintColor(modulated) || modulated.a <= 0.0f)
+            return;
+        PaintTransform2D xf = PaintTransformIdentity();
+        if(this.m_hasActiveTransform)
+            xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+        FlattenPaintPath(path, this.m_hasActiveTransform, xf, this.currentTransformScale(), this.m_pathFlatPoints, this.m_pathSubpaths);
+        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triVerts, this.m_triIndices, this.m_triFringe);
+        EmitPaintTriangulatedMesh(
+            this.m_recording, this.m_clips.back(),
+            Span<Point>(this.m_triVerts), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
+            modulated, PaintMaterial::Solid, u32.max, this.activeAaWidth(), this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    public void strokePath(in PaintPath path, in PaintLineStyle style, in Color color){
+        assert(this.m_recording);
+        if(!this.m_recording || path.empty())
+            return;
+        FlattenPaintPath(path, false, PaintTransformIdentity(), this.currentTransformScale(), this.m_pathFlatPoints, this.m_pathSubpaths);
+        for(in PaintPathSubpath sub : this.m_pathSubpaths){
+            const usize count = sub.pointEnd - sub.pointBegin;
+            if(count >= 2u)
+                this.drawPolyline(Span<Point>(this.m_pathFlatPoints.data() + sub.pointBegin, count), sub.closed, style, color);
+        }
+    }
+    [cpp_unwind]
+    public b8 fillPathGradient(in PaintPath path, in PaintGradient gradient){
+        return this.fillPathGradient(path, gradient, PaintFillRule::NonZero);
+    }
+    [cpp_unwind]
+    public b8 fillPathGradient(in PaintPath path, in PaintGradient gradient, in PaintFillRule fillRule){
+        assert(this.m_recording);
+        if(!this.m_recording || path.empty() || !IsValidPaintGradient(gradient))
+            return false;
+        if(this.m_currentOpacity <= 0.0f)
+            return true;
+        PaintTransform2D xf = PaintTransformIdentity();
+        if(this.m_hasActiveTransform)
+            xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+        const f32 scale = this.currentTransformScale();
+        FlattenPaintPath(path, this.m_hasActiveTransform, xf, scale, this.m_pathFlatPoints, this.m_pathSubpaths);
+        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triVerts, this.m_triIndices, this.m_triFringe);
+        if(this.m_triIndices.empty())
+            return true;
+        const u32 effectOffset = PackPaintGradientRecord(gradient, this.m_hasActiveTransform, xf, scale, this.m_snapshot.m_effectWords);
+        EmitPaintTriangulatedMesh(
+            this.m_recording, this.m_clips.back(),
+            Span<Point>(this.m_triVerts), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
+            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, this.activeAaWidth(), this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+        return true;
+    }
+    [cpp_unwind]
+    private void emitPolyScratchGradientFan(in PaintGradient gradient){
+        const usize count = this.m_polyScratch.size();
+        if(count < 3u)
+            return;
+        PaintTransform2D xf = PaintTransformIdentity();
+        if(this.m_hasActiveTransform)
+            xf = this.m_transforms[this.m_transformDepth - 1u].xf;
+        const u32 effectOffset = PackPaintGradientRecord(gradient, this.m_hasActiveTransform, xf, this.currentTransformScale(), this.m_snapshot.m_effectWords);
+        this.m_triIndices.clear();
+        this.m_triIndices.reserve((count - 2u) * 3u);
+        for(usize k = 1u; k + 1u < count; ++k){
+            this.m_triIndices.push_back(0u);
+            this.m_triIndices.push_back(cast<u32>(k));
+            this.m_triIndices.push_back(cast<u32>(k + 1u));
+        }
+        this.m_triFringe.clear();
+        PaintPathSubpath sub;
+        sub.pointBegin = 0u;
+        sub.pointEnd = count;
+        sub.closed = true;
+        this.m_triFringe.push_back(sub);
+        EmitPaintTriangulatedMesh(
+            this.m_recording, this.m_clips.back(),
+            Span<Point>(this.m_polyScratch), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
+            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, this.activeAaWidth(), this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+    }
+    [cpp_unwind]
+    public b8 fillRectGradient(in Rect rectangle, in PaintGradient gradient){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsValidPaintGradient(gradient))
+            return false;
+        if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
+            return false;
+        if(this.m_currentOpacity <= 0.0f)
+            return true;
+        const Color color(1.0f, 1.0f, 1.0f, this.m_currentOpacity);
+        const Rect zeroUv(0.0f, 0.0f, 0.0f, 0.0f);
+        if(this.m_hasActiveTransform){
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = entry.xf;
+            const u32 effectOffset = PackPaintGradientRecord(gradient, true, xf, this.currentTransformScale(), this.m_snapshot.m_effectWords);
+            if(entry.axisAlignedPositive){
+                const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                EmitPaintEffectQuad(
+                    this.m_recording, this.m_clips.back(), scaledRect, zeroUv, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+                return true;
+            }
+            const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+            const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+            const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+            const Point p10(p00.x + ex.x, p00.y + ex.y);
+            const Point p01(p00.x + ey.x, p00.y + ey.y);
+            const Point p11(p10.x + ey.x, p10.y + ey.y);
+            EmitPaintTransformedEffectQuad(
+                this.m_recording, this.m_clips.back(), p00, p10, p11, p01, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
+                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+            );
+            return true;
+        }
+        const u32 effectOffset = PackPaintGradientRecord(gradient, false, PaintTransformIdentity(), 1.0f, this.m_snapshot.m_effectWords);
+        EmitPaintEffectQuad(
+            this.m_recording, this.m_clips.back(), rectangle, zeroUv, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+        return true;
+    }
+    [cpp_unwind]
+    public b8 fillRoundedRectGradient(in Rect rectangle, in f32 radius, in PaintGradient gradient){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsValidPaintGradient(gradient))
+            return false;
+        if(!this.buildRoundedRectPoints(rectangle, radius, true))
+            return this.fillRectGradient(rectangle, gradient);
+        if(this.m_currentOpacity <= 0.0f)
+            return true;
+        this.emitPolyScratchGradientFan(gradient);
+        return true;
+    }
+    [cpp_unwind]
+    public b8 fillCircleGradient(in Point center, in f32 radius, in PaintGradient gradient){
+        return this.fillEllipseGradient(center, radius, radius, gradient);
+    }
+    [cpp_unwind]
+    public b8 fillEllipseGradient(in Point center, in f32 radiusX, in f32 radiusY, in PaintGradient gradient){
+        assert(this.m_recording);
+        if(!this.m_recording || !IsValidPaintGradient(gradient) || !this.buildEllipsePoints(center, radiusX, radiusY, true))
+            return false;
+        if(this.m_currentOpacity <= 0.0f)
+            return true;
+        this.emitPolyScratchGradientFan(gradient);
+        return true;
+    }
+    [cpp_unwind]
+    public b8 drawDropShadow(in Rect rectangle, in f32 cornerRadius, in PaintShadowStyle style){
+        assert(this.m_recording);
+        if(!this.m_recording)
+            return false;
+        if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)))
+            return false;
+        if(!IsFinite(VectorSingle(cornerRadius)) || !IsValidPaintShadowStyle(style))
+            return false;
+        const Color modulated = ApplyPaintOpacity(style.color, this.m_currentOpacity);
+        if(modulated.a <= 0.0f)
+            return true;
+
+        const Rect zeroUv(0.0f, 0.0f, 0.0f, 0.0f);
+        if(style.inset){
+            this.pushRoundedClip(rectangle, cornerRadius);
+            const f32 boxW = UiSimdMax(0.0f, rectangle.width - 2.0f * style.spread);
+            const f32 boxH = UiSimdMax(0.0f, rectangle.height - 2.0f * style.spread);
+            Point halfSize(0.5f * boxW, 0.5f * boxH);
+            Point boxCenter(rectangle.x + style.offset.x + style.spread + halfSize.x, rectangle.y + style.offset.y + style.spread + halfSize.y);
+            f32 clampedRadius = UiSimdClamp(cornerRadius - style.spread, 0.0f, UiSimdMin(halfSize.x, halfSize.y));
+            f32 sigma = 0.5f * style.blurRadius;
+            if(this.m_hasActiveTransform){
+                in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+                in PaintTransform2D xf = entry.xf;
+                const f32 scale = this.currentTransformScale();
+                boxCenter = ApplyPaintTransform(xf, boxCenter);
+                if(entry.axisAlignedPositive){
+                    halfSize.x *= xf.m00;
+                    halfSize.y *= xf.m11;
+                }
+                else{
+                    halfSize.x *= scale;
+                    halfSize.y *= scale;
+                }
+                clampedRadius *= scale;
+                sigma *= scale;
+                const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
+                if(entry.axisAlignedPositive){
+                    const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                    EmitPaintEffectQuad(
+                        this.m_recording, this.m_clips.back(), scaledRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                        this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                    );
+                }
+                else{
+                    const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+                    const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+                    const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+                    EmitPaintTransformedEffectQuad(
+                        this.m_recording, this.m_clips.back(), p00, Point(p00.x + ex.x, p00.y + ex.y), Point(p00.x + ex.x + ey.x, p00.y + ex.y + ey.y), Point(p00.x + ey.x, p00.y + ey.y),
+                        modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                        this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                    );
+                }
+            }
+            else{
+                const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
+                EmitPaintEffectQuad(
+                    this.m_recording, this.m_clips.back(), rectangle, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+            }
+            this.popClip();
+            return true;
+        }
+
+        const f32 boxW = rectangle.width + 2.0f * style.spread;
+        const f32 boxH = rectangle.height + 2.0f * style.spread;
+        if(boxW <= 0.0f || boxH <= 0.0f)
+            return true;
+        const f32 boxX = rectangle.x + style.offset.x - style.spread;
+        const f32 boxY = rectangle.y + style.offset.y - style.spread;
+        Point halfSize(0.5f * boxW, 0.5f * boxH);
+        Point boxCenter(boxX + halfSize.x, boxY + halfSize.y);
+        f32 clampedRadius = UiSimdClamp(cornerRadius + UiSimdMax(style.spread, 0.0f), 0.0f, UiSimdMin(halfSize.x, halfSize.y));
+        f32 sigma = 0.5f * style.blurRadius;
+        const f32 pad = Ceil(VectorSingle(3.0f * sigma)).x + 1.0f;
+        const Rect drawRect(boxX - pad, boxY - pad, boxW + 2.0f * pad, boxH + 2.0f * pad);
+        if(this.m_hasActiveTransform){
+            in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
+            in PaintTransform2D xf = entry.xf;
+            const f32 scale = this.currentTransformScale();
+            boxCenter = ApplyPaintTransform(xf, boxCenter);
+            if(entry.axisAlignedPositive){
+                halfSize.x *= xf.m00;
+                halfSize.y *= xf.m11;
+            }
+            else{
+                halfSize.x *= scale;
+                halfSize.y *= scale;
+            }
+            clampedRadius *= scale;
+            sigma *= scale;
+            const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
+            if(entry.axisAlignedPositive){
+                const Rect scaledDrawRect(drawRect.x * xf.m00 + xf.tx, drawRect.y * xf.m11 + xf.ty, drawRect.width * xf.m00, drawRect.height * xf.m11);
+                EmitPaintEffectQuad(
+                    this.m_recording, this.m_clips.back(), scaledDrawRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+            }
+            else{
+                const Point p00 = ApplyPaintTransform(xf, Point(drawRect.x, drawRect.y));
+                const Point ex(xf.m00 * drawRect.width, xf.m10 * drawRect.width);
+                const Point ey(xf.m01 * drawRect.height, xf.m11 * drawRect.height);
+                EmitPaintTransformedEffectQuad(
+                    this.m_recording, this.m_clips.back(), p00, Point(p00.x + ex.x, p00.y + ex.y), Point(p00.x + ex.x + ey.x, p00.y + ex.y + ey.y), Point(p00.x + ey.x, p00.y + ey.y),
+                    modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                    this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+                );
+            }
+        }
+        else{
+            const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
+            EmitPaintEffectQuad(
+                this.m_recording, this.m_clips.back(), drawRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
+                this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+            );
+        }
+        return true;
+    }
+    [cpp_unwind]
+    public b8 beginEffectLayer(in Rect bounds, in f32 opacity, in f32 blurRadius){
+        return this.beginEffectLayer(bounds, opacity, blurRadius, this.m_currentBlendMode);
+    }
+    [cpp_unwind]
+    public b8 beginEffectLayer(in Rect bounds, in f32 opacity, in f32 blurRadius, in PaintBlendMode blendMode){
+        if(!this.m_recording || this.m_effectLayerActive || this.m_overlayDepth != 0u || this.m_zOrderActive)
+            return false;
+        if(this.m_snapshot.m_effectLayers.size() >= s_PaintMaxEffectLayers)
+            return false;
+        if(!(bounds.width > 0.0f) || !(bounds.height > 0.0f) || !IsFinite(VectorSingle(bounds.x, bounds.y, bounds.width, bounds.height)))
+            return false;
+        if(!IsFinite(VectorSingle(opacity, blurRadius, 0.0f, 0.0f).xy) || opacity < 0.0f || opacity > 1.0f || blurRadius < 0.0f || blurRadius > s_PaintMaxBlurRadius || blendMode > PaintBlendMode::Replace)
+            return false;
+
+        Rect logicalBounds = bounds;
+        f32 resolvedBlur = blurRadius;
+        if(this.m_hasActiveTransform){
+            logicalBounds = ComputeTransformedPaintRectBounds(this.m_transforms[this.m_transformDepth - 1u].xf, bounds);
+            resolvedBlur = UiSimdClamp(blurRadius * this.currentTransformScale(), 0.0f, s_PaintMaxBlurRadius);
+        }
+
+        const f32 logicalW = this.m_snapshot.m_displayMetrics.logicalWidth;
+        const f32 logicalH = this.m_snapshot.m_displayMetrics.logicalHeight;
+        const VectorSingle outerClipOrigin(this.m_clips.back().rect.x, this.m_clips.back().rect.y, 0.0f, 0.0f);
+        const VectorSingle outerClipEnd(this.m_clips.back().right, this.m_clips.back().bottom, 0.0f, 0.0f);
+        const VectorSingle boundsOrigin(logicalBounds.x, logicalBounds.y, 0.0f, 0.0f);
+        const VectorSingle boundsEnd(logicalBounds.x + logicalBounds.width, logicalBounds.y + logicalBounds.height, 0.0f, 0.0f);
+        const VectorSingle visOrigin = Max(boundsOrigin, outerClipOrigin);
+        const VectorSingle visEnd = Min(boundsEnd, outerClipEnd);
+        const VectorSingle visSize = Max(visEnd - visOrigin, VectorZero());
+
+        const f32 pad = Ceil(VectorSingle(1.5f * resolvedBlur)).x;
+        const VectorSingle expOrigin = Max(visOrigin - VectorSingle(pad), VectorZero());
+        const VectorSingle expEnd = Min(visEnd + VectorSingle(pad), VectorSingle(logicalW, logicalH, 0.0f, 0.0f));
+        const VectorSingle expSize = Max(expEnd - expOrigin, VectorZero());
+
+        this.m_activeEffectLayer = PaintEffectLayer();
+        this.m_activeEffectLayer.bounds = Rect(visOrigin.x, visOrigin.y, visSize.x, visSize.y);
+        this.m_activeEffectLayer.expandedBounds = Rect(expOrigin.x, expOrigin.y, expSize.x, expSize.y);
+        this.m_activeEffectLayer.opacity = opacity;
+        this.m_activeEffectLayer.blurRadius = resolvedBlur;
+        this.m_activeEffectLayer.blendMode = blendMode;
+
+        this.m_effectLayerClipDepth = this.m_clips.size();
+        this.m_effectLayerTransformDepth = this.m_transformDepth;
+        this.m_effectLayerOpacityDepth = this.m_opacityDepth;
+        this.m_effectLayerOpacityBase = this.m_opacityBase;
+        this.m_effectLayerBlendModeDepth = this.m_blendModeDepth;
+        this.m_effectLayerBlendModeBase = this.m_blendModeBase;
+        this.m_effectLayerSavedAnalyticClipDepth = this.m_analyticClipDepth;
+        this.m_effectLayerSavedOpacity = this.m_currentOpacity;
+        this.m_effectLayerSavedBlendMode = this.m_currentBlendMode;
+        this.m_effectLayerSavedOrdered = this.m_commandsOrdered;
+        this.m_effectLayerSavedDescending = this.m_commandsStrictlyDescending;
+
+        this.m_opacityBase = this.m_opacityDepth;
+        this.m_currentOpacity = 1.0f;
+        this.m_blendModeBase = this.m_blendModeDepth;
+        this.m_currentBlendMode = PaintBlendMode::Normal;
+        this.m_analyticClipDepth = 0u;
+        this.m_commandsOrdered = true;
+        this.m_commandsStrictlyDescending = true;
+
+        this.m_effectLayerScratch.clear();
+        TransferVector<DrawCommand>(this.m_effectLayerScratch, this.m_snapshot.m_commands);
+        PaintClipEntry layerClip;
+        layerClip.rect = this.m_activeEffectLayer.expandedBounds;
+        layerClip.right = layerClip.rect.x + layerClip.rect.width;
+        layerClip.bottom = layerClip.rect.y + layerClip.rect.height;
+        layerClip.clipMaskOffset = u32.max;
+        layerClip.blendMode = PaintBlendMode::Normal;
+        this.m_clips.push_back(layerClip);
+        this.m_effectLayerActive = true;
+        return true;
+    }
+    [cpp_unwind]
+    public b8 endEffectLayer(){
+        if(
+            !this.m_recording
+            || !this.m_effectLayerActive
+            || this.m_clips.size() != this.m_effectLayerClipDepth + 1u
+            || this.m_transformDepth != this.m_effectLayerTransformDepth
+            || this.m_opacityDepth != this.m_effectLayerOpacityDepth
+            || this.m_blendModeDepth != this.m_effectLayerBlendModeDepth
+        )
+            return false;
+
+        this.m_clips.pop_back();
+        const u32 commandBegin = cast<u32>(this.m_snapshot.m_effectCommands.size());
+        for(in DrawCommand cmd : this.m_snapshot.m_commands)
+            this.m_snapshot.m_effectCommands.push_back(cmd);
+        const u32 commandEnd = cast<u32>(this.m_snapshot.m_effectCommands.size());
+        this.m_snapshot.m_commands.clear();
+        TransferVector<DrawCommand>(this.m_snapshot.m_commands, this.m_effectLayerScratch);
+
+        this.m_opacityBase = this.m_effectLayerOpacityBase;
+        this.m_currentOpacity = this.m_effectLayerSavedOpacity;
+        this.m_blendModeBase = this.m_effectLayerBlendModeBase;
+        this.m_currentBlendMode = this.m_effectLayerSavedBlendMode;
+        this.m_analyticClipDepth = this.m_effectLayerSavedAnalyticClipDepth;
+        this.m_clips.back().blendMode = this.m_currentBlendMode;
+        this.m_commandsOrdered = this.m_effectLayerSavedOrdered;
+        this.m_commandsStrictlyDescending = this.m_effectLayerSavedDescending;
+        this.m_effectLayerActive = false;
+
+        const f32 logicalW = this.m_snapshot.m_displayMetrics.logicalWidth;
+        const f32 logicalH = this.m_snapshot.m_displayMetrics.logicalHeight;
+        const f32 compositeOpacity = ApplyPaintOpacity(Color(1.0f, 1.0f, 1.0f, this.m_activeEffectLayer.opacity), this.m_currentOpacity).a;
+        in Rect expBounds = this.m_activeEffectLayer.expandedBounds;
+        in Rect visBounds = this.m_activeEffectLayer.bounds;
+        if(
+            commandEnd <= commandBegin
+            || compositeOpacity <= 0.0f
+            || expBounds.width <= 0.0f || expBounds.height <= 0.0f
+            || visBounds.width <= 0.0f || visBounds.height <= 0.0f
+            || logicalW <= 0.0f || logicalH <= 0.0f
+        )
+            return true;
+
+        this.m_activeEffectLayer.commandBegin = commandBegin;
+        this.m_activeEffectLayer.commandEnd = commandEnd;
+        this.m_activeEffectLayer.clip = this.m_clips.back().rect;
+        this.m_activeEffectLayer.clipMaskOffset = this.m_clips.back().clipMaskOffset;
+
+        if(this.m_activeEffectLayer.blurRadius > 0.0f){
+            if(
+                this.m_snapshot.m_vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount)
+                || this.m_snapshot.m_indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)
+            ){
+                assert(false);
+                return false;
+            }
+            const Rect expUv(expBounds.x / logicalW, expBounds.y / logicalH, expBounds.width / logicalW, expBounds.height / logicalH);
+            const f32 sigma = 0.5f * this.m_activeEffectLayer.blurRadius;
+            this.m_activeEffectLayer.blurHorizontalOffset = PackPaintBlurRecord(1.0f, 0.0f, sigma, expUv, this.m_snapshot.m_effectWords);
+            this.m_activeEffectLayer.blurVerticalOffset = PackPaintBlurRecord(0.0f, 1.0f, sigma, expUv, this.m_snapshot.m_effectWords);
+
+            const u32 vBase = cast<u32>(this.m_snapshot.m_vertices.size());
+            const u32 blurFirstIndex = cast<u32>(this.m_snapshot.m_indices.size());
+            const Color whiteColor(1.0f, 1.0f, 1.0f, 1.0f);
+            const f32 x0 = expBounds.x;
+            const f32 y0 = expBounds.y;
+            const f32 x1 = x0 + expBounds.width;
+            const f32 y1 = y0 + expBounds.height;
+            const f32 u0 = expUv.x;
+            const f32 v0 = expUv.y;
+            const f32 u1 = u0 + expUv.width;
+            const f32 v1 = v0 + expUv.height;
+            this.m_snapshot.m_vertices.push_back(Vertex(Point(x0, y0), Point(u0, v0), whiteColor));
+            this.m_snapshot.m_vertices.push_back(Vertex(Point(x1, y0), Point(u1, v0), whiteColor));
+            this.m_snapshot.m_vertices.push_back(Vertex(Point(x1, y1), Point(u1, v1), whiteColor));
+            this.m_snapshot.m_vertices.push_back(Vertex(Point(x0, y1), Point(u0, v1), whiteColor));
+            this.m_snapshot.m_indices.push_back(vBase);
+            this.m_snapshot.m_indices.push_back(vBase + 1u);
+            this.m_snapshot.m_indices.push_back(vBase + 2u);
+            this.m_snapshot.m_indices.push_back(vBase);
+            this.m_snapshot.m_indices.push_back(vBase + 2u);
+            this.m_snapshot.m_indices.push_back(vBase + 3u);
+            this.m_activeEffectLayer.blurFirstIndex = blurFirstIndex;
+        }
+
+        const u32 layerIndex = cast<u32>(this.m_snapshot.m_effectLayers.size());
+        const PaintBlendMode compositeBlendMode = this.m_activeEffectLayer.blendMode;
+        this.m_snapshot.m_effectLayers.push_back(this.m_activeEffectLayer);
+
+        const Rect compUv(visBounds.x / logicalW, visBounds.y / logicalH, visBounds.width / logicalW, visBounds.height / logicalH);
+        const PaintBlendMode prevClipBlend = this.m_clips.back().blendMode;
+        this.m_clips.back().blendMode = compositeBlendMode;
+        EmitPaintEffectQuad(
+            this.m_recording, this.m_clips.back(), visBounds, compUv,
+            Color(1.0f, 1.0f, 1.0f, compositeOpacity), PaintMaterial::EffectLayerComposite, this.m_layer, layerIndex,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
+        );
+        this.m_clips.back().blendMode = prevClipBlend;
+        return true;
+    }
+
     [owner_result, cpp_unwind]
     public DrawSnapshot freeze(){
-        [essential] assert(this.m_transformDepth == 0u);
-        FinalizePaintBuilderRecording(this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_overlayDepth, this.m_snapshot.m_commands, this.m_clips, this.m_sortScratch, this.m_recording);
+        [essential] assert(this.m_transformDepth == 0u && this.m_opacityDepth == 0u && this.m_blendModeDepth == 0u && !this.m_effectLayerActive);
+        FinalizePaintBuilderRecording(this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_overlayDepth, this.m_zOrderActive, this.m_snapshot.m_commands, this.m_clips, this.m_sortScratch, this.m_recording);
         DrawSnapshot result;
         MoveInto<DrawSnapshot>(result, this.m_snapshot);
         return result;
@@ -1021,6 +1912,7 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     private void emitQuad(in Rect rectangle, in Rect uv, in Color color, in PaintMaterial material, in u32 glyphPageIndex, in u32 sdfPageIndex, in u32 sdfChannel, in u32 textureImageIndex){
         assert(this.m_recording);
+        const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
             if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
                 return;
@@ -1029,7 +1921,7 @@ class PaintBuilder : NoCopy{
             if(entry.axisAlignedPositive){
                 const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
                 EmitPaintQuadValidated(
-                    this.m_recording, this.m_clips.back(), scaledRect, uv, color, material, this.m_layer,
+                    this.m_recording, this.m_clips.back(), scaledRect, uv, modulated, material, this.m_layer,
                     glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
                     this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
                 );
@@ -1044,14 +1936,14 @@ class PaintBuilder : NoCopy{
             EmitPaintTransformedQuad(
                 this.m_recording, this.m_clips.back(),
                 p00, p10, p11, p01,
-                uv, color, material, this.m_layer,
+                uv, modulated, material, this.m_layer,
                 glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return;
         }
         EmitPaintQuadValidated(
-            this.m_recording, this.m_clips.back(), rectangle, uv, color, material, this.m_layer,
+            this.m_recording, this.m_clips.back(), rectangle, uv, modulated, material, this.m_layer,
             glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
@@ -1140,14 +2032,14 @@ b8 EmitPaintResolvedGlyphBatchCore(
         && glyphs.size() <= (cast<usize>(u32.max) - vertices.size()) / cast<usize>(s_PaintQuadVertexCount)
         && glyphs.size() <= (cast<usize>(u32.max) - indices.size()) / cast<usize>(s_PaintQuadIndexCount)
     ){
-        vertices.reserve(vertices.size() + glyphs.size() * cast<usize>(s_PaintQuadVertexCount));
-        indices.reserve(indices.size() + glyphs.size() * cast<usize>(s_PaintQuadIndexCount));
+        ReservePaintVectorGeometric(vertices.size() + glyphs.size() * cast<usize>(s_PaintQuadVertexCount), vertices);
+        ReservePaintVectorGeometric(indices.size() + glyphs.size() * cast<usize>(s_PaintQuadIndexCount), indices);
     }
-    Color premultiplied = tint;
-    if(tint.a != 1.0f){
-        const VectorSingle premul = VectorSingle(tint.r, tint.g, tint.b, 1.0f) * VectorSingle(tint.a);
-        premultiplied = Color(premul.x, premul.y, premul.z, premul.w);
-    }
+    const Color premultiplied = PremultiplyPaintColor(tint);
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    u32 lastValidatedSdfPage = u32.max;
+    u32 lastSdfChannelCount = 0u;
     b8 hasMergedRun = false;
     usize mergedCommandIndex = 0u;
     PaintMaterial mergedMaterial = PaintMaterial::Solid;
@@ -1164,15 +2056,26 @@ b8 EmitPaintResolvedGlyphBatchCore(
         if(glyph.isSdf){
             if(cast<usize>(glyph.pageIndex) >= sdfPages.size())
                 return false;
-            in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
-            if(!page.valid() || !IsValidPaintSdfGlyphRequest(glyph.channel, page.deref().binding().channelCount, glyph.uv))
+            if(glyph.pageIndex != lastValidatedSdfPage){
+                in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
+                if(!page.valid())
+                    return false;
+                lastValidatedSdfPage = glyph.pageIndex;
+                lastSdfChannelCount = page.deref().binding().channelCount;
+            }
+            if(!IsValidPaintSdfGlyphRequest(glyph.channel, lastSdfChannelCount, glyph.uv))
                 return false;
             material = PaintMaterial::SdfGlyph;
             glyphPageIndex = u32.max;
             sdfPageIndex = glyph.pageIndex;
             sdfChannel = glyph.channel;
         }
-        else if(cast<usize>(glyph.pageIndex) >= glyphPages.size() || !IsValidPaintUvRect(glyph.uv))
+        else if(glyph.isColor){
+            if(cast<usize>(glyph.pageIndex) >= glyphPages.size() || glyphPages[glyph.pageIndex].deref().binding().channelCount != 4u || !IsValidPaintUvRect(glyph.uv))
+                return false;
+            material = PaintMaterial::ColorGlyph;
+        }
+        else if(cast<usize>(glyph.pageIndex) >= glyphPages.size() || glyphPages[glyph.pageIndex].deref().binding().channelCount != 1u || !IsValidPaintUvRect(glyph.uv))
             return false;
         if(!clipActive)
             continue;
@@ -1227,8 +2130,6 @@ b8 EmitPaintResolvedGlyphBatchCore(
             const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
             if(!IsFinite(rectEnd.xy))
                 continue;
-            const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
-            const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
             const VectorSingle clippedOrigin = VectorSelect(rectOrigin, clipOrigin, VectorGreater(clipOrigin, rectOrigin));
             const VectorSingle clippedEnd = VectorSelect(rectEnd, clipEnd, VectorLess(clipEnd, rectEnd));
             const VectorSingle visSize = clippedEnd - clippedOrigin;
@@ -1238,11 +2139,8 @@ b8 EmitPaintResolvedGlyphBatchCore(
             const f32 visH = visSize.y;
             if(!(visW > 0.0f) || !(visH > 0.0f) || !IsFinite(visSize.xy))
                 continue;
-            const VectorSingle visEnd = clippedOrigin + visSize;
-            const f32 visEndX = visEnd.x;
-            const f32 visEndY = visEnd.y;
-            if(!IsFinite(visEnd.xy))
-                continue;
+            const f32 visEndX = clippedEnd.x;
+            const f32 visEndY = clippedEnd.y;
             if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
                 assert(false);
                 continue;
@@ -1251,7 +2149,7 @@ b8 EmitPaintResolvedGlyphBatchCore(
             f32 top = 0.0f;
             f32 right = 0.0f;
             f32 bottom = 0.0f;
-            if(x0 == rectangle.x && y0 == rectangle.y && visW == rectangle.width && visH == rectangle.height && visEndX == rectEnd.x && visEndY == rectEnd.y){
+            if(x0 == rectangle.x && y0 == rectangle.y && visEndX == rectEnd.x && visEndY == rectEnd.y){
                 left = uv.x;
                 top = uv.y;
                 right = uv.x + uv.width;
@@ -1290,9 +2188,12 @@ b8 EmitPaintResolvedGlyphBatchCore(
             const usize lastIndex = commands.size() - 1u;
             in DrawCommand previous = commands[lastIndex];
             if(
-                previous.layer == layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
+                previous.layer == layer && previous.zOrder == 0u && previous.material == material && previous.glyphPageIndex == glyphPageIndex
                 && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
                 && previous.textureImageIndex == u32.max
+                && previous.effectOffset == u32.max
+                && previous.clipMaskOffset == clipEntry.clipMaskOffset
+                && previous.blendMode == clipEntry.blendMode
                 && EqualUiRect(previous.clip, clipEntry.rect)
             ){
                 commands[lastIndex].indexCount += s_PaintQuadIndexCount;
@@ -1304,7 +2205,7 @@ b8 EmitPaintResolvedGlyphBatchCore(
                 mergedSdfChannel = sdfChannel;
                 continue;
             }
-            if(previous.layer > layer)
+            if(previous.layer > layer || (previous.layer == layer && previous.zOrder > 0u))
                 inOutCommandsOrdered = false;
             else
                 inOutCommandsStrictlyDescending = false;
@@ -1319,6 +2220,9 @@ b8 EmitPaintResolvedGlyphBatchCore(
         command.sdfChannel = sdfChannel;
         command.layer = layer;
         command.textureImageIndex = u32.max;
+        command.effectOffset = u32.max;
+        command.clipMaskOffset = clipEntry.clipMaskOffset;
+        command.blendMode = clipEntry.blendMode;
         mergedCommandIndex = commands.size();
         commands.push_back(command);
         hasMergedRun = true;

@@ -172,7 +172,12 @@ class UiNestedPopupGallery{
         this.m_beforeText = EditModel();
         this.m_afterText = EditModel();
         this.m_childText = EditModel();
-        const b8 initialized = this.m_beforeText.setText("Before child") && this.m_afterText.setText("After child") && this.m_childText.setText("Inside child");
+        const b8 initialized =
+            this.m_beforeText.setText("Before child")
+            && this.m_afterText.setText("After child")
+            && this.m_childText.setText("Inside child")
+            && this.m_lastAction.assign("None")
+        ;
         [essential] assert(initialized);
         this.m_combo.select(1u);
         this.m_search.combo().select(1u);
@@ -201,6 +206,16 @@ class UiNestedPopupGallery{
         RestoreBuilderGap(context.ui, previousGap);
     }
 
+    private void recordAction(in StringView actionName){
+        ++this.m_actionCount;
+        b8 ok = this.m_lastAction.assign(actionName);
+        ok = this.m_lastAction.append(" (#") && ok;
+        AppendUnsignedU64Text(this.m_lastAction, cast<u64>(this.m_actionCount));
+        ok = this.m_lastAction.append(")") && ok;
+        if(!ok)
+            this.m_actionCount = 0u;
+    }
+
     private b8 paintParent(mut Builder ui){
         WidgetOptions button = WidgetOptions();
         button.width = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupButtonWidth);
@@ -211,9 +226,12 @@ class UiNestedPopupGallery{
         EditBoxOptions edit = EditBoxOptions();
         ListOptions list = ListOptions();
         list.height = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupListHeight);
-        if(!ui.label(s_TitleKey, "Parent: controls before and after child") || !ui.beginRow("before", row))
+        if(!ui.label(s_TitleKey, "Parent: controls before and after child"))
             return false;
-        ui.button(s_NestedPopupActionKey, "Before", button);
+        if(!ui.label("action_status", this.m_lastAction.view()) || !ui.beginRow("before", row))
+            return false;
+        if(ui.button(s_NestedPopupActionKey, "Before", button))
+            this.recordAction("Before");
         const EditBoxResult before = ui.editBox(s_NestedPopupEditKey, this.m_beforeText, this.m_beforeEdit, edit);
         if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", this.m_source, this.m_beforeList, list).valid)
             return false;
@@ -221,7 +239,8 @@ class UiNestedPopupGallery{
             this.m_child.open();
         if(!this.paintChild(ui) || !ui.beginRow("after", row))
             return false;
-        ui.button(s_NestedPopupActionKey, "After", button);
+        if(ui.button(s_NestedPopupActionKey, "After", button))
+            this.recordAction("After");
         const EditBoxResult after = ui.editBox(s_NestedPopupEditKey, this.m_afterText, this.m_afterEdit, edit);
         if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", this.m_source, this.m_afterList, list).valid)
             return false;
@@ -234,7 +253,8 @@ class UiNestedPopupGallery{
         search.combo.popupHeight = s_NestedPopupSearchPopupHeight;
         if(!ui.searchComboBox("search", this.m_source, this.m_search, search).combo.valid)
             return false;
-        ui.button(s_NestedPopupMenuAnchorKey, "Right-click / Menu for commands", wide);
+        if(ui.button(s_NestedPopupMenuAnchorKey, "Right-click / Menu for commands", wide))
+            this.recordAction("Parent anchor");
         ContextMenuOptions menu = ContextMenuOptions();
         menu.size = Point(s_NestedPopupMenuWidth, s_NestedPopupMenuHeight);
         const ContextMenuResult result = ui.contextMenu(s_CommandsKey, s_NestedPopupMenuAnchorKey, this.m_source, this.m_menu, menu);
@@ -255,7 +275,8 @@ class UiNestedPopupGallery{
         button.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
         if(!ui.label(s_TitleKey, "Independent child overlay"))
             return false;
-        ui.button(s_NestedPopupActionKey, "Child action", button);
+        if(ui.button(s_NestedPopupActionKey, "Child action", button))
+            this.recordAction("Child action");
         EditBoxOptions edit = EditBoxOptions();
         const EditBoxResult result = ui.editBox(s_NestedPopupEditKey, this.m_childText, this.m_childEdit, edit);
         if(ui.button("close_branch", "Close ancestor and entire branch", button))
@@ -277,6 +298,8 @@ class UiNestedPopupGallery{
     private EditBoxState m_beforeEdit = EditBoxState();
     private EditBoxState m_afterEdit = EditBoxState();
     private EditBoxState m_childEdit = EditBoxState();
+    private CompactString m_lastAction;
+    private u32 m_actionCount = 0u;
 }
 
 class UiNumericEditGallery{
@@ -471,6 +494,7 @@ class UiSliderGallery{
 class UiVectorPaintGallery{
     public UiVectorPaintGallery(){
         this.m_label = Label();
+        this.m_labelBaseXf = MultiplyPaintTransform(MakePaintRotate(-0.14f), MakePaintScale(1.08f, 0.92f));
         const b8 ok = ConfigureLabelWithSize("Transformed Vector & Text", s_GalleryFontSize, this.m_label);
         [essential] assert(ok, "Testbed vector paint label must be valid");
     }
@@ -506,65 +530,89 @@ class UiVectorPaintGallery{
         context.paint.strokeEllipse(Point(x + 266.0f, y + 46.0f), 42.0f, 22.0f, borderStyle, Color(0.98f, 0.72f, 0.84f, 0.95f));
         context.paint.drawArc(Point(x + 348.0f, y + 46.0f), 26.0f, -0.4f, 1.45f * s_Pi, accentStyle, Color(0.35f, 0.92f, 0.98f, 0.98f));
 
-        Array<Point, 5u> polyPts;
-        polyPts[0u] = Point(x + 48.0f, y + 98.0f);
-        polyPts[1u] = Point(x + 76.0f, y + 116.0f);
-        polyPts[2u] = Point(x + 66.0f, y + 150.0f);
-        polyPts[3u] = Point(x + 30.0f, y + 150.0f);
-        polyPts[4u] = Point(x + 20.0f, y + 116.0f);
-        context.paint.fillConvexPolygon(Span<Point>(polyPts.data(), 5u), Color(0.95f, 0.72f, 0.22f, 0.90f));
+        Array<Point, 5u> pentagonPoly;
+        pentagonPoly[0u] = Point(x + 48.0f, y + 98.0f);
+        pentagonPoly[1u] = Point(x + 76.0f, y + 116.0f);
+        pentagonPoly[2u] = Point(x + 66.0f, y + 150.0f);
+        pentagonPoly[3u] = Point(x + 30.0f, y + 150.0f);
+        pentagonPoly[4u] = Point(x + 20.0f, y + 116.0f);
+        context.paint.fillConvexPolygon(Span<Point>(pentagonPoly.data(), 5u), Color(0.95f, 0.72f, 0.22f, 0.90f));
+        context.paint.drawQuadraticBezier(Point(x + 96.0f, y + 152.0f), Point(x + 148.0f, y + 86.0f), Point(x + 204.0f, y + 152.0f), accentStyle, Color(0.45f, 0.95f, 0.65f, 0.98f));
+        context.paint.drawCubicBezier(Point(x + 216.0f, y + 148.0f), Point(x + 256.0f, y + 84.0f), Point(x + 324.0f, y + 178.0f), Point(x + 382.0f, y + 104.0f), accentStyle, Color(0.68f, 0.78f, 1.0f, 0.98f));
 
-        context.paint.drawQuadraticBezier(
-            Point(x + 96.0f, y + 152.0f),
-            Point(x + 148.0f, y + 86.0f),
-            Point(x + 204.0f, y + 152.0f),
-            accentStyle,
-            Color(0.45f, 0.95f, 0.65f, 0.98f)
-        );
-        context.paint.drawCubicBezier(
-            Point(x + 216.0f, y + 148.0f),
-            Point(x + 256.0f, y + 84.0f),
-            Point(x + 324.0f, y + 178.0f),
-            Point(x + 382.0f, y + 104.0f),
-            accentStyle,
-            Color(0.68f, 0.78f, 1.0f, 0.98f)
-        );
+        Array<Point, 4u> dashPoly;
+        dashPoly[0u] = Point(x + 18.0f, y + 174.0f);
+        dashPoly[1u] = Point(x + 150.0f, y + 174.0f);
+        dashPoly[2u] = Point(x + 190.0f, y + 238.0f);
+        dashPoly[3u] = Point(x + 38.0f, y + 238.0f);
+        PaintLineStyle dashPolyStyle;
+        dashPolyStyle.thickness = 3.0f;
+        dashPolyStyle.cap = PaintLineCap::Round;
+        dashPolyStyle.join = PaintLineJoin::Bevel;
+        dashPolyStyle.dashLength = 10.0f;
+        dashPolyStyle.gapLength = 5.0f;
+        dashPolyStyle.antiAlias = true;
+        context.paint.drawPolyline(Span<Point>(dashPoly.data(), 4u), false, dashPolyStyle, Color(0.98f, 0.85f, 0.28f, 0.98f));
 
-        PaintLineStyle dashPoly;
-        dashPoly.thickness = 3.0f;
-        dashPoly.cap = PaintLineCap::Round;
-        dashPoly.join = PaintLineJoin::Bevel;
-        dashPoly.dashLength = 10.0f;
-        dashPoly.gapLength = 5.0f;
-        dashPoly.antiAlias = true;
-        Array<Point, 4u> dashPts;
-        dashPts[0u] = Point(x + 18.0f, y + 174.0f);
-        dashPts[1u] = Point(x + 150.0f, y + 174.0f);
-        dashPts[2u] = Point(x + 190.0f, y + 238.0f);
-        dashPts[3u] = Point(x + 38.0f, y + 238.0f);
-        context.paint.drawPolyline(Span<Point>(dashPts.data(), 4u), false, dashPoly, Color(0.98f, 0.85f, 0.28f, 0.98f));
+        const u64 textIdentity = context.text.identity();
+        const u64 fontGeneration = context.text.generation();
+        const u64 atlasIdentity = context.text.atlasIdentity();
+        const usize atlasGlyphCount = context.text.atlasGlyphCount();
+        const u32 scaleXBits = bit_cast<u32>(context.display.pixelScaleX);
+        const u32 scaleYBits = bit_cast<u32>(context.display.pixelScaleY);
+        if(
+            !this.m_hasCachedLabelMeasure
+            || this.m_cachedLabelTextIdentity != textIdentity
+            || this.m_cachedLabelFontGeneration != fontGeneration
+            || this.m_cachedLabelAtlasIdentity != atlasIdentity
+            || (this.m_cachedLabelNeedsAtlasRecheck && this.m_cachedLabelAtlasGlyphCount != atlasGlyphCount)
+            || this.m_cachedLabelScaleXBits != scaleXBits
+            || this.m_cachedLabelScaleYBits != scaleYBits
+        ){
+            const Expected<Rect> labelBounds = this.m_label.measure(context.text, context.display);
+            this.m_cachedLabelValid = labelBounds.has_value();
+            if(this.m_cachedLabelValid)
+                this.m_cachedLabelRect = labelBounds.value();
+            this.m_cachedLabelNeedsAtlasRecheck = this.m_label.measuredNeedsAtlasRecheck();
+            this.m_cachedLabelTextIdentity = textIdentity;
+            this.m_cachedLabelFontGeneration = fontGeneration;
+            this.m_cachedLabelAtlasIdentity = atlasIdentity;
+            this.m_cachedLabelAtlasGlyphCount = atlasGlyphCount;
+            this.m_cachedLabelScaleXBits = scaleXBits;
+            this.m_cachedLabelScaleYBits = scaleYBits;
+            this.m_hasCachedLabelMeasure = true;
+        }
 
-        const Expected<Rect> labelBounds = this.m_label.measure(context.text, context.display);
-        context.paint.pushTranslate(x + 286.0f, y + 208.0f);
-        context.paint.pushRotate(-0.14f);
-        context.paint.pushScale(1.08f, 0.92f);
+        PaintTransform2D labelXf = this.m_labelBaseXf;
+        labelXf.tx = x + 286.0f;
+        labelXf.ty = y + 208.0f;
+        context.paint.pushTransform(labelXf);
         PaintLineStyle sqStyle;
         sqStyle.thickness = 4.0f;
         sqStyle.cap = PaintLineCap::Square;
         sqStyle.antiAlias = true;
         context.paint.drawLine(Point(-72.0f, 16.0f), Point(72.0f, 16.0f), sqStyle, Color(0.32f, 0.88f, 0.98f, 0.95f));
-        if(labelBounds.has_value()){
-            const Rect r = labelBounds.value();
-            this.m_label.paint(context.text, context.paint, Rect(-r.width * 0.5f, -r.height * 0.5f - 4.0f, r.width, r.height), s_LabelTextColor);
+        if(this.m_cachedLabelValid){
+            in Rect r = this.m_cachedLabelRect;
+            PaintMeasuredLabel(this.m_label, r, Rect(-r.width * 0.5f, -r.height * 0.5f - 4.0f, r.width, r.height), s_LabelTextColor, context.text, context.paint);
         }
-        context.paint.popTransform();
-        context.paint.popTransform();
         context.paint.popTransform();
 
         context.paint.popClip();
     }
 
     private Label m_label;
+    private PaintTransform2D m_labelBaseXf;
+    private Rect m_cachedLabelRect;
+    private u64 m_cachedLabelTextIdentity = 0u;
+    private u64 m_cachedLabelFontGeneration = 0u;
+    private u64 m_cachedLabelAtlasIdentity = 0u;
+    private usize m_cachedLabelAtlasGlyphCount = 0u;
+    private u32 m_cachedLabelScaleXBits = 0u;
+    private u32 m_cachedLabelScaleYBits = 0u;
+    private b8 m_hasCachedLabelMeasure = false;
+    private b8 m_cachedLabelValid = false;
+    private b8 m_cachedLabelNeedsAtlasRecheck = false;
 }
 
 class UiTextAreaGallery{
@@ -710,10 +758,18 @@ class UiWidgetGallery{
 
 class UiSkinPreviewGalleryLayout{
     public Rect gallery;
+    public Rect captionRect;
+    public Rect koreanRect;
+    public Rect normalRect;
+    public Rect hoverRect;
+    public Rect pressedRect;
+    public Rect disabledRect;
+    public Rect editRect;
     public f32 captionHeightMeasure = 0.0f;
     public f32 koreanHeightMeasure = 0.0f;
     public f32 captionHeight = 0.0f;
     public f32 preferredTop = 0.0f;
+    public b8 previewLabelsValid = false;
     public b8 valid = false;
 }
 
@@ -752,7 +808,7 @@ class UiSkinPreview{
             && this.m_cachedLayoutTextIdentity == textIdentity
             && this.m_cachedLayoutFontGeneration == fontGeneration
             && this.m_cachedLayoutAtlasIdentity == atlasIdentity
-            && this.m_cachedLayoutAtlasGlyphCount == atlasGlyphCount
+            && (!this.m_cachedLayoutNeedsAtlasRecheck || this.m_cachedLayoutAtlasGlyphCount == atlasGlyphCount)
             && this.m_cachedLayoutWidthBits == widthBits
             && this.m_cachedLayoutHeightBits == heightBits
             && this.m_cachedLayoutScaleXBits == scaleXBits
@@ -765,13 +821,36 @@ class UiSkinPreview{
         const Expected<Rect> korean = this.m_korean.measure(context.text, context.display);
         if(!caption.has_value() || !korean.has_value())
             return layout;
-        layout.captionHeightMeasure = caption.value().height;
-        layout.koreanHeightMeasure = korean.value().height;
+        layout.captionRect = caption.value();
+        layout.koreanRect = korean.value();
+        layout.captionHeightMeasure = layout.captionRect.height;
+        layout.koreanHeightMeasure = layout.koreanRect.height;
         layout.captionHeight = ResolveSkinGalleryCaptionHeight(layout.captionHeightMeasure, layout.koreanHeightMeasure);
         layout.preferredTop = ResolveSkinGalleryPreferredTop(layout.captionHeight);
         layout.gallery = ResolveWidgetGalleryLayoutBounds(context.display, layout.preferredTop);
+        b8 needsAtlasRecheck = this.m_caption.measuredNeedsAtlasRecheck() || this.m_korean.measuredNeedsAtlasRecheck();
+        const Expected<Rect> normal = this.m_normal.measure(context.text, context.display);
+        const Expected<Rect> hover = this.m_hover.measure(context.text, context.display);
+        const Expected<Rect> pressed = this.m_pressed.measure(context.text, context.display);
+        const Expected<Rect> disabled = this.m_disabled.measure(context.text, context.display);
+        const Expected<Rect> edit = this.m_edit.measure(context.text, context.display);
+        if(normal.has_value() && hover.has_value() && pressed.has_value() && disabled.has_value() && edit.has_value()){
+            layout.normalRect = normal.value();
+            layout.hoverRect = hover.value();
+            layout.pressedRect = pressed.value();
+            layout.disabledRect = disabled.value();
+            layout.editRect = edit.value();
+            layout.previewLabelsValid = true;
+            needsAtlasRecheck = needsAtlasRecheck
+                || this.m_normal.measuredNeedsAtlasRecheck()
+                || this.m_hover.measuredNeedsAtlasRecheck()
+                || this.m_pressed.measuredNeedsAtlasRecheck()
+                || this.m_disabled.measuredNeedsAtlasRecheck()
+                || this.m_edit.measuredNeedsAtlasRecheck();
+        }
         layout.valid = true;
         this.m_cachedLayout = layout;
+        this.m_cachedLayoutNeedsAtlasRecheck = needsAtlasRecheck;
         this.m_cachedLayoutTextIdentity = textIdentity;
         this.m_cachedLayoutFontGeneration = fontGeneration;
         this.m_cachedLayoutAtlasIdentity = atlasIdentity;
@@ -794,40 +873,42 @@ class UiSkinPreview{
         this.m_widgets.paint(context, gallery);
         if(gallery.y < layout.preferredTop || originX < s_MinimumGalleryX)
             return;
-        const Expected<Rect> normal = this.m_normal.measure(context.text, context.display);
-        const Expected<Rect> hover = this.m_hover.measure(context.text, context.display);
-        const Expected<Rect> pressed = this.m_pressed.measure(context.text, context.display);
-        const Expected<Rect> disabled = this.m_disabled.measure(context.text, context.display);
-        const Expected<Rect> edit = this.m_edit.measure(context.text, context.display);
-        if(!normal.has_value() || !hover.has_value() || !pressed.has_value() || !disabled.has_value() || !edit.has_value()){
+        if(!layout.previewLabelsValid){
             error("Testbed: custom UI label measurement failed");
             return;
         }
-        if(!DrawSkinGallery(context.paint, originX, originY, layout.captionHeight)){
+        const u64 regionsStamp = context.paint.regionsCacheStamp();
+        if(!this.m_hasCachedSkinRegions || this.m_cachedSkinRegionsStamp != regionsStamp){
+            this.m_cachedSkinRegionsValid = ResolveSkinGalleryRegionIndices(context.paint, this.m_cachedSkinRegionIndices);
+            this.m_cachedSkinRegionsStamp = regionsStamp;
+            this.m_hasCachedSkinRegions = true;
+        }
+        if(!this.m_cachedSkinRegionsValid){
             error("Testbed: default UI skin is missing a gallery region");
             return;
         }
+        DrawSkinGalleryByIndices(context.paint, this.m_cachedSkinRegionIndices, originX, originY, layout.captionHeight);
 
         const VectorSingle textCoords = VectorSingle(originX, originY, originX, originX)
             + VectorSingle(s_CaptionX, s_CaptionY, s_LeftTextX, s_RightTextX);
-        const VectorSingle buttonHeights(normal.value().height, hover.value().height, pressed.value().height, disabled.value().height);
+        const VectorSingle buttonHeights(layout.normalRect.height, layout.hoverRect.height, layout.pressedRect.height, layout.disabledRect.height);
         const VectorSingle buttonOffsets = (VectorSingle(s_ButtonHeight) - buttonHeights) * 0.5f;
         const VectorSingle buttonYs = VectorSingle(originY)
             + VectorSingle(s_ButtonTopY, s_ButtonTopY, s_ButtonBottomY, s_ButtonBottomY)
             + buttonOffsets;
-        const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, edit.value().height);
-        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y, s_CaptionWidth, layout.captionHeightMeasure))
-            && this.m_korean.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y + layout.captionHeightMeasure, s_CaptionWidth, layout.koreanHeightMeasure));
+        const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, layout.editRect.height);
+        const b8 captionPainted = PaintMeasuredLabel(this.m_caption, layout.captionRect, Rect(textCoords.x, textCoords.y, s_CaptionWidth, layout.captionHeightMeasure), Color(), context.text, context.paint)
+            && PaintMeasuredLabel(this.m_korean, layout.koreanRect, Rect(textCoords.x, textCoords.y + layout.captionHeightMeasure, s_CaptionWidth, layout.koreanHeightMeasure), Color(), context.text, context.paint);
         if(!captionPainted){
             error("Testbed: custom UI caption shaping or rasterization failed");
             return;
         }
         if(
-            !this.m_normal.paint(context.text, context.paint, Rect(textCoords.z, buttonYs.x, s_ButtonTextWidth, normal.value().height), s_LabelTextColor)
-            || !this.m_hover.paint(context.text, context.paint, Rect(textCoords.w, buttonYs.y, s_ButtonTextWidth, hover.value().height), s_LabelTextColor)
-            || !this.m_pressed.paint(context.text, context.paint, Rect(textCoords.z, buttonYs.z, s_ButtonTextWidth, pressed.value().height), s_LabelTextColor)
-            || !this.m_disabled.paint(context.text, context.paint, Rect(textCoords.w, buttonYs.w, s_ButtonTextWidth, disabled.value().height), s_DisabledLabelTextColor)
-            || !this.m_edit.paint(context.text, context.paint, Rect(textCoords.z, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
+            !PaintMeasuredLabel(this.m_normal, layout.normalRect, Rect(textCoords.z, buttonYs.x, s_ButtonTextWidth, layout.normalRect.height), s_LabelTextColor, context.text, context.paint)
+            || !PaintMeasuredLabel(this.m_hover, layout.hoverRect, Rect(textCoords.w, buttonYs.y, s_ButtonTextWidth, layout.hoverRect.height), s_LabelTextColor, context.text, context.paint)
+            || !PaintMeasuredLabel(this.m_pressed, layout.pressedRect, Rect(textCoords.z, buttonYs.z, s_ButtonTextWidth, layout.pressedRect.height), s_LabelTextColor, context.text, context.paint)
+            || !PaintMeasuredLabel(this.m_disabled, layout.disabledRect, Rect(textCoords.w, buttonYs.w, s_ButtonTextWidth, layout.disabledRect.height), s_DisabledLabelTextColor, context.text, context.paint)
+            || !PaintMeasuredLabel(this.m_edit, layout.editRect, Rect(textCoords.z, editY, s_EditTextWidth, layout.editRect.height), s_LabelTextColor, context.text, context.paint)
         )
             error("Testbed: custom UI label shaping or rasterization failed");
     }
@@ -849,6 +930,11 @@ class UiSkinPreview{
     private u32 m_cachedLayoutHeightBits = 0u;
     private u32 m_cachedLayoutScaleXBits = 0u;
     private u32 m_cachedLayoutScaleYBits = 0u;
+    private b8 m_cachedLayoutNeedsAtlasRecheck = false;
+    private Array<usize, 12u> m_cachedSkinRegionIndices;
+    private u64 m_cachedSkinRegionsStamp = 0u;
+    private b8 m_hasCachedSkinRegions = false;
+    private b8 m_cachedSkinRegionsValid = false;
 }
 
 
@@ -875,28 +961,56 @@ void RestoreBuilderGap(mut Builder ui, in f32 previousGap){
     ui.style().gap = previousGap;
 }
 
-b8 DrawOffsetSkinRegion(mut PaintBuilder paint, in Name region, in VectorSingle origin, in VectorSingle offset, in f32 width, in f32 height){
-    const VectorSingle position = origin + offset;
-    return paint.drawRegion(region, Rect(position.x, position.y, width, height));
+b8 PaintMeasuredLabel(in Label label, in Rect measured, in Rect bounds, in Color color, mut TextService text, mut PaintBuilder paint){
+    paint.pushClip(bounds);
+    const b8 painted = text.paint(paint, label.layout(), ResolveLabelPaintOrigin(bounds, measured), color);
+    const b8 restored = paint.popClip();
+    return painted && restored;
 }
 
-b8 DrawSkinGallery(mut PaintBuilder paint, in f32 originX, in f32 originY, in f32 captionHeight){
+b8 TryResolveSkinGalleryRegion(in PaintBuilder paint, in Name region, mut Array<usize, 12u> outIndices, in usize slot){
+    const Optional<usize> resolved = paint.resolveRegionIndex(region, region);
+    if(!resolved.has_value())
+        return false;
+    outIndices[slot] = resolved.value();
+    return true;
+}
+
+b8 ResolveSkinGalleryRegionIndices(in PaintBuilder paint, mut Array<usize, 12u> outIndices){
+    return TryResolveSkinGalleryRegion(paint, s_Panel, outIndices, 0u)
+        && TryResolveSkinGalleryRegion(paint, s_ButtonNormal, outIndices, 1u)
+        && TryResolveSkinGalleryRegion(paint, s_ButtonHover, outIndices, 2u)
+        && TryResolveSkinGalleryRegion(paint, s_ButtonPressed, outIndices, 3u)
+        && TryResolveSkinGalleryRegion(paint, s_ButtonDisabled, outIndices, 4u)
+        && TryResolveSkinGalleryRegion(paint, s_EditFocused, outIndices, 5u)
+        && TryResolveSkinGalleryRegion(paint, s_ComboArrow, outIndices, 6u)
+        && TryResolveSkinGalleryRegion(paint, s_Checkbox, outIndices, 7u)
+        && TryResolveSkinGalleryRegion(paint, s_CheckboxMark, outIndices, 8u)
+        && TryResolveSkinGalleryRegion(paint, s_ProgressTrack, outIndices, 9u)
+        && TryResolveSkinGalleryRegion(paint, s_ProgressFill, outIndices, 10u)
+        && TryResolveSkinGalleryRegion(paint, s_EditNormal, outIndices, 11u);
+}
+
+void DrawOffsetSkinRegionByIndex(mut PaintBuilder paint, in usize regionIndex, in VectorSingle origin, in VectorSingle offset, in f32 width, in f32 height){
+    const VectorSingle position = origin + offset;
+    paint.drawRegionByIndex(regionIndex, Rect(position.x, position.y, width, height));
+}
+
+void DrawSkinGalleryByIndices(mut PaintBuilder paint, in Array<usize, 12u> indices, in f32 originX, in f32 originY, in f32 captionHeight){
     const VectorSingle origin(originX, originY, originX, originY);
     const VectorSingle columnsAndButtons = origin + VectorSingle(s_LeftColumnX, s_ButtonTopY, s_RightColumnX, s_ButtonBottomY);
-    return
-        paint.drawRegion(s_Panel, Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight))
-        && paint.drawRegion(s_ButtonNormal, Rect(columnsAndButtons.x, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonHover, Rect(columnsAndButtons.z, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonPressed, Rect(columnsAndButtons.x, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonDisabled, Rect(columnsAndButtons.z, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_EditFocused, Rect(columnsAndButtons.x, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
-        && DrawOffsetSkinRegion(paint, s_ComboArrow, origin, VectorSingle(s_ComboArrowX, s_ComboArrowY, s_ComboArrowX, s_ComboArrowY), s_ComboArrowSize, s_ComboArrowSize)
-        && DrawOffsetSkinRegion(paint, s_Checkbox, origin, VectorSingle(s_CheckboxX, s_CheckboxY, s_CheckboxX, s_CheckboxY), s_CheckboxSize, s_CheckboxSize)
-        && DrawOffsetSkinRegion(paint, s_CheckboxMark, origin, VectorSingle(s_CheckboxMarkX, s_CheckboxMarkY, s_CheckboxMarkX, s_CheckboxMarkY), s_CheckboxMarkSize, s_CheckboxMarkSize)
-        && paint.drawRegion(s_ProgressTrack, Rect(columnsAndButtons.x, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
-        && DrawOffsetSkinRegion(paint, s_ProgressFill, origin, VectorSingle(s_ProgressFillX, s_ProgressFillY, s_ProgressFillX, s_ProgressFillY), s_ProgressFillWidth, s_ProgressFillHeight)
-        && paint.drawRegion(s_EditNormal, Rect(columnsAndButtons.x, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
-    ;
+    paint.drawRegionByIndex(indices[0u], Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight));
+    paint.drawRegionByIndex(indices[1u], Rect(columnsAndButtons.x, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight));
+    paint.drawRegionByIndex(indices[2u], Rect(columnsAndButtons.z, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight));
+    paint.drawRegionByIndex(indices[3u], Rect(columnsAndButtons.x, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight));
+    paint.drawRegionByIndex(indices[4u], Rect(columnsAndButtons.z, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight));
+    paint.drawRegionByIndex(indices[5u], Rect(columnsAndButtons.x, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight));
+    DrawOffsetSkinRegionByIndex(paint, indices[6u], origin, VectorSingle(s_ComboArrowX, s_ComboArrowY, s_ComboArrowX, s_ComboArrowY), s_ComboArrowSize, s_ComboArrowSize);
+    DrawOffsetSkinRegionByIndex(paint, indices[7u], origin, VectorSingle(s_CheckboxX, s_CheckboxY, s_CheckboxX, s_CheckboxY), s_CheckboxSize, s_CheckboxSize);
+    DrawOffsetSkinRegionByIndex(paint, indices[8u], origin, VectorSingle(s_CheckboxMarkX, s_CheckboxMarkY, s_CheckboxMarkX, s_CheckboxMarkY), s_CheckboxMarkSize, s_CheckboxMarkSize);
+    paint.drawRegionByIndex(indices[9u], Rect(columnsAndButtons.x, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight));
+    DrawOffsetSkinRegionByIndex(paint, indices[10u], origin, VectorSingle(s_ProgressFillX, s_ProgressFillY, s_ProgressFillX, s_ProgressFillY), s_ProgressFillWidth, s_ProgressFillHeight);
+    paint.drawRegionByIndex(indices[11u], Rect(columnsAndButtons.x, originY + s_EditNormalY, s_EditNormalWidth, captionHeight));
 }
 
 b8 ConfigureLabelWithSize(in StringView text, in f32 size, mut Label outLabel){

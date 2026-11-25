@@ -91,7 +91,13 @@ enum<u8> InputCommand{
     Redo,
     Newline,
     ContextMenu,
+    FocusUp,
+    FocusDown,
+    FocusLeft,
+    FocusRight,
 }
+
+const InputCommand s_InputCommandMax = InputCommand::FocusRight;
 
 enum<u8> InputSelectionPolicy{
     None,
@@ -140,7 +146,7 @@ class InputCommandIntent{
 b8 IsValidInputKeyBinding(in InputKeyBinding binding, in b8 validKey, in i32 modifierMask){
     return validKey
         && binding.command != InputCommand::None
-        && binding.command <= InputCommand::ContextMenu
+        && binding.command <= s_InputCommandMax
         && binding.selection <= InputSelectionPolicy::Shift
         && ((binding.modifiers | binding.ignoredModifiers) & ~modifierMask) == 0
         && (binding.modifiers & binding.ignoredModifiers) == 0;

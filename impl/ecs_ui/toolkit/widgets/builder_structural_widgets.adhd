@@ -1,0 +1,919 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_SplitterGripLengthFraction = 0.35f;
+const f32 s_SplitterGripMinLength = 12.0f;
+const f32 s_SplitterGripThickness = 2.0f;
+const f32 s_SpinBoxGlyphExtentFraction = 0.45f;
+const f32 s_SpinBoxGlyphThickness = 1.6f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void MergeSpinBoxNumericResult(in NumericEditResult incoming, mut NumericEditResult accumulated){
+    accumulated.valid = accumulated.valid && incoming.valid;
+    accumulated.committed = accumulated.committed || incoming.committed;
+    accumulated.rejected = accumulated.rejected || incoming.rejected;
+    accumulated.clamped = accumulated.clamped || incoming.clamped;
+    accumulated.restored = accumulated.restored || incoming.restored;
+    accumulated.cancelled = accumulated.cancelled || incoming.cancelled;
+    accumulated.valueChanged = accumulated.valueChanged || incoming.valueChanged;
+}
+
+b8 TryDecodeSpinBoxAction(
+    in ControlAction action,
+    in WidgetId decId,
+    in WidgetId incId,
+    in b8 allowWheel,
+    mut b8 outIsSubmit,
+    mut b8 outIsStep,
+    mut b8 outUseFastStep,
+    mut f64 outSteps
+){
+    outIsSubmit = false;
+    outIsStep = false;
+    outUseFastStep = action.extend;
+    outSteps = 0.0;
+    if(action.kind == ControlActionKind::Submit){
+        outIsSubmit = true;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Activate){
+        if(action.source == decId && action.value == 1u){
+            outIsStep = true;
+            outSteps = -1.0;
+            return true;
+        }
+        if(action.source == incId && action.value == 2u){
+            outIsStep = true;
+            outSteps = 1.0;
+            return true;
+        }
+        return false;
+    }
+    if(action.kind == ControlActionKind::Up){
+        outIsStep = true;
+        outSteps = 1.0;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Down){
+        outIsStep = true;
+        outSteps = -1.0;
+        return true;
+    }
+    if(action.kind == ControlActionKind::PageUp){
+        outIsStep = true;
+        outUseFastStep = true;
+        outSteps = 1.0;
+        return true;
+    }
+    if(action.kind == ControlActionKind::PageDown){
+        outIsStep = true;
+        outUseFastStep = true;
+        outSteps = -1.0;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Wheel && allowWheel){
+        if(!IsFinite(VectorDouble(action.delta)))
+            return false;
+        if(action.delta != 0.0){
+            outIsStep = true;
+            outSteps = action.delta;
+        }
+        return true;
+    }
+    return true;
+}
+
+b8 Builder::pushSpinBoxScope(
+    in StringView stableKey,
+    in LayoutSize width,
+    in LayoutSize height,
+    in LayoutItemOptions layoutOptions,
+    mut u32 outContainerNode
+){
+    if(
+        this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+    )
+        return false;
+    LayoutNodeDesc containerDesc;
+    containerDesc.direction = LayoutDirection::Row;
+    containerDesc.alignItems = LayoutAlign::Stretch;
+    containerDesc.gap = s_SpinBoxDefaultGap;
+    containerDesc.width = width;
+    containerDesc.height = height;
+    ApplyLayoutItemOptions(layoutOptions, containerDesc);
+    const auto admitted = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), containerDesc);
+    if(!admitted.has_value())
+        return false;
+    outContainerNode = admitted.value();
+    if(containerDesc.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
+    if(!this.m_context.pushScope(stableKey))
+        return false;
+    this.m_scope.value().m_stack.push_back(outContainerNode);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::SpinBox);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    return true;
+}
+
+b8 Builder::appendSpinBoxStepButtons(
+    in u32 containerNode,
+    in f32 buttonWidth,
+    mut u32 outDecNode,
+    mut u32 outIncNode
+){
+    LayoutNodeDesc btnDesc;
+    btnDesc.width = LayoutSize(LayoutSizePolicy::Fixed, buttonWidth);
+    btnDesc.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    const auto decAdmitted = this.m_scope.value().m_layout.addNode(containerNode, btnDesc);
+    const auto incAdmitted = this.m_scope.value().m_layout.addNode(containerNode, btnDesc);
+    if(!decAdmitted.has_value() || !incAdmitted.has_value())
+        return false;
+    outDecNode = decAdmitted.value();
+    outIncNode = incAdmitted.value();
+    return true;
+}
+
+void Builder::popSpinBoxScope(){
+    this.m_context.popScope();
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+}
+
+b8 PaintSpinBoxStepButton(
+    in WidgetId partId,
+    in Rect buttonRect,
+    in Rect clip,
+    in WidgetStyle style,
+    in b8 canStep,
+    in b8 isIncrement,
+    mut Context context,
+    mut PaintBuilder paint
+){
+    const b8 hover = canStep && context.input().hover() == partId;
+    const b8 pressed = canStep && context.input().pressed(partId);
+    const Name preferred = ResolveButtonPreferredName(style, canStep, pressed, hover);
+    paint.pushClip(clip);
+    b8 painted = paint.drawRegionWithFallback(preferred, style.button, buttonRect);
+    if(painted && buttonRect.width > 0.0f && buttonRect.height > 0.0f){
+        Color iconColor = style.disabledText;
+        if(canStep)
+            iconColor = style.text;
+        const f32 span = UiSimdMin(buttonRect.width, buttonRect.height) * s_SpinBoxGlyphExtentFraction;
+        if(span >= 2.0f){
+            const f32 midX = buttonRect.x + buttonRect.width * s_RectCenterFraction;
+            const f32 midY = buttonRect.y + buttonRect.height * s_RectCenterFraction;
+            const f32 halfSpan = span * s_RectCenterFraction;
+            const f32 halfThick = s_SpinBoxGlyphThickness * s_RectCenterFraction;
+            paint.fillRect(Rect(midX - halfSpan, midY - halfThick, span, s_SpinBoxGlyphThickness), iconColor);
+            if(isIncrement)
+                paint.fillRect(Rect(midX - halfThick, midY - halfSpan, s_SpinBoxGlyphThickness, span), iconColor);
+        }
+    }
+    const b8 popped = paint.popClip();
+    return painted && popped;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::beginSplitter(in StringView stableKey, mut SplitterState state, in SplitterOptions options){
+    if(
+        this.itemDeclarationBlocked()
+        || this.m_scope.value().m_stack.size() + 2u > s_ContextMaxScopeDepth
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || !IsValidSplitterOptions(options)
+        || !IsValidSplitterStyle(this.m_splitterStyle)
+        || !this.m_skin.has_value()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.synchronizePopup())
+        return true;
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto declared = this.m_context.declare(stableKey, WidgetKind::Splitter);
+    if(!declared.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    mut WidgetState widget = declared.value();
+    if(!this.m_context.claimState(widget, state.instanceGeneration())){
+        this.m_context.fail();
+        return false;
+    }
+    const ControlToken token(state.inputGeneration(), state.instanceGeneration(), 1u);
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    if(options.enabled){
+        while(true){
+            const auto gesture = this.m_context.takePointerGesture(widget, true);
+            if(!gesture.has_value())
+                break;
+            if(!ApplySplitterDragDelta(gesture.value(), options, state)){
+                this.m_context.fail();
+                return false;
+            }
+            if(gesture.value().state == PointerGestureState::Completed)
+                state.m_activeGestureSequence = 0u;
+        }
+        while(true){
+            const auto action = this.m_context.takeControlAction(widget, true, token);
+            if(!action.has_value())
+                break;
+            if(action.value().control != token || !ApplySplitterKeyboardStep(action.value(), options, state)){
+                this.m_context.fail();
+                return false;
+            }
+        }
+    }
+    else{
+        this.m_context.input().invalidateTarget(widget.id);
+        state.m_activeGestureSequence = 0u;
+    }
+    f32 ratio = UiSimdMax(0.0f, UiSimdMin(1.0f, state.ratio()));
+    if(state.m_bounds.width > 0.0f || state.m_bounds.height > 0.0f){
+        const f32 available = ResolveSplitterAvailableExtent(state.m_bounds, options.orientation, options.handleThickness);
+        ratio = ResolveClampedSplitterRatio(ratio, available, options.minFirst, options.minSecond);
+    }
+    LayoutNodeDesc containerDesc;
+    containerDesc.alignItems = LayoutAlign::Stretch;
+    containerDesc.width = options.width;
+    containerDesc.height = options.height;
+    if(options.orientation == SplitterOrientation::Horizontal)
+        containerDesc.direction = LayoutDirection::Row;
+    else
+        containerDesc.direction = LayoutDirection::Column;
+    ApplyLayoutItemOptions(options.layout, containerDesc);
+    const auto containerAdmitted = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), containerDesc);
+    if(!containerAdmitted.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    if(containerDesc.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
+    const u32 containerNode = containerAdmitted.value();
+    LayoutSize firstMain;
+    LayoutSize secondMain;
+    if(ratio <= 0.0f){
+        firstMain = LayoutSize(LayoutSizePolicy::Fixed, options.minFirst);
+        secondMain = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    }
+    else if(ratio >= 1.0f){
+        firstMain = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        secondMain = LayoutSize(LayoutSizePolicy::Fixed, options.minSecond);
+    }
+    else{
+        firstMain = LayoutSize(LayoutSizePolicy::Stretch, ratio);
+        secondMain = LayoutSize(LayoutSizePolicy::Stretch, 1.0f - ratio);
+    }
+    LayoutNodeDesc firstDesc;
+    firstDesc.clipChildren = true;
+    firstDesc.direction = LayoutDirection::Column;
+    LayoutNodeDesc handleDesc;
+    LayoutNodeDesc secondDesc;
+    secondDesc.clipChildren = true;
+    secondDesc.direction = LayoutDirection::Column;
+    if(options.orientation == SplitterOrientation::Horizontal){
+        firstDesc.width = firstMain;
+        firstDesc.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        firstDesc.minWidth = options.minFirst;
+        handleDesc.width = LayoutSize(LayoutSizePolicy::Fixed, options.handleThickness);
+        handleDesc.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        secondDesc.width = secondMain;
+        secondDesc.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        secondDesc.minWidth = options.minSecond;
+    }
+    else{
+        firstDesc.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        firstDesc.height = firstMain;
+        firstDesc.minHeight = options.minFirst;
+        handleDesc.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        handleDesc.height = LayoutSize(LayoutSizePolicy::Fixed, options.handleThickness);
+        secondDesc.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        secondDesc.height = secondMain;
+        secondDesc.minHeight = options.minSecond;
+    }
+    const auto firstAdmitted = this.m_scope.value().m_layout.addNode(containerNode, firstDesc);
+    const auto handleAdmitted = this.m_scope.value().m_layout.addNode(containerNode, handleDesc);
+    const auto secondAdmitted = this.m_scope.value().m_layout.addNode(containerNode, secondDesc);
+    if(!firstAdmitted.has_value() || !handleAdmitted.has_value() || !secondAdmitted.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.m_context.pushScope("first")){
+        this.m_context.popScope();
+        this.m_context.fail();
+        return false;
+    }
+    const u32 splitterIndex = cast<u32>(this.m_scope.value().m_splitters.size());
+    BuilderSplitterFrame frame;
+    frame.widget = widget;
+    frame.state = Optional<mut SplitterState>(state);
+    frame.style = this.m_splitterStyle;
+    frame.options = options;
+    frame.token = token;
+    frame.revision = state.revision();
+    frame.containerNode = containerNode;
+    frame.firstPaneNode = firstAdmitted.value();
+    frame.handleNode = handleAdmitted.value();
+    frame.secondPaneNode = secondAdmitted.value();
+    frame.secondPaneStarted = false;
+    auto handleItem = this.makeItem();
+    handleItem.styleIndex = this.currentItemStyleIndex();
+    handleItem.state = widget;
+    handleItem.node = handleAdmitted.value();
+    handleItem.splitter = splitterIndex;
+    handleItem.enabled = options.enabled;
+    AppendOwned<BuilderSplitterFrame>(this.m_scope.value().m_splitters, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, handleItem);
+    this.m_scope.value().m_stack.push_back(firstAdmitted.value());
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::SplitterFirst);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(splitterIndex);
+    return true;
+}
+
+b8 Builder::splitterSecondPane(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::SplitterFirst
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 splitterIndex = this.m_scope.value().m_splitterStack.back();
+    if(cast<usize>(splitterIndex) >= this.m_scope.value().m_splitters.size()){
+        this.m_context.fail();
+        return false;
+    }
+    mut BuilderSplitterFrame frame = this.m_scope.value().m_splitters[cast<usize>(splitterIndex)];
+    if(frame.secondPaneStarted){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.m_context.popScope() || !this.m_context.pushScope("second")){
+        this.m_context.fail();
+        return false;
+    }
+    frame.secondPaneStarted = true;
+    this.m_scope.value().m_stack.back() = frame.secondPaneNode;
+    this.m_scope.value().m_scopeKinds.back() = BuilderScopeKind::SplitterSecond;
+    return true;
+}
+
+b8 Builder::endSplitter(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::SplitterSecond
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    const b8 poppedPane = this.m_context.popScope();
+    const b8 poppedContainer = this.m_context.popScope();
+    return poppedPane && poppedContainer;
+}
+
+b8 Builder::paintSplitterHandle(in BuilderItem item, in LayoutBox box){
+    if(item.splitter >= this.m_scope.value().m_splitters.size())
+        return false;
+    mut BuilderSplitterFrame frame = this.m_scope.value().m_splitters[item.splitter];
+    if(!this.popupAncestorsVisible() || !frame.state.has_value())
+        return false;
+    mut SplitterState state = frame.state.value();
+    if(state.revision() != frame.revision)
+        return false;
+    const auto containerBoxOpt = this.m_scope.value().m_layout.box(frame.containerNode);
+    const auto firstBoxOpt = this.m_scope.value().m_layout.box(frame.firstPaneNode);
+    const auto secondBoxOpt = this.m_scope.value().m_layout.box(frame.secondPaneNode);
+    if(!containerBoxOpt.has_value() || !firstBoxOpt.has_value() || !secondBoxOpt.has_value())
+        return false;
+    const LayoutBox containerBox = containerBoxOpt.value();
+    const LayoutBox firstBox = firstBoxOpt.value();
+    const LayoutBox secondBox = secondBoxOpt.value();
+    state.m_bounds = containerBox.rectangle;
+    state.m_handleRect = box.rectangle;
+    state.m_firstRect = firstBox.rectangle;
+    state.m_secondRect = secondBox.rectangle;
+    const Rect clip = this.visibleClip(box.clip);
+    const b8 enabled = frame.options.enabled;
+    const b8 hovered = enabled && this.m_context.input().hover() == frame.widget.id;
+    const b8 pressed = enabled && (this.m_context.input().capture() == frame.widget.id || state.m_activeGestureSequence != 0u);
+    Name preferred = frame.style.handle;
+    Color fillColor = frame.style.handleColor;
+    if(!enabled){
+        preferred = frame.style.handleDisabled;
+        fillColor = Color(
+            fillColor.r * frame.style.disabledTint.r,
+            fillColor.g * frame.style.disabledTint.g,
+            fillColor.b * frame.style.disabledTint.b,
+            fillColor.a * frame.style.disabledTint.a
+        );
+    }
+    else if(pressed){
+        preferred = frame.style.handlePressed;
+        fillColor = frame.style.pressedTint;
+    }
+    else if(hovered){
+        preferred = frame.style.handleHover;
+        fillColor = frame.style.hoverTint;
+    }
+    this.m_paint.pushClip(clip);
+    const Optional<usize> regionIdx = this.m_paint.resolveRegionIndex(preferred, frame.style.handleFallback);
+    if(regionIdx.has_value())
+        this.m_paint.drawRegionByIndex(regionIdx.value(), box.rectangle);
+    else
+        this.m_paint.fillRect(box.rectangle, fillColor);
+    if(enabled && this.m_context.input().focus() == frame.widget.id)
+        this.m_paint.tryDrawRegion(this.itemWidgetStyle(item).focus, box.rectangle);
+    if(box.rectangle.width > 0.0f && box.rectangle.height > 0.0f){
+        if(frame.options.orientation == SplitterOrientation::Horizontal){
+            const f32 gripH = UiSimdMin(box.rectangle.height, UiSimdMax(s_SplitterGripMinLength, box.rectangle.height * s_SplitterGripLengthFraction));
+            const f32 gripW = UiSimdMin(box.rectangle.width, s_SplitterGripThickness);
+            const f32 gx = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - gripW) * s_RectCenterFraction);
+            const f32 gy = box.rectangle.y + UiSimdMax(0.0f, (box.rectangle.height - gripH) * s_RectCenterFraction);
+            this.m_paint.fillRect(Rect(gx, gy, gripW, gripH), frame.style.gripColor);
+        }
+        else{
+            const f32 gripW = UiSimdMin(box.rectangle.width, UiSimdMax(s_SplitterGripMinLength, box.rectangle.width * s_SplitterGripLengthFraction));
+            const f32 gripH = UiSimdMin(box.rectangle.height, s_SplitterGripThickness);
+            const f32 gx = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - gripW) * s_RectCenterFraction);
+            const f32 gy = box.rectangle.y + UiSimdMax(0.0f, (box.rectangle.height - gripH) * s_RectCenterFraction);
+            this.m_paint.fillRect(Rect(gx, gy, gripW, gripH), frame.style.gripColor);
+        }
+    }
+    if(!this.m_paint.popClip())
+        return false;
+    HitTargetFactory targets;
+    const HitTarget target = targets.makeSplitterHandleHitTarget(
+        box.rectangle,
+        containerBox.rectangle,
+        clip,
+        frame.options.orientation,
+        enabled,
+        frame.token
+    );
+    if(!this.m_context.addTarget(frame.widget, target))
+        return false;
+    this.emitAccessibleRangeNode(
+        frame.widget,
+        AccessibilityRole::Splitter,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        cast<f64>(state.ratio()),
+        0.0,
+        1.0,
+        0.05,
+        ResolveAccessibleVisibilityStateBits(enabled, clip) | s_AccessibilityStateFocusable,
+        s_AccessibilityActionIncrement | s_AccessibilityActionDecrement | s_AccessibilityActionFocus
+    );
+    return true;
+}
+
+NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerSpinBoxOptions options){
+    NumericEditBoxResult result;
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidIntegerSpinBoxOptions(options)){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.numeric.valid = true;
+        result.edit.valid = true;
+        return result;
+    }
+    const auto declared = this.m_context.declare(stableKey, WidgetKind::SpinBox);
+    if(!declared.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    mut WidgetState widget = declared.value();
+    if(!this.m_context.claimState(widget, model.draft().instanceGeneration())){
+        this.m_context.fail();
+        return result;
+    }
+    const ControlToken token(model.draft().instanceGeneration(), model.draft().instanceGeneration(), 1u);
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    const b8 canStep = options.edit.edit.enabled && !options.edit.edit.readOnly;
+    const auto decId = TryMakeWidgetId(widget.id, s_WidgetPartSpinDec);
+    const auto incId = TryMakeWidgetId(widget.id, s_WidgetPartSpinInc);
+    if(!decId.has_value() || !incId.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    NumericEditResult spinNumeric;
+    spinNumeric.valid = true;
+    while(canStep){
+        const auto actionOpt = this.m_context.takeControlAction(widget, true, token);
+        if(!actionOpt.has_value())
+            break;
+        in ControlAction action = actionOpt.value();
+        b8 isSubmit = false;
+        b8 isStep = false;
+        b8 useFast = false;
+        f64 rawSteps = 0.0;
+        if(!TryDecodeSpinBoxAction(action, decId.value(), incId.value(), options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
+            this.m_context.fail();
+            return result;
+        }
+        if(isSubmit){
+            MergeSpinBoxNumericResult(model.submit(options.edit.bounds), spinNumeric);
+        }
+        else if(isStep){
+            if(model.dirty()){
+                const NumericEditResult flushed = model.blur(options.edit.bounds);
+                MergeSpinBoxNumericResult(flushed, spinNumeric);
+            }
+            i64 stepSize = options.step;
+            if(useFast)
+                stepSize = options.fastStep;
+            i64 deltaSteps = 1ll;
+            if(action.kind == ControlActionKind::Wheel){
+                f64 mag = rawSteps;
+                if(mag < 0.0)
+                    mag = -mag;
+                const f64 rounded = VectorDoubleFloor(VectorDouble(mag + 0.5)).x;
+                i64 magInt = 1ll;
+                if(rounded >= cast<f64>(s_NumericEditMaxI64))
+                    magInt = s_NumericEditMaxI64;
+                else
+                    magInt = Max(1ll, cast<i64>(rounded));
+                if(rawSteps < 0.0)
+                    deltaSteps = -magInt;
+                else
+                    deltaSteps = magInt;
+            }
+            else if(rawSteps < 0.0)
+                deltaSteps = -1ll;
+            const i64 prev = model.value();
+            const Expected<i64> next = StepIntegerSpinBoxValue(prev, deltaSteps, stepSize, options.edit.bounds, options.wrap);
+            if(!next.has_value() || !model.setValue(next.value())){
+                this.m_context.fail();
+                return result;
+            }
+            spinNumeric.committed = true;
+            spinNumeric.valueChanged = spinNumeric.valueChanged || HasIntegerEditValueChanged(next.value(), prev);
+        }
+    }
+    f64 a11yRequested = 0.0;
+    if(canStep && this.m_context.takeAccessibleNumericValue(widget, a11yRequested)){
+        const f64 rounded = VectorDoubleFloor(VectorDouble(a11yRequested + 0.5)).x;
+        i64 candidateVal = options.edit.bounds.maximum;
+        if(rounded <= cast<f64>(options.edit.bounds.minimum))
+            candidateVal = options.edit.bounds.minimum;
+        else if(rounded < cast<f64>(options.edit.bounds.maximum))
+            candidateVal = cast<i64>(rounded);
+        const i64 prev = model.value();
+        if(model.setValue(candidateVal)){
+            spinNumeric.committed = true;
+            spinNumeric.valueChanged = spinNumeric.valueChanged || HasIntegerEditValueChanged(candidateVal, prev);
+        }
+    }
+    if(!canStep)
+        this.m_context.input().invalidateTarget(widget.id);
+    const u32 spinBoxIndex = cast<u32>(this.m_scope.value().m_spinBoxes.size());
+    u32 containerNode = s_LayoutNoParent;
+    u32 decNode = s_LayoutNoParent;
+    u32 incNode = s_LayoutNoParent;
+    if(!this.pushSpinBoxScope(
+        stableKey,
+        options.width,
+        options.height,
+        options.layout,
+        containerNode
+    )){
+        this.m_context.fail();
+        return result;
+    }
+    auto beginItem = this.makeItem();
+    beginItem.styleIndex = this.currentItemStyleIndex();
+    beginItem.state = widget;
+    beginItem.node = containerNode;
+    beginItem.spinBox = spinBoxIndex;
+    beginItem.enabled = options.edit.edit.enabled;
+    beginItem.checked = false;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, beginItem);
+    IntegerEditOptions innerEdit = options.edit;
+    innerEdit.edit.layout = LayoutItemOptions();
+    innerEdit.edit.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    if(options.height.policy != LayoutSizePolicy::Content)
+        innerEdit.edit.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    const usize itemsBefore = this.m_scope.value().m_items.size();
+    result = this.integerEdit("edit", model, state, innerEdit);
+    this.popSpinBoxScope();
+    if(!result.edit.valid || this.m_scope.value().m_items.size() <= itemsBefore || !this.appendSpinBoxStepButtons(containerNode, options.buttonWidth, decNode, incNode)){
+        this.m_context.fail();
+        return result;
+    }
+    this.m_scope.value().m_items.back().spinBox = spinBoxIndex;
+    BuilderSpinBoxFrame frame;
+    frame.widget = widget;
+    frame.integerModel = Optional<mut IntegerEditModel>(model);
+    frame.integerBounds = options.edit.bounds;
+    frame.editState = Optional<mut EditBoxState>(state);
+    frame.token = token;
+    frame.decNode = decNode;
+    frame.incNode = incNode;
+    frame.buttonWidth = options.buttonWidth;
+    frame.canStep = canStep;
+    frame.allowWheel = options.allowWheel;
+    frame.wrap = options.wrap;
+    frame.isFloat = false;
+    frame.integerStep = options.step;
+    frame.integerFastStep = options.fastStep;
+    AppendOwned<BuilderSpinBoxFrame>(this.m_scope.value().m_spinBoxes, frame);
+    auto endItem = this.makeItem();
+    endItem.styleIndex = beginItem.styleIndex;
+    endItem.state = widget;
+    endItem.node = containerNode;
+    endItem.spinBox = spinBoxIndex;
+    endItem.enabled = options.edit.edit.enabled;
+    endItem.checked = true;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
+    MergeSpinBoxNumericResult(spinNumeric, result.numeric);
+    return result;
+}
+
+NumericEditBoxResult Builder::floatSpinBox(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatSpinBoxOptions options){
+    NumericEditBoxResult result;
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidFloatSpinBoxOptions(options)){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.numeric.valid = true;
+        result.edit.valid = true;
+        return result;
+    }
+    const auto declared = this.m_context.declare(stableKey, WidgetKind::SpinBox);
+    if(!declared.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    mut WidgetState widget = declared.value();
+    if(!this.m_context.claimState(widget, model.draft().instanceGeneration())){
+        this.m_context.fail();
+        return result;
+    }
+    const ControlToken token(model.draft().instanceGeneration(), model.draft().instanceGeneration(), 1u);
+    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    const b8 canStep = options.edit.edit.enabled && !options.edit.edit.readOnly;
+    const auto decId = TryMakeWidgetId(widget.id, s_WidgetPartSpinDec);
+    const auto incId = TryMakeWidgetId(widget.id, s_WidgetPartSpinInc);
+    if(!decId.has_value() || !incId.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+    NumericEditResult spinNumeric;
+    spinNumeric.valid = true;
+    while(canStep){
+        const auto actionOpt = this.m_context.takeControlAction(widget, true, token);
+        if(!actionOpt.has_value())
+            break;
+        in ControlAction action = actionOpt.value();
+        b8 isSubmit = false;
+        b8 isStep = false;
+        b8 useFast = false;
+        f64 rawSteps = 0.0;
+        if(!TryDecodeSpinBoxAction(action, decId.value(), incId.value(), options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
+            this.m_context.fail();
+            return result;
+        }
+        if(isSubmit){
+            MergeSpinBoxNumericResult(model.submit(options.edit.bounds), spinNumeric);
+        }
+        else if(isStep){
+            if(model.dirty()){
+                const NumericEditResult flushed = model.blur(options.edit.bounds);
+                MergeSpinBoxNumericResult(flushed, spinNumeric);
+            }
+            f64 stepSize = options.step;
+            if(useFast)
+                stepSize = options.fastStep;
+            const f64 prev = model.value();
+            const Expected<f64> next = StepFloatSpinBoxValue(prev, rawSteps, stepSize, options.edit.bounds, options.wrap);
+            if(!next.has_value() || !model.setValue(next.value())){
+                this.m_context.fail();
+                return result;
+            }
+            spinNumeric.committed = true;
+            spinNumeric.valueChanged = spinNumeric.valueChanged || HasFloatEditBitsChanged(next.value(), prev);
+        }
+    }
+    f64 a11yRequested = 0.0;
+    if(canStep && this.m_context.takeAccessibleNumericValue(widget, a11yRequested)){
+        f64 candidateVal = a11yRequested;
+        if(candidateVal < options.edit.bounds.minimum)
+            candidateVal = options.edit.bounds.minimum;
+        if(candidateVal > options.edit.bounds.maximum)
+            candidateVal = options.edit.bounds.maximum;
+        const f64 prev = model.value();
+        if(model.setValue(candidateVal)){
+            spinNumeric.committed = true;
+            spinNumeric.valueChanged = spinNumeric.valueChanged || HasFloatEditBitsChanged(candidateVal, prev);
+        }
+    }
+    if(!canStep)
+        this.m_context.input().invalidateTarget(widget.id);
+    const u32 spinBoxIndex = cast<u32>(this.m_scope.value().m_spinBoxes.size());
+    u32 containerNode = s_LayoutNoParent;
+    u32 decNode = s_LayoutNoParent;
+    u32 incNode = s_LayoutNoParent;
+    if(!this.pushSpinBoxScope(
+        stableKey,
+        options.width,
+        options.height,
+        options.layout,
+        containerNode
+    )){
+        this.m_context.fail();
+        return result;
+    }
+    auto beginItem = this.makeItem();
+    beginItem.styleIndex = this.currentItemStyleIndex();
+    beginItem.state = widget;
+    beginItem.node = containerNode;
+    beginItem.spinBox = spinBoxIndex;
+    beginItem.enabled = options.edit.edit.enabled;
+    beginItem.checked = false;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, beginItem);
+    FloatEditOptions innerEdit = options.edit;
+    innerEdit.edit.layout = LayoutItemOptions();
+    innerEdit.edit.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    if(options.height.policy != LayoutSizePolicy::Content)
+        innerEdit.edit.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    const usize itemsBefore = this.m_scope.value().m_items.size();
+    result = this.floatEdit("edit", model, state, innerEdit);
+    this.popSpinBoxScope();
+    if(!result.edit.valid || this.m_scope.value().m_items.size() <= itemsBefore || !this.appendSpinBoxStepButtons(containerNode, options.buttonWidth, decNode, incNode)){
+        this.m_context.fail();
+        return result;
+    }
+    this.m_scope.value().m_items.back().spinBox = spinBoxIndex;
+    BuilderSpinBoxFrame frame;
+    frame.widget = widget;
+    frame.floatModel = Optional<mut FloatEditModel>(model);
+    frame.floatBounds = options.edit.bounds;
+    frame.editState = Optional<mut EditBoxState>(state);
+    frame.token = token;
+    frame.decNode = decNode;
+    frame.incNode = incNode;
+    frame.buttonWidth = options.buttonWidth;
+    frame.canStep = canStep;
+    frame.allowWheel = options.allowWheel;
+    frame.wrap = options.wrap;
+    frame.isFloat = true;
+    frame.floatStep = options.step;
+    frame.floatFastStep = options.fastStep;
+    AppendOwned<BuilderSpinBoxFrame>(this.m_scope.value().m_spinBoxes, frame);
+    auto endItem = this.makeItem();
+    endItem.styleIndex = beginItem.styleIndex;
+    endItem.state = widget;
+    endItem.node = containerNode;
+    endItem.spinBox = spinBoxIndex;
+    endItem.enabled = options.edit.edit.enabled;
+    endItem.checked = true;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
+    MergeSpinBoxNumericResult(spinNumeric, result.numeric);
+    return result;
+}
+
+b8 Builder::paintSpinBoxBegin(in BuilderItem item, in LayoutBox box){
+    if(item.spinBox >= this.m_scope.value().m_spinBoxes.size())
+        return false;
+    in BuilderSpinBoxFrame frame = this.m_scope.value().m_spinBoxes[item.spinBox];
+    if(!this.popupAncestorsVisible())
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeSpinBoxHostHitTarget(box.rectangle, clip, frame.canStep, frame.allowWheel, item.contextMenu, frame.token);
+    if(!this.m_context.addTarget(frame.widget, host))
+        return false;
+    f64 curVal = 0.0;
+    f64 minVal = 0.0;
+    f64 maxVal = 0.0;
+    f64 stepVal = 0.0;
+    if(frame.isFloat && frame.floatModel.has_value()){
+        curVal = frame.floatModel.value().value();
+        minVal = frame.floatBounds.minimum;
+        maxVal = frame.floatBounds.maximum;
+        stepVal = frame.floatStep;
+    }
+    else if(!frame.isFloat && frame.integerModel.has_value()){
+        curVal = cast<f64>(frame.integerModel.value().value());
+        minVal = cast<f64>(frame.integerBounds.minimum);
+        maxVal = cast<f64>(frame.integerBounds.maximum);
+        stepVal = cast<f64>(frame.integerStep);
+    }
+    u32 spinState = ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable;
+    u32 spinActions = s_AccessibilityActionFocus;
+    if(!frame.canStep)
+        spinState |= s_AccessibilityStateReadOnly;
+    else
+        spinActions |= s_AccessibilityActionIncrement | s_AccessibilityActionDecrement | s_AccessibilityActionSetValue;
+    if(item.contextMenu)
+        spinActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleRangeNode(
+        frame.widget,
+        AccessibilityRole::SpinButton,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        curVal,
+        minVal,
+        maxVal,
+        stepVal,
+        spinState,
+        spinActions
+    );
+    if(!this.m_context.pushScrollOwner(frame.widget))
+        return false;
+    this.m_context.pushAccessibleParent(frame.widget.id);
+    return true;
+}
+
+b8 Builder::paintSpinBoxEnd(in BuilderItem item, in LayoutBox box){
+    this.m_context.popAccessibleParent();
+    if(!this.m_context.popScrollOwner())
+        return false;
+    if(item.spinBox >= this.m_scope.value().m_spinBoxes.size())
+        return false;
+    in BuilderSpinBoxFrame frame = this.m_scope.value().m_spinBoxes[item.spinBox];
+    if(!this.popupAncestorsVisible())
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    const auto decBoxOpt = this.m_scope.value().m_layout.box(frame.decNode);
+    const auto incBoxOpt = this.m_scope.value().m_layout.box(frame.incNode);
+    if(!decBoxOpt.has_value() || !incBoxOpt.has_value())
+        return false;
+    const LayoutBox decBox = decBoxOpt.value();
+    const LayoutBox incBox = incBoxOpt.value();
+    const auto decId = TryMakeWidgetId(frame.widget.id, s_WidgetPartSpinDec);
+    const auto incId = TryMakeWidgetId(frame.widget.id, s_WidgetPartSpinInc);
+    if(!decId.has_value() || !incId.has_value())
+        return false;
+    in WidgetStyle itemStyle = this.itemWidgetStyle(item);
+    if(!PaintSpinBoxStepButton(decId.value(), decBox.rectangle, clip, itemStyle, frame.canStep, false, this.m_context, this.m_paint))
+        return false;
+    if(!PaintSpinBoxStepButton(incId.value(), incBox.rectangle, clip, itemStyle, frame.canStep, true, this.m_context, this.m_paint))
+        return false;
+    if(!frame.canStep)
+        return true;
+    HitTargetFactory targets;
+    const HitTarget decTarget = targets.makeSpinBoxButtonHitTarget(decBox.rectangle, clip, frame.canStep, frame.token, 1u);
+    const HitTarget incTarget = targets.makeSpinBoxButtonHitTarget(incBox.rectangle, clip, frame.canStep, frame.token, 2u);
+    return this.m_context.addPartTarget(frame.widget, decId.value(), decTarget)
+        && this.m_context.addPartTarget(frame.widget, incId.value(), incTarget);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

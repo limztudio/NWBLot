@@ -1,0 +1,433 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <impl/ecs_ui/toolkit/gpu/shader_abi.adhd>
+#include <impl/ecs_ui/toolkit/gpu/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendCodePointUtf8(in u32 cp, mut String outStr){
+    if(cp <= 0x7Fu){
+        outStr.push_back(cast<i8>(cast<u8>(cp)));
+        return;
+    }
+    if(cp <= 0x7FFu){
+        outStr.push_back(cast<i8>(cast<u8>(0xC0u | ((cp >> 6u) & 0x1Fu))));
+        outStr.push_back(cast<i8>(cast<u8>(0x80u | (cp & 0x3Fu))));
+        return;
+    }
+    if(cp <= 0xFFFFu){
+        outStr.push_back(cast<i8>(cast<u8>(0xE0u | ((cp >> 12u) & 0x0Fu))));
+        outStr.push_back(cast<i8>(cast<u8>(0x80u | ((cp >> 6u) & 0x3Fu))));
+        outStr.push_back(cast<i8>(cast<u8>(0x80u | (cp & 0x3Fu))));
+        return;
+    }
+    outStr.push_back(cast<i8>(cast<u8>(0xF0u | ((cp >> 18u) & 0x07u))));
+    outStr.push_back(cast<i8>(cast<u8>(0x80u | ((cp >> 12u) & 0x3Fu))));
+    outStr.push_back(cast<i8>(cast<u8>(0x80u | ((cp >> 6u) & 0x3Fu))));
+    outStr.push_back(cast<i8>(cast<u8>(0x80u | (cp & 0x3Fu))));
+}
+
+class RichTypographyTests : WidgetFixture{
+    public Font m_korean = Font(Name("tests/ui/fonts/korean"));
+    public b8 m_loadedKorean = false;
+
+    public b8 loadSecondaryKoreanFont(){
+        if(this.m_loadedKorean)
+            return true;
+        this.m_loadedKorean = LoadBundledFixtureFont("korean.font", this.m_korean);
+        return this.m_loadedKorean;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyRichTypography_FontRegistryAndCssMatching(mut RichTypographyTests self){
+    const Name sans = ParseName("ui.font.sans").value();
+    const Name mono = ParseName("ui.font.mono").value();
+    const Name serif = ParseName("ui.font.serif").value();
+
+    FontDescriptor d0(sans, FontWeight::Thin, FontSlant::Normal);
+    FontDescriptor d1(sans, FontWeight::Light, FontSlant::Normal);
+    FontDescriptor d2(sans, FontWeight::Regular, FontSlant::Normal);
+    FontDescriptor d3(sans, FontWeight::Bold, FontSlant::Italic);
+    FontDescriptor d4(mono, FontWeight::Regular, FontSlant::Normal);
+    EXPECT_TRUE(d2 == FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal));
+    EXPECT_TRUE(d2 != d3);
+    EXPECT_TRUE(IsValidFontDescriptor(d3));
+
+    Array<FontDescriptor, 5u> descs(d0, d1, d2, d3, d4);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), sans, FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal)), 2u);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), sans, FontDescriptor(sans, FontWeight::Bold, FontSlant::Italic)), 3u);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), sans, FontDescriptor(sans, FontWeight::ExtraLight, FontSlant::Normal)), 0u);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), sans, FontDescriptor(sans, FontWeight::Medium, FontSlant::Normal)), 2u);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), sans, FontDescriptor(sans, FontWeight::Bold, FontSlant::Oblique)), 3u);
+    EXPECT_EQ(ResolveBestFontDescriptorIndex(Span<FontDescriptor>(descs.data(), 5u), mono, FontDescriptor(serif, FontWeight::Regular, FontSlant::Normal)), 4u);
+
+    ASSERT_TRUE(self.loadSecondaryKoreanFont());
+    const AssetRef<Font> latinRef = MakeUiFixtureAssetRef<Font>(s_TestLatinFontPath);
+    const AssetRef<Font> koreanRef = MakeUiFixtureAssetRef<Font>(s_TestKoreanFontPath);
+    const AssetRef<Font> monoRef("tests/ui/fonts/mono_alias");
+
+    Array<FontSource, 2u> initSources(
+        FontSource(latinRef, self.m_font, 1u, FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal)),
+        FontSource(koreanRef, self.m_korean, 1u, FontDescriptor(sans, FontWeight::Bold, FontSlant::Italic))
+    );
+    ASSERT_TRUE(self.m_text.setFonts(Span<FontSource>(initSources.data(), 2u)));
+    EXPECT_EQ(self.m_text.fontCount(), 2u);
+
+    const auto regularFace = self.m_text.resolveFace(FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal));
+    const auto boldFace = self.m_text.resolveFace(FontDescriptor(sans, FontWeight::Bold, FontSlant::Italic));
+    ASSERT_TRUE(regularFace.has_value());
+    ASSERT_TRUE(boldFace.has_value());
+    EXPECT_EQ(FontFaceIdentityName(regularFace.value()), latinRef.name());
+    EXPECT_EQ(FontFaceIdentityName(boldFace.value()), koreanRef.name());
+
+    const u64 atlasIdBeforeRegister = self.m_text.atlasIdentity();
+    ASSERT_TRUE(self.m_text.registerFont(FontSource(monoRef, self.m_font, 2u, FontDescriptor(mono, FontWeight::Regular, FontSlant::Normal))));
+    EXPECT_EQ(self.m_text.fontCount(), 3u);
+    EXPECT_EQ(self.m_text.atlasIdentity(), atlasIdBeforeRegister);
+
+    self.m_text.setDefaultFamily(mono);
+    EXPECT_EQ(self.m_text.defaultFamily(), mono);
+    const auto resolvedDefault = self.m_text.resolveFace(FontDescriptor());
+    ASSERT_TRUE(resolvedDefault.has_value());
+    EXPECT_EQ(FontFaceIdentityName(resolvedDefault.value()), monoRef.name());
+
+    ShapeRequest reqReg;
+    reqReg.text = "Hello";
+    reqReg.font = FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal);
+    ShapeRequest reqBold;
+    reqBold.text = "Hello";
+    reqBold.font = FontDescriptor(sans, FontWeight::Bold, FontSlant::Italic);
+    const auto layReg = self.m_text.layoutShared(reqReg);
+    const auto layBold = self.m_text.layoutShared(reqBold);
+    ASSERT_TRUE(layReg.has_value());
+    ASSERT_TRUE(layBold.has_value());
+    EXPECT_NE(layReg.value(), layBold.value());
+    ASSERT_FALSE(layReg.value().deref().glyphs().empty());
+    ASSERT_FALSE(layBold.value().deref().glyphs().empty());
+    EXPECT_EQ(FontFaceIdentityName(layReg.value().deref().glyphs()[0u].face), latinRef.name());
+    EXPECT_EQ(FontFaceIdentityName(layBold.value().deref().glyphs()[0u].face), koreanRef.name());
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 400.0f, 240.0f)));
+    self.m_builder.style().font = FontDescriptor(sans, FontWeight::Bold, FontSlant::Italic);
+    EXPECT_TRUE(self.m_builder.label("lbl_bold", "Styled"));
+    Array<RichTextSpan, 2u> richSpans;
+    richSpans[0u].text = "Mono ";
+    richSpans[0u].font = FontDescriptor(mono, FontWeight::Regular, FontSlant::Normal);
+    richSpans[0u].hasFont = true;
+    richSpans[1u].text = "Regular";
+    richSpans[1u].font = FontDescriptor(sans, FontWeight::Regular, FontSlant::Normal);
+    richSpans[1u].hasFont = true;
+    const RichTextResult rtRes = self.m_builder.richText("rt_fonts", Span<RichTextSpan>(richSpans.data(), 2u));
+    EXPECT_TRUE(rtRes.valid);
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(1u));
+}
+
+void VerifyRichTypography_TrackingLineHeightAndOpenType(mut RichTypographyTests self){
+    ShapeRequest badMult;
+    badMult.text = "A";
+    badMult.lineHeightMultiplier = 0.0f;
+    EXPECT_EQ(ValidateTextRequest(badMult, false), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest badHighMult;
+    badHighMult.text = "A";
+    badHighMult.lineHeightMultiplier = 32.0f;
+    EXPECT_EQ(ValidateTextRequest(badHighMult, false), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest badOver;
+    badOver.text = "A";
+    badOver.lineHeightOverride = -1.0f;
+    EXPECT_EQ(ValidateTextRequest(badOver, false), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest badFeatCount;
+    badFeatCount.text = "A";
+    badFeatCount.featureCount = 9u;
+    EXPECT_EQ(ValidateTextRequest(badFeatCount, false), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest badFeatRange;
+    badFeatRange.text = "A";
+    badFeatRange.featureCount = 1u;
+    badFeatRange.features[0u].tag = s_OpenTypeTagKern;
+    badFeatRange.features[0u].start = 5u;
+    badFeatRange.features[0u].end = 2u;
+    EXPECT_EQ(ValidateTextRequest(badFeatRange, false), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest baseReq;
+    baseReq.text = "ABCD";
+    baseReq.fontSize = 16.0f;
+    const auto baseLay = self.m_text.layout(baseReq);
+    ASSERT_TRUE(baseLay.has_value());
+
+    ShapeRequest trackedReq = baseReq;
+    trackedReq.letterSpacing = 4.0f;
+    const auto trackedLay = self.m_text.layout(trackedReq);
+    ASSERT_TRUE(trackedLay.has_value());
+    EXPECT_NEAR(trackedLay.value().measure().x - baseLay.value().measure().x, 12.0f, 0.05f);
+
+    ShapeRequest negTrackReq = baseReq;
+    negTrackReq.letterSpacing = -1000.0f;
+    const auto negTrackLay = self.m_text.layout(negTrackReq);
+    ASSERT_TRUE(negTrackLay.has_value());
+    EXPECT_GE(negTrackLay.value().measure().x, 0.0f);
+
+    ShapeRequest rtlTrackReq = trackedReq;
+    rtlTrackReq.direction = TextDirection::RightToLeft;
+    const auto rtlTrackLay = self.m_text.layout(rtlTrackReq);
+    ASSERT_TRUE(rtlTrackLay.has_value());
+    EXPECT_NEAR(rtlTrackLay.value().measure().x, trackedLay.value().measure().x, 0.05f);
+
+    ShapeRequest wordsReq;
+    wordsReq.text = "AB CD EF";
+    wordsReq.fontSize = 16.0f;
+    const auto wordsBase = self.m_text.layout(wordsReq);
+    ASSERT_TRUE(wordsBase.has_value());
+    ShapeRequest wordsSpacedReq = wordsReq;
+    wordsSpacedReq.wordSpacing = 10.0f;
+    const auto wordsSpaced = self.m_text.layout(wordsSpacedReq);
+    ASSERT_TRUE(wordsSpaced.has_value());
+    EXPECT_NEAR(wordsSpaced.value().measure().x - wordsBase.value().measure().x, 20.0f, 0.05f);
+
+    ShapeRequest doubleHeightReq = baseReq;
+    doubleHeightReq.lineHeightMultiplier = 2.0f;
+    const auto doubleHeightLay = self.m_text.layout(doubleHeightReq);
+    ASSERT_TRUE(doubleHeightLay.has_value());
+    const f32 baseH = baseLay.value().lines()[0u].height;
+    const f32 dblH = doubleHeightLay.value().lines()[0u].height;
+    EXPECT_NEAR(dblH, baseH * 2.0f, 0.05f);
+    EXPECT_NEAR(doubleHeightLay.value().lines()[0u].baseline - baseLay.value().lines()[0u].baseline, (dblH - baseH) * 0.5f, 0.05f);
+
+    ShapeRequest overrideHeightReq = baseReq;
+    overrideHeightReq.lineHeightOverride = 44.0f;
+    const auto overrideLay = self.m_text.layout(overrideHeightReq);
+    ASSERT_TRUE(overrideLay.has_value());
+    EXPECT_NEAR(overrideLay.value().lines()[0u].height, 44.0f, 0.01f);
+
+    const u32 kernTag = MakeOpenTypeTag(cast<u8>('k'), cast<u8>('e'), cast<u8>('r'), cast<u8>('n'));
+    EXPECT_EQ(kernTag, s_OpenTypeTagKern);
+    ShapeRequest featA;
+    featA.text = "fi VA";
+    ShapeRequest featB = featA;
+    featB.featureCount = 2u;
+    featB.features[0u] = OpenTypeFeature(s_OpenTypeTagLiga, 0u);
+    featB.features[1u] = OpenTypeFeature(s_OpenTypeTagKern, 0u);
+    EXPECT_FALSE(SameShapeRequest(featA, featB));
+    const auto shFeatA = self.m_text.layoutShared(featA);
+    const auto shFeatB = self.m_text.layoutShared(featB);
+    ASSERT_TRUE(shFeatA.has_value());
+    ASSERT_TRUE(shFeatB.has_value());
+    EXPECT_NE(shFeatA.value(), shFeatB.value());
+}
+
+void VerifyRichTypography_Uax9BidiEngineAndLayout(mut RichTypographyTests self){
+    EXPECT_EQ(ClassifyBidiCodePoint(0x41u), BidiClass::L);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x05D0u), BidiClass::R);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x0627u), BidiClass::AL);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x35u), BidiClass::EN);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x0665u), BidiClass::AN);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x2Du), BidiClass::ES);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x2Cu), BidiClass::CS);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x24u), BidiClass::ET);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x05BCu), BidiClass::NSM);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x2067u), BidiClass::RLI);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x2069u), BidiClass::PDI);
+    EXPECT_EQ(ClassifyBidiCodePoint(0x20u), BidiClass::WS);
+
+    String hebWithNum;
+    AppendCodePointUtf8(0x05D0u, hebWithNum);
+    AppendCodePointUtf8(0x05D1u, hebWithNum);
+    hebWithNum.append(" 123 ");
+    BidiParagraph rtlNumPara;
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(hebWithNum), TextBidiMode::Auto, rtlNumPara));
+    EXPECT_EQ(rtlNumPara.baseLevel, 1u);
+    EXPECT_EQ(rtlNumPara.baseDirection, TextDirection::RightToLeft);
+    EXPECT_EQ(rtlNumPara.chars[0u].level, 1u);
+    EXPECT_EQ(rtlNumPara.chars[1u].level, 1u);
+    EXPECT_EQ(rtlNumPara.chars[3u].level, 2u);
+    EXPECT_EQ(rtlNumPara.chars[4u].level, 2u);
+    EXPECT_EQ(rtlNumPara.chars[5u].level, 2u);
+
+    Vector<BidiVisualRun> visRuns;
+    ResolveBidiVisualRuns(rtlNumPara, 0u, cast<u32>(hebWithNum.size()), visRuns);
+    ASSERT_GE(visRuns.size(), 3u);
+    EXPECT_EQ(visRuns[0u].direction, TextDirection::RightToLeft);
+    EXPECT_EQ(visRuns[0u].level, 1u);
+    EXPECT_EQ(visRuns[1u].direction, TextDirection::LeftToRight);
+    EXPECT_EQ(visRuns[1u].level, 2u);
+    EXPECT_EQ(visRuns[visRuns.size() - 1u].direction, TextDirection::RightToLeft);
+
+    String ltrIsolated;
+    ltrIsolated.append("A ");
+    AppendCodePointUtf8(0x2067u, ltrIsolated);
+    AppendCodePointUtf8(0x05D0u, ltrIsolated);
+    AppendCodePointUtf8(0x05D1u, ltrIsolated);
+    AppendCodePointUtf8(0x2069u, ltrIsolated);
+    ltrIsolated.append(" Z");
+    BidiParagraph isoPara;
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(ltrIsolated), TextBidiMode::Auto, isoPara));
+    EXPECT_EQ(isoPara.baseLevel, 0u);
+    EXPECT_EQ(isoPara.chars[3u].level, 1u);
+    EXPECT_EQ(isoPara.chars[4u].level, 1u);
+    EXPECT_EQ(isoPara.chars[isoPara.chars.size() - 1u].level, 0u);
+
+    String fsiStr;
+    AppendCodePointUtf8(0x05D0u, fsiStr);
+    fsiStr.append(" ");
+    AppendCodePointUtf8(0x2068u, fsiStr);
+    fsiStr.append("ab(");
+    AppendCodePointUtf8(0x05D1u, fsiStr);
+    fsiStr.append(")");
+    AppendCodePointUtf8(0x2069u, fsiStr);
+    BidiParagraph fsiPara;
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(fsiStr), TextBidiMode::Auto, fsiPara));
+    EXPECT_EQ(fsiPara.baseLevel, 1u);
+    EXPECT_EQ(fsiPara.chars[3u].level, 2u);
+    EXPECT_EQ(fsiPara.chars[5u].level, 2u);
+
+    String rloText;
+    rloText.append("Hi ");
+    AppendCodePointUtf8(0x202Eu, rloText);
+    rloText.append("abc");
+    AppendCodePointUtf8(0x202Cu, rloText);
+    rloText.append(" ok");
+
+    ShapeRequest bidiReq;
+    bidiReq.text = StringView(rloText);
+    bidiReq.fontSize = 16.0f;
+    bidiReq.bidiMode = TextBidiMode::Auto;
+    const auto bidiLay = self.m_text.layout(bidiReq);
+    ASSERT_TRUE(bidiLay.has_value());
+    EXPECT_TRUE(bidiLay.value().hasBidiRuns());
+    EXPECT_EQ(bidiLay.value().direction(), TextDirection::LeftToRight);
+    ASSERT_EQ(bidiLay.value().lines().size(), 1u);
+
+    const auto leadCaret = bidiLay.value().caretRect(0u, TextCaretEdge::Leading);
+    const auto endCaret = bidiLay.value().caretRect(cast<u32>(rloText.size()), TextCaretEdge::Trailing);
+    ASSERT_TRUE(leadCaret.has_value());
+    ASSERT_TRUE(endCaret.has_value());
+    EXPECT_GT(endCaret.value().x, leadCaret.value().x);
+
+    const TextHit hitEnd = bidiLay.value().hitTest(Point(bidiLay.value().measure().x + 20.0f, 4.0f));
+    EXPECT_EQ(hitEnd.byteOffset, cast<u32>(rloText.size()));
+
+    ShapeRequest wrappedBidiReq = bidiReq;
+    wrappedBidiReq.wrapMode = TextWrapMode::Word;
+    wrappedBidiReq.maxWidth = 36.0f;
+    const auto wrappedBidiLay = self.m_text.layout(wrappedBidiReq);
+    ASSERT_TRUE(wrappedBidiLay.has_value());
+    EXPECT_GE(wrappedBidiLay.value().lines().size(), 2u);
+    EXPECT_TRUE(self.m_builder.setTextBidiMode(TextBidiMode::Auto));
+    EXPECT_EQ(self.m_builder.textBidiMode(), TextBidiMode::Auto);
+}
+
+void VerifyRichTypography_ColorGlyphPipeline(mut RichTypographyTests self){
+    Array<u8, 12u> bgraRow(
+        0u, 0u, 0u, 0u,
+        10u, 20u, 30u, 255u,
+        64u, 32u, 128u, 128u
+    );
+    Vector<u8> rgbaOut;
+    ConvertPremulBgraToStraightRgba(Span<u8>(bgraRow.data(), 12u), 3u, rgbaOut);
+    ASSERT_EQ(rgbaOut.size(), 12u);
+    EXPECT_EQ(rgbaOut[0u], 0u);
+    EXPECT_EQ(rgbaOut[3u], 0u);
+    EXPECT_EQ(rgbaOut[4u], 30u);
+    EXPECT_EQ(rgbaOut[5u], 20u);
+    EXPECT_EQ(rgbaOut[6u], 10u);
+    EXPECT_EQ(rgbaOut[7u], 255u);
+    EXPECT_EQ(rgbaOut[8u], 255u);
+    EXPECT_EQ(rgbaOut[9u], 64u);
+    EXPECT_EQ(rgbaOut[10u], 128u);
+    EXPECT_EQ(rgbaOut[11u], 128u);
+
+    GlyphPagePixels colorPixels;
+    colorPixels.resize(8u * 8u * 4u, 180u);
+    GlyphPageBinding colorBinding;
+    colorBinding.font = MakeUiFixtureAssetRef<Font>(s_TestLatinFontPath);
+    colorBinding.fontGeneration = 11u;
+    colorBinding.atlasIdentity = 700u;
+    colorBinding.generation = 1u;
+    colorBinding.index = 0u;
+    colorBinding.width = 8u;
+    colorBinding.height = 8u;
+    colorBinding.channelCount = 4u;
+    EXPECT_TRUE(ValidGlyphPageBinding<Font>(colorBinding, colorPixels.size()));
+
+    GlyphPageBinding badChanBinding = colorBinding;
+    badChanBinding.channelCount = 3u;
+    EXPECT_FALSE(ValidGlyphPageBinding<Font>(badChanBinding, colorPixels.size()));
+    EXPECT_FALSE(ValidGlyphPageBinding<Font>(colorBinding, 64u));
+
+    GlyphPagePixels grayPixels;
+    grayPixels.resize(8u * 8u, 200u);
+    GlyphPageBinding grayBinding = colorBinding;
+    grayBinding.atlasIdentity = 701u;
+    grayBinding.channelCount = 1u;
+    EXPECT_TRUE(CompatibleGlyphPageDimensions<Font>(colorBinding, colorBinding));
+    EXPECT_FALSE(CompatibleGlyphPageDimensions<Font>(colorBinding, grayBinding));
+
+    const Expected<SharedGlyphPage> colorPage = CreateGlyphPage(self.pool, colorBinding, colorPixels);
+    const Expected<SharedGlyphPage> grayPage = CreateGlyphPage(self.pool, grayBinding, grayPixels);
+    ASSERT_TRUE(colorPage.has_value());
+    ASSERT_TRUE(grayPage.has_value());
+
+    DisplayMetrics dm;
+    dm.logicalWidth = 400.0f;
+    dm.logicalHeight = 300.0f;
+    dm.pixelScaleX = 1.0f;
+    dm.pixelScaleY = 1.0f;
+    self.m_paint.begin(dm, 1u, self.m_skinGeneration, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    EXPECT_FALSE(self.m_paint.drawGlyph(colorPage.value(), Rect(0.0f, 0.0f, 16.0f, 16.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f)));
+    EXPECT_FALSE(self.m_paint.drawColorGlyph(grayPage.value(), Rect(0.0f, 0.0f, 16.0f, 16.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f)));
+    EXPECT_TRUE(self.m_paint.drawColorGlyph(colorPage.value(), Rect(10.0f, 10.0f, 24.0f, 24.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f)));
+
+    Array<SharedGlyphPage, 2u> pages(grayPage.value(), colorPage.value());
+    Vector<u32> resolvedIndices;
+    Vector<u32> resolvedSdfIndices;
+    ASSERT_TRUE(self.m_paint.prepareAndResolveTextImages(Span<SharedGlyphPage>(pages.data(), 2u), Span<SharedSdfAtlasPage>(), resolvedIndices, resolvedSdfIndices));
+    ASSERT_EQ(resolvedIndices.size(), 2u);
+
+    Array<ResolvedGlyphDraw, 2u> batch;
+    batch[0u].rectangle = Rect(40.0f, 10.0f, 12.0f, 12.0f);
+    batch[0u].uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
+    batch[0u].pageIndex = resolvedIndices[0u];
+    batch[0u].isColor = false;
+    batch[1u].rectangle = Rect(60.0f, 10.0f, 20.0f, 20.0f);
+    batch[1u].uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
+    batch[1u].pageIndex = resolvedIndices[1u];
+    batch[1u].isColor = true;
+    ASSERT_TRUE(self.m_paint.drawResolvedGlyphBatch(Span<ResolvedGlyphDraw>(batch.data(), 2u), Color(1.0f, 1.0f, 1.0f, 1.0f)));
+
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.commands().size(), 3u);
+    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::ColorGlyph);
+    EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Glyph);
+    EXPECT_EQ(snapshot.commands()[2u].material, PaintMaterial::ColorGlyph);
+    EXPECT_TRUE(ValidateDrawCommandGlyphBindings(snapshot.commands(), snapshot.glyphPages().size()));
+
+    GpuPaintPushConstants push;
+    AssignGpuPaintMaterialPushConstants(PaintMaterial::ColorGlyph, 9u, 0u, 0u, 0u, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, push);
+    EXPECT_EQ(push.material, s_ShaderUiMaterialColorGlyph);
+    EXPECT_EQ(push.textureSlot, 9u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(RichTypographyTests, FontRegistryAndCssMatching, VerifyRichTypography_FontRegistryAndCssMatching)
+NWB_ADHD_GTEST_F(RichTypographyTests, TrackingLineHeightAndOpenType, VerifyRichTypography_TrackingLineHeightAndOpenType)
+NWB_ADHD_GTEST_F(RichTypographyTests, Uax9BidiEngineAndLayout, VerifyRichTypography_Uax9BidiEngineAndLayout)
+NWB_ADHD_GTEST_F(RichTypographyTests, ColorGlyphPipeline, VerifyRichTypography_ColorGlyphPipeline)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,658 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_PlotTestQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_PlotTestPosInfF32Bits = 0x7f800000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TestCanvasPainter : ICanvasPainter{
+    public u32 m_paintCalls = 0u;
+    public Rect m_lastBounds;
+    public Rect m_lastClip;
+
+    public b8 paint(mut PaintBuilder paint, mut TextService text, in Rect bounds, in Rect clip)override{
+        ++this.m_paintCalls;
+        this.m_lastBounds = bounds;
+        this.m_lastClip = clip;
+        paint.fillRect(bounds, Color(0.12f, 0.22f, 0.34f, 1.0f));
+        paint.fillCircle(CenterUiRect(bounds), 6.0f, Color(0.95f, 0.85f, 0.25f, 1.0f));
+        return true;
+    }
+}
+
+class DragDropTests : WidgetFixture{
+    public DragDropState m_drag;
+    public DragDropResult m_src1;
+    public DragDropResult m_src2;
+    public DragDropResult m_dstTyped;
+    public DragDropResult m_dstAny;
+    public DragDropResult m_dstWrong;
+
+    public b8 renderFrame(in u64 generation, in DragDropOptions srcOpts){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 440.0f, 360.0f)))
+            return false;
+
+        WidgetOptions btnOpts;
+        btnOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+        btnOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 28.0f);
+
+        const auto typeA = ParseName("ui.test.drag.a");
+        const auto typeB = ParseName("ui.test.drag.b");
+        const auto typeC = ParseName("ui.test.drag.c");
+        if(!typeA.has_value() || !typeB.has_value() || !typeC.has_value())
+            return false;
+
+        this.m_builder.button("src_btn_1", "Source A", btnOpts);
+        DragDropPayload payload1;
+        payload1.type = typeA.value();
+        payload1.key = 101u;
+        payload1.bytes.push_back(1u);
+        payload1.bytes.push_back(2u);
+        payload1.bytes.push_back(3u);
+        payload1.previewLabel = "Item A";
+        this.m_src1 = this.m_builder.dragSource("drag_src_1", "src_btn_1", payload1, this.m_drag, srcOpts);
+
+        this.m_builder.button("src_btn_2", "Source B", btnOpts);
+        DragDropPayload payload2;
+        payload2.type = typeB.value();
+        payload2.key = 202u;
+        payload2.bytes.push_back(9u);
+        payload2.previewLabel = "Item B";
+        this.m_src2 = this.m_builder.dragSource("drag_src_2", "src_btn_2", payload2, this.m_drag, srcOpts);
+
+        this.m_builder.button("dst_btn_typed", "Target A", btnOpts);
+        this.m_dstTyped = this.m_builder.dropTarget("drop_dst_typed", "dst_btn_typed", typeA.value(), this.m_drag);
+
+        this.m_builder.button("dst_btn_any", "Target Any", btnOpts);
+        this.m_dstAny = this.m_builder.dropTarget("drop_dst_any", "dst_btn_any", s_NameNone, this.m_drag);
+
+        this.m_builder.button("dst_btn_wrong", "Target C", btnOpts);
+        this.m_dstWrong = this.m_builder.dropTarget("drop_dst_wrong", "dst_btn_wrong", typeC.value(), this.m_drag);
+
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public Point targetCenter(in StringView key){
+        const auto tgt = this.tryTarget(this.id(key, "panel"));
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class HyperlinkRichTextTests : WidgetFixture{
+    public b8 m_link1Activated = false;
+    public b8 m_link2Activated = false;
+    public b8 m_link3Activated = false;
+    public RichTextResult m_richResult;
+    public RichTextResult m_trailingResult;
+
+    public b8 renderFrame(in u64 generation, in b8 link1Visited){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 440.0f, 360.0f)))
+            return false;
+
+        HyperlinkOptions opts1;
+        opts1.visited = link1Visited;
+        this.m_link1Activated = this.m_builder.hyperlink("link1", "Documentation", opts1);
+
+        HyperlinkOptions opts2;
+        opts2.visited = true;
+        this.m_link2Activated = this.m_builder.hyperlink("link2", "Visited", opts2);
+
+        HyperlinkOptions opts3;
+        opts3.enabled = false;
+        this.m_link3Activated = this.m_builder.hyperlink("link3", "Disabled", opts3);
+
+        Array<RichTextSpan, 4u> spans;
+        spans[0u].text = "Hello ";
+        spans[0u].color = Color(0.25f, 0.65f, 0.98f, 1.0f);
+        spans[0u].hasColor = true;
+
+        spans[1u].text = "World\nClick ";
+        spans[1u].fontSize = 16.0f;
+        spans[1u].backgroundColor = Color(0.20f, 0.24f, 0.30f, 1.0f);
+        spans[1u].hasBackground = true;
+        spans[1u].strikethrough = true;
+
+        spans[2u].text = "long wrapped hyperlink phrase";
+        spans[2u].underline = true;
+        spans[2u].linkKey = 77u;
+
+        spans[3u].text = " done";
+
+        RichTextOptions richOpts;
+        richOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 96.0f);
+        richOpts.maxWidth = 96.0f;
+        richOpts.wrap = true;
+        richOpts.alignment = TextAlignment::Center;
+        this.m_richResult = this.m_builder.richText("rich", Span<RichTextSpan>(spans.data(), 4u), richOpts);
+
+        RichTextOptions trailOpts;
+        trailOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 180.0f);
+        trailOpts.maxWidth = 180.0f;
+        trailOpts.wrap = true;
+        trailOpts.alignment = TextAlignment::Trailing;
+        Array<RichTextSpan, 1u> singleSpan;
+        singleSpan[0u].text = "Aligned right";
+        this.m_trailingResult = this.m_builder.richText("rich_trail", Span<RichTextSpan>(singleSpan.data(), 1u), trailOpts);
+
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public Vector<HitTarget> collectLinkTargets(in u64 linkKey)const{
+        Vector<HitTarget> outTargets;
+        const WidgetId richId = this.id("rich", "panel");
+        for(in HitTarget tgt : this.m_context.input().targets()){
+            if(tgt.owner == richId && tgt.value == linkKey)
+                outTargets.push_back(tgt);
+        }
+        return outTargets;
+    }
+}
+
+class PlotAndCanvasTests : WidgetFixture{
+    public PlotResult m_plotResult;
+    public PlotResult m_lineResult;
+    public PlotResult m_histResult;
+    public CanvasResult m_canvasResult;
+    public TestCanvasPainter m_painter;
+
+    public b8 renderPlots(in u64 generation){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 440.0f, 380.0f)))
+            return false;
+
+        Array<f32, 5u> s0(-2.0f, 0.0f, 4.0f, 8.0f, 2.0f);
+        Array<f32, 5u> s1(1.0f, 3.0f, 2.0f, 6.0f, 5.0f);
+        Array<f32, 5u> s2(-1.0f, 2.0f, 3.0f, 1.0f, 4.0f);
+
+        Array<PlotSeries, 3u> multi;
+        multi[0u].label = "Area";
+        multi[0u].values = Span<f32>(s0.data(), 5u);
+        multi[0u].kind = PlotKind::Area;
+        multi[1u].label = "Line";
+        multi[1u].values = Span<f32>(s1.data(), 5u);
+        multi[1u].color = Color(0.95f, 0.55f, 0.25f, 1.0f);
+        multi[1u].kind = PlotKind::Line;
+        multi[2u].label = "Bars";
+        multi[2u].values = Span<f32>(s2.data(), 5u);
+        multi[2u].color = Color(0.40f, 0.85f, 0.55f, 1.0f);
+        multi[2u].kind = PlotKind::Bar;
+
+        PlotOptions multiOpts;
+        multiOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+        multiOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+        multiOpts.showLegend = true;
+        this.m_plotResult = this.m_builder.plot("main_plot", Span<PlotSeries>(multi.data(), 3u), multiOpts);
+
+        PlotOptions smallOpts;
+        smallOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 240.0f);
+        smallOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+        this.m_lineResult = this.m_builder.plotLine("line_plot", Span<f32>(s0.data(), 5u), smallOpts);
+        this.m_histResult = this.m_builder.plotHistogram("hist_plot", Span<f32>(s1.data(), 5u), smallOpts);
+
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public b8 renderCanvas(in u64 generation, in b8 interactive){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 360.0f, 260.0f)))
+            return false;
+
+        CanvasOptions opts;
+        opts.width = LayoutSize(LayoutSizePolicy::Fixed, 200.0f);
+        opts.height = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+        opts.fillBackground = true;
+        opts.drawBorder = true;
+        opts.interactive = interactive;
+        this.m_canvasResult = this.m_builder.canvas("cnv", this.m_painter, opts);
+
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+}
+
+class DockSpaceTests : WidgetFixture{
+    public DockSpaceState m_dock;
+    public b8 m_p1Visible = false;
+    public b8 m_p2Visible = false;
+    public b8 m_p3Visible = false;
+    public u32 m_b1Clicks = 0u;
+    public u32 m_b2Clicks = 0u;
+
+    public b8 renderTwoPanels(in u64 generation, in DockSpaceOptions opts){
+        this.m_p1Visible = false;
+        this.m_p2Visible = false;
+        this.m_p3Visible = false;
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 420.0f, 320.0f)))
+            return false;
+
+        WidgetOptions btnOpts;
+        btnOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+        btnOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 26.0f);
+
+        if(this.m_builder.beginDockSpace("dock", this.m_dock, opts)){
+            if(this.m_builder.beginDockedPanel("p1", 1u, "Scene")){
+                this.m_p1Visible = true;
+                if(this.m_builder.button("b1", "Btn1", btnOpts))
+                    ++this.m_b1Clicks;
+                if(!this.m_builder.endDockedPanel())
+                    return false;
+            }
+            if(this.m_builder.beginDockedPanel("p2", 2u, "Props")){
+                this.m_p2Visible = true;
+                if(this.m_builder.button("b2", "Btn2", btnOpts))
+                    ++this.m_b2Clicks;
+                if(!this.m_builder.endDockedPanel())
+                    return false;
+            }
+            if(!this.m_builder.endDockSpace())
+                return false;
+        }
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId dockId()const{ return this.id("dock", "panel"); }
+    public WidgetId tabPartId(in u64 panelKey)const{
+        const WidgetId root = RequireUiWidgetId(this.dockId(), s_WidgetPartDockTab);
+        return TryMakeWidgetPartId(root, panelKey).value();
+    }
+    public WidgetId closePartId(in u64 panelKey)const{
+        const WidgetId root = RequireUiWidgetId(this.dockId(), s_WidgetPartDockClose);
+        return TryMakeWidgetPartId(root, panelKey).value();
+    }
+    public WidgetId splitPartId(in u32 splitNodeId)const{
+        const WidgetId root = RequireUiWidgetId(this.dockId(), s_WidgetPartDockSplit);
+        return TryMakeWidgetPartId(root, cast<u64>(splitNodeId)).value();
+    }
+    public WidgetId dockedButtonId(in StringView panelScope, in StringView btnKey)const{
+        return RequireUiWidgetId(RequireUiWidgetId(this.dockId(), panelScope), btnKey);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyDragDrop_ThresholdMultiFrameSharedAndTypeCheck(mut DragDropTests self){
+    DragDropOptions opts;
+    opts.dragThreshold = 4.0f;
+    ASSERT_TRUE(self.renderFrame(1u, opts));
+    ASSERT_TRUE(self.m_src1.valid);
+    ASSERT_TRUE(self.m_src2.valid);
+    ASSERT_TRUE(self.m_dstTyped.valid);
+    ASSERT_TRUE(self.m_dstAny.valid);
+    ASSERT_TRUE(self.m_dstWrong.valid);
+    EXPECT_FALSE(self.m_src1.dragging);
+    EXPECT_FALSE(self.m_drag.isActive());
+
+    const Point src1Center = self.targetCenter("drag_src_1");
+    const Point src2Center = self.targetCenter("drag_src_2");
+    const Point dstTypedCenter = self.targetCenter("dst_btn_typed");
+    const Point dstAnyCenter = self.targetCenter("dst_btn_any");
+    const Point dstWrongCenter = self.targetCenter("dst_btn_wrong");
+
+    InputEvent subDown;
+    subDown.type = InputEventType::PrimaryDown;
+    subDown.position = src1Center;
+    EXPECT_TRUE(self.send(subDown).pointerConsumed);
+    InputEvent subMove;
+    subMove.type = InputEventType::PointerMove;
+    subMove.position = Point(src1Center.x + 1.0f, src1Center.y + 1.0f);
+    EXPECT_TRUE(self.send(subMove).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(2u, opts));
+    EXPECT_FALSE(self.m_src1.dragging);
+    EXPECT_FALSE(self.m_drag.isActive());
+
+    InputEvent subUp;
+    subUp.type = InputEventType::PrimaryUp;
+    subUp.position = subMove.position;
+    EXPECT_TRUE(self.send(subUp).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(3u, opts));
+    EXPECT_FALSE(self.m_src1.dropped);
+    EXPECT_FALSE(self.m_dstTyped.dropped);
+
+    InputEvent mfDown;
+    mfDown.type = InputEventType::PrimaryDown;
+    mfDown.position = src1Center;
+    EXPECT_TRUE(self.send(mfDown).pointerConsumed);
+    InputEvent mfMove;
+    mfMove.type = InputEventType::PointerMove;
+    mfMove.position = dstTypedCenter;
+    EXPECT_TRUE(self.send(mfMove).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(4u, opts));
+    EXPECT_TRUE(self.m_src1.dragging);
+    EXPECT_TRUE(self.m_drag.isActive());
+    EXPECT_TRUE(self.m_drag.isDraggingType(ParseName("ui.test.drag.a").value()));
+    EXPECT_FALSE(self.m_drag.isDraggingType(ParseName("ui.test.drag.b").value()));
+    EXPECT_TRUE(self.m_dstTyped.hovered);
+    EXPECT_TRUE(self.m_dstAny.dragging);
+    EXPECT_FALSE(self.m_dstWrong.hovered);
+
+    InputEvent mfUp;
+    mfUp.type = InputEventType::PrimaryUp;
+    mfUp.position = dstTypedCenter;
+    EXPECT_TRUE(self.send(mfUp).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(5u, opts));
+    EXPECT_TRUE(self.m_src1.dropped);
+    EXPECT_TRUE(self.m_dstTyped.dropped);
+    EXPECT_EQ(self.m_dstTyped.payload.key, 101u);
+    ASSERT_EQ(self.m_dstTyped.payload.bytes.size(), 3u);
+    EXPECT_EQ(self.m_dstTyped.payload.bytes[2u], 3u);
+    EXPECT_FALSE(self.m_drag.isActive());
+    EXPECT_FALSE(self.m_dstWrong.dropped);
+
+    self.drag(src1Center, dstWrongCenter);
+    ASSERT_TRUE(self.renderFrame(6u, opts));
+    EXPECT_TRUE(self.m_src1.dropped);
+    EXPECT_FALSE(self.m_dstWrong.dropped);
+    EXPECT_FALSE(self.m_dstTyped.dropped);
+
+    self.drag(src2Center, dstAnyCenter);
+    ASSERT_TRUE(self.renderFrame(7u, opts));
+    EXPECT_TRUE(self.m_src2.dropped);
+    EXPECT_TRUE(self.m_dstAny.dropped);
+    EXPECT_EQ(self.m_dstAny.payload.key, 202u);
+    EXPECT_FALSE(self.m_drag.isActive());
+
+    InputEvent cancelDown;
+    cancelDown.type = InputEventType::PrimaryDown;
+    cancelDown.position = src1Center;
+    EXPECT_TRUE(self.send(cancelDown).pointerConsumed);
+    InputEvent cancelMove;
+    cancelMove.type = InputEventType::PointerMove;
+    cancelMove.position = Point(src1Center.x + 14.0f, src1Center.y);
+    EXPECT_TRUE(self.send(cancelMove).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(8u, opts));
+    EXPECT_TRUE(self.m_drag.isActive());
+    self.m_drag.cancel();
+    EXPECT_FALSE(self.m_drag.isActive());
+    ASSERT_TRUE(self.renderFrame(9u, opts));
+    EXPECT_FALSE(self.m_src1.dragging);
+    EXPECT_FALSE(self.m_dstAny.dragging);
+}
+
+void VerifyHyperlinkAndRichText_ActivationWrapAlignAndLinks(mut HyperlinkRichTextTests self){
+    ASSERT_TRUE(self.renderFrame(1u, false));
+    ASSERT_TRUE(self.m_richResult.valid);
+    ASSERT_TRUE(self.m_trailingResult.valid);
+
+    const auto link1Tgt = self.tryTarget(self.id("link1", "panel"));
+    const auto link2Tgt = self.tryTarget(self.id("link2", "panel"));
+    const auto link3Tgt = self.tryTarget(self.id("link3", "panel"));
+    ASSERT_TRUE(link1Tgt.has_value());
+    ASSERT_TRUE(link2Tgt.has_value());
+    ASSERT_TRUE(link3Tgt.has_value());
+
+    const Vector<HitTarget> wrappedLinkTargets = self.collectLinkTargets(77u);
+    ASSERT_GE(wrappedLinkTargets.size(), 2u);
+    EXPECT_NE(wrappedLinkTargets[0u].id, wrappedLinkTargets[1u].id);
+
+    self.click(CenterUiRect(link1Tgt.value().rectangle));
+    ASSERT_TRUE(self.renderFrame(2u, true));
+    EXPECT_TRUE(self.m_link1Activated);
+
+    self.press(Key::Enter);
+    ASSERT_TRUE(self.renderFrame(3u, true));
+    EXPECT_TRUE(self.m_link1Activated);
+
+    const Point disabledCenter = CenterUiRect(link3Tgt.value().rectangle);
+    InputEvent disDown;
+    disDown.type = InputEventType::PrimaryDown;
+    disDown.position = disabledCenter;
+    self.send(disDown);
+    InputEvent disUp;
+    disUp.type = InputEventType::PrimaryUp;
+    disUp.position = disabledCenter;
+    self.send(disUp);
+    ASSERT_TRUE(self.renderFrame(4u, true));
+    EXPECT_FALSE(self.m_link3Activated);
+
+    const Vector<HitTarget> linkParts = self.collectLinkTargets(77u);
+    ASSERT_GE(linkParts.size(), 2u);
+    InputEvent hoverEv;
+    hoverEv.type = InputEventType::PointerMove;
+    hoverEv.position = CenterUiRect(linkParts[1u].rectangle);
+    EXPECT_TRUE(self.send(hoverEv).pointerConsumed);
+    ASSERT_TRUE(self.renderFrame(5u, true));
+    EXPECT_EQ(self.m_richResult.hoveredLinkKey, 77u);
+    EXPECT_FALSE(self.m_richResult.linkActivated);
+
+    self.click(CenterUiRect(linkParts[1u].rectangle));
+    ASSERT_TRUE(self.renderFrame(6u, true));
+    EXPECT_TRUE(self.m_richResult.linkActivated);
+    EXPECT_EQ(self.m_richResult.activatedLinkKey, 77u);
+}
+
+void VerifyPlotAndCanvas_SimdRangeCrosshairPainterAndInput(mut PlotAndCanvasTests self){
+    const f32 qnan = bit_cast<f32>(s_PlotTestQuietNaNF32Bits);
+    const f32 pinf = bit_cast<f32>(s_PlotTestPosInfF32Bits);
+
+    Array<f32, 7u> nanSamples(qnan, -3.0f, 1.0f, pinf, 9.0f, 4.0f, -1.0f);
+    Array<PlotSeries, 1u> nanSeries;
+    nanSeries[0u].values = Span<f32>(nanSamples.data(), 7u);
+    f32 autoMin = 0.0f;
+    f32 autoMax = 0.0f;
+    ASSERT_TRUE(ComputePlotAutoRangeSimd(Span<PlotSeries>(nanSeries.data(), 1u), autoMin, autoMax));
+    EXPECT_NEAR(autoMin, -3.0f, 0.001f);
+    EXPECT_NEAR(autoMax, 9.0f, 0.001f);
+
+    Array<f32, 5u> flatSamples(5.0f, 5.0f, 5.0f, 5.0f, 5.0f);
+    nanSeries[0u].values = Span<f32>(flatSamples.data(), 5u);
+    ASSERT_TRUE(ComputePlotAutoRangeSimd(Span<PlotSeries>(nanSeries.data(), 1u), autoMin, autoMax));
+    EXPECT_NEAR(autoMin, 4.0f, 0.001f);
+    EXPECT_NEAR(autoMax, 6.0f, 0.001f);
+
+    Array<f32, 3u> allBadSamples(qnan, pinf, qnan);
+    nanSeries[0u].values = Span<f32>(allBadSamples.data(), 3u);
+    ASSERT_TRUE(ComputePlotAutoRangeSimd(Span<PlotSeries>(nanSeries.data(), 1u), autoMin, autoMax));
+    EXPECT_NEAR(autoMin, 0.0f, 0.001f);
+    EXPECT_NEAR(autoMax, 1.0f, 0.001f);
+
+    ASSERT_TRUE(self.renderPlots(1u));
+    EXPECT_TRUE(self.m_plotResult.valid);
+    EXPECT_TRUE(self.m_lineResult.valid);
+    EXPECT_TRUE(self.m_histResult.valid);
+    EXPECT_NEAR(self.m_plotResult.computedMinY, -2.0f, 0.001f);
+    EXPECT_NEAR(self.m_plotResult.computedMaxY, 8.0f, 0.001f);
+
+    const auto plotTgt = self.tryTarget(self.id("main_plot", "panel"));
+    ASSERT_TRUE(plotTgt.has_value());
+    InputEvent hoverPlot;
+    hoverPlot.type = InputEventType::PointerMove;
+    hoverPlot.position = CenterUiRect(plotTgt.value().rectangle);
+    EXPECT_TRUE(self.send(hoverPlot).pointerConsumed);
+    ASSERT_TRUE(self.renderPlots(2u));
+    EXPECT_TRUE(self.m_plotResult.hovered);
+    EXPECT_EQ(self.m_plotResult.hoveredSampleIndex, 2u);
+    EXPECT_NEAR(self.m_plotResult.hoveredValue, 4.0f, 0.001f);
+
+    ASSERT_TRUE(self.renderCanvas(3u, true));
+    EXPECT_TRUE(self.m_canvasResult.valid);
+    EXPECT_EQ(self.m_painter.m_paintCalls, 1u);
+    const auto cnvTgt = self.tryTarget(self.id("cnv", "panel"));
+    ASSERT_TRUE(cnvTgt.has_value());
+    const Rect cr = cnvTgt.value().rectangle;
+
+    InputEvent cnvMove;
+    cnvMove.type = InputEventType::PointerMove;
+    cnvMove.position = Point(cr.x + 30.0f, cr.y + 40.0f);
+    EXPECT_TRUE(self.send(cnvMove).pointerConsumed);
+    ASSERT_TRUE(self.renderCanvas(4u, true));
+    EXPECT_TRUE(self.m_canvasResult.hovered);
+    EXPECT_NEAR(self.m_canvasResult.localPointer.x, 30.0f, 0.5f);
+    EXPECT_NEAR(self.m_canvasResult.localPointer.y, 40.0f, 0.5f);
+
+    self.click(Point(cr.x + 25.0f, cr.y + 25.0f));
+    ASSERT_TRUE(self.renderCanvas(5u, true));
+    EXPECT_TRUE(self.m_canvasResult.clicked);
+
+    InputEvent dDown;
+    dDown.type = InputEventType::PrimaryDown;
+    dDown.position = Point(cr.x + 20.0f, cr.y + 20.0f);
+    EXPECT_TRUE(self.send(dDown).pointerConsumed);
+    InputEvent dMove;
+    dMove.type = InputEventType::PointerMove;
+    dMove.position = Point(cr.x + 70.0f, cr.y + 50.0f);
+    EXPECT_TRUE(self.send(dMove).pointerConsumed);
+    ASSERT_TRUE(self.renderCanvas(6u, true));
+    EXPECT_TRUE(self.m_canvasResult.dragging);
+    EXPECT_NEAR(self.m_canvasResult.dragOrigin.x, 20.0f, 0.5f);
+    EXPECT_NEAR(self.m_canvasResult.dragOrigin.y, 20.0f, 0.5f);
+    EXPECT_NEAR(self.m_canvasResult.dragDelta.x, 50.0f, 0.5f);
+    EXPECT_NEAR(self.m_canvasResult.dragDelta.y, 30.0f, 0.5f);
+
+    InputEvent dUp;
+    dUp.type = InputEventType::PrimaryUp;
+    dUp.position = dMove.position;
+    EXPECT_TRUE(self.send(dUp).pointerConsumed);
+    InputEvent wheel;
+    wheel.type = InputEventType::PointerWheel;
+    wheel.position = Point(cr.x + 40.0f, cr.y + 40.0f);
+    wheel.scrollY = 2.0;
+    EXPECT_TRUE(self.send(wheel).pointerConsumed);
+    ASSERT_TRUE(self.renderCanvas(7u, true));
+    EXPECT_FALSE(self.m_canvasResult.dragging);
+    EXPECT_GT(Abs(VectorSingle(cast<f32>(self.m_canvasResult.wheelDelta))).x, 0.5f);
+}
+
+void VerifyDockSpace_StateTreeAndDropZones(mut DockSpaceTests self){
+    DockSpaceState st;
+    EXPECT_TRUE(st.autoDockPanel(1u));
+    EXPECT_TRUE(st.autoDockPanel(2u));
+    EXPECT_FALSE(st.autoDockPanel(2u));
+    const u32 rootId = st.rootNodeId();
+    EXPECT_NE(rootId, 0u);
+    EXPECT_EQ(st.m_nodes[st.findNodeIndex(rootId).value()].activePanelKey, 1u);
+
+    EXPECT_TRUE(st.dockPanel(3u, rootId, DockDropZone::Right, 0.5f));
+    EXPECT_EQ(st.nodes().size(), 3u);
+    const u32 leaf3 = st.findPanelNodeId(3u);
+    EXPECT_NE(leaf3, 0u);
+    EXPECT_TRUE(st.dockPanel(4u, leaf3, DockDropZone::Bottom, 0.4f));
+    EXPECT_EQ(st.nodes().size(), 5u);
+
+    EXPECT_TRUE(st.setSplitRatio(rootId, 0.01f));
+    EXPECT_NEAR(st.m_nodes[st.findNodeIndex(rootId).value()].splitRatio, 0.1f, 0.001f);
+    EXPECT_TRUE(st.setSplitRatio(rootId, 0.99f));
+    EXPECT_NEAR(st.m_nodes[st.findNodeIndex(rootId).value()].splitRatio, 0.9f, 0.001f);
+    EXPECT_TRUE(st.setSplitRatio(rootId, 0.5f));
+
+    DockSpaceStyle style;
+    st.arrange(Rect(0.0f, 0.0f, 400.0f, 300.0f), style);
+    u32 hitNode = 0u;
+    DockDropZone hitZone = DockDropZone::None;
+    EXPECT_TRUE(st.hitTestDropZone(Point(10.0f, 150.0f), style.dropZoneEdgeFraction, hitNode, hitZone));
+    EXPECT_EQ(hitZone, DockDropZone::Left);
+    EXPECT_TRUE(st.hitTestDropZone(Point(100.0f, 150.0f), style.dropZoneEdgeFraction, hitNode, hitZone));
+    EXPECT_EQ(hitZone, DockDropZone::Center);
+    EXPECT_TRUE(st.hitTestDropZone(Point(390.0f, 150.0f), style.dropZoneEdgeFraction, hitNode, hitZone));
+    EXPECT_EQ(hitZone, DockDropZone::Right);
+
+    const Rect previewRight = st.computeDropPreviewRect(hitNode, DockDropZone::Right);
+    EXPECT_GT(previewRight.width, 0.0f);
+
+    EXPECT_TRUE(st.undockPanel(4u));
+    EXPECT_EQ(st.findPanelNodeId(4u), 0u);
+    EXPECT_EQ(st.nodes().size(), 3u);
+}
+
+void VerifyDockSpace_LiveTabsCloseSplitResizeAndUndock(mut DockSpaceTests self){
+    DockSpaceOptions opts;
+    ASSERT_TRUE(self.renderTwoPanels(1u, opts));
+    EXPECT_TRUE(self.m_p1Visible);
+    EXPECT_FALSE(self.m_p2Visible);
+    EXPECT_EQ(self.m_dock.findPanelNodeId(1u), self.m_dock.findPanelNodeId(2u));
+    EXPECT_TRUE(self.hasTarget(self.dockedButtonId("p1", "b1")));
+
+    const auto tab2Tgt = self.tryTarget(self.tabPartId(2u));
+    ASSERT_TRUE(tab2Tgt.has_value());
+    self.click(CenterUiRect(tab2Tgt.value().rectangle));
+    ASSERT_TRUE(self.renderTwoPanels(2u, opts));
+    EXPECT_FALSE(self.m_p1Visible);
+    EXPECT_TRUE(self.m_p2Visible);
+    const auto b2Tgt = self.tryTarget(self.dockedButtonId("p2", "b2"));
+    ASSERT_TRUE(b2Tgt.has_value());
+    self.click(CenterUiRect(b2Tgt.value().rectangle));
+    ASSERT_TRUE(self.renderTwoPanels(3u, opts));
+    EXPECT_EQ(self.m_b2Clicks, 1u);
+
+    const auto close2Tgt = self.tryTarget(self.closePartId(2u));
+    ASSERT_TRUE(close2Tgt.has_value());
+    self.click(CenterUiRect(close2Tgt.value().rectangle));
+    ASSERT_TRUE(self.renderTwoPanels(4u, opts));
+    EXPECT_EQ(self.m_dock.lastClosedPanelKey(), 2u);
+    EXPECT_EQ(self.m_dock.findPanelNodeId(2u), 0u);
+    EXPECT_TRUE(self.m_p1Visible);
+    EXPECT_FALSE(self.m_p2Visible);
+
+    ASSERT_TRUE(self.renderTwoPanels(5u, opts));
+    EXPECT_EQ(self.m_dock.findPanelNodeId(2u), 0u);
+    EXPECT_TRUE(self.m_p1Visible);
+    EXPECT_FALSE(self.m_p2Visible);
+
+    ASSERT_TRUE(self.m_dock.dockPanel(2u, self.m_dock.rootNodeId(), DockDropZone::Center, 0.5f));
+    ASSERT_TRUE(self.renderTwoPanels(6u, opts));
+    EXPECT_TRUE(self.m_p2Visible);
+
+    const auto dragTab2 = self.tryTarget(self.tabPartId(2u));
+    ASSERT_TRUE(dragTab2.has_value());
+    const Rect db = self.m_dock.m_lastBounds;
+    const Point rightDrop(db.x + db.width - 10.0f, db.y + db.height * 0.5f);
+    self.drag(CenterUiRect(dragTab2.value().rectangle), rightDrop);
+    ASSERT_TRUE(self.renderTwoPanels(7u, opts));
+    EXPECT_EQ(self.m_dock.nodes().size(), 3u);
+    EXPECT_TRUE(self.m_p1Visible);
+    EXPECT_TRUE(self.m_p2Visible);
+
+    const u32 rootId = self.m_dock.rootNodeId();
+    const auto splitTgt = self.tryTarget(self.splitPartId(rootId));
+    ASSERT_TRUE(splitTgt.has_value());
+    const Point splitCenter = CenterUiRect(splitTgt.value().rectangle);
+    self.drag(splitCenter, Point(db.x + db.width * 0.72f, splitCenter.y));
+    ASSERT_TRUE(self.renderTwoPanels(8u, opts));
+    EXPECT_GT(self.m_dock.m_nodes[self.m_dock.findNodeIndex(rootId).value()].splitRatio, 0.65f);
+
+    const auto splitExtremeTgt = self.tryTarget(self.splitPartId(rootId));
+    ASSERT_TRUE(splitExtremeTgt.has_value());
+    const Point splitExtremeCenter = CenterUiRect(splitExtremeTgt.value().rectangle);
+    self.drag(splitExtremeCenter, Point(db.x + db.width - 2.0f, splitExtremeCenter.y));
+    ASSERT_TRUE(self.renderTwoPanels(9u, opts));
+    const u32 leaf2Id = self.m_dock.findPanelNodeId(2u);
+    ASSERT_NE(leaf2Id, 0u);
+    EXPECT_GE(self.m_dock.m_nodes[self.m_dock.findNodeIndex(leaf2Id).value()].computedRect.width, self.m_builder.dockSpaceStyle().minPaneExtent - 0.5f);
+
+    const auto undockTab2 = self.tryTarget(self.tabPartId(2u));
+    ASSERT_TRUE(undockTab2.has_value());
+    const Point outsideDrop(db.x + db.width + 80.0f, db.y + 40.0f);
+    self.drag(CenterUiRect(undockTab2.value().rectangle), outsideDrop);
+    ASSERT_TRUE(self.renderTwoPanels(10u, opts));
+    EXPECT_EQ(self.m_dock.lastUndockedPanelKey(), 2u);
+    EXPECT_EQ(self.m_dock.findPanelNodeId(2u), 0u);
+    EXPECT_EQ(self.m_dock.nodes().size(), 1u);
+    EXPECT_TRUE(self.m_p1Visible);
+    EXPECT_FALSE(self.m_p2Visible);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(DragDropTests, ThresholdMultiFrameSharedAndTypeCheck, VerifyDragDrop_ThresholdMultiFrameSharedAndTypeCheck)
+NWB_ADHD_GTEST_F(HyperlinkRichTextTests, ActivationWrapAlignAndLinks, VerifyHyperlinkAndRichText_ActivationWrapAlignAndLinks)
+NWB_ADHD_GTEST_F(PlotAndCanvasTests, SimdRangeCrosshairPainterAndInput, VerifyPlotAndCanvas_SimdRangeCrosshairPainterAndInput)
+NWB_ADHD_GTEST_F(DockSpaceTests, StateTreeAndDropZones, VerifyDockSpace_StateTreeAndDropZones)
+NWB_ADHD_GTEST_F(DockSpaceTests, LiveTabsCloseSplitResizeAndUndock, VerifyDockSpace_LiveTabsCloseSplitResizeAndUndock)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -30,10 +30,9 @@ uint nwbPhysicsMorton3D(const float3 p){
     return (nwbPhysicsExpandBits10(ux) << 2u) | (nwbPhysicsExpandBits10(uy) << 1u) | nwbPhysicsExpandBits10(uz);
 }
 
-int nwbPhysicsLbvhClzDelta(const int i, const int j, const uint n, const uint mortonSlot){
+int nwbPhysicsLbvhClzDelta(const int i, const uint ci, const int j, const uint n, const uint mortonSlot){
     if(j < 0 || j >= int(n))
         return -1;
-    const uint ci = g_NwbPhysicsUintBuffers[mortonSlot][uint(i) * 2u + 0u];
     const uint cj = g_NwbPhysicsUintBuffers[mortonSlot][uint(j) * 2u + 0u];
     if(ci == cj)
         return int(32u + nwbPhysicsClz32(uint(i) ^ uint(j)));
@@ -121,8 +120,23 @@ void nwbPhysicsEmitBroadphasePair(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+uint nwbPhysicsFloatToOrderedUint(const float f){
+    const uint u = asuint(f);
+    return ((u & 0x80000000u) != 0u) ? ~u : (u | 0x80000000u);
+}
+
+float nwbPhysicsOrderedUintToFloat(const uint o){
+    const uint u = ((o & 0x80000000u) != 0u) ? (o & 0x7fffffffu) : ~o;
+    return asfloat(u);
+}
+
 groupshared uint s_LbvhSortMorton[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
 groupshared uint s_LbvhSortShape[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
+groupshared uint s_RadixHist[256];
+groupshared uint s_RadixLocalHist[1024];
+groupshared uint s_RadixAux[256];
+groupshared uint s_BoundsMin[3];
+groupshared uint s_BoundsMax[3];
 
 void nwbPhysicsLbvhLocalBitonicStep(
     const uint localTid,
@@ -196,9 +210,54 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     const uint lbvhNodeSlot = g_NwbPhysicsPushConstants.slots0.w;
 
     const uint pairSlot = g_NwbPhysicsPushConstants.slots1.x;
+    const uint lbvhMetaSlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint counterSlot = g_NwbPhysicsPushConstants.slots1.y;
     const uint nonCollideSlot = g_NwbPhysicsPushConstants.slots1.z;
     const uint nonCollideMask = g_NwbPhysicsPushConstants.slots1.w;
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_CLEAR_BOUNDS){
+        if(tid == 0u){
+            const uint infMin = nwbPhysicsFloatToOrderedUint(1.0e30f);
+            const uint infMax = nwbPhysicsFloatToOrderedUint(-1.0e30f);
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][0u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][1u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][2u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u] = infMax;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][4u] = infMax;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][5u] = infMax;
+        }
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_COMPUTE_BOUNDS){
+        const uint localTid = groupThreadID.x;
+        if(localTid < 3u){
+            s_BoundsMin[localTid] = nwbPhysicsFloatToOrderedUint(1.0e30f);
+            s_BoundsMax[localTid] = nwbPhysicsFloatToOrderedUint(-1.0e30f);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(tid < itemCount){
+            const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].xyz;
+            const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 1u].xyz;
+            const float3 center = (aMin + aMax) * 0.5f;
+            if(all(isfinite(center)) && all(abs(center) < 1.0e18f) && all((aMax - aMin) < 1.9e4f)){
+                InterlockedMin(s_BoundsMin[0u], nwbPhysicsFloatToOrderedUint(center.x));
+                InterlockedMin(s_BoundsMin[1u], nwbPhysicsFloatToOrderedUint(center.y));
+                InterlockedMin(s_BoundsMin[2u], nwbPhysicsFloatToOrderedUint(center.z));
+                InterlockedMax(s_BoundsMax[0u], nwbPhysicsFloatToOrderedUint(center.x));
+                InterlockedMax(s_BoundsMax[1u], nwbPhysicsFloatToOrderedUint(center.y));
+                InterlockedMax(s_BoundsMax[2u], nwbPhysicsFloatToOrderedUint(center.z));
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(localTid < 3u){
+            InterlockedMin(g_NwbPhysicsUintBuffers[lbvhMetaSlot][localTid], s_BoundsMin[localTid]);
+            InterlockedMax(g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u + localTid], s_BoundsMax[localTid]);
+        }
+        return;
+    }
 
     if(mode == NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON){
         if(tid >= itemCount)
@@ -209,22 +268,36 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].xyz;
             const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 1u].xyz;
             const float3 center = (aMin + aMax) * 0.5f;
-            const float3 sceneMin = float3(
+            float3 sceneMin = float3(
                 g_NwbPhysicsPushConstants.deltaTime,
                 g_NwbPhysicsPushConstants.invDeltaTime,
                 g_NwbPhysicsPushConstants.maxLinearVelocity
             );
-            const float3 invExtent = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+            float3 invExtent = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+            if((g_NwbPhysicsPushConstants.flags & 1u) != 0u){
+                const float3 bMin = float3(
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][0u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][1u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][2u])
+                );
+                const float3 bMax = float3(
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][4u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][5u])
+                );
+                if(all(bMin <= bMax)){
+                    const float3 span = max(bMax - bMin, float3(1.0f, 1.0f, 1.0f));
+                    sceneMin = bMin - float3(1.0f, 1.0f, 1.0f);
+                    invExtent = float3(1.0f / (span.x + 2.0f), 1.0f / (span.y + 2.0f), 1.0f / (span.z + 2.0f));
+                }
+                else{
+                    sceneMin = float3(-1.0f, -1.0f, -1.0f);
+                    invExtent = float3(0.5f, 0.5f, 0.5f);
+                }
+            }
             const uint code = nwbPhysicsMorton3D((center - sceneMin) * invExtent);
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 0u] = code;
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 1u] = tid;
-
-            if(shapeCount >= 2u){
-                const uint leafIdx = (shapeCount - 1u) + tid;
-                g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leafIdx].parentMeta = uint4(NWB_PHYSICS_INVALID_INDEX, 0u, 0u, 0u);
-                if(tid + 1u < shapeCount)
-                    g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][tid].parentMeta = uint4(NWB_PHYSICS_INVALID_INDEX, 0u, 0u, 0u);
-            }
         }
         else{
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 0u] = 0xffffffffu;
@@ -257,51 +330,173 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         return;
     }
 
-    if(mode == NWB_PHYSICS_LBVH_MODE_BITONIC_MERGE_LOCAL){
-        const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE;
+    if(mode == NWB_PHYSICS_LBVH_MODE_RADIX_HISTOGRAM){
+        const uint localTid = groupThreadID.x;
+        const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE;
         if(blockBase >= itemCount)
             return;
-        const uint localN = min(itemCount - blockBase, NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE);
-        const uint k = g_NwbPhysicsPushConstants.flags;
-        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
-            s_LbvhSortMorton[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u];
-            s_LbvhSortShape[i] = g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u];
+        const uint shift = g_NwbPhysicsPushConstants.flags;
+        const uint srcMortonSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint radixHistSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint localN = min(itemCount - blockBase, NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE);
+
+        for(uint d = localTid; d < 256u; d += NWB_PHYSICS_WORKGROUP_SIZE)
+            s_RadixHist[d] = 0u;
+        GroupMemoryBarrierWithGroupSync();
+
+        for(uint i = localTid; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            const uint m = g_NwbPhysicsUintBuffers[srcMortonSlot][(blockBase + i) * 2u + 0u];
+            const uint digit = (m >> shift) & 0xffu;
+            InterlockedAdd(s_RadixHist[digit], 1u);
         }
         GroupMemoryBarrierWithGroupSync();
 
-        const uint halfLocal = localN >> 1u;
-        for(uint j = localN >> 1u; j >= 1u; j >>= 1u)
-            nwbPhysicsLbvhLocalBitonicStep(groupThreadID.x, blockBase, halfLocal, k, j);
-
-        for(uint i = groupThreadID.x; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
-            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 0u] = s_LbvhSortMorton[i];
-            g_NwbPhysicsUintBuffers[mortonSlot][(blockBase + i) * 2u + 1u] = s_LbvhSortShape[i];
-        }
+        const uint histBase = groupID.x * 256u;
+        for(uint d = localTid; d < 256u; d += NWB_PHYSICS_WORKGROUP_SIZE)
+            g_NwbPhysicsUintBuffers[radixHistSlot][histBase + d] = s_RadixHist[d];
         return;
     }
 
-    if(mode == NWB_PHYSICS_LBVH_MODE_BITONIC_SORT){
-        if(tid >= itemCount)
+    if(mode == NWB_PHYSICS_LBVH_MODE_RADIX_SCAN){
+        const uint localTid = groupThreadID.x;
+        const uint numBlocks = itemOffset;
+        const uint radixHistSlot = g_NwbPhysicsPushConstants.slots0.z;
+        for(uint pass = 0u; pass < 4u; ++pass){
+            const uint b = pass * 64u + localTid;
+            uint running = 0u;
+            for(uint g = 0u; g < numBlocks; ++g){
+                const uint addr = g * 256u + b;
+                const uint c = g_NwbPhysicsUintBuffers[radixHistSlot][addr];
+                g_NwbPhysicsUintBuffers[radixHistSlot][addr] = running;
+                running += c;
+            }
+            s_RadixHist[b] = running;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        const uint bBase = localTid * 4u;
+        const uint v0 = s_RadixHist[bBase + 0u];
+        const uint v1 = s_RadixHist[bBase + 1u];
+        const uint v2 = s_RadixHist[bBase + 2u];
+        const uint v3 = s_RadixHist[bBase + 3u];
+        const uint subTot = v0 + v1 + v2 + v3;
+        s_RadixAux[localTid] = subTot;
+        GroupMemoryBarrierWithGroupSync();
+
+        uint scanVal = subTot;
+        [unroll]
+        for(uint offset = 1u; offset < 64u; offset <<= 1u){
+            const uint addVal = (localTid >= offset) ? s_RadixAux[localTid - offset] : 0u;
+            GroupMemoryBarrierWithGroupSync();
+            scanVal += addVal;
+            s_RadixAux[localTid] = scanVal;
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        const uint basePrefix = (localTid > 0u) ? s_RadixAux[localTid - 1u] : 0u;
+        const uint outBase = numBlocks * 256u + bBase;
+        g_NwbPhysicsUintBuffers[radixHistSlot][outBase + 0u] = basePrefix;
+        g_NwbPhysicsUintBuffers[radixHistSlot][outBase + 1u] = basePrefix + v0;
+        g_NwbPhysicsUintBuffers[radixHistSlot][outBase + 2u] = basePrefix + v0 + v1;
+        g_NwbPhysicsUintBuffers[radixHistSlot][outBase + 3u] = basePrefix + v0 + v1 + v2;
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_RADIX_SCATTER){
+        const uint localTid = groupThreadID.x;
+        const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE;
+        if(blockBase >= itemCount)
             return;
+        const uint numBlocks = itemOffset;
+        const uint shift = g_NwbPhysicsPushConstants.flags;
+        const uint srcMortonSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint dstMortonSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint radixHistSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint localN = min(itemCount - blockBase, NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE);
 
-        const uint j = itemOffset;
-        const uint k = g_NwbPhysicsPushConstants.flags;
-        const uint mask = j - 1u;
-        const uint idx0 = ((tid & ~mask) << 1u) | (tid & mask);
-        const uint idx1 = idx0 + j;
-        const bool ascending = ((idx0 & k) == 0u);
+        for(uint i = localTid; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            s_LbvhSortMorton[i] = g_NwbPhysicsUintBuffers[srcMortonSlot][(blockBase + i) * 2u + 0u];
+            s_LbvhSortShape[i] = g_NwbPhysicsUintBuffers[srcMortonSlot][(blockBase + i) * 2u + 1u];
+        }
+        const uint blockHistBase = groupID.x * 256u;
+        const uint globalHistBase = numBlocks * 256u;
+        for(uint d = localTid; d < 256u; d += NWB_PHYSICS_WORKGROUP_SIZE)
+            s_RadixHist[d] = g_NwbPhysicsUintBuffers[radixHistSlot][globalHistBase + d] + g_NwbPhysicsUintBuffers[radixHistSlot][blockHistBase + d];
+        GroupMemoryBarrierWithGroupSync();
 
-        const uint m0 = g_NwbPhysicsUintBuffers[mortonSlot][idx0 * 2u + 0u];
-        const uint s0 = g_NwbPhysicsUintBuffers[mortonSlot][idx0 * 2u + 1u];
-        const uint m1 = g_NwbPhysicsUintBuffers[mortonSlot][idx1 * 2u + 0u];
-        const uint s1 = g_NwbPhysicsUintBuffers[mortonSlot][idx1 * 2u + 1u];
+        [unroll]
+        for(uint subPass = 0u; subPass < 2u; ++subPass){
+            const uint srcBase = (subPass == 0u) ? 0u : 256u;
+            const uint dstBase = (subPass == 0u) ? 256u : 0u;
+            const uint subShift = shift + subPass * 4u;
 
-        const bool greater = (m0 > m1) || (m0 == m1 && s0 > s1);
-        if(greater == ascending){
-            g_NwbPhysicsUintBuffers[mortonSlot][idx0 * 2u + 0u] = m1;
-            g_NwbPhysicsUintBuffers[mortonSlot][idx0 * 2u + 1u] = s1;
-            g_NwbPhysicsUintBuffers[mortonSlot][idx1 * 2u + 0u] = m0;
-            g_NwbPhysicsUintBuffers[mortonSlot][idx1 * 2u + 1u] = s0;
+            for(uint b = 0u; b < 16u; ++b)
+                s_RadixLocalHist[b * NWB_PHYSICS_WORKGROUP_SIZE + localTid] = 0u;
+            [unroll]
+            for(uint k = 0u; k < 4u; ++k){
+                const uint i = localTid * 4u + k;
+                if(i < localN){
+                    const uint nib = (s_LbvhSortMorton[srcBase + i] >> subShift) & 0xfu;
+                    s_RadixLocalHist[nib * NWB_PHYSICS_WORKGROUP_SIZE + localTid] += 1u;
+                }
+            }
+            GroupMemoryBarrierWithGroupSync();
+
+            const uint segBase = localTid * 16u;
+            uint sum = 0u;
+            for(uint i = 0u; i < 16u; ++i){
+                const uint c = s_RadixLocalHist[segBase + i];
+                s_RadixLocalHist[segBase + i] = sum;
+                sum += c;
+            }
+            s_RadixAux[localTid] = sum;
+            GroupMemoryBarrierWithGroupSync();
+
+            uint scanVal = sum;
+            [unroll]
+            for(uint offset = 1u; offset < 64u; offset <<= 1u){
+                const uint addVal = (localTid >= offset) ? s_RadixAux[localTid - offset] : 0u;
+                GroupMemoryBarrierWithGroupSync();
+                scanVal += addVal;
+                s_RadixAux[localTid] = scanVal;
+                GroupMemoryBarrierWithGroupSync();
+            }
+
+            const uint segPrefix = (localTid > 0u) ? s_RadixAux[localTid - 1u] : 0u;
+            for(uint i = 0u; i < 16u; ++i)
+                s_RadixLocalHist[segBase + i] += segPrefix;
+            GroupMemoryBarrierWithGroupSync();
+
+            [unroll]
+            for(uint k = 0u; k < 4u; ++k){
+                const uint i = localTid * 4u + k;
+                if(i < localN){
+                    const uint m = s_LbvhSortMorton[srcBase + i];
+                    const uint s = s_LbvhSortShape[srcBase + i];
+                    const uint nib = (m >> subShift) & 0xfu;
+                    const uint dst = s_RadixLocalHist[nib * NWB_PHYSICS_WORKGROUP_SIZE + localTid];
+                    s_RadixLocalHist[nib * NWB_PHYSICS_WORKGROUP_SIZE + localTid] = dst + 1u;
+                    s_LbvhSortMorton[dstBase + dst] = m;
+                    s_LbvhSortShape[dstBase + dst] = s;
+                }
+            }
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        for(uint i = localTid; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            const uint d = (s_LbvhSortMorton[i] >> shift) & 0xffu;
+            if(i == 0u || ((s_LbvhSortMorton[i - 1u] >> shift) & 0xffu) != d)
+                s_RadixAux[d] = i;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        for(uint i = localTid; i < localN; i += NWB_PHYSICS_WORKGROUP_SIZE){
+            const uint m = s_LbvhSortMorton[i];
+            const uint s = s_LbvhSortShape[i];
+            const uint d = (m >> shift) & 0xffu;
+            const uint dst = s_RadixHist[d] + (i - s_RadixAux[d]);
+            g_NwbPhysicsUintBuffers[dstMortonSlot][dst * 2u + 0u] = m;
+            g_NwbPhysicsUintBuffers[dstMortonSlot][dst * 2u + 1u] = s;
         }
         return;
     }
@@ -310,37 +505,43 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         if(tid >= itemCount || itemCount < 2u)
             return;
 
+        if(tid == 0u)
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][0u] = NWB_PHYSICS_INVALID_INDEX;
+
         const uint shapeIdx = g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 1u];
         const uint leafIdx = (itemCount - 1u) + tid;
         if(shapeIdx != NWB_PHYSICS_INVALID_INDEX){
             const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 0u].xyz;
             const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 1u].xyz;
-            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leafIdx].minLeft = float4(aMin, asfloat(shapeIdx));
-            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leafIdx].maxRight = float4(aMax, asfloat(shapeIdx));
+            g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][leafIdx].minLeft = float4(aMin, asfloat(shapeIdx));
+            g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][leafIdx].maxRight = float4(aMax, asfloat(shapeIdx));
         }
 
         if(tid + 1u >= itemCount)
             return;
 
         const int i = int(tid);
-        const int d = (nwbPhysicsLbvhClzDelta(i, i + 1, itemCount, mortonSlot) - nwbPhysicsLbvhClzDelta(i, i - 1, itemCount, mortonSlot) >= 0) ? 1 : -1;
-        const int deltaMin = nwbPhysicsLbvhClzDelta(i, i - d, itemCount, mortonSlot);
+        const uint ci = g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 0u];
+        const int dPlus = nwbPhysicsLbvhClzDelta(i, ci, i + 1, itemCount, mortonSlot);
+        const int dMinus = nwbPhysicsLbvhClzDelta(i, ci, i - 1, itemCount, mortonSlot);
+        const int d = (dPlus - dMinus >= 0) ? 1 : -1;
+        const int deltaMin = (d > 0) ? dMinus : dPlus;
         int lMax = 2;
-        while(nwbPhysicsLbvhClzDelta(i, i + lMax * d, itemCount, mortonSlot) > deltaMin)
+        while(nwbPhysicsLbvhClzDelta(i, ci, i + lMax * d, itemCount, mortonSlot) > deltaMin)
             lMax *= 2;
 
         int l = 0;
         for(int step = lMax / 2; step >= 1; step /= 2){
-            if(nwbPhysicsLbvhClzDelta(i, i + (l + step) * d, itemCount, mortonSlot) > deltaMin)
+            if(nwbPhysicsLbvhClzDelta(i, ci, i + (l + step) * d, itemCount, mortonSlot) > deltaMin)
                 l += step;
         }
         const int j = i + l * d;
-        const int deltaNode = nwbPhysicsLbvhClzDelta(i, j, itemCount, mortonSlot);
+        const int deltaNode = nwbPhysicsLbvhClzDelta(i, ci, j, itemCount, mortonSlot);
 
         int s = 0;
         int t = (l + 1) / 2;
         while(t >= 1){
-            if((s + t) < l && nwbPhysicsLbvhClzDelta(i, i + (s + t) * d, itemCount, mortonSlot) > deltaNode)
+            if((s + t) < l && nwbPhysicsLbvhClzDelta(i, ci, i + (s + t) * d, itemCount, mortonSlot) > deltaNode)
                 s += t;
             if(t == 1)
                 break;
@@ -353,10 +554,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         const uint leftChild = (first == gamma) ? (leafOffset + uint(gamma)) : uint(gamma);
         const uint rightChild = (last == (gamma + 1)) ? (leafOffset + uint(gamma + 1)) : uint(gamma + 1);
 
-        g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][tid].minLeft = float4(0.0f, 0.0f, 0.0f, asfloat(leftChild));
-        g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][tid].maxRight = float4(0.0f, 0.0f, 0.0f, asfloat(rightChild));
-        g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild].parentMeta.x = tid;
-        g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild].parentMeta.x = tid;
+        g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][tid].minLeft = float4(0.0f, 0.0f, 0.0f, asfloat(leftChild));
+        g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][tid].maxRight = float4(0.0f, 0.0f, 0.0f, asfloat(rightChild));
+        g_NwbPhysicsUintBuffers[lbvhMetaSlot][tid * 2u + 1u] = 0u;
+        g_NwbPhysicsUintBuffers[lbvhMetaSlot][leftChild * 2u + 0u] = tid;
+        g_NwbPhysicsUintBuffers[lbvhMetaSlot][rightChild * 2u + 0u] = tid;
         return;
     }
 
@@ -365,14 +567,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             return;
 
         uint cur = (itemCount - 1u) + tid;
-        uint parent = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][cur].parentMeta.x;
+        const NwbPhysicsGpuLbvhNode leafNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][cur];
+        float3 curMin = leafNode.minLeft.xyz;
+        float3 curMax = leafNode.maxRight.xyz;
+        uint parent = g_NwbPhysicsUintBuffers[lbvhMetaSlot][cur * 2u + 0u];
         bool firstLevel = true;
         while(parent != NWB_PHYSICS_INVALID_INDEX){
             if(!firstLevel)
                 DeviceMemoryBarrier();
             firstLevel = false;
             uint prevVisits = 0u;
-            InterlockedAdd(g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].parentMeta.z, 1u, prevVisits);
+            InterlockedAdd(g_NwbPhysicsUintBuffers[lbvhMetaSlot][parent * 2u + 1u], 1u, prevVisits);
             if(prevVisits == 0u)
                 break;
             DeviceMemoryBarrier();
@@ -380,18 +585,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             const NwbPhysicsGpuLbvhNode pNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent];
             const uint leftChild = asuint(pNode.minLeft.w);
             const uint rightChild = asuint(pNode.maxRight.w);
-            const float3 lMin = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild].minLeft.xyz;
-            const float3 lMax = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][leftChild].maxRight.xyz;
-            const float3 rMin = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild].minLeft.xyz;
-            const float3 rMax = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][rightChild].maxRight.xyz;
+            const uint sibling = (cur == leftChild) ? rightChild : leftChild;
+            const NwbPhysicsGpuLbvhNode sibNode = g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][sibling];
 
-            const float3 uMin = min(lMin, rMin);
-            const float3 uMax = max(lMax, rMax);
-            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].minLeft = float4(uMin, asfloat(leftChild));
-            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].maxRight = float4(uMax, asfloat(rightChild));
+            curMin = min(curMin, sibNode.minLeft.xyz);
+            curMax = max(curMax, sibNode.maxRight.xyz);
+            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].minLeft = float4(curMin, asfloat(leftChild));
+            g_NwbPhysicsLbvhNodeBuffers[lbvhNodeSlot][parent].maxRight = float4(curMax, asfloat(rightChild));
 
             cur = parent;
-            parent = pNode.parentMeta.x;
+            parent = g_NwbPhysicsUintBuffers[lbvhMetaSlot][parent * 2u + 0u];
         }
         return;
     }

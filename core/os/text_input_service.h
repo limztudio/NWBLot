@@ -46,7 +46,7 @@ protected:
 
 protected:
     [[nodiscard]] TextInputAdmission::Enum emitCommit(TextInputSessionToken token, AStringView text);
-    [[nodiscard]] TextInputAdmission::Enum emitPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, b8 caretVisible = true);
+    [[nodiscard]] TextInputAdmission::Enum emitPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, b8 caretVisible = true, Span<const TextInputPreeditClause> clauses = {});
     [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision, TextInputDeletionBasis::Enum basis);
     [[nodiscard]] b8 cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }
@@ -68,7 +68,8 @@ private:
     [[nodiscard]] TextInputAdmission::Enum admitEvent(
         TextInputSessionToken token, TextInputEventKind::Enum kind, AStringView text,
         usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, b8 caretVisible,
-        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
+        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret,
+        Span<const TextInputPreeditClause> clauses = {}
     );
     void clearEvents()noexcept;
     void invalidateSession()noexcept;
@@ -101,4 +102,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

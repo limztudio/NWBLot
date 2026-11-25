@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_mesh/system.adhd>
-#include <impl/ecs_csg/components.adhd>
+#include <impl/ecs_csg/frame_types.adhd>
 #include <impl/ecs_scene/components.adhd>
 #include <impl/ecs_render/optics/optical_scene.adhd>
 #include <impl/ecs_render/material/material_surface_lookup.adhd>
@@ -73,7 +73,8 @@ void TryAppendCoincidentOpticalVolumeCandidate(
     const auto mesh = meshSystem.resolveRenderableMeshStatus(entity);
     if(!mesh.has_value() || mesh.value().runtime || !mesh.value().mesh.valid())
         return;
-    if(world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity) || world.hasComponent<CsgReceiverComponent>(entity))
+    const Expected<CsgResolvedReceiver> csgReceiver = ResolveCsgReceiverComponent(world, entity);
+    if(csgReceiver.has_value() && csgReceiver.value().receiver.enabled)
         return;
 
     Optional<in MaterialInstanceComponent> materialInstance;

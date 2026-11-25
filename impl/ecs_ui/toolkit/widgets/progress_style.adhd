@@ -3,19 +3,32 @@
 
 
 #include "style.adhd"
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const f64 s_ProgressIndeterminateSegmentFraction = 0.3;
 const Name s_ProgressTrackRegionName = "progress.track";
 const Name s_ProgressFillRegionName = "progress.fill";
 const Name s_ProgressTrackFallbackRegionName = "scrollbar.track";
 const Name s_ProgressFillFallbackRegionName = "scrollbar.thumb.normal";
 
+enum<u8> ProgressOrientation{
+    Horizontal = 0u,
+    Vertical = 1u,
+    kCount
+}
+
 class ProgressOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;
+    public ProgressOrientation orientation = ProgressOrientation::Horizontal;
+    public b8 indeterminate = false;
+    public f64 indeterminatePhase = 0.0;
+    public StringView label = "";
+    public LayoutItemOptions layout;
 }
 
 class ProgressStyle{
@@ -26,12 +39,14 @@ class ProgressStyle{
     public Insets padding;
     public Color trackTint;
     public Color fillTint;
+    public Color text = s_StyleTextColor;
 }
 
 class ProgressMetrics{
     public Insets padding;
     public Point fillMinimum;
     public Point contentSize;
+    public ProgressOrientation orientation = ProgressOrientation::Horizontal;
 }
 
 class ProgressPlacement{
@@ -47,11 +62,14 @@ class ProgressFrame{
     public ProgressOptions options;
     public ProgressStyle style;
     public ProgressMetrics metrics;
+    public SharedTextLayout label;
+    public Rect labelBounds;
 }
 
 void ApplySkinPaletteToProgressStyle(in UiSkinPalette palette, mut ProgressStyle style){
     style.trackTint = ResolveUiSkinColor(palette, UiSkinColorRole::ProgressTrackTint);
     style.fillTint = ResolveUiSkinColor(palette, UiSkinColorRole::ProgressFillTint);
+    style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
 }
 
 b8 IsValidProgressMetrics(in ProgressMetrics metrics){
@@ -59,6 +77,7 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
         !IsValidUiPadding(metrics.padding)
         || !IsValidUiExtent(metrics.fillMinimum)
         || !IsValidUiExtent(metrics.contentSize)
+        || cast<u8>(metrics.orientation) > cast<u8>(ProgressOrientation::Vertical)
     )
         return false;
     const VectorDouble leading(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top));
@@ -79,11 +98,13 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
 Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
     if(
         !IsValidLayoutSize(options.width)
-        || !IsFinite(VectorDouble(cast<f64>(options.height)))
+        || !IsFinite(VectorDouble(cast<f64>(options.height), options.indeterminatePhase, 0.0, 0.0))
         || options.height < 0.0f
+        || cast<u8>(options.orientation) > cast<u8>(ProgressOrientation::Vertical)
         || !IsBoundedUiPadding(style.padding)
         || !IsValidUiColor(style.trackTint)
         || !IsValidUiColor(style.fillTint)
+        || !IsValidUiColor(style.text)
         || !IsFinite(VectorDouble(cast<f64>(density)))
         || density <= 0.0f
     )
@@ -97,6 +118,7 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
     ProgressMetrics candidate;
     candidate.padding = MaxUiPadding(style.padding, track.padding);
     candidate.fillMinimum = Point(fillMin.x, fillMin.y);
+    candidate.orientation = options.orientation;
     const VectorDouble leading(cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top), cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top));
     const VectorDouble trailing(cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom), cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom));
     const VectorDouble fillSize(cast<f64>(fillMin.x), cast<f64>(fillMin.y), cast<f64>(fillMin.x), cast<f64>(fillMin.y));
@@ -112,8 +134,8 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
     return candidate;
 }
 
-Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
-    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !IsFinite(VectorDouble(fraction)))
+Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction, in b8 indeterminate, in f64 indeterminatePhase){
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !IsFinite(VectorDouble(fraction, indeterminatePhase, 0.0, 0.0)))
         return MakeUnexpected(Failure());
     ProgressPlacement candidate;
     candidate.bounds = bounds;
@@ -125,18 +147,70 @@ Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in Progr
     if(!content.has_value())
         return MakeUnexpected(Failure());
     candidate.content = content.value();
-    const f64 normalized = UiSimdClampF64(fraction, 0.0, 1.0);
     candidate.fillReveal = candidate.content;
     candidate.fillCanvas = candidate.content;
+    const f64 contentX = cast<f64>(candidate.content.x);
+    const f64 contentY = cast<f64>(candidate.content.y);
+    const f64 contentW = cast<f64>(candidate.content.width);
+    const f64 contentH = cast<f64>(candidate.content.height);
+    if(indeterminate){
+        const f64 wrapped = indeterminatePhase - VectorDoubleFloor(VectorDouble(indeterminatePhase)).x;
+        f64 t = wrapped * 2.0;
+        if(wrapped > 0.5)
+            t = (1.0 - wrapped) * 2.0;
+        if(metrics.orientation == ProgressOrientation::Vertical){
+            f64 segH = 0.0;
+            if(contentH > 0.0)
+                segH = UiSimdMinF64(contentH, UiSimdMaxF64(contentH * s_ProgressIndeterminateSegmentFraction, cast<f64>(metrics.fillMinimum.y)));
+            const f64 segY = contentY + (contentH - segH) * (1.0 - t);
+            const Expected<Rect> seg = TryMakeUiRect(contentX, segY, contentW, segH, UiRectPrecision::EmptyPaint);
+            if(!seg.has_value())
+                return MakeUnexpected(Failure());
+            candidate.fillReveal = seg.value();
+            candidate.fillCanvas = seg.value();
+        }
+        else{
+            f64 segW = 0.0;
+            if(contentW > 0.0)
+                segW = UiSimdMinF64(contentW, UiSimdMaxF64(contentW * s_ProgressIndeterminateSegmentFraction, cast<f64>(metrics.fillMinimum.x)));
+            const f64 segX = contentX + (contentW - segW) * t;
+            const Expected<Rect> seg = TryMakeUiRect(segX, contentY, segW, contentH, UiRectPrecision::EmptyPaint);
+            if(!seg.has_value())
+                return MakeUnexpected(Failure());
+            candidate.fillReveal = seg.value();
+            candidate.fillCanvas = seg.value();
+        }
+        return candidate;
+    }
+    const f64 normalized = UiSimdClampF64(fraction, 0.0, 1.0);
+    if(metrics.orientation == ProgressOrientation::Vertical){
+        if(normalized == 0.0){
+            candidate.fillReveal.height = 0.0f;
+            candidate.fillCanvas.height = 0.0f;
+        }
+        else if(normalized != 1.0){
+            const f64 revealH = contentH * normalized;
+            const f64 revealY = contentY + (contentH - revealH);
+            const Expected<Rect> fillReveal = TryMakeUiRect(contentX, revealY, contentW, revealH, UiRectPrecision::EmptyPaint);
+            if(!fillReveal.has_value())
+                return MakeUnexpected(Failure());
+            candidate.fillReveal = fillReveal.value();
+            f64 canvasH = 0.0;
+            if(candidate.fillReveal.height != 0.0f)
+                canvasH = UiSimdMinF64(contentH, UiSimdMaxF64(cast<f64>(candidate.fillReveal.height), cast<f64>(metrics.fillMinimum.y)));
+            const f64 canvasY = contentY + (contentH - canvasH);
+            const Expected<Rect> fillCanvas = TryMakeUiRect(contentX, canvasY, contentW, canvasH, UiRectPrecision::EmptyPaint);
+            if(!fillCanvas.has_value())
+                return MakeUnexpected(Failure());
+            candidate.fillCanvas = fillCanvas.value();
+        }
+        return candidate;
+    }
     if(normalized == 0.0){
         candidate.fillReveal.width = 0.0f;
         candidate.fillCanvas.width = 0.0f;
     }
     else if(normalized != 1.0){
-        const f64 contentX = cast<f64>(candidate.content.x);
-        const f64 contentY = cast<f64>(candidate.content.y);
-        const f64 contentW = cast<f64>(candidate.content.width);
-        const f64 contentH = cast<f64>(candidate.content.height);
         const f64 revealW = contentW * normalized;
         const Expected<Rect> fillReveal = TryMakeUiRect(contentX, contentY, revealW, contentH, UiRectPrecision::EmptyPaint);
         if(!fillReveal.has_value())
@@ -151,6 +225,10 @@ Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in Progr
         candidate.fillCanvas = fillCanvas.value();
     }
     return candidate;
+}
+
+Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
+    return PlaceProgress(bounds, clip, metrics, fraction, false, 0.0);
 }
 
 

@@ -479,6 +479,7 @@ NWB_ADHD_GTEST(UiTextEditSession, DestructionReleasesServiceWithoutBorrowingTheD
 NWB_ADHD_GTEST(EcsUiUnwind, SystemUpdateAllocationFailureUnwindsAndDrainsCleanly, VerifyEcsUiUnwind_SystemUpdateAllocationFailureUnwindsAndDrainsCleanly)
 
 NWB_ADHD_GTEST(EcsUiUnwind, HostSessionAndClipboardAllocationFailurePreserveState, VerifyEcsUiUnwind_HostSessionAndClipboardAllocationFailurePreserveState)
+NWB_ADHD_GTEST(EcsUiBridge, PaintContextCursorAccessibilityAndGamepadForwarding, VerifyEcsUiBridge_PaintContextCursorAccessibilityAndGamepadForwarding)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

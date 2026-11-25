@@ -118,14 +118,16 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
         if(!parameters.has_value())
             continue;
 
-        const MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
+        MatrixSingle worldToShape = MatrixIdentity();
+        MatrixSingle shapeToWorld = MatrixIdentity();
+        receiverLookup.resolveCutterTransforms(record.value(), worldToShape, shapeToWorld);
+
         const auto bounds = shapeRegistry.buildShapeBounds(shapeType.value().id, shapeToWorld, parameters.value());
         if(!bounds.has_value())
             continue;
         if(boundsCanCull && bounds.value().finiteBounds && !AabbIntersects(receiverMin, receiverMax, LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))
             continue;
 
-        const MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
         CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
             record.value().entity,
             cutter.shapeType,

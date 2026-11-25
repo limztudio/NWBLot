@@ -17,6 +17,8 @@ class TypedComponentCookEntry<T>{
 }
 
 type TransformComponentCookEntry = TypedComponentCookEntry<TransformComponent>;
+type LocalTransformComponentCookEntry = TypedComponentCookEntry<LocalTransformComponent>;
+type SceneParentComponentCookEntry = TypedComponentCookEntry<SceneParentComponent>;
 type CameraComponentCookEntry = TypedComponentCookEntry<CameraComponent>;
 type LightComponentCookEntry = TypedComponentCookEntry<LightComponent>;
 
@@ -170,6 +172,36 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Nam
         entry.component = component.value();
     }
     if(!ValidateTransformComponentAssetPayload(entry.component, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<LocalTransformComponentCookEntry> ParseLocalTransformComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    LocalTransformComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_LocalTransformDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_LocalTransformDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        const Expected<LocalTransformComponent> component = ParseLocalTransformComponentData(file, value);
+        if(!component.has_value())
+            return MakeUnexpected(Failure());
+        entry.component = component.value();
+    }
+    if(!ValidateLocalTransformComponentAssetPayload(entry.component, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<SceneParentComponentCookEntry> ParseSceneParentComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    SceneParentComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_SceneParentDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_SceneParentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        const Expected<SceneParentComponent> component = ParseSceneParentComponentData(file, value);
+        if(!component.has_value())
+            return MakeUnexpected(Failure());
+        entry.component = component.value();
+    }
+    if(!ValidateSceneParentComponentAssetPayload(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }

@@ -4,6 +4,7 @@
 
 #include "linux_platform.h"
 #include "frame_detail.h"
+#include "linux_gamepad.h"
 #include "linux_x11_keyboard.h"
 
 #include <X11/XKBlib.h>
@@ -24,7 +25,9 @@
 #endif
 
 #include <core/common/log.h>
+#include <core/os/accessibility.h>
 #include <core/os/linux/x11/clipboard.h>
+#include <core/os/linux/x11/cursor.h>
 #include <core/os/linux/x11/text_input.h>
 
 #include <global/scope_exit.h>
@@ -357,6 +360,17 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& fram
     return service;
 }
 
+Expected<GlobalUniquePtr<ICursorService>> CreateX11FrameCursor(Frame& frame){
+    const auto& frameData = frame.data<Common::LinuxFrame>();
+    Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
+    FOUNDATION_FATAL_ASSERT(display && GetX11Window(frameData));
+    return CreateX11CursorService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
+}
+
+Expected<GlobalUniquePtr<IAccessibilityService>> CreateX11FrameAccessibility(Frame& frame){
+    return CreateAccessibilityService(frame.projectObjectArena(), nullptr);
+}
+
 void ShowX11Frame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     ::Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
@@ -368,6 +382,7 @@ void ShowX11Frame(Frame& frame){
 b8 RunX11Frame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
+    LinuxGamepadPoller gamepadPoller;
     Timer lateTime(TimerNow());
 
     for(;;){
@@ -418,6 +433,7 @@ b8 RunX11Frame(Frame& frame){
         const f32 delta = DurationInSeconds<f32>(currentTime, lateTime);
         lateTime = currentTime;
 
+        gamepadPoller.poll(frame.input(), delta, windowState->windowIsInFocus);
         if(!frame.update(delta))
             return false;
         if(frame.quitRequested())
@@ -467,4 +483,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

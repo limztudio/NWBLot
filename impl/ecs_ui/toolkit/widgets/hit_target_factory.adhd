@@ -8,6 +8,17 @@
 #include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
 #include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
 #include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tab_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/splitter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tree_view.adhd>
+#include <impl/ecs_ui/toolkit/widgets/data_table.adhd>
+#include <impl/ecs_ui/toolkit/widgets/menu_bar.adhd>
+#include <impl/ecs_ui/toolkit/widgets/toast.adhd>
+#include <impl/ecs_ui/toolkit/widgets/color_picker.adhd>
+#include <impl/ecs_ui/toolkit/widgets/drag_drop.adhd>
+#include <impl/ecs_ui/toolkit/widgets/rich_text.adhd>
+#include <impl/ecs_ui/toolkit/widgets/plot_canvas.adhd>
+#include <impl/ecs_ui/toolkit/widgets/dock_space.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +54,10 @@ class HitTargetFactory{
     }
 
     public HitTarget makeEditBoxHitTarget(in HitTarget baseTarget, in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu){
+        return this.makeEditBoxHitTarget(baseTarget, rectangle, clip, enabled, contextMenu, false);
+    }
+
+    public HitTarget makeEditBoxHitTarget(in HitTarget baseTarget, in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu, in b8 acceptTab){
         HitTarget target = baseTarget;
         target.rectangle = rectangle;
         target.clip = clip;
@@ -50,6 +65,9 @@ class HitTargetFactory{
         target.focusable = enabled;
         target.textEditable = enabled;
         target.contextMenu = contextMenu;
+        target.acceptTab = acceptTab;
+        if(enabled)
+            target.cursor = PointerCursor::TextInput;
         return target;
     }
 
@@ -62,6 +80,19 @@ class HitTargetFactory{
         in Point step,
         in ScrollViewportPlacement scrollbars
     ){
+        return this.makeTextAreaHitTarget(rectangle, clip, enabled, contextMenu, token, step, scrollbars, false);
+    }
+
+    public HitTarget makeTextAreaHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in Point step,
+        in ScrollViewportPlacement scrollbars,
+        in b8 acceptTab
+    ){
         HitTarget target;
         target.rectangle = rectangle;
         target.clip = clip;
@@ -69,6 +100,9 @@ class HitTargetFactory{
         target.focusable = enabled;
         target.textEditable = enabled;
         target.contextMenu = contextMenu;
+        target.acceptTab = acceptTab;
+        if(enabled)
+            target.cursor = PointerCursor::TextInput;
         target.control = token;
         target.scrollable = enabled;
         target.scrollStep = cast<f64>(step.y);
@@ -108,9 +142,13 @@ class HitTargetFactory{
         in f32 rowHeight,
         in f32 wheelRows,
         in ScrollPlacement placement,
+        in ScrollViewportPlacement scrollbars,
+        in ListOptions options,
         in u64 rowCount,
+        in b8 variableRowHeights,
         in b8 focusOnCommit
     ){
+        const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
         HitTarget host;
         host.rectangle = rectangle;
         host.clip = clip;
@@ -119,12 +157,60 @@ class HitTargetFactory{
         host.contextMenu = contextMenu;
         host.control = token;
         host.navigable = enabled;
+        host.horizontalNavigation = enabled && allowHorizontal && scrollbars.horizontal.maximum > 0.0;
         host.scrollable = enabled;
         host.scrollStep = cast<f64>(rowHeight) * cast<f64>(wheelRows);
-        host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, rowCount);
+        if(allowHorizontal)
+            host.scrollStepX = cast<f64>(options.wheelColumns);
+        if(variableRowHeights && placement.endRow > placement.firstRow)
+            host.pageRows = Max(cast<u64>(1u), placement.endRow - placement.firstRow);
+        else
+            host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, rowCount);
         host.gestureMaximum = placement.maxOffset;
+        host.gestureMaximumX = scrollbars.horizontal.maximum;
         host.focusOnCommit = focusOnCommit;
         return host;
+    }
+
+    public HitTarget makeListHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in f32 rowHeight,
+        in f32 wheelRows,
+        in ScrollPlacement placement,
+        in u64 rowCount,
+        in b8 focusOnCommit
+    ){
+        ScrollViewportPlacement defaultScrollbars;
+        defaultScrollbars.viewport = placement.viewport;
+        defaultScrollbars.contentClip = placement.contentClip;
+        defaultScrollbars.vertical.track = placement.track;
+        defaultScrollbars.vertical.thumb = placement.thumb;
+        defaultScrollbars.vertical.contentExtent = placement.contentHeight;
+        defaultScrollbars.vertical.viewportExtent = cast<f64>(placement.viewport.height);
+        defaultScrollbars.vertical.maximum = placement.maxOffset;
+        defaultScrollbars.vertical.offset = placement.offset;
+        defaultScrollbars.vertical.visible = placement.scrollbarVisible;
+        ListOptions defaultOptions;
+        defaultOptions.wheelRows = wheelRows;
+        return this.makeListHostHitTarget(
+            rectangle,
+            clip,
+            enabled,
+            contextMenu,
+            token,
+            rowHeight,
+            wheelRows,
+            placement,
+            defaultScrollbars,
+            defaultOptions,
+            rowCount,
+            false,
+            focusOnCommit
+        );
     }
 
     public HitTarget makeListRowHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 key){
@@ -182,7 +268,8 @@ class HitTargetFactory{
         host.enabled = interactive;
         host.focusable = interactive;
         host.navigable = interactive;
-        host.horizontalNavigation = interactive;
+        host.horizontalNavigation = interactive && placement.orientation == SliderOrientation::Horizontal;
+        host.horizontalOnlyNavigation = host.horizontalNavigation;
         host.contextMenu = contextMenu;
         host.control = token;
         host.focusOnCommit = focusOnCommit;
@@ -196,6 +283,7 @@ class HitTargetFactory{
         trackTarget.pointerGesture = true;
         trackTarget.gestureReference = placement.centerTravel;
         trackTarget.control = token;
+        trackTarget.cursor = PointerCursor::Hand;
         return trackTarget;
     }
 
@@ -207,6 +295,7 @@ class HitTargetFactory{
         thumbTarget.gestureReference = placement.travelBounds;
         thumbTarget.control = token;
         thumbTarget.value = BitCast<u64>(value);
+        thumbTarget.cursor = PointerCursor::Hand;
         return thumbTarget;
     }
 
@@ -216,6 +305,8 @@ class HitTargetFactory{
         title.clip = clip;
         title.gestureReference = windowBounds;
         title.pointerGesture = movable;
+        if(movable)
+            title.cursor = PointerCursor::Move;
         return title;
     }
 
@@ -228,12 +319,42 @@ class HitTargetFactory{
         return collapse;
     }
 
-    public HitTarget makeWindowResizeHitTarget(in Rect corner, in Rect clip, in Rect windowBounds){
+    public HitTarget makeWindowCloseHitTarget(in WindowState state, in WindowMetrics metrics, in Rect clip){
+        HitTarget closeTarget;
+        closeTarget.rectangle = ResolveWindowCloseBounds(state, metrics);
+        closeTarget.clip = clip;
+        closeTarget.focusable = true;
+        closeTarget.activatable = true;
+        return closeTarget;
+    }
+
+    public HitTarget makeWindowResizeHitTarget(in Rect corner, in Rect clip, in Rect windowBounds, in WindowResizeEdge edge){
         HitTarget target;
         target.rectangle = corner;
         target.clip = clip;
         target.gestureReference = windowBounds;
         target.pointerGesture = true;
+        switch(edge){
+        case WindowResizeEdge::Left:
+        case WindowResizeEdge::Right:
+            target.cursor = PointerCursor::ResizeEW;
+            break;
+        case WindowResizeEdge::Top:
+        case WindowResizeEdge::Bottom:
+            target.cursor = PointerCursor::ResizeNS;
+            break;
+        case WindowResizeEdge::TopLeft:
+        case WindowResizeEdge::BottomRight:
+            target.cursor = PointerCursor::ResizeNWSE;
+            break;
+        case WindowResizeEdge::TopRight:
+        case WindowResizeEdge::BottomLeft:
+            target.cursor = PointerCursor::ResizeNESW;
+            break;
+        default:
+            target.cursor = PointerCursor::ResizeNWSE;
+            break;
+        }
         return target;
     }
 
@@ -288,18 +409,6 @@ class HitTargetFactory{
         return target;
     }
 
-    public HitTarget makeListScrollbarTrackHitTarget(
-        in ScrollPlacement placement,
-        in Rect clip,
-        in ControlToken token
-    ){
-        HitTarget target;
-        target.rectangle = placement.track;
-        target.clip = clip;
-        target.control = token;
-        return target;
-    }
-
     public HitTarget makeListScrollbarThumbHitTarget(
         in ScrollPlacement placement,
         in Rect clip,
@@ -312,6 +421,71 @@ class HitTargetFactory{
         target.pointerGesture = placement.track.height > placement.thumb.height;
         target.gestureReference = placement.track;
         target.gestureMaximum = placement.maxOffset;
+        return target;
+    }
+
+    public HitTarget makeScrollAreaHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in Point wheelStep,
+        in ScrollViewportPlacement scrollbars
+    ){
+        const b8 hasScrollAxis = wheelStep.x > 0.0f || wheelStep.y > 0.0f;
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled && hasScrollAxis;
+        target.navigable = enabled && hasScrollAxis;
+        target.horizontalNavigation = enabled && wheelStep.x > 0.0f && scrollbars.horizontal.maximum > 0.0;
+        target.scrollable = enabled && hasScrollAxis;
+        target.contextMenu = contextMenu;
+        target.control = token;
+        target.scrollStep = cast<f64>(wheelStep.y);
+        target.scrollStepX = cast<f64>(wheelStep.x);
+        target.gestureMaximum = scrollbars.vertical.maximum;
+        target.gestureMaximumX = scrollbars.horizontal.maximum;
+        return target;
+    }
+
+    public HitTarget makeTabBarHostHitTarget(
+        in TabBarPlacement placement,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in b8 focusOnCommit
+    ){
+        HitTarget host;
+        host.rectangle = placement.bounds;
+        host.clip = placement.clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled;
+        host.horizontalOnlyNavigation = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeTabBarPartHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in ControlToken token,
+        in u64 key
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = key;
         return target;
     }
 
@@ -329,6 +503,391 @@ class HitTargetFactory{
             navigation.commandControl = commandControl;
         }
         return navigation;
+    }
+
+    public HitTarget makeSplitterHandleHitTarget(
+        in Rect handleRect,
+        in Rect fullBounds,
+        in Rect clip,
+        in SplitterOrientation orientation,
+        in b8 enabled,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = handleRect;
+        target.clip = clip;
+        target.gestureReference = fullBounds;
+        target.enabled = enabled;
+        target.focusable = enabled;
+        target.navigable = enabled;
+        target.horizontalNavigation = enabled && orientation == SplitterOrientation::Horizontal;
+        target.horizontalOnlyNavigation = target.horizontalNavigation;
+        target.pointerGesture = enabled;
+        if(enabled){
+            if(orientation == SplitterOrientation::Horizontal)
+                target.cursor = PointerCursor::ResizeEW;
+            else
+                target.cursor = PointerCursor::ResizeNS;
+        }
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeSpinBoxHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 canStep,
+        in b8 allowWheel,
+        in b8 contextMenu,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = canStep;
+        target.focusable = canStep;
+        target.navigable = canStep;
+        target.scrollable = canStep && allowWheel;
+        if(canStep && allowWheel)
+            target.gestureMaximum = 1.0;
+        target.scrollStep = 1.0;
+        target.contextMenu = contextMenu;
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeSpinBoxButtonHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 canStep,
+        in ControlToken token,
+        in u64 partValue
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = canStep;
+        target.activatable = canStep;
+        target.control = token;
+        target.value = partValue;
+        return target;
+    }
+
+    public HitTarget makeTreeHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in f32 rowHeight,
+        in TreeOptions options,
+        in ScrollPlacement placement,
+        in ScrollViewportPlacement scrollbars,
+        in u64 visibleRowCount,
+        in b8 focusOnCommit
+    ){
+        const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled;
+        host.scrollable = enabled;
+        host.scrollStep = cast<f64>(rowHeight) * cast<f64>(options.wheelRows);
+        if(allowHorizontal)
+            host.scrollStepX = cast<f64>(options.wheelColumns);
+        host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, visibleRowCount);
+        host.gestureMaximum = placement.maxOffset;
+        host.gestureMaximumX = scrollbars.horizontal.maximum;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeTreeToggleHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 nodeKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = nodeKey;
+        return target;
+    }
+
+    public HitTarget makeTableHostHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in b8 enabled,
+        in b8 contextMenu,
+        in ControlToken token,
+        in f32 rowHeight,
+        in TableOptions options,
+        in ScrollPlacement placement,
+        in ScrollViewportPlacement scrollbars,
+        in u64 rowCount,
+        in b8 focusOnCommit
+    ){
+        const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled && allowHorizontal && scrollbars.horizontal.maximum > 0.0;
+        host.scrollable = enabled;
+        host.scrollStep = cast<f64>(rowHeight) * cast<f64>(options.wheelRows);
+        if(allowHorizontal)
+            host.scrollStepX = cast<f64>(options.wheelColumns);
+        host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, rowCount);
+        host.gestureMaximum = placement.maxOffset;
+        host.gestureMaximumX = scrollbars.horizontal.maximum;
+        host.focusOnCommit = focusOnCommit;
+        return host;
+    }
+
+    public HitTarget makeTableHeaderHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 columnKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = columnKey;
+        return target;
+    }
+
+    public HitTarget makeTableResizeHitTarget(in Rect rectangle, in Rect clip, in Rect headerCell, in b8 enabled, in ControlToken token, in u64 columnKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.gestureReference = headerCell;
+        target.enabled = enabled;
+        target.pointerGesture = enabled;
+        if(enabled)
+            target.cursor = PointerCursor::ResizeEW;
+        target.control = token;
+        target.value = columnKey;
+        return target;
+    }
+
+    public HitTarget makeMenuBarHostHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in b8 focusOnCommit){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled;
+        host.focusOnCommit = enabled && focusOnCommit;
+        host.control = token;
+        return host;
+    }
+
+    public HitTarget makeMenuBarItemHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 menuKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = menuKey;
+        return target;
+    }
+
+    public HitTarget makeToastHostHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.control = token;
+        return host;
+    }
+
+    public HitTarget makeToastCloseHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 toastId){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = toastId;
+        return target;
+    }
+
+    public HitTarget makeColorPickerHostHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu, in ControlToken token){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.navigable = enabled;
+        host.horizontalNavigation = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        return host;
+    }
+
+    public HitTarget makeColorPickerPartHitTarget(in Rect partRect, in Rect clip, in b8 enabled, in ControlToken token){
+        HitTarget target;
+        target.rectangle = partRect;
+        target.clip = clip;
+        target.gestureReference = partRect;
+        target.enabled = enabled;
+        target.pointerGesture = enabled;
+        if(enabled)
+            target.cursor = PointerCursor::Crosshair;
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeDragSourceHitTarget(in Rect rectangle, in Rect clip, in b8 enabled){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        if(rectangle.width > 0.0f && rectangle.height > 0.0f)
+            target.gestureReference = rectangle;
+        target.enabled = enabled;
+        target.pointerGesture = enabled;
+        if(enabled)
+            target.cursor = PointerCursor::Grab;
+        return target;
+    }
+
+    public HitTarget makeHyperlinkHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.focusable = enabled;
+        target.activatable = enabled;
+        target.contextMenu = contextMenu;
+        if(enabled)
+            target.cursor = PointerCursor::Hand;
+        return target;
+    }
+
+    public HitTarget makeRichTextHostHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu, in ControlToken token){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.contextMenu = contextMenu;
+        host.control = token;
+        return host;
+    }
+
+    public HitTarget makeRichTextLinkHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 linkKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = linkKey;
+        if(enabled)
+            target.cursor = PointerCursor::Hand;
+        return target;
+    }
+
+    public HitTarget makePlotHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.contextMenu = contextMenu;
+        if(enabled)
+            target.cursor = PointerCursor::Crosshair;
+        return target;
+    }
+
+    public HitTarget makeCanvasHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 interactive, in b8 contextMenu, in ControlToken token){
+        HitTarget target;
+        const b8 active = enabled && interactive;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        if(rectangle.width > 0.0f && rectangle.height > 0.0f)
+            target.gestureReference = rectangle;
+        target.enabled = enabled;
+        target.focusable = active;
+        target.activatable = active;
+        target.pointerGesture = active;
+        target.scrollable = active;
+        target.scrollStep = 1.0;
+        target.scrollStepX = 1.0;
+        target.contextMenu = contextMenu;
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeDockSpaceHostHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token){
+        HitTarget host;
+        host.rectangle = rectangle;
+        host.clip = clip;
+        host.enabled = enabled;
+        host.focusable = enabled;
+        host.control = token;
+        return host;
+    }
+
+    public HitTarget makeDockSplitterHitTarget(
+        in Rect rectangle,
+        in Rect clip,
+        in Rect parentRect,
+        in DockSplitDirection splitDirection,
+        in b8 enabled,
+        in ControlToken token
+    ){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        if(parentRect.width > 0.0f && parentRect.height > 0.0f)
+            target.gestureReference = parentRect;
+        target.enabled = enabled;
+        target.pointerGesture = enabled;
+        if(enabled){
+            if(splitDirection == DockSplitDirection::Horizontal)
+                target.cursor = PointerCursor::ResizeEW;
+            else
+                target.cursor = PointerCursor::ResizeNS;
+        }
+        target.control = token;
+        return target;
+    }
+
+    public HitTarget makeDockTabHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 allowDrag, in ControlToken token, in u64 panelKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        if(rectangle.width > 0.0f && rectangle.height > 0.0f)
+            target.gestureReference = rectangle;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.pointerGesture = enabled && allowDrag;
+        if(enabled && allowDrag)
+            target.cursor = PointerCursor::Grab;
+        target.control = token;
+        target.value = panelKey;
+        return target;
+    }
+
+    public HitTarget makeDockTabCloseHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 panelKey){
+        HitTarget target;
+        target.rectangle = rectangle;
+        target.clip = clip;
+        target.enabled = enabled;
+        target.activatable = enabled;
+        target.control = token;
+        target.value = panelKey;
+        return target;
     }
 };
 

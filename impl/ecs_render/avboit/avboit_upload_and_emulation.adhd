@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 
 
@@ -259,6 +260,18 @@ Expected<AvboitGeometryPreparationResult> PrepareAvboitMaterialGeometry(mut GpuT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Name ResolveAvboitPhysicsTransformPatchPrefix(in AvboitGeometryPhase phase){
+    switch(phase){
+    case AvboitGeometryPhase::Extinction:
+        return Name("render.avboit.extinction.physics_patch");
+    case AvboitGeometryPhase::Accumulation:
+        return Name("render.avboit.accumulation.physics_patch");
+    case AvboitGeometryPhase::Occupancy:
+    default:
+        return Name("render.avboit.occupancy.physics_patch");
+    }
+}
+
 [cpp_unwind]
 Expected<b8> DeclareAvboitMaterialUploads(
     mut GpuTaskGraph graph,
@@ -299,6 +312,19 @@ Expected<b8> DeclareAvboitMaterialUploads(
 
         if(!AppendImmutableBufferUpload(graph, instanceBlob, inputs.resources.materialInstances, identities.instanceIdentity, identities.instanceLabel, inOutUploadTask)){
             warning("RendererSystem: could not declare AVBOIT material instance upload");
+            return MakeUnexpected(Failure());
+        }
+        if(!AppendInstanceTransformPatch(
+            inputs.instanceTransformPatchContributor,
+            instanceData,
+            inputs.resources.materialInstances,
+            inputs.frameBindings,
+            ResolveAvboitPhysicsTransformPatchPrefix(phase),
+            true,
+            graph,
+            inOutUploadTask
+        )){
+            warning("RendererSystem: could not declare AVBOIT physics transform patch");
             return MakeUnexpected(Failure());
         }
         if(!AppendImmutableBufferUpload(graph, materialTypedBlob, inputs.resources.materialTyped, identities.typedIdentity, identities.typedLabel, inOutUploadTask)){

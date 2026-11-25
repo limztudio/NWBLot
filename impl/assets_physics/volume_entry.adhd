@@ -28,11 +28,13 @@ class PhysicsColliderDepEntry{
     public AssetRef<Mesh> meshAsset;
     public AssetRef<PhysicsMaterialAsset> materialAsset;
     public AssetRef<ConvexHullAsset> convexHullAsset;
+    public AssetRef<CompoundHullAsset> compoundHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public AssetRef<HeightfieldAsset> heightfieldAsset;
     public Vector<AssetRef<Mesh>> extraMeshAssets;
     public Vector<AssetRef<PhysicsMaterialAsset>> extraMaterialAssets;
     public Vector<AssetRef<ConvexHullAsset>> extraConvexHullAssets;
+    public Vector<AssetRef<CompoundHullAsset>> extraCompoundHullAssets;
     public Vector<AssetRef<CollisionMeshAsset>> extraCollisionMeshAssets;
     public Vector<AssetRef<HeightfieldAsset>> extraHeightfieldAssets;
 }
@@ -116,6 +118,10 @@ Expected<PhysicsDepCheckEntry> ParseConvexHullDepEntry(in Name virtualPath, in P
     return ParsePhysicsDepEntryWithPrefix(virtualPath, file, value, s_ConvexHullDiagnosticPrefix, true);
 }
 
+Expected<PhysicsDepCheckEntry> ParseCompoundHullDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    return ParsePhysicsDepEntryWithPrefix(virtualPath, file, value, s_CompoundHullDiagnosticPrefix, true);
+}
+
 Expected<PhysicsDepCheckEntry> ParseCollisionMeshDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
     return ParsePhysicsDepEntryWithPrefix(virtualPath, file, value, s_CollisionMeshDiagnosticPrefix, true);
 }
@@ -154,6 +160,7 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
         !ReadOptionalColliderDepRef<Mesh>(file, value, "mesh_asset", entry.meshAsset)
         || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, value, "material_asset", entry.materialAsset)
         || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, value, "convex_hull_asset", entry.convexHullAsset)
+        || !ReadOptionalColliderDepRef<CompoundHullAsset>(file, value, "compound_hull_asset", entry.compoundHullAsset)
         || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, value, "collision_mesh_asset", entry.collisionMeshAsset)
         || !ReadOptionalColliderDepRef<HeightfieldAsset>(file, value, "heightfield_asset", entry.heightfieldAsset)
     )
@@ -165,11 +172,6 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
             return MakeUnexpected(Failure());
         }
         const Span<MetascriptValue> items = extraOpt.value().listView();
-        entry.extraMeshAssets.reserve(items.size());
-        entry.extraMaterialAssets.reserve(items.size());
-        entry.extraConvexHullAssets.reserve(items.size());
-        entry.extraCollisionMeshAssets.reserve(items.size());
-        entry.extraHeightfieldAssets.reserve(items.size());
         for(usize i = 0u; i < items.size(); ++i){
             in MetascriptValue item = items[i];
             if(!item.isMap()){
@@ -179,21 +181,30 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
             AssetRef<Mesh> extraMesh;
             AssetRef<PhysicsMaterialAsset> extraMat;
             AssetRef<ConvexHullAsset> extraHull;
+            AssetRef<CompoundHullAsset> extraCompoundHull;
             AssetRef<CollisionMeshAsset> extraCollisionMesh;
             AssetRef<HeightfieldAsset> extraHeightfield;
             if(
                 !ReadOptionalColliderDepRef<Mesh>(file, item, "mesh_asset", extraMesh)
                 || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, item, "material_asset", extraMat)
                 || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, item, "convex_hull_asset", extraHull)
+                || !ReadOptionalColliderDepRef<CompoundHullAsset>(file, item, "compound_hull_asset", extraCompoundHull)
                 || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, item, "collision_mesh_asset", extraCollisionMesh)
                 || !ReadOptionalColliderDepRef<HeightfieldAsset>(file, item, "heightfield_asset", extraHeightfield)
             )
                 return MakeUnexpected(Failure());
-            entry.extraMeshAssets.push_back(extraMesh);
-            entry.extraMaterialAssets.push_back(extraMat);
-            entry.extraConvexHullAssets.push_back(extraHull);
-            entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
-            entry.extraHeightfieldAssets.push_back(extraHeightfield);
+            if(extraMesh.valid())
+                entry.extraMeshAssets.push_back(extraMesh);
+            if(extraMat.valid())
+                entry.extraMaterialAssets.push_back(extraMat);
+            if(extraHull.valid())
+                entry.extraConvexHullAssets.push_back(extraHull);
+            if(extraCompoundHull.valid())
+                entry.extraCompoundHullAssets.push_back(extraCompoundHull);
+            if(extraCollisionMesh.valid())
+                entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
+            if(extraHeightfield.valid())
+                entry.extraHeightfieldAssets.push_back(extraHeightfield);
         }
     }
     return entry;
@@ -242,6 +253,7 @@ b8 CollectColliderAssetDependencies(
     in AssetRef<Mesh> meshAsset,
     in AssetRef<PhysicsMaterialAsset> materialAsset,
     in AssetRef<ConvexHullAsset> convexHullAsset,
+    in AssetRef<CompoundHullAsset> compoundHullAsset,
     in AssetRef<CollisionMeshAsset> collisionMeshAsset,
     in AssetRef<HeightfieldAsset> heightfieldAsset,
     mut ICookDependencyCollector collector
@@ -251,6 +263,8 @@ b8 CollectColliderAssetDependencies(
     if(materialAsset.valid() && !collector.addAssetDependency(materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
         return false;
     if(convexHullAsset.valid() && !collector.addAssetDependency(convexHullAsset.name(), ConvexHullAsset::AssetTypeName()))
+        return false;
+    if(compoundHullAsset.valid() && !collector.addAssetDependency(compoundHullAsset.name(), CompoundHullAsset::AssetTypeName()))
         return false;
     if(collisionMeshAsset.valid() && !collector.addAssetDependency(collisionMeshAsset.name(), CollisionMeshAsset::AssetTypeName()))
         return false;
@@ -264,10 +278,30 @@ b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mu
     if(!entryRes.has_value())
         return false;
     in PhysicsColliderDepEntry dep = entryRes.value();
-    if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.collisionMeshAsset, dep.heightfieldAsset, collector))
+    if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.compoundHullAsset, dep.collisionMeshAsset, dep.heightfieldAsset, collector))
         return false;
     for(usize i = 0u; i < dep.extraMeshAssets.size(); ++i){
-        if(!CollectColliderAssetDependencies(dep.extraMeshAssets[i], dep.extraMaterialAssets[i], dep.extraConvexHullAssets[i], dep.extraCollisionMeshAssets[i], dep.extraHeightfieldAssets[i], collector))
+        if(!collector.addAssetDependency(dep.extraMeshAssets[i].name(), Mesh::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraMaterialAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraMaterialAssets[i].name(), PhysicsMaterialAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraConvexHullAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraConvexHullAssets[i].name(), ConvexHullAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraCompoundHullAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraCompoundHullAssets[i].name(), CompoundHullAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraCollisionMeshAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraCollisionMeshAssets[i].name(), CollisionMeshAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraHeightfieldAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraHeightfieldAssets[i].name(), HeightfieldAsset::AssetTypeName()))
             return false;
     }
     return true;
@@ -415,6 +449,17 @@ b8 ExtractConvexHullDependencies(in CookDependencyItemContext context, mut ICook
     return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_ConvexHullDiagnosticPrefix, ParseConvexHullDepEntry).has_value();
 }
 
+[cook_entry("compound_hull", s_CompoundHullDiagnosticPrefix, ParseCompoundHullCookMetadata, document_and_value, log_failure)]
+Expected<CompoundHullAsset> CookCompoundHullVolumeEntry(in CompoundHullCookEntry entry){
+    CompoundHullAsset asset(entry.virtualPath);
+    asset.setHulls(entry.hulls);
+    return asset;
+}
+
+b8 ExtractCompoundHullDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsDepCheckEntry>(context, s_CompoundHullDiagnosticPrefix, ParseCompoundHullDepEntry).has_value();
+}
+
 [cook_entry("collision_mesh", s_CollisionMeshDiagnosticPrefix, ParseCollisionMeshCookMetadata, document_and_value, log_failure)]
 Expected<CollisionMeshAsset> CookCollisionMeshVolumeEntry(in CollisionMeshCookEntry entry){
     CollisionMeshAsset asset(entry.virtualPath);
@@ -455,6 +500,7 @@ b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry)
         && registry.registerType(PhysicsMaterialAsset::AssetTypeName(), ExtractPhysicsMaterialDependencies)
         && registry.registerType(CollisionLayerMatrixAsset::AssetTypeName(), ExtractCollisionLayerMatrixDependencies)
         && registry.registerType(ConvexHullAsset::AssetTypeName(), ExtractConvexHullDependencies)
+        && registry.registerType(CompoundHullAsset::AssetTypeName(), ExtractCompoundHullDependencies)
         && registry.registerType(CollisionMeshAsset::AssetTypeName(), ExtractCollisionMeshDependencies)
         && registry.registerType(HeightfieldAsset::AssetTypeName(), ExtractHeightfieldDependencies);
 }

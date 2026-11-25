@@ -68,6 +68,30 @@ Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize
     return range;
 }
 
+Expected<EditWordRange> ResolveEditLineRangeAt(in StringView text, in Span<usize> boundaries, in EditTextMode textMode, in usize position){
+    const usize requested = LowerBoundIndex(boundaries, position);
+    if(requested >= boundaries.size() || boundaries[requested] != position)
+        return MakeUnexpected(Failure());
+    if(text.empty())
+        return EditWordRange();
+    if(textMode == EditTextMode::SingleLine){
+        EditWordRange range;
+        range.begin = 0u;
+        range.end = text.size();
+        return range;
+    }
+    usize begin = position;
+    while(begin != 0u && text[begin - 1u] != '\n')
+        --begin;
+    usize end = position;
+    while(end < text.size() && text[end] != '\n')
+        ++end;
+    EditWordRange range;
+    range.begin = begin;
+    range.end = end;
+    return range;
+}
+
 Expected<usize> TryResolveEditMoveTarget(
     in StringView text,
     in Span<usize> boundaries,

@@ -98,8 +98,14 @@ Expected<usize> FindRouterPopupScopeIndex(in Span<PopupRecord> popups, in PopupT
 b8 IsTargetAllowedByRouterPopup(in Span<PopupRecord> popups, in HitTarget target){
     if(popups.empty())
         return !target.popup.widget.valid();
-    const PopupRecord top = popups[popups.size() - 1u];
-    return !top.closing && target.popup == top.scope.token;
+    for(usize index = popups.size(); index > 0u; --index){
+        const PopupRecord record = popups[index - 1u];
+        if(target.popup == record.scope.token)
+            return !record.closing;
+        if(IsPopupScopeBlockingOutside(record.scope))
+            return false;
+    }
+    return !target.popup.widget.valid();
 }
 
 b8 TryStageRouterPopups(in Span<PopupScope> scopes, in Span<PopupRecord> popups, mut Vector<PopupRecord> stagedPopups){

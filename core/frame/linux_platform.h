@@ -32,6 +32,8 @@ namespace FrameDetail{
 b8 InitX11Frame(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame);
+[[nodiscard]] Expected<GlobalUniquePtr<ICursorService>> CreateX11FrameCursor(Frame& frame);
+[[nodiscard]] Expected<GlobalUniquePtr<IAccessibilityService>> CreateX11FrameAccessibility(Frame& frame);
 void ShowX11Frame(Frame& frame);
 b8 RunX11Frame(Frame& frame);
 void CleanupX11Frame(Frame& frame)noexcept;
@@ -40,6 +42,8 @@ void CleanupX11Frame(Frame& frame)noexcept;
 b8 InitWaylandFrame(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& frame);
+[[nodiscard]] Expected<GlobalUniquePtr<ICursorService>> CreateWaylandFrameCursor(Frame& frame);
+[[nodiscard]] Expected<GlobalUniquePtr<IAccessibilityService>> CreateWaylandFrameAccessibility(Frame& frame);
 b8 ShowWaylandFrame(Frame& frame);
 b8 RunWaylandFrame(Frame& frame);
 void CleanupWaylandFrame(Frame& frame)noexcept;
@@ -65,4 +69,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

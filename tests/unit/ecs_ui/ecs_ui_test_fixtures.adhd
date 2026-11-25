@@ -43,6 +43,9 @@ class FakeTextInput : QueuedTextInputService{
     public TextInputAdmission preedit(in StringView text, in usize anchor, in usize caret, in b8 visible){
         return this.emitPreedit(this.activeSession(), text, anchor, caret, visible);
     }
+    public TextInputAdmission preedit(in StringView text, in usize anchor, in usize caret, in b8 visible, in Span<TextInputPreeditClause> clauses){
+        return this.emitPreedit(this.activeSession(), text, anchor, caret, visible, clauses);
+    }
     public TextInputAdmission erase(in usize before, in usize after, in u64 revision, in TextInputDeletionBasis basis){
         return this.emitDeleteSurrounding(this.activeSession(), before, after, revision, basis);
     }
@@ -78,6 +81,73 @@ class FakeClipboard : QueuedClipboardService{
     }
     public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{
         StartEcsUiFakeClipboardRequest(this, token, operation, text);
+    }
+}
+
+class FakeCursor : TrackedCursorService{
+    [cpp_base(TrackedCursorService, storage)]
+    public FakeCursor(mut HeapStorage storage){}
+
+    public Array<CursorShape, 64u> history;
+    public u32 historyCount = 0u;
+    public b8 rejectApply = false;
+
+    public CursorCapabilities capabilities()const override{
+        CursorCapabilities caps;
+        caps.setShape = true;
+        caps.hide = true;
+        caps.backend = CursorBackend::Win32;
+        return caps;
+    }
+
+    public b8 applyNativeCursor(in CursorShape shape)override{
+        if(this.rejectApply)
+            return false;
+        if(this.historyCount < 64u)
+            this.history[this.historyCount] = shape;
+        ++this.historyCount;
+        return true;
+    }
+}
+
+class FakeAccessibility : TrackedAccessibilityService{
+    [cpp_base(TrackedAccessibilityService, storage)]
+    public FakeAccessibility(mut HeapStorage storage){}
+
+    public u64 lastVersion = 0u;
+    public u64 lastFocusedId = 0u;
+    public usize lastNodeCount = 0u;
+    public f32 lastScaleX = 0.0f;
+    public f32 lastScaleY = 0.0f;
+    public Vector<AccessibilityNodeData> publishedNodes;
+    public String publishedText;
+    public Vector<String> announcements;
+
+    public AccessibilityCapabilities capabilities()const override{
+        AccessibilityCapabilities caps;
+        caps.tree = true;
+        caps.announcements = true;
+        caps.actions = true;
+        caps.backend = AccessibilityBackend::Win32Uia;
+        return caps;
+    }
+
+    public b8 pushAction(in u64 targetId, in AccessibilityActionKind kind, in f64 numericValue){
+        AccessibilityActionEvent ev;
+        ev.targetId = targetId;
+        ev.kind = kind;
+        ev.numericValue = numericValue;
+        return this.enqueueAction(ev);
+    }
+
+    [cpp_unwind]
+    public void onTreePublished(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY)override{
+        RecordEcsUiFakeA11yTree(this, nodes, textStorage, focusedId, version, scaleX, scaleY);
+    }
+
+    [cpp_unwind]
+    public void onAnnouncement(in StringView text, in AccessibilityLiveMode politeness)override{
+        RecordEcsUiFakeA11yAnnouncement(this, text, politeness);
     }
 }
 
@@ -238,6 +308,26 @@ void StartEcsUiFakeClipboardRequest(mut FakeClipboard self, in ClipboardRequestT
     }
 }
 
+[cpp_unwind]
+void RecordEcsUiFakeA11yTree(mut FakeAccessibility self, in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY){
+    self.lastVersion = version;
+    self.lastFocusedId = focusedId;
+    self.lastNodeCount = nodes.size();
+    self.lastScaleX = scaleX;
+    self.lastScaleY = scaleY;
+    self.publishedNodes.clear();
+    for(usize index = 0u; index < nodes.size(); ++index)
+        self.publishedNodes.push_back(nodes[index]);
+    self.publishedText.assign(textStorage);
+}
+
+[cpp_unwind]
+void RecordEcsUiFakeA11yAnnouncement(mut FakeAccessibility self, in StringView text, in AccessibilityLiveMode politeness){
+    String msg;
+    msg.assign(text);
+    self.announcements.push_back(msg);
+}
+
 b8 PrepareEcsUiEditView(in EditModel model, mut TextLayoutBuilder layoutBuilder, mut EditBoxView view){
     if(!view.snapshot(model)){
         return false;
@@ -296,6 +386,7 @@ b8 PublishEcsUiEditBox(mut UiEditBoxHostTests self, mut EditModel model, in Edit
     target.focusable = options.enabled;
     target.pointerGesture = options.enabled;
     target.textEditable = true;
+    target.acceptTab = options.acceptTab;
     return self.m_context.addTarget(self.m_widget, target);
 }
 

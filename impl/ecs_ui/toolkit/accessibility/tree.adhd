@@ -1,0 +1,233 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SliceAccessibleText(in String storage, in u32 offset, in u32 length){
+    if(length == 0u)
+        return StringView();
+    const StringView view = StringView(storage);
+    const usize start = cast<usize>(offset);
+    const usize count = cast<usize>(length);
+    if(start > view.size() || count > view.size() - start)
+        return StringView();
+    return view.substr(start, count);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AccessibleTree : NoCopy{
+    private Vector<AccessibilityNodeData> m_stagedNodes;
+    private String m_stagedText;
+    private HashMap<u64, usize> m_stagedLookup;
+    private Vector<AccessibleAnnouncement> m_stagedAnnouncements;
+    private String m_stagedAnnouncementText;
+
+    private Vector<AccessibilityNodeData> m_nodes;
+    private String m_text;
+    private HashMap<u64, usize> m_lookup;
+    private Vector<AccessibleAnnouncement> m_announcements;
+    private String m_announcementText;
+    private u64 m_generation = 0u;
+    private WidgetId m_focusedId;
+    private WidgetId m_hoveredId;
+    private WidgetId m_pressedId;
+
+    public void beginFrame(){
+        this.m_stagedNodes.clear();
+        this.m_stagedText.clear();
+        this.m_stagedLookup.clear();
+        this.m_stagedAnnouncements.clear();
+        this.m_stagedAnnouncementText.clear();
+    }
+
+    public void reset(){
+        this.beginFrame();
+        this.m_nodes.clear();
+        this.m_text.clear();
+        this.m_lookup.clear();
+        this.m_announcements.clear();
+        this.m_announcementText.clear();
+        this.m_generation = 0u;
+        this.m_focusedId = WidgetId();
+        this.m_hoveredId = WidgetId();
+        this.m_pressedId = WidgetId();
+    }
+
+    [cpp_unwind]
+    public b8 addNode(in AccessibleNodeDesc desc){
+        if(!desc.id.valid() || desc.role >= AccessibilityRole::kCount || desc.liveMode > AccessibilityLiveMode::Assertive)
+            return false;
+        if(!IsValidUiRect(desc.bounds))
+            return false;
+        if(!IsFinite(VectorDouble(desc.numericValue, desc.numericMin, desc.numericMax, desc.numericStep)))
+            return false;
+        if(this.m_stagedNodes.size() >= s_AccessibilityMaxNodes)
+            return false;
+        if(this.m_stagedLookup.find(desc.id.value) != this.m_stagedLookup.end())
+            return false;
+        const usize textNeeded = desc.name.size() + desc.description.size() + desc.valueText.size();
+        if(textNeeded > s_AccessibilityMaxTextBytes || this.m_stagedText.size() > s_AccessibilityMaxTextBytes - textNeeded)
+            return false;
+
+        AccessibilityNodeData node;
+        node.id = desc.id.value;
+        if(desc.parentId.valid() && desc.parentId != desc.id)
+            node.parentId = desc.parentId.value;
+        node.role = desc.role;
+        node.liveMode = desc.liveMode;
+        node.stateBits = desc.stateBits;
+        node.actionBits = desc.actionBits;
+        node.x = desc.bounds.x;
+        node.y = desc.bounds.y;
+        node.width = desc.bounds.width;
+        node.height = desc.bounds.height;
+        node.numericValue = desc.numericValue;
+        node.numericMin = desc.numericMin;
+        node.numericMax = desc.numericMax;
+        node.numericStep = desc.numericStep;
+        node.positionInSet = desc.positionInSet;
+        node.setSize = desc.setSize;
+        node.level = desc.level;
+
+        if(!desc.name.empty()){
+            node.nameOffset = cast<u32>(this.m_stagedText.size());
+            node.nameLength = cast<u32>(desc.name.size());
+            this.m_stagedText.append(desc.name);
+        }
+        if(!desc.description.empty()){
+            node.descriptionOffset = cast<u32>(this.m_stagedText.size());
+            node.descriptionLength = cast<u32>(desc.description.size());
+            this.m_stagedText.append(desc.description);
+        }
+        if(!desc.valueText.empty()){
+            node.valueOffset = cast<u32>(this.m_stagedText.size());
+            node.valueLength = cast<u32>(desc.valueText.size());
+            this.m_stagedText.append(desc.valueText);
+        }
+
+        const usize index = this.m_stagedNodes.size();
+        this.m_stagedNodes.push_back(node);
+        this.m_stagedLookup.try_emplace(node.id, index);
+        return true;
+    }
+
+    [cpp_unwind]
+    public b8 announce(in StringView text, in AccessibilityLiveMode liveMode){
+        if(text.empty() || liveMode == AccessibilityLiveMode::Off || liveMode > AccessibilityLiveMode::Assertive)
+            return false;
+        if(this.m_stagedAnnouncements.size() >= s_AccessibleMaxAnnouncements)
+            return false;
+        if(text.size() > s_AccessibilityMaxTextBytes || this.m_stagedAnnouncementText.size() > s_AccessibilityMaxTextBytes - text.size())
+            return false;
+
+        AccessibleAnnouncement entry;
+        entry.textOffset = cast<u32>(this.m_stagedAnnouncementText.size());
+        entry.textLength = cast<u32>(text.size());
+        entry.liveMode = liveMode;
+        this.m_stagedAnnouncementText.append(text);
+        this.m_stagedAnnouncements.push_back(entry);
+        return true;
+    }
+
+    public void commit(in u64 generation, in WidgetId focusedId, in WidgetId hoveredId, in WidgetId pressedId){
+        this.m_nodes.swap(this.m_stagedNodes);
+        this.m_text.swap(this.m_stagedText);
+        this.m_lookup.swap(this.m_stagedLookup);
+        this.m_announcements.swap(this.m_stagedAnnouncements);
+        this.m_announcementText.swap(this.m_stagedAnnouncementText);
+        this.beginFrame();
+        this.m_generation = generation;
+        this.updateInteractionState(focusedId, hoveredId, pressedId);
+    }
+
+    public void updateInteractionState(in WidgetId focusedId, in WidgetId hoveredId, in WidgetId pressedId){
+        this.m_focusedId = focusedId;
+        this.m_hoveredId = hoveredId;
+        this.m_pressedId = pressedId;
+        const u32 dynamicBits = s_AccessibilityStateFocused | s_AccessibilityStateHovered | s_AccessibilityStatePressed;
+        for(mut AccessibilityNodeData node : this.m_nodes){
+            node.stateBits &= ~dynamicBits;
+            if(focusedId.valid() && node.id == focusedId.value)
+                node.stateBits |= s_AccessibilityStateFocused;
+            if(hoveredId.valid() && node.id == hoveredId.value)
+                node.stateBits |= s_AccessibilityStateHovered;
+            if(pressedId.valid() && node.id == pressedId.value)
+                node.stateBits |= s_AccessibilityStatePressed;
+        }
+    }
+
+    public u64 generation()const{ return this.m_generation; }
+    public WidgetId focusedId()const{ return this.m_focusedId; }
+    public WidgetId hoveredId()const{ return this.m_hoveredId; }
+    public WidgetId pressedId()const{ return this.m_pressedId; }
+    public in Vector<AccessibilityNodeData> nodes()const{ return this.m_nodes; }
+    public StringView textStorage()const{ return StringView(this.m_text); }
+    public usize nodeCount()const{ return this.m_nodes.size(); }
+    public in AccessibilityNodeData nodeAt(in usize index)const{ return this.m_nodes[index]; }
+
+    public Optional<in AccessibilityNodeData> findNode(in WidgetId id)const{
+        if(!id.valid())
+            return Optional<in AccessibilityNodeData>();
+        const auto found = this.m_lookup.find(id.value);
+        if(found == this.m_lookup.end())
+            return Optional<in AccessibilityNodeData>();
+        const usize idx = found.value();
+        if(idx >= this.m_nodes.size())
+            return Optional<in AccessibilityNodeData>();
+        return Optional<in AccessibilityNodeData>(this.m_nodes[idx]);
+    }
+
+    public StringView nodeName(in AccessibilityNodeData node)const{
+        return SliceAccessibleText(this.m_text, node.nameOffset, node.nameLength);
+    }
+
+    public StringView nodeDescription(in AccessibilityNodeData node)const{
+        return SliceAccessibleText(this.m_text, node.descriptionOffset, node.descriptionLength);
+    }
+
+    public StringView nodeValue(in AccessibilityNodeData node)const{
+        return SliceAccessibleText(this.m_text, node.valueOffset, node.valueLength);
+    }
+
+    public usize announcementCount()const{ return this.m_announcements.size(); }
+    public in AccessibleAnnouncement announcementAt(in usize index)const{ return this.m_announcements[index]; }
+
+    public StringView announcementText(in AccessibleAnnouncement entry)const{
+        return SliceAccessibleText(this.m_announcementText, entry.textOffset, entry.textLength);
+    }
+
+    public WidgetId hitTest(in Point position)const{
+        if(!IsFinite(VectorSingle(position.x, position.y, 0.0f, 0.0f)))
+            return WidgetId();
+        for(usize index = this.m_nodes.size(); index > 0u; --index){
+            in AccessibilityNodeData node = this.m_nodes[index - 1u];
+            if((node.stateBits & s_AccessibilityStateOffscreen) != 0u)
+                continue;
+            if(node.width <= 0.0f || node.height <= 0.0f)
+                continue;
+            Rect bounds;
+            bounds.x = node.x;
+            bounds.y = node.y;
+            bounds.width = node.width;
+            bounds.height = node.height;
+            if(UiRectContainsPoint(bounds, position)){
+                WidgetId id;
+                id.value = node.id;
+                return id;
+            }
+        }
+        return WidgetId();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

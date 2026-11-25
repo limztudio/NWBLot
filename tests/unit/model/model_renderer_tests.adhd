@@ -59,7 +59,64 @@ void VerifyModelRendererOwnerOverridesSurvivePoolGrowth(){
     EXPECT_TRUE(relocated);
 }
 
+void VerifyModelRendererOpticalFieldsNoEmptyMaterialInstanceAndRuntimeSync(){
+    EcsTestWorld context = EcsTestWorld();
+    Entity owner = context.world.createEntity();
+    mut RendererComponent ownerRenderer = owner.addComponent<RendererComponent>();
+    ownerRenderer.material = AssetRef<Material>(s_ModelFixtureNameObject);
+    ownerRenderer.visible = false;
+    ownerRenderer.opticalVolumeCoincidence = OpticalVolumeCoincidence::SharedGroup;
+    ownerRenderer.opticalVolumeGroup = Name("tests/model/optical_group");
+    ownerRenderer.opticalVolumePriority = 5;
+    ownerRenderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedPriority;
+    ownerRenderer.opticalMediumPriority = -3;
+
+    Entity child = context.world.createEntity();
+    mut ModelObjectComponent obj = child.addComponent<ModelObjectComponent>();
+    obj.owner = owner.id();
+    obj.kind = ModelObjectKind::StaticMesh;
+
+    ApplyModelObjectRenderer(owner.id(), AssetRef<Material>(), context.world, child);
+
+    ASSERT_TRUE(child.hasComponent<RendererComponent>());
+    in RendererComponent childRenderer = child.getComponent<RendererComponent>();
+    EXPECT_EQ(childRenderer.material.name(), s_ModelFixtureNameObject);
+    EXPECT_FALSE(childRenderer.visible);
+    EXPECT_EQ(childRenderer.opticalVolumeCoincidence, OpticalVolumeCoincidence::SharedGroup);
+    EXPECT_EQ(childRenderer.opticalVolumeGroup, Name("tests/model/optical_group"));
+    EXPECT_EQ(childRenderer.opticalVolumePriority, 5);
+    EXPECT_EQ(childRenderer.opticalBoundaryMode, OpticalBoundaryMode::ClosedPriority);
+    EXPECT_EQ(childRenderer.opticalMediumPriority, -3);
+    EXPECT_FALSE(child.hasComponent<MaterialInstanceComponent>());
+
+    {
+        mut RendererComponent editedOwner = owner.getComponent<RendererComponent>();
+        editedOwner.visible = true;
+        editedOwner.opticalVolumePriority = 11;
+        mut MaterialInstanceComponent ownerMi = owner.addComponent<MaterialInstanceComponent>(Name("tests/model/iface"));
+        ownerMi.revision = 3u;
+        MaterialInstanceParameter p;
+        p.parameterName = Name("block.tint");
+        ownerMi.overrides.push_back(p);
+    }
+    SyncModelObjectRenderers(context.world);
+    EXPECT_TRUE(child.getComponent<RendererComponent>().visible);
+    EXPECT_EQ(child.getComponent<RendererComponent>().opticalVolumePriority, 11);
+    ASSERT_TRUE(child.hasComponent<MaterialInstanceComponent>());
+    EXPECT_EQ(child.getComponent<MaterialInstanceComponent>().revision, 3u);
+    ASSERT_EQ(child.getComponent<MaterialInstanceComponent>().overrides.size(), 1u);
+
+    const Name defaultMatName = Name("tests/model/default_mat");
+    obj.defaultMaterial = defaultMatName;
+    owner.getComponent<RendererComponent>().material.reset();
+    owner.removeComponent<MaterialInstanceComponent>();
+    SyncModelObjectRenderers(context.world);
+    EXPECT_EQ(child.getComponent<RendererComponent>().material.name(), defaultMatName);
+    EXPECT_FALSE(child.hasComponent<MaterialInstanceComponent>());
+}
+
 NWB_ADHD_GTEST(ModelRenderer, OwnerOverridesSurviveMaterialComponentPoolGrowth, VerifyModelRendererOwnerOverridesSurvivePoolGrowth)
+NWB_ADHD_GTEST(ModelRenderer, OpticalFieldsNoEmptyMaterialInstanceAndRuntimeSync, VerifyModelRendererOpticalFieldsNoEmptyMaterialInstanceAndRuntimeSync)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -57,11 +57,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     if(exportMode == NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER){
         const uint baseIdx = dstIdx * strideFloat4;
-        const float4 oldTrans = g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 1u];
-        const float4 oldScale = g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 2u];
         g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 0u] = rot;
-        g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 1u] = float4(origin, oldTrans.w);
-        g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 2u] = float4(b.scalePad.xyz, oldScale.w);
+        g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 1u].xyz = origin;
+        g_NwbPhysicsFloat4Buffers[outSlot][baseIdx + 2u].xyz = b.scalePad.xyz;
         return;
     }
 

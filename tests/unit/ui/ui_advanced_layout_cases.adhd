@@ -1,0 +1,685 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type UiAdvancedLayoutTests = WidgetFixture;
+const u32 s_UiAdvancedLayoutQuietNaNF32Bits = 0x7fc00000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+LayoutNodeDesc MakeAdvLayoutBox(in LayoutDirection direction, in LayoutSize width, in LayoutSize height){
+    LayoutNodeDesc description;
+    description.direction = direction;
+    description.width = width;
+    description.height = height;
+    return description;
+}
+
+LayoutNodeDesc MakeAdvFixedLeaf(in f32 width, in f32 height){
+    return MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Fixed, width),
+        LayoutSize(LayoutSizePolicy::Fixed, height)
+    );
+}
+
+void VerifyUiAdvancedLayoutTests_MinMaxConstraintsStretchRedistributionMarginAndAspectRatio(mut UiAdvancedLayoutTests self){
+    LayoutTree tree;
+    Array<LayoutNodeDesc, 12u> invalidDescriptions;
+    invalidDescriptions[0u].minWidth = 50.0f;
+    invalidDescriptions[0u].maxWidth = 30.0f;
+    invalidDescriptions[1u].minHeight = 40.0f;
+    invalidDescriptions[1u].maxHeight = 20.0f;
+    invalidDescriptions[2u].minWidth = -1.0f;
+    invalidDescriptions[3u].maxWidth = bit_cast<f32>(s_UiAdvancedLayoutQuietNaNF32Bits);
+    invalidDescriptions[4u].margin = Insets(-1.0f, 0.0f, 0.0f, 0.0f);
+    invalidDescriptions[5u].aspectRatio = -0.5f;
+    invalidDescriptions[6u].crossGap = -2.0f;
+    invalidDescriptions[7u].gridColumns = 0u;
+    invalidDescriptions[8u].gridColumnSpan = 0u;
+    invalidDescriptions[9u].gridRowSpan = 0u;
+    invalidDescriptions[10u].alignItems = bit_cast<LayoutAlign>(u8(99u));
+    invalidDescriptions[11u].justifyContent = bit_cast<LayoutJustify>(u8(99u));
+    for(in LayoutNodeDesc bad : invalidDescriptions){
+        tree.reset();
+        EXPECT_FALSE(tree.addNode(s_LayoutNoParent, bad).has_value());
+    }
+
+    tree.reset();
+    LayoutNodeDesc rootDesc = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f)
+    );
+    rootDesc.padding = Insets(10.0f, 10.0f, 10.0f, 10.0f);
+    const Expected<u32> rootRes = tree.addNode(s_LayoutNoParent, rootDesc);
+    ASSERT_TRUE(rootRes.has_value());
+    const u32 root = rootRes.value();
+
+    LayoutNodeDesc cappedStretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 20.0f)
+    );
+    cappedStretch.maxWidth = 60.0f;
+    cappedStretch.margin = Insets(5.0f, 2.0f, 5.0f, 4.0f);
+    const Expected<u32> childARes = tree.addNode(root, cappedStretch);
+    ASSERT_TRUE(childARes.has_value());
+    const u32 childA = childARes.value();
+
+    const LayoutNodeDesc freeStretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 20.0f)
+    );
+    const Expected<u32> childBRes = tree.addNode(root, freeStretch);
+    ASSERT_TRUE(childBRes.has_value());
+    const u32 childB = childBRes.value();
+
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 220.0f, 80.0f)));
+    ExpectUiRect(tree.box(childA).value().rectangle, Rect(15.0f, 12.0f, 60.0f, 20.0f));
+    ExpectUiRect(tree.box(childB).value().rectangle, Rect(80.0f, 10.0f, 130.0f, 20.0f));
+
+    tree.reset();
+    const Expected<u32> minRootRes = tree.addNode(
+        s_LayoutNoParent,
+        MakeAdvLayoutBox(LayoutDirection::Row, LayoutSize(LayoutSizePolicy::Stretch, 1.0f), LayoutSize(LayoutSizePolicy::Stretch, 1.0f))
+    );
+    ASSERT_TRUE(minRootRes.has_value());
+    const u32 minRoot = minRootRes.value();
+    LayoutNodeDesc minClampStretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 10.0f)
+    );
+    minClampStretch.minWidth = 70.0f;
+    const LayoutNodeDesc minFreeStretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 10.0f)
+    );
+    const Expected<u32> minChildARes = tree.addNode(minRoot, minClampStretch);
+    const Expected<u32> minChildBRes = tree.addNode(minRoot, minFreeStretch);
+    ASSERT_TRUE(minChildARes.has_value());
+    ASSERT_TRUE(minChildBRes.has_value());
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 100.0f, 40.0f)));
+    ExpectUiRect(tree.box(minChildARes.value()).value().rectangle, Rect(0.0f, 0.0f, 70.0f, 10.0f));
+    ExpectUiRect(tree.box(minChildBRes.value()).value().rectangle, Rect(70.0f, 0.0f, 30.0f, 10.0f));
+
+    tree.reset();
+    LayoutNodeDesc arRoot = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f)
+    );
+    arRoot.gap = 10.0f;
+    const Expected<u32> arParentRes = tree.addNode(s_LayoutNoParent, arRoot);
+    ASSERT_TRUE(arParentRes.has_value());
+    const u32 arParent = arParentRes.value();
+
+    LayoutNodeDesc arFixedW = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Fixed, 100.0f),
+        LayoutSize(LayoutSizePolicy::Content, 0.0f)
+    );
+    arFixedW.aspectRatio = 2.0f;
+    const Expected<u32> ar0Res = tree.addNode(arParent, arFixedW);
+
+    LayoutNodeDesc arFixedH = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Content, 0.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 40.0f)
+    );
+    arFixedH.aspectRatio = 1.5f;
+    const Expected<u32> ar1Res = tree.addNode(arParent, arFixedH);
+
+    LayoutNodeDesc arStretchMaxH = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Content, 0.0f)
+    );
+    arStretchMaxH.aspectRatio = 2.0f;
+    arStretchMaxH.maxHeight = 40.0f;
+    const Expected<u32> ar2Res = tree.addNode(arParent, arStretchMaxH);
+
+    ASSERT_TRUE(ar0Res.has_value());
+    ASSERT_TRUE(ar1Res.has_value());
+    ASSERT_TRUE(ar2Res.has_value());
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 380.0f, 120.0f)));
+    ExpectUiRect(tree.box(ar0Res.value()).value().rectangle, Rect(0.0f, 0.0f, 100.0f, 50.0f));
+    ExpectUiRect(tree.box(ar1Res.value()).value().rectangle, Rect(110.0f, 0.0f, 60.0f, 40.0f));
+    ExpectUiRect(tree.box(ar2Res.value()).value().rectangle, Rect(180.0f, 0.0f, 80.0f, 40.0f));
+}
+
+void VerifyUiAdvancedLayoutTests_AlignItemsAlignSelfJustifyContentAndFlexWrapHeightPropagation(mut UiAdvancedLayoutTests self){
+    LayoutTree tree;
+    Array<LayoutJustify, 6u> modes;
+    modes[0u] = LayoutJustify::Start;
+    modes[1u] = LayoutJustify::Center;
+    modes[2u] = LayoutJustify::End;
+    modes[3u] = LayoutJustify::SpaceBetween;
+    modes[4u] = LayoutJustify::SpaceAround;
+    modes[5u] = LayoutJustify::SpaceEvenly;
+
+    Array<f32, 6u> expectedX0;
+    expectedX0[0u] = 0.0f;
+    expectedX0[1u] = 45.0f;
+    expectedX0[2u] = 90.0f;
+    expectedX0[3u] = 0.0f;
+    expectedX0[4u] = 22.5f;
+    expectedX0[5u] = 30.0f;
+
+    Array<f32, 6u> expectedX1;
+    expectedX1[0u] = 30.0f;
+    expectedX1[1u] = 75.0f;
+    expectedX1[2u] = 120.0f;
+    expectedX1[3u] = 120.0f;
+    expectedX1[4u] = 97.5f;
+    expectedX1[5u] = 90.0f;
+
+    for(u32 mi = 0u; mi < modes.size(); ++mi){
+        tree.reset();
+        LayoutNodeDesc rDesc = MakeAdvLayoutBox(
+            LayoutDirection::Row,
+            LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+            LayoutSize(LayoutSizePolicy::Stretch, 1.0f)
+        );
+        rDesc.gap = 10.0f;
+        rDesc.justifyContent = modes[mi];
+        const u32 root = tree.addNode(s_LayoutNoParent, rDesc).value();
+        const u32 c0 = tree.addNode(root, MakeAdvFixedLeaf(20.0f, 10.0f)).value();
+        const u32 c1 = tree.addNode(root, MakeAdvFixedLeaf(20.0f, 10.0f)).value();
+        ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 140.0f, 30.0f)));
+        EXPECT_FLOAT_EQ(tree.box(c0).value().rectangle.x, expectedX0[mi]);
+        EXPECT_FLOAT_EQ(tree.box(c1).value().rectangle.x, expectedX1[mi]);
+    }
+
+    tree.reset();
+    LayoutNodeDesc alignRoot = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f)
+    );
+    alignRoot.alignItems = LayoutAlign::Center;
+    const u32 aRoot = tree.addNode(s_LayoutNoParent, alignRoot).value();
+    const u32 aAuto = tree.addNode(aRoot, MakeAdvFixedLeaf(20.0f, 20.0f)).value();
+    LayoutNodeDesc startLeaf = MakeAdvFixedLeaf(20.0f, 20.0f);
+    startLeaf.alignSelf = LayoutAlignSelf::Start;
+    const u32 aStart = tree.addNode(aRoot, startLeaf).value();
+    LayoutNodeDesc endLeaf = MakeAdvFixedLeaf(20.0f, 20.0f);
+    endLeaf.alignSelf = LayoutAlignSelf::End;
+    const u32 aEnd = tree.addNode(aRoot, endLeaf).value();
+    LayoutNodeDesc stretchLeaf;
+    stretchLeaf.direction = LayoutDirection::Leaf;
+    stretchLeaf.width = LayoutSize(LayoutSizePolicy::Fixed, 20.0f);
+    stretchLeaf.alignSelf = LayoutAlignSelf::Stretch;
+    const u32 aStretch = tree.addNode(aRoot, stretchLeaf).value();
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 200.0f, 60.0f)));
+    ExpectUiRect(tree.box(aAuto).value().rectangle, Rect(0.0f, 20.0f, 20.0f, 20.0f));
+    ExpectUiRect(tree.box(aStart).value().rectangle, Rect(20.0f, 0.0f, 20.0f, 20.0f));
+    ExpectUiRect(tree.box(aEnd).value().rectangle, Rect(40.0f, 40.0f, 20.0f, 20.0f));
+    ExpectUiRect(tree.box(aStretch).value().rectangle, Rect(60.0f, 0.0f, 20.0f, 60.0f));
+
+    tree.reset();
+    LayoutNodeDesc colDesc = MakeAdvLayoutBox(
+        LayoutDirection::Column,
+        LayoutSize(LayoutSizePolicy::Fixed, 100.0f),
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f)
+    );
+    colDesc.gap = 6.0f;
+    const u32 col = tree.addNode(s_LayoutNoParent, colDesc).value();
+    LayoutNodeDesc wrapRowDesc = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Content, 0.0f)
+    );
+    wrapRowDesc.flexWrap = true;
+    wrapRowDesc.gap = 10.0f;
+    wrapRowDesc.hasCrossGap = true;
+    wrapRowDesc.crossGap = 4.0f;
+    const u32 wrapRow = tree.addNode(col, wrapRowDesc).value();
+    const u32 w0 = tree.addNode(wrapRow, MakeAdvFixedLeaf(45.0f, 20.0f)).value();
+    const u32 w1 = tree.addNode(wrapRow, MakeAdvFixedLeaf(45.0f, 20.0f)).value();
+    const u32 w2 = tree.addNode(wrapRow, MakeAdvFixedLeaf(45.0f, 20.0f)).value();
+    const u32 siblingAfter = tree.addNode(col, MakeAdvFixedLeaf(50.0f, 15.0f)).value();
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 200.0f, 200.0f)));
+    ExpectUiRect(tree.box(wrapRow).value().rectangle, Rect(0.0f, 0.0f, 100.0f, 44.0f));
+    ExpectUiRect(tree.box(w0).value().rectangle, Rect(0.0f, 0.0f, 45.0f, 20.0f));
+    ExpectUiRect(tree.box(w1).value().rectangle, Rect(55.0f, 0.0f, 45.0f, 20.0f));
+    ExpectUiRect(tree.box(w2).value().rectangle, Rect(0.0f, 24.0f, 45.0f, 20.0f));
+    ExpectUiRect(tree.box(siblingAfter).value().rectangle, Rect(0.0f, 50.0f, 50.0f, 15.0f));
+
+    tree.reset();
+    LayoutNodeDesc scrollWrap = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Fixed, 100.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 30.0f)
+    );
+    scrollWrap.flexWrap = true;
+    scrollWrap.scrollable = true;
+    scrollWrap.horizontalScrollbar = ScrollbarPolicy::Never;
+    scrollWrap.verticalScrollbar = ScrollbarPolicy::Auto;
+    scrollWrap.scrollbarThickness = 10.0f;
+    scrollWrap.gap = 4.0f;
+    const u32 swRoot = tree.addNode(s_LayoutNoParent, scrollWrap).value();
+    const u32 sw0 = tree.addNode(swRoot, MakeAdvFixedLeaf(44.0f, 20.0f)).value();
+    const u32 sw1 = tree.addNode(swRoot, MakeAdvFixedLeaf(44.0f, 20.0f)).value();
+    const u32 sw2 = tree.addNode(swRoot, MakeAdvFixedLeaf(44.0f, 20.0f)).value();
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 100.0f, 30.0f)));
+    EXPECT_FLOAT_EQ(tree.box(swRoot).value().content.width, 90.0f);
+    EXPECT_FLOAT_EQ(tree.box(swRoot).value().contentSize.y, 68.0f);
+    ExpectUiRect(tree.box(sw0).value().rectangle, Rect(0.0f, 0.0f, 44.0f, 20.0f));
+    ExpectUiRect(tree.box(sw1).value().rectangle, Rect(0.0f, 24.0f, 44.0f, 20.0f));
+    ExpectUiRect(tree.box(sw2).value().rectangle, Rect(0.0f, 48.0f, 44.0f, 20.0f));
+}
+
+void VerifyUiAdvancedLayoutTests_GridAutoPlacementSpansStretchTracksAndScrollableGrid(mut UiAdvancedLayoutTests self){
+    LayoutTree tree;
+    LayoutNodeDesc gridDesc = MakeAdvLayoutBox(
+        LayoutDirection::Grid,
+        LayoutSize(LayoutSizePolicy::Fixed, 180.0f),
+        LayoutSize(LayoutSizePolicy::Content, 0.0f)
+    );
+    gridDesc.gridColumns = 3u;
+    gridDesc.gap = 10.0f;
+    gridDesc.hasCrossGap = true;
+    gridDesc.crossGap = 6.0f;
+    const u32 grid = tree.addNode(s_LayoutNoParent, gridDesc).value();
+
+    const u32 g0 = tree.addNode(grid, MakeAdvFixedLeaf(40.0f, 20.0f)).value();
+    LayoutNodeDesc span2Stretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 20.0f)
+    );
+    span2Stretch.gridColumnSpan = 2u;
+    const u32 g1 = tree.addNode(grid, span2Stretch).value();
+    LayoutNodeDesc tallFirstCol = MakeAdvFixedLeaf(40.0f, 46.0f);
+    tallFirstCol.gridRowSpan = 2u;
+    const u32 g2 = tree.addNode(grid, tallFirstCol).value();
+    LayoutNodeDesc col1Stretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 20.0f)
+    );
+    const u32 g3 = tree.addNode(grid, col1Stretch).value();
+    LayoutNodeDesc col2Stretch = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 2.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 20.0f)
+    );
+    const u32 g4 = tree.addNode(grid, col2Stretch).value();
+    LayoutNodeDesc span2SkippedRow2 = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Stretch, 1.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 18.0f)
+    );
+    span2SkippedRow2.gridColumnSpan = 2u;
+    const u32 g5 = tree.addNode(grid, span2SkippedRow2).value();
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 300.0f, 300.0f)));
+    ExpectUiRect(tree.box(g0).value().rectangle, Rect(0.0f, 0.0f, 40.0f, 20.0f));
+    ExpectUiRect(tree.box(g1).value().rectangle, Rect(50.0f, 0.0f, 130.0f, 20.0f));
+    ExpectUiRect(tree.box(g2).value().rectangle, Rect(0.0f, 26.0f, 40.0f, 46.0f));
+    ExpectUiRect(tree.box(g3).value().rectangle, Rect(50.0f, 26.0f, 40.0f, 20.0f));
+    ExpectUiRect(tree.box(g4).value().rectangle, Rect(100.0f, 26.0f, 80.0f, 20.0f));
+    ExpectUiRect(tree.box(g5).value().rectangle, Rect(50.0f, 53.0f, 130.0f, 18.0f));
+
+    ScrollAreaState scrollState;
+    ScrollAreaOptions saOpts;
+    saOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 130.0f);
+    saOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    saOpts.direction = LayoutDirection::Grid;
+    saOpts.gridColumns = 2u;
+    saOpts.gap = 4.0f;
+    saOpts.hasCrossGap = true;
+    saOpts.crossGap = 6.0f;
+    saOpts.horizontalScrollbar = ScrollbarPolicy::Never;
+    saOpts.verticalScrollbar = ScrollbarPolicy::Auto;
+
+    WidgetOptions cellOpts;
+    cellOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+    cellOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 30.0f);
+
+    const WidgetId gridScrollId = RequireUiWidgetId(self.id("outer_grid", "panel"), "grid_scroll");
+    const WidgetId b0Id = RequireUiWidgetId(gridScrollId, "b0");
+    const WidgetId b1Id = RequireUiWidgetId(gridScrollId, "b1");
+    const WidgetId b2Id = RequireUiWidgetId(gridScrollId, "b2");
+    const WidgetId b3Id = RequireUiWidgetId(gridScrollId, "b3");
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 300.0f, 200.0f)));
+    ASSERT_TRUE(self.m_builder.beginGrid("outer_grid", 2u));
+    ContainerOptions spanOpts;
+    spanOpts.layout.gridColumnSpan = 2u;
+    spanOpts.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    ASSERT_TRUE(self.m_builder.beginRow("header_row", spanOpts));
+    EXPECT_FALSE(self.m_builder.button("hdr_btn", "Header", cellOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.beginScrollArea("grid_scroll", scrollState, saOpts));
+    EXPECT_FALSE(self.m_builder.button("b0", "A", cellOpts));
+    EXPECT_FALSE(self.m_builder.button("b1", "B", cellOpts));
+    EXPECT_FALSE(self.m_builder.button("b2", "C", cellOpts));
+    EXPECT_FALSE(self.m_builder.button("b3", "D", cellOpts));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    const auto b0 = self.tryTarget(b0Id);
+    const auto b1 = self.tryTarget(b1Id);
+    const auto b2 = self.tryTarget(b2Id);
+    const auto b3 = self.tryTarget(b3Id);
+    ASSERT_TRUE(b0.has_value() && b1.has_value() && b2.has_value() && b3.has_value());
+    EXPECT_FLOAT_EQ(b1.value().rectangle.x, b0.value().rectangle.x + 44.0f);
+    EXPECT_FLOAT_EQ(b2.value().rectangle.y, b0.value().rectangle.y + 36.0f);
+    EXPECT_FLOAT_EQ(b3.value().rectangle.x, b2.value().rectangle.x + 44.0f);
+    EXPECT_FLOAT_EQ(b3.value().rectangle.y, b2.value().rectangle.y);
+    EXPECT_TRUE(scrollState.scrollbars().vertical.visible);
+    EXPECT_NEAR(scrollState.scrollbars().vertical.maximum, 6.0, 0.01);
+}
+
+void VerifyUiAdvancedLayoutTests_AbsoluteAnchorAndPinInsetsWithOverflowClippingAndScroll(mut UiAdvancedLayoutTests self){
+    LayoutTree tree;
+    LayoutNodeDesc rootDesc = MakeAdvLayoutBox(
+        LayoutDirection::Row,
+        LayoutSize(LayoutSizePolicy::Fixed, 200.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 100.0f)
+    );
+    rootDesc.padding = Insets(10.0f, 10.0f, 10.0f, 10.0f);
+    rootDesc.gap = 8.0f;
+    const u32 root = tree.addNode(s_LayoutNoParent, rootDesc).value();
+
+    const u32 flowA = tree.addNode(root, MakeAdvFixedLeaf(40.0f, 20.0f)).value();
+
+    LayoutNodeDesc badgeTopRight = MakeAdvFixedLeaf(20.0f, 12.0f);
+    badgeTopRight.positionMode = LayoutPositionMode::Absolute;
+    badgeTopRight.anchor = LayoutAnchor::TopRight;
+    badgeTopRight.absoluteOffset = Point(-2.0f, 4.0f);
+    const u32 absTopRight = tree.addNode(root, badgeTopRight).value();
+
+    const u32 flowC = tree.addNode(root, MakeAdvFixedLeaf(40.0f, 20.0f)).value();
+
+    LayoutNodeDesc pinnedBottom = MakeAdvLayoutBox(
+        LayoutDirection::Leaf,
+        LayoutSize(LayoutSizePolicy::Content, 0.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 16.0f)
+    );
+    pinnedBottom.positionMode = LayoutPositionMode::Absolute;
+    pinnedBottom.pinLeft = true;
+    pinnedBottom.pinRight = true;
+    pinnedBottom.pinBottom = true;
+    pinnedBottom.absoluteInsets = Insets(5.0f, 0.0f, 5.0f, 4.0f);
+    const u32 absPinned = tree.addNode(root, pinnedBottom).value();
+
+    LayoutNodeDesc centerDot = MakeAdvFixedLeaf(20.0f, 20.0f);
+    centerDot.positionMode = LayoutPositionMode::Absolute;
+    centerDot.anchor = LayoutAnchor::Center;
+    const u32 absCenter = tree.addNode(root, centerDot).value();
+
+    LayoutNodeDesc overflowRight = MakeAdvFixedLeaf(20.0f, 10.0f);
+    overflowRight.positionMode = LayoutPositionMode::Absolute;
+    overflowRight.pinRight = true;
+    overflowRight.absoluteInsets = Insets(0.0f, 0.0f, -10.0f, 0.0f);
+    const u32 absOverflow = tree.addNode(root, overflowRight).value();
+
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 200.0f, 100.0f)));
+    ExpectUiRect(tree.box(flowA).value().rectangle, Rect(10.0f, 10.0f, 40.0f, 20.0f));
+    ExpectUiRect(tree.box(flowC).value().rectangle, Rect(58.0f, 10.0f, 40.0f, 20.0f));
+    ExpectUiRect(tree.box(absTopRight).value().rectangle, Rect(168.0f, 14.0f, 20.0f, 12.0f));
+    ExpectUiRect(tree.box(absPinned).value().rectangle, Rect(15.0f, 70.0f, 170.0f, 16.0f));
+    ExpectUiRect(tree.box(absCenter).value().rectangle, Rect(90.0f, 40.0f, 20.0f, 20.0f));
+    ExpectUiRect(tree.box(absOverflow).value().rectangle, Rect(180.0f, 10.0f, 20.0f, 10.0f));
+    ExpectUiRect(tree.box(absOverflow).value().clip, Rect(180.0f, 10.0f, 10.0f, 10.0f));
+
+    tree.reset();
+    LayoutNodeDesc scrollRootDesc = MakeAdvLayoutBox(
+        LayoutDirection::Column,
+        LayoutSize(LayoutSizePolicy::Fixed, 100.0f),
+        LayoutSize(LayoutSizePolicy::Fixed, 50.0f)
+    );
+    scrollRootDesc.scrollable = true;
+    scrollRootDesc.horizontalScrollbar = ScrollbarPolicy::Never;
+    scrollRootDesc.verticalScrollbar = ScrollbarPolicy::Auto;
+    scrollRootDesc.scrollOffset = Point(0.0f, 12.0f);
+    const u32 sRoot = tree.addNode(s_LayoutNoParent, scrollRootDesc).value();
+    const u32 sChild = tree.addNode(sRoot, MakeAdvFixedLeaf(50.0f, 100.0f)).value();
+    LayoutNodeDesc sAbs = MakeAdvFixedLeaf(10.0f, 10.0f);
+    sAbs.positionMode = LayoutPositionMode::Absolute;
+    sAbs.absoluteOffset = Point(4.0f, 8.0f);
+    const u32 sAbsChild = tree.addNode(sRoot, sAbs).value();
+    ASSERT_TRUE(tree.arrange(Rect(0.0f, 0.0f, 100.0f, 50.0f)));
+    ExpectUiRect(tree.box(sChild).value().rectangle, Rect(0.0f, -12.0f, 50.0f, 100.0f));
+    ExpectUiRect(tree.box(sAbsChild).value().rectangle, Rect(4.0f, -4.0f, 10.0f, 10.0f));
+}
+
+void VerifyUiAdvancedLayoutTests_PerNodeZIndexReordersPaintAndHitTestingAcrossContainersScrollAreasWindowsAndPopups(mut UiAdvancedLayoutTests self){
+    WidgetOptions backOpts;
+    backOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    backOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    backOpts.layout.zIndex = -2;
+
+    WidgetOptions highOpts;
+    highOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    highOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    highOpts.layout.zIndex = 10;
+
+    WidgetOptions midOpts;
+    midOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    midOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    midOpts.layout.zIndex = 0;
+
+    const WidgetId ovId = self.id("ov", "panel");
+    const WidgetId backId = RequireUiWidgetId(ovId, "back_btn");
+    const WidgetId highId = RequireUiWidgetId(ovId, "high_btn");
+    const WidgetId midId = RequireUiWidgetId(ovId, "mid_btn");
+
+    ContainerOptions lowGroupOpts;
+    lowGroupOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    lowGroupOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    lowGroupOpts.layout.zIndex = 0;
+
+    ContainerOptions highGroupOpts;
+    highGroupOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    highGroupOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    highGroupOpts.layout.zIndex = 1;
+
+    WidgetOptions innerVeryHighOpts = highOpts;
+    innerVeryHighOpts.layout.zIndex = 100;
+    WidgetOptions outerGroupLowChildOpts = highOpts;
+    outerGroupLowChildOpts.layout.zIndex = -50;
+    const WidgetId stackCtxOvId = self.id("stack_ctx_ov", "panel");
+    const WidgetId innerHighId = RequireUiWidgetId(RequireUiWidgetId(stackCtxOvId, "low_group"), "inner_high");
+    const WidgetId outerWinsId = RequireUiWidgetId(RequireUiWidgetId(stackCtxOvId, "high_group"), "outer_wins");
+
+    ASSERT_TRUE(self.panel(1u, "panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginOverlay("ov"));
+    EXPECT_FALSE(self.m_builder.button("high_btn", "High", highOpts));
+    EXPECT_FALSE(self.m_builder.button("back_btn", "Back", backOpts));
+    EXPECT_FALSE(self.m_builder.button("mid_btn", "Mid", midOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.beginOverlay("stack_ctx_ov"));
+    ASSERT_TRUE(self.m_builder.beginOverlay("low_group", lowGroupOpts));
+    EXPECT_FALSE(self.m_builder.button("inner_high", "InnerHigh", innerVeryHighOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.beginOverlay("high_group", highGroupOpts));
+    EXPECT_FALSE(self.m_builder.button("outer_wins", "OuterWins", outerGroupLowChildOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    const auto backTarget = self.tryTarget(backId);
+    const auto midTarget = self.tryTarget(midId);
+    const auto highTarget = self.tryTarget(highId);
+    const auto innerHighTarget = self.tryTarget(innerHighId);
+    const auto outerWinsTarget = self.tryTarget(outerWinsId);
+    ASSERT_TRUE(backTarget.has_value() && midTarget.has_value() && highTarget.has_value());
+    ASSERT_TRUE(innerHighTarget.has_value() && outerWinsTarget.has_value());
+    EXPECT_LT(backTarget.value().paintOrder, midTarget.value().paintOrder);
+    EXPECT_LT(midTarget.value().paintOrder, highTarget.value().paintOrder);
+    EXPECT_LT(innerHighTarget.value().paintOrder, outerWinsTarget.value().paintOrder);
+
+    self.click(Point(highTarget.value().rectangle.x + 20.0f, highTarget.value().rectangle.y + 20.0f));
+    self.click(Point(outerWinsTarget.value().rectangle.x + 20.0f, outerWinsTarget.value().rectangle.y + 20.0f));
+
+    ASSERT_TRUE(self.panel(2u, "panel", Rect(10.0f, 10.0f, 360.0f, 280.0f)));
+    ASSERT_TRUE(self.m_builder.beginOverlay("ov"));
+    EXPECT_TRUE(self.m_builder.button("high_btn", "High", highOpts));
+    EXPECT_FALSE(self.m_builder.button("back_btn", "Back", backOpts));
+    EXPECT_FALSE(self.m_builder.button("mid_btn", "Mid", midOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.beginOverlay("stack_ctx_ov"));
+    ASSERT_TRUE(self.m_builder.beginOverlay("low_group", lowGroupOpts));
+    EXPECT_FALSE(self.m_builder.button("inner_high", "InnerHigh", innerVeryHighOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.beginOverlay("high_group", highGroupOpts));
+    EXPECT_TRUE(self.m_builder.button("outer_wins", "OuterWins", outerGroupLowChildOpts));
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.m_builder.endContainer());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+
+    ScrollAreaState scrollState;
+    ScrollAreaOptions saOpts;
+    saOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 150.0f);
+    saOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    saOpts.direction = LayoutDirection::Overlay;
+    saOpts.wheelStep = 18.0f;
+    saOpts.layout.zIndex = 2;
+
+    WidgetOptions saChildLow;
+    saChildLow.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+    saChildLow.height = LayoutSize(LayoutSizePolicy::Fixed, 140.0f);
+    saChildLow.layout.zIndex = -1;
+
+    WidgetOptions saChildHigh;
+    saChildHigh.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+    saChildHigh.height = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+    saChildHigh.layout.zIndex = 5;
+
+    const WidgetId saId = self.id("sa", "panel");
+    const WidgetId saHighId = RequireUiWidgetId(saId, "sa_high");
+    const WidgetId vThumbId = RequireUiWidgetId(saId, s_WidgetPartScrollVerticalThumb);
+
+    ASSERT_TRUE(self.panel(3u, "panel", Rect(10.0f, 10.0f, 220.0f, 160.0f)));
+    ASSERT_TRUE(self.m_builder.beginScrollArea("sa", scrollState, saOpts));
+    EXPECT_FALSE(self.m_builder.button("sa_high", "Top", saChildHigh));
+    EXPECT_FALSE(self.m_builder.button("sa_low", "Bot", saChildLow));
+    ASSERT_TRUE(self.m_builder.endScrollArea());
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+
+    const auto saHighTarget = self.tryTarget(saHighId);
+    const auto vThumbTarget = self.tryTarget(vThumbId);
+    ASSERT_TRUE(saHighTarget.has_value() && vThumbTarget.has_value());
+    EXPECT_LT(saHighTarget.value().paintOrder, vThumbTarget.value().paintOrder);
+
+    InputEvent wheel;
+    wheel.type = InputEventType::PointerWheel;
+    wheel.position = Point(saHighTarget.value().rectangle.x + 10.0f, saHighTarget.value().rectangle.y + 10.0f);
+    wheel.scrollY = -1.0;
+    EXPECT_TRUE(self.send(wheel).pointerConsumed);
+
+    WindowState backWin;
+    WindowOptions backWinOpts;
+    backWinOpts.initialBounds = Rect(20.0f, 20.0f, 180.0f, 140.0f);
+    WindowState frontWin;
+    WindowOptions frontWinOpts;
+    frontWinOpts.initialBounds = Rect(20.0f, 20.0f, 180.0f, 140.0f);
+    PopupState popupState;
+    popupState.open();
+    PopupOptions popupOpts;
+    popupOpts.anchor = Rect(30.0f, 30.0f, 10.0f, 10.0f);
+    popupOpts.size = Point(150.0f, 90.0f);
+
+    const WidgetId backWinBtnId = self.id("bw_btn", "win_back");
+    const WidgetId frontWinBtnId = self.id("fw_btn", "win_front");
+    const WidgetId popBtnId = RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(self.m_root), "pop"), "pop_btn");
+
+    WidgetOptions highZWinBtn = midOpts;
+    highZWinBtn.layout.zIndex = 50;
+    WidgetOptions lowZWinBtn = midOpts;
+    lowZWinBtn.layout.zIndex = -5;
+
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", backWin, backWinOpts));
+    EXPECT_FALSE(self.m_builder.button("bw_btn", "BackBtn", highZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", frontWin, frontWinOpts));
+    EXPECT_FALSE(self.m_builder.button("fw_btn", "FrontBtn", lowZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginPopup("pop", popupState, popupOpts));
+    EXPECT_FALSE(self.m_builder.button("pop_btn", "Pop", midOpts));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+
+    const auto bwT = self.tryTarget(backWinBtnId);
+    const auto fwT = self.tryTarget(frontWinBtnId);
+    const auto pT = self.tryTarget(popBtnId);
+    ASSERT_TRUE(bwT.has_value() && fwT.has_value() && pT.has_value());
+    EXPECT_LT(bwT.value().zOrder, fwT.value().zOrder);
+    EXPECT_EQ(pT.value().zOrder, 0u);
+    EXPECT_GT(pT.value().layer, 0u);
+
+    self.click(Point(pT.value().rectangle.x + 10.0f, pT.value().rectangle.y + 10.0f));
+
+    ASSERT_TRUE(self.begin(5u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", backWin, backWinOpts));
+    EXPECT_FALSE(self.m_builder.button("bw_btn", "BackBtn", highZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", frontWin, frontWinOpts));
+    EXPECT_FALSE(self.m_builder.button("fw_btn", "FrontBtn", lowZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginPopup("pop", popupState, popupOpts));
+    EXPECT_TRUE(self.m_builder.button("pop_btn", "Pop", midOpts));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(5u));
+
+    popupState.close();
+    ASSERT_TRUE(self.begin(6u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", backWin, backWinOpts));
+    EXPECT_FALSE(self.m_builder.button("bw_btn", "BackBtn", highZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", frontWin, frontWinOpts));
+    EXPECT_FALSE(self.m_builder.button("fw_btn", "FrontBtn", lowZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    EXPECT_FALSE(self.m_builder.beginPopup("pop", popupState, popupOpts));
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(6u));
+
+    self.click(Point(fwT.value().rectangle.x + 15.0f, fwT.value().rectangle.y + 15.0f));
+
+    ASSERT_TRUE(self.begin(7u));
+    ASSERT_TRUE(self.m_builder.beginWindow("win_back", "Back", backWin, backWinOpts));
+    EXPECT_FALSE(self.m_builder.button("bw_btn", "BackBtn", highZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.m_builder.beginWindow("win_front", "Front", frontWin, frontWinOpts));
+    EXPECT_TRUE(self.m_builder.button("fw_btn", "FrontBtn", lowZWinBtn));
+    ASSERT_TRUE(self.m_builder.endWindow());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(7u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiAdvancedLayoutTests, MinMaxConstraintsStretchRedistributionMarginAndAspectRatio, VerifyUiAdvancedLayoutTests_MinMaxConstraintsStretchRedistributionMarginAndAspectRatio)
+NWB_ADHD_GTEST_F(UiAdvancedLayoutTests, AlignItemsAlignSelfJustifyContentAndFlexWrapHeightPropagation, VerifyUiAdvancedLayoutTests_AlignItemsAlignSelfJustifyContentAndFlexWrapHeightPropagation)
+NWB_ADHD_GTEST_F(UiAdvancedLayoutTests, GridAutoPlacementSpansStretchTracksAndScrollableGrid, VerifyUiAdvancedLayoutTests_GridAutoPlacementSpansStretchTracksAndScrollableGrid)
+NWB_ADHD_GTEST_F(UiAdvancedLayoutTests, AbsoluteAnchorAndPinInsetsWithOverflowClippingAndScroll, VerifyUiAdvancedLayoutTests_AbsoluteAnchorAndPinInsetsWithOverflowClippingAndScroll)
+NWB_ADHD_GTEST_F(UiAdvancedLayoutTests, PerNodeZIndexReordersPaintAndHitTestingAcrossContainersScrollAreasWindowsAndPopups, VerifyUiAdvancedLayoutTests_PerNodeZIndexReordersPaintAndHitTestingAcrossContainersScrollAreasWindowsAndPopups)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

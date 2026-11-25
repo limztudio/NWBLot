@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_RadioGroupMaxChoices = 64u;
 const u32 s_RadioGroupStampFencePassCount = 2u;
 const f32 s_RadioGroupMaxMarkInset = 0.5f;
 const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
@@ -22,6 +21,13 @@ const Name s_RadioMarkRegionName = "radio.mark";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+enum<u8> RadioGroupOrientation{
+    Vertical,
+    Horizontal,
+    Grid,
+    kCount,
+}
 
 class RadioGroupStyle{
     public Name normal = s_RadioNormalRegionName;
@@ -39,6 +45,7 @@ class RadioGroupStyle{
     public Color disabledTint = s_StyleDisabledTint;
     public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
     public f32 rowGap = s_StyleSpacingSmall;
+    public f32 columnGap = s_StyleSpacingMedium;
     public f32 indicatorExtent = s_StyleControlExtent;
     public f32 gap = s_StyleSpacingMedium;
     public f32 markInset = s_StyleMarkInset;
@@ -46,7 +53,10 @@ class RadioGroupStyle{
 
 class RadioGroupOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public RadioGroupOrientation orientation = RadioGroupOrientation::Vertical;
+    public u32 columns = 1u;
     public b8 enabled = true;
+    public LayoutItemOptions layout;
 }
 
 class RadioGroupResult{
@@ -62,7 +72,7 @@ class RadioGroupChoice{
 }
 
 class RadioGroupChoices{
-    public Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows;
+    public Vector<RadioGroupChoice> rows;
     public u64 sourceGeneration = 0u;
     public u64 sourceRevision = 0u;
     public u32 count = 0u;
@@ -99,14 +109,19 @@ class RadioGroupSnapshot{
 }
 
 class RadioGroupMetrics{
+    public RadioGroupOrientation orientation = RadioGroupOrientation::Vertical;
     public f32 rowHeight = 0.0f;
     public f32 indicatorExtent = s_StyleControlExtent;
     public f32 gap = s_StyleSpacingMedium;
     public f32 rowGap = s_StyleSpacingSmall;
+    public f32 columnGap = s_StyleSpacingMedium;
+    public f32 cellWidth = 0.0f;
     public f32 markInset = s_StyleMarkInset;
     public Insets padding;
     public Point contentSize;
     public u32 count = 0u;
+    public u32 columns = 1u;
+    public u32 rowCount = 0u;
 }
 
 class RadioGroupChoicePlacement{
@@ -123,7 +138,7 @@ class RadioGroupPlacement{
     public Rect bounds;
     public Rect clip;
     public Rect content;
-    public Array<RadioGroupChoicePlacement, s_RadioGroupMaxChoices> rows;
+    public Vector<RadioGroupChoicePlacement> rows;
     public u32 count = 0u;
 }
 
@@ -132,24 +147,34 @@ class RadioGroupPlacement{
 
 
 b8 IsValidRadioGroupChoices(in RadioGroupChoices choices){
-    if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.count > s_RadioGroupMaxChoices){
+    if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.rows.size() != cast<usize>(choices.count)){
         return false;
     }
-    for(u32 index = 0u; index < choices.count; ++index){
-        if(choices.rows[index].key == 0u){
-            return false;
-        }
-        for(u32 previous = 0u; previous < index; ++previous){
-            if(choices.rows[previous].key == choices.rows[index].key){
+    if(choices.count <= 16u){
+        for(u32 index = 0u; index < choices.count; ++index){
+            const u64 key = choices.rows[index].key;
+            if(key == 0u)
                 return false;
+            for(u32 previous = 0u; previous < index; ++previous){
+                if(choices.rows[previous].key == key)
+                    return false;
             }
         }
+        return true;
+    }
+    HashSet<u64> seen;
+    seen.reserve(cast<usize>(choices.count));
+    for(u32 index = 0u; index < choices.count; ++index){
+        const u64 key = choices.rows[index].key;
+        if(key == 0u || seen.find(key) != seen.end())
+            return false;
+        seen.insert(key);
     }
     return true;
 }
 
 Expected<u32> TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key){
-    if(key == 0u){
+    if(key == 0u || choices.rows.size() != cast<usize>(choices.count)){
         return MakeUnexpected(Failure());
     }
     for(u32 candidate = 0u; candidate < choices.count; ++candidate){
@@ -161,7 +186,7 @@ Expected<u32> TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key){
 }
 
 u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b8 reverse){
-    if(choices.count == 0u || start >= choices.count){
+    if(choices.count == 0u || choices.rows.size() != cast<usize>(choices.count) || start >= choices.count){
         return 0u;
     }
     u32 index = start;
@@ -190,11 +215,20 @@ u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b
 }
 
 b8 IsValidRadioGroupOptions(in RadioGroupOptions options){
-    return options.enabled && IsValidLayoutSize(options.width);
+    return options.enabled
+        && IsValidLayoutSize(options.width)
+        && options.orientation < RadioGroupOrientation::kCount
+        && options.columns >= 1u;
 }
 
-u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 cursor, in ControlActionKind kind){
-    if(choices.count == 0u){
+u64 ResolveRadioGroupNavigationTarget(
+    in RadioGroupChoices choices,
+    in u64 cursor,
+    in ControlActionKind kind,
+    in RadioGroupOrientation orientation,
+    in u32 columns
+){
+    if(choices.count == 0u || choices.rows.size() != cast<usize>(choices.count)){
         return 0u;
     }
     if(kind == ControlActionKind::Home){
@@ -211,6 +245,29 @@ u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 curso
             fallbackStart = choices.count - 1u;
         }
         return FindEnabledRadioGroupChoice(choices, fallbackStart, reverse);
+    }
+    if(orientation == RadioGroupOrientation::Grid && columns > 1u && (kind == ControlActionKind::Up || kind == ControlActionKind::Down)){
+        const u32 curIdx = current.value();
+        const u32 col = curIdx % columns;
+        const u32 rowsInCol = 1u + ((choices.count - 1u - col) / columns);
+        const u32 lastInCol = col + (rowsInCol - 1u) * columns;
+        u32 idx = curIdx;
+        for(u32 visited = 0u; visited < rowsInCol; ++visited){
+            if(kind == ControlActionKind::Up){
+                if(idx < columns)
+                    idx = lastInCol;
+                else
+                    idx = idx - columns;
+            }
+            else{
+                if(idx + columns >= choices.count)
+                    idx = col;
+                else
+                    idx = idx + columns;
+            }
+            if(choices.rows[idx].enabled)
+                return choices.rows[idx].key;
+        }
     }
     u32 start = 0u;
     if(reverse){
@@ -230,6 +287,10 @@ u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 curso
         }
     }
     return FindEnabledRadioGroupChoice(choices, start, reverse);
+}
+
+u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 cursor, in ControlActionKind kind){
+    return ResolveRadioGroupNavigationTarget(choices, cursor, kind, RadioGroupOrientation::Vertical, 1u);
 }
 
 void ApplySkinPaletteToRadioGroupStyle(in UiSkinPalette palette, mut RadioGroupStyle style){

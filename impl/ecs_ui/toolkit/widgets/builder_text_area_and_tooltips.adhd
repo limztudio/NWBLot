@@ -56,21 +56,6 @@ b8 ShouldRestoreInitialTextAreaScroll(in b8 firstBinding, in b8 revealCaret){
     return firstBinding && !revealCaret;
 }
 
-u8 SelectNextTextAreaScrollStream(
-    in b8 haveHorizontal,
-    in u64 horizontalSequence,
-    in b8 haveVertical,
-    in u64 verticalSequence,
-    in b8 haveAction,
-    in u64 actionSequence
-){
-    if(haveHorizontal && (!haveVertical || horizontalSequence <= verticalSequence) && (!haveAction || horizontalSequence <= actionSequence))
-        return 0u;
-    if(haveVertical && (!haveAction || verticalSequence <= actionSequence))
-        return 1u;
-    return 2u;
-}
-
 b8 IsTooltipHoverEligible(
     in b8 optionsEnabled,
     in b8 anchorEnabled,
@@ -155,7 +140,18 @@ b8 Builder::tooltip(in StringView stableKey, in StringView anchorKey, in StringV
     frame.revision = state.revision();
     frame.anchorIndex = cast<u32>(anchorIndex.value());
     frame.layer = this.m_context.popupLayer() + 1u;
-    const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    Insets wrapPadding = frame.style.padding;
+    if(this.m_skin.has_value()){
+        const auto background = this.region(frame.style.background, frame.style.fallback);
+        if(background.has_value())
+            wrapPadding = MaxUiPadding(frame.style.padding, background.value().padding);
+    }
+    const f32 padX = wrapPadding.left + wrapPadding.right;
+    ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    if(options.maximumWidth < s_TextMaxCoordinateF32 * 0.5f && options.maximumWidth > padX){
+        request.wrapMode = TextWrapMode::Word;
+        request.maxWidth = options.maximumWidth - padX;
+    }
     auto layout = this.m_text.layoutShared(request);
     if(!layout.has_value()){
         this.m_context.fail();
@@ -217,13 +213,29 @@ b8 Builder::paintTooltips(){
             return false;
         if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text.deref(), textBounds.value(), frame.style.text) || frame.state.value().revision() != frame.revision)
             return false;
+        AccessibleNodeDesc a11yDesc;
+        a11yDesc.id = frame.widget.id;
+        a11yDesc.role = AccessibilityRole::Tooltip;
+        a11yDesc.liveMode = AccessibilityLiveMode::Polite;
+        a11yDesc.stateBits = ResolveAccessibleVisibilityStateBits(true, placement.value().bounds);
+        a11yDesc.bounds = placement.value().bounds;
+        a11yDesc.name = frame.text.deref().utf8();
+        this.m_context.addAccessibleNode(a11yDesc);
         frame.state.value().m_placement = placement.value();
     }
     return true;
 }
 
 EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state, in TextAreaOptions options){
-    if(this.itemDeclarationBlocked() || !IsValidTextAreaWheelLines(options.wheelLines) || model.textMode() != EditTextMode::Multiline){
+    if(
+        this.itemDeclarationBlocked()
+        || !IsValidTextAreaWheelLines(options.wheelLines)
+        || model.textMode() != EditTextMode::Multiline
+        || cast<u8>(options.wrapMode) > cast<u8>(TextWrapMode::Character)
+        || options.tabStopSpaces == 0u
+        || options.tabStopSpaces > s_TextMaxTabStopSpaces
+        || (!options.placeholder.empty() && !ValidateEditTextForMode(options.placeholder, EditTextMode::Multiline))
+    ){
         this.m_context.fail();
         return EditBoxResult();
     }
@@ -250,11 +262,12 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     editOptions.height = options.height;
     editOptions.enabled = options.enabled;
     editOptions.readOnly = options.readOnly;
+    editOptions.acceptTab = options.acceptTab;
     EditBoxResult result;
     result.valid = true;
     result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
     if(this.m_editHost.has_value()){
-        TextAreaNavigationResolver navigation(this.m_text, this.m_context, state, this.m_style.fontSize, this.m_textScriptTag, StringView(this.m_textLanguage));
+        TextAreaNavigationResolver navigation(this.m_text, this.m_context, state, this.m_style.fontSize, this.m_textScriptTag, StringView(this.m_textLanguage), this.m_textDirection);
         TextAreaEditActions actions(model, state, this.m_context);
         result = this.m_editHost.value().editNavigated(widget.value(), editOptions, this.m_context.popupToken(), model, state.m_navigation, navigation, actions);
     }
@@ -290,6 +303,8 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     );
     BuilderTextAreaFrame frame;
     frame.wheelLines = options.wheelLines;
+    frame.wrapMode = options.wrapMode;
+    frame.tabStopSpaces = options.tabStopSpaces;
     frame.model = Optional<mut EditModel>(model);
     frame.state = Optional<mut TextAreaState>(state);
     frame.focused = result.focused;
@@ -301,7 +316,33 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     editFrame.editStyle = this.m_editStyle;
     editFrame.scrollbarStyle = this.m_scrollbarStyle;
     editFrame.editOptions = editOptions;
-    if(!this.prepareEditBox(result, model, state.m_visual, item, editFrame) || !this.textAreaMatches(frame)){
+    if(!options.placeholder.empty()){
+        ShapeRequest placeholderRequest = this.textShapeRequest(options.placeholder, this.m_style.fontSize);
+        placeholderRequest.tabStopSpaces = options.tabStopSpaces;
+        const auto placeholderLayout = this.m_text.layoutShared(placeholderRequest);
+        if(!placeholderLayout.has_value()){
+            result.valid = false;
+            this.m_context.fail();
+            return result;
+        }
+        const auto placeholderBounds = this.m_text.measure(placeholderLayout.value().deref(), this.m_paint.displayMetrics());
+        if(!placeholderBounds.has_value()){
+            result.valid = false;
+            this.m_context.fail();
+            return result;
+        }
+        editFrame.placeholder = placeholderLayout.value();
+        editFrame.placeholderBounds = placeholderBounds.value();
+    }
+    TextWrapMode prepareWrapMode = TextWrapMode::None;
+    f32 prepareWrapWidth = 0.0f;
+    b8 preparePreserveWrapSpaces = false;
+    if(options.wrapMode != TextWrapMode::None && state.m_wrapMode == options.wrapMode && state.m_tabStopSpaces == options.tabStopSpaces && state.m_wrapWidth > 0.0f){
+        prepareWrapMode = options.wrapMode;
+        prepareWrapWidth = state.m_wrapWidth;
+        preparePreserveWrapSpaces = true;
+    }
+    if(!this.prepareEditBox(result, model, state.m_visual, item, editFrame, prepareWrapMode, prepareWrapWidth, options.tabStopSpaces, preparePreserveWrapSpaces) || !this.textAreaMatches(frame)){
         result.valid = false;
         this.m_context.fail();
         return result;
@@ -317,6 +358,7 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), this.editViewForFrame(editFrame).visualBounds().height, item.padding);
+    ApplyLayoutItemOptions(options.layout, description);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -362,13 +404,109 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(!this.textAreaMatches(frame))
         return false;
     mut TextAreaState state = frame.state.value();
-    in EditBoxView view = this.editViewForFrame(editFrame);
     const Rect clip = this.visibleClip(box.clip);
     const f32 caretWidth = 1.0f / this.m_paint.displayMetrics().pixelScaleX;
-    in Rect visualBounds = view.visualBounds();
-    const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, Point(visualBounds.width, visualBounds.height), caretWidth, state.scroll(), editFrame.scrollbarStyle.thickness, editFrame.scrollbarStyle.minimumThumb);
+    const TextAreaModelStamp modelStamp = frame.model.value().stamp();
+    Expected<ScrollViewportPlacement> viewport = MakeUnexpected(Failure());
+    if(frame.wrapMode == TextWrapMode::None){
+        state.m_wrapMode = TextWrapMode::None;
+        state.m_wrapWidth = 0.0f;
+        state.m_tabStopSpaces = frame.tabStopSpaces;
+        state.m_lastWrapBoxWidth = 0.0f;
+        state.m_lastWrapBoxHeight = 0.0f;
+        state.m_lastWrapStamp = TextAreaModelStamp();
+        in Rect visualBounds = this.editViewForFrame(editFrame).visualBounds();
+        viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, Point(visualBounds.width, visualBounds.height), caretWidth, state.scroll(), editFrame.scrollbarStyle.thickness, editFrame.scrollbarStyle.minimumThumb);
+    }
+    else{
+        const auto unwrappedViewport = TryComputeEditBoxViewport(box.rectangle, item.padding, clip, state.scroll(), caretWidth);
+        if(!unwrappedViewport.has_value())
+            return false;
+        const f32 fullWidth = UiSimdMax(0.0f, unwrappedViewport.value().width - caretWidth);
+        mut CachedEditBoxView cached = this.m_editBoxCacheEntries[editFrame.editViewCache];
+        const b8 steadyState =
+            cached.valid
+            && state.m_wrapMode == frame.wrapMode
+            && state.m_tabStopSpaces == frame.tabStopSpaces
+            && state.m_wrapWidth > 0.0f
+            && state.m_lastWrapBoxWidth == box.rectangle.width
+            && state.m_lastWrapBoxHeight == box.rectangle.height
+            && state.m_lastWrapStamp == modelStamp
+            && cached.wrapMode == frame.wrapMode
+            && cached.wrapWidthBits == bit_cast<u32>(state.m_wrapWidth)
+            && cached.tabStopSpaces == frame.tabStopSpaces
+            && cached.preserveWrapSpaces;
+        if(steadyState){
+            in Rect visualBounds = cached.view.visualBounds();
+            viewport = CalculateScrollViewportPlacementWithPolicies(
+                box.rectangle,
+                clip,
+                item.padding,
+                Point(visualBounds.width + caretWidth, visualBounds.height),
+                state.scroll(),
+                editFrame.scrollbarStyle.thickness,
+                editFrame.scrollbarStyle.minimumThumb,
+                ScrollbarPolicy::Never,
+                ScrollbarPolicy::Auto
+            );
+        }
+        else{
+            f32 targetWrapWidth = fullWidth;
+            in DisplayMetrics display = this.m_paint.displayMetrics();
+            for(u32 pass = 0u; pass < 2u; ++pass){
+                if(targetWrapWidth > 0.0f){
+                    ShapeRequest wrapRequest = this.textShapeRequest("", this.m_style.fontSize);
+                    wrapRequest.wrapMode = frame.wrapMode;
+                    wrapRequest.maxWidth = targetWrapWidth;
+                    wrapRequest.tabStopSpaces = frame.tabStopSpaces;
+                    wrapRequest.preserveWrapSpaces = true;
+                    if(cached.view.shape(this.m_text, wrapRequest) != TextLayoutStatus::Success || !cached.view.measure(this.m_text, display)){
+                        cached.valid = false;
+                        return false;
+                    }
+                    cached.wrapMode = frame.wrapMode;
+                    cached.wrapWidthBits = bit_cast<u32>(targetWrapWidth);
+                    cached.tabStopSpaces = frame.tabStopSpaces;
+                    cached.preserveWrapSpaces = true;
+                    cached.pixelScaleXBits = bit_cast<u32>(display.pixelScaleX);
+                    cached.pixelScaleYBits = bit_cast<u32>(display.pixelScaleY);
+                    cached.atlasIdentity = this.m_text.atlasIdentity();
+                    cached.atlasGlyphCount = this.m_text.atlasGlyphCount();
+                }
+                in Rect visualBounds = cached.view.visualBounds();
+                viewport = CalculateScrollViewportPlacementWithPolicies(
+                    box.rectangle,
+                    clip,
+                    item.padding,
+                    Point(visualBounds.width + caretWidth, visualBounds.height),
+                    state.scroll(),
+                    editFrame.scrollbarStyle.thickness,
+                    editFrame.scrollbarStyle.minimumThumb,
+                    ScrollbarPolicy::Never,
+                    ScrollbarPolicy::Auto
+                );
+                if(!viewport.has_value())
+                    return false;
+                if(pass == 0u && viewport.value().vertical.visible){
+                    const f32 nextWrapWidth = UiSimdMax(0.0f, viewport.value().viewport.width - caretWidth);
+                    if(nextWrapWidth > 0.0f && Abs(VectorSingle(nextWrapWidth - targetWrapWidth)).x > 0.5f){
+                        targetWrapWidth = nextWrapWidth;
+                        continue;
+                    }
+                }
+                break;
+            }
+            state.m_wrapMode = frame.wrapMode;
+            state.m_wrapWidth = targetWrapWidth;
+            state.m_tabStopSpaces = frame.tabStopSpaces;
+            state.m_lastWrapBoxWidth = box.rectangle.width;
+            state.m_lastWrapBoxHeight = box.rectangle.height;
+            state.m_lastWrapStamp = modelStamp;
+        }
+    }
     if(!viewport.has_value())
         return false;
+    in EditBoxView view = this.editViewForFrame(editFrame);
     in Vector<TextLine> lines = view.layout().lines();
     f32 firstLineHeight = 0.0f;
     if(!lines.empty())
@@ -378,7 +516,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(!stepResult.has_value())
         return false;
     const Point step = stepResult.value();
-    const ControlToken token = state.m_scrollInput.prepare(item.state, this.m_context.popupToken(), state.instanceGeneration(), state.revision(), frame.model.value().stamp(), editFrame.editOptions.enabled, editFrame.editOptions.readOnly, viewport.value(), step);
+    const ControlToken token = state.m_scrollInput.prepare(item.state, this.m_context.popupToken(), state.instanceGeneration(), state.revision(), modelStamp, editFrame.editOptions.enabled, editFrame.editOptions.readOnly, viewport.value(), step);
     this.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
     if(!this.applyTextAreaScrollInput(item, frame, token))
         return false;
@@ -386,9 +524,13 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
-    if(!TryUpdateScrollViewportOffsets(Point(placement.scroll, placement.scrollY), state.m_scrollInput.placement))
+    const Point clampedScroll = Point(UiSimdMin(placement.scroll, cast<f32>(state.m_scrollInput.placement.horizontal.maximum)), placement.scrollY);
+    if(!TryUpdateScrollViewportOffsets(clampedScroll, state.m_scrollInput.placement))
         return false;
-    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags) || !this.textAreaMatches(frame))
+    Optional<in TextLayout> placeholderLayout;
+    if(editFrame.placeholder.valid())
+        placeholderLayout = Optional<in TextLayout>(editFrame.placeholder.deref());
+    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags, placeholderLayout) || !this.textAreaMatches(frame))
         return false;
     state.m_visual.placement = placement;
     state.m_visual.scroll = placement.scroll;
@@ -401,10 +543,36 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
         item.contextMenu,
         token,
         step,
-        state.scrollbars()
+        state.scrollbars(),
+        editFrame.editOptions.acceptTab
     );
     if(!this.m_context.addTarget(item.state, target) || !this.paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
+    u32 a11yState = ResolveAccessibleVisibilityStateBits(editFrame.editOptions.enabled, clip) | s_AccessibilityStateFocusable | s_AccessibilityStateMultiline;
+    if(editFrame.editOptions.readOnly)
+        a11yState |= s_AccessibilityStateReadOnly;
+    if(editFrame.editOptions.password)
+        a11yState |= s_AccessibilityStatePassword;
+    StringView a11yName = StringView();
+    if(editFrame.placeholder.valid())
+        a11yName = editFrame.placeholder.deref().utf8();
+    StringView a11yValue = StringView();
+    if(!editFrame.editOptions.password)
+        a11yValue = view.layout().utf8();
+    u32 a11yActions = s_AccessibilityActionFocus;
+    if(!editFrame.editOptions.readOnly)
+        a11yActions |= s_AccessibilityActionSetValue;
+    if(item.contextMenu)
+        a11yActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::TextArea,
+        box.rectangle,
+        a11yName,
+        a11yValue,
+        a11yState,
+        a11yActions
+    );
     const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
     if(!published || !this.textAreaMatches(frame))
         return false;
@@ -440,7 +608,7 @@ b8 Builder::applyTextAreaScrollInput(in BuilderItem item, in BuilderTextAreaFram
             verticalSequence = vertical.value().updateSequence;
         if(haveAction)
             actionSequence = action.value().id.sequence;
-        const u8 stream = SelectNextTextAreaScrollStream(
+        const u8 stream = SelectNextScrollInputStream(
             haveHorizontal,
             horizontalSequence,
             haveVertical,
@@ -485,84 +653,7 @@ b8 Builder::paintTextAreaScrollbars(in BuilderItem item, in ScrollViewportPlacem
     if(item.editBox >= this.m_scope.value().m_editBoxes.size())
         return false;
     in BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
-    const b8 enabled = editFrame.editOptions.enabled;
-    b8 horizontalHovered = false;
-    b8 horizontalPressed = false;
-    if(placement.horizontal.visible){
-        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
-        if(!thumbId.has_value())
-            return false;
-        horizontalHovered = this.m_context.input().hover() == thumbId.value();
-        horizontalPressed = this.m_context.input().capture() == thumbId.value();
-    }
-    b8 verticalHovered = false;
-    b8 verticalPressed = false;
-    if(placement.vertical.visible){
-        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
-        if(!thumbId.has_value())
-            return false;
-        verticalHovered = this.m_context.input().hover() == thumbId.value();
-        verticalPressed = this.m_context.input().capture() == thumbId.value();
-    }
-    ControlVisualPainter painter;
-    if(!painter.paintTextAreaScrollbarsVisual(
-        this.m_paint,
-        this.m_skin.value(),
-        editFrame.scrollbarStyle,
-        placement,
-        clip,
-        enabled,
-        horizontalHovered,
-        horizontalPressed,
-        verticalHovered,
-        verticalPressed
-    ))
-        return false;
-    if(!enabled)
-        return true;
-    if(!this.paintTextAreaScrollbarAxis(item, placement.horizontal, clip, token, true, s_TextAreaScrollHorizontalBefore, s_TextAreaScrollHorizontalAfter, s_WidgetPartScrollHorizontalBefore, s_WidgetPartScrollHorizontalAfter, s_WidgetPartScrollHorizontalThumb)
-        || !this.paintTextAreaScrollbarAxis(item, placement.vertical, clip, token, false, s_TextAreaScrollVerticalBefore, s_TextAreaScrollVerticalAfter, s_WidgetPartScrollVerticalBefore, s_WidgetPartScrollVerticalAfter, s_WidgetPartScrollVerticalThumb))
-        return false;
-    HitTargetFactory targets;
-    if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-        const HitTarget target = targets.makeScrollbarCornerHitTarget(placement.corner, clip, token);
-        const auto cornerId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner);
-        if(!cornerId.has_value() || !this.m_context.addPartTarget(item.state, cornerId.value(), target))
-            return false;
-    }
-    return true;
-}
-
-b8 Builder::paintTextAreaScrollbarAxis(in BuilderItem item, in ScrollbarPlacement bar, in Rect clip, in ControlToken token, in b8 horizontal, in u32 beforeAction, in u32 afterAction, in StringView beforeKey, in StringView afterKey, in StringView thumbKey){
-    if(!bar.visible)
-        return true;
-    HitTargetFactory targets;
-    Rect beforeRect;
-    Rect afterRect;
-    ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
-    const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(
-        beforeRect,
-        clip,
-        token,
-        beforeAction
-    );
-    const auto beforeId = TryMakeWidgetId(item.state.id, beforeKey);
-    if(!beforeId.has_value() || !this.m_context.addPartTarget(item.state, beforeId.value(), beforeTarget))
-        return false;
-    const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(
-        afterRect,
-        clip,
-        token,
-        afterAction
-    );
-    const auto afterId = TryMakeWidgetId(item.state.id, afterKey);
-    if(!afterId.has_value() || !this.m_context.addPartTarget(item.state, afterId.value(), afterTarget))
-        return false;
-    const HitTarget thumbTarget = targets.makeScrollbarThumbHitTarget(bar, clip, token, horizontal);
-    const auto thumbId = TryMakeWidgetId(item.state.id, thumbKey);
-    if(!thumbId.has_value() || !this.m_context.addPartTarget(item.state, thumbId.value(), thumbTarget))
-        return false;
-    return true;
+    return this.paintScrollbarsForHost(item.state, editFrame.scrollbarStyle, placement, clip, token, editFrame.editOptions.enabled);
 }
 
 

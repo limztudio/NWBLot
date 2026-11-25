@@ -1385,6 +1385,33 @@ void VerifyUiTextAreaNavigationTests_ExplicitHangulPolicyKeepsVerticalTargetAlig
     EXPECT_NE(matching.value().committedByte, different.value().committedByte);
 }
 
+void VerifyUiTextAreaNavigationTests_RtlDirectionNavigatesUsingVisualRightToLeftCaretColumns(mut UiTextAreaNavigationTests self){
+    ASSERT_TRUE(self.m_model.setText("ab\ncde"));
+    ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+    ShapeRequest request = ShapeRequest();
+    request.fontSize = 14.0f;
+    request.direction = TextDirection::RightToLeft;
+    EditBoxView visual = EditBoxView();
+    ASSERT_TRUE(visual.snapshot(self.m_model));
+    ASSERT_EQ(visual.shape(self.m_text, request), TextLayoutStatus::Success);
+    const auto rtlCaret = visual.caretGeometry().caretRect(visual.displayCaret());
+    ASSERT_TRUE(rtlCaret.has_value());
+    const auto expected = visual.caretGeometry().verticalTarget(visual.displayCaret(), true, rtlCaret.value().x);
+    ASSERT_TRUE(expected.has_value());
+
+    const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
+    TextAreaNavigationResolver ltr = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f, s_TextDefaultScriptTag, s_TextDefaultLanguage, TextDirection::LeftToRight);
+    const auto ltrDown = ltr.resolve(self.m_model, EditNavigationDirection::Down, preferred, 0.0f);
+    ASSERT_TRUE(ltrDown.has_value());
+    EXPECT_EQ(ltrDown.value().committedByte, 3u);
+
+    TextAreaNavigationResolver rtl = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f, s_TextDefaultScriptTag, s_TextDefaultLanguage, TextDirection::RightToLeft);
+    const auto rtlDown = rtl.resolve(self.m_model, EditNavigationDirection::Down, preferred, 0.0f);
+    ASSERT_TRUE(rtlDown.has_value());
+    EXPECT_EQ(rtlDown.value().committedByte, expected.value());
+    EXPECT_NE(rtlDown.value().committedByte, ltrDown.value().committedByte);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1513,6 +1540,34 @@ void VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPu
     self.expectRejected(before);
 }
 
+void VerifyUiTextAreaBuilderTests_PlaceholderRendersOnlyWhenEmptyAndNotComposing(mut UiTextAreaBuilderTests self){
+    TextAreaOptions options = TextAreaOptions();
+    options.placeholder = "Line 1\nLine 2";
+    ASSERT_TRUE(self.frameArea(1u, options));
+    const DrawSnapshot emptySnapshot = self.m_paint.freeze();
+    usize emptyGlyphs = 0u;
+    for(in DrawCommand command : emptySnapshot.commands()){
+        if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+            ++emptyGlyphs;
+    }
+    EXPECT_GT(emptyGlyphs, 0u);
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("im", 0u, 2u));
+    ASSERT_TRUE(self.frameArea(2u, options));
+    self.m_model.cancelComposition();
+    ASSERT_TRUE(self.m_model.setText("typed"));
+    ASSERT_TRUE(self.frameArea(3u, options));
+    const DrawSnapshot filledSnapshot = self.m_paint.freeze();
+    usize filledGlyphs = 0u;
+    for(in DrawCommand command : filledSnapshot.commands()){
+        if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+            ++filledGlyphs;
+    }
+    EXPECT_GT(emptyGlyphs, 0u);
+    EXPECT_GT(filledGlyphs, 0u);
+    EXPECT_NE(emptySnapshot.vertices().size(), filledSnapshot.vertices().size());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1574,10 +1629,12 @@ NWB_ADHD_GTEST_F(UiTextAreaNavigationTests, RejectedScrollIntentPreservesTheReso
 NWB_ADHD_GTEST_F(UiTextAreaNavigationTests, FailedContextRejectsAnOtherwiseCurrentBorrow, VerifyUiTextAreaNavigationTests_FailedContextRejectsAnOtherwiseCurrentBorrow)
 NWB_ADHD_GTEST_F(UiTextAreaNavigationTests, ShapeFailurePreservesModelAndViewportIntent, VerifyUiTextAreaNavigationTests_ShapeFailurePreservesModelAndViewportIntent)
 NWB_ADHD_GTEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAlignedWithVisibleJamo, VerifyUiTextAreaNavigationTests_ExplicitHangulPolicyKeepsVerticalTargetAlignedWithVisibleJamo)
+NWB_ADHD_GTEST_F(UiTextAreaNavigationTests, RtlDirectionNavigatesUsingVisualRightToLeftCaretColumns, VerifyUiTextAreaNavigationTests_RtlDirectionNavigatesUsingVisualRightToLeftCaretColumns)
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel, VerifyUiTextAreaReentryTests_HostLoanResetRejectsWithoutClearingTheLentModel)
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan, VerifyUiTextAreaReentryTests_HostLoanNestedDeclarationRejectsBeforeASecondLoan)
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication, VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublication)
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPublication, VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPublication)
+NWB_ADHD_GTEST_F(UiTextAreaBuilderTests, PlaceholderRendersOnlyWhenEmptyAndNotComposing, VerifyUiTextAreaBuilderTests_PlaceholderRendersOnlyWhenEmptyAndNotComposing)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

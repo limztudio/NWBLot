@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_UI_EFFECT_RECORDS_H
+#define NWB_GRAPHICS_UI_EFFECT_RECORDS_H
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_UI_GRADIENT_LINEAR 0u
+#define NWB_UI_GRADIENT_RADIAL 1u
+#define NWB_UI_GRADIENT_CONIC 2u
+#define NWB_UI_GRADIENT_SPREAD_CLAMP 0u
+#define NWB_UI_GRADIENT_SPREAD_REPEAT 1u
+#define NWB_UI_GRADIENT_SPREAD_MIRROR 2u
+#define NWB_UI_CLIP_ROUNDED_RECT 1u
+#define NWB_UI_CLIP_ELLIPSE 2u
+#define NWB_UI_MAX_GRADIENT_STOPS 16u
+#define NWB_UI_MAX_ANALYTIC_CLIP_DEPTH 8u
+#define NWB_UI_MAX_BLUR_TAP_RADIUS 24u
+#define NWB_UI_GRADIENT_HEADER_BYTES 48u
+#define NWB_UI_GRADIENT_STOP_BYTES 32u
+#define NWB_UI_DROP_SHADOW_RECORD_BYTES 32u
+#define NWB_UI_CLIP_MASK_RECORD_BYTES 48u
+#define NWB_UI_BLUR_RECORD_BYTES 32u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -22,6 +22,13 @@ namespace NWB::UiFontSdk{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct UiOpenTypeFeature{
+    u32 tag = 0u;
+    u32 value = 1u;
+    u32 start = 0u;
+    u32 end = 0xffffffffu;
+};
+
 [[nodiscard]] inline u32 HarfBuzzTag(const AStringView tag)noexcept{
     return hb_tag_from_string(tag.data(), static_cast<i32>(Min(tag.size(), static_cast<usize>(4u))));
 }
@@ -117,6 +124,20 @@ public:
         return true;
     }
     void shape(const HarfBuzzFont& font)noexcept{ hb_shape(font.m_font, m_buffer, nullptr, 0u); }
+    void shapeWithFeatures(const HarfBuzzFont& font, const Span<const UiOpenTypeFeature> features)noexcept{
+        hb_feature_t stackFeatures[16]{};
+        const usize count = Min<usize>(features.size(), 16u);
+        for(usize i = 0u; i < count; ++i){
+            stackFeatures[i].tag = features[i].tag;
+            stackFeatures[i].value = features[i].value;
+            stackFeatures[i].start = features[i].start;
+            stackFeatures[i].end = features[i].end;
+        }
+        if(count != 0u)
+            hb_shape(font.m_font, m_buffer, stackFeatures, static_cast<u32>(count));
+        else
+            hb_shape(font.m_font, m_buffer, nullptr, 0u);
+    }
 
     [[nodiscard]] Span<const hb_glyph_info_t> glyphInfos()const noexcept{
         u32 count = 0u;
@@ -142,4 +163,3 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

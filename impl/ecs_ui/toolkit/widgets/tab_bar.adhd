@@ -1,0 +1,520 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_TabBarMaxTabs = 64u;
+const f32 s_TabBarDefaultCloseExtent = 16.0f;
+const f32 s_TabBarDefaultActiveIndicatorHeight = 2.0f;
+const f32 s_TabBarDefaultMinimumTabWidth = 48.0f;
+const Color s_TabBarActiveIndicatorColor = Color(0.32f, 0.62f, 0.96f, 1.0f);
+const Name s_TabNormalRegionName = "tab.normal";
+const Name s_TabHoverRegionName = "tab.hover";
+const Name s_TabActiveRegionName = "tab.active";
+const Name s_TabPressedRegionName = "tab.pressed";
+const Name s_TabDisabledRegionName = "tab.disabled";
+const Name s_TabCloseRegionName = "tab.close";
+const Name s_TabTrackRegionName = "tab.track";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TabBarItem{
+    public TabBarItem(){
+        this.key = 0u;
+        this.label = "";
+        this.enabled = true;
+        this.closable = false;
+    }
+
+    public TabBarItem(in u64 inKey, in StringView inLabel){
+        this.key = inKey;
+        this.label = inLabel;
+        this.enabled = true;
+        this.closable = false;
+    }
+
+    public TabBarItem(in u64 inKey, in StringView inLabel, in b8 inEnabled){
+        this.key = inKey;
+        this.label = inLabel;
+        this.enabled = inEnabled;
+        this.closable = false;
+    }
+
+    public TabBarItem(in u64 inKey, in StringView inLabel, in b8 inEnabled, in b8 inClosable){
+        this.key = inKey;
+        this.label = inLabel;
+        this.enabled = inEnabled;
+        this.closable = inClosable;
+    }
+
+    public u64 key;
+    public StringView label;
+    public b8 enabled;
+    public b8 closable;
+}
+
+class TabBarStyle{
+    public Name normal = s_TabNormalRegionName;
+    public Name hover = s_TabHoverRegionName;
+    public Name active = s_TabActiveRegionName;
+    public Name pressed = s_TabPressedRegionName;
+    public Name disabled = s_TabDisabledRegionName;
+    public Name close = s_TabCloseRegionName;
+    public Name track = s_TabTrackRegionName;
+    public Name fallback = s_StyleButtonNormalRegionName;
+    public Name trackFallback = s_StyleSeparatorRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
+    public Color hoverTint = s_StyleHoverTint;
+    public Color pressedTint = s_StylePressedTint;
+    public Color disabledTint = s_StyleDisabledTint;
+    public Color indicatorColor = s_TabBarActiveIndicatorColor;
+    public Insets tabPadding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
+    public f32 tabGap = s_StyleSpacingSmall;
+    public f32 closeGap = s_StyleSpacingSmall;
+    public f32 closeExtent = s_TabBarDefaultCloseExtent;
+    public f32 minimumTabWidth = s_TabBarDefaultMinimumTabWidth;
+    public f32 activeIndicatorHeight = s_TabBarDefaultActiveIndicatorHeight;
+}
+
+class TabBarOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height;
+    public b8 equalWidths = false;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class TabBarMetrics{
+    public Insets padding;
+    public Point tabMinimum;
+    public Point contentSize;
+    public f32 trackThickness = 0.0f;
+}
+
+class TabBarTabPlacement{
+    public u64 key = 0u;
+    public Rect rectangle;
+    public Rect clip;
+    public Rect textClip;
+    public Rect closeButton;
+    public Rect activeIndicator;
+    public b8 enabled = false;
+    public b8 closable = false;
+    public b8 selected = false;
+}
+
+class TabBarPlacement{
+    public Rect bounds;
+    public Rect clip;
+    public Rect track;
+    public Array<TabBarTabPlacement, s_TabBarMaxTabs> tabs;
+    public u32 count = 0u;
+}
+
+class TabBarLabelEntry{
+    public SharedTextLayout text;
+    public Rect bounds;
+}
+
+class TabBarResult{
+    public u64 selectedKey = 0u;
+    public u64 closeRequestedKey = 0u;
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 activated = false;
+    public b8 closeRequested = false;
+    public b8 focused = false;
+}
+
+class TabBarState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_contentHash = 0u;
+    public u64 m_contentRevision = 1u;
+    public TabBarPlacement m_placement;
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selected;
+    }
+
+    public u64 cursorKey()const{
+        return this.m_cursor;
+    }
+
+    public in TabBarPlacement placement()const{
+        return this.m_placement;
+    }
+
+    public void select(in u64 key){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selected = key;
+        this.m_cursor = key;
+    }
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selected = 0u;
+        this.m_cursor = 0u;
+        this.m_contentHash = 0u;
+        AdvanceNonWrappingRevision(this.m_contentRevision);
+        this.m_placement = TabBarPlacement();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ApplySkinPaletteToTabBarStyle(in UiSkinPalette palette, mut TabBarStyle style){
+    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
+    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
+    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
+    style.indicatorColor = ResolveUiSkinColor(palette, UiSkinColorRole::ProgressFillTint);
+}
+
+b8 IsValidTabBarOptions(in TabBarOptions options){
+    return IsValidLayoutSize(options.width) && IsValidLayoutSize(options.height);
+}
+
+b8 IsValidTabBarStyle(in TabBarStyle style){
+    return IsValidUiPadding(style.tabPadding)
+        && IsFinite(VectorSingle(style.tabGap, style.closeGap, style.closeExtent, style.minimumTabWidth))
+        && IsFinite(VectorSingle(style.activeIndicatorHeight))
+        && style.tabGap >= 0.0f
+        && style.closeGap >= 0.0f
+        && style.closeExtent >= 0.0f
+        && style.minimumTabWidth >= 0.0f
+        && style.activeIndicatorHeight >= 0.0f
+        && IsValidPaintColor(style.hoverTint)
+        && IsValidPaintColor(style.pressedTint)
+        && IsValidPaintColor(style.disabledTint)
+        && IsValidPaintColor(style.indicatorColor);
+}
+
+b8 ValidateAndHashTabBarItems(in Span<TabBarItem> tabs, mut u64 outContentHash){
+    if(tabs.size() > cast<usize>(s_TabBarMaxTabs))
+        return false;
+    u64 hash = UpdateFnv64U64(s_Fnv64OffsetBasis, cast<u64>(tabs.size()));
+    for(usize index = 0u; index < tabs.size(); ++index){
+        in TabBarItem item = tabs[index];
+        if(item.key == 0u)
+            return false;
+        for(usize prev = 0u; prev < index; ++prev){
+            if(tabs[prev].key == item.key)
+                return false;
+        }
+        hash = UpdateFnv64U64(hash, item.key);
+        u64 flags = 0u;
+        if(item.enabled)
+            flags |= 1u;
+        if(item.closable)
+            flags |= 2u;
+        hash = UpdateFnv64U64(hash, flags);
+        hash = UpdateFnv64U64(hash, cast<u64>(item.label.size()));
+        for(usize b = 0u; b < item.label.size(); ++b)
+            hash = UpdateFnv64Byte(hash, cast<u8>(item.label[b]));
+    }
+    if(hash == 0u)
+        outContentHash = 1u;
+    else
+        outContentHash = hash;
+    return true;
+}
+
+Expected<u32> TryFindTabBarItemIndex(in Span<TabBarItem> tabs, in u64 key){
+    if(key == 0u)
+        return MakeUnexpected(Failure());
+    for(u32 index = 0u; index < cast<u32>(tabs.size()); ++index){
+        if(tabs[index].key == key)
+            return index;
+    }
+    return MakeUnexpected(Failure());
+}
+
+u64 FindEnabledTabBarKey(in Span<TabBarItem> tabs, in u32 startIndex, in b8 reverse){
+    const u32 count = cast<u32>(tabs.size());
+    if(count == 0u || startIndex >= count)
+        return 0u;
+    for(u32 step = 0u; step < count; ++step){
+        u32 index = 0u;
+        if(reverse){
+            if(startIndex >= step)
+                index = startIndex - step;
+            else
+                index = count - (step - startIndex);
+        }
+        else
+            index = (startIndex + step) % count;
+        if(tabs[index].enabled)
+            return tabs[index].key;
+    }
+    return 0u;
+}
+
+b8 IsTabBarInteractive(in Span<TabBarItem> tabs, in TabBarOptions options){
+    if(!options.enabled)
+        return false;
+    for(in TabBarItem item : tabs){
+        if(item.enabled)
+            return true;
+    }
+    return false;
+}
+
+void ReconcileTabBarState(
+    in Span<TabBarItem> tabs,
+    in u64 contentHash,
+    mut TabBarState state,
+    mut TabBarResult result
+){
+    if(state.m_contentHash != contentHash){
+        state.m_contentHash = contentHash;
+        AdvanceNonWrappingRevision(state.m_contentRevision);
+    }
+    const u64 previousSelected = state.m_selected;
+    u64 selected = previousSelected;
+    if(!TryFindTabBarItemIndex(tabs, selected).has_value())
+        selected = FindEnabledTabBarKey(tabs, 0u, false);
+    u64 cursor = state.m_cursor;
+    const Expected<u32> cursorIndex = TryFindTabBarItemIndex(tabs, cursor);
+    if(!cursorIndex.has_value() || !tabs[cursorIndex.value()].enabled){
+        const Expected<u32> selectedIndex = TryFindTabBarItemIndex(tabs, selected);
+        if(selectedIndex.has_value() && tabs[selectedIndex.value()].enabled)
+            cursor = selected;
+        else
+            cursor = FindEnabledTabBarKey(tabs, 0u, false);
+    }
+    if(previousSelected != selected || state.m_cursor != cursor){
+        AdvanceNonWrappingRevision(state.m_revision);
+        state.m_selected = selected;
+        state.m_cursor = cursor;
+    }
+    result.selectedKey = selected;
+    result.selectionChanged = previousSelected != selected;
+}
+
+u64 ResolveTabBarNavigationTarget(in Span<TabBarItem> tabs, in u64 cursor, in ControlActionKind kind){
+    const u32 count = cast<u32>(tabs.size());
+    if(count == 0u)
+        return 0u;
+    if(kind == ControlActionKind::Home)
+        return FindEnabledTabBarKey(tabs, 0u, false);
+    if(kind == ControlActionKind::End)
+        return FindEnabledTabBarKey(tabs, count - 1u, true);
+    const b8 reverse = kind == ControlActionKind::Left;
+    const Expected<u32> current = TryFindTabBarItemIndex(tabs, cursor);
+    if(!current.has_value()){
+        u32 fallbackStart = 0u;
+        if(reverse)
+            fallbackStart = count - 1u;
+        return FindEnabledTabBarKey(tabs, fallbackStart, reverse);
+    }
+    u32 start = 0u;
+    if(reverse){
+        if(current.value() == 0u)
+            start = count - 1u;
+        else
+            start = current.value() - 1u;
+    }
+    else
+        start = (current.value() + 1u) % count;
+    return FindEnabledTabBarKey(tabs, start, reverse);
+}
+
+b8 ApplyTabBarControlAction(
+    in WidgetId hostId,
+    in Span<TabBarItem> tabs,
+    in ControlAction action,
+    mut TabBarState state,
+    mut TabBarResult result
+){
+    u64 candidate = 0u;
+    b8 activate = false;
+    switch(action.kind){
+    case ControlActionKind::Left:
+    case ControlActionKind::Right:
+    case ControlActionKind::Home:
+    case ControlActionKind::End:
+        candidate = ResolveTabBarNavigationTarget(tabs, state.m_cursor, action.kind);
+        break;
+    case ControlActionKind::Submit:{
+        const Expected<u32> index = TryFindTabBarItemIndex(tabs, state.m_cursor);
+        if(index.has_value() && tabs[index.value()].enabled){
+            candidate = state.m_cursor;
+            activate = true;
+        }
+        break;
+    }
+    case ControlActionKind::Activate:{
+        const Expected<u32> index = TryFindTabBarItemIndex(tabs, action.value);
+        if(!index.has_value() || !tabs[index.value()].enabled)
+            return false;
+        in TabBarItem item = tabs[index.value()];
+        const Expected<WidgetId> closeGroupId = TryMakeWidgetId(hostId, s_WidgetPartTabClose);
+        if(!closeGroupId.has_value())
+            return false;
+        const Expected<WidgetId> closePartId = TryMakeWidgetPartId(closeGroupId.value(), item.key);
+        if(!closePartId.has_value())
+            return false;
+        if(action.source == closePartId.value()){
+            if(!item.closable)
+                return false;
+            result.closeRequested = true;
+            result.closeRequestedKey = item.key;
+            return true;
+        }
+        candidate = item.key;
+        activate = true;
+        break;
+    }
+    default:
+        return true;
+    }
+    if(candidate != 0u){
+        const b8 changed = state.m_selected != candidate;
+        result.selectionChanged = result.selectionChanged || changed;
+        result.activated = result.activated || activate;
+        state.m_selected = candidate;
+        state.m_cursor = candidate;
+        result.selectedKey = candidate;
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+    return true;
+}
+
+Expected<TabBarPlacement> PlaceTabBar(
+    in Rect bounds,
+    in Rect clip,
+    in Span<TabBarItem> tabs,
+    in Span<f32> labelWidths,
+    in TabBarStyle style,
+    in TabBarMetrics metrics,
+    in u64 selectedKey,
+    in b8 equalWidths
+){
+    if(
+        !IsValidUiRect(bounds)
+        || !IsValidUiRect(clip)
+        || tabs.size() != labelWidths.size()
+        || tabs.size() > cast<usize>(s_TabBarMaxTabs)
+    )
+        return MakeUnexpected(Failure());
+    TabBarPlacement placement;
+    placement.bounds = bounds;
+    const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::RoundedEndpoints);
+    if(!clipped.has_value())
+        return MakeUnexpected(Failure());
+    placement.clip = clipped.value();
+    const u32 count = cast<u32>(tabs.size());
+    placement.count = count;
+    if(metrics.trackThickness > 0.0f && bounds.height >= metrics.trackThickness){
+        const f64 trackY = cast<f64>(bounds.y) + (cast<f64>(bounds.height) - cast<f64>(metrics.trackThickness));
+        const Expected<Rect> trackRect = TryMakeUiRect(cast<f64>(bounds.x), trackY, cast<f64>(bounds.width), cast<f64>(metrics.trackThickness), UiRectPrecision::RoundedEndpoints);
+        if(!trackRect.has_value())
+            return MakeUnexpected(Failure());
+        placement.track = trackRect.value();
+    }
+    if(count == 0u)
+        return placement;
+    const f64 padX = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
+    const f64 totalGaps = cast<f64>(style.tabGap) * cast<f64>(count - 1u);
+    const f64 availableTabsWidth = UiSimdMaxF64(0.0, cast<f64>(bounds.width) - totalGaps);
+    Array<f64, s_TabBarMaxTabs> desiredWidths;
+    f64 totalDesiredWidth = 0.0;
+    for(u32 index = 0u; index < count; ++index){
+        in TabBarItem item = tabs[index];
+        f64 closeWidth = 0.0;
+        if(item.closable && style.closeExtent > 0.0f)
+            closeWidth = cast<f64>(style.closeGap) + cast<f64>(style.closeExtent);
+        const f64 natural = padX + cast<f64>(labelWidths[index]) + closeWidth;
+        const f64 minTab = UiSimdMaxF64(cast<f64>(metrics.tabMinimum.x), cast<f64>(style.minimumTabWidth));
+        const f64 w = UiSimdMaxF64(natural, minTab);
+        desiredWidths[index] = w;
+        totalDesiredWidth += w;
+    }
+    f64 cursorX = cast<f64>(bounds.x);
+    f64 equalTabWidth = 0.0;
+    if(equalWidths)
+        equalTabWidth = availableTabsWidth / cast<f64>(count);
+    f64 shrinkScale = 1.0;
+    if(!equalWidths && totalDesiredWidth > availableTabsWidth && totalDesiredWidth > 0.0)
+        shrinkScale = availableTabsWidth / totalDesiredWidth;
+    for(u32 index = 0u; index < count; ++index){
+        in TabBarItem item = tabs[index];
+        f64 tabWidth = desiredWidths[index] * shrinkScale;
+        if(equalWidths)
+            tabWidth = equalTabWidth;
+        const Expected<Rect> tabRect = TryMakeUiRect(cursorX, cast<f64>(bounds.y), tabWidth, cast<f64>(bounds.height), UiRectPrecision::RoundedEndpoints);
+        if(!tabRect.has_value())
+            return MakeUnexpected(Failure());
+        TabBarTabPlacement tabPlace;
+        tabPlace.key = item.key;
+        tabPlace.rectangle = tabRect.value();
+        tabPlace.enabled = item.enabled;
+        tabPlace.closable = item.closable;
+        tabPlace.selected = item.key == selectedKey;
+        const Expected<Rect> tabClip = TryIntersectUiRects(tabPlace.rectangle, placement.clip, UiRectPrecision::RoundedEndpoints);
+        if(!tabClip.has_value())
+            return MakeUnexpected(Failure());
+        tabPlace.clip = tabClip.value();
+        const Expected<Rect> paddedText = TryInsetUiRect(tabPlace.rectangle, metrics.padding, UiRectPrecision::RoundedEndpoints);
+        if(!paddedText.has_value())
+            return MakeUnexpected(Failure());
+        Rect inner = paddedText.value();
+        if(item.closable && style.closeExtent > 0.0f && inner.width > style.closeExtent + style.closeGap){
+            const f64 closeExtent = cast<f64>(UiSimdMin(style.closeExtent, inner.height));
+            const f64 closeX = (cast<f64>(inner.x) + cast<f64>(inner.width)) - closeExtent;
+            const f64 closeY = cast<f64>(inner.y) + UiSimdMaxF64(0.0, (cast<f64>(inner.height) - closeExtent) * 0.5);
+            const Expected<Rect> closeRect = TryMakeUiRect(closeX, closeY, closeExtent, closeExtent, UiRectPrecision::RoundedEndpoints);
+            if(!closeRect.has_value())
+                return MakeUnexpected(Failure());
+            tabPlace.closeButton = closeRect.value();
+            const f64 remainingW = UiSimdMaxF64(0.0, cast<f64>(inner.width) - closeExtent - cast<f64>(style.closeGap));
+            inner.width = cast<f32>(remainingW);
+        }
+        const Expected<Rect> textClip = TryIntersectUiRects(inner, tabPlace.clip, UiRectPrecision::RoundedEndpoints);
+        if(!textClip.has_value())
+            return MakeUnexpected(Failure());
+        tabPlace.textClip = textClip.value();
+        if(tabPlace.selected && style.activeIndicatorHeight > 0.0f && tabPlace.rectangle.height > 0.0f){
+            const f64 indH = UiSimdMinF64(cast<f64>(style.activeIndicatorHeight), cast<f64>(tabPlace.rectangle.height));
+            const f64 indY = (cast<f64>(tabPlace.rectangle.y) + cast<f64>(tabPlace.rectangle.height)) - indH;
+            const Expected<Rect> indRect = TryMakeUiRect(cast<f64>(tabPlace.rectangle.x), indY, cast<f64>(tabPlace.rectangle.width), indH, UiRectPrecision::RoundedEndpoints);
+            if(!indRect.has_value())
+                return MakeUnexpected(Failure());
+            tabPlace.activeIndicator = indRect.value();
+        }
+        placement.tabs[index] = tabPlace;
+        cursorX += tabWidth + cast<f64>(style.tabGap);
+    }
+    return placement;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

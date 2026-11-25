@@ -1064,7 +1064,9 @@ void VerifyUiEditClickTracker_ExactTimeAndDistanceBoundsRequireAReleasedFirstPre
     tracker.release(owner);
     EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2000u, false), UiEditClickKind::Word);
     tracker.release(owner);
-    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2001u, false), UiEditClickKind::Caret);
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2001u, false), UiEditClickKind::Line);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2002u, false), UiEditClickKind::Caret);
 }
 
 void VerifyUiEditClickTracker_ClockReversalAndMovementCannotManufactureASecondClick(){
@@ -1304,6 +1306,101 @@ void VerifyUiEditClipboard_OwnerThreadViolationCannotPollApplyOrCancelAHostReque
     EXPECT_TRUE(controller.cancel());
 }
 
+void VerifyUiEditBoxHostTests_PasswordBlocksCopyCutAndPrimaryWhileAllowingPasteAndFullLineDoubleClick(mut UiEditBoxHostTests self){
+    ASSERT_TRUE(self.m_model.setText("ab cd"));
+    EditBoxOptions options = EditBoxOptions();
+    options.password = true;
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    ASSERT_TRUE(self.key(Key::Tab));
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    ASSERT_TRUE(self.key(Key::A, false, true));
+    ASSERT_TRUE(self.key(Key::C, false, true));
+    EXPECT_TRUE(self.frame(self.m_model, options));
+    ASSERT_TRUE(self.m_clipboard.pump());
+    EXPECT_EQ(self.m_clipboard.startedText, "");
+    EXPECT_EQ(self.m_clipboard.document, "");
+    ASSERT_TRUE(self.key(Key::X, false, true));
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    ASSERT_TRUE(self.m_clipboard.pump());
+    EXPECT_EQ(self.m_model.text(), "ab cd");
+    EXPECT_EQ(self.m_clipboard.document, "");
+    const Point pt = self.atByte(1u);
+    InputEvent down = InputEvent();
+    down.position = pt;
+    down.hoverCapable = true;
+    down.type = InputEventType::PrimaryDown;
+    down.timestampMs = 100u;
+    ASSERT_TRUE(self.dispatch(down));
+    InputEvent up = InputEvent();
+    up.position = pt;
+    up.hoverCapable = true;
+    up.type = InputEventType::PrimaryUp;
+    up.timestampMs = 120u;
+    ASSERT_TRUE(self.dispatch(up));
+    down.timestampMs = 200u;
+    ASSERT_TRUE(self.dispatch(down));
+    up.timestampMs = 220u;
+    ASSERT_TRUE(self.dispatch(up));
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    EXPECT_EQ(self.m_model.selectedText(), "ab cd");
+    self.m_clipboard.document.assign("secret");
+    ASSERT_TRUE(self.key(Key::V, false, true));
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    ASSERT_TRUE(self.m_clipboard.pump());
+    ASSERT_TRUE(self.frame(self.m_model, options));
+    EXPECT_EQ(self.m_model.text(), "secret");
+}
+
+void VerifyUiEditNavigationHostTests_TripleClickSelectsFullLineAndDragsAcrossLines(mut UiEditNavigationHostTests self){
+    ASSERT_TRUE(self.m_navigationModel.setText("one two\nthree four\nfive"));
+    ASSERT_TRUE(self.activateNavigation());
+    const Point line0 = MakeEcsUiPoint(self.core.m_placement.textOrigin.x + 11.0f, self.core.m_placement.textOrigin.y + 5.0f);
+    const Point line1 = MakeEcsUiPoint(self.core.m_placement.textOrigin.x + 11.0f, self.core.m_placement.textOrigin.y + 18.0f);
+    InputEvent down = InputEvent();
+    down.position = line0;
+    down.hoverCapable = true;
+    down.type = InputEventType::PrimaryDown;
+    InputEvent up = InputEvent();
+    up.position = line0;
+    up.hoverCapable = true;
+    up.type = InputEventType::PrimaryUp;
+    down.timestampMs = 100u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    up.timestampMs = 110u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    down.timestampMs = 200u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    up.timestampMs = 210u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    down.timestampMs = 300u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    up.timestampMs = 310u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    ASSERT_TRUE(self.navigationFrame());
+    EXPECT_EQ(self.m_navigationModel.selectedText(), "one two");
+    down.timestampMs = 900u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    up.timestampMs = 910u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    down.timestampMs = 1000u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    up.timestampMs = 1010u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    down.timestampMs = 1100u;
+    ASSERT_TRUE(self.core.dispatch(down));
+    InputEvent move = InputEvent();
+    move.position = line1;
+    move.hoverCapable = true;
+    move.type = InputEventType::PointerMove;
+    move.timestampMs = 1120u;
+    ASSERT_TRUE(self.core.dispatch(move));
+    up.position = line1;
+    up.timestampMs = 1130u;
+    ASSERT_TRUE(self.core.dispatch(up));
+    ASSERT_TRUE(self.navigationFrame());
+    EXPECT_EQ(self.m_navigationModel.selectedText(), "one two\nthree four");
+}
+
 NWB_ADHD_GTEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead, VerifyUiClipboardPublications_CopiedWritePreservesNativeFifoBeforeLaterPasteRead)
 NWB_ADHD_GTEST(UiClipboardPublications, BoundedQueueAndExplicitResetReleaseAllPendingNativeTokens, VerifyUiClipboardPublications_BoundedQueueAndExplicitResetReleaseAllPendingNativeTokens)
 NWB_ADHD_GTEST(UiClipboardPublications, CompletionFailuresAreReportedAndConsumedWithoutLosingSuccessfulPublications, VerifyUiClipboardPublications_CompletionFailuresAreReportedAndConsumedWithoutLosingSuccessfulPublications)
@@ -1369,6 +1466,8 @@ NWB_ADHD_GTEST(UiEditClipboard, TextLimitAndMalformedClipboardPreserveSelectionH
 NWB_ADHD_GTEST(UiEditClipboard, ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesDuringTransfer, VerifyUiEditClipboard_ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesDuringTransfer)
 NWB_ADHD_GTEST(UiEditClipboard, UnsupportedPrimarySelectionRejectsBeforeTransferAdmission, VerifyUiEditClipboard_UnsupportedPrimarySelectionRejectsBeforeTransferAdmission)
 NWB_ADHD_GTEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest, VerifyUiEditClipboard_OwnerThreadViolationCannotPollApplyOrCancelAHostRequest)
+NWB_ADHD_GTEST_F(UiEditBoxHostTests, PasswordBlocksCopyCutAndPrimaryWhileAllowingPasteAndFullLineDoubleClick, VerifyUiEditBoxHostTests_PasswordBlocksCopyCutAndPrimaryWhileAllowingPasteAndFullLineDoubleClick)
+NWB_ADHD_GTEST_F(UiEditNavigationHostTests, TripleClickSelectsFullLineAndDragsAcrossLines, VerifyUiEditNavigationHostTests_TripleClickSelectsFullLineAndDragsAcrossLines)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

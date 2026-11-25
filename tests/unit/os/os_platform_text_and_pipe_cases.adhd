@@ -32,8 +32,11 @@ extern class X11FilteredKeyHistory{
 extern class X11PreeditBuffer{
     StringView text()const;
     usize caretByte()const;
+    Span<TextInputPreeditClause> clauses()const;
     void clear();
     b8 replace(in usize start, in usize count, in StringView insertion, in usize caret);
+    b8 replace(in usize start, in usize count, in StringView insertion, in usize caret, in Span<TextInputPreeditClauseStyle> styles);
+    b8 updateFeedback(in usize start, in usize count, in Span<TextInputPreeditClauseStyle> styles, in usize caret);
     b8 moveCaret(in usize character);
     usize moveCaretToEnd();
 };
@@ -703,6 +706,85 @@ void VerifyWaylandTextInputState_RingEvictionStillAdmitsDelayedCommitButMarksDel
 }
 
 
+void VerifyX11PreeditBuffer_ClauseStylesMergeAcrossIncrementalEditsAndFeedbackUpdates(){
+    HeapStorage storage = HeapStorage();
+    X11PreeditBuffer buffer(storage.arena);
+    Array<TextInputPreeditClauseStyle, 4u> styles;
+    styles[0u] = TextInputPreeditClauseStyle::Raw;
+    styles[1u] = TextInputPreeditClauseStyle::Converted;
+    styles[2u] = TextInputPreeditClauseStyle::Converted;
+    styles[3u] = TextInputPreeditClauseStyle::Target;
+    ASSERT_TRUE(buffer.replace(0u, 0u, "\346\227\245abcd", 4u, Span<TextInputPreeditClauseStyle>()));
+    EXPECT_TRUE(buffer.clauses().empty());
+    buffer.clear();
+    ASSERT_TRUE(buffer.replace(0u, 0u, "\346\227\245abc", 4u, styles));
+    ASSERT_EQ(buffer.clauses().size(), 3u);
+    EXPECT_EQ(buffer.clauses()[0u].beginByte, 0u);
+    EXPECT_EQ(buffer.clauses()[0u].endByte, 3u);
+    EXPECT_EQ(buffer.clauses()[0u].style, TextInputPreeditClauseStyle::Raw);
+    EXPECT_EQ(buffer.clauses()[1u].beginByte, 3u);
+    EXPECT_EQ(buffer.clauses()[1u].endByte, 5u);
+    EXPECT_EQ(buffer.clauses()[1u].style, TextInputPreeditClauseStyle::Converted);
+    EXPECT_EQ(buffer.clauses()[2u].beginByte, 5u);
+    EXPECT_EQ(buffer.clauses()[2u].endByte, 6u);
+    EXPECT_EQ(buffer.clauses()[2u].style, TextInputPreeditClauseStyle::Target);
+
+    Array<TextInputPreeditClauseStyle, 2u> feedbackStyles;
+    feedbackStyles[0u] = TextInputPreeditClauseStyle::Target;
+    feedbackStyles[1u] = TextInputPreeditClauseStyle::Target;
+    ASSERT_TRUE(buffer.updateFeedback(1u, 2u, feedbackStyles, 3u));
+    ASSERT_EQ(buffer.clauses().size(), 2u);
+    EXPECT_EQ(buffer.clauses()[0u].beginByte, 0u);
+    EXPECT_EQ(buffer.clauses()[0u].endByte, 3u);
+    EXPECT_EQ(buffer.clauses()[0u].style, TextInputPreeditClauseStyle::Raw);
+    EXPECT_EQ(buffer.clauses()[1u].beginByte, 3u);
+    EXPECT_EQ(buffer.clauses()[1u].endByte, 6u);
+    EXPECT_EQ(buffer.clauses()[1u].style, TextInputPreeditClauseStyle::Target);
+
+    buffer.clear();
+    EXPECT_TRUE(buffer.clauses().empty());
+}
+
+void VerifyFakeTextInputService_ValidatesPreeditClauseBoundsBoundariesAndCommitClearing(){
+    HeapStorage storage = HeapStorage();
+    FakeTextInputService service = FakeTextInputService(storage);
+    ASSERT_TRUE(service.setFocused(true));
+    const auto begun = service.begin(TextInputSessionDesc(TextInputRect(10, 10, 2, 16), "", 0u, 0u));
+    ASSERT_TRUE(begun.has_value());
+    const TextInputSessionToken token = begun.value();
+
+    Array<TextInputPreeditClause, 2u> invalidOrder;
+    invalidOrder[0u] = TextInputPreeditClause(2u, 4u, TextInputPreeditClauseStyle::Raw);
+    invalidOrder[1u] = TextInputPreeditClause(1u, 3u, TextInputPreeditClauseStyle::Target);
+    EXPECT_EQ(service.sendPreedit(token, "abcd", 0u, 4u, true, invalidOrder), TextInputAdmission::InvalidRange);
+
+    Array<TextInputPreeditClause, 1u> splitUtf8;
+    splitUtf8[0u] = TextInputPreeditClause(0u, 1u, TextInputPreeditClauseStyle::Raw);
+    EXPECT_EQ(service.sendPreedit(token, "\346\227\245a", 0u, 4u, true, splitUtf8), TextInputAdmission::InvalidRange);
+
+    Array<TextInputPreeditClause, 1u> badStyle;
+    badStyle[0u] = TextInputPreeditClause(0u, 1u, TextInputPreeditClauseStyle::kCount);
+    EXPECT_EQ(service.sendPreedit(token, "abcd", 0u, 4u, true, badStyle), TextInputAdmission::InvalidRange);
+
+    Array<TextInputPreeditClause, 2u> validClauses;
+    validClauses[0u] = TextInputPreeditClause(0u, 3u, TextInputPreeditClauseStyle::Converted);
+    validClauses[1u] = TextInputPreeditClause(3u, 5u, TextInputPreeditClauseStyle::Target);
+    EXPECT_EQ(service.sendPreedit(token, "\346\227\245ab", 0u, 5u, true, validClauses), TextInputAdmission::Accepted);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(service.poll(token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    ASSERT_EQ(out.event.preeditClauses.size(), 2u);
+    EXPECT_EQ(out.event.preeditClauses[0u].style, TextInputPreeditClauseStyle::Converted);
+    EXPECT_EQ(out.event.preeditClauses[1u].style, TextInputPreeditClauseStyle::Target);
+
+    EXPECT_EQ(service.sendCommit(token, "ok"), TextInputAdmission::Accepted);
+    ASSERT_EQ(service.poll(token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Commit);
+    EXPECT_TRUE(out.event.preeditClauses.empty());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -750,6 +832,8 @@ NWB_ADHD_GTEST(WaylandTextInputState, SerialTracksHistoricalCurrentSessionRevisi
 NWB_ADHD_GTEST(WaylandTextInputState, NewSessionAndDisableFenceDelayedOldSerials, VerifyWaylandTextInputState_NewSessionAndDisableFenceDelayedOldSerials)
 NWB_ADHD_GTEST(WaylandTextInputState, SerialWraparoundPreservesCurrentSessionInterval, VerifyWaylandTextInputState_SerialWraparoundPreservesCurrentSessionInterval)
 NWB_ADHD_GTEST(WaylandTextInputState, RingEvictionStillAdmitsDelayedCommitButMarksDeletionRevisionUnknown, VerifyWaylandTextInputState_RingEvictionStillAdmitsDelayedCommitButMarksDeletionRevisionUnknown)
+NWB_ADHD_GTEST(X11PreeditBuffer, ClauseStylesMergeAcrossIncrementalEditsAndFeedbackUpdates, VerifyX11PreeditBuffer_ClauseStylesMergeAcrossIncrementalEditsAndFeedbackUpdates)
+NWB_ADHD_GTEST(QueuedTextInputService, ValidatesPreeditClauseBoundsBoundariesAndCommitClearing, VerifyFakeTextInputService_ValidatesPreeditClauseBoundsBoundariesAndCommitClearing)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

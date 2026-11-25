@@ -1,0 +1,158 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_box_style.adhd"
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_SpinBoxDefaultWidth = 140.0f;
+const f32 s_SpinBoxDefaultButtonWidth = 22.0f;
+const f32 s_SpinBoxDefaultGap = 2.0f;
+const i64 s_SpinBoxDefaultIntegerStep = 1ll;
+const i64 s_SpinBoxDefaultIntegerFastStep = 10ll;
+const f64 s_SpinBoxDefaultFloatStep = 0.1;
+const f64 s_SpinBoxDefaultFloatFastStep = 1.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class IntegerSpinBoxOptions{
+    public IntegerEditOptions edit;
+    public i64 step = s_SpinBoxDefaultIntegerStep;
+    public i64 fastStep = s_SpinBoxDefaultIntegerFastStep;
+    public f32 buttonWidth = s_SpinBoxDefaultButtonWidth;
+    public b8 wrap = false;
+    public b8 allowWheel = true;
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Fixed, s_SpinBoxDefaultWidth);
+    public LayoutSize height;
+    public LayoutItemOptions layout;
+}
+
+class FloatSpinBoxOptions{
+    public FloatEditOptions edit;
+    public f64 step = s_SpinBoxDefaultFloatStep;
+    public f64 fastStep = s_SpinBoxDefaultFloatFastStep;
+    public f32 buttonWidth = s_SpinBoxDefaultButtonWidth;
+    public b8 wrap = false;
+    public b8 allowWheel = true;
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Fixed, s_SpinBoxDefaultWidth);
+    public LayoutSize height;
+    public LayoutItemOptions layout;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidIntegerSpinBoxOptions(in IntegerSpinBoxOptions options){
+    return ValidateIntegerBounds(options.edit.bounds)
+        && options.step > 0ll
+        && options.fastStep >= options.step
+        && IsFinite(VectorSingle(options.buttonWidth))
+        && options.buttonWidth > 0.0f
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsValidLayoutSize(options.edit.edit.width)
+        && IsValidLayoutSize(options.edit.edit.height);
+}
+
+b8 IsValidFloatSpinBoxOptions(in FloatSpinBoxOptions options){
+    return ValidateFloatBounds(options.edit.bounds)
+        && IsFinite(VectorDouble(options.step, options.fastStep, 0.0, 0.0))
+        && options.step > 0.0
+        && options.fastStep >= options.step
+        && IsFinite(VectorSingle(options.buttonWidth))
+        && options.buttonWidth > 0.0f
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsValidLayoutSize(options.edit.edit.width)
+        && IsValidLayoutSize(options.edit.edit.height);
+}
+
+Expected<i64> StepIntegerSpinBoxValue(in i64 current, in i64 deltaSteps, in i64 stepSize, in IntegerBounds bounds, in b8 wrap){
+    if(!ValidateIntegerBounds(bounds) || stepSize <= 0ll)
+        return MakeUnexpected(Failure());
+    i64 base = current;
+    if(base < bounds.minimum)
+        base = bounds.minimum;
+    else if(base > bounds.maximum)
+        base = bounds.maximum;
+    if(deltaSteps == 0ll)
+        return base;
+    const b8 positive = deltaSteps > 0ll;
+    u64 stepsMag = 0u;
+    if(positive)
+        stepsMag = cast<u64>(deltaSteps);
+    else if(deltaSteps == s_NumericEditMinI64)
+        stepsMag = cast<u64>(s_NumericEditMaxI64) + 1u;
+    else
+        stepsMag = cast<u64>(-deltaSteps);
+    const u64 stepMag = cast<u64>(stepSize);
+    u64 moveMag = u64.max;
+    if(stepsMag <= u64.max / stepMag)
+        moveMag = stepsMag * stepMag;
+    const u64 span = cast<u64>(bounds.maximum) - cast<u64>(bounds.minimum);
+    if(positive){
+        const u64 roomUp = cast<u64>(bounds.maximum) - cast<u64>(base);
+        if(moveMag <= roomUp)
+            return cast<i64>(cast<u64>(base) + moveMag);
+        if(!wrap)
+            return bounds.maximum;
+        if(span == 0u)
+            return bounds.minimum;
+        if(span == u64.max)
+            return cast<i64>(cast<u64>(base) + moveMag);
+        const u64 cycle = span + 1u;
+        const u64 excess = (moveMag - roomUp - 1u) % cycle;
+        return cast<i64>(cast<u64>(bounds.minimum) + excess);
+    }
+    const u64 roomDown = cast<u64>(base) - cast<u64>(bounds.minimum);
+    if(moveMag <= roomDown)
+        return cast<i64>(cast<u64>(base) - moveMag);
+    if(!wrap)
+        return bounds.minimum;
+    if(span == 0u)
+        return bounds.maximum;
+    if(span == u64.max)
+        return cast<i64>(cast<u64>(base) - moveMag);
+    const u64 cycle = span + 1u;
+    const u64 excess = (moveMag - roomDown - 1u) % cycle;
+    return cast<i64>(cast<u64>(bounds.maximum) - excess);
+}
+
+Expected<f64> StepFloatSpinBoxValue(in f64 current, in f64 deltaSteps, in f64 stepSize, in FloatBounds bounds, in b8 wrap){
+    if(!ValidateFloatBounds(bounds) || !IsFinite(VectorDouble(current, deltaSteps, stepSize, 0.0)) || stepSize <= 0.0)
+        return MakeUnexpected(Failure());
+    const f64 base = UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, current));
+    if(deltaSteps == 0.0)
+        return base;
+    const f64 delta = deltaSteps * stepSize;
+    if(!IsFinite(VectorDouble(delta)))
+        return MakeUnexpected(Failure());
+    f64 next = base + delta;
+    if(!IsFinite(VectorDouble(next))){
+        if(delta > 0.0)
+            next = bounds.maximum;
+        else
+            next = bounds.minimum;
+    }
+    const f64 span = bounds.maximum - bounds.minimum;
+    if(wrap && IsFinite(VectorDouble(span)) && span > 0.0){
+        if(next > bounds.maximum || next < bounds.minimum){
+            const f64 offset = (next - bounds.minimum) / span;
+            const f64 wrapped = next - VectorDoubleFloor(VectorDouble(offset)).x * span;
+            next = UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, wrapped));
+        }
+        return next;
+    }
+    return UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, next));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

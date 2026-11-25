@@ -31,6 +31,11 @@ class MeshFrameBindings : NoCopy{
             return false;
         const GpuDescriptorHandle instanceHandle = instanceHandleResult.value();
         GpuDescriptorRetirementGuard retireInstance(heap, instanceHandle);
+        const Expected<GpuDescriptorHandle> instanceUavHandleResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(!instanceUavHandleResult.has_value())
+            return false;
+        const GpuDescriptorHandle instanceUavHandle = instanceUavHandleResult.value();
+        GpuDescriptorRetirementGuard retireInstanceUav(heap, instanceUavHandle);
         const Expected<GpuDescriptorHandle> materialTypedHandleResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
         if(!materialTypedHandleResult.has_value())
             return false;
@@ -47,6 +52,7 @@ class MeshFrameBindings : NoCopy{
         BufferHandle localViewBuffer = meshViewBuffer;
         const b8 registered =
             heap.write(instanceHandle, DescriptorWriteItemStructuredBufferSrv(0u, instanceBuffer.deref()))
+            && heap.write(instanceUavHandle, DescriptorWriteItemStructuredBufferUav(0u, instanceBuffer.deref()))
             && heap.write(materialTypedHandle, DescriptorWriteItemStructuredBufferSrv(0u, materialTypedBuffer.deref()))
             && heap.write(viewHandle, DescriptorWriteItemConstantBuffer(0u, localViewBuffer.deref()))
         ;
@@ -58,6 +64,7 @@ class MeshFrameBindings : NoCopy{
             materialBuffers.materialTypedBuffer,
             MeshViewBufferSnapshot(meshViewBuffer, viewHandle),
             instanceHandle,
+            instanceUavHandle,
             materialTypedHandle,
             materialBuffers.instanceBufferCapacity,
             materialBuffers.materialTypedBufferCapacity
@@ -65,6 +72,7 @@ class MeshFrameBindings : NoCopy{
         const MeshFrameBindingSnapshot retired = this.m_snapshot;
         this.m_snapshot = replacement;
         retireInstance.release();
+        retireInstanceUav.release();
         retireMaterialTyped.release();
         retireView.release();
 
@@ -80,6 +88,7 @@ class MeshFrameBindings : NoCopy{
             this.m_snapshot.materialTypedBuffer,
             this.viewSnapshot(meshViewBuffer),
             this.m_snapshot.instanceHeapHandle,
+            this.m_snapshot.instanceUavHeapHandle,
             this.m_snapshot.materialTypedHeapHandle,
             this.m_snapshot.instanceBufferCapacity,
             this.m_snapshot.materialTypedBufferCapacity
@@ -109,6 +118,8 @@ class MeshFrameBindings : NoCopy{
             return;
         if(snapshot.instanceHeapHandle.valid())
             heap.free(snapshot.instanceHeapHandle);
+        if(snapshot.instanceUavHeapHandle.valid())
+            heap.free(snapshot.instanceUavHeapHandle);
         if(snapshot.materialTypedHeapHandle.valid())
             heap.free(snapshot.materialTypedHeapHandle);
         if(snapshot.meshView.heapHandle.valid())

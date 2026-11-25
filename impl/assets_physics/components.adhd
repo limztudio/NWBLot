@@ -134,6 +134,8 @@ class VehicleComponentAsset : IComponent{
     public void applyToEntity(mut Entity entity)const override{
         mut VehicleComponent dst = entity.addComponent<VehicleComponent>();
         dst = this.component;
+        dst.wheelEntities.clear();
+        dst.skeletonEntity = s_InvalidEntityId;
         dst.dirty = true;
         dst.initialized = false;
     }
@@ -151,6 +153,8 @@ class RagdollComponentAsset : IComponent{
     public void applyToEntity(mut Entity entity)const override{
         mut RagdollComponent dst = entity.addComponent<RagdollComponent>();
         dst = this.component;
+        dst.boneEntities.clear();
+        dst.skeletonEntity = s_InvalidEntityId;
         dst.dirty = true;
         dst.initialized = false;
         dst.instance.reset();
@@ -199,6 +203,8 @@ class ArticulationComponentAsset : IComponent{
     public void applyToEntity(mut Entity entity)const override{
         mut ArticulationComponent dst = entity.addComponent<ArticulationComponent>();
         dst = this.component;
+        dst.linkEntities.clear();
+        dst.skeletonEntity = s_InvalidEntityId;
         dst.dirty = true;
         dst.initialized = false;
         dst.articulation.reset();
@@ -283,6 +289,7 @@ class ColliderShapeEntryHeaderBinary{
     public NameHash meshAssetHash;
     public NameHash materialAssetHash;
     public NameHash convexHullAssetHash;
+    public NameHash compoundHullAssetHash;
     public NameHash collisionMeshAssetHash;
     public NameHash heightfieldAssetHash;
     public NameHash collisionLayerHash;
@@ -312,6 +319,12 @@ class ColliderShapeEntryHeaderBinary{
     public u32 heightfieldMaterialCount = 0u;
     public u32 heightfieldCellMaterialCount = 0u;
     public u32 chainPointCount = 0u;
+    public u32 vhacdMaxRecursionDepth = 8u;
+    public f32 vhacdConcavityThreshold = 0.02f;
+    public u32 vhacdMaxVerticesPerHull = 32u;
+    public f32 vhacdMinVolumeRatio = 0.001f;
+    public f32 vhacdMergeVolumeTolerance = 0.05f;
+    public u32 heightfieldCellHoleByteCount = 0u;
     public u16 flags = 0u;
     public u8 shapeType = 2u;
     public u8 frictionCombineMode = cast<u8>(MaterialCombineMode::GeometricMean);
@@ -319,7 +332,9 @@ class ColliderShapeEntryHeaderBinary{
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
     public u32 reserved2 = 0u;
-    public u64 reserved3 = 0u;
+    public u32 reserved3 = 0u;
+    public u32 reserved4 = 0u;
+    public u64 reserved5 = 0u;
 }
 
 [serialize]
@@ -336,6 +351,7 @@ class JointComponentPayloadBinary{
     public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
@@ -376,13 +392,19 @@ class JointComponentPayloadBinary{
     public f32 lengthB = 0.0f;
     public u32 pathPointCount = 0u;
     public u32 extraJointCount = 0u;
+    public f32 slerpHertz = 0.0f;
+    public f32 slerpDampingRatio = 1.0f;
+    public f32 slerpMaxTorque = 0.0f;
+    public f32 sixDofSwingLimitY = 0.0f;
+    public f32 sixDofSwingLimitZ = 0.0f;
     public Array<f32, 42u> sixDofParams;
     public Array<u8, 8u> sixDofMotions;
     public Array<u8, 8u> sixDofFlags;
     public u16 flags = 0u;
     public u8 jointType = 0u;
-    public u8 reserved0 = 0u;
-    public u32 reserved1 = 0u;
+    public u8 sixDofSwingLimitMode = 0u;
+    public u64 reserved0 = 0u;
+    public u64 reserved1 = 0u;
 }
 
 [serialize]

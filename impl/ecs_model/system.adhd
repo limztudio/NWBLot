@@ -17,6 +17,8 @@
 const StringView s_ModelSystemAssetLoadContext = "ModelSystem";
 type ModelObjectRendererApplyFn = Func<void(in EntityID, in AssetRef<Material>, mut World, mut Entity)>;
 type ModelObjectRendererCallback = Optional<ModelObjectRendererApplyFn>;
+type ModelObjectRendererSyncFn = Func<void(mut World)>;
+type ModelObjectRendererSyncCallback = Optional<ModelObjectRendererSyncFn>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,15 +26,22 @@ type ModelObjectRendererCallback = Optional<ModelObjectRendererApplyFn>;
 
 class ModelObjectRendererHooks{
     public ModelObjectRendererCallback apply;
+    public ModelObjectRendererSyncCallback sync;
     public FixedVector<ComponentAccess, 4u> accesses;
 
     public ModelObjectRendererHooks(){
         this.apply = ModelObjectRendererCallback();
+        this.sync = ModelObjectRendererSyncCallback();
         this.accesses = FixedVector<ComponentAccess, 4u>();
     }
 
-    public ModelObjectRendererHooks(in ModelObjectRendererCallback inApply, in Span<ComponentAccess> inAccesses){
+    public ModelObjectRendererHooks(
+        in ModelObjectRendererCallback inApply,
+        in ModelObjectRendererSyncCallback inSync,
+        in Span<ComponentAccess> inAccesses
+    ){
         this.apply = inApply;
+        this.sync = inSync;
         this.accesses = FixedVector<ComponentAccess, 4u>();
         assert(inAccesses.size() <= 4u);
         for(in ComponentAccess access : inAccesses)
@@ -45,6 +54,7 @@ class ModelSystem{
     private mut World m_world;
     private mut AssetManager m_assetManager;
     private ModelObjectRendererCallback m_applyRenderer;
+    private ModelObjectRendererSyncCallback m_syncRenderer;
     private Vector<SkeletonJointMatrix> m_scratchJoints;
     private Vector<ModelAttachmentJointQuery> m_attachmentJointQueries;
     private Vector<usize> m_attachmentParentOrder;
@@ -53,6 +63,7 @@ class ModelSystem{
         this.m_world = world;
         this.m_assetManager = assetManager;
         this.m_applyRenderer = ModelObjectRendererCallback();
+        this.m_syncRenderer = ModelObjectRendererSyncCallback();
         this.registerDefaultAccesses();
     }
 
@@ -60,6 +71,7 @@ class ModelSystem{
         this.m_world = world;
         this.m_assetManager = assetManager;
         this.m_applyRenderer = rendererHooks.apply;
+        this.m_syncRenderer = rendererHooks.sync;
         this.registerDefaultAccesses();
 
         for(usize i = 0u; i < rendererHooks.accesses.size(); ++i)
@@ -75,6 +87,8 @@ class ModelSystem{
         if(!transformed.has_value())
             return MakeUnexpected(transformed.error());
         this.updateStaticMeshAttachments();
+        if(this.m_syncRenderer.has_value())
+            this.m_syncRenderer.value()(world);
         return Expected<void, CpuTaskAdmissionError>();
     }
 
@@ -90,6 +104,7 @@ class ModelSystem{
         this.writeAccess<SkinnedMeshBindingComponent>();
         this.writeAccess<TransformComponent>();
         this.writeAccess<SkeletonPoseComponent>();
+        this.readAccess<SkeletonJointPaletteComponent>();
     }
 
     private void clearInactiveModelRuntimes();
@@ -181,6 +196,7 @@ class ModelSystem{
 
     private b8 spawnStaticMeshObject(in EntityID owner, in ModelStaticMeshObject object, mut HashMap<Name, EntityID> spawnedObjects){
         Entity entity = this.createSpawnedObjectEntity(owner, object.name, MatrixSingle(object.transform), ModelObjectKind::StaticMesh);
+        this.m_world.entity(entity.id()).getComponent<ModelObjectComponent>().defaultMaterial = object.material.name();
         spawnedObjects.try_emplace(object.name, entity.id());
         if(this.m_applyRenderer.has_value()){
             const ModelObjectRendererApplyFn applyFn = this.m_applyRenderer.value();
@@ -227,6 +243,7 @@ class ModelSystem{
             return false;
 
         Entity entity = this.createSpawnedObjectEntity(owner, object.name, MatrixSingle(object.transform), ModelObjectKind::SkinnedMesh);
+        this.m_world.entity(entity.id()).getComponent<ModelObjectComponent>().defaultMaterial = object.material.name();
         spawnedObjects.try_emplace(object.name, entity.id());
         if(this.m_applyRenderer.has_value()){
             const ModelObjectRendererApplyFn applyFn = this.m_applyRenderer.value();
@@ -285,10 +302,21 @@ void ResolveModelAttachmentJointQueries(
         const EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
         const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, queries, groupBegin);
 
+        b8 resolvedFromPose = false;
         if(world.hasComponent<SkeletonPoseComponent>(parentEntity)){
             in SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(parentEntity);
-            if(TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, jointPalette).has_value())
-                ResolveModelAttachmentJointQueryGroup(parentOrder, jointPalette, groupBegin, groupEnd, queries);
+            if(HasSkeletonPoseData(pose)){
+                resolvedFromPose = true;
+                if(TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, jointPalette).has_value())
+                    ResolveModelAttachmentJointQueryGroup(parentOrder, jointPalette, groupBegin, groupEnd, queries);
+            }
+        }
+        if(!resolvedFromPose && world.hasComponent<SkeletonJointPaletteComponent>(parentEntity)){
+            in SkeletonJointPaletteComponent palette = world.getComponent<SkeletonJointPaletteComponent>(parentEntity);
+            if(!palette.joints.empty() && ValidSkeletonSkinningMode(palette.skinningMode)){
+                const Span<SkeletonJointMatrix> paletteSpan(palette.joints.data(), palette.joints.size());
+                ResolveModelAttachmentJointQueryGroup(parentOrder, paletteSpan, groupBegin, groupEnd, queries);
+            }
         }
         groupBegin = groupEnd;
     }
@@ -446,12 +474,29 @@ void UpdateModelStaticMeshAttachmentTransform(
         if(!query.resolved)
             return;
         jointMatrix = MatrixSingle(query.jointMatrix);
+        if(!IsInvertibleAffineJointMatrix3x4(jointMatrix, s_SkeletonJointDeterminantEpsilon))
+            return;
     }
     else{
-        if(!world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity))
-            return;
-        if(!TryEvaluateSkeletonPoseJointMatrix(world.getComponent<SkeletonPoseComponent>(attachment.parentEntity), attachment.parentJointIndex, jointMatrix))
-            return;
+        b8 resolvedFromPose = false;
+        if(world.hasComponent<SkeletonPoseComponent>(attachment.parentEntity)){
+            in SkeletonPoseComponent pose = world.getComponent<SkeletonPoseComponent>(attachment.parentEntity);
+            if(HasSkeletonPoseData(pose)){
+                resolvedFromPose = true;
+                if(!TryEvaluateSkeletonPoseJointMatrix(pose, attachment.parentJointIndex, jointMatrix))
+                    return;
+            }
+        }
+        if(!resolvedFromPose){
+            if(!world.hasComponent<SkeletonJointPaletteComponent>(attachment.parentEntity))
+                return;
+            in SkeletonJointPaletteComponent palette = world.getComponent<SkeletonJointPaletteComponent>(attachment.parentEntity);
+            if(!ValidSkeletonSkinningMode(palette.skinningMode) || cast<usize>(attachment.parentJointIndex) >= palette.joints.size())
+                return;
+            jointMatrix = MatrixSingle(palette.joints[cast<usize>(attachment.parentJointIndex)]);
+            if(!IsInvertibleAffineJointMatrix3x4(jointMatrix, s_SkeletonJointDeterminantEpsilon))
+                return;
+        }
     }
     TryDecomposeAndAssignTransformComponent(
         ComputeModelJointAttachmentWorldMatrix(parentMatrix, jointMatrix, localMatrix),

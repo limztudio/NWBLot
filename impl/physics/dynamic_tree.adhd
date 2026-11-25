@@ -289,9 +289,18 @@ class DynamicTree{
         Array<u32, 64u> fixedStack;
         fixedStack[0u] = this.m_root;
         u32 fixedCount = 1u;
-        while(fixedCount > 0u){
-            --fixedCount;
-            const u32 nodeId = fixedStack[fixedCount];
+        Vector<u32> overflowStack;
+        b8 useOverflow = false;
+        while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+            u32 nodeId = 0u;
+            if(useOverflow){
+                nodeId = overflowStack.back();
+                overflowStack.pop_back();
+            }
+            else{
+                --fixedCount;
+                nodeId = fixedStack[fixedCount];
+            }
             in TreeNode node = this.m_nodes[nodeId];
             if(node.child1 != s_NullIndex){
                 in TreeNode c1 = this.m_nodes[node.child1];
@@ -304,9 +313,19 @@ class DynamicTree{
                         if(!callback(node.child1, c1.userData()))
                             return;
                     }
-                    else if(fixedCount < 64u){
+                    else if(!useOverflow && fixedCount < 64u){
                         fixedStack[fixedCount] = node.child1;
                         ++fixedCount;
+                    }
+                    else{
+                        if(!useOverflow){
+                            useOverflow = true;
+                            overflowStack.reserve(128u);
+                            for(u32 si = 0u; si < fixedCount; ++si)
+                                overflowStack.push_back(fixedStack[si]);
+                            fixedCount = 0u;
+                        }
+                        overflowStack.push_back(node.child1);
                     }
                 }
             }
@@ -321,9 +340,19 @@ class DynamicTree{
                         if(!callback(node.child2, c2.userData()))
                             return;
                     }
-                    else if(fixedCount < 64u){
+                    else if(!useOverflow && fixedCount < 64u){
                         fixedStack[fixedCount] = node.child2;
                         ++fixedCount;
+                    }
+                    else{
+                        if(!useOverflow){
+                            useOverflow = true;
+                            overflowStack.reserve(128u);
+                            for(u32 si = 0u; si < fixedCount; ++si)
+                                overflowStack.push_back(fixedStack[si]);
+                            fixedCount = 0u;
+                        }
+                        overflowStack.push_back(node.child2);
                     }
                 }
             }
@@ -560,10 +589,23 @@ class DynamicTree{
         fixedStack[0u] = this.m_root;
         fixedStackTMin[0u] = rootTMin;
         u32 fixedCount = 1u;
-        while(fixedCount > 0u){
-            --fixedCount;
-            const u32 nodeId = fixedStack[fixedCount];
-            const f32 poppedTMin = fixedStackTMin[fixedCount];
+        Vector<u32> overflowStack;
+        Vector<f32> overflowStackTMin;
+        b8 useOverflow = false;
+        while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
+            u32 nodeId = 0u;
+            f32 poppedTMin = 0.0f;
+            if(useOverflow){
+                nodeId = overflowStack.back();
+                overflowStack.pop_back();
+                poppedTMin = overflowStackTMin.back();
+                overflowStackTMin.pop_back();
+            }
+            else{
+                --fixedCount;
+                nodeId = fixedStack[fixedCount];
+                poppedTMin = fixedStackTMin[fixedCount];
+            }
             if(poppedTMin > maxFraction)
                 continue;
 
@@ -594,7 +636,20 @@ class DynamicTree{
                     )
                         hit2 = AabbRayCastValues(VectorSingle(c2.aabbMinUser, 0.0f), VectorSingle(c2.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, t2);
                 }
-                PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, node.child1, hit1, t1, node.child2, hit2, t2);
+                PushRayCastChildrenOrderedWithSpill(
+                    node.child1,
+                    hit1,
+                    t1,
+                    node.child2,
+                    hit2,
+                    t2,
+                    fixedStack,
+                    fixedStackTMin,
+                    fixedCount,
+                    overflowStack,
+                    overflowStackTMin,
+                    useOverflow
+                );
             }
         }
     }

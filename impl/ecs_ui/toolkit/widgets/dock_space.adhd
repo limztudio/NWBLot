@@ -1,0 +1,574 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DockDefaultTabBarHeight = 26.0f;
+const f32 s_DockDefaultTabPaddingX = 10.0f;
+const f32 s_DockDefaultTabCloseSize = 14.0f;
+const f32 s_DockDefaultSplitterThickness = 5.0f;
+const f32 s_DockDefaultMinPaneExtent = 60.0f;
+const f32 s_DockDefaultDropEdgeFraction = 0.25f;
+const f32 s_DockDefaultDragThreshold = 4.0f;
+const Color s_DockDefaultBgColor = Color(0.10f, 0.12f, 0.16f, 1.0f);
+const Color s_DockDefaultTabBarBgColor = Color(0.13f, 0.15f, 0.20f, 1.0f);
+const Color s_DockDefaultActiveTabColor = Color(0.20f, 0.24f, 0.32f, 1.0f);
+const Color s_DockDefaultInactiveTabColor = Color(0.14f, 0.16f, 0.22f, 1.0f);
+const Color s_DockDefaultHoverTabColor = Color(0.25f, 0.30f, 0.39f, 1.0f);
+const Color s_DockDefaultSplitterColor = Color(0.22f, 0.26f, 0.32f, 1.0f);
+const Color s_DockDefaultSplitterHoverColor = Color(0.36f, 0.56f, 0.84f, 1.0f);
+const Color s_DockDefaultBorderColor = Color(0.28f, 0.32f, 0.40f, 0.90f);
+const Color s_DockDefaultDropPreviewFill = Color(0.28f, 0.62f, 0.96f, 0.26f);
+const Color s_DockDefaultDropPreviewBorder = Color(0.32f, 0.70f, 1.00f, 0.95f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> DockSplitDirection{
+    None,
+    Horizontal,
+    Vertical,
+}
+
+enum<u8> DockDropZone{
+    None,
+    Center,
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+class DockNode{
+    public u32 id = 0u;
+    public u32 parentId = 0u;
+    public DockSplitDirection splitDirection = DockSplitDirection::None;
+    public f32 splitRatio = 0.5f;
+    public u32 firstChildId = 0u;
+    public u32 secondChildId = 0u;
+    public Vector<u64> panelKeys;
+    public u64 activePanelKey = 0u;
+    public Rect computedRect;
+    public Rect tabBarRect;
+    public Rect contentRect;
+    public Rect splitterRect;
+
+    public b8 isLeaf()const{
+        return this.splitDirection == DockSplitDirection::None;
+    }
+}
+
+class DockSpaceStyle{
+    public Color backgroundColor = s_DockDefaultBgColor;
+    public Color tabBarBgColor = s_DockDefaultTabBarBgColor;
+    public Color activeTabColor = s_DockDefaultActiveTabColor;
+    public Color inactiveTabColor = s_DockDefaultInactiveTabColor;
+    public Color hoverTabColor = s_DockDefaultHoverTabColor;
+    public Color splitterColor = s_DockDefaultSplitterColor;
+    public Color splitterHoverColor = s_DockDefaultSplitterHoverColor;
+    public Color borderColor = s_DockDefaultBorderColor;
+    public Color dropPreviewFill = s_DockDefaultDropPreviewFill;
+    public Color dropPreviewBorder = s_DockDefaultDropPreviewBorder;
+    public Color textColor = s_StyleTextColor;
+    public Color inactiveTextColor = s_StyleDisabledTextColor;
+    public f32 tabBarHeight = s_DockDefaultTabBarHeight;
+    public f32 tabPaddingX = s_DockDefaultTabPaddingX;
+    public f32 tabCloseSize = s_DockDefaultTabCloseSize;
+    public f32 splitterThickness = s_DockDefaultSplitterThickness;
+    public f32 minPaneExtent = s_DockDefaultMinPaneExtent;
+    public f32 dropZoneEdgeFraction = s_DockDefaultDropEdgeFraction;
+}
+
+class DockSpaceOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public b8 allowSplitResize = true;
+    public b8 allowTabClose = true;
+    public b8 allowDragDock = true;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class DockSpaceState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u32 m_nextNodeId = 1u;
+    public u32 m_rootNodeId = 0u;
+    public Vector<DockNode> m_nodes;
+    public u64 m_draggingPanelKey = 0u;
+    public u32 m_draggingSourceNodeId = 0u;
+    public Point m_dragOrigin;
+    public Point m_dragPointer;
+    public b8 m_dragActive = false;
+    public u32 m_hoverTargetNodeId = 0u;
+    public DockDropZone m_hoverDropZone = DockDropZone::None;
+    public u64 m_lastClosedPanelKey = 0u;
+    public u64 m_lastUndockedPanelKey = 0u;
+    public Rect m_lastBounds;
+    public Vector<u64> m_knownPanelKeys;
+
+    public b8 isKnownPanel(in u64 panelKey)const{
+        for(in u64 k : this.m_knownPanelKeys){
+            if(k == panelKey)
+                return true;
+        }
+        return false;
+    }
+
+    public void markKnownPanel(in u64 panelKey){
+        if(panelKey != 0u && !this.isKnownPanel(panelKey))
+            this.m_knownPanelKeys.push_back(panelKey);
+    }
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public u64 lastClosedPanelKey()const{ return this.m_lastClosedPanelKey; }
+    public u64 lastUndockedPanelKey()const{ return this.m_lastUndockedPanelKey; }
+    public u32 rootNodeId()const{ return this.m_rootNodeId; }
+    public in Vector<DockNode> nodes()const{ return this.m_nodes; }
+
+    public u32 ensureRoot(){
+        if(this.m_rootNodeId != 0u && this.findNodeIndex(this.m_rootNodeId).has_value())
+            return this.m_rootNodeId;
+        this.m_nodes.clear();
+        this.m_nextNodeId = 1u;
+        DockNode root;
+        root.id = this.m_nextNodeId;
+        ++this.m_nextNodeId;
+        this.m_rootNodeId = root.id;
+        this.m_nodes.push_back(root);
+        return this.m_rootNodeId;
+    }
+
+    public Optional<usize> findNodeIndex(in u32 nodeId)const{
+        if(nodeId == 0u)
+            return Optional<usize>();
+        for(usize idx = 0u; idx < this.m_nodes.size(); ++idx){
+            if(this.m_nodes[idx].id == nodeId)
+                return Optional<usize>(idx);
+        }
+        return Optional<usize>();
+    }
+
+    public u32 findPanelNodeId(in u64 panelKey)const{
+        if(panelKey == 0u)
+            return 0u;
+        for(in DockNode node : this.m_nodes){
+            if(!node.isLeaf())
+                continue;
+            for(in u64 key : node.panelKeys){
+                if(key == panelKey)
+                    return node.id;
+            }
+        }
+        return 0u;
+    }
+
+    private void eraseNodeById(in u32 nodeId){
+        const Optional<usize> idxOpt = this.findNodeIndex(nodeId);
+        if(!idxOpt.has_value())
+            return;
+        const usize idx = idxOpt.value();
+        for(usize mv = idx + 1u; mv < this.m_nodes.size(); ++mv)
+            this.m_nodes[mv - 1u] = this.m_nodes[mv];
+        this.m_nodes.pop_back();
+    }
+
+    public b8 selectTab(in u32 nodeId, in u64 panelKey){
+        const Optional<usize> idxOpt = this.findNodeIndex(nodeId);
+        if(!idxOpt.has_value())
+            return false;
+        mut DockNode node = this.m_nodes[idxOpt.value()];
+        if(!node.isLeaf())
+            return false;
+        b8 found = false;
+        for(in u64 key : node.panelKeys){
+            if(key == panelKey){
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            return false;
+        if(node.activePanelKey != panelKey){
+            node.activePanelKey = panelKey;
+            AdvanceNonWrappingRevision(this.m_revision);
+        }
+        return true;
+    }
+
+    public b8 setSplitRatio(in u32 splitNodeId, in f32 ratio){
+        if(!IsFinite(VectorSingle(ratio)))
+            return false;
+        const Optional<usize> idxOpt = this.findNodeIndex(splitNodeId);
+        if(!idxOpt.has_value())
+            return false;
+        mut DockNode node = this.m_nodes[idxOpt.value()];
+        if(node.isLeaf())
+            return false;
+        const f32 clamped = UiSimdClamp(ratio, 0.1f, 0.9f);
+        if(clamped != node.splitRatio){
+            node.splitRatio = clamped;
+            AdvanceNonWrappingRevision(this.m_revision);
+        }
+        return true;
+    }
+
+    public b8 undockPanel(in u64 panelKey){
+        const u32 leafId = this.findPanelNodeId(panelKey);
+        const Optional<usize> leafIdxOpt = this.findNodeIndex(leafId);
+        if(!leafIdxOpt.has_value())
+            return false;
+        usize leafIdx = leafIdxOpt.value();
+        mut DockNode leaf = this.m_nodes[leafIdx];
+        b8 removed = false;
+        for(usize i = 0u; i < leaf.panelKeys.size(); ++i){
+            if(leaf.panelKeys[i] == panelKey){
+                for(usize mv = i + 1u; mv < leaf.panelKeys.size(); ++mv)
+                    leaf.panelKeys[mv - 1u] = leaf.panelKeys[mv];
+                leaf.panelKeys.pop_back();
+                removed = true;
+                break;
+            }
+        }
+        if(!removed)
+            return false;
+        if(leaf.activePanelKey == panelKey){
+            if(leaf.panelKeys.empty())
+                leaf.activePanelKey = 0u;
+            else
+                leaf.activePanelKey = leaf.panelKeys.back();
+        }
+        const u32 parentId = leaf.parentId;
+        if(!leaf.panelKeys.empty() || parentId == 0u){
+            AdvanceNonWrappingRevision(this.m_revision);
+            return true;
+        }
+        const Optional<usize> parentIdxOpt = this.findNodeIndex(parentId);
+        if(!parentIdxOpt.has_value()){
+            AdvanceNonWrappingRevision(this.m_revision);
+            return true;
+        }
+        const u32 grandparentId = this.m_nodes[parentIdxOpt.value()].parentId;
+        u32 siblingId = this.m_nodes[parentIdxOpt.value()].secondChildId;
+        if(siblingId == leafId)
+            siblingId = this.m_nodes[parentIdxOpt.value()].firstChildId;
+        const Optional<usize> siblingIdxOpt = this.findNodeIndex(siblingId);
+        if(siblingIdxOpt.has_value()){
+            this.m_nodes[siblingIdxOpt.value()].parentId = grandparentId;
+            if(grandparentId == 0u)
+                this.m_rootNodeId = siblingId;
+            else{
+                const Optional<usize> gpIdxOpt = this.findNodeIndex(grandparentId);
+                if(gpIdxOpt.has_value()){
+                    if(this.m_nodes[gpIdxOpt.value()].firstChildId == parentId)
+                        this.m_nodes[gpIdxOpt.value()].firstChildId = siblingId;
+                    else
+                        this.m_nodes[gpIdxOpt.value()].secondChildId = siblingId;
+                }
+            }
+        }
+        this.eraseNodeById(leafId);
+        this.eraseNodeById(parentId);
+        AdvanceNonWrappingRevision(this.m_revision);
+        return true;
+    }
+
+    public b8 autoDockPanel(in u64 panelKey){
+        if(panelKey == 0u || this.isKnownPanel(panelKey))
+            return false;
+        this.markKnownPanel(panelKey);
+        if(this.findPanelNodeId(panelKey) != 0u)
+            return true;
+        this.ensureRoot();
+        usize leafIdx = 0u;
+        b8 foundLeaf = false;
+        const Optional<usize> rootIdxOpt = this.findNodeIndex(this.m_rootNodeId);
+        if(rootIdxOpt.has_value() && this.m_nodes[rootIdxOpt.value()].isLeaf()){
+            leafIdx = rootIdxOpt.value();
+            foundLeaf = true;
+        }
+        else{
+            for(usize i = 0u; i < this.m_nodes.size(); ++i){
+                if(this.m_nodes[i].isLeaf()){
+                    leafIdx = i;
+                    foundLeaf = true;
+                    break;
+                }
+            }
+        }
+        if(!foundLeaf)
+            return false;
+        this.m_nodes[leafIdx].panelKeys.push_back(panelKey);
+        if(this.m_nodes[leafIdx].activePanelKey == 0u)
+            this.m_nodes[leafIdx].activePanelKey = panelKey;
+        AdvanceNonWrappingRevision(this.m_revision);
+        return true;
+    }
+
+    public b8 dockPanel(in u64 panelKey, in u32 targetNodeId, in DockDropZone zone, in f32 splitRatio){
+        if(panelKey == 0u || zone == DockDropZone::None || !IsFinite(VectorSingle(splitRatio)))
+            return false;
+        this.markKnownPanel(panelKey);
+        this.ensureRoot();
+        u32 resolvedTarget = targetNodeId;
+        if(resolvedTarget == 0u)
+            resolvedTarget = this.m_rootNodeId;
+        const u32 currentLeafId = this.findPanelNodeId(panelKey);
+        if(currentLeafId == resolvedTarget && zone == DockDropZone::Center)
+            return this.selectTab(resolvedTarget, panelKey);
+        const Optional<usize> initialTargetOpt = this.findNodeIndex(resolvedTarget);
+        if(!initialTargetOpt.has_value() || !this.m_nodes[initialTargetOpt.value()].isLeaf())
+            return false;
+        if(currentLeafId == resolvedTarget && this.m_nodes[initialTargetOpt.value()].panelKeys.size() <= 1u)
+            return false;
+        if(currentLeafId != 0u)
+            this.undockPanel(panelKey);
+
+        const Optional<usize> targetIdxOpt = this.findNodeIndex(resolvedTarget);
+        if(!targetIdxOpt.has_value() || !this.m_nodes[targetIdxOpt.value()].isLeaf())
+            return false;
+        const usize targetIdx = targetIdxOpt.value();
+        if(zone == DockDropZone::Center || this.m_nodes[targetIdx].panelKeys.empty()){
+            this.m_nodes[targetIdx].panelKeys.push_back(panelKey);
+            this.m_nodes[targetIdx].activePanelKey = panelKey;
+            AdvanceNonWrappingRevision(this.m_revision);
+            return true;
+        }
+
+        DockSplitDirection splitDir = DockSplitDirection::Horizontal;
+        b8 newFirst = false;
+        if(zone == DockDropZone::Left){
+            splitDir = DockSplitDirection::Horizontal;
+            newFirst = true;
+        }
+        else if(zone == DockDropZone::Right){
+            splitDir = DockSplitDirection::Horizontal;
+            newFirst = false;
+        }
+        else if(zone == DockDropZone::Top){
+            splitDir = DockSplitDirection::Vertical;
+            newFirst = true;
+        }
+        else{
+            splitDir = DockSplitDirection::Vertical;
+            newFirst = false;
+        }
+
+        const u32 child1Id = this.m_nextNodeId;
+        ++this.m_nextNodeId;
+        const u32 child2Id = this.m_nextNodeId;
+        ++this.m_nextNodeId;
+
+        DockNode existingLeafCopy;
+        existingLeafCopy.panelKeys = this.m_nodes[targetIdx].panelKeys;
+        existingLeafCopy.activePanelKey = this.m_nodes[targetIdx].activePanelKey;
+
+        DockNode newLeaf;
+        newLeaf.panelKeys.push_back(panelKey);
+        newLeaf.activePanelKey = panelKey;
+
+        DockNode firstChild;
+        DockNode secondChild;
+        if(newFirst){
+            firstChild = newLeaf;
+            secondChild = existingLeafCopy;
+        }
+        else{
+            firstChild = existingLeafCopy;
+            secondChild = newLeaf;
+        }
+        firstChild.id = child1Id;
+        firstChild.parentId = resolvedTarget;
+        secondChild.id = child2Id;
+        secondChild.parentId = resolvedTarget;
+
+        this.m_nodes[targetIdx].splitDirection = splitDir;
+        this.m_nodes[targetIdx].splitRatio = UiSimdClamp(splitRatio, 0.1f, 0.9f);
+        this.m_nodes[targetIdx].firstChildId = child1Id;
+        this.m_nodes[targetIdx].secondChildId = child2Id;
+        this.m_nodes[targetIdx].panelKeys.clear();
+        this.m_nodes[targetIdx].activePanelKey = 0u;
+        this.m_nodes.push_back(firstChild);
+        this.m_nodes.push_back(secondChild);
+        AdvanceNonWrappingRevision(this.m_revision);
+        return true;
+    }
+
+    public b8 isPanelVisible(in u64 panelKey)const{
+        if(panelKey == 0u)
+            return false;
+        for(in DockNode node : this.m_nodes){
+            if(node.isLeaf() && node.activePanelKey == panelKey && node.contentRect.width > 0.0f && node.contentRect.height > 0.0f)
+                return true;
+        }
+        return false;
+    }
+
+    public Rect panelContentRect(in u64 panelKey)const{
+        if(panelKey == 0u)
+            return Rect();
+        for(in DockNode node : this.m_nodes){
+            if(node.isLeaf() && node.activePanelKey == panelKey)
+                return node.contentRect;
+        }
+        return Rect();
+    }
+
+    private void arrangeSubtree(in u32 nodeId, in Rect rect, in DockSpaceStyle style){
+        const Optional<usize> idxOpt = this.findNodeIndex(nodeId);
+        if(!idxOpt.has_value())
+            return;
+        const usize idx = idxOpt.value();
+        this.m_nodes[idx].computedRect = rect;
+        if(this.m_nodes[idx].isLeaf()){
+            this.m_nodes[idx].splitterRect = Rect();
+            if(this.m_nodes[idx].panelKeys.empty()){
+                this.m_nodes[idx].tabBarRect = Rect();
+                this.m_nodes[idx].contentRect = rect;
+            }
+            else{
+                const f32 tabH = UiSimdMin(style.tabBarHeight, rect.height);
+                this.m_nodes[idx].tabBarRect = Rect(rect.x, rect.y, rect.width, tabH);
+                this.m_nodes[idx].contentRect = Rect(rect.x, rect.y + tabH, rect.width, UiSimdMax(0.0f, rect.height - tabH));
+            }
+            return;
+        }
+
+        const DockSplitDirection dir = this.m_nodes[idx].splitDirection;
+        const f32 splitThickness = style.splitterThickness;
+        const f32 ratio = this.m_nodes[idx].splitRatio;
+        const u32 firstId = this.m_nodes[idx].firstChildId;
+        const u32 secondId = this.m_nodes[idx].secondChildId;
+        Rect r1;
+        Rect r2;
+        if(dir == DockSplitDirection::Horizontal){
+            const f32 avail = UiSimdMax(0.0f, rect.width - splitThickness);
+            const f32 minW = UiSimdMin(style.minPaneExtent, avail * 0.5f);
+            const f32 w1 = UiSimdClamp(avail * ratio, minW, UiSimdMax(minW, avail - minW));
+            const f32 w2 = UiSimdMax(0.0f, avail - w1);
+            r1 = Rect(rect.x, rect.y, w1, rect.height);
+            this.m_nodes[idx].splitterRect = Rect(rect.x + w1, rect.y, splitThickness, rect.height);
+            r2 = Rect(rect.x + w1 + splitThickness, rect.y, w2, rect.height);
+        }
+        else{
+            const f32 avail = UiSimdMax(0.0f, rect.height - splitThickness);
+            const f32 minH = UiSimdMin(style.minPaneExtent, avail * 0.5f);
+            const f32 h1 = UiSimdClamp(avail * ratio, minH, UiSimdMax(minH, avail - minH));
+            const f32 h2 = UiSimdMax(0.0f, avail - h1);
+            r1 = Rect(rect.x, rect.y, rect.width, h1);
+            this.m_nodes[idx].splitterRect = Rect(rect.x, rect.y + h1, rect.width, splitThickness);
+            r2 = Rect(rect.x, rect.y + h1 + splitThickness, rect.width, h2);
+        }
+        this.m_nodes[idx].tabBarRect = Rect();
+        this.m_nodes[idx].contentRect = Rect();
+        this.arrangeSubtree(firstId, r1, style);
+        this.arrangeSubtree(secondId, r2, style);
+    }
+
+    public void arrange(in Rect bounds, in DockSpaceStyle style){
+        this.ensureRoot();
+        this.m_lastBounds = bounds;
+        this.arrangeSubtree(this.m_rootNodeId, bounds, style);
+    }
+
+    public b8 hitTestDropZone(in Point pt, in f32 edgeFraction, mut u32 outNodeId, mut DockDropZone outZone)const{
+        outNodeId = 0u;
+        outZone = DockDropZone::None;
+        for(in DockNode node : this.m_nodes){
+            if(!node.isLeaf() || !(node.computedRect.width > 0.0f) || !(node.computedRect.height > 0.0f))
+                continue;
+            if(!UiRectContainsPoint(node.computedRect, pt))
+                continue;
+            outNodeId = node.id;
+            const f32 nx = (pt.x - node.computedRect.x) / node.computedRect.width;
+            const f32 ny = (pt.y - node.computedRect.y) / node.computedRect.height;
+            f32 bestDist = edgeFraction;
+            DockDropZone bestZone = DockDropZone::Center;
+            if(nx < bestDist){
+                bestDist = nx;
+                bestZone = DockDropZone::Left;
+            }
+            if(1.0f - nx < bestDist){
+                bestDist = 1.0f - nx;
+                bestZone = DockDropZone::Right;
+            }
+            if(ny < bestDist){
+                bestDist = ny;
+                bestZone = DockDropZone::Top;
+            }
+            if(1.0f - ny < bestDist){
+                bestDist = 1.0f - ny;
+                bestZone = DockDropZone::Bottom;
+            }
+            outZone = bestZone;
+            return true;
+        }
+        return false;
+    }
+
+    public Rect computeDropPreviewRect(in u32 nodeId, in DockDropZone zone)const{
+        const Optional<usize> idxOpt = this.findNodeIndex(nodeId);
+        if(!idxOpt.has_value() || zone == DockDropZone::None)
+            return Rect();
+        in Rect r = this.m_nodes[idxOpt.value()].computedRect;
+        if(zone == DockDropZone::Left)
+            return Rect(r.x, r.y, r.width * 0.5f, r.height);
+        if(zone == DockDropZone::Right)
+            return Rect(r.x + r.width * 0.5f, r.y, r.width * 0.5f, r.height);
+        if(zone == DockDropZone::Top)
+            return Rect(r.x, r.y, r.width, r.height * 0.5f);
+        if(zone == DockDropZone::Bottom)
+            return Rect(r.x, r.y + r.height * 0.5f, r.width, r.height * 0.5f);
+        return r;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidDockSpaceOptions(in DockSpaceOptions options){
+    return IsValidLayoutSize(options.width) && IsValidLayoutSize(options.height);
+}
+
+b8 IsValidDockSpaceStyle(in DockSpaceStyle style){
+    return IsValidPaintColor(style.backgroundColor)
+        && IsValidPaintColor(style.tabBarBgColor)
+        && IsValidPaintColor(style.activeTabColor)
+        && IsValidPaintColor(style.inactiveTabColor)
+        && IsValidPaintColor(style.hoverTabColor)
+        && IsValidPaintColor(style.splitterColor)
+        && IsValidPaintColor(style.splitterHoverColor)
+        && IsValidPaintColor(style.borderColor)
+        && IsValidPaintColor(style.dropPreviewFill)
+        && IsValidPaintColor(style.dropPreviewBorder)
+        && IsValidPaintColor(style.textColor)
+        && IsValidPaintColor(style.inactiveTextColor)
+        && IsFinite(VectorSingle(style.tabBarHeight, style.tabPaddingX, style.tabCloseSize, style.splitterThickness))
+        && IsFinite(VectorSingle(style.minPaneExtent, style.dropZoneEdgeFraction, 0.0f, 0.0f))
+        && style.tabBarHeight > 0.0f
+        && style.tabPaddingX >= 0.0f
+        && style.tabCloseSize > 0.0f
+        && style.splitterThickness > 0.0f
+        && style.minPaneExtent > 0.0f
+        && style.dropZoneEdgeFraction > 0.0f && style.dropZoneEdgeFraction < 0.5f;
+}
+
+void ApplySkinPaletteToDockSpaceStyle(in UiSkinPalette palette, mut DockSpaceStyle style){
+    style.textColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+    style.inactiveTextColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.borderColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

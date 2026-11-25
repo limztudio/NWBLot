@@ -52,14 +52,17 @@ class CsgSnapshotIdentityBuilder{
     public void updateCsgFrameStateCutterSignature(
         in EntityID entity,
         in CsgCutterComponent cutter,
+        in MatrixSingle worldToShape,
+        in MatrixSingle shapeToWorld,
         mut u64 inOutContentHash
     )const{
         inOutContentHash = UpdateFnv64U32(inOutContentHash, entity.id);
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.active);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.syncFromTransform);
         inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
         inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
-        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.worldToShape));
-        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, MatrixSingle(cutter.shapeToWorld));
+        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, worldToShape);
+        inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, shapeToWorld);
         inOutContentHash = this.updateFnv64ByteSpan(inOutContentHash, cutter.parameterBytes);
     }
 

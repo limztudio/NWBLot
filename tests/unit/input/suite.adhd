@@ -650,7 +650,108 @@ NWB_ADHD_GTEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchD
 NWB_ADHD_GTEST(InputDispatcher, MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress, VerifyInputDispatcher_MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress)
 NWB_ADHD_GTEST(InputDispatcher, CaptureLossSkipsPendingRemovalAndKeepsOtherOwners, VerifyInputDispatcher_CaptureLossSkipsPendingRemovalAndKeepsOtherOwners)
 NWB_ADHD_GTEST(InputDispatcher, OwnerAddedDuringPointerLeaveWaitsForNextEvent, VerifyInputDispatcher_OwnerAddedDuringPointerLeaveWaitsForNextEvent)
+class GamepadTestHandler : IInputEventHandler{
+    public b8 m_consume = false;
+    public u32 m_connections = 0u;
+    public u32 m_buttons = 0u;
+    public u32 m_axes = 0u;
+    public u32 m_lastGamepad = 0u;
+    public b8 m_lastConnected = false;
+    public i32 m_lastButton = -1;
+    public i32 m_lastAction = -1;
+    public i32 m_lastAxis = -1;
+    public f32 m_lastAxisValue = 0.0f;
+
+    public void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected)override{
+        ++this.m_connections;
+        this.m_lastGamepad = gamepadIndex;
+        this.m_lastConnected = connected;
+    }
+
+    public b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action)override{
+        ++this.m_buttons;
+        this.m_lastGamepad = gamepadIndex;
+        this.m_lastButton = button;
+        this.m_lastAction = action;
+        return this.m_consume;
+    }
+
+    public b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value)override{
+        ++this.m_axes;
+        this.m_lastGamepad = gamepadIndex;
+        this.m_lastAxis = axis;
+        this.m_lastAxisValue = value;
+        return this.m_consume;
+    }
+}
+
+void VerifyInputDispatcher_GamepadValidationClampingAndPriority(){
+    InputDispatcher dispatcher = InputDispatcher();
+    GamepadTestHandler front;
+    GamepadTestHandler back;
+    back.m_consume = true;
+    dispatcher.addHandlerToFront(front);
+    dispatcher.addHandlerToBack(back);
+
+    dispatcher.gamepadConnectionUpdate(s_MaxGamepadCount, true);
+    EXPECT_EQ(front.m_connections, 0u);
+    EXPECT_EQ(back.m_connections, 0u);
+
+    dispatcher.gamepadConnectionUpdate(1u, true);
+    EXPECT_EQ(front.m_connections, 1u);
+    EXPECT_EQ(back.m_connections, 1u);
+    EXPECT_EQ(back.m_lastGamepad, 1u);
+    EXPECT_TRUE(back.m_lastConnected);
+
+    dispatcher.gamepadButtonUpdate(s_MaxGamepadCount, cast<i32>(GamepadButton::A), InputAction::Press);
+    dispatcher.gamepadButtonUpdate(0u, -1, InputAction::Press);
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::kCount), InputAction::Press);
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::A), 99);
+    EXPECT_EQ(front.m_buttons, 0u);
+    EXPECT_EQ(back.m_buttons, 0u);
+
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::A), InputAction::Repeat);
+    EXPECT_EQ(back.m_buttons, 1u);
+    EXPECT_EQ(front.m_buttons, 0u);
+    EXPECT_EQ(back.m_lastAction, cast<i32>(InputAction::Repeat));
+
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::A), InputAction::Release);
+    EXPECT_EQ(back.m_buttons, 2u);
+    EXPECT_EQ(front.m_buttons, 1u);
+    EXPECT_EQ(front.m_lastAction, cast<i32>(InputAction::Release));
+
+    const f32 quietNaN = bit_cast<f32>(0x7fc00000u);
+    dispatcher.gamepadAxisUpdate(0u, cast<i32>(GamepadAxis::LeftX), quietNaN);
+    dispatcher.gamepadAxisUpdate(s_MaxGamepadCount, cast<i32>(GamepadAxis::LeftX), 0.5f);
+    dispatcher.gamepadAxisUpdate(0u, cast<i32>(GamepadAxis::kCount), 0.5f);
+    EXPECT_EQ(front.m_axes, 0u);
+    EXPECT_EQ(back.m_axes, 0u);
+
+    dispatcher.gamepadAxisUpdate(2u, cast<i32>(GamepadAxis::LeftX), -2.5f);
+    EXPECT_EQ(back.m_axes, 1u);
+    EXPECT_EQ(back.m_lastAxisValue, -1.0f);
+    EXPECT_EQ(front.m_axes, 0u);
+
+    dispatcher.gamepadAxisUpdate(2u, cast<i32>(GamepadAxis::LeftTrigger), -0.5f);
+    EXPECT_EQ(back.m_axes, 2u);
+    EXPECT_EQ(back.m_lastAxisValue, 0.0f);
+
+    dispatcher.gamepadAxisUpdate(2u, cast<i32>(GamepadAxis::RightTrigger), 3.0f);
+    EXPECT_EQ(back.m_axes, 3u);
+    EXPECT_EQ(back.m_lastAxisValue, 1.0f);
+
+    back.m_consume = false;
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::B), InputAction::Press);
+    dispatcher.gamepadAxisUpdate(2u, cast<i32>(GamepadAxis::RightX), 0.25f);
+    EXPECT_EQ(back.m_buttons, 3u);
+    EXPECT_EQ(front.m_buttons, 2u);
+    EXPECT_EQ(back.m_axes, 4u);
+    EXPECT_EQ(front.m_axes, 1u);
+    EXPECT_EQ(front.m_lastAxisValue, 0.25f);
+}
+
 NWB_ADHD_GTEST(InputDispatcher, PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease, VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease)
+NWB_ADHD_GTEST(InputDispatcher, GamepadValidationClampingAndPriority, VerifyInputDispatcher_GamepadValidationClampingAndPriority)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

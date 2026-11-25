@@ -36,8 +36,62 @@ void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material,
     mut RendererComponent renderer = entity.addComponent<RendererComponent>();
     renderer = resolvedRenderer.value();
 
-    mut MaterialInstanceComponent materialInstance = entity.addComponent<MaterialInstanceComponent>();
-    CopyOwnerMaterialInstanceIfPresent(world, owner, materialInstance);
+    if(world.hasComponent<MaterialInstanceComponent>(owner)){
+        mut MaterialInstanceComponent materialInstance = entity.addComponent<MaterialInstanceComponent>();
+        CopyOwnerMaterialInstanceIfPresent(world, owner, materialInstance);
+    }
+}
+
+void SyncModelObjectRenderers(mut World world){
+    mut World worldMut = world;
+    world.view<ModelObjectComponent>().each(lambda[mut worldMut](in EntityID entity, in ModelObjectComponent object) -> void{
+        if(object.kind == ModelObjectKind::Skeleton)
+            return;
+        if(!object.owner.valid() || !worldMut.alive(object.owner))
+            return;
+
+        const Optional<RendererComponent> ownerRenderer = TryGetOwnerRendererComponent(worldMut, object.owner);
+        RendererComponent fallbackRenderer = RendererComponent();
+        if(ownerRenderer.has_value())
+            fallbackRenderer = ownerRenderer.value();
+        const Expected<RendererComponent> resolvedRenderer = TryResolveModelObjectRendererComponent(
+            AssetRef<Material>(object.defaultMaterial),
+            ownerRenderer.has_value(),
+            fallbackRenderer
+        );
+        if(!resolvedRenderer.has_value()){
+            if(worldMut.hasComponent<RendererComponent>(entity))
+                worldMut.removeComponent<RendererComponent>(entity);
+            if(worldMut.hasComponent<MaterialInstanceComponent>(entity))
+                worldMut.removeComponent<MaterialInstanceComponent>(entity);
+            return;
+        }
+
+        if(worldMut.hasComponent<RendererComponent>(entity)){
+            mut RendererComponent childRenderer = worldMut.getComponent<RendererComponent>(entity);
+            if(!ModelObjectRendererComponentsEqual(childRenderer, resolvedRenderer.value()))
+                childRenderer = resolvedRenderer.value();
+        }
+        else{
+            worldMut.entity(entity).addComponent<RendererComponent>() = resolvedRenderer.value();
+        }
+
+        if(worldMut.hasComponent<MaterialInstanceComponent>(object.owner)){
+            if(!worldMut.hasComponent<MaterialInstanceComponent>(entity)){
+                mut MaterialInstanceComponent childMat = worldMut.entity(entity).addComponent<MaterialInstanceComponent>();
+                CopyModelObjectMaterialInstance(worldMut.getComponent<MaterialInstanceComponent>(object.owner), childMat);
+            }
+            else{
+                const MaterialInstanceComponent ownerMat = worldMut.getComponent<MaterialInstanceComponent>(object.owner);
+                mut MaterialInstanceComponent childMat = worldMut.getComponent<MaterialInstanceComponent>(entity);
+                if(!ModelObjectMaterialInstancesEqual(ownerMat, childMat))
+                    CopyModelObjectMaterialInstance(ownerMat, childMat);
+            }
+        }
+        else if(worldMut.hasComponent<MaterialInstanceComponent>(entity)){
+            worldMut.removeComponent<MaterialInstanceComponent>(entity);
+        }
+    });
 }
 
 ComponentAccess MakeWriteComponentAccess(in usize typeId){
@@ -52,7 +106,8 @@ ModelObjectRendererHooks CreateModelObjectRendererHooks(){
     accesses[0u] = MakeWriteComponentAccess(ComponentType<RendererComponent>());
     accesses[1u] = MakeWriteComponentAccess(ComponentType<MaterialInstanceComponent>());
     const ModelObjectRendererApplyFn applyFn = ApplyModelObjectRenderer;
-    return ModelObjectRendererHooks(ModelObjectRendererCallback(applyFn), accesses);
+    const ModelObjectRendererSyncFn syncFn = SyncModelObjectRenderers;
+    return ModelObjectRendererHooks(ModelObjectRendererCallback(applyFn), ModelObjectRendererSyncCallback(syncFn), accesses);
 }
 
 

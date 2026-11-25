@@ -19,6 +19,7 @@ class EditBoxView{
     private Rect m_visualBounds;
     private EditBoxRange m_selection;
     private EditBoxRange m_preedit;
+    private Vector<EditPreeditClause> m_preeditClauses;
     private EditBoxRange m_replacement;
     private usize m_caret = 0u;
     private usize m_committedBytes = 0u;
@@ -29,10 +30,16 @@ class EditBoxView{
 
     [cpp_unwind]
     public b8 snapshot(in EditModel model){
+        return this.snapshot(model, false, s_EditBoxDefaultMaskCodePoint);
+    }
+
+    [cpp_unwind]
+    public b8 snapshot(in EditModel model, in b8 password, in u32 maskCodePoint){
         return EditBoxSnapshotBuilder().commit(
             model.text(), model.graphemeBoundaries(), model.composition(), model.textMode(),
             model.selectionStart(), model.selectionEnd(), model.caret(), model.revision(),
-            this.m_display, this.m_mapping, this.m_selection, this.m_preedit, this.m_replacement, this.m_caret,
+            password, maskCodePoint,
+            this.m_display, this.m_mapping, this.m_selection, this.m_preedit, this.m_preeditClauses, this.m_replacement, this.m_caret,
             this.m_committedBytes, this.m_revision, this.m_textMode, this.m_composing, this.m_ready
         );
     }
@@ -82,7 +89,8 @@ class EditBoxView{
         return TryArrangeEditBox(
             this.m_ready, bounds, padding, clip, previousScroll, caretWidth, revealCaret, this.m_textMode,
             this.m_visualBounds, this.layout().measure(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
-            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing,
+            this.layout().direction()
         );
     }
 
@@ -96,7 +104,8 @@ class EditBoxView{
         return TryArrangeEditBoxViewport(
             this.m_ready, bounds, viewport, clip, previousScroll, caretWidth, revealCaret, this.m_textMode,
             this.m_visualBounds, this.layout().measure(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
-            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing,
+            this.layout().direction()
         );
     }
 
@@ -106,20 +115,24 @@ class EditBoxView{
 
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement)const{
-        return this.paint(text, paint, skin, placement, s_DefaultEditBoxStyle, s_DefaultEditBoxPaintFlags);
+        return this.paint(text, paint, skin, placement, s_DefaultEditBoxStyle, s_DefaultEditBoxPaintFlags, Optional<in TextLayout>());
     }
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style)const{
-        return this.paint(text, paint, skin, placement, style, s_DefaultEditBoxPaintFlags);
+        return this.paint(text, paint, skin, placement, style, s_DefaultEditBoxPaintFlags, Optional<in TextLayout>());
     }
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags)const{
+        return this.paint(text, paint, skin, placement, style, flags, Optional<in TextLayout>());
+    }
+    [cpp_unwind]
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags, in Optional<in TextLayout> placeholder)const{
         if(!this.m_ready)
             return false;
         return PaintEditBoxViewVisual(
             text, paint, skin, this.layout(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
-            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_selection, this.m_preedit, this.m_composing,
-            placement, style, flags
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_selection, this.m_preedit, Span<EditPreeditClause>(this.m_preeditClauses), this.m_composing,
+            placement, style, flags, placeholder
         );
     }
 
@@ -135,6 +148,7 @@ class EditBoxView{
     public usize displayCaret()const{ return this.m_caret; }
     public EditBoxRange selectionRange()const{ return this.m_selection; }
     public EditBoxRange preeditRange()const{ return this.m_preedit; }
+    public Span<EditPreeditClause> preeditClauses()const{ return Span<EditPreeditClause>(this.m_preeditClauses); }
     public EditBoxRange replacementRange()const{ return this.m_replacement; }
     public b8 composing()const{ return this.m_composing; }
     public b8 ready()const{ return this.m_ready; }

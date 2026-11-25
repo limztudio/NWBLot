@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/accessibility/tree.adhd>
 #include <impl/ecs_ui/toolkit/input/context_staging.adhd>
 #include <impl/ecs_ui/toolkit/input/router.adhd>
 #include <impl/ecs_ui/toolkit/paint_primitives.adhd>
@@ -25,18 +26,43 @@ class Context : NoCopy{
     private usize m_retainedRootCapacity = 0u;
     private Vector<PopupScope> m_commitPopups;
     private Vector<WidgetId> m_retiredIds;
+    private Vector<WindowPressRecord> m_windowPressScratch;
+    private Vector<WindowPromotionRecord> m_windowPromotions;
     private PopupToken m_currentPopup;
     private Array<PopupToken, s_InputMaxPopups> m_popupStack;
+    private Array<ContextScrollOwnerEntry, s_ContextMaxScopeDepth> m_scrollOwners;
+    private Array<ContextFocusGroupEntry, s_ContextMaxScopeDepth> m_focusGroups;
     private usize m_popupDepth = 0u;
+    private usize m_scrollOwnerDepth = 0u;
+    private usize m_focusGroupDepth = 0u;
     private usize m_declarationCount = 0u;
     private usize m_stateClaimCount = 0u;
     private WidgetState m_lastDeclaredState;
     private WidgetRoot m_root;
+    private WidgetId m_activeWindowId;
+    private u64 m_activeWindowDeclarationGeneration = 0u;
     private u64 m_frameGeneration = 0u;
     private u64 m_focusLossGeneration = 0u;
     private u64 m_lastFrameGeneration = 0u;
     private u64 m_readyGeneration = 0u;
     private u32 m_popupLayer = 0u;
+    private u32 m_windowZOrder = 0u;
+    private u32 m_nextWindowZOrder = 1u;
+    private PointerCursor m_frameCursor = PointerCursor::Default;
+    private PointerCursor m_nextTargetCursor = PointerCursor::Default;
+    private WidgetId m_nextFocusUp;
+    private WidgetId m_nextFocusDown;
+    private WidgetId m_nextFocusLeft;
+    private WidgetId m_nextFocusRight;
+    private b8 m_hasNextTargetCursor = false;
+    private b8 m_hasNextFocusNeighbors = false;
+    private AccessibleTree m_accessibility;
+    private Vector<WidgetId> m_accessibleParents;
+    private AccessibleOverride m_nextAccessibleOverride;
+    private Vector<AccessibleNumericValueRequest> m_accessibleNumericRequests;
+    private u32 m_nextTargetFocusGroup = 0u;
+    private b8 m_nextTargetTrapDirectional = false;
+    private b8 m_hasNextTargetFocusGroup = false;
     private b8 m_rootActive = false;
     private b8 m_failed = false;
     private b8 m_rootPrunedThisFrame = false;
@@ -44,10 +70,13 @@ class Context : NoCopy{
     [cpp_unwind]
     public Context(){
         this.m_scopes.reserve(s_ContextMaxScopeDepth);
+        this.m_accessibleParents.reserve(s_ContextMaxScopeDepth);
         this.m_targets.reserve(s_InputMaxTargets);
         this.m_targetRoots.reserve(s_InputMaxTargets);
         this.m_popups.reserve(s_InputMaxPopups);
         this.m_commitPopups.reserve(s_InputMaxPopups);
+        this.m_windowPressScratch.reserve(s_InputMaxWindowPresses);
+        this.m_windowPromotions.reserve(s_InputMaxWindowPresses);
     }
     public b8 beginFrame(in u64 generation){
         if(!TryBeginContextFrame(
@@ -70,7 +99,52 @@ class Context : NoCopy{
             return false;
         this.m_lastDeclaredState = WidgetState();
         this.m_rootPrunedThisFrame = false;
+        this.m_windowZOrder = 0u;
+        this.m_activeWindowId = WidgetId();
+        this.m_activeWindowDeclarationGeneration = 0u;
+        this.m_scrollOwnerDepth = 0u;
+        this.m_focusGroupDepth = 0u;
+        this.m_accessibleParents.clear();
+        this.m_accessibility.beginFrame();
+        this.m_frameCursor = PointerCursor::Default;
+        this.clearNextTargetOverrides();
+        this.clearNextAccessibleOverride();
+        this.collectWindowPromotions();
         return true;
+    }
+    public u32 allocateWindowZOrder(){
+        const u32 allocated = this.m_nextWindowZOrder;
+        if(this.m_nextWindowZOrder < u32.max)
+            ++this.m_nextWindowZOrder;
+        return allocated;
+    }
+    public void observeWindowZOrder(in u32 zOrder){
+        if(zOrder >= this.m_nextWindowZOrder && zOrder < u32.max)
+            this.m_nextWindowZOrder = zOrder + 1u;
+    }
+    public u32 takeWindowPromotion(in WidgetState window){
+        for(usize index = 0u; index < this.m_windowPromotions.size(); ++index){
+            if(this.m_windowPromotions[index].windowId == window.id && this.m_windowPromotions[index].declarationGeneration == window.declarationGeneration){
+                const u32 promoted = this.m_windowPromotions[index].zOrder;
+                this.m_windowPromotions.erase(this.m_windowPromotions.begin() + cast<isize>(index));
+                return promoted;
+            }
+        }
+        return 0u;
+    }
+    public b8 beginWindowLayer(in WidgetState window, in u32 zOrder){
+        if(this.m_failed || !this.currentDeclaration(window) || zOrder == 0u || this.m_windowZOrder != 0u || this.m_popupDepth != 0u)
+            return false;
+        this.observeWindowZOrder(zOrder);
+        this.m_windowZOrder = zOrder;
+        this.m_activeWindowId = window.id;
+        this.m_activeWindowDeclarationGeneration = window.declarationGeneration;
+        return true;
+    }
+    public void endWindowLayer(){
+        this.m_windowZOrder = 0u;
+        this.m_activeWindowId = WidgetId();
+        this.m_activeWindowDeclarationGeneration = 0u;
     }
     [cpp_unwind]
     public b8 beginRoot(in WidgetRoot root){
@@ -81,10 +155,263 @@ class Context : NoCopy{
         return true;
     }
     public b8 endRoot(){
+        this.endWindowLayer();
+        this.m_scrollOwnerDepth = 0u;
+        this.m_focusGroupDepth = 0u;
+        this.m_accessibleParents.clear();
+        this.clearNextTargetOverrides();
+        this.clearNextAccessibleOverride();
         if(!TryEndContextRoot(this.m_failed, this.m_popupDepth, this.m_currentPopup, this.m_rootActive, this.m_scopes)){
             this.fail();
             return false;
         }
+        return true;
+    }
+    public b8 pushScrollOwner(in WidgetState owner){
+        if(this.m_failed || !this.currentDeclaration(owner) || this.m_scrollOwnerDepth >= s_ContextMaxScopeDepth)
+            return false;
+        ContextScrollOwnerEntry entry;
+        entry.id = owner.id;
+        entry.declarationGeneration = owner.declarationGeneration;
+        entry.popup = this.m_currentPopup;
+        this.m_scrollOwners[this.m_scrollOwnerDepth] = entry;
+        ++this.m_scrollOwnerDepth;
+        return true;
+    }
+    public b8 popScrollOwner(){
+        if(this.m_scrollOwnerDepth == 0u)
+            return false;
+        --this.m_scrollOwnerDepth;
+        return true;
+    }
+    public void clearScrollOwners(){
+        this.m_scrollOwnerDepth = 0u;
+    }
+    public void setFrameCursor(in PointerCursor cursor){
+        if(cursor <= PointerCursor::Hidden)
+            this.m_frameCursor = cursor;
+    }
+    public PointerCursor frameCursor()const{ return this.m_frameCursor; }
+    public PointerCursor resolveCursor()const{
+        if(this.m_frameCursor != PointerCursor::Default)
+            return this.m_frameCursor;
+        return this.m_input.resolvedCursor();
+    }
+    public void setNextTargetCursor(in PointerCursor cursor){
+        if(cursor <= PointerCursor::Hidden){
+            this.m_nextTargetCursor = cursor;
+            this.m_hasNextTargetCursor = true;
+        }
+    }
+    public void setNextFocusNeighbors(in WidgetId up, in WidgetId down, in WidgetId left, in WidgetId right){
+        this.m_nextFocusUp = up;
+        this.m_nextFocusDown = down;
+        this.m_nextFocusLeft = left;
+        this.m_nextFocusRight = right;
+        this.m_hasNextFocusNeighbors = true;
+    }
+    public void setNextTargetFocusGroup(in u32 groupId, in b8 trapDirectional){
+        this.m_nextTargetFocusGroup = groupId;
+        this.m_nextTargetTrapDirectional = trapDirectional;
+        this.m_hasNextTargetFocusGroup = true;
+    }
+    public void clearNextTargetOverrides(){
+        this.m_nextTargetCursor = PointerCursor::Default;
+        this.m_hasNextTargetCursor = false;
+        this.m_nextFocusUp = WidgetId();
+        this.m_nextFocusDown = WidgetId();
+        this.m_nextFocusLeft = WidgetId();
+        this.m_nextFocusRight = WidgetId();
+        this.m_hasNextFocusNeighbors = false;
+        this.m_nextTargetFocusGroup = 0u;
+        this.m_nextTargetTrapDirectional = false;
+        this.m_hasNextTargetFocusGroup = false;
+    }
+    [cpp_unwind]
+    public b8 pushAccessibleParent(in WidgetId id){
+        if(this.m_failed || !this.m_rootActive || !id.valid() || this.m_accessibleParents.size() >= s_ContextMaxScopeDepth)
+            return false;
+        this.m_accessibleParents.push_back(id);
+        return true;
+    }
+    public b8 popAccessibleParent(){
+        if(this.m_accessibleParents.empty())
+            return false;
+        this.m_accessibleParents.pop_back();
+        return true;
+    }
+    public WidgetId currentAccessibleParent()const{
+        if(this.m_accessibleParents.empty())
+            return WidgetId();
+        return this.m_accessibleParents.back();
+    }
+    [cpp_unwind]
+    public void setNextAccessibleOverride(in AccessibleOverride value){
+        this.m_nextAccessibleOverride = value;
+    }
+    public void clearNextAccessibleOverride(){
+        this.m_nextAccessibleOverride.reset();
+    }
+    [cpp_unwind]
+    public b8 addAccessibleNode(in AccessibleNodeDesc desc){
+        AccessibleNodeDesc resolved = desc;
+        if(!resolved.parentId.valid())
+            resolved.parentId = this.currentAccessibleParent();
+        if(this.m_nextAccessibleOverride.any()){
+            if(this.m_nextAccessibleOverride.hasLabel)
+                resolved.name = StringView(this.m_nextAccessibleOverride.label);
+            if(this.m_nextAccessibleOverride.hasDescription)
+                resolved.description = StringView(this.m_nextAccessibleOverride.description);
+            if(this.m_nextAccessibleOverride.hasRole)
+                resolved.role = this.m_nextAccessibleOverride.role;
+            if(this.m_nextAccessibleOverride.hasLiveMode)
+                resolved.liveMode = this.m_nextAccessibleOverride.liveMode;
+        }
+        const b8 added = this.m_accessibility.addNode(resolved);
+        this.m_nextAccessibleOverride.reset();
+        return added;
+    }
+    [cpp_unwind]
+    public b8 announce(in StringView text, in AccessibilityLiveMode liveMode){
+        if(this.m_failed || !this.m_rootActive)
+            return false;
+        return this.m_accessibility.announce(text, liveMode);
+    }
+    [cpp_unwind]
+    public b8 applyAccessibleAction(in AccessibilityActionEvent action){
+        if(action.targetId == 0u)
+            return false;
+        WidgetId id;
+        id.value = action.targetId;
+        const Optional<in AccessibilityNodeData> a11yNode = this.m_accessibility.findNode(id);
+        const Optional<in HitTarget> hitTarget = this.m_input.findTarget(id);
+        if(!a11yNode.has_value() && !hitTarget.has_value())
+            return false;
+        if(a11yNode.has_value() && (a11yNode.value().stateBits & s_AccessibilityStateEnabled) == 0u)
+            return false;
+        if(hitTarget.has_value() && !hitTarget.value().enabled)
+            return false;
+
+        b8 handled = false;
+        if(action.kind == AccessibilityActionKind::Focus)
+            handled = this.m_input.setFocus(id);
+        else if(action.kind == AccessibilityActionKind::SetValue){
+            if(!IsFinite(VectorDouble(action.numericValue)))
+                return false;
+            if(hitTarget.has_value() && hitTarget.value().focusable)
+                this.m_input.setFocus(id);
+            b8 updatedExisting = false;
+            for(mut AccessibleNumericValueRequest req : this.m_accessibleNumericRequests){
+                if(req.targetId == id){
+                    req.value = action.numericValue;
+                    updatedExisting = true;
+                    break;
+                }
+            }
+            if(!updatedExisting){
+                if(this.m_accessibleNumericRequests.size() < s_AccessibilityMaxActions){
+                    AccessibleNumericValueRequest req;
+                    req.targetId = id;
+                    req.value = action.numericValue;
+                    this.m_accessibleNumericRequests.push_back(req);
+                    handled = true;
+                }
+            }
+            else
+                handled = true;
+        }
+        else{
+            if(hitTarget.has_value() && hitTarget.value().focusable)
+                this.m_input.setFocus(id);
+            InputCommand command = InputCommand::None;
+            if(action.kind == AccessibilityActionKind::Invoke
+                || action.kind == AccessibilityActionKind::Toggle
+                || action.kind == AccessibilityActionKind::Select
+                || action.kind == AccessibilityActionKind::Expand
+            )
+                command = InputCommand::Activate;
+            else if(action.kind == AccessibilityActionKind::Collapse){
+                if(a11yNode.has_value() && (a11yNode.value().role == AccessibilityRole::ToggleButton || a11yNode.value().role == AccessibilityRole::TreeItem))
+                    command = InputCommand::Activate;
+                else
+                    command = InputCommand::Cancel;
+            }
+            else if(action.kind == AccessibilityActionKind::Increment){
+                if(hitTarget.has_value() && hitTarget.value().horizontalNavigation)
+                    command = InputCommand::Right;
+                else
+                    command = InputCommand::Up;
+            }
+            else if(action.kind == AccessibilityActionKind::Decrement){
+                if(hitTarget.has_value() && hitTarget.value().horizontalNavigation)
+                    command = InputCommand::Left;
+                else
+                    command = InputCommand::Down;
+            }
+            else if(action.kind == AccessibilityActionKind::ContextMenu)
+                command = InputCommand::ContextMenu;
+
+            if(command != InputCommand::None){
+                InputEvent downEvent;
+                downEvent.type = InputEventType::CommandDown;
+                downEvent.command = command;
+                downEvent.source = InputSource(s_AccessibleInputDeviceId, 1u);
+                InputEvent upEvent;
+                upEvent.type = InputEventType::CommandUp;
+                upEvent.command = command;
+                upEvent.source = InputSource(s_AccessibleInputDeviceId, 1u);
+                if(this.m_input.queue(downEvent).has_value() && this.m_input.queue(upEvent).has_value()){
+                    const InputRoutingResult routed = this.m_input.process();
+                    handled = routed.commandConsumed || routed.focus == id;
+                }
+            }
+        }
+
+        if(handled){
+            WidgetId pressedId;
+            if(this.m_input.pressed(this.m_input.focus()))
+                pressedId = this.m_input.focus();
+            else if(this.m_input.pressed(this.m_input.capture()))
+                pressedId = this.m_input.capture();
+            this.m_accessibility.updateInteractionState(this.m_input.focus(), this.m_input.hover(), pressedId);
+        }
+        return handled;
+    }
+    public b8 takeAccessibleNumericValue(in WidgetState state, mut f64 outValue){
+        if(this.m_failed || !this.currentDeclaration(state))
+            return false;
+        for(usize index = 0u; index < this.m_accessibleNumericRequests.size(); ++index){
+            if(this.m_accessibleNumericRequests[index].targetId == state.id){
+                outValue = this.m_accessibleNumericRequests[index].value;
+                this.m_accessibleNumericRequests.erase(this.m_accessibleNumericRequests.begin() + cast<isize>(index));
+                return true;
+            }
+        }
+        return false;
+    }
+    [cpp_unwind]
+    public b8 pushFocusGroup(in StringView stableKey, in b8 trapDirectional){
+        if(this.m_failed || !this.m_rootActive || this.m_focusGroupDepth >= s_ContextMaxScopeDepth || this.m_scopes.empty() || stableKey.empty())
+            return false;
+        const Expected<WidgetId> id = TryMakeWidgetId(this.m_scopes.back(), stableKey);
+        if(!id.has_value())
+            return false;
+        const u64 raw = id.value().value;
+        u32 groupId = cast<u32>((raw ^ (raw >> 32u)) & 0xFFFFFFFFu);
+        if(groupId == 0u)
+            groupId = 1u;
+        ContextFocusGroupEntry entry;
+        entry.id = groupId;
+        entry.trapDirectional = trapDirectional;
+        entry.popup = this.m_currentPopup;
+        this.m_focusGroups[this.m_focusGroupDepth] = entry;
+        ++this.m_focusGroupDepth;
+        return true;
+    }
+    public b8 popFocusGroup(){
+        if(this.m_focusGroupDepth == 0u)
+            return false;
+        --this.m_focusGroupDepth;
         return true;
     }
     [cpp_unwind]
@@ -136,7 +463,49 @@ class Context : NoCopy{
     }
     [cpp_unwind]
     public b8 addTarget(in WidgetState state, in HitTarget target){
-        if(this.m_failed || !this.currentDeclaration(state) || !TryAppendContextTarget(state, this.m_currentPopup, this.m_popupLayer, target, this.m_targets, this.m_targetRoots)){
+        WidgetId scrollOwnerId;
+        u64 scrollOwnerGen = 0u;
+        if(this.m_scrollOwnerDepth > 0u){
+            in ContextScrollOwnerEntry top = this.m_scrollOwners[this.m_scrollOwnerDepth - 1u];
+            if(top.popup == this.m_currentPopup){
+                scrollOwnerId = top.id;
+                scrollOwnerGen = top.declarationGeneration;
+            }
+        }
+        HitTarget resolved = target;
+        if(this.m_hasNextTargetFocusGroup){
+            if(this.m_nextTargetFocusGroup != 0u){
+                resolved.focusGroup = this.m_nextTargetFocusGroup;
+                resolved.trapDirectionalFocus = this.m_nextTargetTrapDirectional;
+            }
+            this.m_nextTargetFocusGroup = 0u;
+            this.m_nextTargetTrapDirectional = false;
+            this.m_hasNextTargetFocusGroup = false;
+        }
+        else if(this.m_focusGroupDepth > 0u){
+            in ContextFocusGroupEntry groupTop = this.m_focusGroups[this.m_focusGroupDepth - 1u];
+            if(groupTop.popup == this.m_currentPopup && resolved.focusGroup == 0u){
+                resolved.focusGroup = groupTop.id;
+                resolved.trapDirectionalFocus = groupTop.trapDirectional;
+            }
+        }
+        if(this.m_hasNextTargetCursor){
+            resolved.cursor = this.m_nextTargetCursor;
+            this.m_nextTargetCursor = PointerCursor::Default;
+            this.m_hasNextTargetCursor = false;
+        }
+        if(this.m_hasNextFocusNeighbors){
+            resolved.focusNeighborUp = this.m_nextFocusUp;
+            resolved.focusNeighborDown = this.m_nextFocusDown;
+            resolved.focusNeighborLeft = this.m_nextFocusLeft;
+            resolved.focusNeighborRight = this.m_nextFocusRight;
+            this.m_nextFocusUp = WidgetId();
+            this.m_nextFocusDown = WidgetId();
+            this.m_nextFocusLeft = WidgetId();
+            this.m_nextFocusRight = WidgetId();
+            this.m_hasNextFocusNeighbors = false;
+        }
+        if(this.m_failed || !this.currentDeclaration(state) || !TryAppendContextTarget(state, this.m_currentPopup, this.m_popupLayer, this.m_windowZOrder, this.m_activeWindowId, this.m_activeWindowDeclarationGeneration, scrollOwnerId, scrollOwnerGen, resolved, this.m_targets, this.m_targetRoots)){
             this.fail();
             return false;
         }
@@ -144,7 +513,30 @@ class Context : NoCopy{
     }
     [cpp_unwind]
     public b8 addPartTarget(in WidgetState owner, in WidgetId part, in HitTarget target){
-        if(this.m_failed || !this.currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, this.m_currentPopup, this.m_popupLayer, target, this.m_targets, this.m_targetRoots)){
+        WidgetId scrollOwnerId;
+        u64 scrollOwnerGen = 0u;
+        if(this.m_scrollOwnerDepth > 0u){
+            in ContextScrollOwnerEntry top = this.m_scrollOwners[this.m_scrollOwnerDepth - 1u];
+            if(top.popup == this.m_currentPopup){
+                scrollOwnerId = top.id;
+                scrollOwnerGen = top.declarationGeneration;
+            }
+        }
+        HitTarget resolved = target;
+        if(this.m_hasNextTargetFocusGroup){
+            if(this.m_nextTargetFocusGroup != 0u && resolved.focusGroup == 0u){
+                resolved.focusGroup = this.m_nextTargetFocusGroup;
+                resolved.trapDirectionalFocus = this.m_nextTargetTrapDirectional;
+            }
+        }
+        else if(this.m_focusGroupDepth > 0u){
+            in ContextFocusGroupEntry groupTop = this.m_focusGroups[this.m_focusGroupDepth - 1u];
+            if(groupTop.popup == this.m_currentPopup && resolved.focusGroup == 0u){
+                resolved.focusGroup = groupTop.id;
+                resolved.trapDirectionalFocus = groupTop.trapDirectional;
+            }
+        }
+        if(this.m_failed || !this.currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, this.m_currentPopup, this.m_popupLayer, this.m_windowZOrder, this.m_activeWindowId, this.m_activeWindowDeclarationGeneration, scrollOwnerId, scrollOwnerGen, resolved, this.m_targets, this.m_targetRoots)){
             this.fail();
             return false;
         }
@@ -300,6 +692,12 @@ class Context : NoCopy{
             ExtractContextCommitPopups(this.m_popups, this.m_commitPopups);
         if(!this.m_input.commitTargets(Span<HitTarget>(this.m_targets), generation, this.m_commitPopups, this.m_focusLossGeneration))
             return false;
+        WidgetId pressedId;
+        if(this.m_input.pressed(this.m_input.focus()))
+            pressedId = this.m_input.focus();
+        else if(this.m_input.pressed(this.m_input.capture()))
+            pressedId = this.m_input.capture();
+        this.m_accessibility.commit(generation, this.m_input.focus(), this.m_input.hover(), pressedId);
         this.m_targets.clear();
         this.m_targetRoots.clear();
         this.m_popups.clear();
@@ -315,9 +713,26 @@ class Context : NoCopy{
         this.m_frameGeneration = 0u;
         this.m_failed = false;
         this.m_lastDeclaredState = WidgetState();
+        this.m_windowPromotions.clear();
+        this.m_focusGroupDepth = 0u;
+        this.m_accessibleParents.clear();
+        this.m_accessibility.beginFrame();
+        this.m_frameCursor = PointerCursor::Default;
+        this.clearNextTargetOverrides();
+        this.clearNextAccessibleOverride();
     }
     public void resetInput(){
         this.m_input.reset();
+        this.endWindowLayer();
+        this.m_scrollOwnerDepth = 0u;
+        this.m_focusGroupDepth = 0u;
+        this.m_accessibleParents.clear();
+        this.m_accessibility.reset();
+        this.m_accessibleNumericRequests.clear();
+        this.m_frameCursor = PointerCursor::Default;
+        this.clearNextTargetOverrides();
+        this.clearNextAccessibleOverride();
+        this.m_windowPromotions.clear();
         ResetContextPopupAndTargetState(
             this.m_targets,
             this.m_targetRoots,
@@ -349,6 +764,8 @@ class Context : NoCopy{
     public u64 readyGeneration()const{ return this.m_readyGeneration; }
     public mut InputRouter input(){ return this.m_input; }
     public in InputRouter input()const{ return this.m_input; }
+    public in AccessibleTree accessibility()const{ return this.m_accessibility; }
+    public mut AccessibleTree accessibility(){ return this.m_accessibility; }
     public in WidgetStateStore states()const{ return this.m_states; }
     [cpp_unwind]
     private Expected<mut WidgetState> declareId(in WidgetId id, in WidgetKind kind){
@@ -372,6 +789,21 @@ class Context : NoCopy{
             return WidgetStateIndexPolicy().matchesDeclaration(this.m_rootActive, this.m_root, this.m_frameGeneration, state, this.m_lastDeclaredState);
         const Optional<in WidgetState> current = this.m_states.find(state.id);
         return current.has_value() && WidgetStateIndexPolicy().matchesDeclaration(this.m_rootActive, this.m_root, this.m_frameGeneration, state, current.value());
+    }
+    private void collectWindowPromotions(){
+        this.m_windowPromotions.clear();
+        this.m_input.takeWindowPresses(this.m_windowPressScratch);
+        if(this.m_windowPressScratch.empty())
+            return;
+        if(this.m_windowPressScratch.size() > 1u)
+            SortSequence<WindowPressRecord>(this.m_windowPressScratch, LessWindowPressSequence);
+        for(in WindowPressRecord press : this.m_windowPressScratch){
+            WindowPromotionRecord promotion;
+            promotion.windowId = press.windowId;
+            promotion.declarationGeneration = press.declarationGeneration;
+            promotion.zOrder = this.allocateWindowZOrder();
+            this.m_windowPromotions.push_back(promotion);
+        }
     }
     [cpp_unwind]
     private void retireUnseenStates(){

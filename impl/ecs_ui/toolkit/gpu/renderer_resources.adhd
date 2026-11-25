@@ -8,20 +8,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RenderState PaintRenderState(){
+RenderState PaintRenderStateForBlendMode(in PaintBlendMode mode){
     RenderState state;
     state.depthStencilState.disableDepthTest().disableDepthWrite();
     state.rasterState.enableDepthClip().setCullNone();
-    state.blendState.targets[s_ShaderUiColorTargetLocation]
-        .enableBlend()
-        .setSrcBlend(BlendFactor::One)
-        .setDestBlend(BlendFactor::InvSrcAlpha)
-        .setBlendOp(BlendOp::Add)
-        .setSrcBlendAlpha(BlendFactor::One)
-        .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
-        .setBlendOpAlpha(BlendOp::Add)
-    ;
+    if(mode == PaintBlendMode::Additive){
+        state.blendState.targets[s_ShaderUiColorTargetLocation]
+            .enableBlend()
+            .setSrcBlend(BlendFactor::One)
+            .setDestBlend(BlendFactor::One)
+            .setBlendOp(BlendOp::Add)
+            .setSrcBlendAlpha(BlendFactor::One)
+            .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+            .setBlendOpAlpha(BlendOp::Add)
+        ;
+    }
+    else if(mode == PaintBlendMode::Multiply){
+        state.blendState.targets[s_ShaderUiColorTargetLocation]
+            .enableBlend()
+            .setSrcBlend(BlendFactor::DstColor)
+            .setDestBlend(BlendFactor::InvSrcAlpha)
+            .setBlendOp(BlendOp::Add)
+            .setSrcBlendAlpha(BlendFactor::One)
+            .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+            .setBlendOpAlpha(BlendOp::Add)
+        ;
+    }
+    else if(mode == PaintBlendMode::Screen){
+        state.blendState.targets[s_ShaderUiColorTargetLocation]
+            .enableBlend()
+            .setSrcBlend(BlendFactor::One)
+            .setDestBlend(BlendFactor::InvSrcColor)
+            .setBlendOp(BlendOp::Add)
+            .setSrcBlendAlpha(BlendFactor::One)
+            .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+            .setBlendOpAlpha(BlendOp::Add)
+        ;
+    }
+    else if(mode == PaintBlendMode::Erase){
+        state.blendState.targets[s_ShaderUiColorTargetLocation]
+            .enableBlend()
+            .setSrcBlend(BlendFactor::Zero)
+            .setDestBlend(BlendFactor::InvSrcAlpha)
+            .setBlendOp(BlendOp::Add)
+            .setSrcBlendAlpha(BlendFactor::Zero)
+            .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+            .setBlendOpAlpha(BlendOp::Add)
+        ;
+    }
+    else if(mode == PaintBlendMode::Replace){
+        state.blendState.targets[s_ShaderUiColorTargetLocation].blendEnable = false;
+    }
+    else{
+        state.blendState.targets[s_ShaderUiColorTargetLocation]
+            .enableBlend()
+            .setSrcBlend(BlendFactor::One)
+            .setDestBlend(BlendFactor::InvSrcAlpha)
+            .setBlendOp(BlendOp::Add)
+            .setSrcBlendAlpha(BlendFactor::One)
+            .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+            .setBlendOpAlpha(BlendOp::Add)
+        ;
+    }
     return state;
+}
+
+RenderState PaintRenderState(){
+    return PaintRenderStateForBlendMode(PaintBlendMode::Normal);
 }
 
 
@@ -102,13 +155,16 @@ b8 GpuRendererState::createResources(){
     ;
     FramebufferInfo targetInfo;
     targetInfo.addColorFormat(Format::RGBA16_FLOAT);
-    auto pipelineResult = device.createGraphicsPipeline(pipeline, targetInfo);
-    if(pipelineResult.has_value())
-        resources.deref().m_pipeline = pipelineResult.value();
-    else
-        resources.deref().m_pipeline.reset();
-    if(!pipelineResult.has_value())
-        return false;
+    for(usize modeIndex = 0u; modeIndex < s_PaintBlendModeCount; ++modeIndex){
+        pipeline.setRenderState(PaintRenderStateForBlendMode(cast<PaintBlendMode>(modeIndex)));
+        auto pipelineResult = device.createGraphicsPipeline(pipeline, targetInfo);
+        if(pipelineResult.has_value())
+            resources.deref().m_pipelines[modeIndex] = pipelineResult.value();
+        else
+            resources.deref().m_pipelines[modeIndex].reset();
+        if(!pipelineResult.has_value())
+            return false;
+    }
     this.m_resources = resources;
     return true;
 }

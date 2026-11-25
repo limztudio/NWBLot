@@ -116,6 +116,7 @@ class UiEditGeometry{
         outCandidate.stopTable = stopTable;
         outCandidate.textMode = textMode;
         outCandidate.options = options;
+        outCandidate.options.placeholder = StringView();
         outCandidate.generation = generation;
         outCandidate.revision = revision;
         outCandidate.externalRevision = externalRevision;

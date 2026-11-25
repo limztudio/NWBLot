@@ -4,9 +4,11 @@
 
 [cpp_header("<core/frame/module.h>"), cpp_name("::NWB::Core::Frame"), cpp_flags(no_copy, no_assign)]
 extern class Frame{
+    mut IAccessibilityService accessibility(...);
     void cleanup(...);
     mut IClipboardService clipboard(...);
     mut CpuTaskScheduler cpuTasks(...);
+    mut ICursorService cursor(...);
     b8 flushTelemetryUpload(...);
     mut FrameGraphRegistry frameGraphRegistry(...)const;
     mut GpuTaskScheduler gpuTasks(...);

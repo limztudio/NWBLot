@@ -18,6 +18,7 @@ struct NwbUiVertexOutput{
     float4 position : SV_Position;
     [[vk::location(NWB_UI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;
     [[vk::location(NWB_UI_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_UI_RASTER_LOGICAL_POS_LOCATION)]] float2 logicalPos : TEXCOORD1;
 };
 
 
@@ -29,6 +30,7 @@ NwbUiVertexOutput main(NwbUiVertexInput input){
     output.position = float4(input.position * g_NwbUiPushConstants.scale + g_NwbUiPushConstants.translate, 0.0, 1.0);
     output.uv = input.uv;
     output.color = input.color;
+    output.logicalPos = input.position;
     return output;
 }
 

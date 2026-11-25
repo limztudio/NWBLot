@@ -39,6 +39,7 @@ class SelectionTextInput : QueuedTextInputService{
     public TextInputAdmission sendCommit(in TextInputSessionToken token, in StringView text){ return this.emitCommit(token, text); }
     public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret){ return this.emitPreedit(token, text, anchor, caret); }
     public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible){ return this.emitPreedit(token, text, anchor, caret, visible); }
+    public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible, in Span<TextInputPreeditClause> clauses){ return this.emitPreedit(token, text, anchor, caret, visible, clauses); }
     public TextInputAdmission sendDeletion(in TextInputSessionToken token, in usize before, in usize after, in u64 revision, in TextInputDeletionBasis basis){ return this.emitDeleteSurrounding(token, before, after, revision, basis); }
 }
 
@@ -124,6 +125,7 @@ class FakeTextInputService : QueuedTextInputService{
     public TextInputAdmission sendCommit(in TextInputSessionToken token, in StringView text){ return this.emitCommit(token, text); }
     public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret){ return this.emitPreedit(token, text, anchor, caret); }
     public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible){ return this.emitPreedit(token, text, anchor, caret, visible); }
+    public TextInputAdmission sendPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible, in Span<TextInputPreeditClause> clauses){ return this.emitPreedit(token, text, anchor, caret, visible, clauses); }
     public TextInputAdmission sendDeletion(in TextInputSessionToken token, in usize before, in usize after, in u64 revision, in TextInputDeletionBasis basis){ return this.emitDeleteSurrounding(token, before, after, revision, basis); }
 
     public String m_nativeSurrounding;

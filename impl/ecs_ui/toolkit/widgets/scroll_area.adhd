@@ -1,0 +1,261 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "text_area_scroll.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_ScrollAreaDefaultWheelStep = 48.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ScrollAreaOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutDirection direction = LayoutDirection::Column;
+    public Insets padding;
+    public f32 gap = s_StyleSpacingMedium;
+    public f32 wheelStep = s_ScrollAreaDefaultWheelStep;
+    public ScrollbarPolicy horizontalScrollbar = ScrollbarPolicy::Auto;
+    public ScrollbarPolicy verticalScrollbar = ScrollbarPolicy::Auto;
+    public b8 showBackground = false;
+    public b8 enabled = true;
+    public LayoutAlign alignItems = LayoutAlign::Start;
+    public LayoutJustify justifyContent = LayoutJustify::Start;
+    public b8 flexWrap = false;
+    public b8 hasCrossGap = false;
+    public f32 crossGap = 0.0f;
+    public u32 gridColumns = 1u;
+    public LayoutItemOptions layout;
+}
+
+class ScrollAreaScrollSnapshot{
+    public b8 operator==(in ScrollAreaScrollSnapshot rhs)const{
+        return this.widget == rhs.widget
+            && this.popup == rhs.popup
+            && this.declarationGeneration == rhs.declarationGeneration
+            && this.stateRevision == rhs.stateRevision
+            && this.inputGeneration == rhs.inputGeneration
+            && this.enabled == rhs.enabled;
+    }
+
+    public b8 operator!=(in ScrollAreaScrollSnapshot rhs)const{
+        return this.widget != rhs.widget
+            || this.popup != rhs.popup
+            || this.declarationGeneration != rhs.declarationGeneration
+            || this.stateRevision != rhs.stateRevision
+            || this.inputGeneration != rhs.inputGeneration
+            || this.enabled != rhs.enabled;
+    }
+
+    public WidgetId widget;
+    public PopupToken popup;
+    public u64 declarationGeneration = 0u;
+    public u64 stateRevision = 1u;
+    public u64 inputGeneration = 0u;
+    public b8 enabled = true;
+}
+
+class ScrollAreaScrollState{
+    public ControlToken prepare(
+        in WidgetState widget,
+        in PopupToken popup,
+        in u64 stateGeneration,
+        in u64 stateRevision,
+        in u64 inputGeneration,
+        in b8 enabled,
+        in ScrollViewportPlacement inPlacement,
+        in Point inStep
+    ){
+        ScrollAreaScrollSnapshot next;
+        next.widget = widget.id;
+        next.popup = popup;
+        next.declarationGeneration = widget.declarationGeneration;
+        next.stateRevision = stateRevision;
+        next.inputGeneration = inputGeneration;
+        next.enabled = enabled;
+        if(
+            !this.prepared
+            || next != this.snapshot
+            || !SameScrollViewportPlacementGeometry(inPlacement, this.placement)
+            || inStep.x != this.step.x
+            || inStep.y != this.step.y
+        )
+            ++this.revision;
+        this.snapshot = next;
+        this.placement = inPlacement;
+        this.step = inStep;
+        this.prepared = true;
+        return ControlToken(stateGeneration, inputGeneration, this.revision);
+    }
+
+    public ControlToken currentToken(in u64 stateGeneration, in u64 inputGeneration)const{
+        if(!this.prepared)
+            return ControlToken();
+        return ControlToken(stateGeneration, inputGeneration, this.revision);
+    }
+
+    public void retire(){
+        ++this.revision;
+        this.prepared = false;
+        this.snapshot = ScrollAreaScrollSnapshot();
+        this.placement = ScrollViewportPlacement();
+        this.step = Point();
+    }
+
+    public ScrollAreaScrollSnapshot snapshot;
+    public ScrollViewportPlacement placement;
+    public Point step;
+    public u64 revision = 1u;
+    public b8 prepared = false;
+}
+
+class ScrollAreaState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public Point m_scroll;
+    public Point m_contentSize;
+    public ScrollAreaScrollState m_scrollInput;
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public Point scroll()const{
+        return this.m_scroll;
+    }
+
+    public Point contentSize()const{
+        return this.m_contentSize;
+    }
+
+    public in ScrollViewportPlacement scrollbars()const{
+        return this.m_scrollInput.placement;
+    }
+
+    public b8 scrollTo(in Point scroll){
+        if(!IsValidUiExtent(scroll))
+            return false;
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_scrollInput.retire();
+        this.m_scroll = scroll;
+        return true;
+    }
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_scrollInput.retire();
+        this.m_scroll = Point();
+        this.m_contentSize = Point();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidScrollAreaOptions(in ScrollAreaOptions options){
+    return options.direction >= LayoutDirection::Row
+        && options.direction <= LayoutDirection::Grid
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsValidUiPadding(options.padding)
+        && IsFinite(VectorSingle(options.gap, options.wheelStep, options.crossGap, 0.0f))
+        && options.gap >= 0.0f
+        && options.crossGap >= 0.0f
+        && options.wheelStep > 0.0f
+        && options.alignItems <= LayoutAlign::Stretch
+        && options.justifyContent <= LayoutJustify::SpaceEvenly
+        && options.gridColumns >= 1u
+        && options.horizontalScrollbar <= ScrollbarPolicy::Never
+        && options.verticalScrollbar <= ScrollbarPolicy::Never;
+}
+
+b8 TryApplyScrollAreaControlAction(
+    in ControlAction action,
+    in ScrollViewportPlacement accepted,
+    in Point step,
+    mut Point inOutScroll
+){
+    Point next = inOutScroll;
+    if(action.kind == ControlActionKind::Wheel || action.kind == ControlActionKind::Activate){
+        b8 unusedManual = false;
+        return TryApplyTextAreaScrollControlAction(action, accepted, inOutScroll, unusedManual);
+    }
+    switch(action.kind){
+    case ControlActionKind::Up:{
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), -1.0, cast<f64>(step.y), accepted.vertical.maximum);
+        if(!nextY.has_value())
+            return false;
+        next.y = nextY.value();
+        break;
+    }
+    case ControlActionKind::Down:{
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), 1.0, cast<f64>(step.y), accepted.vertical.maximum);
+        if(!nextY.has_value())
+            return false;
+        next.y = nextY.value();
+        break;
+    }
+    case ControlActionKind::Left:{
+        const Expected<f32> nextX = TryStepScrollbarOffset(cast<f64>(inOutScroll.x), -1.0, cast<f64>(step.x), accepted.horizontal.maximum);
+        if(!nextX.has_value())
+            return false;
+        next.x = nextX.value();
+        break;
+    }
+    case ControlActionKind::Right:{
+        const Expected<f32> nextX = TryStepScrollbarOffset(cast<f64>(inOutScroll.x), 1.0, cast<f64>(step.x), accepted.horizontal.maximum);
+        if(!nextX.has_value())
+            return false;
+        next.x = nextX.value();
+        break;
+    }
+    case ControlActionKind::PageUp:{
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), -1.0, accepted.vertical.viewportExtent, accepted.vertical.maximum);
+        if(!nextY.has_value())
+            return false;
+        next.y = nextY.value();
+        break;
+    }
+    case ControlActionKind::PageDown:{
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), 1.0, accepted.vertical.viewportExtent, accepted.vertical.maximum);
+        if(!nextY.has_value())
+            return false;
+        next.y = nextY.value();
+        break;
+    }
+    case ControlActionKind::Home:{
+        next.y = 0.0f;
+        break;
+    }
+    case ControlActionKind::End:{
+        next.y = cast<f32>(accepted.vertical.maximum);
+        break;
+    }
+    default:
+        return true;
+    }
+    inOutScroll = next;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

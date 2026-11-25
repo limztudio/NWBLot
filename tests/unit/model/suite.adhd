@@ -425,6 +425,35 @@ void VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner(){
     EXPECT_EQ(context.source.readCount, 2u);
 }
 
+void VerifyModelAttachmentJointPaletteFallbackSingularGuardAndContinue(){
+    RuntimeContext context = RuntimeContext();
+    mut World world = context.testWorld.world;
+    const EntityID owner = MakeModelRuntimeOwner(context);
+
+    const EntityID paletteSkel = MakeModelRuntimeObject(owner, context);
+    world.entity(paletteSkel).getComponent<ModelObjectComponent>().kind = ModelObjectKind::Skeleton;
+    mut SkeletonJointPaletteComponent palette = world.entity(paletteSkel).addComponent<SkeletonJointPaletteComponent>();
+    palette.joints.push_back(MakeTranslation(4.0f));
+    palette.joints.push_back(MakeTranslation(9.0f));
+
+    const EntityID singularJoint = MakeAttachment(context, owner, paletteSkel, 0u, 1.0f);
+    const EntityID oobJoint = MakeAttachment(context, owner, paletteSkel, 99u, 1.0f);
+    const EntityID validLater = MakeAttachment(context, owner, paletteSkel, 1u, 2.0f);
+
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(singularJoint).getComponent<TransformComponent>().position.x, 5.0f);
+    EXPECT_FLOAT_EQ(world.entity(validLater).getComponent<TransformComponent>().position.x, 11.0f);
+
+    world.entity(oobJoint).getComponent<TransformComponent>().position.x = 77.0f;
+    palette.joints[0u]._11 = 0.0f;
+    palette.joints[1u] = MakeTranslation(12.0f);
+    world.entity(singularJoint).getComponent<TransformComponent>().position.x = 55.0f;
+    ASSERT_TRUE(context.system.update(world, 0.0f));
+    EXPECT_FLOAT_EQ(world.entity(singularJoint).getComponent<TransformComponent>().position.x, 55.0f);
+    EXPECT_FLOAT_EQ(world.entity(oobJoint).getComponent<TransformComponent>().position.x, 77.0f);
+    EXPECT_FLOAT_EQ(world.entity(validLater).getComponent<TransformComponent>().position.x, 14.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -440,6 +469,7 @@ NWB_ADHD_GTEST(ModelRuntime, InvalidBindingsAndRemovedModelsUseIndependentCleanu
 NWB_ADHD_GTEST(ModelRuntime, PrunesDestroyedOwnerGenerationWithoutTouchingItsReplacement, VerifyModelRuntimePrunesDestroyedOwnerGeneration)
 NWB_ADHD_GTEST(ModelRuntime, SteadyStateAndEmptyRuntimeCleanupPerformNoBackingAllocations, VerifyModelRuntimeSteadyStatePerformsNoBackingAllocs)
 NWB_ADHD_GTEST(ModelRuntime, FailedReplacementLoadClearsOnlyThatOwnersObjectsAndCanRetry, VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner)
+NWB_ADHD_GTEST(ModelAttachment, JointPaletteFallbackSingularGuardAndContinue, VerifyModelAttachmentJointPaletteFallbackSingularGuardAndContinue)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

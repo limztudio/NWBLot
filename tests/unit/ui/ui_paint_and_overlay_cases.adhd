@@ -776,6 +776,37 @@ void VerifyUiPaintOverlayTests_EscapingTheParentStillClipsOverlayGeometryAndUvsT
     EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.y, 0.45f);
 }
 
+void VerifyUiPaintOverlayTests_ZOrderSortsBaseLayerBelowPopupsAndRecoversOnClipMismatch(mut UiPaintOverlayTests self){
+    const Rect r = Rect(1.0f, 1.0f, 10.0f, 10.0f);
+    ASSERT_TRUE(self.m_builder.beginZOrder(3u));
+    self.m_builder.fillRect(r, Color(1.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_FALSE(self.m_builder.beginOverlay(1u));
+    EXPECT_FALSE(self.m_builder.beginZOrder(4u));
+    ASSERT_TRUE(self.m_builder.endZOrder());
+    EXPECT_FALSE(self.m_builder.beginZOrder(0u));
+    ASSERT_TRUE(self.m_builder.beginOverlay(1u));
+    self.m_builder.fillRect(r, Color(0.0f, 1.0f, 0.0f, 1.0f));
+    EXPECT_FALSE(self.m_builder.beginZOrder(2u));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.beginZOrder(1u));
+    self.m_builder.pushClip(Rect(2.0f, 2.0f, 4.0f, 4.0f));
+    self.m_builder.fillRect(r, Color(0.0f, 0.0f, 1.0f, 1.0f));
+    EXPECT_FALSE(self.m_builder.endZOrder());
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endZOrder());
+    self.m_builder.fillRect(r, Color(0.5f, 0.5f, 0.5f, 1.0f));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    ASSERT_EQ(snapshot.commands().size(), 4u);
+    EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
+    EXPECT_EQ(snapshot.commands()[0u].zOrder, 0u);
+    EXPECT_EQ(snapshot.commands()[1u].layer, 0u);
+    EXPECT_EQ(snapshot.commands()[1u].zOrder, 1u);
+    EXPECT_EQ(snapshot.commands()[2u].layer, 0u);
+    EXPECT_EQ(snapshot.commands()[2u].zOrder, 3u);
+    EXPECT_EQ(snapshot.commands()[3u].layer, 1u);
+    EXPECT_EQ(snapshot.commands()[3u].zOrder, 0u);
+}
+
 void VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips(mut UiPaintOverlayTests self){
     const Rect rectangle = Rect(0.0f, 0.0f, 100.0f, 80.0f);
     self.m_builder.pushClip(Rect(5.0f, 5.0f, 10.0f, 10.0f));
@@ -1728,6 +1759,7 @@ NWB_ADHD_GTEST_F(UiPaintOverlayTests, BoundedOverlayDepthRejectsWithoutChangingT
 NWB_ADHD_GTEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState, VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState)
 NWB_ADHD_GTEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches, VerifyUiPaintOverlayTests_LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches)
 NWB_ADHD_GTEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges, VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, ZOrderSortsBaseLayerBelowPopupsAndRecoversOnClipMismatch, VerifyUiPaintOverlayTests_ZOrderSortsBaseLayerBelowPopupsAndRecoversOnClipMismatch)
 
 NWB_ADHD_GTEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv, VerifyUiPaintSdfTests_ClipTrimsSdfGeometryAndUv)
 NWB_ADHD_GTEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip, VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip)

@@ -264,6 +264,8 @@ int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const Loader
                 frame.input(),
                 frame.clipboard(),
                 frame.textInput(),
+                frame.cursor(),
+                frame.accessibility(),
                 frame.projectObjectArena(),
                 frame.cpuTasks(),
                 frame.gpuTasks(),
@@ -412,4 +414,3 @@ NWB_DEFINE_APPLICATION_ENTRY_POINT(__hidden_loader::EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

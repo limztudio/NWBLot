@@ -84,6 +84,7 @@ class RendererFramePipeline : NoCopy{
     private f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     private Optional<mut IGpuTaskGraphPresentationContributor> m_preparedTaskGraphPresentationContributor;
     private Optional<mut IGpuTaskGraphOutputLayerContributor> m_preparedTaskGraphOutputLayerContributor;
+    private Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> m_instanceTransformPatchContributor;
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
     private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
 
@@ -203,6 +204,7 @@ class RendererFramePipeline : NoCopy{
     public b8 appendFrameGraph(mut FrameGraphBuilder builder);
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems);
+    public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor);
 
     public b8 isTransparentFeatureEnabled()const{
         return this.m_activeSceneSubsystems.has_value() && this.m_activeSceneSubsystems.value().hasSubsystem<TransparentSubsystem>();

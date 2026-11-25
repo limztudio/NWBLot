@@ -88,8 +88,10 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
     avboitCsgIntervalCombinePayload.csgResources = inputs.csgResources;
 
     TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(this.m_graph, this.m_materialSystem, this.m_csgSystem, this.m_avboitSystem);
+    TransparentCsgIntervalProducerInputs transparentCsgInputs(inputs.targets, inputs.csgFrameState, inputs.frameBindings, inputs.csgResources, inputs.meshViewState, inputs.resources, inputs.prefixTask, inputs.hasTransparentRenderers);
+    transparentCsgInputs.instanceTransformPatchContributor = inputs.instanceTransformPatchContributor;
     const auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
-        TransparentCsgIntervalProducerInputs(inputs.targets, inputs.csgFrameState, inputs.frameBindings, inputs.csgResources, inputs.meshViewState, inputs.resources, inputs.prefixTask, inputs.hasTransparentRenderers),
+        transparentCsgInputs,
         avboitPrePayload,
         avboitCsgReceiverSpanPayload,
         avboitCsgIntervalCombinePayload,
@@ -129,6 +131,7 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         this.m_graph, this.m_materialSystem, this.m_csgSystem,
         inputs.csgFrameState, inputs.csgResources, inputs.frameBindings, inputs.meshViewState, avboitIntervalCompletionTask,
         inputs.refractionCaptureEnabled,
+        inputs.instanceTransformPatchContributor,
         inputs.targets, objectGeometry, generatedGeometry, uploadedStreams
     );
     if(!refractionCaptureTaskResult.has_value()){

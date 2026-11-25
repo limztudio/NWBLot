@@ -53,25 +53,97 @@ class ListInput{
         in ListInputMatches matches,
         in ListInputApplyAction applyAction
     ){
-        const Expected<WidgetId> thumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
-        if(!thumb.has_value())
+        const Expected<WidgetId> vThumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
+        const Expected<WidgetId> hThumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollHorizontalThumb);
+        const Expected<WidgetId> vBefore = TryMakeWidgetId(rows.id, s_WidgetPartScrollVerticalBefore);
+        const Expected<WidgetId> vAfter = TryMakeWidgetId(rows.id, s_WidgetPartScrollVerticalAfter);
+        const Expected<WidgetId> hBefore = TryMakeWidgetId(rows.id, s_WidgetPartScrollHorizontalBefore);
+        const Expected<WidgetId> hAfter = TryMakeWidgetId(rows.id, s_WidgetPartScrollHorizontalAfter);
+        if(!vThumb.has_value() || !hThumb.has_value() || !vBefore.has_value() || !vAfter.has_value() || !hBefore.has_value() || !hAfter.has_value())
             return false;
-        Expected<PointerGesture> gesture = this.nextGesture(rows, thumb.value(), enabled, inPopup);
-        b8 haveGesture = this.validGesture(gesture, token, inPopup, popup);
+        Expected<PointerGesture> hGesture = this.nextGesture(rows, hThumb.value(), enabled, inPopup);
+        b8 haveHorizontal = this.validGesture(hGesture, token, inPopup, popup);
+        Expected<PointerGesture> vGesture = this.nextGesture(rows, vThumb.value(), enabled, inPopup);
+        b8 haveVertical = this.validGesture(vGesture, token, inPopup, popup);
         Expected<ControlAction> action = this.nextAction(rows, token, enabled, inPopup);
         b8 haveAction = this.validAction(action, inPopup, popup);
-        while(haveGesture || haveAction){
+        while(haveHorizontal || haveVertical || haveAction){
             if(!matches())
                 return false;
-            if(haveGesture && (!haveAction || gesture.value().updateSequence < action.value().id.sequence)){
-                const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture.value());
+            u64 horizontalSequence = 0u;
+            u64 verticalSequence = 0u;
+            u64 actionSequence = 0u;
+            if(haveHorizontal)
+                horizontalSequence = hGesture.value().updateSequence;
+            if(haveVertical)
+                verticalSequence = vGesture.value().updateSequence;
+            if(haveAction)
+                actionSequence = action.value().id.sequence;
+            const u8 stream = SelectNextScrollInputStream(
+                haveHorizontal,
+                horizontalSequence,
+                haveVertical,
+                verticalSequence,
+                haveAction,
+                actionSequence
+            );
+            if(stream == 0u){
+                const Expected<f64> offsetX = TryComputeListHorizontalGestureScrollOffset(hGesture.value());
+                if(!offsetX.has_value())
+                    return false;
+                if(!state.m_scrollX.setOffset(offsetX.value()))
+                    return false;
+                hGesture = this.nextGesture(rows, hThumb.value(), enabled, inPopup);
+                haveHorizontal = this.validGesture(hGesture, token, inPopup, popup);
+            }
+            else if(stream == 1u){
+                const Expected<f64> offset = TryComputeListGestureScrollOffset(vGesture.value());
                 if(!offset.has_value())
                     return false;
                 state.m_ensureCursor = false;
                 if(!state.m_scroll.setOffset(offset.value()))
                     return false;
-                gesture = this.nextGesture(rows, thumb.value(), enabled, inPopup);
-                haveGesture = this.validGesture(gesture, token, inPopup, popup);
+                vGesture = this.nextGesture(rows, vThumb.value(), enabled, inPopup);
+                haveVertical = this.validGesture(vGesture, token, inPopup, popup);
+            }
+            else if(
+                action.value().kind == ControlActionKind::Activate
+                && (action.value().source == vBefore.value() || action.value().source == vAfter.value())
+            ){
+                f64 pageDelta = -1.0;
+                if(action.value().source == vBefore.value())
+                    pageDelta = 1.0;
+                f64 pageStep = cast<f64>(state.m_placement.viewport.height);
+                if(pageStep <= 0.0)
+                    pageStep = cast<f64>(Max(action.value().pageRows, cast<u64>(1u))) * cast<f64>(state.m_scrollRowHeight);
+                if(pageStep > 0.0){
+                    const Expected<f64> offset = TryComputeListWheelOffset(state.m_scroll.offset(), pageDelta, pageStep, action.value().maximum);
+                    if(!offset.has_value())
+                        return false;
+                    state.m_ensureCursor = false;
+                    if(!state.m_scroll.setOffset(offset.value()))
+                        return false;
+                }
+                action = this.nextAction(rows, token, enabled, inPopup);
+                haveAction = this.validAction(action, inPopup, popup);
+            }
+            else if(
+                action.value().kind == ControlActionKind::Activate
+                && (action.value().source == hBefore.value() || action.value().source == hAfter.value())
+            ){
+                f64 pageDeltaX = 1.0;
+                if(action.value().source == hBefore.value())
+                    pageDeltaX = -1.0;
+                f64 pageStepX = cast<f64>(state.m_scrollbars.viewport.width);
+                if(pageStepX <= 0.0)
+                    pageStepX = action.value().stepX;
+                if(pageStepX > 0.0){
+                    const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), pageDeltaX, pageStepX, action.value().maximumX);
+                    if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value()))
+                        return false;
+                }
+                action = this.nextAction(rows, token, enabled, inPopup);
+                haveAction = this.validAction(action, inPopup, popup);
             }
             else{
                 const ListActionOutcome outcome = applyAction(action.value());

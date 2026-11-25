@@ -84,7 +84,7 @@ b8 SnapshotNumericFrame(in Optional<mut BuilderFloatEditFrame> loan, in EditMode
 b8 Builder::applySliderInput(mut SliderFrame frame, in SliderPlacement placement, in b8 interactive){
     if(!this.sliderMatches(frame))
         return false;
-    if(!interactive || placement.centerTravel.width <= 0.0f)
+    if(!interactive || ResolveSliderCenterTravelSpan(placement.orientation, placement.centerTravel) <= 0.0f)
         return true;
     const auto track = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
     if(!track.has_value())
@@ -400,6 +400,16 @@ b8 Builder::paintContextMenuPopup(mut BuilderContextMenuFrame frame){
     const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
     b8 painted = backgroundPainted && popped && this.m_context.addTarget(frame.popup, barrier);
     if(painted){
+        this.emitAccessibleNode(
+            frame.popup,
+            AccessibilityRole::Menu,
+            placement.value().bounds,
+            StringView(),
+            StringView(),
+            ResolveAccessibleVisibilityStateBits(frame.options.enabled, placement.value().bounds),
+            s_AccessibilityActionNone
+        );
+        const b8 pushedParent = this.m_context.pushAccessibleParent(frame.popup.id);
         auto item = this.makeItem();
         item.state = frame.rows;
         item.list = frame.list;
@@ -407,6 +417,8 @@ b8 Builder::paintContextMenuPopup(mut BuilderContextMenuFrame frame){
         box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
         box.clip = placement.value().bounds;
         painted = this.paintList(item, box) && this.contextMenuMatches(frame);
+        if(pushedParent)
+            this.m_context.popAccessibleParent();
     }
     const b8 overlayEnded = this.m_paint.endOverlay();
     const b8 scopeEnded = this.m_context.endPopupScope(painted);
@@ -466,7 +478,12 @@ EditBoxResult Builder::declareEditBox(
     in Optional<mut BuilderIntegerEditFrame> integerFrame,
     in Optional<mut BuilderFloatEditFrame> floatFrame
 ){
-    if(this.itemDeclarationBlocked() || model.textMode() != EditTextMode::SingleLine){
+    if(
+        this.itemDeclarationBlocked()
+        || model.textMode() != EditTextMode::SingleLine
+        || (options.password && !IsValidEditBoxMaskCodePoint(options.maskCodePoint))
+        || (!options.placeholder.empty() && !ValidateEditTextForMode(options.placeholder, EditTextMode::SingleLine))
+    ){
         this.m_context.fail();
         return EditBoxResult();
     }
@@ -477,6 +494,9 @@ EditBoxResult Builder::declareEditBox(
     }
     this.m_declaring = true;
     BuilderOperationEnd finish(this.m_declaring);
+    const StringView placeholderText = options.placeholder;
+    EditBoxOptions cleanOptions = options;
+    cleanOptions.placeholder = StringView();
     const auto widget = this.m_context.declare(stableKey, WidgetKind::EditBox);
     if(!widget.has_value())
         return EditBoxResult();
@@ -484,16 +504,16 @@ EditBoxResult Builder::declareEditBox(
         this.m_context.fail();
         return EditBoxResult();
     }
-    if(!options.enabled)
+    if(!cleanOptions.enabled)
         this.m_context.input().invalidateTarget(widget.value().id);
     EditBoxResult result;
     result.valid = true;
-    result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
+    result.focused = cleanOptions.enabled && this.m_context.input().focus() == widget.value().id;
     if(this.m_editHost.has_value()){
         if(actions.has_value())
-            result = this.m_editHost.value().editActions(widget.value(), options, this.m_context.popupToken(), model, actions.value());
+            result = this.m_editHost.value().editActions(widget.value(), cleanOptions, this.m_context.popupToken(), model, actions.value());
         else
-            result = this.m_editHost.value().edit(widget.value(), options, model);
+            result = this.m_editHost.value().edit(widget.value(), cleanOptions, model);
     }
     if(!result.valid || this.m_context.failed()){
         result.valid = false;
@@ -510,7 +530,23 @@ EditBoxResult Builder::declareEditBox(
     item.state = widget.value();
     auto editFrame = this.makeEditBoxFrame();
     editFrame.editStyle = this.m_editStyle;
-    editFrame.editOptions = options;
+    editFrame.editOptions = cleanOptions;
+    if(!placeholderText.empty()){
+        const auto placeholderLayout = this.m_text.layoutShared(this.textShapeRequest(placeholderText, this.m_style.fontSize));
+        if(!placeholderLayout.has_value()){
+            this.m_context.fail();
+            result.valid = false;
+            return result;
+        }
+        const auto placeholderBounds = this.m_text.measure(placeholderLayout.value().deref(), this.m_paint.displayMetrics());
+        if(!placeholderBounds.has_value()){
+            this.m_context.fail();
+            result.valid = false;
+            return result;
+        }
+        editFrame.placeholder = placeholderLayout.value();
+        editFrame.placeholderBounds = placeholderBounds.value();
+    }
     if(!this.prepareEditBox(result, model, state, item, editFrame)){
         result.valid = false;
         return result;
@@ -526,9 +562,10 @@ EditBoxResult Builder::declareEditBox(
     if(floatFrame.has_value())
         item.floatEdit = cast<u32>(this.m_scope.value().m_floatEdits.size());
     LayoutNodeDesc description;
-    description.width = options.width;
-    description.height = options.height;
+    description.width = cleanOptions.width;
+    description.height = cleanOptions.height;
     description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), this.editViewForFrame(editFrame).visualBounds().height, item.padding);
+    ApplyLayoutItemOptions(cleanOptions.layout, description);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -539,6 +576,20 @@ EditBoxResult Builder::declareEditBox(
 }
 
 b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item, mut BuilderEditBoxFrame editFrame){
+    return this.prepareEditBox(result, model, state, item, editFrame, TextWrapMode::None, 0.0f, s_TextDefaultTabStopSpaces, false);
+}
+
+b8 Builder::prepareEditBox(
+    in EditBoxResult result,
+    mut EditModel model,
+    mut EditBoxState state,
+    mut BuilderItem item,
+    mut BuilderEditBoxFrame editFrame,
+    in TextWrapMode wrapMode,
+    in f32 wrapWidth,
+    in u32 tabStopSpaces,
+    in b8 preserveWrapSpaces
+){
     state.updateFromModel(model.stamp(), result.focused, this.m_deltaSeconds);
 
     editFrame.editFlags.enabled = editFrame.editOptions.enabled;
@@ -568,11 +619,23 @@ b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut Edi
     const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
     const u64 atlasId = this.m_text.atlasIdentity();
     const usize atlasGlyphs = this.m_text.atlasGlyphCount();
-    if(!cached.matchesShape(stamp, textId, textGen, fontSizeBits, this.m_textScriptTag, StringView(this.m_textLanguage))){
+    const b8 password = editFrame.editOptions.password;
+    const u32 maskCodePoint = editFrame.editOptions.maskCodePoint;
+    f32 effectiveWrapWidth = 0.0f;
+    if(wrapMode != TextWrapMode::None)
+        effectiveWrapWidth = wrapWidth;
+    const u32 wrapWidthBits = bit_cast<u32>(effectiveWrapWidth);
+    if(!cached.matchesShape(stamp, textId, textGen, fontSizeBits, this.m_textScriptTag, StringView(this.m_textLanguage), this.m_textDirection, password, maskCodePoint, wrapMode, wrapWidthBits, tabStopSpaces, preserveWrapSpaces)){
         cached.valid = false;
+        ShapeRequest shapeRequest = this.textShapeRequest("", this.m_style.fontSize);
+        shapeRequest.wrapMode = wrapMode;
+        if(wrapMode != TextWrapMode::None)
+            shapeRequest.maxWidth = effectiveWrapWidth;
+        shapeRequest.tabStopSpaces = tabStopSpaces;
+        shapeRequest.preserveWrapSpaces = preserveWrapSpaces;
         if(
-            !cached.view.snapshot(model)
-            || cached.view.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success
+            !cached.view.snapshot(model, password, maskCodePoint)
+            || cached.view.shape(this.m_text, shapeRequest) != TextLayoutStatus::Success
             || !cached.view.measure(this.m_text, display)
         ){
             this.m_context.fail();
@@ -583,6 +646,13 @@ b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut Edi
         cached.textGeneration = textGen;
         cached.fontSizeBits = fontSizeBits;
         cached.scriptTag = this.m_textScriptTag;
+        cached.direction = this.m_textDirection;
+        cached.password = password;
+        cached.maskCodePoint = maskCodePoint;
+        cached.wrapMode = wrapMode;
+        cached.wrapWidthBits = wrapWidthBits;
+        cached.tabStopSpaces = tabStopSpaces;
+        cached.preserveWrapSpaces = preserveWrapSpaces;
         cached.language.assign(StringView(this.m_textLanguage));
         cached.pixelScaleXBits = scaleXBits;
         cached.pixelScaleYBits = scaleYBits;
@@ -617,17 +687,46 @@ b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in H
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
-    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags))
+    Optional<in TextLayout> placeholderLayout;
+    if(editFrame.placeholder.valid())
+        placeholderLayout = Optional<in TextLayout>(editFrame.placeholder.deref());
+    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags, placeholderLayout))
         return false;
     editFrame.editState.value().placement = placement;
     editFrame.editState.value().scroll = placement.scroll;
     HitTarget navigationTarget;
     if(navigation.has_value())
         navigationTarget = navigation.value();
+    const Rect clip = this.visibleClip(box.clip);
     HitTargetFactory targets;
-    const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, this.visibleClip(box.clip), editFrame.editOptions.enabled, item.contextMenu);
+    const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, clip, editFrame.editOptions.enabled, item.contextMenu, editFrame.editOptions.acceptTab);
     if(!this.m_context.addTarget(item.state, target))
         return false;
+    u32 a11yState = ResolveAccessibleVisibilityStateBits(editFrame.editOptions.enabled, clip) | s_AccessibilityStateFocusable;
+    if(editFrame.editOptions.readOnly)
+        a11yState |= s_AccessibilityStateReadOnly;
+    if(editFrame.editOptions.password)
+        a11yState |= s_AccessibilityStatePassword;
+    StringView a11yName = StringView();
+    if(editFrame.placeholder.valid())
+        a11yName = editFrame.placeholder.deref().utf8();
+    StringView a11yValue = StringView();
+    if(!editFrame.editOptions.password)
+        a11yValue = view.layout().utf8();
+    u32 a11yActions = s_AccessibilityActionFocus;
+    if(!editFrame.editOptions.readOnly)
+        a11yActions |= s_AccessibilityActionSetValue;
+    if(item.contextMenu)
+        a11yActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::TextField,
+        box.rectangle,
+        a11yName,
+        a11yValue,
+        a11yState,
+        a11yActions
+    );
     const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
     return published && this.numericEditMatches(item);
 }

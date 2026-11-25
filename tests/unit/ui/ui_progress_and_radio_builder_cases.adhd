@@ -97,7 +97,7 @@ class ReconcileGate : IRadioGroupReconcileGuard{
 
 
 class ChoiceSource : IListDataSource{
-    public Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows;
+    public Vector<RadioGroupChoice> rows;
     public TestObserved<u64> generation = TestObserved<u64>(41u);
     public TestObserved<u64> revisionValue = TestObserved<u64>(7u);
     public TestObserved<u64> count = TestObserved<u64>(4u);
@@ -118,7 +118,14 @@ class ChoiceSource : IListDataSource{
     public TestObserved<b8> nestedSucceeded = TestObserved<b8>(true);
 
     public ChoiceSource(){
-        for(u32 index = 0u; index < s_RadioGroupMaxChoices; ++index)
+        this.ensureCapacity(64u);
+    }
+    public void ensureCapacity(in u32 required){
+        const u32 current = cast<u32>(this.rows.size());
+        if(required <= current)
+            return;
+        this.rows.resize(cast<usize>(required));
+        for(u32 index = current; index < required; ++index)
             this.rows[index] = RadioGroupChoice(index + 1u, true);
     }
     public void bindState(mut RadioGroupState targetState){
@@ -143,15 +150,16 @@ class ChoiceSource : IListDataSource{
     public u64 key(in u64 index)const override{
         this.callback(RadioCallbackPhase::Key);
         ++this.keyCalls.value();
-        if(index < s_RadioGroupMaxChoices)
+        if(index < this.rows.size())
             return this.rows[cast<usize>(index)].key;
         return 0u;
     }
     public Expected<u64> indexOf(in u64 key)const override{
         u64 index = 0u;
         this.callback(RadioCallbackPhase::Lookup);
-        for(u32 candidate = 0u; candidate < Min<u64>(this.count.value(), s_RadioGroupMaxChoices); ++candidate){
-            if(this.rows[candidate].key == key){
+        const u64 limit = Min<u64>(this.count.value(), cast<u64>(this.rows.size()));
+        for(u64 candidate = 0u; candidate < limit; ++candidate){
+            if(this.rows[cast<usize>(candidate)].key == key){
                 index = candidate;
                 if(this.badLookup)
                     index = this.count.value();
@@ -165,7 +173,7 @@ class ChoiceSource : IListDataSource{
     public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
         u64 index = 0u;
         ++this.findCalls.value();
-        if(start >= this.count.value() || this.count.value() > s_RadioGroupMaxChoices)
+        if(start >= this.count.value() || this.count.value() > cast<u64>(this.rows.size()))
             return MakeUnexpected(Failure());
         index = start;
         for(u64 visited = 0u; visited < this.count.value(); ++visited){
@@ -187,7 +195,7 @@ class ChoiceSource : IListDataSource{
     public StringView text(in u64 arg0)const override{ return "choice"; }
     public b8 enabled(in u64 index)const override{
         this.callback(RadioCallbackPhase::Enabled);
-        return index < s_RadioGroupMaxChoices && this.rows[cast<usize>(index)].enabled;
+        return index < cast<u64>(this.rows.size()) && this.rows[cast<usize>(index)].enabled;
     }
     public void callback(in RadioCallbackPhase current)const{
         ++this.callbackCalls.value();
@@ -1158,15 +1166,16 @@ void VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderI
 
 void VerifyUiRadioGroupBehaviorTests_FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics(){
     ChoiceSource source = ChoiceSource();
-    source.count.value() = s_RadioGroupMaxChoices;
+    source.ensureCapacity(128u);
+    source.count.value() = 128u;
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
     const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
-    EXPECT_EQ(choices.value().count, s_RadioGroupMaxChoices);
+    EXPECT_EQ(choices.value().count, 128u);
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expectedResult = result;
-    source.count.value() = s_RadioGroupMaxChoices + 1u;
+    source.count.value() = cast<u64>(u32.max) + 1u;
     source.keyCalls.value() = 0u;
     EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
     EXPECT_TRUE(state.matches(before));
@@ -1548,17 +1557,12 @@ void VerifyUiRadioGroupBuilderTests_SixtyFourChoicesSucceedAndTheSixtyFifthRejec
     self.m_source.m_count = 64u;
     ASSERT_TRUE(self.accept(1u));
     EXPECT_EQ(self.m_state.placement().count, 64u);
-    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
-    const RadioGroupSnapshot saved = self.m_state.snapshot();
     self.m_source.resetCounters();
-    self.m_source.m_count = 65u;
+    self.m_source.m_count = 100u;
     ++self.m_source.m_contentRevision.value();
-    EXPECT_FALSE(self.declare(2u));
-    EXPECT_TRUE(self.m_context.failed());
-    EXPECT_TRUE(self.m_state.matches(saved));
-    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
-    EXPECT_FALSE(self.m_context.commitFrame(2u));
-    self.expectAccepted(displayed);
+    ASSERT_TRUE(self.accept(2u, RadioGroupOptions(), Rect(10.0f, 10.0f, 340.0f, 3200.0f)));
+    EXPECT_EQ(self.m_state.placement().count, 100u);
+    EXPECT_EQ(self.m_state.placement().rows[99u].key, 1000u);
 }
 
 void VerifyUiRadioGroupBuilderTests_DuplicateStableKeysRejectBeforeAnyLabelBorrow(mut UiRadioGroupBuilderTests self){
@@ -1647,6 +1651,72 @@ void VerifyUiRadioGroupBuilderTests_InvalidWidthRejectsBeforeSourceCallbacksOrSt
     EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
 }
 
+void VerifyUiProgressBuilderTests_VerticalIndeterminateAndCenteredLabelRenderCorrectly(mut UiProgressBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    ProgressOptions options = ProgressOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 180.0f;
+    options.height = 36.0f;
+    options.indeterminate = true;
+    options.indeterminatePhase = 0.25;
+    options.label = "75%";
+    ASSERT_TRUE(self.m_builder.progress("indeterminate", 0.0, options));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const auto track = self.sampleTrackRegion(snapshot);
+    const auto fill = self.sampleFillRegion(snapshot);
+    ASSERT_TRUE(track.has_value());
+    ASSERT_TRUE(fill.has_value());
+    EXPECT_GT(fill.value().bounds.x, track.value().bounds.x + 4.0f);
+    EXPECT_LT(fill.value().bounds.width, track.value().bounds.width - 8.0f);
+    usize glyphCommands = 0u;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+            ++glyphCommands;
+    }
+    EXPECT_GT(glyphCommands, 0u);
+}
+
+void VerifyUiProgressLayoutTests_VerticalAndIndeterminatePhaseWrapAndNanReject(){
+    UiSkinRegion track;
+    track.rectangle = UiSkinRect(0u, 0u, 16u, 16u);
+    track.minimumWidth = 8.0f;
+    track.minimumHeight = 8.0f;
+    UiSkinRegion fill = track;
+    ProgressOptions invalid = ProgressOptions();
+    invalid.indeterminate = true;
+    const u64 quietNanBits = 0x7ff8000000000000u;
+    invalid.indeterminatePhase = bit_cast<f64>(quietNanBits);
+    EXPECT_FALSE(MeasureProgress(invalid, ProgressStyle(), track, fill, 1.0f).has_value());
+    invalid.indeterminatePhase = 0.0;
+    invalid.orientation = cast<ProgressOrientation>(9u);
+    EXPECT_FALSE(MeasureProgress(invalid, ProgressStyle(), track, fill, 1.0f).has_value());
+
+    ProgressOptions vertical = ProgressOptions();
+    vertical.orientation = ProgressOrientation::Vertical;
+    vertical.height = 100.0f;
+    const Expected<ProgressMetrics> metrics = MeasureProgress(vertical, ProgressStyle(), track, fill, 1.0f);
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = Rect(10.0f, 20.0f, 24.0f, 100.0f);
+    const Expected<ProgressPlacement> empty = PlaceProgress(bounds, bounds, metrics.value(), 0.0);
+    const Expected<ProgressPlacement> quarter = PlaceProgress(bounds, bounds, metrics.value(), 0.25);
+    ASSERT_TRUE(empty.has_value());
+    ASSERT_TRUE(quarter.has_value());
+    EXPECT_FLOAT_EQ(empty.value().fillReveal.height, 0.0f);
+    EXPECT_FLOAT_EQ(quarter.value().fillReveal.height, 25.0f);
+    EXPECT_FLOAT_EQ(quarter.value().fillReveal.y, 95.0f);
+
+    const Expected<ProgressPlacement> indStart = PlaceProgress(bounds, bounds, metrics.value(), 0.0, true, 0.0);
+    const Expected<ProgressPlacement> indMid = PlaceProgress(bounds, bounds, metrics.value(), 0.0, true, 0.5);
+    const Expected<ProgressPlacement> indNeg = PlaceProgress(bounds, bounds, metrics.value(), 0.0, true, -0.5);
+    ASSERT_TRUE(indStart.has_value());
+    ASSERT_TRUE(indMid.has_value());
+    ASSERT_TRUE(indNeg.has_value());
+    EXPECT_FLOAT_EQ(indStart.value().fillReveal.y, 90.0f);
+    EXPECT_FLOAT_EQ(indMid.value().fillReveal.y, 20.0f);
+    EXPECT_FLOAT_EQ(indNeg.value().fillReveal.y, 20.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1715,6 +1785,8 @@ NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, RemovalAndKnownSourceReplacementClear
 NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit, VerifyUiRadioGroupBuilderTests_PreparedGeometryDoesNotReplaceAcceptedChoiceTargetsUntilCommit)
 NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds, VerifyUiRadioGroupBuilderTests_DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds)
 NWB_ADHD_GTEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation, VerifyUiRadioGroupBuilderTests_InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation)
+NWB_ADHD_GTEST_F(UiProgressBuilderTests, VerticalIndeterminateAndCenteredLabelRenderCorrectly, VerifyUiProgressBuilderTests_VerticalIndeterminateAndCenteredLabelRenderCorrectly)
+NWB_ADHD_GTEST(UiProgressLayoutTests, VerticalAndIndeterminatePhaseWrapAndNanReject, VerifyUiProgressLayoutTests_VerticalAndIndeterminatePhaseWrapAndNanReject)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,87 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <core/alloc/general.h>
+
+#include <global/expected.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CursorShape{
+    enum Enum : u8{
+        Default = 0u,
+        TextInput,
+        Hand,
+        Crosshair,
+        ResizeEW,
+        ResizeNS,
+        ResizeNWSE,
+        ResizeNESW,
+        Move,
+        NotAllowed,
+        Wait,
+        Progress,
+        Grab,
+        Grabbing,
+        Hidden,
+        kCount
+    };
+};
+
+namespace CursorBackend{
+    enum Enum : u8{
+        Unsupported = 0u,
+        Win32,
+        X11,
+        Wayland
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CursorCapabilities{
+    b8 setShape = false;
+    b8 hide = false;
+    CursorBackend::Enum backend = CursorBackend::Unsupported;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+interface ICursorService : private NoCopy{
+public:
+    virtual ~ICursorService()noexcept = default;
+
+
+public:
+    [[nodiscard]] virtual CursorCapabilities capabilities()const noexcept = 0;
+    [[nodiscard]] virtual b8 isOwnerThread()const noexcept = 0;
+    [[nodiscard]] virtual b8 setCursor(CursorShape::Enum shape)noexcept = 0;
+    [[nodiscard]] virtual CursorShape::Enum currentCursor()const noexcept = 0;
+};
+
+[[nodiscard]] Expected<GlobalUniquePtr<ICursorService>> CreateCursorService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

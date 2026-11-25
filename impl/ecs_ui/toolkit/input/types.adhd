@@ -96,6 +96,8 @@ class CommandSource{
     public b8 consumed = false;
     public b8 delegated = false;
     public b8 submitArmed = false;
+    public b8 submitExtend = false;
+    public b8 submitToggle = false;
     public b8 contextArmed = false;
 }
 

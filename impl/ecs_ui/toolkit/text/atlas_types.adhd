@@ -30,11 +30,11 @@ type SdfAtlasPageBinding = SdfAtlasPageBindingRecord<Font>;
 
 class GlyphPageBindingRecord<TFont>{
     public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
-        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
+        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height && this.channelCount == rhs.channelCount;
     }
 
     public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
-        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
+        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height || this.channelCount != rhs.channelCount;
     }
 
     public AssetRef<TFont> font;
@@ -44,6 +44,7 @@ class GlyphPageBindingRecord<TFont>{
     public u32 index = 0u;
     public u32 width = 0u;
     public u32 height = 0u;
+    public u32 channelCount = 1u;
 }
 
 class SdfAtlasPageBindingRecord<TFont>{
@@ -112,7 +113,7 @@ b8 SameGlyphPageVersion<TFont>(
     in Span<u8> secondPixels,
     in b8 sameInstance
 ){
-    if(!SameGlyphPageKey(first, second) || first.generation != second.generation || first.width != second.width || first.height != second.height)
+    if(!SameGlyphPageKey(first, second) || first.generation != second.generation || first.width != second.width || first.height != second.height || first.channelCount != second.channelCount)
         return false;
     if(sameInstance)
         return true;
@@ -129,7 +130,8 @@ b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usi
         && binding.height != 0u
         && binding.width <= s_GlyphAtlasPageExtent
         && binding.height <= s_GlyphAtlasPageExtent
-        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height);
+        && (binding.channelCount == 1u || binding.channelCount == 4u)
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height) * cast<usize>(binding.channelCount);
 }
 
 b8 SameSdfAtlasPageKey<TFont>(in SdfAtlasPageBindingRecord<TFont> first, in SdfAtlasPageBindingRecord<TFont> second){
@@ -204,14 +206,18 @@ void CopyGlyphBitmapToAtlasPage(
     in u32 placementY,
     in u32 width,
     in u32 height,
+    in u32 channelCount,
     in Span<u8> bitmapPixels,
     mut Vector<u8> outPagePixels
 ){
+    const usize ch = cast<usize>(channelCount);
+    const usize rowBytes = cast<usize>(width) * ch;
+    const usize pageStride = cast<usize>(s_GlyphAtlasPageExtent) * ch;
     for(u32 row = 0u; row < height; ++row){
-        const usize destination = cast<usize>(placementY + row + 1u) * cast<usize>(s_GlyphAtlasPageExtent) + cast<usize>(placementX + 1u);
-        const usize source = cast<usize>(row) * cast<usize>(width);
-        for(u32 col = 0u; col < width; ++col)
-            outPagePixels[destination + cast<usize>(col)] = bitmapPixels[source + cast<usize>(col)];
+        const usize destination = cast<usize>(placementY + row + 1u) * pageStride + cast<usize>(placementX + 1u) * ch;
+        const usize source = cast<usize>(row) * rowBytes;
+        for(usize col = 0u; col < rowBytes; ++col)
+            outPagePixels[destination + col] = bitmapPixels[source + col];
     }
 }
 

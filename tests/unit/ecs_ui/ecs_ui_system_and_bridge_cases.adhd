@@ -13,6 +13,7 @@
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/components.adhd>
 #include <impl/ecs_ui/edit_clipboard_controller.adhd>
+#include <impl/ecs_ui/layer_system.adhd>
 #include <impl/ecs_ui/paint_context.adhd>
 #include <impl/ecs_ui/skin_selection.adhd>
 #include <impl/ecs_ui/text_edit_session.adhd>
@@ -56,6 +57,8 @@ class PaintSlotFixture{
     public EcsTestWorld ecs;
     public FakeClipboard clipboard;
     public FakeTextInput textInput;
+    public FakeCursor cursor;
+    public FakeAccessibility accessibility;
     public Context uiContext;
     public PaintBuilder paint;
     public TextService text;
@@ -66,8 +69,10 @@ class PaintSlotFixture{
     public PaintSlotFixture(){
         this.clipboard = FakeClipboard(this.ecs.arena);
         this.textInput = FakeTextInput(this.ecs.arena);
+        this.cursor = FakeCursor(this.ecs.arena);
+        this.accessibility = FakeAccessibility(this.ecs.arena);
         this.builder = Builder(this.uiContext, this.paint, this.text);
-        this.context = UiPaintContext(this.ecs.world, this.clipboard, this.textInput, this.paint, this.text, this.display, this.builder);
+        this.context = UiPaintContext(this.ecs.world, this.clipboard, this.textInput, this.cursor, this.accessibility, this.paint, this.text, this.display, this.builder);
     }
 }
 
@@ -553,6 +558,129 @@ void VerifyEcsUiUnwind_HostSessionAndClipboardAllocationFailurePreserveState(){
     EXPECT_TRUE(VerifyUiEditBoxHostEditOom(fixture.textInput, fixture.clipboard));
     EXPECT_TRUE(VerifyUiTextEditSessionOom(fixture.textInput));
     EXPECT_TRUE(VerifyUiEditClipboardControllerOom(fixture.clipboard));
+}
+
+class BridgeGamepadHandler : IInputEventHandler{
+    private mut GamepadNavigationAdapter m_adapter;
+    private mut Context m_context;
+    public u32 m_buttonEvents = 0u;
+    public u32 m_axisEvents = 0u;
+
+    public BridgeGamepadHandler(mut GamepadNavigationAdapter adapter, mut Context context){
+        this.m_adapter = adapter;
+        this.m_context = context;
+    }
+
+    [cpp_unwind]
+    public void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected)override{
+        this.m_adapter.onConnection(gamepadIndex, connected, this.m_context.input());
+    }
+
+    [cpp_unwind]
+    public b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action)override{
+        ++this.m_buttonEvents;
+        return this.m_adapter.onButton(gamepadIndex, button, action, this.m_context.input());
+    }
+
+    [cpp_unwind]
+    public b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value)override{
+        ++this.m_axisEvents;
+        return this.m_adapter.onAxis(gamepadIndex, axis, value, this.m_context.input());
+    }
+}
+
+void AddBridgeGamepadHandlerToBack(mut InputDispatcher dispatcher, mut BridgeGamepadHandler handler){
+    dispatcher.addHandlerToBack(handler);
+}
+
+void RemoveBridgeGamepadHandler(mut InputDispatcher dispatcher, mut BridgeGamepadHandler handler){
+    dispatcher.removeHandler(handler);
+}
+
+void VerifyEcsUiBridge_PaintContextCursorAccessibilityAndGamepadForwarding(){
+    PaintSlotFixture fixture = PaintSlotFixture();
+    EXPECT_EQ(MapPointerCursorToCoreCursor(PointerCursor::Default), CursorShape::Default);
+    EXPECT_EQ(MapPointerCursorToCoreCursor(PointerCursor::TextInput), CursorShape::TextInput);
+    EXPECT_EQ(MapPointerCursorToCoreCursor(PointerCursor::Grabbing), CursorShape::Grabbing);
+    EXPECT_EQ(MapPointerCursorToCoreCursor(PointerCursor::Hidden), CursorShape::Hidden);
+
+    EXPECT_TRUE(fixture.context.cursor.setCursor(CursorShape::Hand));
+    EXPECT_TRUE(fixture.context.cursor.setCursor(CursorShape::Hand));
+    EXPECT_TRUE(fixture.context.cursor.setCursor(CursorShape::ResizeEW));
+    EXPECT_EQ(fixture.cursor.historyCount, 2u);
+    EXPECT_EQ(fixture.cursor.history[0u], CursorShape::Hand);
+    EXPECT_EQ(fixture.cursor.history[1u], CursorShape::ResizeEW);
+
+    WidgetRoot testRoot;
+    testRoot.value = 91u;
+    ASSERT_TRUE(fixture.uiContext.beginFrame(1u));
+    ASSERT_TRUE(fixture.uiContext.beginRoot(testRoot));
+    const auto btnDecl = fixture.uiContext.declare("btn", WidgetKind::Button);
+    const auto nextDecl = fixture.uiContext.declare("next", WidgetKind::Button);
+    ASSERT_TRUE(btnDecl.has_value());
+    ASSERT_TRUE(nextDecl.has_value());
+
+    HitTarget btnTarget;
+    btnTarget.rectangle = Rect(10.0f, 10.0f, 80.0f, 30.0f);
+    btnTarget.clip = Rect(0.0f, 0.0f, 400.0f, 200.0f);
+    btnTarget.focusable = true;
+    btnTarget.activatable = true;
+    ASSERT_TRUE(fixture.uiContext.addTarget(btnDecl.value(), btnTarget));
+
+    HitTarget nextTarget;
+    nextTarget.rectangle = Rect(120.0f, 10.0f, 80.0f, 30.0f);
+    nextTarget.clip = Rect(0.0f, 0.0f, 400.0f, 200.0f);
+    nextTarget.focusable = true;
+    nextTarget.activatable = true;
+    ASSERT_TRUE(fixture.uiContext.addTarget(nextDecl.value(), nextTarget));
+
+    AccessibleNodeDesc btnNode;
+    btnNode.id = btnDecl.value().id;
+    btnNode.role = AccessibilityRole::Button;
+    btnNode.stateBits = s_AccessibilityStateEnabled | s_AccessibilityStateFocusable;
+    btnNode.actionBits = s_AccessibilityActionInvoke | s_AccessibilityActionFocus;
+    btnNode.bounds = btnTarget.rectangle;
+    btnNode.name = "First";
+    ASSERT_TRUE(fixture.uiContext.addAccessibleNode(btnNode));
+    ASSERT_TRUE(fixture.uiContext.announce("Loaded", AccessibilityLiveMode::Polite));
+    ASSERT_TRUE(fixture.uiContext.endRoot());
+    ASSERT_TRUE(fixture.uiContext.finishFrame());
+    ASSERT_TRUE(fixture.uiContext.commitFrame(1u));
+
+    in AccessibleTree tree = fixture.uiContext.accessibility();
+    ASSERT_TRUE(fixture.context.accessibility.publishTree(
+        Span<AccessibilityNodeData>(tree.nodes()),
+        tree.textStorage(),
+        tree.focusedId().value,
+        tree.generation(),
+        fixture.display.pixelScaleX,
+        fixture.display.pixelScaleY
+    ));
+    EXPECT_TRUE(fixture.context.accessibility.announce(tree.announcementText(tree.announcementAt(0u)), AccessibilityLiveMode::Polite));
+    EXPECT_EQ(fixture.accessibility.lastVersion, 1u);
+    EXPECT_EQ(fixture.accessibility.lastNodeCount, 1u);
+    ASSERT_EQ(fixture.accessibility.announcements.size(), 1u);
+    EXPECT_EQ(StringView(fixture.accessibility.announcements[0u]), "Loaded");
+
+    ASSERT_TRUE(fixture.accessibility.pushAction(btnDecl.value().id.value, AccessibilityActionKind::Invoke, 0.0));
+    AccessibilityActionEvent action;
+    ASSERT_TRUE(fixture.context.accessibility.pollAction(action));
+    EXPECT_TRUE(fixture.uiContext.applyAccessibleAction(action));
+    EXPECT_EQ(fixture.uiContext.input().focus(), btnDecl.value().id);
+
+    GamepadNavigationAdapter pad;
+    InputDispatcher dispatcher = InputDispatcher();
+    BridgeGamepadHandler handler(pad, fixture.uiContext);
+    AddBridgeGamepadHandlerToBack(dispatcher, handler);
+    dispatcher.gamepadConnectionUpdate(0u, true);
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::DPadRight), s_InputActionPress);
+    EXPECT_EQ(fixture.uiContext.input().focus(), nextDecl.value().id);
+    dispatcher.gamepadButtonUpdate(0u, cast<i32>(GamepadButton::DPadRight), s_InputActionReleaseBase);
+    dispatcher.gamepadAxisUpdate(0u, cast<i32>(GamepadAxis::LeftX), -0.90f);
+    EXPECT_EQ(fixture.uiContext.input().focus(), btnDecl.value().id);
+    RemoveBridgeGamepadHandler(dispatcher, handler);
+    EXPECT_EQ(handler.m_buttonEvents, 2u);
+    EXPECT_EQ(handler.m_axisEvents, 1u);
 }
 
 

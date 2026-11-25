@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_scene/hierarchy.adhd>
 #include <impl/ecs_skeleton/components.adhd>
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
@@ -97,6 +98,7 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         this.writeAccess<SkinnedMeshBindingComponent>();
         this.readAccess<SkeletonJointPaletteComponent>();
         this.readAccess<SkeletonPoseComponent>();
+        this.readAccess<SceneEntityNameComponent>();
         runtimeMeshRegistry.registerRuntimeMeshProvider(this);
     }
     public ~MeshSkinningSystem(){

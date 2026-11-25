@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_physics/cook_components.adhd>
+#include <impl/assets_physics/cook_source_io.adhd>
 #include <impl/assets_physics/physics_asset_binary_codec.adhd>
 
 
@@ -12,6 +13,7 @@
 const StringView s_PhysicsMaterialDiagnosticPrefix = "PhysicsMaterial meta";
 const StringView s_CollisionLayerMatrixDiagnosticPrefix = "CollisionLayerMatrix meta";
 const StringView s_ConvexHullDiagnosticPrefix = "ConvexHull meta";
+const StringView s_CompoundHullDiagnosticPrefix = "CompoundHull meta";
 const StringView s_CollisionMeshDiagnosticPrefix = "CollisionMesh meta";
 const StringView s_HeightfieldDiagnosticPrefix = "Heightfield meta";
 
@@ -32,6 +34,11 @@ class CollisionLayerMatrixCookEntry{
 class ConvexHullCookEntry{
     public Name virtualPath = s_NameNone;
     public HullShape hull;
+}
+
+class CompoundHullCookEntry{
+    public Name virtualPath = s_NameNone;
+    public Vector<HullShape> hulls;
 }
 
 class CollisionMeshCookEntry{
@@ -67,6 +74,13 @@ b8 SerializeConvexHullAsset(in ConvexHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hull, outBinary);
+}
+
+[asset_writer]
+b8 SerializeCompoundHullAsset(in CompoundHullAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeCompoundHullUnchecked(asset.hulls, outBinary);
 }
 
 [asset_writer]
@@ -215,27 +229,213 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
     return entry;
 }
 
-Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
-    ConvexHullCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_ConvexHullDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_ConvexHullDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
+b8 HasCaseInsensitiveExtensionSuffix(in StringView text, in StringView lowerExt){
+    if(text.size() < lowerExt.size())
+        return false;
+    const usize start = text.size() - lowerExt.size();
+    for(usize i = 0u; i < lowerExt.size(); ++i){
+        u8 ch = cast<u8>(text[start + i]);
+        if(ch >= 65u && ch <= 90u)
+            ch = cast<u8>(ch + 32u);
+        if(ch != cast<u8>(lowerExt[i]))
+            return false;
+    }
+    return true;
+}
+
+b8 AppendNestedPhysicsU32List(
+    in Path file,
+    in StringView prefix,
+    in StringView field,
+    in MetascriptValue value,
+    mut Vector<u32> outValues
+){
+    if(value.isList()){
+        const Span<MetascriptValue> items = value.listView();
+        for(usize i = 0u; i < items.size(); ++i){
+            if(!AppendNestedPhysicsU32List(file, prefix, field, items[i], outValues))
+                return false;
+        }
+        return true;
+    }
+    u32 idx = 0u;
+    if(!ReadPhysicsU32Value(file, value, prefix, field, idx))
+        return false;
+    outValues.push_back(idx);
+    return true;
+}
+
+b8 ExtractNwbMeshPositionsAndIndices(
+    in Path sourceFile,
+    in StringView prefix,
+    in MetascriptValue meshVal,
+    mut Vector<f32x4> outVertices,
+    mut Vector<u32> outIndices
+){
+    const Optional<in MetascriptValue> posOpt = meshVal.borrowField("positions");
+    if(!posOpt.has_value()){
+        error("{} '{}': source .nwb mesh missing 'positions'", prefix, PathToString(sourceFile));
+        return false;
+    }
+    if(!ReadPhysicsFloat3ArrayValue(sourceFile, posOpt.value(), prefix, "positions", outVertices) || outVertices.empty())
+        return false;
+
+    const Optional<in MetascriptValue> idxOpt = meshVal.borrowField("indices");
+    if(!idxOpt.has_value()){
+        error("{} '{}': source .nwb mesh missing 'indices'", prefix, PathToString(sourceFile));
+        return false;
+    }
+    Vector<u32> rawIndices;
+    if(!AppendNestedPhysicsU32List(sourceFile, prefix, "indices", idxOpt.value(), rawIndices)
+        || rawIndices.empty()
+        || (rawIndices.size() % 3u) != 0u){
+        error("{} '{}': source .nwb mesh 'indices' must be non-empty triangle triples", prefix, PathToString(sourceFile));
+        return false;
+    }
+
+    const Optional<in MetascriptValue> refOpt = meshVal.borrowField("vertex_refs");
+    if(refOpt.has_value()){
+        if(!refOpt.value().isList()){
+            error("{} '{}': source .nwb 'vertex_refs' must be a list", prefix, PathToString(sourceFile));
+            return false;
+        }
+        const Span<MetascriptValue> refs = refOpt.value().listView();
+        Vector<u32> posRefs;
+        posRefs.resize(refs.size());
+        for(usize ri = 0u; ri < refs.size(); ++ri){
+            if(!refs[ri].isList() || refs[ri].listView().size() < 1u){
+                error("{} '{}': source .nwb 'vertex_refs[{}]' must be a list", prefix, PathToString(sourceFile), ri);
+                return false;
+            }
+            u32 posIdx = 0u;
+            if(!ReadPhysicsU32Value(sourceFile, refs[ri].listView()[0u], prefix, "vertex_refs", posIdx))
+                return false;
+            if(cast<usize>(posIdx) >= outVertices.size()){
+                error("{} '{}': source .nwb vertex_ref position index {} out of bounds", prefix, PathToString(sourceFile), posIdx);
+                return false;
+            }
+            posRefs[ri] = posIdx;
+        }
+        outIndices.resize(rawIndices.size());
+        for(usize ii = 0u; ii < rawIndices.size(); ++ii){
+            if(cast<usize>(rawIndices[ii]) >= posRefs.size()){
+                error("{} '{}': source .nwb index {} out of vertex_refs bounds", prefix, PathToString(sourceFile), rawIndices[ii]);
+                return false;
+            }
+            outIndices[ii] = posRefs[rawIndices[ii]];
+        }
+        return true;
+    }
+
+    for(usize ii = 0u; ii < rawIndices.size(); ++ii){
+        if(cast<usize>(rawIndices[ii]) >= outVertices.size()){
+            error("{} '{}': source .nwb index {} out of position bounds", prefix, PathToString(sourceFile), rawIndices[ii]);
+            return false;
+        }
+    }
+    outIndices = rawIndices;
+    return true;
+}
+
+b8 LoadPhysicsSourceMesh(
+    in Path ownerNwbFile,
+    in StringView sourceMeshRef,
+    in StringView prefix,
+    mut Vector<f32x4> outVertices,
+    mut Vector<u32> outIndices
+){
+    outVertices.clear();
+    outIndices.clear();
+    Path resolvedPath;
+    ResolvePhysicsSourcePath(ownerNwbFile, sourceMeshRef, resolvedPath);
+
+    if(HasCaseInsensitiveExtensionSuffix(sourceMeshRef, ".nwb")){
+        b8 foundVar = false;
+        b8 extractOk = false;
+        if(!VisitMetadataDocumentFile(resolvedPath, prefix, lambda[in resolvedPath, in prefix, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in MetascriptDocument doc) -> b8{
+            doc.forEachDeclaration(lambda[in resolvedPath, in prefix, in doc, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in StringView declType, in StringView declVar) -> b8{
+                if(declType == "mesh" || declType == "skinned_mesh"){
+                    foundVar = true;
+                    const Optional<in MetascriptValue> valOpt = doc.borrowVariable(declVar);
+                    if(!valOpt.has_value() || !valOpt.value().isMap()){
+                        error("{} '{}': source .nwb mesh variable '{}' must be a map", prefix, PathToString(resolvedPath), declVar);
+                        extractOk = false;
+                        return false;
+                    }
+                    extractOk = ExtractNwbMeshPositionsAndIndices(resolvedPath, prefix, valOpt.value(), outVertices, outIndices);
+                    return false;
+                }
+                return true;
+            });
+            if(!foundVar){
+                const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
+                if(assetOpt.has_value() && assetOpt.value().isMap()){
+                    foundVar = true;
+                    extractOk = ExtractNwbMeshPositionsAndIndices(resolvedPath, prefix, assetOpt.value(), outVertices, outIndices);
+                }
+            }
+            if(!foundVar){
+                error("{} '{}': source .nwb contains no mesh declaration", prefix, PathToString(resolvedPath));
+                return false;
+            }
+            return extractOk;
+        }))
+            return false;
+        return extractOk;
+    }
+
+    if(!LoadExternalMeshFile(resolvedPath, outVertices, outIndices)){
+        error("{} '{}': failed to load external mesh file '{}'", prefix, PathToString(ownerNwbFile), sourceMeshRef);
+        return false;
+    }
+    return true;
+}
+
+b8 BuildCookHullFromMapValue(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView prefix,
+    in b8 allowSourceMesh,
+    mut HullShape outHull
+){
+    if(!mapVal.isMap()){
+        error("{} '{}': hull entry must be a map", prefix, PathToString(file));
+        return false;
+    }
 
     b8 isBox = false;
+    b8 hasIsBox = false;
     b8 hasHalfExtents = false;
     VectorSingle halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
     VectorSingle boxRotation(0.0f, 0.0f, 0.0f, 1.0f);
     u32 rotFieldCount = 0u;
     f32 skinRadius = 0.0f;
     Vector<f32x4> points;
+    b8 hasSourceMesh = false;
+    StringView sourceMesh = "";
 
-    if(!value.forEachMapEntry(lambda[in file, mut isBox, mut hasHalfExtents, mut halfExtents, mut boxRotation, mut rotFieldCount, mut skinRadius, mut points](in StringView key, in MetascriptValue fieldVal) -> b8{
-        if(key == "is_box") return ReadPhysicsBoolValue(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, isBox);
-        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, skinRadius);
-        if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, points);
+    if(!mapVal.forEachMapEntry(lambda[
+        in file, in prefix, in allowSourceMesh, mut isBox, mut hasIsBox, mut hasHalfExtents,
+        mut halfExtents, mut boxRotation, mut rotFieldCount, mut skinRadius, mut points,
+        mut hasSourceMesh, mut sourceMesh
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "is_box"){
+            hasIsBox = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, isBox);
+        }
+        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, skinRadius);
+        if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, points);
+        if(allowSourceMesh && key == "source_mesh"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!srcRes.has_value())
+                return false;
+            sourceMesh = srcRes.value();
+            hasSourceMesh = true;
+            return true;
+        }
         if(key == "half_extents"){
             VectorSingle v(0.0f);
-            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ConvexHullDiagnosticPrefix, key, v))
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
                 return false;
             halfExtents = v;
             hasHalfExtents = true;
@@ -246,7 +446,7 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
             if(!ReadPhysicsRotationVectorValue(
                 file,
                 fieldVal,
-                s_ConvexHullDiagnosticPrefix,
+                prefix,
                 key,
                 "box_rotation",
                 "box_rotation_euler",
@@ -260,25 +460,36 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
             boxRotation = q;
             return true;
         }
-        error("{} '{}': unsupported asset field '{}'", s_ConvexHullDiagnosticPrefix, PathToString(file), key);
+        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
         return false;
     }))
-        return MakeUnexpected(Failure());
+        return false;
 
     if(!IsFinite(VectorSingle(skinRadius)) || skinRadius < 0.0f){
-        error("{} '{}': invalid 'skin_radius'", s_ConvexHullDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': invalid 'skin_radius'", prefix, PathToString(file));
+        return false;
+    }
+
+    if(hasSourceMesh && (hasIsBox || isBox || !points.empty() || hasHalfExtents)){
+        error("{} '{}': 'source_mesh' cannot be combined with 'is_box', 'half_extents', or 'points'", prefix, PathToString(file));
+        return false;
+    }
+
+    if(hasSourceMesh){
+        Vector<u32> dummyIndices;
+        if(!LoadPhysicsSourceMesh(file, sourceMesh, prefix, points, dummyIndices))
+            return false;
     }
 
     if(isBox){
         if(!hasHalfExtents || halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f){
-            error("{} '{}': box hull requires positive 'half_extents'", s_ConvexHullDiagnosticPrefix, PathToString(file));
-            return MakeUnexpected(Failure());
+            error("{} '{}': box hull requires positive 'half_extents'", prefix, PathToString(file));
+            return false;
         }
         const Expected<HullShape> built = MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, skinRadius);
         if(!built.has_value()){
-            error("{} '{}': failed to construct box convex hull", s_ConvexHullDiagnosticPrefix, PathToString(file));
-            return MakeUnexpected(Failure());
+            error("{} '{}': failed to construct box convex hull", prefix, PathToString(file));
+            return false;
         }
         HullShape boxHull = built.value();
         const b8 hasRot = !Vector3LessOrEqual(Abs(boxRotation), VectorSingle(1.0e-5f));
@@ -291,18 +502,142 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, i
                 boxHull.facePlanes[fi] = Plane3D(rotN, boxHull.facePlanes[fi].normalOffset.w);
             }
         }
-        entry.hull = boxHull;
-    }
-    else{
-        Expected<HullShape> built = BuildConvexHull(Span<f32x4>(points.data(), points.size()), skinRadius);
-        if(!built.has_value()){
-            error("{} '{}': degenerate or invalid convex hull points", s_ConvexHullDiagnosticPrefix, PathToString(file));
-            return MakeUnexpected(Failure());
-        }
-        entry.hull = built.value();
+        outHull = boxHull;
+        return true;
     }
 
+    const Expected<HullShape> built = BuildConvexHull(Span<f32x4>(points.data(), points.size()), skinRadius);
+    if(!built.has_value()){
+        error("{} '{}': degenerate or invalid convex hull points", prefix, PathToString(file));
+        return false;
+    }
+    outHull = built.value();
+    return true;
+}
+
+Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    ConvexHullCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_ConvexHullDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ConvexHullDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(!BuildCookHullFromMapValue(file, value, s_ConvexHullDiagnosticPrefix, true, entry.hull))
+        return MakeUnexpected(Failure());
+
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateConvexHull(entry.hull, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    CompoundHullCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_CompoundHullDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CompoundHullDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    b8 hasHullsList = false;
+    b8 hasSourceMesh = false;
+    StringView sourceMesh = "";
+    Vector<f32x4> vertices;
+    Vector<u32> indices;
+    VhacdParams vhacdParams;
+
+    if(!value.forEachMapEntry(lambda[
+        in file, mut entry, mut hasHullsList, mut hasSourceMesh, mut sourceMesh,
+        mut vertices, mut indices, mut vhacdParams
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "hulls"){
+            hasHullsList = true;
+            if(!fieldVal.isList() || fieldVal.listView().empty()){
+                error("{} '{}': field 'hulls' must be a non-empty list of hull maps", s_CompoundHullDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            const Span<MetascriptValue> items = fieldVal.listView();
+            entry.hulls.clear();
+            entry.hulls.resize(items.size());
+            for(usize hi = 0u; hi < items.size(); ++hi){
+                if(!BuildCookHullFromMapValue(file, items[hi], s_CompoundHullDiagnosticPrefix, false, entry.hulls[hi]))
+                    return false;
+            }
+            return true;
+        }
+        if(key == "source_mesh"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key);
+            if(!srcRes.has_value())
+                return false;
+            sourceMesh = srcRes.value();
+            hasSourceMesh = true;
+            return true;
+        }
+        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vertices);
+        if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, indices);
+        if(key == "vhacd_max_hulls" || key == "max_hulls") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxConvexHulls);
+        if(key == "vhacd_max_recursion_depth" || key == "max_recursion_depth") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxRecursionDepth);
+        if(key == "vhacd_concavity_threshold" || key == "concavity_threshold") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.concavityThreshold);
+        if(key == "vhacd_max_vertices_per_hull" || key == "max_vertices_per_hull") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxVerticesPerHull);
+        if(key == "skin_radius" || key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.hullRadius);
+        if(key == "vhacd_min_volume_ratio" || key == "min_volume_ratio") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.minVolumeRatio);
+        if(key == "vhacd_enable_arbitrary_planes" || key == "enable_arbitrary_planes") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableArbitraryPlanes);
+        if(key == "vhacd_enable_hull_merging" || key == "enable_hull_merging") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableHullMerging);
+        if(key == "vhacd_merge_volume_tolerance" || key == "merge_volume_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.mergeVolumeTolerance);
+        error("{} '{}': unsupported asset field '{}'", s_CompoundHullDiagnosticPrefix, PathToString(file), key);
+        return false;
+    }))
+        return MakeUnexpected(Failure());
+
+    const b8 hasInlineMesh = !vertices.empty() || !indices.empty();
+    if(hasHullsList && (hasSourceMesh || hasInlineMesh)){
+        error("{} '{}': 'hulls' cannot be combined with 'source_mesh' or inline 'vertices'/'indices'", s_CompoundHullDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(hasSourceMesh && hasInlineMesh){
+        error("{} '{}': 'source_mesh' cannot be combined with inline 'vertices'/'indices'", s_CompoundHullDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(!hasHullsList && !hasSourceMesh && !hasInlineMesh){
+        error("{} '{}': compound hull requires 'hulls', 'source_mesh', or 'vertices'/'indices'", s_CompoundHullDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+
+    if(!hasHullsList){
+        if(vhacdParams.maxConvexHulls < 1u
+            || vhacdParams.maxRecursionDepth < 1u
+            || vhacdParams.maxVerticesPerHull < 4u
+            || !IsFinite(VectorSingle(vhacdParams.hullRadius, vhacdParams.concavityThreshold, vhacdParams.minVolumeRatio, vhacdParams.mergeVolumeTolerance))
+            || vhacdParams.hullRadius < 0.0f
+            || vhacdParams.concavityThreshold < 0.0f
+            || vhacdParams.minVolumeRatio < 0.0f
+            || vhacdParams.mergeVolumeTolerance < 0.0f){
+            error("{} '{}': invalid VHACD parameters", s_CompoundHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        if(hasSourceMesh){
+            if(!LoadPhysicsSourceMesh(file, sourceMesh, s_CompoundHullDiagnosticPrefix, vertices, indices))
+                return MakeUnexpected(Failure());
+        }
+        if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
+            error("{} '{}': VHACD compound hull requires valid triangle mesh vertices and indices", s_CompoundHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        for(usize ii = 0u; ii < indices.size(); ++ii){
+            if(cast<usize>(indices[ii]) >= vertices.size()){
+                error("{} '{}': mesh index {} out of bounds", s_CompoundHullDiagnosticPrefix, PathToString(file), indices[ii]);
+                return MakeUnexpected(Failure());
+            }
+        }
+        const Expected<VhacdResult> decompRes = ComputeConvexDecomposition(
+            Span<f32x4>(vertices.data(), vertices.size()),
+            Span<u32>(indices.data(), indices.size()),
+            vhacdParams
+        );
+        if(!decompRes.has_value() || decompRes.value().hulls.empty()){
+            error("{} '{}': VHACD produced no valid convex hulls", s_CompoundHullDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+        entry.hulls = decompRes.value().hulls;
+    }
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCompoundHull(entry.hulls, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -313,6 +648,8 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
         || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionMeshDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
+    b8 hasSourceMesh = false;
+    StringView sourceMesh = "";
     Vector<f32x4> vertices;
     Vector<u32> indices;
     f32 skinRadius = 0.0f;
@@ -321,7 +658,18 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
     Vector<u16> triMaterialIndices;
     Vector<u32> triUserData;
 
-    if(!value.forEachMapEntry(lambda[in file, mut vertices, mut indices, mut skinRadius, mut sidedness, mut materials, mut triMaterialIndices, mut triUserData](in StringView key, in MetascriptValue fieldVal) -> b8{
+    if(!value.forEachMapEntry(lambda[
+        in file, mut hasSourceMesh, mut sourceMesh, mut vertices, mut indices,
+        mut skinRadius, mut sidedness, mut materials, mut triMaterialIndices, mut triUserData
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "source_mesh"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key);
+            if(!srcRes.has_value())
+                return false;
+            sourceMesh = srcRes.value();
+            hasSourceMesh = true;
+            return true;
+        }
         if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, vertices);
         if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, indices);
         if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, skinRadius);
@@ -347,6 +695,15 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
         return false;
     }))
         return MakeUnexpected(Failure());
+
+    if(hasSourceMesh && (!vertices.empty() || !indices.empty())){
+        error("{} '{}': 'source_mesh' cannot be combined with inline 'vertices' or 'indices'", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(hasSourceMesh){
+        if(!LoadPhysicsSourceMesh(file, sourceMesh, s_CollisionMeshDiagnosticPrefix, vertices, indices))
+            return MakeUnexpected(Failure());
+    }
 
     if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
         error("{} '{}': collision mesh requires non-empty vertices and triangle-multiple indices", s_CollisionMeshDiagnosticPrefix, PathToString(file));
@@ -387,20 +744,95 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
 
     u32 cols = 0u;
     u32 rows = 0u;
+    b8 hasCols = false;
+    b8 hasRows = false;
     Vector<f32> heights;
+    b8 hasHeights = false;
+    b8 hasSourceHeightmap = false;
+    StringView sourceHeightmap = "";
+    u32 heightmapChannel = 0u;
+    f32 heightMin = 0.0f;
+    f32 heightMax = 1.0f;
+    u32 rawBits = 0u;
+    b8 rawBigEndian = false;
+    b8 hasRawFloat = false;
+    b8 rawFloat = false;
     VectorSingle scale(1.0f, 1.0f, 1.0f, 0.0f);
     VectorSingle origin(0.0f);
     f32 thickness = 0.0f;
+    b8 flipDiagonal = false;
     Vector<SurfaceMaterial> materials;
     Vector<u16> cellMaterialIndices;
+    Vector<u8> cellHoles;
+    b8 hasHoleMaskImage = false;
+    StringView holeMaskImage = "";
+    f32 holeMaskThreshold = 0.5f;
 
-    if(!value.forEachMapEntry(lambda[in file, mut cols, mut rows, mut heights, mut scale, mut origin, mut thickness, mut materials, mut cellMaterialIndices](in StringView key, in MetascriptValue fieldVal) -> b8{
-        if(key == "cols") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cols);
-        if(key == "rows") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rows);
-        if(key == "heights") return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heights);
+    if(!value.forEachMapEntry(lambda[
+        in file, mut cols, mut rows, mut hasCols, mut hasRows, mut heights, mut hasHeights,
+        mut hasSourceHeightmap, mut sourceHeightmap, mut heightmapChannel, mut heightMin, mut heightMax,
+        mut rawBits, mut rawBigEndian, mut hasRawFloat, mut rawFloat,
+        mut scale, mut origin, mut thickness, mut flipDiagonal,
+        mut materials, mut cellMaterialIndices, mut hasHoleMaskImage, mut holeMaskImage, mut holeMaskThreshold
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "cols"){
+            hasCols = true;
+            return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cols);
+        }
+        if(key == "rows"){
+            hasRows = true;
+            return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rows);
+        }
+        if(key == "heights"){
+            hasHeights = true;
+            return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heights);
+        }
+        if(key == "source_heightmap"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            if(!srcRes.has_value())
+                return false;
+            sourceHeightmap = srcRes.value();
+            hasSourceHeightmap = true;
+            return true;
+        }
+        if(key == "heightmap_channel"){
+            const Expected<StringView> chRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            if(!chRes.has_value())
+                return false;
+            const StringView ch = chRes.value();
+            if(ch == "r" || ch == "red") heightmapChannel = 0u;
+            else if(ch == "g" || ch == "green") heightmapChannel = 1u;
+            else if(ch == "b" || ch == "blue") heightmapChannel = 2u;
+            else if(ch == "a" || ch == "alpha") heightmapChannel = 3u;
+            else if(ch == "luminance" || ch == "luma") heightmapChannel = 4u;
+            else{
+                error("{} '{}': field 'heightmap_channel' must be 'r', 'g', 'b', 'a', or 'luminance'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            return true;
+        }
+        if(key == "height_min") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heightMin);
+        if(key == "height_max") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heightMax);
+        if(key == "raw_bits") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawBits);
+        if(key == "raw_big_endian") return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawBigEndian);
+        if(key == "raw_float"){
+            hasRawFloat = true;
+            return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawFloat);
+        }
         if(key == "scale") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, scale);
         if(key == "origin") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, origin);
         if(key == "thickness") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, thickness);
+        if(key == "flip_diagonal") return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, flipDiagonal);
+        if(key == "cell_holes") return true;
+        if(key == "hole_mask_image"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            if(!srcRes.has_value())
+                return false;
+            holeMaskImage = srcRes.value();
+            hasHoleMaskImage = true;
+            return true;
+        }
+        if(key == "hole_mask_threshold") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, holeMaskThreshold);
         if(key == "materials")
             return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_HeightfieldDiagnosticPrefix, "materials", materials);
         if(key == "cell_material_indices")
@@ -410,21 +842,86 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
     }))
         return MakeUnexpected(Failure());
 
-    if(!IsFinite(VectorSingle(thickness)) || thickness < 0.0f){
-        error("{} '{}': invalid 'thickness'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+    if(!IsFinite(VectorSingle(thickness, heightMin, heightMax, holeMaskThreshold)) || thickness < 0.0f){
+        error("{} '{}': invalid heightfield scalar fields", s_HeightfieldDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
+    if(hasSourceHeightmap && hasHeights){
+        error("{} '{}': 'source_heightmap' cannot be combined with inline 'heights'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(hasSourceHeightmap){
+        Path resolvedSource;
+        ResolvePhysicsSourcePath(file, sourceHeightmap, resolvedSource);
+        const b8 isRaw16 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r16") || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".raw");
+        const b8 isRaw32 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r32") || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".f32");
+        if(isRaw16 || isRaw32){
+            u32 bits = 16u;
+            b8 useFloat = false;
+            if(isRaw32){
+                bits = 32u;
+                useFloat = true;
+            }
+            if(rawBits != 0u)
+                bits = rawBits;
+            if(hasRawFloat)
+                useFloat = rawFloat;
+            if(cols < 2u || rows < 2u){
+                error("{} '{}': raw heightmap requires explicit 'cols' >= 2 and 'rows' >= 2", s_HeightfieldDiagnosticPrefix, PathToString(file));
+                return MakeUnexpected(Failure());
+            }
+            if(!LoadHeightmapRawBinary(resolvedSource, cols, rows, bits, rawBigEndian, useFloat, heightMin, heightMax, heights)){
+                error("{} '{}': failed to load raw heightmap '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), sourceHeightmap);
+                return MakeUnexpected(Failure());
+            }
+        }
+        else{
+            u32 imgCols = 0u;
+            u32 imgRows = 0u;
+            if(!LoadHeightmapImage(resolvedSource, heightmapChannel, heightMin, heightMax, imgCols, imgRows, heights)){
+                error("{} '{}': failed to load heightmap image '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), sourceHeightmap);
+                return MakeUnexpected(Failure());
+            }
+            if((hasCols && cols != imgCols) || (hasRows && rows != imgRows)){
+                error("{} '{}': heightmap image dimensions ({}x{}) do not match specified cols/rows ({}x{})", s_HeightfieldDiagnosticPrefix, PathToString(file), imgCols, imgRows, cols, rows);
+                return MakeUnexpected(Failure());
+            }
+            cols = imgCols;
+            rows = imgRows;
+        }
+    }
+
     Expected<HeightfieldShape> built = MakeHeightfieldShape(cols, rows, Span<f32>(heights.data(), heights.size()), scale, origin);
     if(!built.has_value()){
         error("{} '{}': failed to construct heightfield", s_HeightfieldDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
-    mut HeightfieldShape hf = built.value();
-    hf.thickness = thickness;
-    hf.materials = materials;
-    hf.cellMaterialIndices = cellMaterialIndices;
-    hf.updateHeightRange();
-    entry.heightfield = hf;
+
+    const Optional<in MetascriptValue> holesOpt = value.borrowField("cell_holes");
+    if(holesOpt.has_value() && hasHoleMaskImage){
+        error("{} '{}': 'cell_holes' cannot be combined with 'hole_mask_image'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(holesOpt.has_value()){
+        if(!ParseHeightfieldCellHolesValue(file, holesOpt.value(), s_HeightfieldDiagnosticPrefix, "cell_holes", cols, rows, cellHoles))
+            return MakeUnexpected(Failure());
+    }
+    else if(hasHoleMaskImage){
+        Path resolvedMask;
+        ResolvePhysicsSourcePath(file, holeMaskImage, resolvedMask);
+        if(!LoadHeightmapHoleMask(resolvedMask, cols, rows, holeMaskThreshold, cellHoles)){
+            error("{} '{}': failed to load hole mask image '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), holeMaskImage);
+            return MakeUnexpected(Failure());
+        }
+    }
+
+    entry.heightfield = built.value();
+    entry.heightfield.thickness = thickness;
+    entry.heightfield.flipDiagonal = flipDiagonal;
+    entry.heightfield.materials = materials;
+    entry.heightfield.cellMaterialIndices = cellMaterialIndices;
+    entry.heightfield.cellHoles = cellHoles;
+    entry.heightfield.buildHierarchy();
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateHeightfield(entry.heightfield, entry.virtualPath))
         return MakeUnexpected(Failure());
@@ -472,6 +969,20 @@ Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Path root, in Strin
 Expected<ConvexHullAsset> BuildConvexHullAsset(in ConvexHullCookEntry entry){
     ConvexHullAsset asset(entry.virtualPath);
     asset.setHull(entry.hull);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<CompoundHullCookEntry>(root, virtualRoot, file, document, s_CompoundHullDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CompoundHullCookEntry>{
+        return ParseCompoundHullCookMetadata(path, file, value);
+    });
+}
+
+Expected<CompoundHullAsset> BuildCompoundHullAsset(in CompoundHullCookEntry entry){
+    CompoundHullAsset asset(entry.virtualPath);
+    asset.setHulls(entry.hulls);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

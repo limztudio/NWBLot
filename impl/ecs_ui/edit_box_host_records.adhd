@@ -59,15 +59,17 @@ class UiEditBoxEntry{
     public u64 retiredFocusGeneration = 0u;
     public u64 navigationInstanceGeneration = 0u;
     public usize dragAnchor = 0u;
-    public usize wordDragStart = 0u;
-    public usize wordDragEnd = 0u;
+    public usize rangeDragStart = 0u;
+    public usize rangeDragEnd = 0u;
+    public UiEditClickKind dragMode = UiEditClickKind::Caret;
     public b8 dragging = false;
-    public b8 wordDragging = false;
     public b8 preeditCaretVisible = true;
     public b8 actionCapable = false;
     public b8 focused = false;
     public b8 enabled = true;
     public b8 readOnly = false;
+    public b8 password = false;
+    public b8 acceptTab = false;
     public b8 navigationResetPending = false;
     public TextInputSessionToken rejectedNative;
 }
@@ -78,8 +80,8 @@ class UiEditBoxEvent{
     public TextInputEvent native = TextInputEvent();
     public EditCommandRequest command;
     public EditNavigationDirection navigationDirection = EditNavigationDirection::Up;
+    public UiEditClickKind clickKind = UiEditClickKind::Caret;
     public b8 completed = false;
-    public b8 wordSelect = false;
     public usize position = 0u;
     public usize wordPosition = 0u;
     public u64 geometryRevision = 0u;

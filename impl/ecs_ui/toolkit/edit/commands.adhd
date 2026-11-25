@@ -10,7 +10,7 @@
 
 
 b8 IsAdmittedEditCommand(in EditCommand command){
-    return command != EditCommand::None && cast<u8>(command) <= cast<u8>(EditCommand::Newline);
+    return command != EditCommand::None && cast<u8>(command) <= cast<u8>(EditCommand::InsertTab);
 }
 
 EditMove ResolveEditWordEraseMove(in b8 forward){
@@ -81,6 +81,12 @@ void FinalizeAppliedEditCommand(
     else{
         switch(request.command){
         case EditCommand::Newline: applied = model.replaceSelection(s_EditNewlineText); break;
+        case EditCommand::InsertTab:
+            if(model.textMode() == EditTextMode::Multiline)
+                applied = model.replaceSelection(s_EditTabText);
+            else
+                applied = false;
+            break;
         case EditCommand::Backspace: applied = model.backspace(); break;
         case EditCommand::Delete: applied = model.eraseForward(); break;
         case EditCommand::WordBackspace: applied = EraseEditWord(model, false); break;

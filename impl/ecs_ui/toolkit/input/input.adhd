@@ -214,6 +214,16 @@ void RestoreRouterPopupFocus(
     mut ControlToken inOutFocusControl
 ){
     if(top){
+        if(!IsPopupScopeBlockingOutside(restore.scope)){
+            const Expected<usize> currentIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+            if(windowFocused && currentIndex.has_value()){
+                const HitTarget current = targets[currentIndex.value()];
+                if(current.popup == restore.restorePopup && current.focusable && IsRouterTargetInteractive(targets, lookup, popups, current)){
+                    inOutFocusControl = current.control;
+                    return;
+                }
+            }
+        }
         RetireRouterCommandFocus(commandSources);
         const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, restore.restoreFocus, restore.restoreDeclaration);
         b8 restored = false;
@@ -352,11 +362,12 @@ b8 PublishRouterTargetTable(
 ){
     b8 hasOwners = false;
     b8 hasCommandOwners = false;
+    b8 hasScrollOwners = false;
     b8 needsSort = false;
     outHasFocusOnCommit = false;
-    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners, needsSort, outHasFocusOnCommit))
+    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners, hasScrollOwners, needsSort, outHasFocusOnCommit))
         return false;
-    if((hasOwners || hasCommandOwners || needsSort || !stagedPopups.empty()) && !ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners, needsSort))
+    if((hasOwners || hasCommandOwners || hasScrollOwners || needsSort || !stagedPopups.empty()) && !ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners, hasScrollOwners, needsSort))
         return false;
     committedTargets.swap(stagedTargets);
     committedLookup.swap(stagedLookup);

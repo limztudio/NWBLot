@@ -141,6 +141,27 @@ void SetRouterHoverTarget(
         AdvanceRouterHoverActivity(inOutActivityGeneration);
 }
 
+void RecordRouterWindowPress(in HitTarget hit, mut u64 inOutNextActionSequence, mut Vector<WindowPressRecord> inOutWindowPresses){
+    if(!hit.windowId.valid() || hit.windowDeclarationGeneration == 0u || inOutNextActionSequence == 0u)
+        return;
+    const u64 sequence = inOutNextActionSequence;
+    ++inOutNextActionSequence;
+    for(usize index = 0u; index < inOutWindowPresses.size(); ++index){
+        if(inOutWindowPresses[index].windowId == hit.windowId){
+            inOutWindowPresses[index].declarationGeneration = hit.windowDeclarationGeneration;
+            inOutWindowPresses[index].sequence = sequence;
+            return;
+        }
+    }
+    if(inOutWindowPresses.size() >= s_InputMaxWindowPresses)
+        return;
+    WindowPressRecord record;
+    record.windowId = hit.windowId;
+    record.declarationGeneration = hit.windowDeclarationGeneration;
+    record.sequence = sequence;
+    inOutWindowPresses.push_back(record);
+}
+
 void RouteRouterSecondary(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
@@ -155,6 +176,7 @@ void RouteRouterSecondary(
     in b8 canAppendPopupDismissal,
     mut PopupDismissRequest popupDismissRequest,
     mut Vector<ContextMenuAction> contextMenuActions,
+    mut Vector<WindowPressRecord> windowPresses,
     mut u64 inOutNextActionSequence,
     mut b8 inOutSecondaryDown,
     mut b8 inOutSecondarySequenceConsumed,
@@ -180,7 +202,7 @@ void RouteRouterSecondary(
         else if(primaryDown)
             inOutResult.pointerConsumed = inOutResult.pointerConsumed || pointerSequenceConsumed;
         else
-            inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || HasBlockingRouterPopup(popups) || hasHit;
         if(
             inOutSecondaryDown
             && inOutSecondarySequenceConsumed
@@ -203,10 +225,17 @@ void RouteRouterSecondary(
     if(primaryDown)
         inOutSecondarySequenceConsumed = pointerSequenceConsumed;
     else
-        inOutSecondarySequenceConsumed = !popups.empty() || hasHit;
+        inOutSecondarySequenceConsumed = HasBlockingRouterPopup(popups) || hasHit;
     inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutSecondarySequenceConsumed;
-    if(!inOutSecondarySequenceConsumed)
+    if(!inOutSecondarySequenceConsumed){
+        if(!primaryDown && !popups.empty()){
+            const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+            outDismissedPopup = dismissal.has_value();
+            if(outDismissedPopup)
+                popupDismissRequest = dismissal.value();
+        }
         return;
+    }
     if(!popups.empty() && !hasHit){
         const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
         outDismissedPopup = dismissal.has_value();
@@ -214,6 +243,14 @@ void RouteRouterSecondary(
             popupDismissRequest = dismissal.value();
         return;
     }
+    if(hasHit && !popups.empty() && hit.popup != popups.back().scope.token){
+        const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+        outDismissedPopup = dismissal.has_value();
+        if(outDismissedPopup)
+            popupDismissRequest = dismissal.value();
+    }
+    if(hasHit && !primaryDown)
+        RecordRouterWindowPress(hit, inOutNextActionSequence, windowPresses);
     if(!hasAnchor || !anchor.contextMenu || !windowFocused)
         return;
     inOutSecondaryOwner = TargetOwner(anchor.id, anchor.declarationGeneration, anchor.popup, anchor.control);

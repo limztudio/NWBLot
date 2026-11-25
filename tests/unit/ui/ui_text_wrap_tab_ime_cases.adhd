@@ -1,0 +1,315 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_text_area.adhd>
+#include <tests/unit/ui/fixture_text_shaping.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type UiTextWrapTabImeTests = TextAreaFixture;
+const f32 s_UiWrapNarrowWidth = 120.0f;
+const f32 s_UiWrapShortHeight = 52.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextWrapTabImeTests_TabStopAlignmentSpacingAndZeroGlyphQuads(mut UiTextWrapTabImeTests self){
+    ShapeRequest spaceRequest;
+    spaceRequest.text = " ";
+    spaceRequest.fontSize = 14.0f;
+    const auto spaceLayout = self.m_text.layout(spaceRequest);
+    ASSERT_TRUE(spaceLayout.has_value());
+    const f32 spaceAdvance = spaceLayout.value().measure().x;
+    ASSERT_GT(spaceAdvance, 0.0f);
+    const f32 tabStopAdvance = spaceAdvance * 4.0f;
+
+    ShapeRequest shortRequest;
+    shortRequest.text = " \tb";
+    shortRequest.fontSize = 14.0f;
+    shortRequest.tabStopSpaces = 4u;
+    const auto shortLayout = self.m_text.layout(shortRequest);
+    ASSERT_TRUE(shortLayout.has_value());
+    ASSERT_EQ(shortLayout.value().clusters().size(), 3u);
+    EXPECT_NEAR(shortLayout.value().clusters()[2u].leadingX, tabStopAdvance, 1.0e-3f);
+
+    ShapeRequest threeSpaceRequest = shortRequest;
+    threeSpaceRequest.text = "   \tb";
+    const auto threeSpaceLayout = self.m_text.layout(threeSpaceRequest);
+    ASSERT_TRUE(threeSpaceLayout.has_value());
+    ASSERT_EQ(threeSpaceLayout.value().clusters().size(), 5u);
+    EXPECT_NEAR(threeSpaceLayout.value().clusters()[4u].leadingX, tabStopAdvance, 1.0e-3f);
+
+    ShapeRequest crossStopRequest = shortRequest;
+    crossStopRequest.text = "    \tb";
+    const auto crossStopLayout = self.m_text.layout(crossStopRequest);
+    ASSERT_TRUE(crossStopLayout.has_value());
+    ASSERT_EQ(crossStopLayout.value().clusters().size(), 6u);
+    EXPECT_NEAR(crossStopLayout.value().clusters()[5u].leadingX, tabStopAdvance * 2.0f, 1.0e-3f);
+
+    ShapeRequest customStopRequest = shortRequest;
+    customStopRequest.tabStopSpaces = 2u;
+    const auto customStopLayout = self.m_text.layout(customStopRequest);
+    ASSERT_TRUE(customStopLayout.has_value());
+    EXPECT_NEAR(customStopLayout.value().clusters()[2u].leadingX, spaceAdvance * 2.0f, 1.0e-3f);
+
+    ShapeRequest invalidLow = shortRequest;
+    invalidLow.tabStopSpaces = 0u;
+    EXPECT_EQ(self.m_text.layout(invalidLow).error(), TextLayoutStatus::InvalidParameters);
+    ShapeRequest invalidHigh = shortRequest;
+    invalidHigh.tabStopSpaces = s_TextMaxTabStopSpaces + 1u;
+    EXPECT_EQ(self.m_text.layout(invalidHigh).error(), TextLayoutStatus::InvalidParameters);
+
+    ShapeRequest tabOnlyRequest;
+    tabOnlyRequest.text = "A\tB";
+    tabOnlyRequest.fontSize = 14.0f;
+    tabOnlyRequest.tabStopSpaces = 4u;
+    const auto shapedFontLayout = self.m_text.layout(tabOnlyRequest);
+    ASSERT_TRUE(shapedFontLayout.has_value());
+    in TextLayout tabLayout = shapedFontLayout.value();
+    ASSERT_EQ(tabLayout.clusters().size(), 3u);
+    EXPECT_GT(tabLayout.clusters()[1u].trailingX, tabLayout.clusters()[1u].leadingX);
+
+    ASSERT_TRUE(self.begin(1u));
+    self.m_text.paint(self.m_paint, tabLayout, Point(10.0f, 10.0f), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.finishRoot());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    usize glyphQuadIndices = 0u;
+    for(in DrawCommand cmd : snapshot.commands()){
+        if(cmd.material == PaintMaterial::Glyph || cmd.material == PaintMaterial::SdfGlyph)
+            glyphQuadIndices += cast<usize>(cmd.indexCount);
+    }
+    EXPECT_EQ(glyphQuadIndices, 12u);
+}
+
+void VerifyUiTextWrapTabImeTests_TextAreaSoftWrapConvergenceSelectionAndVerticalNavigation(mut UiTextWrapTabImeTests self){
+    ASSERT_TRUE(self.m_model.setText("alpha beta gamma delta epsilon zeta eta theta"));
+    ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+    TextAreaOptions options = TextAreaOptions();
+    options.wrapMode = TextWrapMode::Word;
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, s_UiWrapNarrowWidth);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, s_UiWrapShortHeight);
+    options.tabStopSpaces = 4u;
+
+    const Rect bounds = Rect(20.0f, 20.0f, 300.0f, 200.0f);
+    ASSERT_TRUE(self.frameArea(1u, options, bounds));
+    const f32 wrappedWidthPass1 = self.m_state.m_wrapWidth;
+    EXPECT_GT(wrappedWidthPass1, 0.0f);
+    EXPECT_EQ(self.m_state.m_wrapMode, TextWrapMode::Word);
+    EXPECT_TRUE(self.m_state.scrollbars().vertical.visible);
+    EXPECT_FALSE(self.m_state.scrollbars().horizontal.visible);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollbars().horizontal.maximum, 0.0);
+
+    ASSERT_TRUE(self.frameArea(2u, options, bounds));
+    EXPECT_FLOAT_EQ(self.m_state.m_wrapWidth, wrappedWidthPass1);
+
+    ShapeRequest matchReq;
+    matchReq.text = self.m_model.text();
+    matchReq.fontSize = self.m_builder.style().fontSize;
+    matchReq.wrapMode = TextWrapMode::Word;
+    matchReq.maxWidth = wrappedWidthPass1;
+    matchReq.tabStopSpaces = 4u;
+    matchReq.preserveWrapSpaces = true;
+    const auto wrappedLayout = self.m_text.layout(matchReq);
+    ASSERT_TRUE(wrappedLayout.has_value());
+    ASSERT_GT(wrappedLayout.value().lines().size(), 1u);
+    const usize softLineEnd = cast<usize>(wrappedLayout.value().lines()[0u].byteEnd);
+    ASSERT_LT(softLineEnd, self.m_model.text().size());
+    EXPECT_NE(self.m_model.text()[softLineEnd], '\n');
+
+    EditBoxView view = EditBoxView();
+    ASSERT_TRUE(view.snapshot(self.m_model));
+    ASSERT_EQ(view.shape(self.m_text, matchReq), TextLayoutStatus::Success);
+    EditBoxRange firstLineRange = EditBoxRange();
+    firstLineRange.begin = 0u;
+    firstLineRange.end = softLineEnd;
+    const Expected<Rect> seg0 = ResolveEditCaretRangeOnLine(
+        view.layout().utf8(),
+        view.layout().lines(),
+        view.layout().clusters(),
+        view.caretGeometry().boundaries(),
+        view.caretGeometry().lines(),
+        firstLineRange,
+        0u,
+        1.0f,
+        view.layout().direction()
+    );
+    ASSERT_TRUE(seg0.has_value());
+    EXPECT_GT(seg0.value().width, 0.0f);
+
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, self.m_builder.style().fontSize);
+    const EditNavigationSnapshot navSnapshot = self.m_state.m_navigation.snapshot();
+    const Expected<EditNavigationResult> downTarget = resolver.resolve(self.m_model, EditNavigationDirection::Down, navSnapshot, self.m_state.placement().content.height);
+    ASSERT_TRUE(downTarget.has_value());
+    EXPECT_GE(downTarget.value().committedByte, softLineEnd);
+
+    EditModel tokenModel = EditModel(EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(tokenModel.setText("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"));
+    TextAreaState tokenState = TextAreaState();
+    TextAreaOptions charOptions = options;
+    charOptions.wrapMode = TextWrapMode::Character;
+    ASSERT_TRUE(self.beginArea(3u, bounds));
+    const EditBoxResult charRes = self.m_builder.textArea("charArea", tokenModel, tokenState, charOptions);
+    EXPECT_TRUE(charRes.valid);
+    EXPECT_TRUE(self.acceptArea());
+    EXPECT_EQ(tokenState.m_wrapMode, TextWrapMode::Character);
+}
+
+void VerifyUiTextWrapTabImeTests_TextAreaAcceptTabInsertsTabAndAllowsShiftTabOut(mut UiTextWrapTabImeTests self){
+    EditModel model = EditModel(EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(model.setText("ab"));
+    ASSERT_TRUE(model.setSelection(1u, 1u));
+    EditCommandRequest tabRequest = EditCommandRequest();
+    tabRequest.command = EditCommand::InsertTab;
+    const EditCommandResult multilineRes = ApplyEditCommand(model, tabRequest, false);
+    EXPECT_TRUE(multilineRes.handled);
+    EXPECT_TRUE(multilineRes.textChanged);
+    EXPECT_EQ(model.text(), "a\tb");
+    EXPECT_EQ(model.caret(), 2u);
+
+    EditModel singleModel = EditModel(EditLimits(), EditTextMode::SingleLine);
+    ASSERT_TRUE(singleModel.setText("ab"));
+    const EditCommandResult singleRes = ApplyEditCommand(singleModel, tabRequest, false);
+    EXPECT_TRUE(singleRes.handled);
+    EXPECT_FALSE(singleRes.textChanged);
+    EXPECT_EQ(singleModel.text(), "ab");
+
+    TextAreaOptions areaOptions = TextAreaOptions();
+    areaOptions.acceptTab = true;
+    areaOptions.height = LayoutSize(LayoutSizePolicy::Fixed, 60.0f);
+    ASSERT_TRUE(self.panel(1u, "tabPanel", Rect(10.0f, 10.0f, 300.0f, 200.0f)));
+    ASSERT_TRUE(self.m_builder.textArea("area", model, self.m_state, areaOptions).valid);
+    EXPECT_FALSE(self.m_builder.button("nextBtn", "Next"));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    const Optional<in HitTarget> areaTarget = self.target(self.id("area", "tabPanel"));
+    const Optional<in HitTarget> btnTarget = self.target(self.id("nextBtn", "tabPanel"));
+    ASSERT_TRUE(areaTarget.has_value());
+    ASSERT_TRUE(btnTarget.has_value());
+    EXPECT_TRUE(areaTarget.value().acceptTab);
+    EXPECT_FALSE(btnTarget.value().acceptTab);
+
+    self.click(Point(areaTarget.value().rectangle.x + 8.0f, areaTarget.value().rectangle.y + 8.0f));
+    EXPECT_EQ(self.m_context.input().focus(), areaTarget.value().id);
+
+    self.press(Key::Tab, false, false);
+    EXPECT_EQ(self.m_context.input().focus(), areaTarget.value().id);
+
+    self.press(Key::Tab, false, true);
+    EXPECT_EQ(self.m_context.input().focus(), btnTarget.value().id);
+}
+
+void VerifyUiTextWrapTabImeTests_MultiClauseImeValidationMaskingAndPaintGeometry(mut UiTextWrapTabImeTests self){
+    EditModel model = EditModel(EditLimits(), EditTextMode::SingleLine);
+    ASSERT_TRUE(model.setText("p"));
+    ASSERT_TRUE(model.setSelection(1u, 1u));
+    ASSERT_TRUE(model.beginComposition());
+
+    Array<EditPreeditClause, 2u> badOverlap = Array<EditPreeditClause, 2u>();
+    badOverlap[0u].beginByte = 0u;
+    badOverlap[0u].endByte = 3u;
+    badOverlap[0u].style = EditPreeditClauseStyle::Raw;
+    badOverlap[1u].beginByte = 2u;
+    badOverlap[1u].endByte = 4u;
+    badOverlap[1u].style = EditPreeditClauseStyle::Target;
+    EXPECT_FALSE(model.updateComposition("abcd", 0u, 4u, badOverlap));
+
+    Array<EditPreeditClause, 1u> midUtf8 = Array<EditPreeditClause, 1u>();
+    midUtf8[0u].beginByte = 1u;
+    midUtf8[0u].endByte = 3u;
+    midUtf8[0u].style = EditPreeditClauseStyle::Converted;
+    EXPECT_FALSE(model.updateComposition("\xED\x95\x9C", 0u, 3u, midUtf8));
+
+    Array<EditPreeditClause, 4u> clauses = Array<EditPreeditClause, 4u>();
+    clauses[0u].beginByte = 0u;
+    clauses[0u].endByte = 2u;
+    clauses[0u].style = EditPreeditClauseStyle::Raw;
+    clauses[1u].beginByte = 2u;
+    clauses[1u].endByte = 4u;
+    clauses[1u].style = EditPreeditClauseStyle::Converted;
+    clauses[2u].beginByte = 4u;
+    clauses[2u].endByte = 6u;
+    clauses[2u].style = EditPreeditClauseStyle::Target;
+    clauses[3u].beginByte = 6u;
+    clauses[3u].endByte = 8u;
+    clauses[3u].style = EditPreeditClauseStyle::Selected;
+    ASSERT_TRUE(model.updateComposition("abcdefgh", 0u, 8u, clauses));
+    ASSERT_EQ(model.composition().clauses.size(), 4u);
+
+    EditBoxView maskedView = EditBoxView();
+    ASSERT_TRUE(maskedView.snapshot(model, true, s_EditBoxDefaultMaskCodePoint));
+    ASSERT_EQ(maskedView.preeditClauses().size(), 4u);
+    EXPECT_EQ(maskedView.preeditClauses()[0u].beginByte, 1u);
+    EXPECT_EQ(maskedView.preeditClauses()[0u].endByte, 3u);
+    EXPECT_EQ(maskedView.preeditClauses()[3u].endByte, 9u);
+
+    EditBoxView view = EditBoxView();
+    ASSERT_TRUE(view.snapshot(model));
+    ShapeRequest request;
+    request.text = view.displayText();
+    request.fontSize = 14.0f;
+    ASSERT_EQ(view.shape(self.m_text, request), TextLayoutStatus::Success);
+    const Expected<EditBoxPlacement> placement = view.arrange(Rect(10.0f, 10.0f, 300.0f, 40.0f), Insets(), Rect(0.0f, 0.0f, 400.0f, 100.0f), Point());
+    ASSERT_TRUE(placement.has_value());
+
+    EditBoxStyle style = EditBoxStyle();
+    style.preedit = Color(0.10f, 0.20f, 0.90f, 1.0f);
+    style.preeditConverted = Color(0.20f, 0.80f, 0.40f, 1.0f);
+    style.preeditTarget = Color(0.95f, 0.65f, 0.10f, 1.0f);
+    EditBoxPaintFlags flags = EditBoxPaintFlags();
+    flags.focused = true;
+    flags.preeditCaretVisible = false;
+
+    DisplayMetrics metrics = DisplayMetrics(400.0f, 100.0f, 1.0f, 1.0f);
+    self.m_paint.begin(metrics, 1u, self.m_skinGeneration, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+    ASSERT_TRUE(view.paint(self.m_text, self.m_paint, self.m_skin, placement.value(), style, flags));
+    EXPECT_FALSE(self.m_paint.popClip());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const Color expectedHighlight(style.preeditTarget.r * 0.25f, style.preeditTarget.g * 0.25f, style.preeditTarget.b * 0.25f, 0.25f);
+    usize rawVertices = 0u;
+    usize convertedVertices = 0u;
+    usize targetVertices = 0u;
+    usize highlightVertices = 0u;
+    for(usize idx = 0u; idx < snapshot.vertices().size(); ++idx){
+        const Color c = snapshot.vertices()[idx].color;
+        if(c.r == style.preedit.r && c.g == style.preedit.g && c.b == style.preedit.b && c.a == style.preedit.a)
+            ++rawVertices;
+        else if(c.r == style.preeditConverted.r && c.g == style.preeditConverted.g && c.b == style.preeditConverted.b && c.a == style.preeditConverted.a)
+            ++convertedVertices;
+        else if(c.r == style.preeditTarget.r && c.g == style.preeditTarget.g && c.b == style.preeditTarget.b && c.a == style.preeditTarget.a)
+            ++targetVertices;
+        else if(
+            Abs(VectorSingle(c.r - expectedHighlight.r)).x < 1.0e-5f
+            && Abs(VectorSingle(c.g - expectedHighlight.g)).x < 1.0e-5f
+            && Abs(VectorSingle(c.b - expectedHighlight.b)).x < 1.0e-5f
+            && Abs(VectorSingle(c.a - expectedHighlight.a)).x < 1.0e-5f
+        )
+            ++highlightVertices;
+    }
+    EXPECT_GE(rawVertices, 8u);
+    EXPECT_EQ(convertedVertices, 4u);
+    EXPECT_EQ(targetVertices, 8u);
+    EXPECT_EQ(highlightVertices, 4u);
+
+    model.cancelComposition();
+    EXPECT_TRUE(model.composition().clauses.empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiTextWrapTabImeTests, TabStopAlignmentSpacingAndZeroGlyphQuads, VerifyUiTextWrapTabImeTests_TabStopAlignmentSpacingAndZeroGlyphQuads)
+NWB_ADHD_GTEST_F(UiTextWrapTabImeTests, TextAreaSoftWrapConvergenceSelectionAndVerticalNavigation, VerifyUiTextWrapTabImeTests_TextAreaSoftWrapConvergenceSelectionAndVerticalNavigation)
+NWB_ADHD_GTEST_F(UiTextWrapTabImeTests, TextAreaAcceptTabInsertsTabAndAllowsShiftTabOut, VerifyUiTextWrapTabImeTests_TextAreaAcceptTabInsertsTabAndAllowsShiftTabOut)
+NWB_ADHD_GTEST_F(UiTextWrapTabImeTests, MultiClauseImeValidationMaskingAndPaintGeometry, VerifyUiTextWrapTabImeTests_MultiClauseImeValidationMaskingAndPaintGeometry)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

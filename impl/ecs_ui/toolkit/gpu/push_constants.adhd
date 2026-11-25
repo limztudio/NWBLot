@@ -10,10 +10,11 @@
 
 const usize s_GpuTargetSlotCount = 3u;
 const usize s_GpuFrameCount = 4u;
-const usize s_GpuRasterFixedResourceUses = 4u;
-const usize s_GpuRasterDependencyCapacity = 3u;
+const usize s_GpuRasterFixedResourceUses = 6u;
+const usize s_GpuRasterDependencyCapacity = 6u;
 const usize s_GpuInitialVertexCapacity = 4096u;
 const usize s_GpuInitialIndexCapacity = 12288u;
+const usize s_GpuInitialEffectWordCapacity = 256u;
 const u32 s_GpuFullscreenTriangleVertexCount = 3u;
 const u32 s_GpuTimingHeightShift = 16u;
 const u32 s_GpuFrameTimingQueryCount = 2u;
@@ -82,6 +83,34 @@ const Name s_GpuBackBufferTextureName = "ui.backbuffer";
 const Name s_GpuOutputPipelineName = "ui.output_pipeline";
 const Name s_GpuOutputTaskName = "ui.output";
 const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
+const Name s_GpuEffectBufferName = "ui.effects";
+const Name s_GpuEffectUploadTaskName = "ui.effect_upload";
+const Name s_GpuScratchATextureName = "ui.scratch_a";
+const Name s_GpuScratchBTextureName = "ui.scratch_b";
+const Name s_GpuScratchAReadyName = "ui.scratch_a_ready";
+const Name s_GpuScratchBReadyName = "ui.scratch_b_ready";
+const Name s_GpuRasterPassPrefix = "ui.raster/";
+const Name s_GpuEffectClearPrefix = "ui.effect_clear/";
+const Name s_GpuEffectClearBPrefix = "ui.effect_clear_b/";
+const Name s_GpuEffectClearA2Prefix = "ui.effect_clear_a2/";
+const Name s_GpuEffectCapturePrefix = "ui.effect_capture/";
+const Name s_GpuEffectBlurHPrefix = "ui.effect_blur_h/";
+const Name s_GpuEffectBlurVPrefix = "ui.effect_blur_v/";
+const Name s_GpuRasterPipelineAdditiveName = "ui.raster_pipeline_additive";
+const Name s_GpuRasterPipelineMultiplyName = "ui.raster_pipeline_multiply";
+const Name s_GpuRasterPipelineScreenName = "ui.raster_pipeline_screen";
+const Name s_GpuRasterPipelineEraseName = "ui.raster_pipeline_erase";
+const Name s_GpuRasterPipelineReplaceName = "ui.raster_pipeline_replace";
+const StringView s_GpuEffectsMarkerLabel = "UI Effect Parameters";
+const StringView s_GpuEffectUploadMarkerLabel = "UI Effect Upload";
+const StringView s_GpuScratchAMarkerLabel = "UI Scratch A";
+const StringView s_GpuScratchBMarkerLabel = "UI Scratch B";
+const StringView s_GpuScratchAReadyMarkerLabel = "UI Scratch A Ready";
+const StringView s_GpuScratchBReadyMarkerLabel = "UI Scratch B Ready";
+const StringView s_GpuEffectClearMarkerLabel = "UI Effect Clear";
+const StringView s_GpuEffectCaptureMarkerLabel = "UI Effect Capture";
+const StringView s_GpuEffectBlurHMarkerLabel = "UI Effect Blur Horizontal";
+const StringView s_GpuEffectBlurVMarkerLabel = "UI Effect Blur Vertical";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,6 +137,9 @@ class GpuPaintPushConstants{
     public u32 sdfChannel = 0u;
     public u32 sdfSpreadPixels = 0u;
     public u32 sdfDistanceEncoding = 0u;
+    public u32 effectBufferSlot = 0xffffffffu;
+    public u32 effectOffset = 0xffffffffu;
+    public u32 clipMaskOffset = 0xffffffffu;
 }
 
 [serialize]

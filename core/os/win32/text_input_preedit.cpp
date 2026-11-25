@@ -50,8 +50,8 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
     return publishCompositionPreedit(token, m_utf8Text, caret, caret);
 }
 
-TextInputAdmission::Enum Win32TextInputService::publishCompositionPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte){
-    const TextInputAdmission::Enum admitted = emitPreedit(token, text, anchorByte, caretByte);
+TextInputAdmission::Enum Win32TextInputService::publishCompositionPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const Span<const TextInputPreeditClause> clauses){
+    const TextInputAdmission::Enum admitted = emitPreedit(token, text, anchorByte, caretByte, true, clauses);
     if(admitted == TextInputAdmission::Accepted){
         m_preeditText.assign(text.data(), text.size());
         m_preeditCaretByte = caretByte;
@@ -61,6 +61,10 @@ TextInputAdmission::Enum Win32TextInputService::publishCompositionPreedit(const 
 
 void Win32TextInputService::clearCompositionPreedit()noexcept{
     m_preeditText.clear();
+    m_compAttr.clear();
+    m_compClause.clear();
+    m_utf16ByteOffsets.clear();
+    m_preeditClauses.clear();
     m_preeditCaretByte = 0u;
     m_pendingPreeditHighSurrogate = 0u;
     m_pendingPreeditMoveCaret = true;
@@ -74,4 +78,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

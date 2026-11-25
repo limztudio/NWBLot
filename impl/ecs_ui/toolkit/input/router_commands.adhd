@@ -107,6 +107,9 @@ void RouteRouterCommand(
         commandSources[sourceIndex] = source;
         consumed = true;
     }
+    else if(event.command == InputCommand::FocusNext && hasFocused && windowFocused && IsRouterTargetInteractive(targets, lookup, popups, focused) && focused.textEditable && focused.acceptTab){
+        consumed = true;
+    }
     else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious){
         const b8 moved = TryMoveRouterFocusForTraversal(
             targets,
@@ -122,7 +125,33 @@ void RouteRouterCommand(
             outDismissedPopup
         );
         source = commandSources[sourceIndex];
-        consumed = consumed || moved || !popups.empty();
+        consumed = consumed || moved || HasBlockingRouterPopup(popups);
+    }
+    else if(
+        event.command == InputCommand::FocusUp
+        || event.command == InputCommand::FocusDown
+        || event.command == InputCommand::FocusLeft
+        || event.command == InputCommand::FocusRight
+    ){
+        FocusDirection direction = FocusDirection::Down;
+        if(event.command == InputCommand::FocusUp)
+            direction = FocusDirection::Up;
+        else if(event.command == InputCommand::FocusLeft)
+            direction = FocusDirection::Left;
+        else if(event.command == InputCommand::FocusRight)
+            direction = FocusDirection::Right;
+        const b8 moved = TryMoveRouterSpatialFocus(
+            targets,
+            lookup,
+            popups,
+            direction,
+            commandSources,
+            inOutFocus,
+            inOutFocusDeclaration,
+            inOutFocusControl
+        );
+        source = commandSources[sourceIndex];
+        consumed = consumed || moved || HasBlockingRouterPopup(popups);
     }
     else if(event.command == InputCommand::Cancel){
         consumed = consumed
@@ -130,7 +159,7 @@ void RouteRouterCommand(
             || inOutCapture.valid()
             || pointerSequenceConsumed
             || secondarySequenceConsumed
-            || (!pointerSources.empty() && WantsRouterPointer(pointerSources, !popups.empty(), inOutHover));
+            || (!pointerSources.empty() && WantsRouterPointer(pointerSources, HasBlockingRouterPopup(popups), inOutHover));
         if(!event.repeat && !alreadyPressed){
             CancelRouterCommandPresses(commandSources);
             CancelRouterPointerPress(
@@ -152,7 +181,7 @@ void RouteRouterCommand(
                 if(outDismissedPopup)
                     popupDismissRequest = dismissal.value();
             }
-            consumed = true;
+            consumed = consumed || outDismissedPopup || HasBlockingRouterPopup(popups);
         }
         else if(!event.repeat && !alreadyPressed && !(hasFocused && focused.textEditable)){
             RetireRouterCommandFocus(commandSources);
@@ -163,7 +192,7 @@ void RouteRouterCommand(
         }
     }
     else{
-        consumed = consumed || !popups.empty() || hasFocused;
+        consumed = consumed || HasBlockingRouterPopup(popups) || hasFocused;
         RouteRouterActiveCommandAction(
             targets,
             lookup,

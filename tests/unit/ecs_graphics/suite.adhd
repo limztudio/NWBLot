@@ -13,6 +13,8 @@
 #include <impl/assets_mesh/asset.adhd>
 #include <impl/ecs_csg/module.adhd>
 #include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_mesh/skinning/skinning_frame_plan_and_dispatch.adhd>
+#include <impl/ecs_scene/hierarchy.adhd>
 #include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd>
 #include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd>
 #include <impl/ecs_render/caustic/caustic_light_selector.adhd>
@@ -1651,6 +1653,166 @@ void VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices(){
     EXPECT_EQ(idle.value().value(), Name("render.deferred_graph.queue_4294967295.internal_idle"));
 }
 
+class SuiteCoincidentMaterialLookup : IPreparedMaterialLookup{
+    public MaterialSurfaceInfo info;
+
+    public SuiteCoincidentMaterialLookup(in Name materialName){
+        this.info.materialName = materialName;
+        this.info.transparent = true;
+        this.info.refractive = true;
+    }
+
+    [cpp_unwind]
+    public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset)override{
+        if(!materialAsset.valid() || materialAsset.name() != this.info.materialName)
+            return MakeUnexpected(Failure());
+        mut MaterialSurfaceInfo surface = this.info;
+        return Expected<mut MaterialSurfaceInfo>(surface);
+    }
+
+    public Expected<Span<u8>> findPreparedMaterialInstanceMutableTypedBytes(
+        in EntityID entity,
+        in MaterialSurfaceInfo materialInfo,
+        in Optional<in MaterialInstanceComponent> materialInstance
+    )const override{
+        return Span<u8>();
+    }
+}
+
+void VerifyCsgShadowSnapshot_FrameCacheTracksCutterTransformSyncAndGenericReceiver(){
+    CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+    TestValueSlot<MeshSystem> meshStorage;
+    mut MeshSystem meshSystem = meshStorage.constructIn(context.testWorld.arena, context.testWorld.world);
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+
+    auto receiverEnt = context.testWorld.world.createEntity();
+    receiverEnt.addComponent<CsgReceiverComponent>().receiverGroup = s_CsgShadowReceiverGroup;
+    receiverEnt.addComponent<RendererComponent>();
+    receiverEnt.addComponent<MeshComponent>().mesh.virtualPath = s_EcsCaseTestsCsgShadowStaticCacheMesh;
+    receiverEnt.addComponent<TransformComponent>();
+
+    auto cutterEnt = context.testWorld.world.createEntity();
+    mut TransformComponent cutterXf = cutterEnt.addComponent<TransformComponent>();
+    cutterXf.position = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    mut CsgCutterComponent cutter = cutterEnt.addComponent<CsgCutterComponent>();
+    cutter.receiverGroup = s_CsgShadowReceiverGroup;
+    cutter.shapeType = s_CsgBoxShapeName;
+
+    const auto sig0 = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(sig0.has_value());
+
+    cutterXf.position.x = 4.0f;
+    const auto sigMoved = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(sigMoved.has_value());
+    EXPECT_NE(sig0.value(), sigMoved.value());
+
+    cutter.syncFromTransform = false;
+    const auto sigManual = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(sigManual.has_value());
+    cutterXf.position.x = 9.0f;
+    const auto sigManualUnchanged = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(sigManualUnchanged.has_value());
+    EXPECT_EQ(sigManual.value(), sigManualUnchanged.value());
+
+    receiverEnt.getComponent<CsgReceiverComponent>().enabled = false;
+    const auto sigDisabled = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(sigDisabled.has_value());
+    EXPECT_NE(sigManualUnchanged.value(), sigDisabled.value());
+}
+
+void VerifyCoincidentOpticalVolumes_ExcludesOnlyEnabledCsgReceivers(){
+    CoincidentSelectionContext selContext = CoincidentSelectionContext();
+    EcsTestWorld tw;
+    mut MeshSystem meshSystem = tw.world.addSystem<MeshSystem>(tw.world);
+    const Name matName = Name("tests/coincident/refractive_mat");
+    const Name meshName = Name("tests/coincident/cube_mesh");
+    SuiteCoincidentMaterialLookup matLookup(matName);
+
+    Entity e1 = tw.world.createEntity();
+    e1.addComponent<MeshComponent>().mesh.virtualPath = meshName;
+    e1.addComponent<TransformComponent>();
+    {
+        mut RendererComponent r = e1.addComponent<RendererComponent>();
+        r.material = AssetRef<Material>(matName);
+        r.opticalVolumeCoincidence = OpticalVolumeCoincidence::IdenticalMaterial;
+        r.opticalBoundaryMode = OpticalBoundaryMode::ClosedPriority;
+        r.opticalVolumePriority = 10;
+    }
+
+    Entity e2 = tw.world.createEntity();
+    e2.addComponent<MeshComponent>().mesh.virtualPath = meshName;
+    e2.addComponent<TransformComponent>();
+    {
+        mut RendererComponent r = e2.addComponent<RendererComponent>();
+        r.material = AssetRef<Material>(matName);
+        r.opticalVolumeCoincidence = OpticalVolumeCoincidence::IdenticalMaterial;
+        r.opticalBoundaryMode = OpticalBoundaryMode::ClosedPriority;
+        r.opticalVolumePriority = 5;
+    }
+    e2.addComponent<CsgReceiverComponent>().enabled = false;
+
+    Entity e3 = tw.world.createEntity();
+    e3.addComponent<MeshComponent>().mesh.virtualPath = meshName;
+    e3.addComponent<TransformComponent>();
+    {
+        mut RendererComponent r = e3.addComponent<RendererComponent>();
+        r.material = AssetRef<Material>(matName);
+        r.opticalVolumeCoincidence = OpticalVolumeCoincidence::IdenticalMaterial;
+        r.opticalBoundaryMode = OpticalBoundaryMode::ClosedPriority;
+        r.opticalVolumePriority = 1;
+    }
+    e3.addComponent<CsgReceiverComponent>().enabled = true;
+
+    selContext.selection.prepare(tw.world, matLookup);
+    EXPECT_FALSE(selContext.selection.isSuppressed(e1.id()));
+    EXPECT_TRUE(selContext.selection.isSuppressed(e2.id()));
+    EXPECT_FALSE(selContext.selection.isSuppressed(e3.id()));
+}
+
+void VerifyMeshSkinning_NamedSkeletonResolutionAndScopeIsolation(){
+    EcsTestWorld tw;
+    const u32 scopeA = AllocateSceneNameScopeId(tw.world);
+
+    Entity skelA = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = skelA.addComponent<SceneEntityNameComponent>();
+        n.name = Name("HeroSkel");
+        n.scopeId = scopeA;
+    }
+
+    const u32 scopeB = AllocateSceneNameScopeId(tw.world);
+    ASSERT_NE(scopeA, scopeB);
+
+    Entity skelB = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = skelB.addComponent<SceneEntityNameComponent>();
+        n.name = Name("HeroSkel");
+        n.scopeId = scopeB;
+    }
+
+    Entity meshEnt = tw.world.createEntity();
+    {
+        mut SceneEntityNameComponent n = meshEnt.addComponent<SceneEntityNameComponent>();
+        n.name = Name("HeroMesh");
+        n.scopeId = scopeB;
+    }
+    {
+        mut SkinnedMeshBindingComponent bind = meshEnt.addComponent<SkinnedMeshBindingComponent>();
+        bind.skeletonEntityName = Name("HeroSkel");
+    }
+
+    const EntityID resolved = ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world);
+    EXPECT_EQ(resolved, skelB.id());
+    EXPECT_EQ(meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity, skelB.id());
+
+    meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity = skelA.id();
+    EXPECT_EQ(ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world), skelA.id());
+
+    meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity = s_InvalidEntityId;
+    meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntityName = Name("NonExistentSkel");
+    EXPECT_EQ(ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world), meshEnt.id());
+}
+
 NWB_ADHD_GTEST(EcsGraphics, IndexedNamesPreserveMaximumIndices, VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices)
 
 NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)
@@ -1738,6 +1900,12 @@ NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTru
 NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds, VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds)
 
 NWB_ADHD_GTEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections, VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections)
+
+NWB_ADHD_GTEST(CsgShadowSnapshot, FrameCacheTracksCutterTransformSyncAndGenericReceiver, VerifyCsgShadowSnapshot_FrameCacheTracksCutterTransformSyncAndGenericReceiver)
+
+NWB_ADHD_GTEST(CoincidentOpticalVolumes, ExcludesOnlyEnabledCsgReceivers, VerifyCoincidentOpticalVolumes_ExcludesOnlyEnabledCsgReceivers)
+
+NWB_ADHD_GTEST(MeshSkinning, NamedSkeletonResolutionAndScopeIsolation, VerifyMeshSkinning_NamedSkeletonResolutionAndScopeIsolation)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -24,6 +24,9 @@ const u32 s_CollisionMeshVersion = 1u;
 const u32 s_HeightfieldMagic = 0x50484644u;
 const u32 s_HeightfieldVersion = 1u;
 
+const u32 s_CompoundHullMagic = 0x50434D50u;
+const u32 s_CompoundHullVersion = 1u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -181,6 +184,22 @@ class HeightfieldAsset{
 
     public in HeightfieldShape heightfieldShape()const{
         return this.heightfield;
+    }
+}
+
+[arena, asset("compound_hull")]
+class CompoundHullAsset{
+    public Vector<HullShape> hulls;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setHulls(in Vector<HullShape> inHulls){
+        this.hulls = inHulls;
+    }
+
+    public in Vector<HullShape> hullShapes()const{
+        return this.hulls;
     }
 }
 

@@ -114,6 +114,43 @@ void InputDispatcher::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     });
 }
 
+void InputDispatcher::gamepadConnectionUpdate(const u32 gamepadIndex, const b8 connected){
+    if(gamepadIndex >= s_MaxGamepadCount)
+        return;
+
+    dispatchToHandlers([&](IInputEventHandler& handler){
+        handler.gamepadConnectionUpdate(gamepadIndex, connected);
+        return false;
+    });
+}
+
+void InputDispatcher::gamepadButtonUpdate(const u32 gamepadIndex, const i32 button, const i32 action){
+    if(gamepadIndex >= s_MaxGamepadCount || button < 0 || button >= GamepadButton::kCount)
+        return;
+    if(action != InputAction::Release && action != InputAction::Press && action != InputAction::Repeat)
+        return;
+
+    dispatchToHandlers([&](IInputEventHandler& handler){
+        const b8 consumed = handler.gamepadButtonUpdate(gamepadIndex, button, action);
+        return action != InputAction::Release && consumed;
+    });
+}
+
+void InputDispatcher::gamepadAxisUpdate(const u32 gamepadIndex, const i32 axis, const f32 value){
+    if(gamepadIndex >= s_MaxGamepadCount || axis < 0 || axis >= GamepadAxis::kCount)
+        return;
+    const SIMDVectorSingle scalar = VectorReplicate(value);
+    if(!VectorIsFinite(scalar, VectorComponentMask::s_XY))
+        return;
+    const b8 isTrigger = axis == GamepadAxis::LeftTrigger || axis == GamepadAxis::RightTrigger;
+    const SIMDVectorSingle minVec = isTrigger ? VectorZero() : VectorReplicate(-1.0f);
+    const f32 clamped = VectorGetX(VectorClamp(scalar, minVec, VectorSplatOne()));
+
+    dispatchToHandlers([&](IInputEventHandler& handler){
+        return handler.gamepadAxisUpdate(gamepadIndex, axis, clamped);
+    });
+}
+
 void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, const NotNull<IInputEventHandler*> handler){
     if(m_dispatchDepth > 0){
         m_pendingHandlerMutations.push_back({ handler, type });
@@ -161,4 +198,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

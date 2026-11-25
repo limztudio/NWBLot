@@ -15,6 +15,8 @@ void AppendRouterControlAction(
     in ControlActionKind kind,
     in f64 delta,
     in f64 deltaX,
+    in b8 extend,
+    in b8 toggle,
     mut Vector<ControlAction> controlActions,
     mut u64 inOutNextActionSequence,
     mut InputRoutingResult inOutResult
@@ -42,6 +44,8 @@ void AppendRouterControlAction(
     action.deltaX = deltaX;
     action.stepX = host.scrollStepX;
     action.maximumX = host.gestureMaximumX;
+    action.extend = extend;
+    action.toggle = toggle;
     controlActions.push_back(action);
     ++inOutNextActionSequence;
 }

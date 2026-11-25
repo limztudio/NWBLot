@@ -57,6 +57,7 @@ class HullShape{
     public Vector<Plane3D> facePlanes;
     public Vector<HullFaceTopology> faceTopologies;
     public Vector<HalfEdge> halfEdges;
+    public f32 cachedBuoyancyVolume = -1.0f;
 
     public VectorSingle centroid()const{
         return VectorSingle(this.centroidRadius, 0.0f);
@@ -128,6 +129,7 @@ class MeshShape{
     public Vector<u32> triangleUserData;
     public f32x4 localAabbMinRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x3_u32 localAabbMaxMeta(0.0f, 0.0f, 0.0f, 0u);
+    public f32 cachedBuoyancyVolume = -1.0f;
 
     public f32 radius()const{
         return this.localAabbMinRadius.w;
@@ -187,6 +189,97 @@ class MeshShape{
     public void setLocalAabb(in Aabb3D box){
         this.localAabbMinRadius = f32x4(VectorSingle(box.lowerBound), this.localAabbMinRadius.w);
         this.localAabbMaxMeta = f32x3_u32(box.upperBound.x, box.upperBound.y, box.upperBound.z, this.localAabbMaxMeta.w);
+    }
+
+    public u32 triangleMetaWordAt(in usize wordIdx)const{
+        const u32 bvhCount = this.bvhNodeCount();
+        const usize flagSlots = (this.triangles.size() + 7u) >> 3u;
+        const usize slot = cast<usize>(bvhCount) + flagSlots + (wordIdx >> 1u);
+        if(slot >= this.nodes.size())
+            return 0u;
+        if((wordIdx & 1u) == 0u)
+            return this.nodes[slot].aabbMinLeft.w;
+        return this.nodes[slot].aabbMaxRight.w;
+    }
+
+    public b8 refitBvh(in Span<f32x4> newVertices){
+        const u32 bvhCount = this.bvhNodeCount();
+        const usize tCount = this.triangles.size();
+        const usize extraFlagSlots = (tCount + 7u) >> 3u;
+        const usize extraVertSlots = (tCount * 3u + 1u) >> 1u;
+        if(this.triangles.empty() || bvhCount == 0u || cast<usize>(bvhCount) + extraFlagSlots + extraVertSlots > this.nodes.size())
+            return false;
+        const usize vCount = newVertices.size();
+        for(usize vi = 0u; vi < vCount; ++vi){
+            if(!IsValidPositionVec3(VectorSingle(newVertices[vi])))
+                return false;
+        }
+        for(usize ti = 0u; ti < tCount; ++ti){
+            const usize wBase = ti * 3u;
+            const u32 i0 = this.triangleMetaWordAt(wBase);
+            const u32 i1 = this.triangleMetaWordAt(wBase + 1u);
+            const u32 i2 = this.triangleMetaWordAt(wBase + 2u);
+            if(cast<usize>(i0) >= vCount || cast<usize>(i1) >= vCount || cast<usize>(i2) >= vCount)
+                return false;
+        }
+        for(usize ti = 0u; ti < tCount; ++ti){
+            const usize wBase = ti * 3u;
+            const u32 i0 = this.triangleMetaWordAt(wBase);
+            const u32 i1 = this.triangleMetaWordAt(wBase + 1u);
+            const u32 i2 = this.triangleMetaWordAt(wBase + 2u);
+            const VectorSingle p0 = VectorSingle(newVertices[i0]);
+            const VectorSingle p1 = VectorSingle(newVertices[i1]);
+            const VectorSingle p2 = VectorSingle(newVertices[i2]);
+            const VectorSingle cr = Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(p2 - p0, 0.0f));
+            const VectorSingle fallbackN(this.triangles[ti].normal.x, this.triangles[ti].normal.y, this.triangles[ti].normal.z, 0.0f);
+            this.triangles[ti].v0 = f32x3u(p0);
+            this.triangles[ti].v1 = f32x3u(p1);
+            this.triangles[ti].v2 = f32x3u(p2);
+            this.triangles[ti].normal = f32x3u(SafeNormalizeVec3(cr, fallbackN));
+        }
+        for(u32 ni = bvhCount; ni > 0u; --ni){
+            const u32 nodeIdx = ni - 1u;
+            in MeshBvhNode node = this.nodes[nodeIdx];
+            if(node.isLeaf()){
+                const u32 firstTri = node.leftOrFirst();
+                const u32 endTri = firstTri + node.rightOrCount();
+                if(firstTri < endTri && endTri <= cast<u32>(tCount)){
+                    in MeshTriangle firstT = this.triangles[firstTri];
+                    const VectorSingle fv0(firstT.v0.x, firstT.v0.y, firstT.v0.z, 0.0f);
+                    const VectorSingle fv1(firstT.v1.x, firstT.v1.y, firstT.v1.z, 0.0f);
+                    const VectorSingle fv2(firstT.v2.x, firstT.v2.y, firstT.v2.z, 0.0f);
+                    VectorSingle bMin = Min(fv0, Min(fv1, fv2));
+                    VectorSingle bMax = Max(fv0, Max(fv1, fv2));
+                    for(u32 ti = firstTri + 1u; ti < endTri; ++ti){
+                        in MeshTriangle tr = this.triangles[ti];
+                        const VectorSingle tv0(tr.v0.x, tr.v0.y, tr.v0.z, 0.0f);
+                        const VectorSingle tv1(tr.v1.x, tr.v1.y, tr.v1.z, 0.0f);
+                        const VectorSingle tv2(tr.v2.x, tr.v2.y, tr.v2.z, 0.0f);
+                        bMin = Min(bMin, Min(tv0, Min(tv1, tv2)));
+                        bMax = Max(bMax, Max(tv0, Max(tv1, tv2)));
+                    }
+                    this.nodes[nodeIdx].setAabb(Aabb3D(bMin, bMax));
+                }
+            }
+            else{
+                in MeshBvhNode leftN = this.nodes[node.leftOrFirst()];
+                in MeshBvhNode rightN = this.nodes[node.rightOrCount()];
+                const VectorSingle bMin = Min(VectorSingle(leftN.aabbMinLeft, 0.0f), VectorSingle(rightN.aabbMinLeft, 0.0f));
+                const VectorSingle bMax = Max(VectorSingle(leftN.aabbMaxRight, 0.0f), VectorSingle(rightN.aabbMaxRight, 0.0f));
+                this.nodes[nodeIdx].setAabb(Aabb3D(bMin, bMax));
+            }
+        }
+        const f32 rad = this.radius();
+        VectorSingle localMin(this.nodes[0u].aabbMinLeft, 0.0f);
+        VectorSingle localMax(this.nodes[0u].aabbMaxRight, 0.0f);
+        if(rad > 0.0f){
+            const VectorSingle rVec(rad, rad, rad, 0.0f);
+            localMin = localMin - rVec;
+            localMax = localMax + rVec;
+        }
+        this.setLocalAabb(Aabb3D(localMin, localMax));
+        this.cachedBuoyancyVolume = -1.0f;
+        return true;
     }
 }
 
@@ -636,6 +729,59 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     return outMass;
 }
 
+f32 ComputeHullBuoyancyVolume(in HullShape hull){
+    const f32 r = SimdMax(0.0f, hull.radius());
+    if(hull.isBox()){
+        const VectorSingle he = hull.halfExtents();
+        const f32 coreVol = 8.0f * he.x * he.y * he.z;
+        if(r <= 0.0f)
+            return coreVol;
+        return coreVol
+            + 8.0f * r * (he.x * he.y + he.y * he.z + he.z * he.x)
+            + 2.0f * s_Pi * r * r * (he.x + he.y + he.z)
+            + (4.0f / 3.0f) * s_Pi * r * r * r;
+    }
+    if(!hull.faceTopologies.empty() && !hull.vertices.empty()){
+        const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
+        f32 volume6 = 0.0f;
+        f32 skinVol = 0.0f;
+        for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
+            in HullFaceTopology face = hull.faceTopologies[fIdx];
+            if(face.vertexCount < 3u)
+                continue;
+            u8 eIdx = face.edge;
+            const VectorSingle w0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+            const VectorSingle v0 = w0 - refPoint;
+            eIdx = hull.halfEdges[eIdx].next;
+            VectorSingle wPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+            VectorSingle vPrev = wPrev - refPoint;
+            for(u8 t = 2u; t < face.vertexCount; ++t){
+                eIdx = hull.halfEdges[eIdx].next;
+                const VectorSingle wCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+                const VectorSingle vCurr = wCurr - refPoint;
+                volume6 += Vector3Dot(v0, Cross(vPrev, vCurr)).x;
+                if(r > 0.0f){
+                    const f32 twiceArea = Vector3Length(Cross(VectorSingle(wPrev - w0, 0.0f), VectorSingle(wCurr - w0, 0.0f))).x;
+                    if(twiceArea > 1.0e-10f)
+                        skinVol += 0.5f * twiceArea * r;
+                }
+                wPrev = wCurr;
+                vPrev = vCurr;
+            }
+        }
+        if(volume6 <= 1.0e-12f){
+            if(r > 0.0f)
+                return (4.0f / 3.0f) * s_Pi * r * r * r;
+            return 0.0f;
+        }
+        f32 shapeVol = volume6 / 6.0f;
+        if(r > 0.0f)
+            shapeVol += skinVol + (4.0f / 3.0f) * s_Pi * r * r * r;
+        return shapeVol;
+    }
+    return 0.0f;
+}
+
 void ComputeSphereAabbValues(in SphereShape sphere, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
     const VectorSingle wc = TransformPointValues(xfPos, xfRot, sphere.center());
     const f32 rad = sphere.radius();
@@ -751,16 +897,41 @@ void PartitionMeshBvhMedian(
     }
 }
 
+isize FloorToIsize(in f32 v){
+    const isize t = cast<isize>(v);
+    if(cast<f32>(t) > v)
+        return t - 1;
+    return t;
+}
+
+u64 HashQuantizedWeldCell(in isize ix, in isize iy, in isize iz){
+    return (cast<u64>(ix) * cast<u64>(73856093u))
+        ^ (cast<u64>(iy) * cast<u64>(19349663u))
+        ^ (cast<u64>(iz) * cast<u64>(83492791u));
+}
+
+f32 MeshBvhBoxHalfArea(in VectorSingle bMin, in VectorSingle bMax){
+    const VectorSingle e = Max(VectorSingle(0.0f), VectorSingle(bMax - bMin, 0.0f));
+    return e.x * e.y + e.y * e.z + e.z * e.x;
+}
+
 u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx, in u32 depth){
     const u32 nodeIdx = cast<u32>(mesh.nodes.size());
     mesh.nodes.push_back(MeshBvhNode());
 
     VectorSingle boxMin(triAabbs[triOrder[beginIdx]].lowerBound);
     VectorSingle boxMax(triAabbs[triOrder[beginIdx]].upperBound);
+    VectorSingle centMin = (boxMin + boxMax) * 0.5f;
+    VectorSingle centMax = centMin;
     for(usize i = beginIdx + 1u; i < endIdx; ++i){
         in Aabb3D triBox = triAabbs[triOrder[i]];
-        boxMin = Min(boxMin, VectorSingle(triBox.lowerBound));
-        boxMax = Max(boxMax, VectorSingle(triBox.upperBound));
+        const VectorSingle lo(triBox.lowerBound);
+        const VectorSingle hi(triBox.upperBound);
+        boxMin = Min(boxMin, lo);
+        boxMax = Max(boxMax, hi);
+        const VectorSingle c = (lo + hi) * 0.5f;
+        centMin = Min(centMin, c);
+        centMax = Max(centMax, c);
     }
     mesh.nodes[nodeIdx].aabbMinLeft = f32x3_u32(boxMin.x, boxMin.y, boxMin.z, mesh.nodes[nodeIdx].aabbMinLeft.w);
     mesh.nodes[nodeIdx].aabbMaxRight = f32x3_u32(boxMax.x, boxMax.y, boxMax.z, mesh.nodes[nodeIdx].aabbMaxRight.w);
@@ -771,30 +942,115 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
         return nodeIdx;
     }
 
-    const VectorSingle ext = boxMax - boxMin;
-    usize splitAxis = 0u;
-    if(ext.y > ext.x && ext.y >= ext.z)
-        splitAxis = 1u;
-    else if(ext.z > ext.x && ext.z > ext.y)
-        splitAxis = 2u;
+    const VectorSingle cExt = centMax - centMin;
+    f32 bestCost = s_MaxF32;
+    usize bestAxis = 0u;
+    u32 bestSplitBin = 0u;
+    b8 foundBest = false;
 
-    const f32 splitMid = (VectorGetByIndex(boxMin, cast<isize>(splitAxis)) + VectorGetByIndex(boxMax, cast<isize>(splitAxis))) * 0.5f;
+    if(depth < 24u){
+        for(usize axis = 0u; axis < 3u; ++axis){
+            const f32 axisLen = VectorGetByIndex(cExt, cast<isize>(axis));
+            if(axisLen <= 1.0e-6f)
+                continue;
+            const f32 cAxisMin = VectorGetByIndex(centMin, cast<isize>(axis));
+            const f32 invScale = 8.0f / axisLen;
 
-    usize midIdx = beginIdx;
-    for(usize i = beginIdx; i < endIdx; ++i){
-        const f32 c = MeshTriCentroidAxis(triAabbs[triOrder[i]], splitAxis);
-        if(c < splitMid){
-            const u32 tmp = triOrder[i];
-            triOrder[i] = triOrder[midIdx];
-            triOrder[midIdx] = tmp;
-            ++midIdx;
+            Array<u32, 8u> binCounts;
+            Array<f32x4, 8u> binMins;
+            Array<f32x4, 8u> binMaxs;
+            for(u32 bi = 0u; bi < 8u; ++bi){
+                binCounts[bi] = 0u;
+                binMins[bi] = f32x4(s_MaxF32, s_MaxF32, s_MaxF32, 0.0f);
+                binMaxs[bi] = f32x4(-s_MaxF32, -s_MaxF32, -s_MaxF32, 0.0f);
+            }
+
+            for(usize i = beginIdx; i < endIdx; ++i){
+                in Aabb3D triBox = triAabbs[triOrder[i]];
+                const f32 cVal = MeshTriCentroidAxis(triBox, axis);
+                const isize rawBin = cast<isize>((cVal - cAxisMin) * invScale);
+                u32 bi = 0u;
+                if(rawBin > 0){
+                    bi = cast<u32>(rawBin);
+                    if(bi > 7u)
+                        bi = 7u;
+                }
+                binCounts[bi] += 1u;
+                binMins[bi] = f32x4(Min(VectorSingle(binMins[bi]), VectorSingle(triBox.lowerBound)), 0.0f);
+                binMaxs[bi] = f32x4(Max(VectorSingle(binMaxs[bi]), VectorSingle(triBox.upperBound)), 0.0f);
+            }
+
+            Array<u32, 7u> leftCounts;
+            Array<f32, 7u> leftAreas;
+            u32 runLeftCount = 0u;
+            VectorSingle runLeftMin(s_MaxF32);
+            VectorSingle runLeftMax(-s_MaxF32);
+            for(usize k = 0u; k < 7u; ++k){
+                if(binCounts[k] > 0u){
+                    runLeftCount += binCounts[k];
+                    runLeftMin = Min(runLeftMin, VectorSingle(binMins[k]));
+                    runLeftMax = Max(runLeftMax, VectorSingle(binMaxs[k]));
+                }
+                leftCounts[k] = runLeftCount;
+                if(runLeftCount > 0u)
+                    leftAreas[k] = MeshBvhBoxHalfArea(runLeftMin, runLeftMax);
+                else
+                    leftAreas[k] = 0.0f;
+            }
+
+            u32 runRightCount = 0u;
+            VectorSingle runRightMin(s_MaxF32);
+            VectorSingle runRightMax(-s_MaxF32);
+            for(usize kRev = 7u; kRev > 0u; --kRev){
+                const usize k = kRev - 1u;
+                const usize rb = k + 1u;
+                if(binCounts[rb] > 0u){
+                    runRightCount += binCounts[rb];
+                    runRightMin = Min(runRightMin, VectorSingle(binMins[rb]));
+                    runRightMax = Max(runRightMax, VectorSingle(binMaxs[rb]));
+                }
+                if(leftCounts[k] > 0u && runRightCount > 0u){
+                    const f32 cost = cast<f32>(leftCounts[k]) * leftAreas[k] + cast<f32>(runRightCount) * MeshBvhBoxHalfArea(runRightMin, runRightMax);
+                    if(cost < bestCost){
+                        bestCost = cost;
+                        bestAxis = axis;
+                        bestSplitBin = cast<u32>(k);
+                        foundBest = true;
+                    }
+                }
+            }
         }
     }
 
-    const usize leftCount = midIdx - beginIdx;
-    const usize rightCount = endIdx - midIdx;
-    const b8 heavilySkewed = (depth >= 12u) && (leftCount * 4u < triCount || rightCount * 4u < triCount);
-    if(midIdx == beginIdx || midIdx == endIdx || depth >= 24u || heavilySkewed){
+    usize midIdx = beginIdx;
+    if(foundBest){
+        const f32 cAxisMinBest = VectorGetByIndex(centMin, cast<isize>(bestAxis));
+        const f32 invScaleBest = 8.0f / VectorGetByIndex(cExt, cast<isize>(bestAxis));
+        for(usize i = beginIdx; i < endIdx; ++i){
+            const f32 cVal = MeshTriCentroidAxis(triAabbs[triOrder[i]], bestAxis);
+            const isize rawBin = cast<isize>((cVal - cAxisMinBest) * invScaleBest);
+            u32 bi = 0u;
+            if(rawBin > 0){
+                bi = cast<u32>(rawBin);
+                if(bi > 7u)
+                    bi = 7u;
+            }
+            if(bi <= bestSplitBin){
+                const u32 tmp = triOrder[i];
+                triOrder[i] = triOrder[midIdx];
+                triOrder[midIdx] = tmp;
+                ++midIdx;
+            }
+        }
+    }
+
+    if(!foundBest || midIdx == beginIdx || midIdx == endIdx){
+        const VectorSingle ext = boxMax - boxMin;
+        usize splitAxis = 0u;
+        if(ext.y > ext.x && ext.y >= ext.z)
+            splitAxis = 1u;
+        else if(ext.z > ext.x && ext.z > ext.y)
+            splitAxis = 2u;
         PartitionMeshBvhMedian(triAabbs, triOrder, beginIdx, endIdx, splitAxis);
         midIdx = beginIdx + (triCount / 2u);
     }
@@ -828,14 +1084,68 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
             return MakeUnexpected(Failure());
     }
 
+    Vector<u32> weldedVerts;
+    weldedVerts.resize(vertices.size(), 0u);
+    Vector<u32> nextSameCell;
+    nextSameCell.resize(vertices.size(), s_NullIndex);
+    HashMap<u64, u32> weldBuckets;
+    weldBuckets.reserve(vertices.size());
+    const f32 invWeldCell = 5000.0f;
+    const f32 weldEpsSq = 1.0e-8f;
+    for(usize vi = 0u; vi < vertices.size(); ++vi){
+        const VectorSingle vp(vertices[vi].x, vertices[vi].y, vertices[vi].z, 0.0f);
+        const isize ix = FloorToIsize(vp.x * invWeldCell);
+        const isize iy = FloorToIsize(vp.y * invWeldCell);
+        const isize iz = FloorToIsize(vp.z * invWeldCell);
+        b8 matched = false;
+        u32 matchedId = cast<u32>(vi);
+        for(isize dx = -1; dx <= 1 && !matched; ++dx){
+            for(isize dy = -1; dy <= 1 && !matched; ++dy){
+                for(isize dz = -1; dz <= 1 && !matched; ++dz){
+                    const u64 nKey = HashQuantizedWeldCell(ix + dx, iy + dy, iz + dz);
+                    const auto foundBucket = weldBuckets.find(nKey);
+                    if(foundBucket == weldBuckets.end())
+                        continue;
+                    u32 cand = foundBucket.value();
+                    while(cand != s_NullIndex){
+                        const VectorSingle cp(vertices[cand].x, vertices[cand].y, vertices[cand].z, 0.0f);
+                        if(Vector3LengthSq(VectorSingle(vp - cp, 0.0f)).x <= weldEpsSq){
+                            matchedId = weldedVerts[cand];
+                            matched = true;
+                            break;
+                        }
+                        cand = nextSameCell[cand];
+                    }
+                }
+            }
+        }
+        if(matched){
+            weldedVerts[vi] = matchedId;
+        }
+        else{
+            weldedVerts[vi] = cast<u32>(vi);
+            const u64 selfKey = HashQuantizedWeldCell(ix, iy, iz);
+            const auto foundSelf = weldBuckets.find(selfKey);
+            if(foundSelf == weldBuckets.end()){
+                weldBuckets.emplace(selfKey, cast<u32>(vi));
+            }
+            else{
+                nextSameCell[vi] = foundSelf.value();
+                foundSelf.value() = cast<u32>(vi);
+            }
+        }
+    }
+
     Vector<MeshTriangle> rawTriangles;
     Vector<Aabb3D> rawTriAabbs;
     Vector<u32x4> rawTriIndices;
+    Vector<u32x4> rawOriginalTriIndices;
     Vector<u16> rawMatIndices;
     Vector<u32> rawUserData;
     rawTriangles.reserve(inputTriCount);
     rawTriAabbs.reserve(inputTriCount);
     rawTriIndices.reserve(inputTriCount);
+    rawOriginalTriIndices.reserve(inputTriCount);
     if(!triangleMaterialIndices.empty())
         rawMatIndices.reserve(inputTriCount);
     if(!triangleUserData.empty())
@@ -865,7 +1175,8 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
         tri.normal = f32x3u(SafeNormalizeVec3(cr, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
         rawTriangles.push_back(tri);
         rawTriAabbs.push_back(Aabb3D(Min(p0, Min(p1, p2)), Max(p0, Max(p1, p2))));
-        rawTriIndices.push_back(u32x4(i0, i1, i2, 0u));
+        rawTriIndices.push_back(u32x4(weldedVerts[i0], weldedVerts[i1], weldedVerts[i2], 0u));
+        rawOriginalTriIndices.push_back(u32x4(i0, i1, i2, 0u));
         if(!triangleMaterialIndices.empty())
             rawMatIndices.push_back(triangleMaterialIndices[rawTriIdx]);
         if(!triangleUserData.empty())
@@ -1002,7 +1313,8 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
     mesh.localAabbMaxMeta = f32x3_u32(0.0f, 0.0f, 0.0f, meta);
 
     const usize extraFlagSlots = (triOrder.size() + 7u) >> 3u;
-    for(usize s = 0u; s < extraFlagSlots; ++s)
+    const usize extraVertSlots = (triOrder.size() * 3u + 1u) >> 1u;
+    for(usize s = 0u; s < extraFlagSlots + extraVertSlots; ++s)
         mesh.nodes.push_back(MeshBvhNode());
 
     if(!materials.empty()){
@@ -1015,11 +1327,31 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
     if(!rawUserData.empty())
         mesh.triangleUserData.reserve(mesh.triangles.size());
 
+    const usize vertMetaBase = cast<usize>(bvhCount) + extraFlagSlots;
     Vector<MeshTriangle> orderedTris;
     orderedTris.reserve(mesh.triangles.size());
     for(usize i = 0u; i < triOrder.size(); ++i){
         const u32 srcIdx = triOrder[i];
         orderedTris.push_back(mesh.triangles[srcIdx]);
+        const u32x4 origIdx = rawOriginalTriIndices[srcIdx];
+        const usize w0 = i * 3u;
+        const usize w1 = w0 + 1u;
+        const usize w2 = w0 + 2u;
+        const usize s0 = vertMetaBase + (w0 >> 1u);
+        if((w0 & 1u) == 0u)
+            mesh.nodes[s0].aabbMinLeft.w = origIdx.x;
+        else
+            mesh.nodes[s0].aabbMaxRight.w = origIdx.x;
+        const usize s1 = vertMetaBase + (w1 >> 1u);
+        if((w1 & 1u) == 0u)
+            mesh.nodes[s1].aabbMinLeft.w = origIdx.y;
+        else
+            mesh.nodes[s1].aabbMaxRight.w = origIdx.y;
+        const usize s2 = vertMetaBase + (w2 >> 1u);
+        if((w2 & 1u) == 0u)
+            mesh.nodes[s2].aabbMinLeft.w = origIdx.z;
+        else
+            mesh.nodes[s2].aabbMaxRight.w = origIdx.z;
         if(!rawMatIndices.empty())
             mesh.triangleMaterialIndices.push_back(rawMatIndices[srcIdx]);
         if(!rawUserData.empty())
@@ -1058,6 +1390,40 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
         Span<u16>(emptyMatIdx),
         Span<u32>(emptyUserData)
     );
+}
+
+f32 ComputeMeshBuoyancyVolume(in MeshShape mesh){
+    if(mesh.triangles.empty())
+        return 0.0f;
+    const f32 r = mesh.radius();
+    if(mesh.isClosed()){
+        const VectorSingle refPt = VectorSingle(mesh.triangles[0u].v0, 0.0f);
+        f32 volume6 = 0.0f;
+        f32 skinVol = 0.0f;
+        for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+            in MeshTriangle tri = mesh.triangles[ti];
+            const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
+            const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
+            const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
+            volume6 += Vector3Dot(tv0 - refPt, Cross(tv1 - refPt, tv2 - refPt)).x;
+            if(r > 0.0f){
+                const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
+                if(twiceArea > 1.0e-10f)
+                    skinVol += 0.5f * twiceArea * r;
+            }
+        }
+        return Abs(VectorSingle(volume6)).x / 6.0f + skinVol;
+    }
+    f32 surfArea = 0.0f;
+    for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+        in MeshTriangle tri = mesh.triangles[ti];
+        const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
+        const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
+        const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
+        const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
+        surfArea += 0.5f * twiceArea;
+    }
+    return surfArea * SimdMax(2.0f * r, 0.02f);
 }
 
 void ComputeMeshAabbValues(in MeshShape mesh, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
@@ -1406,15 +1772,22 @@ void ComputePlaneAabbValues(in PlaneShape plane, in VectorSingle xfPos, in Vecto
     const VectorSingle wt1 = Vector3Rotate(t1Local, xfRot);
     const VectorSingle wt2 = Vector3Rotate(t2Local, xfRot);
     const VectorSingle origin = TransformPointValues(xfPos, xfRot, nLocal * plane.offset());
-    f32 hx = s_PlaneHalfExtentDefault;
-    f32 hz = s_PlaneHalfExtentDefault;
     if(plane.isFiniteExtent()){
-        hx = plane.halfExtent.x;
-        hz = plane.halfExtent.z;
+        const f32 hx = plane.halfExtent.x;
+        const f32 hz = plane.halfExtent.z;
+        const VectorSingle ext = Abs(wt1) * hx + Abs(wt2) * hz + Abs(wn) * 0.05f;
+        outMin = origin - ext;
+        outMax = origin + ext;
+        return;
     }
-    const VectorSingle ext = Abs(wt1) * hx + Abs(wt2) * hz + Abs(wn) * 0.05f;
-    outMin = origin - ext;
-    outMax = origin + ext;
+    const f32 hx = s_PlaneHalfExtentDefault;
+    const f32 hz = s_PlaneHalfExtentDefault;
+    const f32 depthNeg = s_PlaneHalfExtentDefault;
+    const VectorSingle c = origin - wn * (0.5f * (depthNeg - 0.05f));
+    const f32 halfN = 0.5f * (depthNeg + 0.05f);
+    const VectorSingle ext = Abs(wt1) * hx + Abs(wt2) * hz + Abs(wn) * halfN;
+    outMin = c - ext;
+    outMax = c + ext;
 }
 
 void ComputeSegmentAabbValues(in SegmentShape seg, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){

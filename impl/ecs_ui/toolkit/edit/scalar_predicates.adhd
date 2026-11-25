@@ -25,7 +25,7 @@ b8 IsMultilineLineBreakScalar(in u32 scalar){
 }
 
 b8 IsCanonicalMultilineScalar(in u32 scalar){
-    return scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
+    return scalar == s_EditUnicodeTab || scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
 }
 
 f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){

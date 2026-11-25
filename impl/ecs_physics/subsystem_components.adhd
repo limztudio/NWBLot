@@ -87,6 +87,7 @@ class EcsJointBreakEvent{
 class CharacterControllerComponent{
     public CharacterControllerDef def;
     public CharacterController controller;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
     public b8 initialized = false;
     public b8 syncFromTransform = false;
@@ -98,10 +99,16 @@ class VehicleComponent{
     public VehicleEngineDef engine;
     public Vector<VehicleWheelDef> wheels;
     public Vector<Name> wheelEntityNames;
+    public Vector<EntityID> wheelEntities;
+    public EntityID skeletonEntity = s_InvalidEntityId;
+    public Name skeletonEntityName = s_NameNone;
+    public Vector<u32> wheelJointIndices;
     public VehicleInput input;
     public Filter queryFilter;
     public VehicleController controller;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
+    public b8 writeBackToSkeleton = false;
     public b8 initialized = false;
     public b8 dirty = true;
 }
@@ -110,6 +117,7 @@ class VehicleComponent{
 class RagdollComponent{
     public Vector<RagdollBoneDef> bones;
     public RagdollInstance instance;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
     public b8 kinematic = false;
     public b8 driveToPose = false;
@@ -117,6 +125,15 @@ class RagdollComponent{
     public Vector<Transform3D> targetPose;
     public Vector<b8> boneKinematicMask;
     public Vector<Name> boneEntityNames;
+    public Vector<EntityID> boneEntities;
+    public EntityID skeletonEntity = s_InvalidEntityId;
+    public Name skeletonEntityName = s_NameNone;
+    public Vector<u32> boneJointIndices;
+    public b8 driveFromSkeleton = false;
+    public b8 writeBackToSkeleton = false;
+    public b8 autoGenerateFromSkeleton = false;
+    public b8 enableSelfCollision = true;
+    public Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs;
     public b8 initialized = false;
     public b8 dirty = true;
 }
@@ -124,12 +141,14 @@ class RagdollComponent{
 [arena, component("fluid_volume")]
 class FluidVolumeComponent{
     public FluidVolume volume;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
 }
 
 [arena, component("force_field")]
 class ForceFieldComponent{
     public ForceField field;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
 }
 
@@ -137,14 +156,31 @@ class ForceFieldComponent{
 class ArticulationComponent{
     public Vector<ArticulationLinkDef> links;
     public Vector<Name> proxyEntityNames;
+    public Vector<EntityID> linkEntities;
+    public Vector<Name> linkEntityNames;
+    public EntityID skeletonEntity = s_InvalidEntityId;
+    public Name skeletonEntityName = s_NameNone;
+    public Vector<u32> linkJointIndices;
     public b8 isFixedBase = true;
     public u32 subSteps = 4u;
     public b8 enableContactCoupling = false;
     public f32 contactRestitution = 0.0f;
     public f32 contactFriction = 0.5f;
     public Filter contactFilter;
+    public Name collisionLayer = s_NameNone;
+    public Vector<ArticulationMimicConstraint> mimicConstraints;
+    public Vector<ArticulationTendonConstraint> tendonConstraints;
+    public Vector<ArticulationLoopConstraint> loopConstraints;
+    public b8 enableSelfCollision = false;
+    public f32 selfCollisionMargin = 0.0f;
+    public b8 enableSleep = false;
+    public f32 sleepLinearThreshold = 0.02f;
+    public f32 sleepAngularThreshold = 0.03f;
+    public f32 sleepTimeThreshold = 0.5f;
     public Articulation articulation;
     public b8 enabled = true;
+    public b8 writeBackToSkeleton = false;
+    public b8 writeBackLinkTransforms = true;
     public b8 initialized = false;
     public b8 dirty = true;
 }
@@ -153,7 +189,9 @@ class ArticulationComponent{
 class SoftBodyComponent{
     public SoftBody softBody;
     public Vector<Name> attachmentBodyEntityNames;
+    public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
+    public b8 dirty = false;
 }
 
 [arena, component("gpu_render_transform_export")]
@@ -162,6 +200,68 @@ class GpuRenderTransformExportComponent{
     public u32 instanceIndex = 0u;
     public u32 flags = 0u;
     public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+class EcsCharacterGroundChangedEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public CharacterGroundState previousState = CharacterGroundState::InAir;
+    public CharacterGroundState currentState = CharacterGroundState::InAir;
+    public EntityID groundEntity = s_InvalidEntityId;
+    public BodyId groundBodyId;
+    public ShapeId groundShapeId;
+    public f32x4 groundNormal(0.0f, 1.0f, 0.0f, 0.0f);
+    public b8 hitCeiling = false;
+}
+
+class EcsVehicleStateEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public i32 previousGear = 1;
+    public i32 currentGear = 1;
+    public u32 groundedWheelCount = 0u;
+    public f32 maxSlip = 0.0f;
+    public f32 speedMps = 0.0f;
+}
+
+class EcsSoftBodyTearEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public u32 tornConstraintCount = 0u;
+    public u32 particleCount = 0u;
+}
+
+class EcsFluidVolumeEvent{
+    public EntityID fluidEntity = s_InvalidEntityId;
+    public EntityID bodyEntity = s_InvalidEntityId;
+    public b8 entered = false;
+    public f32 submergedFraction = 0.0f;
+    public f32x4 centerOfBuoyancy(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class EcsCharacterControllerEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public EntityID otherEntity = s_InvalidEntityId;
+    public CharacterControllerEvent event;
+}
+
+class EcsVehicleTelemetryEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public VehicleTelemetryEvent event;
+}
+
+class EcsFluidSplashEvent{
+    public EntityID fluidEntity = s_InvalidEntityId;
+    public EntityID bodyEntity = s_InvalidEntityId;
+    public FluidSplashEvent event;
+}
+
+class EcsSoftBodyConstraintTearEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public SoftBodyTearEvent event;
+}
+
+class EcsSoftBodyImpactEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public EntityID otherEntity = s_InvalidEntityId;
+    public SoftBodyImpactEvent event;
 }
 
 

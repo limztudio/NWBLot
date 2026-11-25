@@ -12,6 +12,7 @@
 
 #include <core/common/log.h>
 #include <core/os/linux/wayland/clipboard.h>
+#include <core/os/linux/wayland/cursor.h>
 #include <global/simd/vector_arithmetic.h>
 #include <linux/input-event-codes.h>
 
@@ -91,10 +92,12 @@ b8 WaylandPointerInput::acquire(wl_seat& seat){
 }
 
 
-void WaylandPointerInput::OnPointerEnter(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 serial, [[maybe_unused]] wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy){
+void WaylandPointerInput::OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, [[maybe_unused]] wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy){
     using namespace __hidden_frame_linux_wayland_input;
 
     auto& pointerInput = *MakeNotNull(static_cast<WaylandPointerInput*>(data));
+    if(ICursorService* const cursor = pointerInput.m_frame.tryCursor())
+        ObserveWaylandCursorPointerEnter(*cursor, pointer, serial);
     const SIMDVectorDouble pixelCoordinates = VectorDoubleMultiply(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(Max(pointerInput.m_bufferScale, 1))));
     pointerInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
@@ -228,4 +231,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

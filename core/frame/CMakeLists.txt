@@ -16,6 +16,7 @@ if(WIN32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_frame PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/linux.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux_gamepad.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/linux_x11.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/linux_x11_keyboard.cpp"
     )
@@ -32,4 +33,3 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 target_link_libraries(nwb_frame PUBLIC nwb_common nwb_alloc nwb_cpu_task nwb_graphics nwb_input nwb_os nwb_perf nwb_telemetry)
-

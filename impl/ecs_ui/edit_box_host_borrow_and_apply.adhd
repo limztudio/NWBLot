@@ -136,7 +136,7 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
     }
     else{
         const b8 rebound = IsUiEditEntryRebound(entry.value().owner, owner, entry.value().popup, popup, entry.value().actionCapable, actions.has_value(), entry.value().navigationInstanceGeneration, navigationInstance);
-        const b8 policyChanged = entry.value().enabled != options.enabled || entry.value().readOnly != options.readOnly;
+        const b8 policyChanged = entry.value().enabled != options.enabled || entry.value().readOnly != options.readOnly || entry.value().password != options.password;
         abandon = actions.has_value() && (rebound || policyChanged);
         if(rebound || policyChanged || !entry.value().expected.matches(model)){
             this.m_focusSyncDirty = true;
@@ -147,7 +147,7 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
             this.discard(entry.value().owner);
             entry.value().owner = owner;
             entry.value().dragging = false;
-            entry.value().wordDragging = false;
+            entry.value().dragMode = UiEditClickKind::Caret;
             this.m_clickTracker.cancel();
             model.cancelComposition();
             entry.value().expected.capture(model);
@@ -165,6 +165,8 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
     entry.value().navigationInstanceGeneration = navigationInstance;
     entry.value().enabled = options.enabled;
     entry.value().readOnly = options.readOnly;
+    entry.value().password = options.password;
+    entry.value().acceptTab = options.acceptTab;
     if(actions.has_value() && result.focused && !entry.value().focused){
         entry.value().focused = true;
         entry.value().focusGeneration = this.nextFocusGeneration();
@@ -294,13 +296,13 @@ b8 UiEditBoxHost::apply(in EditBoxOptions options, mut UiEditBoxEvent event, mut
         }
         if(command.clipboard != EditClipboardAction::None){
             if(command.clipboard == EditClipboardAction::Copy){
-                if(!model.hasSelection())
+                if(options.password || !model.hasSelection())
                     return true;
                 this.drainPublications();
                 const auto status = this.m_publications.request(model.selectedText());
                 this.m_clipboardFailure |= status != UiClipboardPublicationStatus::Pending;
             }
-            else{
+            else if(!(options.password && command.clipboard == EditClipboardAction::Cut)){
                 const auto request = this.m_clipboard.request(entry.owner, model, command.clipboard, ClipboardChannel::Clipboard, options.readOnly);
                 if(request.status == UiEditClipboardStatus::Pending)
                     this.m_clipboardOwner = entry.owner;
@@ -342,23 +344,39 @@ b8 UiEditBoxHost::apply(in EditBoxOptions options, mut UiEditBoxEvent event, mut
         if(model.revision() != event.geometryRevision || model.externalRevision() != event.geometryExternalRevision){
             if(event.completed){
                 entry.dragging = false;
-                entry.wordDragging = false;
+                entry.dragMode = UiEditClickKind::Caret;
             }
             return true;
         }
-        if(event.wordSelect){
+        if(event.clickKind == UiEditClickKind::Line || (event.clickKind == UiEditClickKind::Word && options.password)){
+            const auto range = model.lineRangeAt(event.position);
+            if(!range.has_value() || !model.setSelection(range.value().begin, range.value().end))
+                return true;
+            entry.rangeDragStart = range.value().begin;
+            entry.rangeDragEnd = range.value().end;
+            entry.dragMode = UiEditClickKind::Line;
+        }
+        else if(event.clickKind == UiEditClickKind::Word){
             const auto range = model.wordRangeAt(event.wordPosition);
             if(!range.has_value() || !model.setSelection(range.value().begin, range.value().end))
                 return true;
-            entry.wordDragStart = range.value().begin;
-            entry.wordDragEnd = range.value().end;
-            entry.wordDragging = true;
+            entry.rangeDragStart = range.value().begin;
+            entry.rangeDragEnd = range.value().end;
+            entry.dragMode = UiEditClickKind::Word;
         }
-        else if(event.dragging && entry.dragging && entry.wordDragging){
+        else if(event.dragging && entry.dragging && entry.dragMode == UiEditClickKind::Line){
+            const auto range = model.lineRangeAt(event.position);
+            if(!range.has_value())
+                return true;
+            const EditWordRange selection = ResolveUiEditWordDragSelection(event.position, entry.rangeDragStart, entry.rangeDragEnd, range.value());
+            if(!model.setSelection(selection.begin, selection.end))
+                return true;
+        }
+        else if(event.dragging && entry.dragging && entry.dragMode == UiEditClickKind::Word){
             const auto range = model.wordRangeAt(event.wordPosition);
             if(!range.has_value())
                 return true;
-            const EditWordRange selection = ResolveUiEditWordDragSelection(event.wordPosition, entry.wordDragStart, entry.wordDragEnd, range.value());
+            const EditWordRange selection = ResolveUiEditWordDragSelection(event.wordPosition, entry.rangeDragStart, entry.rangeDragEnd, range.value());
             if(!model.setSelection(selection.begin, selection.end))
                 return true;
         }
@@ -367,12 +385,12 @@ b8 UiEditBoxHost::apply(in EditBoxOptions options, mut UiEditBoxEvent event, mut
             if(!model.setSelection(anchor, event.position))
                 return true;
             entry.dragAnchor = anchor;
-            entry.wordDragging = false;
+            entry.dragMode = UiEditClickKind::Caret;
         }
         entry.dragging = !event.completed;
         if(event.completed)
-            entry.wordDragging = false;
-        if(model.hasSelection() && this.m_clipboardService.capabilities(ClipboardChannel::PrimarySelection).writeText){
+            entry.dragMode = UiEditClickKind::Caret;
+        if(!options.password && model.hasSelection() && this.m_clipboardService.capabilities(ClipboardChannel::PrimarySelection).writeText){
             const auto request = this.m_primary.request(entry.owner, model, EditClipboardAction::PublishSelection, ClipboardChannel::PrimarySelection, options.readOnly);
             if(request.status == UiEditClipboardStatus::Pending)
                 this.m_primaryOwner = entry.owner;

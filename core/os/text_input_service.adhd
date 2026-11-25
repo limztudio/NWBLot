@@ -18,6 +18,7 @@ extern class QueuedTextInputService : ITextInputService{
     void endNativeSession(in TextInputSessionToken token);
     TextInputAdmission emitCommit(in TextInputSessionToken token, in StringView text);
     TextInputAdmission emitPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible = true);
+    TextInputAdmission emitPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible, in Span<TextInputPreeditClause> clauses);
     TextInputAdmission emitDeleteSurrounding(in TextInputSessionToken token, in usize before, in usize after, in u64 revision, in TextInputDeletionBasis basis);
     b8 cancelSession(in TextInputSessionToken token, in TextInputCancelReason reason);
     usize surroundingCaretByte()const;

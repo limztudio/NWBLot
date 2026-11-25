@@ -1,0 +1,266 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_ToastDefaultWidth = 300.0f;
+const f32 s_ToastDefaultMinHeight = 48.0f;
+const f32 s_ToastDefaultPaddingX = 12.0f;
+const f32 s_ToastDefaultAccentWidth = 4.0f;
+const f32 s_ToastDefaultCornerRadius = 4.0f;
+const f32 s_ToastDefaultCloseSize = 18.0f;
+const f32 s_ToastDefaultGap = 8.0f;
+const f32 s_ToastDefaultMargin = 16.0f;
+const f32 s_ToastDefaultDuration = 4.0f;
+const u32 s_ToastDefaultMaxVisible = 5u;
+const Color s_ToastDefaultBgColor = Color(0.14f, 0.16f, 0.20f, 0.96f);
+const Color s_ToastDefaultBorderColor = Color(0.32f, 0.36f, 0.44f, 0.90f);
+const Color s_ToastDefaultInfoColor = Color(0.28f, 0.62f, 0.95f, 1.0f);
+const Color s_ToastDefaultSuccessColor = Color(0.24f, 0.76f, 0.44f, 1.0f);
+const Color s_ToastDefaultWarningColor = Color(0.95f, 0.68f, 0.20f, 1.0f);
+const Color s_ToastDefaultErrorColor = Color(0.92f, 0.28f, 0.28f, 1.0f);
+const Color s_ToastDefaultSubtextColor = Color(0.75f, 0.78f, 0.84f, 1.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> ToastSeverity{
+    Info,
+    Success,
+    Warning,
+    Error,
+    kCount,
+}
+
+enum<u8> ToastCorner{
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    kCount,
+}
+
+class ToastItem{
+    public u64 id = 0u;
+    public String title;
+    public String message;
+    public ToastSeverity severity = ToastSeverity::Info;
+    public f32 durationSeconds = s_ToastDefaultDuration;
+    public f32 elapsedSeconds = 0.0f;
+    public b8 dismissible = true;
+}
+
+class ToastStyle{
+    public Color backgroundColor = s_ToastDefaultBgColor;
+    public Color borderColor = s_ToastDefaultBorderColor;
+    public Color infoAccent = s_ToastDefaultInfoColor;
+    public Color successAccent = s_ToastDefaultSuccessColor;
+    public Color warningAccent = s_ToastDefaultWarningColor;
+    public Color errorAccent = s_ToastDefaultErrorColor;
+    public Color textColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
+    public Color subtextColor = s_ToastDefaultSubtextColor;
+    public f32 cardWidth = s_ToastDefaultWidth;
+    public f32 minCardHeight = s_ToastDefaultMinHeight;
+    public f32 accentWidth = s_ToastDefaultAccentWidth;
+    public f32 cornerRadius = s_ToastDefaultCornerRadius;
+    public f32 closeButtonSize = s_ToastDefaultCloseSize;
+    public Insets padding = Insets(s_ToastDefaultPaddingX, s_StyleSpacingMedium, s_ToastDefaultPaddingX, s_StyleSpacingMedium);
+    public f32 gap = s_ToastDefaultGap;
+    public f32 margin = s_ToastDefaultMargin;
+}
+
+class ToastOptions{
+    public ToastCorner corner = ToastCorner::BottomRight;
+    public u32 maxVisible = s_ToastDefaultMaxVisible;
+    public f32 defaultDuration = s_ToastDefaultDuration;
+    public b8 pauseOnHover = true;
+    public b8 enabled = true;
+}
+
+class ToastResult{
+    public b8 valid = false;
+    public u32 activeCount = 0u;
+    public u32 dismissedCount = 0u;
+    public u64 lastDismissedId = 0u;
+}
+
+class ToastState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_nextId = 1u;
+    public u64 m_revision = 1u;
+    public Vector<ToastItem> m_items;
+    public Vector<Rect> m_visibleRects;
+    public Vector<u64> m_visibleIds;
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public usize count()const{ return this.m_items.size(); }
+    public in Vector<ToastItem> items()const{ return this.m_items; }
+
+    public u64 push(in StringView title, in StringView message, in ToastSeverity severity){
+        return this.push(title, message, severity, s_ToastDefaultDuration);
+    }
+
+    public u64 push(in StringView title, in StringView message, in ToastSeverity severity, in f32 durationSeconds){
+        if((title.empty() && message.empty()) || severity >= ToastSeverity::kCount || !IsFinite(VectorSingle(durationSeconds)) || durationSeconds < 0.0f)
+            return 0u;
+        ToastItem item;
+        item.id = this.m_nextId;
+        ++this.m_nextId;
+        item.title.assign(title);
+        item.message.assign(message);
+        item.severity = severity;
+        item.durationSeconds = durationSeconds;
+        item.elapsedSeconds = 0.0f;
+        item.dismissible = true;
+        this.m_items.push_back(item);
+        AdvanceNonWrappingRevision(this.m_revision);
+        return item.id;
+    }
+
+    public b8 dismiss(in u64 id){
+        if(id == 0u)
+            return false;
+        for(usize idx = 0u; idx < this.m_items.size(); ++idx){
+            if(this.m_items[idx].id == id){
+                for(usize mv = idx + 1u; mv < this.m_items.size(); ++mv)
+                    this.m_items[mv - 1u] = this.m_items[mv];
+                this.m_items.pop_back();
+                AdvanceNonWrappingRevision(this.m_revision);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void clear(){
+        if(!this.m_items.empty()){
+            this.m_items.clear();
+            this.m_visibleRects.clear();
+            this.m_visibleIds.clear();
+            AdvanceNonWrappingRevision(this.m_revision);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidToastOptions(in ToastOptions options){
+    return options.corner < ToastCorner::kCount
+        && options.maxVisible > 0u
+        && IsFinite(VectorSingle(options.defaultDuration))
+        && options.defaultDuration >= 0.0f;
+}
+
+b8 IsValidToastStyle(in ToastStyle style){
+    return IsValidPaintColor(style.backgroundColor)
+        && IsValidPaintColor(style.borderColor)
+        && IsValidPaintColor(style.infoAccent)
+        && IsValidPaintColor(style.successAccent)
+        && IsValidPaintColor(style.warningAccent)
+        && IsValidPaintColor(style.errorAccent)
+        && IsValidPaintColor(style.textColor)
+        && IsValidPaintColor(style.subtextColor)
+        && IsBoundedUiPadding(style.padding)
+        && IsFinite(VectorSingle(style.cardWidth, style.minCardHeight, style.accentWidth, style.cornerRadius))
+        && IsFinite(VectorSingle(style.closeButtonSize, style.gap, style.margin, 0.0f))
+        && style.cardWidth > 0.0f
+        && style.minCardHeight > 0.0f
+        && style.accentWidth >= 0.0f
+        && style.cornerRadius >= 0.0f
+        && style.closeButtonSize > 0.0f
+        && style.gap >= 0.0f
+        && style.margin >= 0.0f;
+}
+
+Color ResolveToastAccentColor(in ToastStyle style, in ToastSeverity severity){
+    switch(severity){
+    case ToastSeverity::Success:
+        return style.successAccent;
+    case ToastSeverity::Warning:
+        return style.warningAccent;
+    case ToastSeverity::Error:
+        return style.errorAccent;
+    default:
+        return style.infoAccent;
+    }
+}
+
+b8 IsPointInsideRect(in Point pt, in Rect rect){
+    return rect.width > 0.0f
+        && rect.height > 0.0f
+        && pt.x >= rect.x
+        && pt.x < rect.x + rect.width
+        && pt.y >= rect.y
+        && pt.y < rect.y + rect.height;
+}
+
+b8 IsToastHoveredByPointer(in ToastState state, in u64 id, in b8 pointerKnown, in Point pointerPos){
+    if(!pointerKnown)
+        return false;
+    for(usize idx = 0u; idx < state.m_visibleIds.size() && idx < state.m_visibleRects.size(); ++idx){
+        if(state.m_visibleIds[idx] == id)
+            return IsPointInsideRect(pointerPos, state.m_visibleRects[idx]);
+    }
+    return false;
+}
+
+void AdvanceToastTimers(
+    mut ToastState state,
+    in f32 deltaSeconds,
+    in b8 pauseOnHover,
+    in b8 pointerKnown,
+    in Point pointerPos,
+    in u32 maxVisible,
+    mut u32 outExpiredCount,
+    mut u64 outLastExpiredId
+){
+    if(!(deltaSeconds > 0.0f) || !IsFinite(VectorSingle(deltaSeconds)) || state.m_items.empty())
+        return;
+    const usize activeLimit = Min(cast<usize>(maxVisible), state.m_items.size());
+    usize writeIdx = 0u;
+    b8 removedAny = false;
+    for(usize idx = 0u; idx < state.m_items.size(); ++idx){
+        ToastItem item = state.m_items[idx];
+        const b8 visibleSlot = idx < activeLimit;
+        b8 expired = false;
+        if(visibleSlot && item.durationSeconds > 0.0f){
+            const b8 paused = pauseOnHover && IsToastHoveredByPointer(state, item.id, pointerKnown, pointerPos);
+            if(!paused){
+                item.elapsedSeconds += deltaSeconds;
+                if(item.elapsedSeconds >= item.durationSeconds)
+                    expired = true;
+            }
+        }
+        if(expired){
+            ++outExpiredCount;
+            outLastExpiredId = item.id;
+            removedAny = true;
+            continue;
+        }
+        state.m_items[writeIdx] = item;
+        ++writeIdx;
+    }
+    if(removedAny){
+        state.m_items.resize(writeIdx);
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+}
+
+void ApplySkinPaletteToToastStyle(in UiSkinPalette palette, mut ToastStyle style){
+    style.textColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+    style.subtextColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.borderColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

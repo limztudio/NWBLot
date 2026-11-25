@@ -44,10 +44,21 @@ class AtlasPage{
     public u32 rowHeight = 0u;
     public u64 generation = 0u;
     public b8 dirty = false;
+    public b8 isColor;
 
     public AtlasPage(in SharedFontFace face){
         this.face = face;
+        this.isColor = false;
         this.pixels.resize(cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
+    }
+
+    public AtlasPage(in SharedFontFace face, in b8 isColor){
+        this.face = face;
+        this.isColor = isColor;
+        usize ch = 1u;
+        if(isColor)
+            ch = 4u;
+        this.pixels.resize(cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent * ch, 0u);
     }
 }
 
@@ -108,6 +119,8 @@ class GlyphAtlas : NoCopy{
         record.pixelSize = pixelSize;
         record.bearingX = this.m_bitmap.bearingX;
         record.bearingY = this.m_bitmap.bearingY;
+        record.bitmapScale = this.m_bitmap.bitmapScale;
+        record.isColor = this.m_bitmap.isColor;
         if(this.m_bitmap.width == 0u || this.m_bitmap.height == 0u){
             this.appendGlyph(record);
             return Optional<in AtlasGlyph>(this.m_glyphs[this.m_glyphs.size() - 1u]);
@@ -120,7 +133,7 @@ class GlyphAtlas : NoCopy{
         usize pageIndex = 0u;
         while(pageIndex < this.m_pages.size()){
             in AtlasPage existing = this.m_pages[pageIndex];
-            if(existing.face == face){
+            if(existing.face == face && existing.isColor == this.m_bitmap.isColor){
                 const Expected<GlyphAtlasPlacement> placed = TryPlaceGlyphAtlasBitmap(existing.cursorX, existing.cursorY, existing.rowHeight, paddedWidth, paddedHeight);
                 if(placed.has_value()){
                     placement = placed.value();
@@ -132,13 +145,16 @@ class GlyphAtlas : NoCopy{
         if(pageIndex == this.m_pages.size()){
             if(this.m_pages.size() >= s_GlyphAtlasMaxPages)
                 return Optional<in AtlasGlyph>();
-            this.m_pages.emplace_back(face);
+            this.m_pages.emplace_back(face, this.m_bitmap.isColor);
             placement = MakeInitialGlyphAtlasPlacement(paddedHeight);
         }
         mut AtlasPage page = this.m_pages[pageIndex];
+        u32 chCount = 1u;
+        if(this.m_bitmap.isColor)
+            chCount = 4u;
         record.pageIndex = cast<u32>(pageIndex);
         record.pixels = MakePlacedGlyphAtlasPixelRect(placement.x, placement.y, this.m_bitmap.width, this.m_bitmap.height);
-        CopyGlyphBitmapToAtlasPage(placement.x, placement.y, this.m_bitmap.width, this.m_bitmap.height, this.m_bitmap.pixels, page.pixels);
+        CopyGlyphBitmapToAtlasPage(placement.x, placement.y, this.m_bitmap.width, this.m_bitmap.height, chCount, this.m_bitmap.pixels, page.pixels);
         page.cursorX = placement.x + paddedWidth;
         page.cursorY = placement.y;
         page.rowHeight = placement.rowHeight;
@@ -157,7 +173,10 @@ class GlyphAtlas : NoCopy{
             return MakeUnexpected(Failure());
         mut AtlasPage page = this.m_pages[index];
         if(page.dirty){
-            const Expected<GlyphPageBindingRecord<Font>> binding = TryMakeNextGlyphPageBinding<Font>(page.face.deref().identity(), page.face.deref().generation(), this.m_identity, page.generation, index);
+            u32 chCount = 1u;
+            if(page.isColor)
+                chCount = 4u;
+            const Expected<GlyphPageBindingRecord<Font>> binding = TryMakeNextGlyphPageBinding<Font>(page.face.deref().identity(), page.face.deref().generation(), this.m_identity, page.generation, index, chCount);
             if(!binding.has_value())
                 return MakeUnexpected(Failure());
             Expected<SharedGlyphPage> published = CopyGlyphPage(this.m_pool, binding.value(), Span<u8>(page.pixels));
@@ -197,7 +216,8 @@ Expected<GlyphPageBindingRecord<TFont>> TryMakeNextGlyphPageBinding<TFont>(
     in u64 fontGeneration,
     in u64 atlasIdentity,
     in u64 currentGeneration,
-    in u32 pageIndex
+    in u32 pageIndex,
+    in u32 channelCount
 ){
     if(currentGeneration == u64.max)
         return MakeUnexpected(Failure());
@@ -209,6 +229,7 @@ Expected<GlyphPageBindingRecord<TFont>> TryMakeNextGlyphPageBinding<TFont>(
     binding.index = pageIndex;
     binding.width = s_GlyphAtlasPageExtent;
     binding.height = s_GlyphAtlasPageExtent;
+    binding.channelCount = channelCount;
     return binding;
 }
 
